@@ -14,6 +14,17 @@ plugins {
     alias(libs.plugins.spotless)
     id("yawnandpawn.verify-core-dependencies")
     id("yawnandpawn.allowlists")
+    id("yawnandpawn.design-tokens")
+}
+
+// ---------------------------------------------------------------------------------------------
+// Design tokens (AD-10, Story 1.3): tools/tokens generates PpsTokens.kt from the DESIGN.md
+// frontmatter. `generateTokens` writes the committed file; `checkTokens` (qualityGate) fails on drift.
+// ---------------------------------------------------------------------------------------------
+designTokens {
+    designFile.set(layout.projectDirectory.file("_bmad-output/planning-artifacts/ux-designs/ux-pay-per-snooze-2026-09-26/DESIGN.md"))
+    outputFile.set(layout.projectDirectory.file("composeApp/src/commonMain/kotlin/com/yawnandpawn/app/ui/theme/PpsTokens.kt"))
+    packageName.set("com.yawnandpawn.app.ui.theme")
 }
 
 // ---------------------------------------------------------------------------------------------
@@ -27,7 +38,7 @@ spotless {
         ktlint().setEditorConfigPath(rootProject.file(".editorconfig"))
     }
     kotlinGradle {
-        target("*.gradle.kts", "*/*.gradle.kts", "config/*/*.gradle.kts")
+        target("*.gradle.kts", "*/*.gradle.kts", "config/*/*.gradle.kts", "tools/*/*.gradle.kts")
         targetExclude("**/build/**")
         ktlint().setEditorConfigPath(rootProject.file(".editorconfig"))
     }
@@ -39,8 +50,8 @@ spotless {
 val detektConfig = files("config/detekt/detekt.yml")
 
 detekt {
-    // The root project only analyses the included build-logic sources.
-    source.setFrom("build-logic/src")
+    // The root project only analyses the included builds' sources (build-logic, tools/tokens).
+    source.setFrom("build-logic/src", "tools/tokens/src")
     config.setFrom(detektConfig)
     buildUponDefaultConfig = true
 }
@@ -83,8 +94,11 @@ kover {
 //     permissions, SCHEDULE_EXACT_ALARM stops at API 32, no accessibility/device-admin/lock-task
 // A story that adds a dependency or permission updates the allowlist file in the same change.
 //
+// Design tokens (Story 1.3, plugin yawnandpawn.design-tokens from tools/tokens):
+//   - checkTokens: regenerates PpsTokens.kt into build/tokens and fails on any diff with the committed file
+//   - the raw colour / radius / sp detekt rules, ContrastTest and CopyRulesTest run inside detekt and host tests
+//
 // Later stories register their checks here as additional dependencies of `qualityGate`:
-//   - Story 1.3: design token diff check (tools/tokens regenerates PpsTokens.kt, fails on diff)
 //   - Story 1.17: sound loudness script (peak and integrated loudness of bundled sounds)
 // Add them with `dependsOn(...)` below; never run a check outside the gate.
 // ---------------------------------------------------------------------------------------------
@@ -104,6 +118,8 @@ tasks.register("qualityGate") {
         ":androidApp:testDebugUnitTest",
         ":detekt-rules:test",
         gradle.includedBuild("build-logic").task(":test"),
+        gradle.includedBuild("tokens").task(":test"),
+        "checkTokens",
         "koverVerify",
         ":androidApp:lintDebug",
         ":androidApp:assembleDebug",

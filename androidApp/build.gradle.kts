@@ -122,6 +122,11 @@ dependencies {
     implementation(libs.compose.ui)
     implementation(libs.koin.android)
 
+    // Debug-only theme showcase (src/debug). Same artifacts :composeApp already puts on the runtime classpath.
+    debugImplementation(libs.compose.foundation)
+    debugImplementation(libs.compose.material3)
+    debugImplementation(libs.compose.components.resources)
+
     testImplementation(project(":testing"))
     testImplementation(libs.kotlin.test)
     testImplementation(libs.junit4)

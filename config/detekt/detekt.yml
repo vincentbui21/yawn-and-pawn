@@ -13,9 +13,11 @@ naming:
     # Composables are PascalCase; test names are backticked sentences.
     ignoreAnnotated:
       - 'Composable'
-    excludes:
+    excludes: &testSources
       - '**/test/**'
       - '**/*Test/**'
+      - '**/testDebug/**'
+      - '**/testRelease/**'
 
 # Custom rules from :detekt-rules (config/detekt-rules).
 yawn-and-pawn:
@@ -25,8 +27,23 @@ yawn-and-pawn:
     # :core logs only through the Logger port (Architecture Conventions: Logging).
     includes:
       - '**/core/src/**'
+  # Design tokens only (AD-10, Story 1.3). Active for every module; code in a package ending
+  # in ui.theme (where PpsTheme is built from the generated PpsTokens) is exempt inside the rules.
+  NoRawColor:
+    active: true
+  NoRawCornerRadius:
+    active: true
+  NoRawSp:
+    active: true
+
+# Test source sets detekt's defaults do not know (androidHostTest, testDebug) are tests too.
+complexity:
+  TooManyFunctions:
+    excludes: *testSources
 
 style:
+  MagicNumber:
+    excludes: *testSources
   MaxLineLength:
     # Same limit as ktlint (.editorconfig).
     maxLineLength: 140

@@ -49,6 +49,9 @@ class NoPrintlnInCoreTest {
         val ruleSet = YawnAndPawnRuleSetProvider().instance()
 
         assertEquals("yawn-and-pawn", ruleSet.id.value)
-        assertEquals(listOf("NoPrintlnInCore"), ruleSet.rules.keys.map { it.value })
+        assertEquals(
+            listOf("NoPrintlnInCore", "NoRawColor", "NoRawCornerRadius", "NoRawSp"),
+            ruleSet.rules.keys.map { it.value },
+        )
     }
 }

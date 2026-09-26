@@ -1,0 +1,16 @@
+<!-- CopyRulesTest fixture: every entry except "ok_*" breaks exactly one copy rule. Not an app resource. -->
+<resources>
+    <string name="ok_body">Snooze costs money. Waking up is free.</string>
+    <string name="ok_price">Snooze · %1$s</string>
+    <string name="bad_em_dash">Nice try — keep going.</string>
+    <string name="bad_hype">A Seamless wake-up.</string>
+    <string name="bad_currency">Snooze · $3</string>
+    <string name="bad_backup">Try a backup check.</string>
+    <string name="bad_emoji">Good morning 🌞</string>
+    <string name="success_zero_snooze">Up on time. 🌞</string>
+    <string name="bad_long_headline">This headline is far too long for anyone half asleep</string>
+    <plurals name="bad_plural">
+        <item quantity="one">%1$d snooze €</item>
+        <item quantity="other">%1$d snoozes</item>
+    </plurals>
+</resources>

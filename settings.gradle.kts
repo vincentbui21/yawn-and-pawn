@@ -1,5 +1,7 @@
 pluginManagement {
     includeBuild("build-logic")
+    // DESIGN.md -> PpsTokens.kt generator (Story 1.3). An included build, not a subproject (AD-1 graph).
+    includeBuild("tools/tokens")
     repositories {
         google {
             mavenContent {

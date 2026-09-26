@@ -43,6 +43,9 @@ androidx-lifecycle-cmp = "2.11.0"
 androidx-activity-compose = "1.13.0"
 robolectric = "4.17"
 junit4 = "4.13.2"
+androidx-test-runner = "1.7.0"
+androidx-test-core = "1.7.0"
+androidx-test-ext-junit = "1.3.0"
 foojay = "1.0.0"
 
 [libraries]
@@ -89,8 +92,14 @@ firebase-crashlytics = { module = "com.google.firebase:firebase-crashlytics" }
 firebase-analytics = { module = "com.google.firebase:firebase-analytics" }
 zxing-core = { module = "com.google.zxing:core", version.ref = "zxing" }
 
+# Build logic (compileOnly in build-logic; same version as the applied AGP)
+android-gradle-api = { module = "com.android.tools.build:gradle-api", version.ref = "agp" }
+
 # Testing
 junit4 = { module = "junit:junit", version.ref = "junit4" }
+androidx-test-runner = { module = "androidx.test:runner", version.ref = "androidx-test-runner" }
+androidx-test-core = { module = "androidx.test:core", version.ref = "androidx-test-core" }
+androidx-test-ext-junit = { module = "androidx.test.ext:junit", version.ref = "androidx-test-ext-junit" }
 robolectric = { module = "org.robolectric:robolectric", version.ref = "robolectric" }
 turbine = { module = "app.cash.turbine:turbine", version.ref = "turbine" }
 roborazzi = { module = "io.github.takahirom.roborazzi:roborazzi", version.ref = "roborazzi" }

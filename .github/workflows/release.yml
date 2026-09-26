@@ -1,0 +1,137 @@
+# Release (Story 1.2, AD-15): a tag vX.Y.Z builds a signed release AAB with versionName X.Y.Z and
+# uploads it to the Play internal track. Signing and Play credentials come only from GitHub
+# secrets (docs/ci-release.md). Without them the upload job is skipped with a notice, never failed.
+#
+# The trigger is every v* tag so that malformed tags (v1.2, v1.2.3-rc) fail loudly in "Validate
+# tag" instead of being ignored; only vX.Y.Z tags ever reach the build.
+name: Release
+
+on:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  prepare:
+    name: Validate tag and check secrets
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.tag.outputs.version }}
+      secrets-present: ${{ steps.secrets.outputs.present }}
+    steps:
+      - name: Validate tag
+        id: tag
+        env:
+          TAG: ${{ github.ref_name }}
+        run: |
+          invalid() {
+            echo "::error title=Invalid release tag::Tag '$TAG' $1. Nothing was built."
+            exit 1
+          }
+          if [[ ! "$TAG" =~ ^v(0|[1-9][0-9]{0,4})\.(0|[1-9][0-9]?)\.(0|[1-9][0-9]?)$ ]]; then
+            invalid "is not vX.Y.Z (digits only, minor and patch 0-99, e.g. v1.2.3)"
+          fi
+          major="${BASH_REMATCH[1]}"; minor="${BASH_REMATCH[2]}"; patch="${BASH_REMATCH[3]}"
+          # versionCode = major*10000 + minor*100 + patch must be 1..2100000000 (Play limit).
+          if [ "$major" -gt 20999 ]; then invalid "has a major version above 20999"; fi
+          if [ "$major$minor$patch" = "000" ]; then invalid "is v0.0.0 (versionCode 0 is not allowed)"; fi
+          echo "version=${TAG#v}" >> "$GITHUB_OUTPUT"
+          echo "Release version: ${TAG#v}"
+
+      - name: Check signing and Play secrets
+        id: secrets
+        env:
+          UPLOAD_KEYSTORE_BASE64: ${{ secrets.UPLOAD_KEYSTORE_BASE64 }}
+          UPLOAD_KEYSTORE_PASSWORD: ${{ secrets.UPLOAD_KEYSTORE_PASSWORD }}
+          UPLOAD_KEY_ALIAS: ${{ secrets.UPLOAD_KEY_ALIAS }}
+          UPLOAD_KEY_PASSWORD: ${{ secrets.UPLOAD_KEY_PASSWORD }}
+          PLAY_SERVICE_ACCOUNT_JSON: ${{ secrets.PLAY_SERVICE_ACCOUNT_JSON }}
+        run: |
+          missing=()
+          for name in UPLOAD_KEYSTORE_BASE64 UPLOAD_KEYSTORE_PASSWORD UPLOAD_KEY_ALIAS UPLOAD_KEY_PASSWORD PLAY_SERVICE_ACCOUNT_JSON; do
+            if [ -z "${!name}" ]; then missing+=("$name"); fi
+          done
+          if [ "${#missing[@]}" -gt 0 ]; then
+            echo "::notice title=Play upload skipped::Missing GitHub secrets: ${missing[*]}. See docs/ci-release.md."
+            {
+              echo "### Play upload skipped"
+              echo
+              echo "Missing GitHub secrets: ${missing[*]}. Add them as described in \`docs/ci-release.md\`."
+            } >> "$GITHUB_STEP_SUMMARY"
+            echo "present=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "present=true" >> "$GITHUB_OUTPUT"
+          fi
+
+  upload:
+    name: Build signed AAB and upload to the internal track
+    needs: prepare
+    if: needs.prepare.outputs.secrets-present == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - name: Check out
+        uses: actions/checkout@v7
+
+      - name: Fail if secrets are tracked by git
+        run: bash .github/scripts/check-no-tracked-secrets.sh
+
+      - name: Set up Temurin JDK 17
+        uses: actions/setup-java@v6
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - name: Set up Gradle (with caching)
+        uses: gradle/actions/setup-gradle@v6
+
+      - name: Quality gate
+        run: ./gradlew qualityGate
+
+      - name: Decode the upload keystore
+        env:
+          UPLOAD_KEYSTORE_BASE64: ${{ secrets.UPLOAD_KEYSTORE_BASE64 }}
+        # Pasted secrets often carry line breaks or spaces, which base64 --decode rejects.
+        run: printf '%s' "$UPLOAD_KEYSTORE_BASE64" | tr -d ' \r\n\t' | base64 --decode > "$RUNNER_TEMP/upload.jks"
+
+      - name: Build the signed release bundle
+        env:
+          VERSION_NAME: ${{ needs.prepare.outputs.version }}
+          UPLOAD_KEYSTORE_PASSWORD: ${{ secrets.UPLOAD_KEYSTORE_PASSWORD }}
+          UPLOAD_KEY_ALIAS: ${{ secrets.UPLOAD_KEY_ALIAS }}
+          UPLOAD_KEY_PASSWORD: ${{ secrets.UPLOAD_KEY_PASSWORD }}
+        run: |
+          export UPLOAD_KEYSTORE_FILE="$RUNNER_TEMP/upload.jks"
+          ./gradlew :androidApp:bundleRelease "-Pyawnandpawn.versionName=$VERSION_NAME"
+
+      - name: Keep the signed bundle and R8 mapping
+        uses: actions/upload-artifact@v7
+        with:
+          name: release-${{ needs.prepare.outputs.version }}
+          retention-days: 90
+          if-no-files-found: error
+          path: |
+            androidApp/build/outputs/bundle/release/androidApp-release.aab
+            androidApp/build/outputs/mapping/release/mapping.txt
+
+      - name: Upload to the Play internal track
+        # Pinned by commit SHA: this step receives the Play service-account credential.
+        uses: r0adkll/upload-google-play@e738b9dd8f2476ea806d921b64aacd24f34515a5 # v1.1.5
+        with:
+          serviceAccountJsonPlainText: ${{ secrets.PLAY_SERVICE_ACCOUNT_JSON }}
+          packageName: com.yawnandpawn.app
+          releaseFiles: androidApp/build/outputs/bundle/release/androidApp-release.aab
+          mappingFile: androidApp/build/outputs/mapping/release/mapping.txt
+          track: internal
+          status: completed
+
+      - name: Remove the keystore
+        if: always()
+        run: rm -f "$RUNNER_TEMP/upload.jks"

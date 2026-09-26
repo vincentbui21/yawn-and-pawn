@@ -1,0 +1,4 @@
+<resources>
+    <!-- Launcher label. In-app text comes from Compose Multiplatform resources in :composeApp. -->
+    <string name="app_name">Yawn &amp; Pawn</string>
+</resources>

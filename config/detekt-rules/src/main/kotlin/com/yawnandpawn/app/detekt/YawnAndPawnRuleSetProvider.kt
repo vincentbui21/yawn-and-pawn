@@ -14,6 +14,7 @@ class YawnAndPawnRuleSetProvider : RuleSetProvider {
             ruleSetId,
             mapOf(
                 RuleName("NoPrintlnInCore") to ::NoPrintlnInCore,
+                RuleName("NoDirectTimeAccess") to ::NoDirectTimeAccess,
                 RuleName("NoRawColor") to ::NoRawColor,
                 RuleName("NoRawCornerRadius") to ::NoRawCornerRadius,
                 RuleName("NoRawSp") to ::NoRawSp,

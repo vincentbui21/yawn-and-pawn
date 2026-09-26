@@ -18,7 +18,8 @@ kotlin {
     sourceSets {
         commonMain.dependencies {
             implementation(libs.kotlinx.coroutines.core)
-            implementation(libs.kotlinx.datetime)
+            // api: TimeZoneProvider and AlarmRule expose kotlinx-datetime types to :androidApp and :composeApp.
+            api(libs.kotlinx.datetime)
             implementation(libs.kotlinx.serialization.json)
         }
         commonTest.dependencies {

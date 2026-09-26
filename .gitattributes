@@ -18,3 +18,5 @@ gradlew text eol=lf
 *.ogg binary
 *.mp3 binary
 *.wav binary
+# Token generator fixtures are compared byte for byte; keep LF on Windows checkouts too.
+tools/tokens/src/test/resources/** text eol=lf

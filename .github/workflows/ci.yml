@@ -67,7 +67,31 @@ jobs:
           set -o pipefail
           ./gradlew :androidApp:atdApi34DebugAndroidTest \
             -Pandroid.testoptions.manageddevices.emulator.gpu=swiftshader_indirect \
-            2>&1 | tee "$LOG_DIR/managedDevice.log"
+            -Pandroid.experimental.testOptions.managedDevices.emulator.showKernelLogging=true \
+            --info 2>&1 | tee "$LOG_DIR/managedDevice.log"
+
+      # TEMPORARY (Story 1.2 CI bring-up): boot the same AVD by hand to see whether and how it fails.
+      - name: Diagnose emulator boot
+        if: failure()
+        continue-on-error: true
+        run: |
+          SDK="${ANDROID_HOME:-/usr/local/lib/android/sdk}"
+          grep -iE "emulator.*-avd|emulator command|launching emulator|kernel" "$LOG_DIR/managedDevice.log" | head -20 || true
+          export ANDROID_AVD_HOME="$HOME/.android/avd/gradle-managed"
+          "$SDK/emulator/emulator" -avd dev34_aosp_atd_x86_64_Pixel_6 -no-window -no-audio -no-boot-anim \
+            -gpu swiftshader_indirect -no-snapshot -read-only > emu.log 2>&1 &
+          emu=$!
+          for i in $(seq 1 48); do
+            if ! kill -0 "$emu" 2>/dev/null; then echo "emulator process exited after $((i*5)) s"; break; fi
+            booted="$("$SDK/platform-tools/adb" shell getprop sys.boot_completed 2>/dev/null | tr -d '\r')"
+            if [ "$booted" = "1" ]; then echo "BOOTED after $((i*5)) s"; break; fi
+            sleep 5
+          done
+          kill "$emu" 2>/dev/null || true
+          echo "--- emulator log (errors/warnings) ---"
+          grep -iE "error|fatal|warn|crash|abort|signal" emu.log | grep -v FeatureControl | head -40 || true
+          echo "--- emulator log tail ---"
+          tail -40 emu.log
 
       - name: Name the failing Gradle tasks in the job summary
         if: failure()

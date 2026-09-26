@@ -7,16 +7,18 @@ _Last updated: 2026-09-26_
 - App name **Yawn & Pawn**, package `com.yawnandpawn.app`, English only.
 - GitHub repo: https://github.com/vincentbui21/yawn-and-pawn (private).
 - **Google Play Console developer account created** (personal, owner vincentbui2108@gmail.com, developer name "Yawn & Pawn", USD 25 paid).
+- **Story 1.1** (KMP scaffold + `./gradlew qualityGate`) merged in PR #1.
+- **Story 1.2** (CI on every PR and push to `main`, dependency and permission allowlists, tag-based release workflow) merged in PR #2. CI is green, including the emulator smoke test.
+- **Company laptop set up without admin rights**: Python, GitHub CLI, JDK 17, Android Studio and the Android SDK in the user folder.
 
 ## Waiting on
 - **Google identity verification** (passport + Helen electricity invoice as proof of address), submitted 2026-09-26. Usually 1–3 business days. A rejection can be fixed by re-uploading, no new fee.
 - **Phone verification**: unlocks only after identity approval (Play Console → Account details → Verify).
 
 ## Next
-1. Push the local folder to GitHub (docs/dev-setup.md §3).
-2. Story 1.1 (scaffold) → 1.2 (CI) → 1.3 (design tokens), built interactively with `bmad-build` in Claude Code (VS Code) on the laptop.
-3. Then run the automatic loop with **bmad-loop** (official BMAD orchestrator: dev → review → verify → commit per story, driven by sprint-status.yaml). Runs in WSL + tmux on Windows. BMAD must be reinstalled with `--shims` so the `bmad-dev-auto` name bmad-loop calls maps to `bmad-build-auto`. First run with `--dry-run`, then per epic with `gates.mode = "per-epic"`; `human-verify` stories are done by the owner.
-4. Story 1.4 remainder (app record, internal track, license testers) once 1.1 produces a signed build.
+1. Story 1.3 (design tokens and PpsTheme), built with `bmad-build` on the company laptop.
+2. **bmad-loop cannot run on the company laptop** (it needs WSL, which needs admin rights). Options: run bmad-loop on the personal computer (docs/dev-setup.md §6), or use a simple PowerShell loop that runs `claude -p "/bmad-build-auto"` one story at a time on the company laptop.
+3. Story 1.4 remainder (app record, internal track, license testers) after identity verification. The release workflow needs the GitHub secrets in `docs/ci-release.md`, and the very first upload must be done by hand in Play Console.
 
 ## Open items (not blocking Epic 1)
 - Support email placeholder vincentbui2108@gmail.com (change later in config/app-links.properties).

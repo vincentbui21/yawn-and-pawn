@@ -5,8 +5,21 @@ plugins {
 
 dependencyResolutionManagement {
     repositories {
+        google {
+            mavenContent {
+                includeGroupAndSubgroups("androidx")
+                includeGroupAndSubgroups("com.android")
+                includeGroupAndSubgroups("com.google")
+            }
+        }
         mavenCentral()
         gradlePluginPortal()
+    }
+    versionCatalogs {
+        // Same catalog as the main build, so the AGP API version cannot drift from the applied AGP.
+        create("libs") {
+            from(files("../gradle/libs.versions.toml"))
+        }
     }
 }
 

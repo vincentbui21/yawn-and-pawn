@@ -8,7 +8,23 @@ plugins {
     alias(libs.plugins.roborazzi)
 }
 
-val appVersionName = "0.1.0"
+// The release workflow passes the tag version (-Pyawnandpawn.versionName=X.Y.Z); local builds use the default.
+val appVersionName = providers.gradleProperty("yawnandpawn.versionName").getOrElse("0.1.0")
+
+// Release signing comes only from the environment (GitHub Actions secrets in release.yml, see
+// docs/ci-release.md). With none of the four values the release build stays unsigned; with only
+// some of them the build fails, so a misconfigured release never ships unsigned by accident.
+val uploadSigning =
+    listOf("UPLOAD_KEYSTORE_FILE", "UPLOAD_KEYSTORE_PASSWORD", "UPLOAD_KEY_ALIAS", "UPLOAD_KEY_PASSWORD")
+        .associateWith { providers.environmentVariable(it).orNull.orEmpty() }
+        .let { values ->
+            val missing = values.filterValues { it.isBlank() }.keys
+            when {
+                missing.isEmpty() -> values
+                missing.size == values.size -> null
+                else -> throw GradleException("Release signing is partly configured; missing: ${missing.joinToString()}")
+            }
+        }
 
 kotlin {
     jvmToolchain(
@@ -38,6 +54,18 @@ android {
         versionName = appVersionName
         // major * 10000 + minor * 100 + patch (unit-tested in build-logic and :core AppVersion).
         versionCode = versionCodeOf(appVersionName)
+        testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
+    }
+
+    signingConfigs {
+        if (uploadSigning != null) {
+            create("upload") {
+                storeFile = file(uploadSigning.getValue("UPLOAD_KEYSTORE_FILE"))
+                storePassword = uploadSigning.getValue("UPLOAD_KEYSTORE_PASSWORD")
+                keyAlias = uploadSigning.getValue("UPLOAD_KEY_ALIAS")
+                keyPassword = uploadSigning.getValue("UPLOAD_KEY_PASSWORD")
+            }
+        }
     }
 
     buildTypes {
@@ -48,6 +76,9 @@ android {
             isMinifyEnabled = true
             isShrinkResources = true
             proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
+            if (uploadSigning != null) {
+                signingConfig = signingConfigs.getByName("upload")
+            }
         }
     }
 
@@ -63,6 +94,16 @@ android {
     testOptions {
         unitTests {
             isIncludeAndroidResources = true
+        }
+        // Gradle Managed Device for CI: ./gradlew :androidApp:atdApi34DebugAndroidTest (needs KVM).
+        managedDevices {
+            localDevices {
+                create("atdApi34") {
+                    device = "Pixel 6"
+                    apiLevel = 34
+                    systemImageSource = "aosp-atd"
+                }
+            }
         }
     }
 }
@@ -89,4 +130,9 @@ dependencies {
     testImplementation(libs.roborazzi)
     testImplementation(libs.roborazzi.compose)
     testImplementation(libs.roborazzi.junit.rule)
+
+    androidTestImplementation(libs.androidx.test.runner)
+    androidTestImplementation(libs.androidx.test.core)
+    androidTestImplementation(libs.androidx.test.ext.junit)
+    androidTestImplementation(libs.compose.ui.test.junit4)
 }

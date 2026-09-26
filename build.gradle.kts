@@ -13,6 +13,7 @@ plugins {
     alias(libs.plugins.detekt)
     alias(libs.plugins.spotless)
     id("yawnandpawn.verify-core-dependencies")
+    id("yawnandpawn.allowlists")
 }
 
 // ---------------------------------------------------------------------------------------------
@@ -76,8 +77,13 @@ kover {
 // ---------------------------------------------------------------------------------------------
 // Definition of done (AD-14): `./gradlew qualityGate`.
 //
+// Allowlists (Story 1.2, plugin yawnandpawn.allowlists, tasks on :androidApp, debug + release):
+//   - checkDependencyAllowlist: every resolved runtime group:artifact is in config/dependency-allowlist.txt
+//   - checkPermissionAllowlist: merged manifests request only config/permission-allowlist.txt
+//     permissions, SCHEDULE_EXACT_ALARM stops at API 32, no accessibility/device-admin/lock-task
+// A story that adds a dependency or permission updates the allowlist file in the same change.
+//
 // Later stories register their checks here as additional dependencies of `qualityGate`:
-//   - Story 1.2: dependency allowlist check and manifest permission allowlist test
 //   - Story 1.3: design token diff check (tools/tokens regenerates PpsTokens.kt, fails on diff)
 //   - Story 1.17: sound loudness script (peak and integrated loudness of bundled sounds)
 // Add them with `dependsOn(...)` below; never run a check outside the gate.
@@ -102,5 +108,7 @@ tasks.register("qualityGate") {
         ":androidApp:lintDebug",
         ":androidApp:assembleDebug",
         "verifyCoreDependencies",
+        ":androidApp:checkDependencyAllowlist",
+        ":androidApp:checkPermissionAllowlist",
     )
 }

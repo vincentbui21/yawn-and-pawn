@@ -1,0 +1,28 @@
+# Permission allowlist (NFR-4, AD-5), checked by `./gradlew checkPermissionAllowlist` (part of qualityGate).
+#
+# Every uses-permission in the merged debug and release manifests must be listed here, one per line.
+# A name without a dot is a platform permission: CAMERA means android.permission.CAMERA.
+# `#` starts a comment. The check also fails on SCHEDULE_EXACT_ALARM without
+# android:maxSdkVersion="32", on components protected by BIND_ACCESSIBILITY_SERVICE or
+# BIND_DEVICE_ADMIN, and on any android:lockTaskMode. Never add READ_PHONE_STATE or
+# SYSTEM_ALERT_WINDOW (no device hostage).
+
+# The app's own permissions (Story 1.2 list; later stories declare them as they need them)
+INTERNET
+com.android.vending.BILLING
+POST_NOTIFICATIONS
+USE_EXACT_ALARM
+SCHEDULE_EXACT_ALARM  # API 31-32 only: the check requires android:maxSdkVersion="32"
+USE_FULL_SCREEN_INTENT
+FOREGROUND_SERVICE
+FOREGROUND_SERVICE_MEDIA_PLAYBACK
+RECEIVE_BOOT_COMPLETED
+WAKE_LOCK
+VIBRATE
+CAMERA
+RECORD_AUDIO
+
+# Reviewed library-merged permissions
+# androidx.core (API 33+ ContextCompat.registerReceiver): a signature-level permission the app
+# defines for itself so its non-exported dynamic receivers only accept its own broadcasts.
+com.yawnandpawn.app.DYNAMIC_RECEIVER_NOT_EXPORTED_PERMISSION

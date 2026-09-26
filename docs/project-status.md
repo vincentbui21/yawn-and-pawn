@@ -9,6 +9,7 @@ _Last updated: 2026-09-26_
 - **Google Play Console developer account created** (personal, owner vincentbui2108@gmail.com, developer name "Yawn & Pawn", USD 25 paid).
 - **Story 1.1** (KMP scaffold + `./gradlew qualityGate`) merged in PR #1.
 - **Story 1.2** (CI on every PR and push to `main`, dependency and permission allowlists, tag-based release workflow) merged in PR #2. CI is green, including the emulator smoke test.
+- **Story 1.3** (design tokens generated from DESIGN.md, PpsTheme with Light/Dark/Sunrise, Geist, raw-value detekt rules, contrast and copy-rule tests, debug theme showcase) merged in PR #3.
 - **Company laptop set up without admin rights**: Python, GitHub CLI, JDK 17, Android Studio and the Android SDK in the user folder.
 
 ## Waiting on
@@ -16,7 +17,7 @@ _Last updated: 2026-09-26_
 - **Phone verification**: unlocks only after identity approval (Play Console → Account details → Verify).
 
 ## Next
-1. Story 1.3 (design tokens and PpsTheme), built with `bmad-build` on the company laptop.
+1. Stories 1.1–1.3 are done, so the foundation for the automatic loop is in place. Next automatable stories: 1.6 (time ports and occurrence math) and 1.7 (alarm storage). 1.4 and 1.5 are owner/human-verify stories waiting on Play Console.
 2. **bmad-loop cannot run on the company laptop** (it needs WSL, which needs admin rights). Options: run bmad-loop on the personal computer (docs/dev-setup.md §6), or use a simple PowerShell loop that runs `claude -p "/bmad-build-auto"` one story at a time on the company laptop.
 3. Story 1.4 remainder (app record, internal track, license testers) after identity verification. The release workflow needs the GitHub secrets in `docs/ci-release.md`, and the very first upload must be done by hand in Play Console.
 

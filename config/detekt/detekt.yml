@@ -1,0 +1,34 @@
+# detekt configuration, applied on top of the detekt default config (buildUponDefaultConfig = true).
+# Only overrides live here. Later stories add rules (time ports, raw colours, ...) to :detekt-rules.
+
+config:
+  validation: true
+  # The yawn-and-pawn rule set is provided by :detekt-rules, which the root project and
+  # :detekt-rules itself do not load, so its key is skipped by config validation.
+  excludes:
+    - 'yawn-and-pawn.*'
+
+naming:
+  FunctionNaming:
+    # Composables are PascalCase; test names are backticked sentences.
+    ignoreAnnotated:
+      - 'Composable'
+    excludes:
+      - '**/test/**'
+      - '**/*Test/**'
+
+# Custom rules from :detekt-rules (config/detekt-rules).
+yawn-and-pawn:
+  active: true
+  NoPrintlnInCore:
+    active: true
+    # :core logs only through the Logger port (Architecture Conventions: Logging).
+    includes:
+      - '**/core/src/**'
+
+style:
+  MaxLineLength:
+    # Same limit as ktlint (.editorconfig).
+    maxLineLength: 140
+  UnusedImport:
+    active: true

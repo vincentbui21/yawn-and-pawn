@@ -1,0 +1,174 @@
+# STATUS DEFINITIONS:
+# ==================
+# Epic Status:
+#   - backlog: Epic not yet started
+#   - in-progress: Epic actively being worked on
+#   - done: All stories in epic completed
+
+# Story Status:
+#   - backlog: Story only exists in epic file
+#   - ready-for-dev: Story file created, ready for development
+#   - in-progress: Developer actively working on implementation
+#   - review: Implementation complete, ready for review
+#   - done: Story completed
+
+# Retrospective Status:
+#   - optional: Can be completed but not required
+#   - done: Retrospective has been completed
+
+# Action Item Status:
+#   - open: Committed during a retrospective, not yet addressed
+#   - in-progress: Actively being worked on
+#   - done: Completed
+
+# WORKFLOW NOTES:
+# ===============
+# - Epic transitions to 'in-progress' automatically when its first story starts (via build's sprint sync)
+# - Stories can be worked in parallel if team capacity allows
+# - Developer typically creates the next story after the previous one is 'done' to incorporate learnings
+# - Dev moves story to 'review', then runs code-review (fresh context, different LLM recommended)
+# - Retrospective appends its action items to action_items; the status view surfaces open ones
+generated: 09-26-2026 12:36
+last_updated: 09-26-2026 12:36
+project: Yawn & Pawn
+project_key: NOKEY
+tracking_system: file-system
+story_location: _bmad-output/implementation-artifacts
+development_status:
+  epic-1: backlog
+  1-1-scaffold-the-kmp-project-with-a-quality-gate: backlog
+  1-2-ci-pipeline-and-dependency-and-permission-allowlists: backlog
+  1-3-generated-design-tokens-and-ppstheme: backlog
+  1-4-google-play-console-setup-owner-task: backlog
+  1-5-spike-s1-pay-for-a-snooze-over-the-lock-screen: backlog
+  1-6-time-ports-deadlines-and-alarm-occurrence-math-in-core: backlog
+  1-7-store-alarms-in-app-db: backlog
+  1-8-create-and-edit-an-alarm: backlog
+  1-9-alarm-list-on-home-with-the-next-alarm-countdown: backlog
+  1-10-schedule-alarms-exactly-and-keep-them-across-reboot-and-cloc: backlog
+  1-11-the-complete-wake-session-state-machine-in-core: backlog
+  1-12-sessionengine-with-write-ahead-persistence: backlog
+  1-13-record-every-session-in-history: backlog
+  1-14-ring-the-alarm-wakeservice-alarmplayer-and-the-ongoing-notif: backlog
+  1-15-ringing-screen-over-the-lock-screen-with-i-m-up: backlog
+  1-16-stop-a-forgotten-alarm-after-30-minutes: backlog
+  1-17-built-in-sound-library-with-preview-and-a-never-silent-fallb: backlog
+  1-18-test-alarm-and-debug-fire-now-hook: backlog
+  1-19-permissions-for-reliable-alarms-and-crash-reporting: backlog
+  1-20-spike-s2-alarm-reliability-on-the-device-matrix: backlog
+  1-21-epic-1-device-verification-checklist: backlog
+  epic-1-retrospective: optional
+
+  epic-2: backlog
+  2-1-keep-the-backup-alarm-armed-and-recover-after-a-kill: backlog
+  2-2-session-deadlines-survive-clock-changes-and-reboots: backlog
+  2-3-ring-before-the-first-unlock-after-a-reboot: backlog
+  2-4-unlocking-during-a-ring-makes-snooze-available-in-place: backlog
+  2-5-leave-the-alarm-and-come-back-through-the-notification: backlog
+  2-6-lock-the-app-to-alarm-in-progress-during-a-session: backlog
+  2-7-pause-the-alarm-for-phone-calls: backlog
+  2-8-alarm-volume-and-volume-keys-on-the-wake-screen: backlog
+  2-9-merge-an-alarm-that-rings-during-a-session: backlog
+  2-10-session-conflict-rules-end-to-end: backlog
+  2-11-no-hostage-guard-the-phone-stays-usable: backlog
+  2-12-back-up-alarms-and-history-never-the-session-or-media: backlog
+  2-13-epic-2-escape-attempts-checklist-on-the-device-matrix: backlog
+  epic-2-retrospective: optional
+
+  epic-3: backlog
+  3-1-check-plugin-contract-and-the-math-generator-in-core: backlog
+  3-2-solve-math-to-stop-the-alarm: backlog
+  3-3-success-screen-after-the-check-basic: backlog
+  3-4-grace-window-with-the-countdown-ring: backlog
+  3-5-choose-the-checks-for-each-alarm: backlog
+  3-6-try-it-previews-for-every-check: backlog
+  3-7-word-unscramble-check: backlog
+  3-8-memory-sequence-check: backlog
+  3-9-fallback-check-picker: backlog
+  3-10-qr-barcode-register-a-code-and-scan-it-to-stop-the-alarm: backlog
+  3-11-qr-barcode-when-the-camera-fails-and-before-first-unlock: backlog
+  3-12-checks-with-talkback-end-to-end: backlog
+  3-13-suggest-re-registering-after-3-fallbacks-in-7-days: backlog
+  3-14-epic-3-device-verification-checklist: backlog
+  epic-3-retrospective: optional
+
+  epic-4: backlog
+  4-1-create-the-50-snooze-products-with-tools-play-catalog: backlog
+  4-2-money-moneyformatter-and-the-feeladder-in-core: backlog
+  4-3-cache-play-prices-for-offline-display: backlog
+  4-4-commitment-lock-and-pending-changes-in-core: backlog
+  4-5-snooze-settings-base-fee-and-max-snoozes: backlog
+  4-6-fee-ladder-lock-notes-and-turn-off-confirmation-in-the-edito: backlog
+  4-7-snoozeavailability-with-every-reason: backlog
+  4-8-purchase-intents-install-id-and-the-runtime-db-intent-table: backlog
+  4-9-purchasereconciler-for-every-recovery-case: backlog
+  4-10-grant-ledger-purchase-records-and-consume-with-retry: backlog
+  4-11-billing-orchestration-launch-recovery-item_already_owned-and: backlog
+  4-12-play-billing-9-1-adapter-replacing-the-fake: backlog
+  4-13-snooze-confirm-sheet: backlog
+  4-14-payment-outcome-messages: backlog
+  4-15-snoozed-screen-session-line-and-snoozing-from-a-check: backlog
+  4-16-purchase-history: backlog
+  4-17-problem-with-a-charge: backlog
+  4-18-epic-4-payment-verification-with-license-testers: backlog
+  epic-4-retrospective: optional
+
+  epic-5: backlog
+  5-1-wake-and-snooze-defaults-and-theme-override-in-settings: backlog
+  5-2-bright-wake-screen: backlog
+  5-3-full-reliability-probe-do-not-disturb-battery-and-the-locked: backlog
+  5-4-reliability-checklist-screen-and-revoked-setting-warnings: backlog
+  5-5-manufacturer-background-guidance: backlog
+  5-6-anonymous-usage-stats-off-until-the-user-says-yes: backlog
+  5-7-privacy-policy-terms-and-support-pages-on-github-pages: backlog
+  5-8-how-payments-refunds-work-privacy-terms-and-support-in-setti: backlog
+  5-9-delete-all-data: backlog
+  5-10-onboarding-part-1-mission-alarm-behaviour-disclosure-and-bas: backlog
+  5-11-onboarding-part-2-first-alarm-checks-checklist-and-usage-sta: backlog
+  5-12-onboarding-test-alarm-on-a-locked-screen: backlog
+  5-13-epic-5-device-verification-checklist: backlog
+  5-14-start-the-14-day-closed-test-owner-task: backlog
+  epic-5-retrospective: optional
+
+  epic-6: backlog
+  6-1-streaks-on-time-rate-and-time-to-up-in-core-stats: backlog
+  6-2-snoozes-per-week-money-per-currency-and-day-outcomes-in-core: backlog
+  6-3-streak-and-money-hero-card-on-home: backlog
+  6-4-zero-snooze-celebration-on-the-success-screen: backlog
+  6-5-progress-screen-with-stat-tiles-snoozes-chart-and-money: backlog
+  6-6-calendar-of-morning-outcomes: backlog
+  6-7-day-detail-for-each-morning: backlog
+  6-8-weekly-summary-notification-on-sunday-evening: backlog
+  6-9-export-history-as-csv: backlog
+  6-10-epic-6-device-verification-checklist: backlog
+  epic-6-retrospective: optional
+
+  epic-7: backlog
+  7-1-record-and-store-motivation-messages: backlog
+  7-2-recordings-screen-and-choosing-a-message-per-alarm: backlog
+  7-3-play-my-message-after-i-m-up: backlog
+  7-4-use-my-own-audio-file-as-an-alarm-sound: backlog
+  7-5-mix-into-alarm-motivation-playback: backlog
+  7-6-spike-s3-house-hunt-image-matching: backlog
+  7-7-house-hunt-check-plugin-and-on-device-matcher: backlog
+  7-8-house-hunt-registration-and-re-take-after-restore: backlog
+  7-9-house-hunt-check-on-the-wake-screen: backlog
+  7-10-printable-qr-code-for-the-qr-barcode-check: backlog
+  7-11-skip-the-next-alarm-from-a-pre-alarm-notification: backlog
+  7-12-epic-7-device-verification-checklist: backlog
+  epic-7-retrospective: optional
+
+  epic-8: backlog
+  8-1-store-listing-text: backlog
+  8-2-screenshots-feature-graphic-and-icon-from-real-screens: backlog
+  8-3-data-safety-form-launch-blocker: backlog
+  8-4-content-rating-target-audience-18-and-other-app-content-decl: backlog
+  8-5-exact-alarm-full-screen-intent-and-foreground-service-declar: backlog
+  8-6-eu-dsa-trader-status-and-eu-consumer-rules-launch-blocker: backlog
+  8-7-release-signing-and-tag-driven-upload-to-the-internal-track: backlog
+  8-8-release-build-device-verification-checklist-launch-blocker: backlog
+  8-9-closed-test-feedback-triage-and-exit-launch-blocker: backlog
+  8-10-launch-readiness-review: backlog
+  8-11-post-launch-monitoring-runbook: backlog
+  8-12-staged-production-rollout: backlog
+  epic-8-retrospective: optional

@@ -1,0 +1,39 @@
+# Gradle / Android build output
+.gradle/
+build/
+**/build/
+captures/
+.externalNativeBuild/
+.cxx/
+*.apk
+*.aab
+*.ap_
+*.dex
+output-metadata.json
+
+# Local config and secrets (never commit)
+local.properties
+*.jks
+*.keystore
+keystore.properties
+google-services.json
+play-service-account*.json
+*.env
+.env*
+
+# IDE
+.idea/
+*.iml
+.DS_Store
+Thumbs.db
+
+# Kotlin / KMP
+.kotlin/
+kotlin-js-store/
+
+# Claude Code: commit shared skills and settings, not personal ones
+.claude/settings.local.json
+.claude/*.local.*
+
+# BMAD run scratch
+_bmad-output/**/.working/

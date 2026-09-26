@@ -99,6 +99,8 @@ context:
 
 - CI bring-up: the managed emulator failed to start on ubuntu-latest with an empty error; a temporary diagnostic step showed `qemu-system-x86_64: libpulse.so.0: cannot open shared object file`. ci.yml now installs `libpulse0` before the GMD step (diagnostic step removed).
 
+- CI bring-up (cont.): with libpulse0 present the emulator still exited silently; a manual boot in CI showed `FATAL | Your device does not have enough disk space to run avd`. ci.yml now frees disk space (unused preinstalled toolchains, Docker images) before setup-java. Diagnostics removed.
+
 ## Spec Change Log
 
 ## Review Triage Log

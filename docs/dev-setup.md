@@ -6,6 +6,7 @@ Open **PowerShell** (not as Administrator) and run:
 
 ```powershell
 winget install Git.Git
+winget install GitHub.cli
 winget install Google.AndroidStudio
 irm https://claude.ai/install.ps1 | iex
 ```
@@ -51,13 +52,14 @@ cd "D:\Code Source\pay-per-snooze"
 git init -b main
 git add .
 git commit -m "chore: planning artifacts, BMAD setup and sprint status"
-gh repo create yawn-and-pawn --private --source . --push
+git remote add origin https://github.com/vincentbui21/yawn-and-pawn.git
+git push -u origin main
 ```
 
 On the second computer:
 
 ```powershell
-gh repo clone yawn-and-pawn
+gh repo clone vincentbui21/yawn-and-pawn
 cd yawn-and-pawn
 ```
 
@@ -77,3 +79,49 @@ Git is the only thing the two computers share, so these rules stop them overwrit
 
 - **Google Play Console developer account** (personal, USD 25 one-time, identity verification can take a few days): Story 1.4. Start early.
 - **Support email:** placeholder `vincentbui2108@gmail.com` for now; change it later in `config/app-links.properties` (one line).
+
+## 6. Automatic build loop: bmad-loop (after stories 1.1–1.3)
+
+bmad-loop is the official BMAD orchestrator (https://github.com/bmad-code-org/bmad-loop). It reads `sprint-status.yaml`, picks the next story, and runs dev → review → verify → commit in fresh Claude Code sessions. It needs **WSL + tmux** on Windows.
+
+```powershell
+wsl --install -d Ubuntu        # once, then reboot and open "Ubuntu"
+```
+
+Inside Ubuntu (WSL):
+
+```bash
+sudo apt update && sudo apt install -y tmux git unzip openjdk-17-jdk
+curl -LsSf https://astral.sh/uv/install.sh | sh
+curl -fsSL https://claude.ai/install.sh | bash          # Claude Code for Linux, then run `claude` once to log in
+# Android command-line SDK for Gradle builds inside WSL (emulators stay on Windows / CI)
+mkdir -p ~/android-sdk/cmdline-tools && cd ~/android-sdk/cmdline-tools
+# download "Command line tools only" for Linux from developer.android.com/studio, unzip to ./latest, then:
+~/android-sdk/cmdline-tools/latest/bin/sdkmanager "platform-tools" "platforms;android-37" "build-tools;36.0.0"
+echo 'export ANDROID_HOME=$HOME/android-sdk' >> ~/.bashrc
+
+# clone the repo inside the Linux filesystem (much faster than /mnt/d)
+cd ~ && gh repo clone vincentbui21/yawn-and-pawn && cd yawn-and-pawn
+npx bmad-method install --yes --modules bmm --tools claude-code --shims   # --shims adds bmad-dev-auto → bmad-build-auto
+uv tool install "bmad-loop[tui] @ git+https://github.com/bmad-code-org/bmad-loop.git"
+bmad-loop init
+bmad-loop validate
+bmad-loop run --epic 1 --dry-run     # preview which stories it would run
+```
+
+Settings live in `.bmad-loop/policy.toml`. Recommended for this project:
+
+```toml
+[verify]
+commands = ["./gradlew qualityGate"]
+
+[gates]
+mode = "per-epic"          # pause at the end of each epic for your device check
+
+[scm]
+isolation = "worktree"
+branch_per = "story"
+merge_strategy = "squash"
+```
+
+`human-verify` stories (device checklists, Play Console tasks) are done by you, not the loop. Use `bmad-loop tui` to watch progress and `bmad-loop attach` to look at a live session.

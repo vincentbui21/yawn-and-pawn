@@ -2916,7 +2916,7 @@ So that Play Console, the app and testers link to one honest, up-to-date source.
 **Given** `./gradlew checkSitePages` (a `qualityGate` dependency)
 **When** it runs
 **Then** it fails if a page is missing, if `privacy.md` lacks any required heading (Data on your phone, Backup, Crash reports, Usage stats, Payments, Camera and microphone, Deleting your data, Contact), if any page contains "TODO" outside the marked Q17 placeholder, or if the copy rules (no em dash, banned words) are broken
-**And** the published URLs live in `config/app-links.properties` (`privacyUrl`, `termsUrl`, `supportUrl`, `supportEmail`) and are exposed to the app as `AppLinks` (supportEmail placeholder `vincentbui2108@gmail.com`; GitHub Pages base URL `https://<github-username>.github.io/yawn-and-pawn/` [OPEN: owner's GitHub username])
+**And** the published URLs live in `config/app-links.properties` (`privacyUrl`, `termsUrl`, `supportUrl`, `supportEmail`) and are exposed to the app as `AppLinks` (supportEmail placeholder `vincentbui2108@gmail.com`; GitHub Pages base URL `https://vincentbui21.github.io/yawn-and-pawn/` (repo https://github.com/vincentbui21/yawn-and-pawn))
 
 **Given** the owner
 **When** the pages are live

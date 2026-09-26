@@ -95,6 +95,8 @@ context:
 - Review fixes: each allowlist task fails unless the variants it gathered are exactly its `expectedVariants` input (default `{debug, release}`). Components inherit a hostage `android:permission` from `<application>`, which is flagged too. The secrets guard reads `git -c core.quotePath=false ls-files -z`, also covers `local.properties`, `.env*`, `*.pem`, `*.pk8` and `*.p8`, and is tested by `.github/scripts/test-check-no-tracked-secrets.sh` (run in CI before the guard). Partial `UPLOAD_*` signing configuration fails the build. CI `push` runs only on `main`. The release job runs `qualityGate`, pins the Play upload action by SHA (v1.1.5), rejects v0.0.0 and majors above 20999, strips whitespace from the keystore base64, and keeps the AAB and mapping for 90 days.
 - Not verifiable locally: the GitHub CI run (managed device, Linux Roborazzi verify). No Roborazzi threshold was set pre-emptively; the deferred-work item stays open until the first PR run.
 
+- First CI run (PR #2): `empty_screen.png` failed Roborazzi verify on Linux with a 5.5e-6 diff fraction (about 18 anti-aliased text-edge pixels; images visually identical). Added `androidApp/src/test/.../ScreenshotOptions.kt` with a shared 0.1% `changeThreshold` used by `MainActivityTest`; verified locally by swapping in the CI-rendered image as baseline (passes) and restoring the Windows baseline.
+
 ## Spec Change Log
 
 ## Review Triage Log

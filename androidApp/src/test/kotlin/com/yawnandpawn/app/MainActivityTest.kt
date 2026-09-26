@@ -40,6 +40,6 @@ class MainActivityTest {
     @Test
     fun `the empty screen matches the screenshot baseline`() {
         composeRule.onNodeWithText("Yawn & Pawn").assertExists()
-        composeRule.onRoot().captureRoboImage("src/test/screenshots/empty_screen.png")
+        composeRule.onRoot().captureRoboImage("src/test/screenshots/empty_screen.png", roborazziOptions = screenshotOptions)
     }
 }

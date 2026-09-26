@@ -16,7 +16,7 @@
 - source_spec: `_bmad-output/implementation-artifacts/spec-1-1-scaffold-the-kmp-project-with-a-quality-gate.md`
   summary: Confirm the Roborazzi baseline recorded on Windows verifies on Linux CI, or re-record on CI / add a compare threshold.
   evidence: Unverified (medium if true). Settled by the first CI run of `qualityGate` in Story 1.2.
-  status: still open after Story 1.2: CI now runs `testDebugUnitTest` with Roborazzi verify on ubuntu-latest, but no CI run has happened yet (the Windows machine cannot run it). If the first PR run fails on `empty_screen.png`, set a small Roborazzi `compareOptions` change threshold in `androidApp/build.gradle.kts`, document the value, and keep Windows verification passing (spec-1-2 Design Notes).
+  status: resolved in Story 1.2 (PR #2): Linux render differs by a 5.5e-6 diff fraction; shared 0.1% changeThreshold in androidApp/src/test/.../ScreenshotOptions.kt.
 - source_spec: `_bmad-output/implementation-artifacts/spec-1-1-scaffold-the-kmp-project-with-a-quality-gate.md`
   summary: Remove the "every Robolectric test class must call stopKoin()" trap (test Application or shared rule).
   evidence: `YawnAndPawnApp` calls global `startKoin`; a later test class without `@After stopKoin()` makes the next class throw `KoinApplicationAlreadyStartedException`.

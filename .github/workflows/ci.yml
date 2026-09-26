@@ -51,8 +51,12 @@ jobs:
           set -o pipefail
           ./gradlew :androidApp:bundleRelease 2>&1 | tee "$LOG_DIR/bundleRelease.log"
 
-      - name: Enable KVM for the emulator
+      # The runner image lacks libpulse0, which the emulator's qemu binary links against
+      # (without it the managed device exits with an empty error message).
+      - name: Enable KVM and install emulator system libraries
         run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq libpulse0
           echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' \
             | sudo tee /etc/udev/rules.d/99-kvm4all.rules
           sudo udevadm control --reload-rules
@@ -64,29 +68,6 @@ jobs:
           ./gradlew :androidApp:atdApi34DebugAndroidTest \
             -Pandroid.testoptions.manageddevices.emulator.gpu=swiftshader_indirect \
             2>&1 | tee "$LOG_DIR/managedDevice.log"
-
-      # TEMPORARY (Story 1.2 CI bring-up): the managed emulator exits with an empty error message.
-      # Capture why, then remove this step.
-      - name: Diagnose emulator start failure
-        if: failure()
-        continue-on-error: true
-        run: |
-          SDK="${ANDROID_HOME:-/usr/local/lib/android/sdk}"
-          ls -l /dev/kvm || true
-          "$SDK/emulator/emulator" -version | head -3 || true
-          "$SDK/emulator/emulator" -accel-check || true
-          echo "--- missing shared libraries ---"
-          find "$SDK/emulator" -maxdepth 3 -type f \( -name 'qemu-system-x86_64*' -o -name 'emulator' \) \
-            -exec sh -c 'echo "$1"; ldd "$1" | grep "not found" || true' _ {} \;
-          echo "--- AVDs ---"
-          find "$HOME/.android" "$HOME/.config/.android" -name '*.ini' -path '*avd*' 2>/dev/null | head
-          avd_ini="$(find "$HOME/.android" "$HOME/.config/.android" -name 'dev34_aosp_atd_x86_64_Pixel_6.ini' 2>/dev/null | head -1)"
-          if [ -n "$avd_ini" ]; then
-            export ANDROID_AVD_HOME="$(dirname "$avd_ini")"
-            echo "--- direct emulator launch (90 s) ---"
-            timeout 90 "$SDK/emulator/emulator" -avd dev34_aosp_atd_x86_64_Pixel_6 -no-window -no-audio \
-              -gpu swiftshader_indirect -no-snapshot -verbose 2>&1 | tail -60 || true
-          fi
 
       - name: Name the failing Gradle tasks in the job summary
         if: failure()

@@ -97,6 +97,8 @@ context:
 
 - First CI run (PR #2): `empty_screen.png` failed Roborazzi verify on Linux with a 5.5e-6 diff fraction (about 18 anti-aliased text-edge pixels; images visually identical). Added `androidApp/src/test/.../ScreenshotOptions.kt` with a shared 0.1% `changeThreshold` used by `MainActivityTest`; verified locally by swapping in the CI-rendered image as baseline (passes) and restoring the Windows baseline.
 
+- CI bring-up: the managed emulator failed to start on ubuntu-latest with an empty error; a temporary diagnostic step showed `qemu-system-x86_64: libpulse.so.0: cannot open shared object file`. ci.yml now installs `libpulse0` before the GMD step (diagnostic step removed).
+
 ## Spec Change Log
 
 ## Review Triage Log

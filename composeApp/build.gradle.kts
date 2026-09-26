@@ -52,3 +52,18 @@ compose.resources {
     packageOfResClass = "com.yawnandpawn.app.ui.resources"
     publicResClass = true
 }
+
+// Host tests read DESIGN.md (ContrastTest) and the string/font resources (CopyRulesTest, GeistFontTest).
+// Same DESIGN.md as the designTokens block in the root build file.
+val designMd = rootProject.layout.projectDirectory.file("_bmad-output/planning-artifacts/ux-designs/ux-pay-per-snooze-2026-09-26/DESIGN.md")
+val composeResourcesDir = layout.projectDirectory.dir("src/commonMain/composeResources")
+tasks.withType<Test>().configureEach {
+    inputs.file(designMd).withPathSensitivity(PathSensitivity.RELATIVE)
+    inputs.dir(composeResourcesDir).withPathSensitivity(PathSensitivity.RELATIVE)
+    systemProperty("yawnandpawn.designMd", designMd.asFile.absolutePath)
+    systemProperty("yawnandpawn.composeResources", composeResourcesDir.asFile.absolutePath)
+    // CopyRulesTest also scans the launcher strings of :androidApp (read as files; no project dependency).
+    val androidRes = rootProject.layout.projectDirectory.dir("androidApp/src/main/res")
+    inputs.dir(androidRes).withPathSensitivity(PathSensitivity.RELATIVE)
+    systemProperty("yawnandpawn.androidRes", androidRes.asFile.absolutePath)
+}

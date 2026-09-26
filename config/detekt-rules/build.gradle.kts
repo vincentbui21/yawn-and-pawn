@@ -20,8 +20,13 @@ dependencies {
     }
     testImplementation(libs.kotlin.test)
     testImplementation(libs.junit4)
+    // DetektConfigTest reads config/detekt/detekt.yml.
+    testImplementation(libs.snakeyaml)
 }
 
 tasks.test {
     useJUnit()
+    val detektConfig = rootProject.layout.projectDirectory.file("config/detekt/detekt.yml")
+    inputs.file(detektConfig).withPathSensitivity(PathSensitivity.RELATIVE)
+    systemProperty("yawnandpawn.detektConfig", detektConfig.asFile.absolutePath)
 }

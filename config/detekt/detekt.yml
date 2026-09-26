@@ -1,5 +1,5 @@
 # detekt configuration, applied on top of the detekt default config (buildUponDefaultConfig = true).
-# Only overrides live here. Later stories add rules (time ports, raw colours, ...) to :detekt-rules.
+# Only overrides live here. Later stories add rules to :detekt-rules.
 
 config:
   validation: true
@@ -27,6 +27,17 @@ yawn-and-pawn:
     # :core logs only through the Logger port (Architecture Conventions: Logging).
     includes:
       - '**/core/src/**'
+  # Time only through the Clock/MonotonicClock/BootCounter/TimeZoneProvider ports (AD-3, Story 1.6).
+  # App modules only (build tooling is not scoped); package com.yawnandpawn.app.android (the Android
+  # adapters) is exempt inside the rule.
+  NoDirectTimeAccess:
+    active: true
+    includes:
+      - '**/core/src/**'
+      - '**/data/src/**'
+      - '**/composeApp/src/**'
+      - '**/androidApp/src/**'
+      - '**/testing/src/**'
   # Design tokens only (AD-10, Story 1.3). Active for every module; code in a package ending
   # in ui.theme (where PpsTheme is built from the generated PpsTokens) is exempt inside the rules.
   NoRawColor:

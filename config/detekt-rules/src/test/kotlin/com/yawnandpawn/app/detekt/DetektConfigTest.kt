@@ -29,4 +29,13 @@ class DetektConfigTest {
             assertEquals(true, entry?.get("active"), "yawn-and-pawn.$rule.active")
         }
     }
+
+    @Test
+    fun `NoDirectTimeAccess is scoped to the five app modules`() {
+        val rule = (config["yawn-and-pawn"] as Map<*, *>)["NoDirectTimeAccess"] as Map<*, *>
+        val includes = (rule["includes"] as List<*>).toSet()
+
+        val expected = listOf("core", "data", "composeApp", "androidApp", "testing").map { "**/$it/src/**" }
+        assertTrue(includes.containsAll(expected), "NoDirectTimeAccess.includes = $includes")
+    }
 }

@@ -4,7 +4,7 @@ description: A calm, warm night-time alarm app that turns into a bright sunrise 
 status: draft
 version: 0.3
 owner: Kiet Bui
-updated: 2026-09-27
+updated: 2026-09-28
 sources:
   - _bmad-output/planning-artifacts/prds/prd-pay-per-snooze-2026-09-26/prd.md
   - EXPERIENCE.md
@@ -286,6 +286,12 @@ components:
     borderColor: '{colors.glass-edge}'
     blurRadius: '{spacing.glass-blur}'
     note: 'Surfaces over moving content: pill-save, nav-bar, sheet-snooze-confirm. Real blur on Android 12+ only.'
+  header-collapsing:
+    titleChipColor: '{colors.glass-strong}'
+    compactChipColor: '{colors.glass-strong}'
+    compactNumberColor: '{colors.accent-text}'
+    compactNumberTypography: '{typography.title}'
+    note: 'Home header (owner decision 2026-09-28, Samsung Weather). Title pinned top-left in headline; glass chip fades in over the first 16dp of scroll; card-hero fades out by 60% of the collapse, shrinks 10% and lags 20% as it scrolls under; from 50% the compact streak chip fades and rises 8dp in beside (or, when it does not fit, under) the title.'
   pill-save:
     backgroundColor: '{colors.glass-strong}'
     borderColor: '{colors.glass-edge}'
@@ -469,7 +475,7 @@ The palette is warm greys plus one accent. Nothing is pure black or pure white a
 - `{colors.glass}` (72% alpha) for cards (`card-group`, `card-alarm`, `card-hero`, `banner-warning`, `panel-session-in-progress`) over the static gradient.
 - `{colors.glass-strong}` (92% alpha) for surfaces over moving content (`glass-bar`: `pill-save`, `nav-bar`, `sheet-snooze-confirm`). It is dense enough that text passes even over the worst content behind it (dark `text` in light themes, light `text` in Dark).
 - `{colors.glass-edge}` is a `{spacing.hairline}` decorative edge and the divider between rows in a card (like `outline-subtle`, never the only boundary of a control).
-- **Blur:** `glass-bar` surfaces blur what scrolls beneath them by `{spacing.glass-blur}` on Android 12+ (API 31+, the built-in `RenderEffect` through Compose, no extra library). Below API 31 they are the same translucent surfaces without blur. Cards sit over the static gradient, where a blur looks identical to no blur, so they use the fill only; nothing blurs a constantly animating list.
+- **Blur:** `glass-bar` surfaces that float over content (the snooze confirm sheet) blur what is beneath them by `{spacing.glass-blur}` on Android 12+; the bottom pill no longer overlaps content (2026-09-28), so it has nothing to blur (API 31+, the built-in `RenderEffect` through Compose, no extra library). Below API 31 they are the same translucent surfaces without blur. Cards sit over the static gradient, where a blur looks identical to no blur, so they use the fill only; nothing blurs a constantly animating list.
 - Contrast is verified for text and controls on glass composited over the worst case behind it (the darker gradient top, or the darkest or lightest content under a `glass-bar`); see the `glass+...` rows below.
 
 ### Verified contrast (WCAG 2.x)
@@ -616,7 +622,8 @@ Computed with a WCAG relative-luminance script (2026-09-26; glass and gradient r
 - Single column always. One main job per screen.
 - **Grouped cards (owner decision 2026-09-27, after the Oppo and Samsung stock Clock apps):** related rows sit together in one `card-group` with hairline dividers between rows, on every app screen; cards are 12 dp apart; a short section title in `label` / `text-secondary` may sit above a card.
 - **Progressive disclosure:** a row shows its title, the current value as a subtitle (`caption`, `text-secondary`) and a chevron; tapping opens a sub-screen (back arrow, same background) to set it. One screen never shows every option.
-- **Bottom pill:** screens with a Save have a floating `pill-save` ("Cancel | Save") 16 dp above the navigation bar, kept above the keyboard; the scrolling content ends with room for it.
+- **Bottom pill (owner decision 2026-09-28, Samsung editor):** screens with a Save have `pill-save` ("Cancel | Save") in **its own bottom area**, 16 dp above the navigation bar and above the keyboard. The scrolling content ends above that area and never runs under the pill: scrolled to the end, the last row is fully visible.
+- **Collapsing header (owner decision 2026-09-28, Samsung Weather):** Home pins its title top-left and collapses `card-hero` into a compact chip beside it as the list scrolls; cards scroll up underneath the pinned header. See `header-collapsing`.
 
 ## Elevation & Depth
 
@@ -659,7 +666,8 @@ Visual specs. Behaviour for every row lives in `EXPERIENCE.md > Component Patter
 | `background-gradient` | Every screen's background: `gradient-top` fading into `bg` over the top 60% (Sunrise: `sunrise-gradient-top` into `bg-sunrise` over the top 40%), flat below. No accent directly on it. |
 | `card-group` | `{colors.glass}` fill, `{spacing.hairline}` `glass-edge` border, `{rounded.md}`. Rows inside have `{spacing.card-padding}` side padding and hairline `glass-edge` dividers between them. Used for every group of settings: editor, sub-screens, Settings, pickers, onboarding. |
 | `glass-bar` | `{colors.glass-strong}` with a `glass-edge` hairline, background blur `{spacing.glass-blur}` on Android 12+. For `pill-save`, `nav-bar` and `sheet-snooze-confirm`. |
-| `pill-save` | Floating `glass-bar`, 56 dp, `{rounded.full}`, full width minus `screen-margin`, two equal halves split by a hairline: "Cancel" (`text`) and "Save" (`accent-text`, bold), both `label`, each at least 48 dp. |
+| `header-collapsing` | Home only. "Yawn & Pawn" pinned top-left in `headline`; a `glass-strong` pill chip fades in behind it over the first 16 dp of scroll. `card-hero` fades out by 60% of the collapse, shrinks to 90% towards its top-left and lags 20% of its height as it scrolls under the header; from 50% (a cross-fade, so the streak never shows twice) the compact chip (`glass-strong`, streak number in `title` / `accent-text`, "days on time" in `label`) fades and rises 8 dp in beside the title. The status bar area keeps `gradient-top` so nothing runs under the clock. |
+| `pill-save` | `glass-bar` in its own bottom area (never over content), 56 dp, `{rounded.full}`, full width minus `screen-margin`, two equal halves split by a hairline: "Cancel" (`text`) and "Save" (`accent-text`, bold), both `label`, each at least 48 dp. |
 | `fab` | 56 dp, `{rounded.full}`, accent fill, "+" in on-accent. Bottom right, 20 dp from edges. |
 | `banner-warning` | `{colors.glass}` fill with a `glass-edge` hairline, `{rounded.md}`, leading `error` icon in `{colors.error}`, message in `body`, `button-text` "Fix". Info variant: `info` icon in `text-secondary`, no error colour. |
 | `panel-session-in-progress` | Replaces Home content during a session. `{colors.glass}` card, "Alarm in progress" in `headline`, one `button-filled` "Back to alarm". |

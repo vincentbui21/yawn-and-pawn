@@ -3,7 +3,7 @@ name: Yawn & Pawn
 status: draft
 version: 0.3
 owner: Kiet Bui
-updated: 2026-09-27
+updated: 2026-09-28
 sources:
   - _bmad-output/planning-artifacts/prds/prd-pay-per-snooze-2026-09-26/prd.md
   - DESIGN.md
@@ -312,7 +312,7 @@ Behavioural rules. Visual specs for every row live in `DESIGN.md > Components` u
 | `stepper` | Base fee, counts | − / + in single steps; long-press repeats. Base fee lowering under lock shows the lock note. |
 | `slider` | Quiet time (15 to 30 s, default 20), volume | Value announced on change; steps of 1 s or 5%. No ramp start level slider (owner decision 2026-09-27). |
 | `switch` | Toggles | Immediate effect; no save needed except inside the editor. |
-| `time-picker` | Editor, onboarding | Scrolling wheels in their own card: hour and minute, plus AM/PM on 12 h phones, with "h" / "min" labels; momentum scrolling that snaps to one value, a light haptic tick per value, centre value selected; no keyboard ever opens. TalkBack reads each wheel as "Hour, 6" / "Minute, 45"; swipe up or down changes it by one. Targets ≥ 48 dp. (owner decision 2026-09-27, replaces keyboard input first) |
+| `time-picker` | Editor, onboarding | Scrolling wheels in their own card: hour and minute, plus AM/PM on 12 h phones, with "h" / "min" labels; momentum scrolling that snaps to one value, a light haptic tick and a short quiet bundled tick sound per value (owner decision 2026-09-28; the sound is silent on silent or vibrate, the haptic follows the system haptic setting), centre value selected; no keyboard ever opens. TalkBack reads each wheel as "Hour, 6" / "Minute, 45"; swipe up or down changes it by one. Targets ≥ 48 dp. (owner decision 2026-09-27, replaces keyboard input first) |
 | `top-app-bar` | Pushed screens | Back returns; unsaved editor changes prompt "Discard changes?" |
 | `nav-bar` | App root | Three items; hidden during the session lock. |
 | `progress-dots` | Onboarding | Show step; back allowed; not tappable. |
@@ -323,7 +323,8 @@ Behavioural rules. Visual specs for every row live in `DESIGN.md > Components` u
 | `checklist-row` | Reliability checklist | "Fix" deep-links to the system setting; status re-checked on return. Camera and microphone rows appear only when needed. |
 | `settings-row` | Editor, Settings, pickers | Progressive disclosure (owner decision 2026-09-27): title with the current value as a subtitle and a chevron; tap opens the sub-screen that sets it (back arrow returns, the change is kept). A toggle row has a switch instead. Rows unavailable during a session. |
 | `card-group` | Every app screen | Related rows grouped in one glass card with dividers (owner decision 2026-09-27, like the stock Clock apps). Not interactive itself. |
-| `pill-save` | Editor (and later setup screens with a Save) | Floating "Cancel \| Save". Cancel = Back (unsaved changes ask "Discard changes?"). Stays above the keyboard. Save is disabled while saving. |
+| `pill-save` | Editor (and later setup screens with a Save) | "Cancel \| Save" in its own bottom area (owner decision 2026-09-28): content scrolls above it, never under it, and the last row is fully visible at the end. Cancel = Back (unsaved changes ask "Discard changes?"). Stays above the keyboard with the focused field visible. Save is disabled while saving. |
+| `header-collapsing` | Home | Continuous and tied to the scroll position, never a snap (owner decision 2026-09-28, Samsung Weather): the title stays pinned and gains its glass chip as content scrolls under it; the hero collapses into the compact "{streak} days on time" chip; alarm cards scroll underneath. Reduced motion: each part switches instantly at the halfway point. The compact chip is not read by TalkBack (the hero card says the same). |
 | `glass-bar` | Bottom pill, nav bar, snooze confirm sheet | Translucent glass over moving content; blurs it on Android 12+, plain translucent below. |
 | `background-gradient` | Every screen | Static; never animates. |
 | `purchase-row` | Purchase history | Read-only. Shows what was charged; stranded purchases read "Not used, refunded automatically by Google". Self-requested refunds are not detectable (PRD §6.3). |
@@ -420,12 +421,13 @@ Behavioural rules. Visual specs for every row live in `DESIGN.md > Components` u
 | Screens and sub-screens (owner decision 2026-09-27) | Slide in from the end and out the other way, 250 ms emphasized; the outgoing screen moves a quarter width |
 | "Custom" repeat | Day chips expand and collapse |
 | Switches and chips | Animate their state change (Material 3 switch, chip colour fade) |
-| Time wheel | Momentum scroll with snapping; light haptic tick per value |
+| Time wheel | Momentum scroll with snapping; light haptic tick and a quiet tick sound per value |
+| Home header (owner decision 2026-09-28) | Scroll-linked collapse: title chip fades in over 16 dp; hero fades out by 60%, shrinks 10% and lags; the compact streak chip cross-fades in from 50% and rises 8 dp |
 | Alarm cards | Animate in and out when added or removed |
 | "I'm up" pulse (Ringing) | Scale 1 to 1.03 and back, 1.2 s, repeating; drawn only |
 
-- **Reduced motion:** when the animator duration scale is 0, every motion becomes an instant state change and the "I'm up" pulse does not run; the countdown still counts as numbers.
-- **Haptics:** light tick on each digit or tile tap and on each time-wheel value; success pattern on completion; strong buzz when the alarm returns after grace; a short tick every 5 s during grace (countdown cue that works without sound or sight).
+- **Reduced motion:** when the animator duration scale is 0, every motion becomes an instant state change and the "I'm up" pulse does not run; the Home header switches between its rest and collapsed states at the halfway point instead of following the scroll; the countdown still counts as numbers.
+- **Haptics and sounds:** light tick on each digit or tile tap and on each time-wheel value, plus the bundled wheel tick sound (12 ms, played quietly on the sonification stream, never while the phone is on silent or vibrate; not the system click that "Touch sounds" controls); success pattern on completion; strong buzz when the alarm returns after grace; a short tick every 5 s during grace (countdown cue that works without sound or sight).
 - **Volume keys:** captured only while the wake screen is in the foreground (FR-SES-6). The accessibility shortcut (both volume keys held) always passes through.
 - **Banned:** decorative motion, pre-selected payment buttons, disguised or hidden snooze, confirm-shaming copy, carousels, streak-loss threats, badge counts.
 

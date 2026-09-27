@@ -47,3 +47,12 @@ Owner decisions and issues from trying the design preview on the Oppo A96. Each 
     - The contrast test covers text on glass against the worst case of the gradient behind it.
     - Blur only on cards, sheets and the pill, never on constantly animating lists.
     - A blur library (e.g. Haze) needs a dependency-allowlist review; Android's built-in `RenderEffect` is the fallback option.
+
+## Round 1 rework feedback (2026-09-28)
+16. **The Cancel | Save pill must not cover content.** It gets its own bottom area, like the Samsung editor: the scrolling content ends above that area (the last row fully visible when scrolled to the end), and the area stays above the keyboard.
+17. **Wheel feedback like Samsung:** each value that passes the centre of the time wheel gives a light haptic tick and a short, quiet tick sound. The sound is bundled, not the system click that "Touch sounds" turns off, and plays at a low level. Both are silent when the phone is on silent or vibrate for the sound, and the haptic respects the system haptic setting.
+18. **Collapsing Home header like Samsung Weather** (owner video, "Lahti" / "8°"):
+    - "Yawn & Pawn" stays pinned top-left like "Lahti" and gains a frosted glass chip behind it once content scrolls under it.
+    - The streak hero (big "12", "days on time", money line) collapses as you scroll into a compact pinned row ("12 days on time"). Secondary lines fade or move beside the number.
+    - Alarm cards scroll up underneath the pinned header.
+    - The transition is continuous and tied to scroll position. It is not a snap, and reduced motion turns it into an instant switch.

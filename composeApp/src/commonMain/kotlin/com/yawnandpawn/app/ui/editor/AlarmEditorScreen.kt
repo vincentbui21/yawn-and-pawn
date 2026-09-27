@@ -13,21 +13,17 @@ import androidx.compose.animation.slideInHorizontally
 import androidx.compose.animation.slideOutHorizontally
 import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.ScrollState
-import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.imePadding
-import androidx.compose.foundation.layout.isImeVisible
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.statusBars
 import androidx.compose.foundation.layout.windowInsetsPadding
-import androidx.compose.foundation.layout.windowInsetsTopHeight
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.SnackbarHostState
@@ -38,9 +34,9 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.semantics
-import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.navigationevent.NavigationEventInfo
 import androidx.navigationevent.compose.NavigationBackHandler
@@ -63,8 +59,6 @@ import com.yawnandpawn.app.ui.components.PpsWheelTimePicker
 import com.yawnandpawn.app.ui.components.SaveCancelPill
 import com.yawnandpawn.app.ui.components.SwitchRow
 import com.yawnandpawn.app.ui.components.TextFieldRow
-import com.yawnandpawn.app.ui.components.glassSource
-import com.yawnandpawn.app.ui.components.rememberGlassBackdrop
 import com.yawnandpawn.app.ui.format.countdownText
 import com.yawnandpawn.app.ui.format.formatClockTime
 import com.yawnandpawn.app.ui.format.is24HourClock
@@ -149,8 +143,8 @@ fun AlarmEditorRoute(
  * out. With [EditorUiState.full] it is the full editor (wake-up check, quiet time, motivation, sound list, fee ladder,
  * "Test alarm"); without it, the Story 1.8 fields only.
  *
- * The pill sits above the keyboard (`imePadding`, with the activity edge-to-edge and `adjustResize`), so Save stays
- * visible while the alarm name is typed.
+ * The pill has its own bottom area under the scrolling content and sits above the keyboard (`imePadding`, with the
+ * activity edge-to-edge and `adjustResize`), so Save and the focused name field stay visible while it is typed.
  */
 @Composable
 fun AlarmEditorScreen(
@@ -206,7 +200,6 @@ private fun paneTransition(forward: Boolean): ContentTransform {
 }
 
 /** The main editor screen: header, time card, repeat card, the two row cards, notes, "Test alarm" and the pill. */
-@OptIn(ExperimentalLayoutApi::class)
 @Composable
 private fun EditorMain(
     state: EditorUiState,
@@ -215,21 +208,19 @@ private fun EditorMain(
     scroll: ScrollState,
 ) {
     val spacing = PpsTheme.spacing
-    val backdrop = rememberGlassBackdrop()
-    Box(modifier = Modifier.fillMaxSize()) {
-        PpsBackground(modifier = Modifier.glassSource(backdrop)) {
+    // The pill has its own bottom area (owner decision 2026-09-28, like the Samsung editor): the scrolling content ends
+    // above it, so the last row is fully visible when scrolled to the end, and both sit above the keyboard.
+    PpsBackground {
+        Column(modifier = Modifier.fillMaxSize().imePadding()) {
             Column(
                 modifier =
                     Modifier
-                        .fillMaxSize()
-                        .imePadding()
-                        // With the keyboard up, the viewport ends above the pill, so the focused name field is never
-                        // hidden behind it; otherwise content scrolls under the pill (which blurs it).
-                        .padding(bottom = if (WindowInsets.isImeVisible) PILL_CLEARANCE else 0.dp)
-                        .verticalScroll(scroll)
+                        .fillMaxWidth()
+                        .weight(1f)
                         .windowInsetsPadding(WindowInsets.statusBars)
-                        .navigationBarsPadding()
-                        .padding(start = spacing.screenMargin, end = spacing.screenMargin, top = spacing.space4, bottom = PILL_CLEARANCE),
+                        .clipToBounds()
+                        .verticalScroll(scroll)
+                        .padding(start = spacing.screenMargin, end = spacing.screenMargin, top = spacing.space4, bottom = spacing.space4),
                 verticalArrangement = Arrangement.spacedBy(spacing.space3),
             ) {
                 EditorHeader(state)
@@ -248,24 +239,15 @@ private fun EditorMain(
                     )
                 }
             }
+            SaveCancelPill(
+                cancelText = stringResource(Res.string.editor_cancel),
+                saveText = stringResource(Res.string.editor_save),
+                onCancel = { onIntent(EditorIntent.BackRequested) },
+                onSave = { onIntent(EditorIntent.SaveClicked) },
+                saveEnabled = !state.isSaving,
+                modifier = Modifier.padding(top = spacing.space2),
+            )
         }
-        // The status bar area keeps the top of the background, so scrolled cards never run under the clock and icons.
-        Box(
-            modifier =
-                Modifier
-                    .fillMaxWidth()
-                    .windowInsetsTopHeight(WindowInsets.statusBars)
-                    .background(PpsTheme.colors.gradientTop),
-        )
-        SaveCancelPill(
-            cancelText = stringResource(Res.string.editor_cancel),
-            saveText = stringResource(Res.string.editor_save),
-            onCancel = { onIntent(EditorIntent.BackRequested) },
-            onSave = { onIntent(EditorIntent.SaveClicked) },
-            saveEnabled = !state.isSaving,
-            backdrop = backdrop,
-            modifier = Modifier.align(Alignment.BottomCenter),
-        )
     }
 }
 

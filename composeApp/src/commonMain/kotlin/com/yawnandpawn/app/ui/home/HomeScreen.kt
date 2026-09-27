@@ -15,13 +15,22 @@ import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.statusBars
 import androidx.compose.foundation.layout.windowInsetsPadding
+import androidx.compose.foundation.layout.windowInsetsTopHeight
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.layout.onSizeChanged
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.semantics
@@ -50,7 +59,6 @@ import com.yawnandpawn.app.ui.resources.alarm_card_switch
 import com.yawnandpawn.app.ui.resources.alarms_add_alarm
 import com.yawnandpawn.app.ui.resources.alarms_add_first
 import com.yawnandpawn.app.ui.resources.alarms_empty_title
-import com.yawnandpawn.app.ui.resources.app_name
 import com.yawnandpawn.app.ui.resources.disable_keep_on
 import com.yawnandpawn.app.ui.resources.disable_turn_off
 import com.yawnandpawn.app.ui.resources.disable_under_lock_hours
@@ -81,22 +89,21 @@ fun HomeScreen(
     is24Hour: Boolean,
     onIntent: (HomeIntent) -> Unit,
     modifier: Modifier = Modifier,
+    listState: LazyListState = rememberLazyListState(),
 ) {
-    val colors = PpsTheme.colors
     val spacing = PpsTheme.spacing
     PpsBackground(modifier = modifier) {
-        Column(modifier = Modifier.fillMaxSize().windowInsetsPadding(WindowInsets.statusBars)) {
-            Text(
-                text = stringResource(Res.string.app_name),
-                modifier = Modifier.padding(horizontal = spacing.screenMargin, vertical = spacing.space4).semantics { heading() },
-                style = PpsTheme.typography.headline,
-                color = colors.text,
-            )
-            when {
-                state.sessionInProgress -> SessionPanel(onBackToAlarm = { onIntent(HomeIntent.BackToAlarm) })
-                state.alarms.isEmpty() -> EmptyHome(state = state, is24Hour = is24Hour, onIntent = onIntent, modifier = Modifier.weight(1f))
-                else -> HomeList(state = state, is24Hour = is24Hour, onIntent = onIntent, modifier = Modifier.weight(1f))
+        if (state.sessionInProgress || state.alarms.isEmpty()) {
+            Column(modifier = Modifier.fillMaxSize().windowInsetsPadding(WindowInsets.statusBars)) {
+                HomeHeader(streakDays = null, collapse = null, modifier = Modifier.padding(bottom = spacing.space3))
+                if (state.sessionInProgress) {
+                    SessionPanel(onBackToAlarm = { onIntent(HomeIntent.BackToAlarm) })
+                } else {
+                    EmptyHome(state = state, is24Hour = is24Hour, onIntent = onIntent, modifier = Modifier.weight(1f))
+                }
             }
+        } else {
+            HomeList(state = state, is24Hour = is24Hour, onIntent = onIntent, listState = listState)
         }
         if (!state.sessionInProgress) {
             PpsFab(
@@ -109,42 +116,74 @@ fun HomeScreen(
     state.disableDialog?.let { dialog -> DisableDialog(dialog = dialog, is24Hour = is24Hour, onIntent = onIntent) }
 }
 
+/**
+ * The alarm list under the pinned, collapsing header (owner decision 2026-09-28, Samsung Weather): the list starts below
+ * the header and scrolls up underneath it; the hero collapses into the header's compact streak chip as it goes.
+ */
 @Composable
 private fun HomeList(
     state: HomeUiState,
     is24Hour: Boolean,
     onIntent: (HomeIntent) -> Unit,
-    modifier: Modifier = Modifier,
+    listState: LazyListState,
 ) {
     val spacing = PpsTheme.spacing
-    LazyColumn(
-        modifier = modifier.fillMaxWidth(),
-        // Room below the last card for the FAB (56 dp plus its margins).
-        contentPadding = PaddingValues(start = spacing.screenMargin, end = spacing.screenMargin, bottom = LIST_BOTTOM_PADDING),
-        verticalArrangement = Arrangement.spacedBy(spacing.space3),
-    ) {
-        item(key = "notices") { Notices(state = state, is24Hour = is24Hour, onIntent = onIntent) }
-        state.hero?.let { hero -> item(key = "hero") { HeroCard(hero) } }
-        state.nextAlarm?.let { countdown ->
-            item(key = "next") {
-                Text(
-                    text = countdownText(countdown),
-                    modifier = Modifier.padding(top = spacing.space2),
-                    style = PpsTheme.typography.title,
-                    color = PpsTheme.colors.text,
+    val density = LocalDensity.current
+    val collapse = rememberHeaderCollapse(listState)
+    var headerHeight by remember { mutableStateOf(0.dp) }
+    Box(modifier = Modifier.fillMaxSize()) {
+        LazyColumn(
+            state = listState,
+            modifier = Modifier.fillMaxSize(),
+            // Starts below the pinned header; room below the last card for the FAB (56 dp plus its margins).
+            contentPadding =
+                PaddingValues(
+                    start = spacing.screenMargin,
+                    end = spacing.screenMargin,
+                    top = headerHeight + spacing.space3,
+                    bottom = LIST_BOTTOM_PADDING,
+                ),
+            verticalArrangement = Arrangement.spacedBy(spacing.space3),
+        ) {
+            item(key = "notices") { Notices(state = state, is24Hour = is24Hour, onIntent = onIntent) }
+            state.hero?.let { hero -> item(key = HERO_KEY) { HeroCard(hero, modifier = Modifier.collapsingHero(collapse)) } }
+            state.nextAlarm?.let { countdown ->
+                item(key = "next") {
+                    Text(
+                        text = countdownText(countdown),
+                        modifier = Modifier.padding(top = spacing.space2),
+                        style = PpsTheme.typography.title,
+                        color = PpsTheme.colors.text,
+                    )
+                }
+            }
+            items(state.alarms, key = { it.id }) { alarm ->
+                AlarmCardView(
+                    // Cards animate in and out when an alarm is added or removed (owner decision 2026-09-27).
+                    modifier = Modifier.animateItem(),
+                    alarm = alarm,
+                    is24Hour = is24Hour,
+                    onClick = { onIntent(HomeIntent.EditAlarm(alarm.id)) },
+                    onToggle = { onIntent(HomeIntent.AlarmToggled(alarm.id, it)) },
                 )
             }
         }
-        items(state.alarms, key = { it.id }) { alarm ->
-            AlarmCardView(
-                // Cards animate in and out when an alarm is added or removed (owner decision 2026-09-27).
-                modifier = Modifier.animateItem(),
-                alarm = alarm,
-                is24Hour = is24Hour,
-                onClick = { onIntent(HomeIntent.EditAlarm(alarm.id)) },
-                onToggle = { onIntent(HomeIntent.AlarmToggled(alarm.id, it)) },
-            )
-        }
+        // The status bar keeps the top of the background, so cards never run under the clock and icons.
+        Box(
+            modifier =
+                Modifier
+                    .fillMaxWidth()
+                    .windowInsetsTopHeight(WindowInsets.statusBars)
+                    .background(PpsTheme.colors.gradientTop),
+        )
+        HomeHeader(
+            streakDays = state.hero?.streakDays,
+            collapse = collapse,
+            modifier =
+                Modifier
+                    .windowInsetsPadding(WindowInsets.statusBars)
+                    .onSizeChanged { headerHeight = with(density) { it.height.toDp() } },
+        )
     }
 }
 
@@ -188,11 +227,14 @@ private fun Notices(
 
 /** `card-hero` (glass): streak number in `display` (`accent-text`), "days on time" in `body`, the money line in `text-secondary`. */
 @Composable
-private fun HeroCard(hero: HomeHero) {
+private fun HeroCard(
+    hero: HomeHero,
+    modifier: Modifier = Modifier,
+) {
     val colors = PpsTheme.colors
     Column(
         modifier =
-            Modifier
+            modifier
                 .fillMaxWidth()
                 .glass(PpsTheme.shapes.md)
                 .padding(PpsTheme.spacing.cardPadding)

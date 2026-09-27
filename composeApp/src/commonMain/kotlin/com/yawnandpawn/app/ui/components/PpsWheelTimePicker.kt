@@ -200,11 +200,19 @@ private fun WheelSync(
     val latestSelected by rememberUpdatedState(selectedIndex)
     val latestOnSelect by rememberUpdatedState(onSelect)
     val haptics = LocalHapticFeedback.current
-    // A light tick each time a new value passes the centre while the wheel scrolls (owner decision 2026-09-27).
+    val tick = rememberWheelTickSound()
+    // A light haptic tick and a quiet tick sound each time a new value passes the centre while the wheel scrolls
+    // (owner decisions 2026-09-27 / 2026-09-28).
     LaunchedEffect(listState, count) {
         snapshotFlow { listState.centredIndex() % count }
             .drop(1)
-            .collect { if (listState.isScrollInProgress) haptics.performHapticFeedback(HapticFeedbackType.SegmentFrequentTick) }
+            .collect {
+                if (listState.isScrollInProgress) {
+                    // The haptic follows the system haptic setting; the sound is silent on silent or vibrate.
+                    haptics.performHapticFeedback(HapticFeedbackType.SegmentFrequentTick)
+                    tick()
+                }
+            }
     }
     LaunchedEffect(listState, count) {
         snapshotFlow { listState.isScrollInProgress }

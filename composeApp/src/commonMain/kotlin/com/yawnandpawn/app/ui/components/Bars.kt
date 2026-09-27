@@ -31,9 +31,10 @@ import androidx.compose.ui.unit.dp
 import com.yawnandpawn.app.ui.theme.PpsTheme
 
 /**
- * `pill-save` (owner decision 2026-09-27, Samsung style): a floating `glass-bar` pill with "Cancel" and "Save" halves
- * split by a hairline. Sits [PILL_BOTTOM_GAP] above the navigation bar and above the keyboard (`imePadding`), over the
- * screen content that [backdrop] records, which it blurs on Android 12+. Each half is a ≥ 48 dp button.
+ * `pill-save` (owner decisions 2026-09-27 / 2026-09-28, Samsung style): a `glass-bar` pill with "Cancel" and "Save"
+ * halves split by a hairline, in its own bottom area below the scrolling content (never over it), [PILL_BOTTOM_GAP]
+ * above the navigation bar and above the keyboard (`imePadding`). Each half is a ≥ 48 dp button. [backdrop] is only for
+ * a pill that floats over content.
  */
 @Composable
 fun SaveCancelPill(

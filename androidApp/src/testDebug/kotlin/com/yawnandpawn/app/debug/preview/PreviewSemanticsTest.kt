@@ -58,7 +58,8 @@ abstract class PreviewSemanticsChecks(
     fun `every control meets the accessibility floor`() =
         withPreview(case) {
             composeRule.waitForIdle()
-            val nodes = composeRule.onAllNodes(actionable).fetchSemanticsNodes()
+            // A control scrolled fully out of the viewport (Home scrolled under its header) has empty bounds; skip it.
+            val nodes = composeRule.onAllNodes(actionable).fetchSemanticsNodes().filterNot { it.touchBoundsInRoot.isEmpty }
             nodes.forEach { node ->
                 assertTrue(
                     node.widthDp() >= 48.dp && node.heightDp() >= 48.dp,

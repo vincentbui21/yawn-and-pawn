@@ -19,3 +19,11 @@ expect fun rememberReducedMotion(): Boolean
  */
 @Composable
 expect fun SystemBarIcons(darkIcons: Boolean)
+
+/**
+ * The time wheel's tick (owner decision 2026-09-28, like the Samsung clock): a short, quiet bundled sound, not the
+ * system click that "Touch sounds" turns off. The returned function plays it once; it stays silent while the phone is on
+ * silent or vibrate.
+ */
+@Composable
+expect fun rememberWheelTickSound(): () -> Unit

@@ -74,7 +74,18 @@ object PreviewSamples {
                 listOf(CheckType.WordUnscramble),
                 enabled = false,
             ),
-        )
+            // More cards, so Home scrolls and its header collapses on a phone (design preview feedback item 18).
+            AlarmCard(
+                "4",
+                LocalTime(6, 15),
+                setOf(DayOfWeek.MONDAY, DayOfWeek.WEDNESDAY, DayOfWeek.FRIDAY),
+                "Gym",
+                listOf(CheckType.MemorySequence),
+                true,
+            ),
+            AlarmCard("5", LocalTime(10, 30), emptySet(), "Dentist", listOf(CheckType.Math), enabled = true),
+            AlarmCard("6", LocalTime(13, 0), weekdays, "Lunch walk", listOf(CheckType.HouseHunt), enabled = false),
+        ).sortedBy { it.time }
 
     val homeList =
         HomeUiState(

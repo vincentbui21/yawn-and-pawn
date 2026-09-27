@@ -65,3 +65,6 @@
 - source_spec: `_bmad-output/implementation-artifacts/spec-design-preview-whole-app.md`
   summary: Editor sub-screens are in-screen state (`EditorUiState.pane`), not Navigation 3 routes.
   evidence: Keeps production navigation unchanged (spec Never). Predictive back animates the whole editor, not the sub-screen; revisit when Story 1.9+ wires the editor to real sub-screens.
+- source_spec: `_bmad-output/implementation-artifacts/spec-design-preview-whole-app.md`
+  summary: Exempt the time-wheel tick from the Story 1.17 bundled-sound loudness check.
+  evidence: `composeApp/src/androidMain/res/raw/wheel_tick.wav` (12 ms, 3.2 kHz, peak -12 dBFS, generated in-repo) is a deliberately quiet UI sound (feedback item 17). The loudness gate (peak >= -3 dBFS, >= -14 LUFS) is not built yet, so there is no exemption list to add it to; Story 1.17 must scope its check to alarm sounds or exempt this file.

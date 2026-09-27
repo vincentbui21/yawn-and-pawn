@@ -1,6 +1,9 @@
 package com.yawnandpawn.app.debug.preview
 
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.runtime.Composable
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.unit.dp
 import com.yawnandpawn.app.ui.editor.AlarmEditorScreen
 import com.yawnandpawn.app.ui.editor.EditorUiState
 import com.yawnandpawn.app.ui.home.HomeScreen
@@ -37,6 +40,9 @@ class PreviewItem(
     val render: @Composable (is24Hour: Boolean) -> Unit,
 )
 
+/** About half the hero card height (display number, two lines, card padding). */
+private const val HALF_HERO_DP = 54
+
 /** Every state the design preview shows, grouped by round and screen (Round 1: the daily loop). */
 object PreviewCatalog {
     private fun home(
@@ -45,9 +51,14 @@ object PreviewCatalog {
         state: HomeUiState,
         primary: Boolean = false,
         hasDialog: Boolean = false,
+        // Opened scrolled to this list item (1 = the hero) plus scrollDp into it: the collapsing header states.
+        scrollItem: Int = 0,
+        scrollDp: Int = 0,
     ) = PreviewItem(id, 1, "Alarms (Home)", title, primary = primary, hasDialog = hasDialog) { is24 ->
+        val offset = with(LocalDensity.current) { scrollDp.dp.roundToPx() }
+        val listState = rememberLazyListState(initialFirstVisibleItemIndex = scrollItem, initialFirstVisibleItemScrollOffset = offset)
         AppShell(selected = AppTab.Alarms, onSelect = {}, showNavBar = !state.sessionInProgress) {
-            HomeScreen(state = state, is24Hour = is24, onIntent = {})
+            HomeScreen(state = state, is24Hour = is24, onIntent = {}, listState = listState)
         }
     }
 
@@ -114,6 +125,8 @@ object PreviewCatalog {
                 AppShell(selected = AppTab.Settings, onSelect = {}) { TabPlaceholder(AppTab.Settings) }
             },
             home("home_list", "Streak, next alarm, alarm cards", s.homeList, primary = true),
+            home("home_half_collapsed", "Scrolled: header half collapsed", s.homeList, scrollItem = 1, scrollDp = HALF_HERO_DP),
+            home("home_collapsed", "Scrolled: header collapsed, cards under it", s.homeList, scrollItem = 2, scrollDp = 24),
             home("home_paid", "Paid this week, rings in 45 min", s.homePaid),
             home("home_days_away", "Next alarm in 2 d 3 h", s.homeDaysAway),
             home("home_empty", "Empty", s.homeEmpty, primary = true),

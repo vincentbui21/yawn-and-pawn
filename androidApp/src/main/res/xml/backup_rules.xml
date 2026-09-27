@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+    Auto Backup on API 30 and lower (NFR-14). Same content as data_extraction_rules.xml: only app.db in the
+    device-protected database domain; everything not included is excluded. BackupRulesTest checks both.
+-->
+<full-backup-content>
+    <include domain="device_database" path="app.db" />
+</full-backup-content>

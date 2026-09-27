@@ -15,6 +15,8 @@ android-minSdk = "26"
 
 # Libraries (Stack table)
 room3 = "3.0.3"
+# androidx.sqlite: the version room3 3.0.3 depends on (verified published 2026-09-27).
+sqlite = "2.7.1"
 datastore = "1.2.1"
 kotlinx-coroutines = "1.11.0"
 kotlinx-datetime = "0.8.0"
@@ -73,6 +75,8 @@ navigation3-ui = { module = "org.jetbrains.androidx.navigation3:navigation3-ui",
 androidx-activity-compose = { module = "androidx.activity:activity-compose", version.ref = "androidx-activity-compose" }
 room3-runtime = { module = "androidx.room3:room3-runtime", version.ref = "room3" }
 room3-compiler = { module = "androidx.room3:room3-compiler", version.ref = "room3" }
+# AndroidSQLiteDriver (framework SQLite); see docs/decisions/oq-2-room.md for why not the bundled driver.
+sqlite-framework = { module = "androidx.sqlite:sqlite-framework", version.ref = "sqlite" }
 datastore-preferences = { module = "androidx.datastore:datastore-preferences", version.ref = "datastore" }
 workmanager-runtime = { module = "androidx.work:work-runtime-ktx", version.ref = "workmanager" }
 camerax-camera2 = { module = "androidx.camera:camera-camera2", version.ref = "camerax" }

@@ -111,6 +111,19 @@ androidx.window:window
 androidx.window:window-core
 androidx.window:window-core-android
 
+# Room 3 and AndroidX SQLite (Story 1.7, app.db; docs/decisions/oq-2-room.md). Reviewed 2026-09-27: local
+# on-device database only (Room runtime, the SQLite driver API and the framework-SQLite driver); no network code.
+androidx.room3:room3-common
+androidx.room3:room3-common-jvm
+androidx.room3:room3-runtime
+androidx.room3:room3-runtime-android
+androidx.sqlite:sqlite
+androidx.sqlite:sqlite-android
+androidx.sqlite:sqlite-async
+androidx.sqlite:sqlite-async-android
+androidx.sqlite:sqlite-framework
+androidx.sqlite:sqlite-framework-android
+
 # Annotations and small support libraries
 com.google.guava:listenablefuture
 org.jspecify:jspecify

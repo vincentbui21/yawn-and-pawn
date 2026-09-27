@@ -5,6 +5,7 @@ plugins {
     alias(libs.plugins.android.kotlin.multiplatform.library)
     alias(libs.plugins.compose.multiplatform)
     alias(libs.plugins.compose.compiler)
+    alias(libs.plugins.kotlin.serialization)
 }
 
 kotlin {
@@ -40,10 +41,19 @@ kotlin {
             implementation(libs.compose.components.resources)
             implementation(libs.compose.ui.tooling.preview)
             implementation(libs.koin.core)
+            // Story 1.8: Navigation 3, one ViewModel per screen (scoped to its nav entry) and Koin in Compose.
+            implementation(libs.navigation3.ui)
+            implementation(libs.androidx.lifecycle.viewmodel.compose)
+            implementation(libs.androidx.lifecycle.viewmodel.navigation3)
+            implementation(libs.koin.compose)
+            implementation(libs.koin.compose.viewmodel)
+            // @Serializable routes; subclassesOfSealed needs 1.9+ (Navigation 3 alone brings 1.7).
+            implementation(libs.kotlinx.serialization.core)
         }
         commonTest.dependencies {
             implementation(project(":testing"))
             implementation(libs.kotlin.test)
+            implementation(libs.kotlinx.coroutines.test)
         }
     }
 }

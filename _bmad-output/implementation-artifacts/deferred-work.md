@@ -41,3 +41,6 @@
 - source_spec: `_bmad-output/implementation-artifacts/spec-1-7-store-alarms-in-app-db.md`
   summary: Test that app.db opens before first unlock (credential storage locked).
   evidence: Only the device-protected path is asserted. Belongs with the directBootAware receivers and WakeService in Stories 1.10 and 1.14.
+- source_spec: `_bmad-output/implementation-artifacts/spec-1-8-create-and-edit-an-alarm.md`
+  summary: Owner copy for storage read failures: the Alarms list failing to load, and an alarm failing to open in the editor.
+  evidence: EXPERIENCE.md has no strings for these states. Story 1.8 now hides the misleading empty state on a list failure and closes the editor on a load failure without a message; both need a short owner-approved message (and possibly a retry).

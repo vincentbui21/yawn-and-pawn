@@ -165,7 +165,7 @@ data class CheckUiState(
 
 /** Success after the check. */
 sealed interface SuccessKind {
-    /** Zero snoozes: "Up on time. {streak} days in a row." ("Up on time." before streaks exist, [streakDays] 0). */
+    /** Zero snoozes: the streak number, "days in a row" and "Up on time." (only "Up on time." before streaks, [streakDays] 0). */
     data class OnTime(
         val streakDays: Int,
     ) : SuccessKind

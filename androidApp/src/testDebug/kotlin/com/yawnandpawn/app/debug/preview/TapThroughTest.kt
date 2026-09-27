@@ -70,7 +70,9 @@ class TapThroughTest {
             tapDigits("42")
             composeRule.onNodeWithText("Check").performClick()
 
-            composeRule.onNodeWithText("Up on time. 12 days in a row.").assertExists()
+            composeRule.onNodeWithText("days in a row").assertExists()
+            composeRule.onNodeWithText("Up on time.").assertExists()
+            composeRule.onNodeWithContentDescription("12").assertExists()
             composeRule.onNodeWithText("Done").performClick()
             composeRule.onNodeWithText("Alarm in progress").assertDoesNotExist()
             composeRule.onNodeWithContentDescription("Add alarm").assertExists()

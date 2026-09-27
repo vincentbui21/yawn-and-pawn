@@ -32,6 +32,15 @@ Drafted for the new sub-screens:
 | (reused `editor_message_none`) | None | Wake-up check row value with no check selected | Same word as the Motivation "None"; the row also shows "Pick at least one check." |
 | `editor_message` (existing) | Message | Motivation sub-screen, title above None / Random / Message 1 | EXPERIENCE.md "Recordings, editor section" row. |
 
+## Success screen (owner feedback items 19 to 20, 2026-09-28)
+
+| Key | Draft | Screen | Note |
+|---|---|---|---|
+| `success_days_in_a_row` | days in a row | Success, under the streak number | Owner-given (item 19). |
+| `success_day_in_a_row` | day in a row | Success, under "1" | Draft singular of the owner's label. |
+
+The old `success_zero_snooze` ("Up on time. {n} days in a row.") and `success_zero_snooze_one` strings are no longer used on this screen.
+
 ## Not strings, but worth a look
 
 - The Math problem is drawn as digits with "+" or "×" (for example "47 + 38"); TalkBack reads the key string "47 plus 38".

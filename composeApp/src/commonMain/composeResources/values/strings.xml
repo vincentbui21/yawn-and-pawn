@@ -204,6 +204,9 @@
     <string name="success_zero_snooze">Up on time. %1$d days in a row.</string>
     <string name="success_zero_snooze_one">Up on time. 1 day in a row.</string>
     <string name="success_zero_snooze_first">Up on time.</string>
+    <!-- Under the streak number on Success (owner decision 2026-09-28, feedback item 19); the singular is a draft. -->
+    <string name="success_days_in_a_row">days in a row</string>
+    <string name="success_day_in_a_row">day in a row</string>
     <string name="success_after_snooze">You're up. That's what counts.</string>
     <string name="success_paid_this_morning">%1$s paid this morning</string>
     <string name="success_test">Test finished. Your alarm works.</string>

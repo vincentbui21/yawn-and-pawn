@@ -56,3 +56,11 @@ Owner decisions and issues from trying the design preview on the Oppo A96. Each 
     - The streak hero (big "12", "days on time", money line) collapses as you scroll into a compact pinned row ("12 days on time"). Secondary lines fade or move beside the number.
     - Alarm cards scroll up underneath the pinned header.
     - The transition is continuous and tied to scroll position. It is not a snap, and reduced motion turns it into an instant switch.
+19. **Success screen (on time) copy, no repeated number** (owner, 2026-09-28): the big streak number, then the label "days in a row" directly under it, then the headline "Up on time.". No second "12" in the sentence, and each line fits on one line on a 360 dp phone at 100% font size. This replaces the EXPERIENCE.md string "Up on time. {n} days in a row." for this screen.
+20. **Success celebration** (owner, 2026-09-28):
+    - The number counts up from n−1 to n with a small bounce.
+    - A short confetti burst in Sunrise/brand colours, about 1.5 s, then the screen is calm.
+    - One success haptic.
+    - Built with Compose animation, not a GIF.
+    - Reduced motion shows the final state instantly with no confetti.
+    - After-snooze success stays without confetti (EXPERIENCE.md "No animation").

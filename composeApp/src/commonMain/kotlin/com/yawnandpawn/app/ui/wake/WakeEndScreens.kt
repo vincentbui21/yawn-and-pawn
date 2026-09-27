@@ -40,9 +40,7 @@ import com.yawnandpawn.app.ui.resources.success_done
 import com.yawnandpawn.app.ui.resources.success_paid_this_morning
 import com.yawnandpawn.app.ui.resources.success_pending_not_used
 import com.yawnandpawn.app.ui.resources.success_test
-import com.yawnandpawn.app.ui.resources.success_zero_snooze
 import com.yawnandpawn.app.ui.resources.success_zero_snooze_first
-import com.yawnandpawn.app.ui.resources.success_zero_snooze_one
 import com.yawnandpawn.app.ui.theme.PpsTheme
 import org.jetbrains.compose.resources.stringResource
 
@@ -99,7 +97,8 @@ fun FallbackPickerScreen(
 }
 
 /**
- * Success, always Sunrise: zero snooze shows the streak ("Up on time. 12 days in a row.", the number in `display`),
+ * Success, always Sunrise: zero snooze shows the streak number (`display`, counting up), "days in a row" and "Up on time."
+ * with a 1.5 s confetti celebration and one success haptic (owner decisions 2026-09-28),
  * after a snooze "You're up. That's what counts." with the amount paid, a test "Test finished. Your alarm works.",
  * then "Done" (64 dp, thumb zone).
  */
@@ -109,7 +108,9 @@ fun SuccessScreen(
     onIntent: (WakeIntent) -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    WakeSurface(modifier = modifier) {
+    // On time only: the celebration (count-up, confetti, one success haptic); after a snooze or a test, none.
+    val celebration = if (state.kind is SuccessKind.OnTime) rememberCelebration() else null
+    WakeSurface(modifier = modifier, overlay = { celebration?.let { Confetti(it) } }) {
         val colors = PpsTheme.colors
         val spacing = PpsTheme.spacing
         Column(modifier = Modifier.fillMaxSize().wakeContentPadding()) {
@@ -125,16 +126,9 @@ fun SuccessScreen(
                 ) {
                     when (val kind = state.kind) {
                         is SuccessKind.OnTime -> {
-                            if (kind.streakDays > 0) {
-                                Text(text = kind.streakDays.toString(), style = PpsTheme.typography.display, color = colors.accentText)
-                            }
-                            Headline(
-                                when (kind.streakDays) {
-                                    0 -> stringResource(Res.string.success_zero_snooze_first)
-                                    1 -> stringResource(Res.string.success_zero_snooze_one)
-                                    else -> stringResource(Res.string.success_zero_snooze, kind.streakDays)
-                                },
-                            )
+                            // Owner decision 2026-09-28: the number, "days in a row" under it, then "Up on time."
+                            if (kind.streakDays > 0 && celebration != null) StreakCount(kind.streakDays, celebration)
+                            Headline(stringResource(Res.string.success_zero_snooze_first))
                         }
 
                         is SuccessKind.AfterSnooze -> {

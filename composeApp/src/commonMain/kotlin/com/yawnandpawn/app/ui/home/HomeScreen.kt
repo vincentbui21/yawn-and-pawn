@@ -48,6 +48,8 @@ import com.yawnandpawn.app.ui.components.PpsFilledButton
 import com.yawnandpawn.app.ui.components.PpsSwitch
 import com.yawnandpawn.app.ui.components.RowIcon
 import com.yawnandpawn.app.ui.components.glass
+import com.yawnandpawn.app.ui.components.glassSource
+import com.yawnandpawn.app.ui.components.rememberGlassBackdrop
 import com.yawnandpawn.app.ui.format.Countdown
 import com.yawnandpawn.app.ui.format.countdownText
 import com.yawnandpawn.app.ui.format.formatClockTime
@@ -131,11 +133,19 @@ private fun HomeList(
     val density = LocalDensity.current
     val collapse = rememberHeaderCollapse(listState)
     var headerHeight by remember { mutableStateOf(0.dp) }
+    val backdrop = rememberGlassBackdrop()
+    val statusBarTop = WindowInsets.statusBars.getTop(density)
+    val fade = with(density) { spacing.space3.toPx() }
+    val opaque = PpsTheme.colors.text
     Box(modifier = Modifier.fillMaxSize()) {
         LazyColumn(
             state = listState,
-            modifier = Modifier.fillMaxSize(),
-            // Starts below the pinned header; room below the last card for the FAB (56 dp plus its margins).
+            modifier =
+                Modifier
+                    .fillMaxSize()
+                    .glassSource(backdrop)
+                    .fadeUnderHeader(zoneBottom = { statusBarTop + with(density) { headerHeight.toPx() } }, fade = fade, opaque = opaque),
+            // Starts below the pinned header (and its fade); room below the last card so its switch clears the FAB.
             contentPadding =
                 PaddingValues(
                     start = spacing.screenMargin,
@@ -147,16 +157,7 @@ private fun HomeList(
         ) {
             item(key = "notices") { Notices(state = state, is24Hour = is24Hour, onIntent = onIntent) }
             state.hero?.let { hero -> item(key = HERO_KEY) { HeroCard(hero, modifier = Modifier.collapsingHero(collapse)) } }
-            state.nextAlarm?.let { countdown ->
-                item(key = "next") {
-                    Text(
-                        text = countdownText(countdown),
-                        modifier = Modifier.padding(top = spacing.space2),
-                        style = PpsTheme.typography.title,
-                        color = PpsTheme.colors.text,
-                    )
-                }
-            }
+            state.nextAlarm?.let { countdown -> item(key = "next") { NextAlarm(countdown) } }
             items(state.alarms, key = { it.id }) { alarm ->
                 AlarmCardView(
                     // Cards animate in and out when an alarm is added or removed (owner decision 2026-09-27).
@@ -168,23 +169,27 @@ private fun HomeList(
                 )
             }
         }
-        // The status bar keeps the top of the background, so cards never run under the clock and icons.
-        Box(
-            modifier =
-                Modifier
-                    .fillMaxWidth()
-                    .windowInsetsTopHeight(WindowInsets.statusBars)
-                    .background(PpsTheme.colors.gradientTop),
-        )
         HomeHeader(
             streakDays = state.hero?.streakDays,
             collapse = collapse,
+            backdrop = backdrop,
             modifier =
                 Modifier
                     .windowInsetsPadding(WindowInsets.statusBars)
                     .onSizeChanged { headerHeight = with(density) { it.height.toDp() } },
         )
     }
+}
+
+/** "Rings in ..." above the alarm cards. */
+@Composable
+private fun NextAlarm(countdown: Countdown) {
+    Text(
+        text = countdownText(countdown),
+        modifier = Modifier.padding(top = PpsTheme.spacing.space2),
+        style = PpsTheme.typography.title,
+        color = PpsTheme.colors.text,
+    )
 }
 
 /** Banners and the missed note, stacked above the hero. */
@@ -408,4 +413,6 @@ private fun DisableDialog(
 }
 
 private const val HOURS_PER_DAY = 24
-private val LIST_BOTTOM_PADDING = 96.dp
+
+/** FAB 56 dp + its 20 dp margin + a 24 dp gap, so the last card's switch is above the FAB when scrolled to the end. */
+private val LIST_BOTTOM_PADDING = 100.dp

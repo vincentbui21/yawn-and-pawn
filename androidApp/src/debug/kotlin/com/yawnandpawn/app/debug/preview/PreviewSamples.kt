@@ -5,6 +5,7 @@ import com.yawnandpawn.app.ui.checks.Difficulty
 import com.yawnandpawn.app.ui.editor.CheckChip
 import com.yawnandpawn.app.ui.editor.CheckMode
 import com.yawnandpawn.app.ui.editor.EditorForm
+import com.yawnandpawn.app.ui.editor.EditorPane
 import com.yawnandpawn.app.ui.editor.EditorUiState
 import com.yawnandpawn.app.ui.editor.FullEditorSections
 import com.yawnandpawn.app.ui.editor.MotivationChoice
@@ -44,14 +45,18 @@ import java.util.Locale
 /**
  * Fake data for the design preview and its screenshot tests: realistic states from EXPERIENCE.md Key Flows (Linh's
  * 7:30 weekday alarm, Marco's 5:45). Prices are [Money] in the phone's local currency (US dollars when the locale has
- * none), so they go through the normal price formatting and never carry a hard-coded symbol.
+ * none), so they go through the normal price formatting and never carry a hard-coded symbol. The base fee is a
+ * realistic amount in that currency (design preview feedback item 5: not "₫1" on a Vietnamese phone).
  */
 object PreviewSamples {
     private val currency: String =
         runCatching { Currency.getInstance(Locale.getDefault()).currencyCode }.getOrNull() ?: "USD"
 
-    /** The base fee B: snooze N costs B x N. */
-    fun price(units: Int): Money = Money.of(units, currency)
+    /** The fake base fee B in [currency]: snooze N costs B x N. */
+    private val baseFee: Int = baseFeeFor(currency)
+
+    /** The price of snooze [n] (B x n). */
+    fun price(n: Int): Money = Money.of(baseFee * n, currency)
 
     private val weekdays = setOf(DayOfWeek.MONDAY, DayOfWeek.TUESDAY, DayOfWeek.WEDNESDAY, DayOfWeek.THURSDAY, DayOfWeek.FRIDAY)
 
@@ -92,36 +97,11 @@ object PreviewSamples {
 
     val homeDisableDialog = homeList.copy(disableDialog = DisableUnderLock("2", LocalTime(7, 30), Countdown.HoursMinutes(8, 0)))
 
-    // Alarm editor -------------------------------------------------------------------------------------------------
+    // Sound list (the editor's Sound sub-screen) ---------------------------------------------------------------------
 
-    val fullSections =
-        FullEditorSections(
-            checks = listOf(CheckChip(CheckType.Math, Difficulty.Medium), CheckChip(CheckType.QrBarcode, Difficulty.Easy)),
-            checkMode = CheckMode.Random,
-            feeLadder = listOf(price(1), price(2), price(3)),
-            soundName = "Sunrise",
-        )
+    private val recordings = listOf("Message 1", "Message 2")
 
-    val editorNew = EditorUiState(full = FullEditorSections(feeLadder = listOf(price(1), price(2), price(3)), soundName = "Sunrise"))
-
-    val editorEdit =
-        EditorUiState(
-            isNew = false,
-            form = EditorForm(time = LocalTime(7, 30), repeatDays = weekdays, label = "Stand-up"),
-            full = fullSections.copy(motivation = MotivationChoice.Recording("Message 1"), motivationTiming = MotivationTiming.AfterImUp),
-        )
-
-    val editorNoCheck = editorNew.copy(full = editorNew.full?.copy(checks = emptyList(), noCheckError = true))
-
-    val editorWeakening = editorEdit.copy(full = editorEdit.full?.copy(weakeningAppliesAfter = LocalTime(7, 30)))
-
-    val editorSoundMissing = editorEdit.copy(full = editorEdit.full?.copy(soundName = "morning-mix.mp3", soundMissing = true))
-
-    val editorTomorrow = editorNew.copy(ringsTomorrowAt = EditorForm.DEFAULT_TIME)
-
-    // Sound picker -------------------------------------------------------------------------------------------------
-
-    val soundPicker =
+    val soundList =
         SoundPickerUiState(
             options =
                 listOf(
@@ -136,7 +116,68 @@ object PreviewSamples {
             selectedId = "b1",
         )
 
-    val soundPreviewing = soundPicker.copy(selectedId = "b2", previewingId = "b2")
+    // Alarm editor -------------------------------------------------------------------------------------------------
+
+    val fullSections =
+        FullEditorSections(
+            checks = listOf(CheckChip(CheckType.Math, Difficulty.Medium), CheckChip(CheckType.QrBarcode, Difficulty.Easy)),
+            checkMode = CheckMode.Random,
+            feeLadder = listOf(price(1), price(2), price(3)),
+            soundName = "Sunrise",
+        )
+
+    val editorNew =
+        EditorUiState(
+            ringsIn = Countdown.HoursMinutes(23, 0),
+            full =
+                FullEditorSections(
+                    feeLadder = listOf(price(1), price(2), price(3)),
+                    soundName = "Sunrise",
+                    sounds = soundList,
+                    recordings = recordings,
+                ),
+        )
+
+    val editorEdit =
+        EditorUiState(
+            isNew = false,
+            form = EditorForm(time = LocalTime(7, 30), repeatDays = weekdays, label = "Stand-up"),
+            ringsIn = Countdown.HoursMinutes(7, 12),
+            full =
+                fullSections.copy(
+                    motivation = MotivationChoice.Recording("Message 1"),
+                    motivationTiming = MotivationTiming.AfterImUp,
+                    sounds = soundList,
+                    recordings = recordings,
+                ),
+        )
+
+    /** Custom repeat days (Mon, Wed, Fri): the day chips are shown. */
+    val editorCustomDays =
+        editorEdit.copy(form = editorEdit.form.copy(repeatDays = setOf(DayOfWeek.MONDAY, DayOfWeek.WEDNESDAY, DayOfWeek.FRIDAY)))
+
+    val editorSoundPane = editorEdit.copy(pane = EditorPane.Sound)
+
+    val editorSoundPreviewing =
+        editorSoundPane.copy(full = editorSoundPane.full?.copy(sounds = soundList.copy(selectedId = "b2", previewingId = "b2")))
+
+    val editorSnoozePane = editorEdit.copy(pane = EditorPane.Snooze)
+
+    val editorCheckPane = editorEdit.copy(pane = EditorPane.WakeCheck)
+
+    val editorQuietPane = editorEdit.copy(pane = EditorPane.QuietTime)
+
+    val editorMotivationPane = editorEdit.copy(pane = EditorPane.Motivation)
+
+    val editorNoCheck = editorNew.copy(full = editorNew.full?.copy(checks = emptyList(), noCheckError = true))
+
+    val editorNoCheckPane = editorNoCheck.copy(pane = EditorPane.WakeCheck)
+
+    val editorWeakening = editorEdit.copy(full = editorEdit.full?.copy(weakeningAppliesAfter = LocalTime(7, 30)))
+
+    val editorSoundMissing = editorEdit.copy(full = editorEdit.full?.copy(soundName = "morning-mix.mp3", soundMissing = true))
+
+    val editorTomorrow = editorNew.copy(ringsTomorrowAt = EditorForm.DEFAULT_TIME, ringsIn = Countdown.HoursMinutes(23, 0))
 
     // Wake flow ----------------------------------------------------------------------------------------------------
 
@@ -261,3 +302,61 @@ object PreviewSamples {
 
     val snoozed = SnoozedUiState(nextRingAt = LocalTime(7, 39))
 }
+
+/**
+ * A realistic fake base fee per currency (whole units): about one US dollar, rounded the way a price would be. Unknown
+ * currencies use 1 of their unit when they have decimals, 100 when they have none (like the yen).
+ */
+internal fun baseFeeFor(currencyCode: String): Int =
+    BASE_FEES[currencyCode]
+        ?: if (runCatching { Currency.getInstance(currencyCode).defaultFractionDigits }.getOrNull() == 0) NO_DECIMALS_FEE else 1
+
+/** The fallback base fee in a currency without decimals. */
+private const val NO_DECIMALS_FEE = 100
+
+private val BASE_FEES: Map<String, Int> =
+    mapOf(
+        "USD" to 1,
+        "EUR" to 1,
+        "GBP" to 1,
+        "CHF" to 1,
+        "CAD" to 1,
+        "SGD" to 1,
+        "AUD" to 2,
+        "NZD" to 2,
+        "VND" to 25_000,
+        "IDR" to 15_000,
+        "KRW" to 1_500,
+        "JPY" to 150,
+        "HUF" to 400,
+        "CLP" to 1_000,
+        "COP" to 4_000,
+        "ARS" to 1_000,
+        "NGN" to 1_500,
+        "KZT" to 500,
+        "INR" to 80,
+        "PKR" to 300,
+        "BDT" to 120,
+        "RUB" to 90,
+        "UAH" to 40,
+        "THB" to 35,
+        "PHP" to 55,
+        "TWD" to 30,
+        "CZK" to 25,
+        "MXN" to 20,
+        "ZAR" to 20,
+        "TRY" to 35,
+        "EGP" to 50,
+        "SEK" to 10,
+        "NOK" to 10,
+        "DKK" to 7,
+        "CNY" to 7,
+        "HKD" to 8,
+        "PLN" to 4,
+        "BRL" to 5,
+        "MYR" to 5,
+        "SAR" to 4,
+        "AED" to 4,
+        "ILS" to 4,
+        "PEN" to 4,
+    )

@@ -23,4 +23,8 @@ data class PpsSpacing(
     /** "I'm up" and the House Hunt shutter. */
     val targetWakeHero: Dp = PpsTokens.Spacing.targetWakeHero,
     val ringStroke: Dp = PpsTokens.Spacing.ringStroke,
+    /** Background blur radius behind glass over moving content (Android 12+). */
+    val glassBlur: Dp = PpsTokens.Spacing.glassBlur,
+    /** Width of the glass edge and of dividers between rows in a card. */
+    val hairline: Dp = PpsTokens.Spacing.hairline,
 )

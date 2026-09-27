@@ -28,8 +28,10 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.yawnandpawn.app.ui.components.PpsBackground
 import com.yawnandpawn.app.ui.components.PpsFab
 import com.yawnandpawn.app.ui.components.PpsFilledButton
+import com.yawnandpawn.app.ui.components.glass
 import com.yawnandpawn.app.ui.format.formatClockTime
 import com.yawnandpawn.app.ui.format.is24HourClock
 import com.yawnandpawn.app.ui.format.repeatSummary
@@ -68,7 +70,7 @@ fun AlarmsScreen(
 ) {
     val colors = PpsTheme.colors
     val spacing = PpsTheme.spacing
-    Box(modifier = modifier.fillMaxSize().background(colors.bg)) {
+    PpsBackground(modifier = modifier) {
         Column(modifier = Modifier.fillMaxSize().windowInsetsPadding(WindowInsets.statusBars)) {
             Text(
                 text = stringResource(Res.string.app_name),
@@ -137,7 +139,7 @@ private fun AlarmList(
         verticalArrangement = Arrangement.spacedBy(spacing.space2),
     ) {
         items(alarms, key = { it.id }) { alarm ->
-            AlarmListRow(alarm = alarm, is24Hour = is24Hour, onClick = { onEditAlarm(alarm.id) })
+            AlarmListRow(alarm = alarm, is24Hour = is24Hour, onClick = { onEditAlarm(alarm.id) }, modifier = Modifier.animateItem())
         }
     }
 }
@@ -147,15 +149,15 @@ private fun AlarmListRow(
     alarm: AlarmRow,
     is24Hour: Boolean,
     onClick: () -> Unit,
+    modifier: Modifier = Modifier,
 ) {
     val colors = PpsTheme.colors
     Column(
         modifier =
-            Modifier
+            modifier
                 .fillMaxWidth()
                 .heightIn(min = PpsTheme.spacing.targetWake)
-                .clip(PpsTheme.shapes.md)
-                .background(colors.surface)
+                .glass(PpsTheme.shapes.md)
                 .clickable(role = Role.Button, onClick = onClick)
                 .padding(PpsTheme.spacing.cardPadding),
         verticalArrangement = Arrangement.Center,

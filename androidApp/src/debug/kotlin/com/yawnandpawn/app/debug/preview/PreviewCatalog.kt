@@ -8,8 +8,6 @@ import com.yawnandpawn.app.ui.home.HomeUiState
 import com.yawnandpawn.app.ui.shell.AppShell
 import com.yawnandpawn.app.ui.shell.AppTab
 import com.yawnandpawn.app.ui.shell.TabPlaceholder
-import com.yawnandpawn.app.ui.sound.SoundPickerScreen
-import com.yawnandpawn.app.ui.sound.SoundPickerUiState
 import com.yawnandpawn.app.ui.wake.CheckScreen
 import com.yawnandpawn.app.ui.wake.CheckUiState
 import com.yawnandpawn.app.ui.wake.FallbackPickerScreen
@@ -58,15 +56,20 @@ object PreviewCatalog {
         title: String,
         state: EditorUiState,
         primary: Boolean = false,
-    ) = PreviewItem(id, 1, "Alarm editor", title, primary = primary, tall = true) { is24 ->
+        group: String = "Alarm editor",
+        tall: Boolean = true,
+    ) = PreviewItem(id, 1, group, title, primary = primary, tall = tall) { is24 ->
         AlarmEditorScreen(state = state, is24Hour = is24, onIntent = {})
     }
 
-    private fun sound(
+    /** An editor sub-screen (progressive disclosure): its own group in the menu. */
+    private fun subScreen(
         id: String,
         title: String,
-        state: SoundPickerUiState,
-    ) = PreviewItem(id, 1, "Sound picker", title) { SoundPickerScreen(state = state, onIntent = {}) }
+        state: EditorUiState,
+        primary: Boolean = false,
+        tall: Boolean = false,
+    ) = editor(id, title, state, primary = primary, group = "Alarm editor sub-screens", tall = tall)
 
     private fun ringing(
         id: String,
@@ -118,14 +121,20 @@ object PreviewCatalog {
             home("home_reliability", "Permission missing banner", s.homeReliability),
             home("home_session", "Session in progress", s.homeSession, primary = true),
             home("home_disable_dialog", "Turn off under the commitment lock", s.homeDisableDialog, hasDialog = true),
-            editor("editor_full_new", "New alarm (full editor)", s.editorNew, primary = true),
-            editor("editor_full_edit", "Edit alarm with two checks and a message", s.editorEdit),
+            editor("editor_full_new", "New alarm", s.editorNew, primary = true),
+            editor("editor_full_edit", "Edit alarm: weekdays, two checks, a message", s.editorEdit),
+            editor("editor_custom_days", "Custom repeat days", s.editorCustomDays),
             editor("editor_no_check", "No check selected", s.editorNoCheck),
             editor("editor_weakening", "Weakening under lock", s.editorWeakening),
             editor("editor_sound_missing", "Custom sound missing", s.editorSoundMissing),
             editor("editor_rings_tomorrow", "One-time alarm rings tomorrow", s.editorTomorrow),
-            sound("sound_picker", "Sounds", s.soundPicker),
-            sound("sound_previewing", "Preview playing", s.soundPreviewing),
+            subScreen("editor_sound", "Sound: volume, gradual volume, sounds", s.editorSoundPane, primary = true, tall = true),
+            subScreen("editor_sound_previewing", "Sound: preview playing", s.editorSoundPreviewing, tall = true),
+            subScreen("editor_snooze", "Snooze: length and fee ladder", s.editorSnoozePane),
+            subScreen("editor_wake_check", "Wake-up check: checks, mode, difficulty", s.editorCheckPane, tall = true),
+            subScreen("editor_wake_check_none", "Wake-up check: none selected", s.editorNoCheckPane, tall = true),
+            subScreen("editor_quiet_time", "Quiet time", s.editorQuietPane),
+            subScreen("editor_motivation", "Motivation", s.editorMotivationPane),
             ringing("ringing_first", "First ring", s.ringingFirst, primary = true),
             ringing("ringing_after_snooze", "After a snooze", s.ringingAfterSnooze),
             ringing("ringing_test", "Test alarm", s.ringingTest),

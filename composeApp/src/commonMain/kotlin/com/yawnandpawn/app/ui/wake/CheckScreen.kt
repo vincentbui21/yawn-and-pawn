@@ -46,6 +46,7 @@ import androidx.compose.ui.unit.dp
 import com.yawnandpawn.app.ui.checks.description
 import com.yawnandpawn.app.ui.checks.displayName
 import com.yawnandpawn.app.ui.components.PpsTextButton
+import com.yawnandpawn.app.ui.components.glass
 import com.yawnandpawn.app.ui.resources.Res
 import com.yawnandpawn.app.ui.resources.camera_unavailable
 import com.yawnandpawn.app.ui.resources.check_wrong_answer
@@ -93,7 +94,19 @@ fun CheckScreen(
     onIntent: (WakeIntent) -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    WakeSurface(modifier = modifier) {
+    WakeSurface(
+        modifier = modifier,
+        overlay = { backdrop ->
+            state.sheet?.let { sheet ->
+                SnoozeConfirmSheet(
+                    sheet = sheet,
+                    onUpper = { onIntent(WakeIntent.SheetUpperClicked) },
+                    onDismiss = { onIntent(WakeIntent.SheetDismissed) },
+                    backdrop = backdrop,
+                )
+            }
+        },
+    ) {
         val spacing = PpsTheme.spacing
         Column(modifier = Modifier.fillMaxSize().wakeContentPadding()) {
             Column(
@@ -121,13 +134,6 @@ fun CheckScreen(
                 }
                 SnoozeButton(offer = state.snooze, onClick = { onIntent(WakeIntent.SnoozeClicked) })
             }
-        }
-        state.sheet?.let { sheet ->
-            SnoozeConfirmSheet(
-                sheet = sheet,
-                onUpper = { onIntent(WakeIntent.SheetUpperClicked) },
-                onDismiss = { onIntent(WakeIntent.SheetDismissed) },
-            )
         }
     }
 }
@@ -538,8 +544,7 @@ private fun CameraUnavailable() {
         modifier =
             Modifier
                 .fillMaxWidth()
-                .clip(PpsTheme.shapes.md)
-                .background(PpsTheme.colors.surface)
+                .glass(PpsTheme.shapes.md)
                 .padding(PpsTheme.spacing.cardPadding)
                 .semantics { liveRegion = LiveRegionMode.Polite },
         style = PpsTheme.typography.body,

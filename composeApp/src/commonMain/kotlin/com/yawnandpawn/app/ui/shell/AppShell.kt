@@ -17,9 +17,13 @@ import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.RectangleShape
 import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
+import com.yawnandpawn.app.ui.components.PpsBackground
+import com.yawnandpawn.app.ui.components.glass
 import com.yawnandpawn.app.ui.theme.PpsTheme
 import org.jetbrains.compose.resources.painterResource
 import org.jetbrains.compose.resources.stringResource
@@ -39,6 +43,7 @@ fun AppShell(
 ) {
     Scaffold(
         modifier = modifier.fillMaxSize(),
+        // The screens draw the background gradient; the nav bar is glass over its flat bottom.
         containerColor = PpsTheme.colors.bg,
         contentColor = PpsTheme.colors.text,
         bottomBar = { if (showNavBar) PpsNavBar(selected = selected, onSelect = onSelect) },
@@ -53,7 +58,8 @@ fun AppShell(
 private fun bottomOnly(padding: PaddingValues) = PaddingValues(bottom = padding.calculateBottomPadding())
 
 /**
- * `nav-bar`: Material 3 navigation bar on `surface`, three items with Material Symbols Rounded icons; the selected
+ * `nav-bar`: Material 3 navigation bar on `glass-bar` (`glass-strong` with a hairline edge), three items with
+ * Material Symbols Rounded icons; the selected
  * icon is fill 1 in `accent-text`, labels always shown (`text` selected, `text-secondary` otherwise). No indicator
  * pill, so no colour pair outside the contrast table.
  */
@@ -64,7 +70,12 @@ fun PpsNavBar(
     modifier: Modifier = Modifier,
 ) {
     val colors = PpsTheme.colors
-    NavigationBar(modifier = modifier, containerColor = colors.surface, contentColor = colors.text, tonalElevation = 0.dp) {
+    NavigationBar(
+        modifier = modifier.glass(RectangleShape, strong = true),
+        containerColor = Color.Transparent,
+        contentColor = colors.text,
+        tonalElevation = 0.dp,
+    ) {
         AppTab.entries.forEach { tab ->
             val isSelected = tab == selected
             NavigationBarItem(
@@ -79,7 +90,7 @@ fun PpsNavBar(
                         selectedTextColor = colors.text,
                         unselectedIconColor = colors.textSecondary,
                         unselectedTextColor = colors.textSecondary,
-                        indicatorColor = colors.surface,
+                        indicatorColor = Color.Transparent,
                     ),
             )
         }
@@ -92,16 +103,16 @@ fun TabPlaceholder(
     tab: AppTab,
     modifier: Modifier = Modifier,
 ) {
-    Text(
-        text = stringResource(tab.label),
-        modifier =
-            modifier
-                .fillMaxSize()
-                .background(PpsTheme.colors.bg)
-                .windowInsetsPadding(WindowInsets.statusBars)
-                .padding(horizontal = PpsTheme.spacing.screenMargin, vertical = PpsTheme.spacing.space4)
-                .semantics { heading() },
-        style = PpsTheme.typography.headline,
-        color = PpsTheme.colors.text,
-    )
+    PpsBackground(modifier = modifier) {
+        Text(
+            text = stringResource(tab.label),
+            modifier =
+                Modifier
+                    .windowInsetsPadding(WindowInsets.statusBars)
+                    .padding(horizontal = PpsTheme.spacing.screenMargin, vertical = PpsTheme.spacing.space4)
+                    .semantics { heading() },
+            style = PpsTheme.typography.headline,
+            color = PpsTheme.colors.text,
+        )
+    }
 }

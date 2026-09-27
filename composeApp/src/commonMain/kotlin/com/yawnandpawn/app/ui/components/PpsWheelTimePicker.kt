@@ -23,7 +23,9 @@ import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.semantics.ProgressBarRangeInfo
 import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.semantics.contentDescription
@@ -34,15 +36,19 @@ import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.rememberTextMeasurer
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.Dp
+import androidx.compose.ui.unit.TextUnit
 import androidx.compose.ui.unit.max
 import com.yawnandpawn.app.ui.format.periodName
 import com.yawnandpawn.app.ui.resources.Res
 import com.yawnandpawn.app.ui.resources.time_wheel_hour
+import com.yawnandpawn.app.ui.resources.time_wheel_hour_unit
 import com.yawnandpawn.app.ui.resources.time_wheel_minute
+import com.yawnandpawn.app.ui.resources.time_wheel_minute_unit
 import com.yawnandpawn.app.ui.resources.time_wheel_period
 import com.yawnandpawn.app.ui.theme.CLOCK_XL_MAX_FONT_SCALE
 import com.yawnandpawn.app.ui.theme.PpsTheme
 import com.yawnandpawn.app.ui.theme.cappedFontSize
+import kotlinx.coroutines.flow.drop
 import kotlinx.coroutines.flow.filter
 import kotlinx.datetime.LocalTime
 import org.jetbrains.compose.resources.stringResource
@@ -52,7 +58,8 @@ import kotlin.math.roundToInt
 /**
  * `time-picker` (owner decision 2026-09-27, replaces keyboard input): an hour and a minute wheel, plus an AM/PM wheel
  * when the phone uses a 12-hour clock ([is24Hour] false). Each wheel scrolls with snapping to one value, repeats its
- * range for an endless feel, highlights the centre value and never opens a keyboard. Digits use `display` with
+ * range for an endless feel with momentum, ticks lightly (haptic) per value, highlights the centre value and never opens
+ * a keyboard; "h" and "min" unit labels follow the hour and minute wheels. Digits use `display` with
  * tabular figures (capped at 1.3x font scale, like `clock-xl`, so three wheels fit a 360 dp screen at 200%).
  * TalkBack reads each wheel as an adjustable control ("Hour, 6"); swipe up or down changes the value by one.
  * [time] is the source of truth: every settled change is reported through [onTimeChange].
@@ -88,12 +95,7 @@ fun PpsWheelTimePicker(
                 latestOnChange(LocalTime(hour, current.minute))
             },
         )
-        Text(
-            text = ":",
-            modifier = Modifier.clearAndSetSemantics { }.padding(horizontal = PpsTheme.spacing.space1),
-            style = digits,
-            color = PpsTheme.colors.text,
-        )
+        UnitLabel(stringResource(Res.string.time_wheel_hour_unit))
         Wheel(
             title = stringResource(Res.string.time_wheel_minute),
             count = MINUTES_PER_HOUR,
@@ -104,20 +106,8 @@ fun PpsWheelTimePicker(
             endless = true,
             onSelect = { index -> latestOnChange(LocalTime(latestTime.hour, index)) },
         )
+        UnitLabel(stringResource(Res.string.time_wheel_minute_unit))
         if (!is24Hour) PeriodWheel(time = time, onTimeChange = { latestOnChange(it) })
-    }
-}
-
-/** `display` with its font scale capped at 1.3x (DESIGN.md `clock-xl` rule applied to the wheel digits). */
-@Composable
-private fun wheelDigitStyle(): TextStyle {
-    val display = PpsTheme.typography.display
-    val density = LocalDensity.current
-    return remember(display, density) {
-        display.copy(
-            fontSize = cappedFontSize(display.fontSize, density, CLOCK_XL_MAX_FONT_SCALE),
-            lineHeight = cappedFontSize(display.lineHeight, density, CLOCK_XL_MAX_FONT_SCALE),
-        )
     }
 }
 
@@ -209,6 +199,13 @@ private fun WheelSync(
 ) {
     val latestSelected by rememberUpdatedState(selectedIndex)
     val latestOnSelect by rememberUpdatedState(onSelect)
+    val haptics = LocalHapticFeedback.current
+    // A light tick each time a new value passes the centre while the wheel scrolls (owner decision 2026-09-27).
+    LaunchedEffect(listState, count) {
+        snapshotFlow { listState.centredIndex() % count }
+            .drop(1)
+            .collect { if (listState.isScrollInProgress) haptics.performHapticFeedback(HapticFeedbackType.SegmentFrequentTick) }
+    }
     LaunchedEffect(listState, count) {
         snapshotFlow { listState.isScrollInProgress }
             .filter { !it }

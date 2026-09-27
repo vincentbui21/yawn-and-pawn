@@ -1,17 +1,12 @@
 package com.yawnandpawn.app.ui.sound
 
-import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
-import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.selection.selectable
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -21,15 +16,12 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.semantics.Role
-import androidx.compose.ui.semantics.heading
-import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
+import com.yawnandpawn.app.ui.components.GroupCard
+import com.yawnandpawn.app.ui.components.GroupDivider
 import com.yawnandpawn.app.ui.components.ICON_SIZE
 import com.yawnandpawn.app.ui.components.PpsTextButton
-import com.yawnandpawn.app.ui.components.PpsTopAppBar
 import com.yawnandpawn.app.ui.resources.Res
-import com.yawnandpawn.app.ui.resources.editor_back
-import com.yawnandpawn.app.ui.resources.editor_sound
 import com.yawnandpawn.app.ui.resources.sound_builtin
 import com.yawnandpawn.app.ui.resources.sound_file_missing
 import com.yawnandpawn.app.ui.resources.sound_pick_file
@@ -47,7 +39,7 @@ import org.jetbrains.compose.resources.StringResource
 import org.jetbrains.compose.resources.painterResource
 import org.jetbrains.compose.resources.stringResource
 
-/** Where a sound comes from (its caption in the list). */
+/** Where a sound comes from (its section and caption). */
 enum class SoundSource { BuiltIn, System, File }
 
 /** One `sound-row`. */
@@ -59,7 +51,7 @@ data class SoundOption(
     val missing: Boolean = false,
 )
 
-/** What the Sound picker renders. */
+/** The sound list of the editor's Sound sub-screen (the IA's Sound picker). */
 data class SoundPickerUiState(
     val options: List<SoundOption> = emptyList(),
     val selectedId: String? = null,
@@ -77,33 +69,26 @@ sealed interface SoundPickerIntent {
     ) : SoundPickerIntent
 
     data object PickFileClicked : SoundPickerIntent
-
-    data object BackRequested : SoundPickerIntent
 }
 
-/** The Sound picker, stateless: built-in sounds, system ringtones and the user's files, each with a preview button. */
+/**
+ * The Sound picker as sections of the Sound sub-screen, stateless: a `card-group` each for built-in sounds, system
+ * ringtones and the user's files ("Built-in" · "System" · "Your files"), every row with its preview button, and
+ * "Pick a file" under the files.
+ */
 @Composable
-fun SoundPickerScreen(
+fun SoundList(
     state: SoundPickerUiState,
     onIntent: (SoundPickerIntent) -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    val spacing = PpsTheme.spacing
-    Column(modifier = modifier.fillMaxSize().background(PpsTheme.colors.bg)) {
-        PpsTopAppBar(
-            title = stringResource(Res.string.editor_sound),
-            backContentDescription = stringResource(Res.string.editor_back),
-            onBack = { onIntent(SoundPickerIntent.BackRequested) },
-        )
-        LazyColumn(
-            modifier = Modifier.fillMaxWidth().weight(1f).navigationBarsPadding(),
-            contentPadding = PaddingValues(horizontal = spacing.screenMargin, vertical = spacing.space2),
-        ) {
-            SoundSource.entries.forEach { source ->
-                val options = state.options.filter { it.source == source }
-                if (options.isEmpty() && source != SoundSource.File) return@forEach
-                item(key = "header-$source") { SectionHeader(source.sectionTitle()) }
-                items(options, key = { it.id }) { option ->
+    Column(modifier = modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(PpsTheme.spacing.space3)) {
+        SoundSource.entries.forEach { source ->
+            val options = state.options.filter { it.source == source }
+            if (options.isEmpty() && source != SoundSource.File) return@forEach
+            GroupCard(title = stringResource(source.sectionTitle()), modifier = Modifier.padding(top = PpsTheme.spacing.space2)) {
+                options.forEachIndexed { index, option ->
+                    if (index > 0) GroupDivider()
                     SoundRow(
                         option = option,
                         selected = option.id == state.selectedId,
@@ -112,26 +97,16 @@ fun SoundPickerScreen(
                     )
                 }
                 if (source == SoundSource.File) {
-                    item(key = "pick-file") {
-                        PpsTextButton(
-                            text = stringResource(Res.string.sound_pick_file),
-                            onClick = { onIntent(SoundPickerIntent.PickFileClicked) },
-                        )
-                    }
+                    if (options.isNotEmpty()) GroupDivider()
+                    PpsTextButton(
+                        text = stringResource(Res.string.sound_pick_file),
+                        onClick = { onIntent(SoundPickerIntent.PickFileClicked) },
+                        modifier = Modifier.padding(horizontal = PpsTheme.spacing.space2),
+                    )
                 }
             }
         }
     }
-}
-
-@Composable
-private fun SectionHeader(title: StringResource) {
-    Text(
-        text = stringResource(title),
-        modifier = Modifier.padding(top = PpsTheme.spacing.space4, bottom = PpsTheme.spacing.space1).semantics { heading() },
-        style = PpsTheme.typography.label,
-        color = PpsTheme.colors.textSecondary,
-    )
 }
 
 /**
@@ -147,7 +122,10 @@ private fun SoundRow(
 ) {
     val colors = PpsTheme.colors
     val spacing = PpsTheme.spacing
-    Row(modifier = Modifier.fillMaxWidth().heightIn(min = SOUND_ROW_HEIGHT), verticalAlignment = Alignment.CenterVertically) {
+    Row(
+        modifier = Modifier.fillMaxWidth().heightIn(min = SOUND_ROW_HEIGHT).padding(end = spacing.space2),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
         Row(
             modifier =
                 Modifier
@@ -157,7 +135,7 @@ private fun SoundRow(
                         selected = selected,
                         role = Role.RadioButton,
                         onClick = { onIntent(SoundPickerIntent.Selected(option.id)) },
-                    ),
+                    ).padding(start = spacing.cardPadding),
             verticalAlignment = Alignment.CenterVertically,
         ) {
             Icon(
@@ -182,7 +160,7 @@ private fun SoundRow(
             onClick = { onIntent(SoundPickerIntent.PreviewToggled(option.id)) },
             modifier = Modifier.size(spacing.targetMin),
             enabled = !option.missing,
-            colors = IconButtonDefaults.iconButtonColors(contentColor = colors.text, disabledContentColor = colors.disabledContent),
+            colors = IconButtonDefaults.iconButtonColors(contentColor = colors.text, disabledContentColor = colors.textSecondary),
         ) {
             Icon(
                 painter = painterResource(if (previewing) Res.drawable.symbol_stop else Res.drawable.symbol_play_arrow),

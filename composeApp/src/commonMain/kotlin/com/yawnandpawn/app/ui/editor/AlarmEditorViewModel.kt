@@ -13,6 +13,8 @@ import com.yawnandpawn.app.core.error.DomainError
 import com.yawnandpawn.app.core.error.Outcome
 import com.yawnandpawn.app.core.time.Clock
 import com.yawnandpawn.app.core.time.TimeZoneProvider
+import com.yawnandpawn.app.ui.format.Weekdays
+import com.yawnandpawn.app.ui.format.countdownOf
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -21,8 +23,9 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.receiveAsFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
-import kotlinx.datetime.LocalTime
+import kotlinx.datetime.TimeZone
 import kotlinx.datetime.toLocalDateTime
+import kotlin.time.Instant
 
 /** The Koin parameter of [AlarmEditorViewModel]: which alarm to edit, `null` for a new one. */
 data class AlarmEditorArgs(
@@ -31,8 +34,9 @@ data class AlarmEditorArgs(
 
 /**
  * The Alarm editor (Story 1.8): loads the alarm with [alarmId] (or starts from the defaults), keeps the form, and
- * saves it through [SaveAlarm] as an enabled alarm. Back with unsaved changes asks "Discard changes?" first.
- * "Rings tomorrow" is computed with `nextOccurrence` from [clock] and [timeZoneProvider] (never the system clock).
+ * saves it through [SaveAlarm] as an enabled alarm. Back with unsaved changes asks "Discard changes?" first; on a
+ * sub-screen (Sound, Snooze) Back returns to the main screen. "Rings in ..." and "Rings tomorrow" are computed with
+ * `nextOccurrence` from [clock] and [timeZoneProvider] (never the system clock).
  */
 class AlarmEditorViewModel(
     private val alarmId: String?,
@@ -55,7 +59,7 @@ class AlarmEditorViewModel(
 
     init {
         if (alarmId == null) {
-            _state.update { it.copy(ringsTomorrowAt = ringsTomorrowAt(it.form)) }
+            _state.update { it.withRings(it.form, clock.now(), timeZoneProvider.current()) }
         } else {
             viewModelScope.launch { load(alarmId) }
         }
@@ -82,6 +86,14 @@ class AlarmEditorViewModel(
                 _state.update { it.copy(showDiscardDialog = false) }
             }
 
+            is EditorIntent.PaneOpened -> {
+                _state.update { if (it.isLoading) it else it.copy(pane = intent.pane) }
+            }
+
+            is EditorIntent.RepeatChosen -> {
+                chooseRepeat(intent.choice)
+            }
+
             else -> {
                 onFormIntent(intent)
             }
@@ -106,21 +118,12 @@ class AlarmEditorViewModel(
                 editForm { it.copy(snoozeLengthMinutes = intent.minutes) }
             }
 
-            // A gradual ramp never starts above the target volume (SaveAlarm would reject it), so it follows it down.
-            // With gradual volume off the start level is hidden and left alone; toDraft clamps it if it is turned back on.
             is EditorIntent.VolumeChanged -> {
-                editForm {
-                    val rampStart = if (it.gradualVolume) minOf(it.rampStartPercent, intent.percent) else it.rampStartPercent
-                    it.copy(volumePercent = intent.percent, rampStartPercent = rampStart)
-                }
+                editForm { it.copy(volumePercent = intent.percent) }
             }
 
             is EditorIntent.GradualVolumeToggled -> {
                 editForm { it.copy(gradualVolume = intent.enabled) }
-            }
-
-            is EditorIntent.RampStartChanged -> {
-                editForm { it.copy(rampStartPercent = minOf(intent.percent, it.volumePercent)) }
             }
 
             is EditorIntent.VibrationToggled -> {
@@ -140,7 +143,10 @@ class AlarmEditorViewModel(
                 stored = alarm
                 val form = alarm.toForm()
                 initialForm = form
-                _state.update { it.copy(isLoading = false, form = form, ringsTomorrowAt = ringsTomorrowAt(form)) }
+                val custom = form.repeatDays.isNotEmpty() && form.repeatDays != Weekdays
+                _state.update {
+                    it.copy(isLoading = false, form = form, customRepeat = custom).withRings(form, clock.now(), timeZoneProvider.current())
+                }
             }
 
             // Deleted meanwhile, or storage unreadable: there is nothing to edit.
@@ -155,7 +161,7 @@ class AlarmEditorViewModel(
             if (current.isLoading) return@update current
             val form = change(current.form)
             val fieldError = current.fieldError?.takeUnless { it != AlarmField.Label && form != current.form }
-            current.copy(form = form, ringsTomorrowAt = ringsTomorrowAt(form), fieldError = fieldError)
+            current.copy(form = form, fieldError = fieldError).withRings(form, clock.now(), timeZoneProvider.current())
         }
     }
 
@@ -200,10 +206,21 @@ class AlarmEditorViewModel(
         _effects.send(EditorEffect.ShowSaveFailed)
     }
 
+    /** "Once" clears the days, "Weekdays" sets Monday to Friday, "Custom" shows the day chips and keeps the days. */
+    private fun chooseRepeat(choice: RepeatChoice) {
+        when (choice) {
+            RepeatChoice.Once -> editForm { it.copy(repeatDays = emptySet()) }
+            RepeatChoice.Weekdays -> editForm { it.copy(repeatDays = Weekdays) }
+            RepeatChoice.Custom -> Unit
+        }
+        _state.update { if (it.isLoading) it else it.copy(customRepeat = choice == RepeatChoice.Custom) }
+    }
+
     private fun requestBack() {
         val current = _state.value
         when {
             current.showDiscardDialog -> _state.update { it.copy(showDiscardDialog = false) }
+            current.pane != EditorPane.Main -> _state.update { it.copy(pane = EditorPane.Main) }
             !current.isLoading && current.form != initialForm -> _state.update { it.copy(showDiscardDialog = true) }
             else -> close()
         }
@@ -212,16 +229,6 @@ class AlarmEditorViewModel(
     private fun close() {
         _state.update { it.copy(showDiscardDialog = false) }
         _effects.trySend(EditorEffect.Close)
-    }
-
-    /** When a one-time alarm whose time has passed today actually rings tomorrow (shifted in a DST gap), else null. */
-    private fun ringsTomorrowAt(form: EditorForm): LocalTime? {
-        if (form.repeatDays.isNotEmpty()) return null
-        val now = clock.now()
-        val zone = timeZoneProvider.current()
-        val next = nextOccurrence(AlarmRule(form.time), now, zone)
-        val ring = next.toLocalDateTime(zone)
-        return if (ring.date != now.toLocalDateTime(zone).date) ring.time else null
     }
 
     private fun EditorForm.toDraft(): AlarmDraft =
@@ -235,11 +242,24 @@ class AlarmEditorViewModel(
             soundRef = stored?.soundRef?.takeUnless { it.isBlank() } ?: Alarm.DEFAULT_SOUND_REF,
             volumePercent = volumePercent,
             gradualVolume = gradualVolume,
-            rampStartPercent = if (gradualVolume) minOf(rampStartPercent, volumePercent) else rampStartPercent,
+            // Not editable (owner decision 2026-09-27): the ramp starts at the fixed 20%, never above the set volume.
+            rampStartPercent = minOf(Alarm.DEFAULT_RAMP_START_PERCENT, volumePercent),
             vibration = vibration,
             snoozeLengthMinutes = snoozeLengthMinutes,
             graceSeconds = (stored?.graceSeconds ?: Alarm.DEFAULT_GRACE_SECONDS).coerceIn(Alarm.GRACE_SECONDS_RANGE),
         )
+}
+
+/** "Rings in ..." and, for a one-time alarm whose time has passed today, when it rings tomorrow (shifted in a DST gap). */
+private fun EditorUiState.withRings(
+    form: EditorForm,
+    now: Instant,
+    zone: TimeZone,
+): EditorUiState {
+    val next = nextOccurrence(AlarmRule(form.time, form.repeatDays), now, zone)
+    val ring = next.toLocalDateTime(zone)
+    val tomorrow = form.repeatDays.isEmpty() && ring.date != now.toLocalDateTime(zone).date
+    return copy(ringsIn = countdownOf(next - now), ringsTomorrowAt = if (tomorrow) ring.time else null)
 }
 
 /** The stored alarm as the form shows it; out-of-range stored values open as the nearest valid value. */

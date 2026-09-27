@@ -39,19 +39,22 @@ fun RingingScreen(
     onIntent: (WakeIntent) -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    WakeSurface(modifier = modifier) {
+    WakeSurface(
+        modifier = modifier,
+        overlay = { backdrop ->
+            state.sheet?.let { sheet ->
+                SnoozeConfirmSheet(
+                    sheet = sheet,
+                    onUpper = { onIntent(WakeIntent.SheetUpperClicked) },
+                    onDismiss = { onIntent(WakeIntent.SheetDismissed) },
+                    backdrop = backdrop,
+                )
+            }
+        },
+    ) {
         val colors = PpsTheme.colors
         val spacing = PpsTheme.spacing
-        // The sunrise gradient: top 40% only, behind label, clock and date; nothing accent-coloured sits on it.
-        colors.sunriseGradientTop?.let { top ->
-            Box(
-                modifier =
-                    Modifier
-                        .fillMaxWidth()
-                        .fillMaxHeight(TOP_ZONE)
-                        .background(Brush.verticalGradient(listOf(top, colors.bg))),
-            )
-        }
+        // The sunrise gradient (WakeSurface) covers the top 40% only, behind label, clock and date; no accent on it.
         Column(modifier = Modifier.fillMaxSize().wakeContentPadding()) {
             Column(
                 modifier = Modifier.fillMaxWidth().weight(1f),
@@ -83,19 +86,13 @@ fun RingingScreen(
                         textAlign = TextAlign.Center,
                     )
                 }
-                WakePrimaryButton(text = stringResource(Res.string.wake_im_up), onClick = { onIntent(WakeIntent.ImUpClicked) })
+                WakePrimaryButton(
+                    text = stringResource(Res.string.wake_im_up),
+                    onClick = { onIntent(WakeIntent.ImUpClicked) },
+                    pulse = state.sheet == null,
+                )
                 SnoozeButton(offer = state.snooze, onClick = { onIntent(WakeIntent.SnoozeClicked) })
             }
         }
-        state.sheet?.let { sheet ->
-            SnoozeConfirmSheet(
-                sheet = sheet,
-                onUpper = { onIntent(WakeIntent.SheetUpperClicked) },
-                onDismiss = { onIntent(WakeIntent.SheetDismissed) },
-            )
-        }
     }
 }
-
-/** DESIGN.md: the gradient (and label, clock, date) live in the top 40%; the thumb zone is the bottom 40%. */
-private const val TOP_ZONE = 0.4f

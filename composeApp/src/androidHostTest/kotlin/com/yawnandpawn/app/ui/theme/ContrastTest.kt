@@ -128,6 +128,22 @@ class ContrastTest {
     }
 
     @Test
+    fun `a stacked background composites the translucent glass over the gradient`() {
+        val row = ContrastRow("Light", "text-secondary", "glass+gradient-top", ContrastRow.Kind.Text, 6.75, false)
+        val glass = PpsTokens.Light.glass
+        val composite = ContrastTable.composite(glass, PpsTokens.Light.gradientTop)
+
+        assertEquals(1f, composite.alpha)
+        assertTrue(composite.red >= PpsTokens.Light.gradientTop.red, "white glass lightens the gradient")
+        assertTrue(ContrastTable.violations(listOf(row), PpsTokens.colorsByName).isEmpty())
+        val missing = ContrastRow("Light", "text", "glass+nothing", ContrastRow.Kind.Text, 1.0, false)
+        assertEquals(
+            listOf("Light | text / glass+nothing: no generated token nothing"),
+            ContrastTable.violations(listOf(missing), PpsTokens.colorsByName),
+        )
+    }
+
+    @Test
     fun `info rows are only ratio-checked`() {
         val row = ContrastRow("Light", "snoozed", "missed", ContrastRow.Kind.Info, 1.03, false)
 

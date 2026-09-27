@@ -7,13 +7,15 @@
     <string name="alarms_add_alarm">Add alarm</string>
     <string name="repeat_every_day">Every day</string>
     <string name="repeat_once">Once</string>
+    <!-- Owner decision 2026-09-27 (design preview feedback item 7): Mon to Fri, and Sat and Sun. -->
+    <string name="repeat_weekdays">Weekdays</string>
+    <string name="repeat_weekends">Weekends</string>
 
     <!-- Alarm editor (Story 1.8). Key strings from EXPERIENCE.md; the rest owner-approved 2026-09-27. -->
     <string name="editor_new_title">New alarm</string>
     <string name="editor_edit_title">Edit alarm</string>
     <string name="editor_back">Back</string>
     <string name="editor_repeat">Repeat</string>
-    <string name="editor_label">Label</string>
     <string name="editor_label_too_long">Keep the label under 40 characters.</string>
     <string name="editor_snooze_length">Snooze length</string>
     <string name="editor_snooze_minutes">%1$d min</string>
@@ -22,7 +24,6 @@
     <string name="editor_sound_default">Sunrise</string>
     <string name="editor_volume">Volume</string>
     <string name="editor_gradual_volume">Gradually increase volume</string>
-    <string name="editor_starting_volume">Starting volume</string>
     <string name="editor_percent">%1$d%</string>
     <string name="editor_vibration">Vibration</string>
     <string name="editor_save">Save</string>
@@ -36,6 +37,23 @@
     <string name="time_wheel_hour">Hour</string>
     <string name="time_wheel_minute">Minute</string>
     <string name="time_wheel_period">AM or PM</string>
+    <!-- Unit labels after the wheels (owner decision 2026-09-27, feedback item 10). -->
+    <string name="time_wheel_hour_unit">h</string>
+    <string name="time_wheel_minute_unit">min</string>
+
+    <!-- Alarm editor layout (owner decision 2026-09-27, feedback items 2, 3, 8 to 11). Owner-given copy, plus drafts in docs/design-preview/copy-to-approve.md. -->
+    <string name="editor_cancel">Cancel</string>
+    <string name="editor_alarm_name">Alarm name</string>
+    <string name="repeat_custom">Custom</string>
+    <string name="editor_wake_check">Wake-up check</string>
+    <string name="editor_snooze">Snooze</string>
+    <string name="editor_quiet_time">Quiet time</string>
+    <string name="editor_vibrate_quiet_time">Vibrate during quiet time</string>
+    <string name="editor_quiet_time_note">After I'm up, the alarm stays quiet this long while you do your check.</string>
+    <string name="editor_check_mode">Mode</string>
+    <string name="editor_difficulty">Difficulty</string>
+    <string name="editor_record_message">Record a message</string>
+    <string name="editor_when_it_plays">When it plays</string>
 
     <!-- Design preview round 1 (spec-design-preview-whole-app). EXPERIENCE.md key strings verbatim; drafts are listed in docs/design-preview/copy-to-approve.md. -->
     <!-- App shell: nav-bar items (EXPERIENCE.md Information Architecture). -->
@@ -87,9 +105,7 @@
     <string name="editor_mode_random">Random</string>
     <string name="editor_mode_all">All</string>
     <string name="editor_no_check">Pick at least one check.</string>
-    <string name="editor_grace_window">Grace window</string>
     <string name="editor_grace_seconds">%1$d seconds</string>
-    <string name="editor_vibrate_in_grace">Vibrate in grace window</string>
     <string name="editor_fee_ladder">Snooze 1: %1$s · 2: %2$s · 3: %3$s</string>
     <string name="editor_motivation">Motivation</string>
     <string name="editor_message">Message</string>

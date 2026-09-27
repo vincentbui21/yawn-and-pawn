@@ -2,11 +2,17 @@ package com.yawnandpawn.app.debug.preview
 
 import android.os.Looper
 import androidx.activity.compose.setContent
+import androidx.compose.ui.semantics.SemanticsActions
+import androidx.compose.ui.test.hasClickAction
+import androidx.compose.ui.test.hasScrollAction
 import androidx.compose.ui.test.hasText
 import androidx.compose.ui.test.junit4.createEmptyComposeRule
 import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
+import androidx.compose.ui.test.performScrollTo
+import androidx.compose.ui.test.performScrollToNode
+import androidx.compose.ui.test.performSemanticsAction
 import androidx.test.core.app.ActivityScenario
 import com.yawnandpawn.app.ui.theme.PpsThemeMode
 import org.junit.After
@@ -98,9 +104,49 @@ class TapThroughTest {
         tapThrough(startInSession = false) {
             composeRule.onNodeWithContentDescription("Add alarm").performClick()
             composeRule.onNodeWithText("New alarm").assertExists()
-            composeRule.onNodeWithText("Test alarm").performClick()
+            // "Test alarm" may scroll in under the floating pill, so click it through its semantics action.
+            composeRule.onNodeWithText("Test alarm").performScrollTo().performSemanticsAction(SemanticsActions.OnClick)
             composeRule.onNodeWithContentDescription("Snooze unavailable, Test · no charge").assertExists()
         }
+
+    @Test
+    fun `a row opens its sub-screen, Back returns to the editor, and Back on a wake screen leaves the tap-through`() {
+        var exited = false
+        ActivityScenario.launch(PreviewActivity::class.java).use { scenario ->
+            scenario.onActivity { activity ->
+                activity.setContent {
+                    PreviewFrame(PpsThemeMode.Light, largeFont = false) {
+                        TapThrough(is24Hour = false, onExit = { exited = true }, startInSession = false)
+                    }
+                }
+            }
+            composeRule.onNodeWithContentDescription("Add alarm").performClick()
+            composeRule.onNode(hasText("Quiet time") and hasClickAction()).performScrollTo().performClick()
+            composeRule.onNodeWithText("Vibrate during quiet time").assertExists()
+            scenario.onActivity { it.onBackPressedDispatcher.onBackPressed() }
+            composeRule.onNodeWithText("New alarm").assertExists()
+
+            // "Test alarm" may scroll in under the floating pill, so click it through its semantics action.
+            composeRule.onNodeWithText("Test alarm").performScrollTo().performSemanticsAction(SemanticsActions.OnClick)
+            composeRule.onNodeWithText("I'm up").assertExists()
+            scenario.onActivity { it.onBackPressedDispatcher.onBackPressed() }
+            composeRule.waitForIdle()
+            kotlin.test.assertTrue(exited, "Back on a wake screen returns to the preview menu")
+        }
+    }
+
+    @Test
+    fun `Back on a wake screen from the menu returns to the menu, even with the confirm sheet open`() {
+        ActivityScenario.launch(PreviewActivity::class.java).use { scenario ->
+            composeRule.onNode(hasScrollAction()).performScrollToNode(hasText("Confirm (Sunrise)"))
+            composeRule.onNodeWithText("Confirm (Sunrise)").performClick()
+            composeRule.onNodeWithText("I'll get up").assertExists()
+
+            scenario.onActivity { it.onBackPressedDispatcher.onBackPressed() }
+
+            composeRule.onNodeWithText("Yawn & Pawn Preview").assertExists()
+        }
+    }
 }
 
 private const val FRAMES_MILLIS = 48L

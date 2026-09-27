@@ -1,6 +1,5 @@
 package com.yawnandpawn.app.ui.components
 
-import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -24,7 +23,7 @@ import com.yawnandpawn.app.ui.theme.PpsTheme
 import org.jetbrains.compose.resources.painterResource
 
 /**
- * `top-app-bar` of a pushed screen: flat on `bg`, 48 dp back arrow ([backContentDescription] for TalkBack),
+ * `top-app-bar` of a pushed screen: transparent over the background gradient, 48 dp back arrow ([backContentDescription] for TalkBack),
  * title in `headline`. The title wraps instead of clipping at large font scales.
  */
 @Composable
@@ -39,7 +38,6 @@ fun PpsTopAppBar(
         modifier =
             modifier
                 .fillMaxWidth()
-                .background(PpsTheme.colors.bg)
                 .windowInsetsPadding(WindowInsets.statusBars)
                 .heightIn(min = spacing.targetWake)
                 .padding(start = spacing.space1, end = spacing.screenMargin, top = spacing.space2, bottom = spacing.space2),

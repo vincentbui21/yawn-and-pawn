@@ -33,7 +33,7 @@ import org.jetbrains.compose.resources.DrawableResource
 import org.jetbrains.compose.resources.painterResource
 
 /**
- * `banner-warning`: `surface-variant` fill, `rounded.md`, leading `error` icon in `error` (or, for [info], the `info`
+ * `banner-warning`: glass fill with a hairline edge, `rounded.md`, leading `error` icon in `error` (or, for [info], the `info`
  * icon in `text-secondary`), [message] in `body` and a `button-text` [actionText]. The error variant is never
  * dismissible (it clears itself); the info variant may pass [onDismiss] for a close button ([dismissLabel]).
  */
@@ -53,8 +53,7 @@ fun BannerWarning(
         modifier =
             modifier
                 .fillMaxWidth()
-                .clip(PpsTheme.shapes.md)
-                .background(colors.surfaceVariant)
+                .glass(PpsTheme.shapes.md)
                 .padding(start = spacing.cardPadding, top = spacing.space2, bottom = spacing.space2, end = spacing.space1),
         verticalAlignment = Alignment.CenterVertically,
     ) {
@@ -124,8 +123,7 @@ fun CheckChipView(
 
 /**
  * A bare `switch` for a row that has its own tap action (`card-alarm`): accent checked track, `outline` unchecked
- * border, 48 dp target. TalkBack reads [label] with the switch role and its state. [trackColor] is the unchecked track
- * (the surface it sits on, so the outline pair stays in the contrast table).
+ * border on a clear track (it sits on glass), 48 dp target. TalkBack reads [label] with the switch role and its state.
  */
 @Composable
 fun PpsSwitch(
@@ -133,22 +131,12 @@ fun PpsSwitch(
     onCheckedChange: (Boolean) -> Unit,
     label: String,
     modifier: Modifier = Modifier,
-    trackColor: Color = PpsTheme.colors.surface,
 ) {
-    val colors = PpsTheme.colors
     Switch(
         checked = checked,
         onCheckedChange = onCheckedChange,
         modifier = modifier.semantics { contentDescription = label },
-        colors =
-            SwitchDefaults.colors(
-                checkedThumbColor = colors.onAccent,
-                checkedTrackColor = colors.accent,
-                checkedBorderColor = colors.accent,
-                uncheckedThumbColor = colors.outline,
-                uncheckedTrackColor = trackColor,
-                uncheckedBorderColor = colors.outline,
-            ),
+        colors = ppsSwitchColors(),
     )
 }
 

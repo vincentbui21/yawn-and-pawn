@@ -33,10 +33,12 @@ import com.yawnandpawn.app.ui.components.BannerWarning
 import com.yawnandpawn.app.ui.components.ConfirmDialog
 import com.yawnandpawn.app.ui.components.DismissButton
 import com.yawnandpawn.app.ui.components.NoteInline
+import com.yawnandpawn.app.ui.components.PpsBackground
 import com.yawnandpawn.app.ui.components.PpsFab
 import com.yawnandpawn.app.ui.components.PpsFilledButton
 import com.yawnandpawn.app.ui.components.PpsSwitch
 import com.yawnandpawn.app.ui.components.RowIcon
+import com.yawnandpawn.app.ui.components.glass
 import com.yawnandpawn.app.ui.format.Countdown
 import com.yawnandpawn.app.ui.format.countdownText
 import com.yawnandpawn.app.ui.format.formatClockTime
@@ -82,7 +84,7 @@ fun HomeScreen(
 ) {
     val colors = PpsTheme.colors
     val spacing = PpsTheme.spacing
-    Box(modifier = modifier.fillMaxSize().background(colors.bg)) {
+    PpsBackground(modifier = modifier) {
         Column(modifier = Modifier.fillMaxSize().windowInsetsPadding(WindowInsets.statusBars)) {
             Text(
                 text = stringResource(Res.string.app_name),
@@ -135,6 +137,8 @@ private fun HomeList(
         }
         items(state.alarms, key = { it.id }) { alarm ->
             AlarmCardView(
+                // Cards animate in and out when an alarm is added or removed (owner decision 2026-09-27).
+                modifier = Modifier.animateItem(),
                 alarm = alarm,
                 is24Hour = is24Hour,
                 onClick = { onIntent(HomeIntent.EditAlarm(alarm.id)) },
@@ -182,7 +186,7 @@ private fun Notices(
     }
 }
 
-/** `card-hero`: streak number in `display` (`accent-text`), "days on time" in `body`, the money line in `text-secondary`. */
+/** `card-hero` (glass): streak number in `display` (`accent-text`), "days on time" in `body`, the money line in `text-secondary`. */
 @Composable
 private fun HeroCard(hero: HomeHero) {
     val colors = PpsTheme.colors
@@ -190,8 +194,7 @@ private fun HeroCard(hero: HomeHero) {
         modifier =
             Modifier
                 .fillMaxWidth()
-                .clip(PpsTheme.shapes.md)
-                .background(colors.surface)
+                .glass(PpsTheme.shapes.md)
                 .padding(PpsTheme.spacing.cardPadding)
                 .semantics(mergeDescendants = true) { },
     ) {
@@ -215,7 +218,7 @@ private fun HeroCard(hero: HomeHero) {
 }
 
 /**
- * `card-alarm`: `surface`, `rounded.md`; time in `title`, repeat days and label in `caption`, check icons (20 dp,
+ * `card-alarm`: glass, `rounded.md`; time in `title`, repeat days and label in `caption`, check icons (20 dp,
  * `text-secondary`) and the enable `switch` on the right. The card is one button (tap edits); the switch is its own
  * control ("7:30 AM alarm").
  */
@@ -225,17 +228,17 @@ private fun AlarmCardView(
     is24Hour: Boolean,
     onClick: () -> Unit,
     onToggle: (Boolean) -> Unit,
+    modifier: Modifier = Modifier,
 ) {
     val colors = PpsTheme.colors
     val spacing = PpsTheme.spacing
     val time = formatClockTime(alarm.time, is24Hour)
     Row(
         modifier =
-            Modifier
+            modifier
                 .fillMaxWidth()
                 .heightIn(min = spacing.targetWake)
-                .clip(PpsTheme.shapes.md)
-                .background(colors.surface),
+                .glass(PpsTheme.shapes.md),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Column(
@@ -308,8 +311,7 @@ private fun SessionPanel(onBackToAlarm: () -> Unit) {
             Modifier
                 .padding(horizontal = spacing.screenMargin)
                 .fillMaxWidth()
-                .clip(PpsTheme.shapes.md)
-                .background(PpsTheme.colors.surface)
+                .glass(PpsTheme.shapes.md)
                 .padding(spacing.cardPadding),
         verticalArrangement = Arrangement.spacedBy(spacing.space4),
     ) {

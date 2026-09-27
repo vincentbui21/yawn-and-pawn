@@ -4,6 +4,7 @@ import com.yawnandpawn.app.core.alarm.AlarmField
 import com.yawnandpawn.app.ui.alarms.AlarmRow
 import com.yawnandpawn.app.ui.alarms.AlarmsUiState
 import com.yawnandpawn.app.ui.editor.EditorForm
+import com.yawnandpawn.app.ui.editor.EditorPane
 import com.yawnandpawn.app.ui.editor.EditorUiState
 import kotlinx.datetime.DayOfWeek
 import kotlinx.datetime.LocalTime
@@ -24,7 +25,6 @@ object EditorSamples {
                     label = "Gym",
                     snoozeLengthMinutes = 5,
                     volumePercent = 60,
-                    rampStartPercent = 10,
                     vibration = false,
                 ),
         )
@@ -39,8 +39,14 @@ object EditorSamples {
     val labelError =
         EditorUiState(form = EditorForm(label = "Morning run with the whole neighbourhood!"), fieldError = AlarmField.Label)
 
-    /** Gradual volume off: no starting-volume slider. */
-    val gradualOff = EditorUiState(form = EditorForm(gradualVolume = false))
+    /** The Sound sub-screen with gradual volume off (owner decision 2026-09-27: never a starting-volume slider). */
+    val soundGradualOff = EditorUiState(form = EditorForm(gradualVolume = false), pane = EditorPane.Sound)
+
+    /** The Sound sub-screen of a new alarm: volume and "Gradually increase volume". */
+    val soundPane = EditorUiState(pane = EditorPane.Sound)
+
+    /** The Snooze sub-screen of a new alarm: 5 / 9 / 10 / 15 min. */
+    val snoozePane = EditorUiState(pane = EditorPane.Snooze)
 
     val emptyAlarms = AlarmsUiState(isLoading = false)
 

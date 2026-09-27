@@ -56,3 +56,12 @@
   summary: Owner decision: should the editor open with the keyboard up on the hour field?
   evidence: Material TimeInput focuses the hour and opens the numeric keyboard immediately ("keyboard input first" per EXPERIENCE.md), covering the lower half of the form. Seen on the Oppo A96 walkthrough.
   status: resolved by the owner decision 2026-09-27 (`spec-design-preview-whole-app.md`): the time input is now scrolling wheels (`PpsWheelTimePicker`) and no keyboard ever opens; EXPERIENCE.md and DESIGN.md `time-picker` rows updated.
+- source_spec: `_bmad-output/implementation-artifacts/spec-design-preview-whole-app.md`
+  summary: Ramp start semantics after the owner removed the starting-volume slider (feedback item 3).
+  evidence: The owner wants the ramp to start at "20% of the alarm volume". The model keeps `rampStartPercent = 20` and `AlarmValidation` still treats it as an absolute level that must not exceed the volume, so the editor saves `min(20, volume)`. Story 1.14 (`rampGain`) must read it as 20% of the set volume, and the validation rule can then go.
+- source_spec: `_bmad-output/implementation-artifacts/spec-design-preview-whole-app.md`
+  summary: Live background blur is only on surfaces over moving content (bottom pill, snooze confirm sheet), not on cards.
+  evidence: Cards sit inside the scrolling content over a static gradient; a backdrop blur there looks the same as none and would need each card to re-record its own backdrop. DESIGN.md records this rule; revisit if the owner wants blur visible on cards (would need content behind cards, e.g. a photo background).
+- source_spec: `_bmad-output/implementation-artifacts/spec-design-preview-whole-app.md`
+  summary: Editor sub-screens are in-screen state (`EditorUiState.pane`), not Navigation 3 routes.
+  evidence: Keeps production navigation unchanged (spec Never). Predictive back animates the whole editor, not the sub-screen; revisit when Story 1.9+ wires the editor to real sub-screens.

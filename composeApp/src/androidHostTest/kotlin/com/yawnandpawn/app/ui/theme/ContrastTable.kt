@@ -104,20 +104,49 @@ object ContrastTable {
         return 0.2126 * channel(color.red) + 0.7152 * channel(color.green) + 0.0722 * channel(color.blue)
     }
 
+    /**
+     * The colour a pair side names in [theme]: one token, or a stack written `top+below` (`glass+gradient-top`): each
+     * translucent token composited over the next, the last one opaque. Missing keys are added to [missing].
+     */
+    fun resolve(
+        theme: String,
+        name: String,
+        colors: Map<String, Color>,
+        missing: MutableList<String>,
+    ): Color? {
+        val layers =
+            name.split("+").map { part ->
+                val key = tokenKey(theme, part.trim())
+                colors[key] ?: null.also { missing += key }
+            }
+        if (layers.any { it == null }) return null
+        return layers.filterNotNull().reduceRight { top, below -> composite(top, below) }
+    }
+
+    /** [top] (with its alpha) drawn over [below], as an opaque colour. */
+    fun composite(
+        top: Color,
+        below: Color,
+    ): Color {
+        val a = top.alpha
+        return Color(
+            red = top.red * a + below.red * (1 - a),
+            green = top.green * a + below.green * (1 - a),
+            blue = top.blue * a + below.blue * (1 - a),
+            alpha = 1f,
+        )
+    }
+
     /** Every problem with [rows] against [colors] (DESIGN.md key to colour), one message per problem naming the row. */
     fun violations(
         rows: List<ContrastRow>,
         colors: Map<String, Color>,
     ): List<String> =
         rows.flatMap { row ->
-            val fg = colors[tokenKey(row.theme, row.foreground)]
-            val bg = colors[tokenKey(row.theme, row.background)]
+            val missing = mutableListOf<String>()
+            val fg = resolve(row.theme, row.foreground, colors, missing)
+            val bg = resolve(row.theme, row.background, colors, missing)
             if (fg == null || bg == null) {
-                val missing =
-                    listOfNotNull(
-                        tokenKey(row.theme, row.foreground).takeIf { fg == null },
-                        tokenKey(row.theme, row.background).takeIf { bg == null },
-                    )
                 return@flatMap listOf("$row: no generated token ${missing.joinToString()}")
             }
             val computed = contrast(fg, bg)

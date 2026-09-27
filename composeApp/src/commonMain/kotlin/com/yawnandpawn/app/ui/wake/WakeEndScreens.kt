@@ -28,6 +28,7 @@ import com.yawnandpawn.app.ui.checks.icon
 import com.yawnandpawn.app.ui.components.DismissButton
 import com.yawnandpawn.app.ui.components.NoteInline
 import com.yawnandpawn.app.ui.components.RowIcon
+import com.yawnandpawn.app.ui.components.glass
 import com.yawnandpawn.app.ui.format.formatClockTime
 import com.yawnandpawn.app.ui.format.formatMoney
 import com.yawnandpawn.app.ui.resources.Res
@@ -81,8 +82,7 @@ fun FallbackPickerScreen(
                         Modifier
                             .fillMaxWidth()
                             .heightIn(min = spacing.targetWake)
-                            .clip(PpsTheme.shapes.md)
-                            .background(colors.surface)
+                            .glass(PpsTheme.shapes.md)
                             .clickable(role = Role.Button) { onIntent(WakeIntent.FallbackChosen(type)) }
                             .padding(spacing.cardPadding),
                     verticalAlignment = Alignment.CenterVertically,
@@ -115,37 +115,43 @@ fun SuccessScreen(
         Column(modifier = Modifier.fillMaxSize().wakeContentPadding()) {
             Column(
                 modifier = Modifier.fillMaxWidth().weight(1f).verticalScroll(rememberScrollState()),
-                verticalArrangement = Arrangement.spacedBy(spacing.space3, Alignment.CenterVertically),
-                horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.Center,
             ) {
-                when (val kind = state.kind) {
-                    is SuccessKind.OnTime -> {
-                        if (kind.streakDays > 0) {
-                            Text(text = kind.streakDays.toString(), style = PpsTheme.typography.display, color = colors.accentText)
+                // On a glass card: the streak number in accent-text passes on glass (5.11), not on the sunrise gradient.
+                Column(
+                    modifier = Modifier.fillMaxWidth().glass(PpsTheme.shapes.md).padding(spacing.space6),
+                    verticalArrangement = Arrangement.spacedBy(spacing.space3),
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                ) {
+                    when (val kind = state.kind) {
+                        is SuccessKind.OnTime -> {
+                            if (kind.streakDays > 0) {
+                                Text(text = kind.streakDays.toString(), style = PpsTheme.typography.display, color = colors.accentText)
+                            }
+                            Headline(
+                                when (kind.streakDays) {
+                                    0 -> stringResource(Res.string.success_zero_snooze_first)
+                                    1 -> stringResource(Res.string.success_zero_snooze_one)
+                                    else -> stringResource(Res.string.success_zero_snooze, kind.streakDays)
+                                },
+                            )
                         }
-                        Headline(
-                            when (kind.streakDays) {
-                                0 -> stringResource(Res.string.success_zero_snooze_first)
-                                1 -> stringResource(Res.string.success_zero_snooze_one)
-                                else -> stringResource(Res.string.success_zero_snooze, kind.streakDays)
-                            },
-                        )
-                    }
 
-                    is SuccessKind.AfterSnooze -> {
-                        Headline(stringResource(Res.string.success_after_snooze))
-                        Text(
-                            text = stringResource(Res.string.success_paid_this_morning, formatMoney(kind.paidThisMorning)),
-                            style = PpsTheme.typography.body,
-                            color = colors.textSecondary,
-                        )
-                    }
+                        is SuccessKind.AfterSnooze -> {
+                            Headline(stringResource(Res.string.success_after_snooze))
+                            Text(
+                                text = stringResource(Res.string.success_paid_this_morning, formatMoney(kind.paidThisMorning)),
+                                style = PpsTheme.typography.body,
+                                color = colors.textSecondary,
+                            )
+                        }
 
-                    SuccessKind.Test -> {
-                        Headline(stringResource(Res.string.success_test))
+                        SuccessKind.Test -> {
+                            Headline(stringResource(Res.string.success_test))
+                        }
                     }
+                    if (state.pendingNotUsed) NoteInline(text = stringResource(Res.string.success_pending_not_used))
                 }
-                if (state.pendingNotUsed) NoteInline(text = stringResource(Res.string.success_pending_not_used))
             }
             WakePrimaryButton(text = stringResource(Res.string.success_done), onClick = { onIntent(WakeIntent.DoneClicked) }, hero = false)
         }

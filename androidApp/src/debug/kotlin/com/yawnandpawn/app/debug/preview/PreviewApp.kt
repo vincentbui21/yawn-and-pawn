@@ -3,6 +3,7 @@ package com.yawnandpawn.app.debug.preview
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.WindowInsets
@@ -27,6 +28,9 @@ import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.Density
+import com.yawnandpawn.app.ui.components.GroupCard
+import com.yawnandpawn.app.ui.components.GroupDivider
+import com.yawnandpawn.app.ui.components.PpsBackground
 import com.yawnandpawn.app.ui.components.PpsSegmentedControl
 import com.yawnandpawn.app.ui.components.SwitchRow
 import com.yawnandpawn.app.ui.format.is24HourClock
@@ -54,7 +58,7 @@ fun PreviewFrame(
 private enum class Flow(
     val title: String,
 ) {
-    App("Tap through the app: Home, editor, sound picker, test alarm"),
+    App("Tap through the app: Home, editor and its sub-screens, test alarm"),
     Session("Tap through a morning: Back to alarm, Ringing, Check, Success"),
 }
 
@@ -80,8 +84,10 @@ fun PreviewApp() {
             }
 
             item != null -> {
-                BackHandler { openItem = null }
                 item.render(is24)
+                // Registered after the screen, so it wins over a confirm sheet's own Back: on wake screens Back returns
+                // to this menu in the preview only (a real alarm ignores Back; design preview feedback item 6).
+                BackHandler { openItem = null }
             }
 
             else -> {
@@ -110,44 +116,68 @@ private fun PreviewMenu(
     val colors = PpsTheme.colors
     val spacing = PpsTheme.spacing
     val grouped = PreviewCatalog.items.groupBy { it.round to it.group }
-    LazyColumn(
-        modifier = Modifier.fillMaxSize().background(colors.bg).windowInsetsPadding(WindowInsets.statusBars),
-        contentPadding = PaddingValues(horizontal = spacing.screenMargin, vertical = spacing.space4),
-    ) {
-        item {
-            Column {
-                Text(
-                    text = "Yawn & Pawn Preview",
-                    modifier = Modifier.semantics { heading() },
-                    style = PpsTheme.typography.headline,
-                    color = colors.text,
-                )
-                Text(
-                    text = "Fake data only. Nothing is saved, scheduled, played or charged. Back returns here.",
-                    style = PpsTheme.typography.caption,
-                    color = colors.textSecondary,
-                )
-                PpsSegmentedControl(
-                    options = listOf(false, true),
-                    selected = dark,
-                    label = { if (it) "Dark" else "Light" },
-                    onSelect = onDark,
-                    modifier = Modifier.padding(top = spacing.space4),
-                )
-                SwitchRow(label = "200% font size", checked = largeFont, onCheckedChange = onLargeFont)
+    PpsBackground {
+        LazyColumn(
+            modifier = Modifier.fillMaxSize().windowInsetsPadding(WindowInsets.statusBars),
+            contentPadding = PaddingValues(horizontal = spacing.screenMargin, vertical = spacing.space4),
+            verticalArrangement = Arrangement.spacedBy(spacing.space3),
+        ) {
+            item {
+                Column {
+                    Text(
+                        text = "Yawn & Pawn Preview",
+                        modifier = Modifier.semantics { heading() },
+                        style = PpsTheme.typography.headline,
+                        color = colors.text,
+                    )
+                    Text(
+                        text = "Fake data only. Nothing is saved, scheduled, played or charged. Back returns here.",
+                        style = PpsTheme.typography.caption,
+                        color = colors.textSecondary,
+                    )
+                }
             }
-        }
-        item { MenuHeader("Round 1 · The daily loop") }
-        items(Flow.entries) { flow -> MenuRow(title = flow.title, onClick = { onOpenFlow(flow) }) }
-        grouped.forEach { (key, items) ->
-            item { MenuSubheader(key.second) }
-            items(items, key = { it.id }) { item ->
-                MenuRow(title = if (item.wake) "${item.title} (Sunrise)" else item.title, onClick = { onOpenItem(item) })
+            item {
+                GroupCard {
+                    PpsSegmentedControl(
+                        options = listOf(false, true),
+                        selected = dark,
+                        label = { if (it) "Dark" else "Light" },
+                        onSelect = onDark,
+                        modifier = Modifier.padding(spacing.cardPadding),
+                    )
+                    GroupDivider()
+                    SwitchRow(label = "200% font size", checked = largeFont, onCheckedChange = onLargeFont)
+                }
             }
+            item { MenuHeader("Round 1 · The daily loop") }
+            item { MenuCard(title = "Tap through", rows = Flow.entries.map { it.title to { onOpenFlow(it) } }) }
+            grouped.forEach { (key, items) ->
+                item(key = key.second) {
+                    MenuCard(
+                        title = key.second,
+                        rows = items.map { item -> (if (item.wake) "${item.title} (Sunrise)" else item.title) to { onOpenItem(item) } },
+                    )
+                }
+            }
+            item { MenuHeader("Round 2 · Progress and settings (next)") }
+            item { MenuHeader("Round 3 · Setup flows (later)") }
+            item { Column(modifier = Modifier.windowInsetsPadding(WindowInsets.navigationBars)) {} }
         }
-        item { MenuHeader("Round 2 · Progress and settings (next)") }
-        item { MenuHeader("Round 3 · Setup flows (later)") }
-        item { Column(modifier = Modifier.windowInsetsPadding(WindowInsets.navigationBars)) {} }
+    }
+}
+
+/** One screen's states as a card of rows (the grouped-card pattern the app uses). */
+@Composable
+private fun MenuCard(
+    title: String,
+    rows: List<Pair<String, () -> Unit>>,
+) {
+    GroupCard(title = title) {
+        rows.forEachIndexed { index, (text, onClick) ->
+            if (index > 0) GroupDivider()
+            MenuRow(title = text, onClick = onClick)
+        }
     }
 }
 
@@ -155,19 +185,9 @@ private fun PreviewMenu(
 private fun MenuHeader(text: String) {
     Text(
         text = text,
-        modifier = Modifier.padding(top = PpsTheme.spacing.sectionGap, bottom = PpsTheme.spacing.space2).semantics { heading() },
+        modifier = Modifier.padding(top = PpsTheme.spacing.space4).semantics { heading() },
         style = PpsTheme.typography.title,
         color = PpsTheme.colors.text,
-    )
-}
-
-@Composable
-private fun MenuSubheader(text: String) {
-    Text(
-        text = text,
-        modifier = Modifier.padding(top = PpsTheme.spacing.space4, bottom = PpsTheme.spacing.space1).semantics { heading() },
-        style = PpsTheme.typography.label,
-        color = PpsTheme.colors.accentText,
     )
 }
 
@@ -183,7 +203,7 @@ private fun MenuRow(
                 .fillMaxWidth()
                 .heightIn(min = PpsTheme.spacing.targetMin)
                 .clickable(role = Role.Button, onClick = onClick)
-                .padding(vertical = PpsTheme.spacing.space3),
+                .padding(horizontal = PpsTheme.spacing.cardPadding, vertical = PpsTheme.spacing.space3),
         style = PpsTheme.typography.body,
         color = PpsTheme.colors.text,
     )

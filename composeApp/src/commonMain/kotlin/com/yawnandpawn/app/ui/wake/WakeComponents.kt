@@ -2,6 +2,11 @@
 
 package com.yawnandpawn.app.ui.wake
 
+import androidx.compose.animation.core.RepeatMode
+import androidx.compose.animation.core.animateFloat
+import androidx.compose.animation.core.infiniteRepeatable
+import androidx.compose.animation.core.rememberInfiniteTransition
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
@@ -39,6 +44,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.semantics.LiveRegionMode
 import androidx.compose.ui.semantics.Role
@@ -53,7 +59,13 @@ import androidx.compose.ui.unit.dp
 import androidx.navigationevent.NavigationEventInfo
 import androidx.navigationevent.compose.NavigationBackHandler
 import androidx.navigationevent.compose.rememberNavigationEventState
+import com.yawnandpawn.app.ui.components.GlassBackdrop
 import com.yawnandpawn.app.ui.components.NoteInline
+import com.yawnandpawn.app.ui.components.PpsBackground
+import com.yawnandpawn.app.ui.components.glass
+import com.yawnandpawn.app.ui.components.glassSource
+import com.yawnandpawn.app.ui.components.rememberGlassBackdrop
+import com.yawnandpawn.app.ui.components.rememberReducedMotion
 import com.yawnandpawn.app.ui.format.formatMoney
 import com.yawnandpawn.app.ui.resources.Res
 import com.yawnandpawn.app.ui.resources.grace_ended
@@ -98,16 +110,22 @@ import org.jetbrains.compose.resources.painterResource
 import org.jetbrains.compose.resources.stringResource
 
 /**
- * Every wake screen: always the Sunrise token set (whatever the app theme), flat `bg-sunrise`, drawn edge-to-edge with
- * its content inside the system bars.
+ * Every wake screen: always the Sunrise token set (whatever the app theme), on the sunrise `background-gradient` (top
+ * 40%, flat thumb zone), drawn edge-to-edge with its content inside the system bars. [overlay] (the confirm sheet) sits
+ * over the content and gets the [GlassBackdrop] of it, so its glass blurs what is beneath on Android 12+.
  */
 @Composable
 fun WakeSurface(
     modifier: Modifier = Modifier,
+    overlay: @Composable BoxScope.(GlassBackdrop) -> Unit = {},
     content: @Composable BoxScope.() -> Unit,
 ) {
     PpsTheme(wake = true) {
-        Box(modifier = modifier.fillMaxSize().background(PpsTheme.colors.bg), content = content)
+        val backdrop = rememberGlassBackdrop()
+        Box(modifier = modifier.fillMaxSize()) {
+            PpsBackground(modifier = Modifier.glassSource(backdrop), content = content)
+            overlay(backdrop)
+        }
     }
 }
 
@@ -116,19 +134,44 @@ fun WakeSurface(
 fun Modifier.wakeContentPadding(): Modifier =
     windowInsetsPadding(WindowInsets.systemBars).padding(horizontal = PpsTheme.spacing.screenMargin, vertical = PpsTheme.spacing.space4)
 
-/** `button-wake-primary` ("I'm up"): full width, 72 dp (64 dp in the sheet), accent fill, `button-wake` label. */
+/**
+ * `button-wake-primary` ("I'm up"): full width, 72 dp (64 dp in the sheet), accent fill, `button-wake` label. With
+ * [pulse] (Ringing only, owner decision 2026-09-27) it breathes gently (scale 1 to 1.03 and back, 1.2 s), unless the
+ * phone asks for no motion; the pulse is drawn only, so its touch target never moves.
+ */
 @Composable
 fun WakePrimaryButton(
     text: String,
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
     hero: Boolean = true,
+    pulse: Boolean = false,
 ) {
     val colors = PpsTheme.colors
     val spacing = PpsTheme.spacing
+    val pulsing = pulse && !rememberReducedMotion()
+    val scale =
+        if (pulsing) {
+            rememberInfiniteTransition(label = "I'm up pulse")
+                .animateFloat(
+                    initialValue = 1f,
+                    targetValue = PULSE_SCALE,
+                    animationSpec = infiniteRepeatable(tween(PULSE_MILLIS), RepeatMode.Reverse),
+                    label = "scale",
+                ).value
+        } else {
+            1f
+        }
     Button(
         onClick = onClick,
-        modifier = modifier.fillMaxWidth().heightIn(min = if (hero) spacing.targetWakeHero else spacing.targetWake),
+        modifier =
+            modifier
+                .fillMaxWidth()
+                .heightIn(min = if (hero) spacing.targetWakeHero else spacing.targetWake)
+                .graphicsLayer {
+                    scaleX = scale
+                    scaleY = scale
+                },
         shape = PpsTheme.shapes.full,
         colors = ButtonDefaults.buttonColors(containerColor = colors.accent, contentColor = colors.onAccent),
     ) {
@@ -301,7 +344,11 @@ fun GraceHeader(
 ) {
     val colors = PpsTheme.colors
     val spacing = PpsTheme.spacing
-    Row(modifier = modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+    // On a glass card: the accent ring passes on glass over the sunrise gradient (3.17), not on the gradient itself.
+    Row(
+        modifier = modifier.fillMaxWidth().glass(PpsTheme.shapes.md).padding(spacing.space3),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
         Box(modifier = Modifier.size(RING_SIZE), contentAlignment = Alignment.Center) {
             when (grace) {
                 is GraceState.Running -> {
@@ -347,7 +394,8 @@ fun GraceHeader(
 }
 
 /**
- * `sheet-snooze-confirm` over a wake screen: `surface` bottom sheet, top corners `rounded.lg`, 24 dp padding. The upper
+ * `sheet-snooze-confirm` over a wake screen: a `glass-bar` bottom sheet (`glass-strong`, blurred backdrop on Android
+ * 12+), top corners `rounded.lg`, 24 dp padding. The upper
  * outlined action pays (or uses the earlier payment); the filled bottom one, a tap outside and Back all run
  * [onDismiss] ("I'll get up", "Not now", "Cancel"). Every input is ignored for 500 ms after the sheet opens or changes
  * state, whatever the animation setting. Neither button is pre-selected.
@@ -358,6 +406,7 @@ fun SnoozeConfirmSheet(
     onUpper: () -> Unit,
     onDismiss: () -> Unit,
     modifier: Modifier = Modifier,
+    backdrop: GlassBackdrop? = null,
 ) {
     val colors = PpsTheme.colors
     val spacing = PpsTheme.spacing
@@ -386,9 +435,11 @@ fun SnoozeConfirmSheet(
                 Modifier
                     .align(Alignment.BottomCenter)
                     .fillMaxWidth()
-                    .clip(PpsTheme.shapes.lg.copy(bottomStart = ZeroCornerSize, bottomEnd = ZeroCornerSize))
-                    .background(colors.surface)
-                    .navigationBarsPadding()
+                    .glass(
+                        PpsTheme.shapes.lg.copy(bottomStart = ZeroCornerSize, bottomEnd = ZeroCornerSize),
+                        strong = true,
+                        backdrop = backdrop,
+                    ).navigationBarsPadding()
                     .padding(spacing.space6),
             verticalArrangement = Arrangement.spacedBy(spacing.space3),
         ) {
@@ -469,6 +520,8 @@ private fun SheetContent(sheet: SnoozeSheet) {
 const val INPUT_LOCK_MILLIS: Long = 500L
 
 private const val SCRIM_ALPHA = 0.32f
+private const val PULSE_SCALE = 1.03f
+private const val PULSE_MILLIS = 1_200
 private const val FULL_CIRCLE = 360f
 private const val START_ANGLE = -90f
 private val RING_SIZE = 120.dp

@@ -83,10 +83,15 @@ class MainActivityTest {
         composeRule.onNodeWithContentDescription("Add alarm").performClick()
         waitForText("New alarm")
 
+        composeRule.onNode(hasText("Custom") and hasClickAction()).performClick()
         composeRule.onNodeWithContentDescription("Monday").performClick()
-        composeRule.onNode(hasSetTextAction() and hasText("Label")).performTextReplacement("Stand-up")
-        composeRule.onNode(hasText("15 min") and hasClickAction()).performScrollTo().performClick()
+        composeRule.onNode(hasSetTextAction() and hasContentDescription("Alarm name")).performTextReplacement("Stand-up")
         composeRule.onNode(hasText("Vibration") and hasClickAction()).performScrollTo().performClick()
+        // Snooze is a row that opens its sub-screen; the sub-screen's back arrow returns with the change kept.
+        composeRule.onNode(hasText("Snooze") and hasClickAction()).performScrollTo().performClick()
+        composeRule.onNode(hasText("15 min") and hasClickAction()).performClick()
+        composeRule.onNodeWithContentDescription("Back").performClick()
+        waitForText("Save")
         composeRule.onNodeWithText("Save").performClick()
 
         waitForGone("New alarm")
@@ -97,11 +102,14 @@ class MainActivityTest {
         waitForText("Edit alarm")
         composeRule.onNodeWithContentDescription("Monday").assertIsOn()
         composeRule.onNodeWithText("Stand-up").assertExists()
-        composeRule.onNode(hasText("15 min") and hasClickAction()).assertIsSelected()
         composeRule.onNode(hasText("Vibration") and hasClickAction()).assertIsOff()
+        composeRule.onNode(hasText("Snooze") and hasClickAction()).performScrollTo().performClick()
+        composeRule.onNode(hasText("15 min") and hasClickAction()).assertIsSelected()
+        composeRule.activityRule.scenario.onActivity { it.onBackPressedDispatcher.onBackPressed() }
+        waitForText("Cancel")
 
-        // No change: Back closes at once.
-        composeRule.onNodeWithContentDescription("Back").performClick()
+        // No change: Cancel closes at once.
+        composeRule.onNodeWithText("Cancel").performClick()
         waitForGone("Edit alarm")
         composeRule.onNodeWithText("Yawn & Pawn").assertExists()
     }
@@ -117,7 +125,7 @@ class MainActivityTest {
 
         composeRule.onNodeWithText("Once").performClick()
         waitForText("Edit alarm")
-        composeRule.onNodeWithContentDescription("Sunday").performClick()
+        composeRule.onNode(hasText("Weekdays") and hasClickAction()).performClick()
         composeRule.activityRule.scenario.onActivity { it.onBackPressedDispatcher.onBackPressed() }
 
         waitForText("Discard changes?")
@@ -125,7 +133,7 @@ class MainActivityTest {
         composeRule.onNodeWithText("Discard changes?").assertDoesNotExist()
         composeRule.onNodeWithText("Edit alarm").assertExists()
 
-        composeRule.onNodeWithContentDescription("Back").performClick()
+        composeRule.onNodeWithText("Cancel").performClick()
         waitForText("Discard changes?")
         composeRule.onNodeWithText("Discard").performClick()
 
@@ -164,13 +172,14 @@ class MainActivityTest {
         waitForText("No alarms yet.")
         composeRule.onNodeWithContentDescription("Add alarm").performClick()
         waitForText("New alarm")
+        composeRule.onNode(hasText("Custom") and hasClickAction()).performClick()
         composeRule.onNodeWithContentDescription("Monday").performClick()
 
         composeRule.activityRule.scenario.recreate()
 
         waitForText("New alarm")
         composeRule.onNodeWithContentDescription("Monday").assertIsOn()
-        composeRule.onNodeWithContentDescription("Back").performClick()
+        composeRule.onNodeWithText("Cancel").performClick()
         waitForText("Discard changes?")
     }
 }

@@ -8,6 +8,7 @@ import androidx.compose.runtime.ReadOnlyComposable
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.platform.LocalDensity
+import com.yawnandpawn.app.ui.components.SystemBarIcons
 
 /** App-screen theme choice (Settings: System / Light / Dark). */
 enum class PpsThemeMode { System, Light, Dark }
@@ -69,6 +70,9 @@ fun PpsTheme(
         LocalPpsShapes provides shapes,
         LocalPpsSpacing provides PpsSpacing(),
     ) {
+        // Dark status and navigation bar icons on the light sets (Light, Sunrise), light ones on Dark, whatever the phone
+        // uses itself (design preview feedback item 4).
+        SystemBarIcons(darkIcons = !colors.isDark)
         MaterialTheme(
             colorScheme = remember(colors) { colors.toColorScheme() },
             typography = remember(typography) { typography.toMaterialTypography() },

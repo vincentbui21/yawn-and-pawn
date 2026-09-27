@@ -78,7 +78,10 @@ private fun PpsColors.roles(): List<Pair<String, Color>> =
         "inverse-surface" to inverseSurface,
         "inverse-text" to inverseText,
         "inverse-accent" to inverseAccent,
-        sunriseGradientTop?.let { "sunrise-gradient-top" to it },
+        "gradient-top" to gradientTop,
+        "glass" to glass,
+        "glass-strong" to glassStrong,
+        "glass-edge" to glassEdge,
     )
 
 @Composable

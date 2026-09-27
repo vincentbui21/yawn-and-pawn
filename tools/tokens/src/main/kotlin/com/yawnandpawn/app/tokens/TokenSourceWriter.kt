@@ -96,7 +96,7 @@ object TokenSourceWriter {
             out.appendLine("    /** ${set.objectName} colour set. */")
             out.appendLine("    object ${set.objectName} {")
             bySet[set].orEmpty().forEach { color ->
-                out.appendLine("        val ${ColorSet.propertyName(color.name)} = Color(0xFF${color.hex.removePrefix("#")})")
+                out.appendLine("        val ${ColorSet.propertyName(color.name)} = Color(0x${argb(color.hex)})")
             }
             out.appendLine("    }")
             out.appendLine()
@@ -153,6 +153,15 @@ object TokenSourceWriter {
         }
         out.appendLine("    }")
     }
+
+    /** `#RRGGBB` to `FFRRGGBB`, `#RRGGBBAA` to `AARRGGBB` (the Compose `Color(0xAARRGGBB)` order). */
+    private fun argb(hex: String): String {
+        val digits = hex.removePrefix("#")
+        return if (digits.length == RGBA_DIGITS) digits.substring(RGB_DIGITS) + digits.substring(0, RGB_DIGITS) else "FF$digits"
+    }
+
+    private const val RGB_DIGITS = 6
+    private const val RGBA_DIGITS = 8
 
     private fun checkNames(tokens: DesignTokens) {
         val groups =

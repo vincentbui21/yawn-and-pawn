@@ -32,3 +32,12 @@
 - source_spec: `_bmad-output/implementation-artifacts/spec-1-6-time-ports-deadlines-and-alarm-occurrence-math-in-core.md`
   summary: Decide how deadlines and scheduling behave right after a reboot when the wall clock is wrong until network time syncs.
   evidence: Unverified (medium if it happens). After a reboot `Deadline` compares wall time by design (AD-3); an RTC reset or manual clock change can make a snooze deadline due too early or too late. Natural home: Stories 1.10 (reschedule on boot/time change) and 1.12 (SessionEngine restore).
+- source_spec: `_bmad-output/implementation-artifacts/spec-1-7-store-alarms-in-app-db.md`
+  summary: Decide whether request codes of deleted alarms may be reused, or keep a persisted high-water mark.
+  evidence: Unverified (medium once scheduling exists). "Highest in use + 1" reuses a deleted alarm's code; harmful only if a stale PendingIntent survives. Settle in Story 1.10 (scheduler cancels on delete).
+- source_spec: `_bmad-output/implementation-artifacts/spec-1-7-store-alarms-in-app-db.md`
+  summary: Write a downgrade policy for restoring a newer-schema app.db backup onto an older install.
+  evidence: Unverified (medium if it happens). Destructive fallback is forbidden, so a v2 backup restored on v1 fails to open. Arises with Story 1.13 (session_history, schema v2).
+- source_spec: `_bmad-output/implementation-artifacts/spec-1-7-store-alarms-in-app-db.md`
+  summary: Test that app.db opens before first unlock (credential storage locked).
+  evidence: Only the device-protected path is asserted. Belongs with the directBootAware receivers and WakeService in Stories 1.10 and 1.14.

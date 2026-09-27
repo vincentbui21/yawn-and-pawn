@@ -1,3 +1,34 @@
 <resources>
     <string name="app_name">Yawn &amp; Pawn</string>
+
+    <!-- Alarms route (Story 1.8). EXPERIENCE.md Key strings: Home empty, Home FAB (TalkBack), Alarm repeat summary. -->
+    <string name="alarms_empty_title">No alarms yet.</string>
+    <string name="alarms_add_first">Add your first alarm</string>
+    <string name="alarms_add_alarm">Add alarm</string>
+    <string name="repeat_every_day">Every day</string>
+    <string name="repeat_once">Once</string>
+
+    <!-- Alarm editor (Story 1.8). Key strings from EXPERIENCE.md; the rest owner-approved 2026-09-27. -->
+    <string name="editor_new_title">New alarm</string>
+    <string name="editor_edit_title">Edit alarm</string>
+    <string name="editor_back">Back</string>
+    <string name="editor_repeat">Repeat</string>
+    <string name="editor_label">Label</string>
+    <string name="editor_label_too_long">Keep the label under 40 characters.</string>
+    <string name="editor_snooze_length">Snooze length</string>
+    <string name="editor_snooze_minutes">%1$d min</string>
+    <string name="editor_sound">Sound</string>
+    <!-- Placeholder name of the default sound until the sound library (Story 1.17). -->
+    <string name="editor_sound_default">Sunrise</string>
+    <string name="editor_volume">Volume</string>
+    <string name="editor_gradual_volume">Gradually increase volume</string>
+    <string name="editor_starting_volume">Starting volume</string>
+    <string name="editor_percent">%1$d%</string>
+    <string name="editor_vibration">Vibration</string>
+    <string name="editor_save">Save</string>
+    <string name="editor_rings_tomorrow">Rings tomorrow at %1$s.</string>
+    <string name="editor_save_failed">Couldn't save the alarm. Try again.</string>
+    <string name="editor_discard_title">Discard changes?</string>
+    <string name="editor_discard">Discard</string>
+    <string name="editor_keep_editing">Keep editing</string>
 </resources>

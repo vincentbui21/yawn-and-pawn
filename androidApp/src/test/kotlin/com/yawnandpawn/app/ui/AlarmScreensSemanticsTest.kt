@@ -1,0 +1,284 @@
+package com.yawnandpawn.app.ui
+
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.SemanticsActions
+import androidx.compose.ui.semantics.SemanticsNode
+import androidx.compose.ui.semantics.SemanticsProperties
+import androidx.compose.ui.semantics.getOrNull
+import androidx.compose.ui.test.SemanticsMatcher
+import androidx.compose.ui.test.assert
+import androidx.compose.ui.test.assertIsOff
+import androidx.compose.ui.test.assertIsOn
+import androidx.compose.ui.test.assertIsSelected
+import androidx.compose.ui.test.hasClickAction
+import androidx.compose.ui.test.hasContentDescription
+import androidx.compose.ui.test.hasSetTextAction
+import androidx.compose.ui.test.hasText
+import androidx.compose.ui.test.isDialog
+import androidx.compose.ui.test.junit4.ComposeTestRule
+import androidx.compose.ui.test.junit4.createEmptyComposeRule
+import androidx.compose.ui.test.onNodeWithContentDescription
+import androidx.compose.ui.test.onNodeWithText
+import androidx.compose.ui.test.performClick
+import androidx.compose.ui.unit.dp
+import com.yawnandpawn.app.core.alarm.AlarmWriteLock
+import com.yawnandpawn.app.core.alarm.SaveAlarm
+import com.yawnandpawn.app.core.error.DomainError
+import com.yawnandpawn.app.testing.FakeAlarmRepository
+import com.yawnandpawn.app.testing.FakeClock
+import com.yawnandpawn.app.testing.FakeIdGenerator
+import com.yawnandpawn.app.testing.FakeTimeZoneProvider
+import com.yawnandpawn.app.ui.alarms.AlarmsScreen
+import com.yawnandpawn.app.ui.editor.AlarmEditorRoute
+import com.yawnandpawn.app.ui.editor.AlarmEditorScreen
+import com.yawnandpawn.app.ui.editor.AlarmEditorViewModel
+import com.yawnandpawn.app.ui.editor.EditorUiState
+import com.yawnandpawn.app.ui.format.DayNameStyle
+import com.yawnandpawn.app.ui.format.WeekOrder
+import com.yawnandpawn.app.ui.format.dayName
+import com.yawnandpawn.app.ui.theme.PpsThemeMode
+import org.junit.After
+import org.junit.Rule
+import org.junit.Test
+import org.junit.runner.RunWith
+import org.koin.core.context.stopKoin
+import org.robolectric.RobolectricTestRunner
+import org.robolectric.annotation.Config
+import kotlin.test.assertEquals
+import kotlin.test.assertFalse
+import kotlin.test.assertTrue
+
+/**
+ * Accessibility floor for the Story 1.8 screens: every touch target is at least 48 dp, and every control TalkBack
+ * can act on has a label, a role (or is a text field or slider) and, where it has one, its state.
+ */
+@RunWith(RobolectricTestRunner::class)
+@Config(qualifiers = "w411dp-h1400dp-mdpi")
+class AlarmScreensSemanticsTest {
+    @get:Rule
+    val composeRule = createEmptyComposeRule()
+
+    @After
+    fun tearDown() {
+        stopKoin()
+    }
+
+    private fun editor(
+        state: EditorUiState,
+        is24Hour: Boolean = false,
+        block: () -> Unit,
+    ) = withScreen(PpsThemeMode.Light, content = { AlarmEditorScreen(state = state, is24Hour = is24Hour, onIntent = {}) }, block = block)
+
+    /** Controls TalkBack can act on: tappable, adjustable (slider) or editable. */
+    private val actionable =
+        hasClickAction() or SemanticsMatcher.keyIsDefined(SemanticsActions.SetProgress) or hasSetTextAction()
+
+    private fun ComposeTestRule.actionableNodes(): List<SemanticsNode> = onAllNodes(actionable).fetchSemanticsNodes()
+
+    private fun SemanticsNode.describe(): String = "${config.getOrNull(SemanticsProperties.Role)} '${label()}' ($config)"
+
+    private fun SemanticsNode.label(): String =
+        listOfNotNull(
+            config.getOrNull(SemanticsProperties.ContentDescription)?.joinToString(),
+            config.getOrNull(SemanticsProperties.Text)?.joinToString(),
+            config.getOrNull(SemanticsProperties.EditableText)?.text,
+        ).joinToString(" ").trim()
+
+    /** Touch bounds include Material's minimum interactive size, as touch and TalkBack see them. */
+    private fun assertMinTouchTarget(node: SemanticsNode) {
+        val bounds = node.touchBoundsInRoot
+        with(node.layoutInfo.density) {
+            val ok = bounds.width.toDp() >= 48.dp && bounds.height.toDp() >= 48.dp
+            assertTrue(ok, "target ${bounds.width.toDp()} x ${bounds.height.toDp()} is under 48 dp: ${node.describe()}")
+        }
+    }
+
+    private fun assertAccessibilityFloor() {
+        val nodes = composeRule.actionableNodes()
+        assertTrue(nodes.size > 5, "found only ${nodes.size} controls")
+        nodes.forEach { node ->
+            assertMinTouchTarget(node)
+            assertTrue(node.label().isNotEmpty(), "no TalkBack label: ${node.describe()}")
+            val config = node.config
+            val role = config.getOrNull(SemanticsProperties.Role)
+            val isTextField = SemanticsActions.SetText in config
+            val isSlider = SemanticsProperties.ProgressBarRangeInfo in config
+            assertTrue(role != null || isTextField || isSlider, "no role: ${node.describe()}")
+            when (role) {
+                Role.Switch, Role.Checkbox -> {
+                    assertTrue(
+                        SemanticsProperties.ToggleableState in config,
+                        "no on/off state: ${node.describe()}",
+                    )
+                }
+
+                Role.RadioButton, Role.Tab -> {
+                    assertTrue(SemanticsProperties.Selected in config, "no selected state: ${node.describe()}")
+                }
+
+                else -> {
+                    Unit
+                }
+            }
+            if (isSlider) assertTrue(SemanticsProperties.StateDescription in config, "slider value not announced: ${node.describe()}")
+        }
+    }
+
+    @Test
+    fun `new alarm editor meets the accessibility floor`() =
+        editor(EditorSamples.newAlarm) {
+            assertAccessibilityFloor()
+        }
+
+    @Test
+    fun `edit alarm editor in 24-hour mode meets the accessibility floor`() =
+        editor(EditorSamples.editAlarm, is24Hour = true) {
+            assertAccessibilityFloor()
+        }
+
+    @Test
+    @Config(qualifiers = "+h2400dp", fontScale = 2.0f)
+    fun `the editor at 200 percent font scale meets the accessibility floor`() =
+        editor(EditorSamples.newAlarm) {
+            assertAccessibilityFloor()
+        }
+
+    @Test
+    fun `the discard dialog actions meet the accessibility floor`() =
+        editor(EditorSamples.discardDialog) {
+            composeRule.onNode(isDialog()).assertExists()
+            composeRule.onNodeWithText("Keep editing").assert(hasClickAction())
+            composeRule.onNodeWithText("Discard").assert(hasClickAction())
+            assertAccessibilityFloor()
+        }
+
+    @Test
+    fun `day chips read full day names with their checked state`() =
+        editor(EditorSamples.editAlarm) {
+            composeRule.onNodeWithContentDescription("Monday").assertIsOn()
+            composeRule.onNodeWithContentDescription("Tuesday").assertIsOff()
+            composeRule.onNodeWithContentDescription("Sunday").assertIsOff()
+            composeRule.onNodeWithText("M").assertDoesNotExist()
+        }
+
+    @Test
+    fun `snooze length segments are radio buttons with 9 min selected by default`() =
+        editor(EditorSamples.newAlarm) {
+            composeRule.onNode(hasText("9 min") and hasClickAction()).assertIsSelected()
+            composeRule
+                .onNode(hasText("5 min") and hasClickAction())
+                .assert(SemanticsMatcher.expectValue(SemanticsProperties.Role, Role.RadioButton))
+        }
+
+    @Test
+    fun `sliders are labelled and announce their value`() =
+        editor(EditorSamples.newAlarm) {
+            composeRule
+                .onNode(
+                    hasContentDescription("Volume"),
+                ).assert(SemanticsMatcher.expectValue(SemanticsProperties.StateDescription, "80%"))
+            composeRule
+                .onNode(hasContentDescription("Starting volume"))
+                .assert(SemanticsMatcher.expectValue(SemanticsProperties.StateDescription, "20%"))
+        }
+
+    @Test
+    fun `switches read their label with the switch role and state`() =
+        editor(EditorSamples.gradualOff) {
+            composeRule.onNode(hasText("Gradually increase volume") and hasClickAction()).assertIsOff()
+            composeRule.onNode(hasText("Vibration") and hasClickAction()).assertIsOn()
+            composeRule.onNode(hasContentDescription("Starting volume")).assertDoesNotExist()
+        }
+
+    @Test
+    fun `the top app bar back arrow is labelled Back`() =
+        editor(EditorSamples.editAlarm) {
+            composeRule.onNodeWithContentDescription("Back").assert(hasClickAction())
+            composeRule.onNodeWithText("Edit alarm").assertExists()
+        }
+
+    @Test
+    fun `the Alarms empty state and FAB meet the accessibility floor`() =
+        withScreen(
+            PpsThemeMode.Light,
+            content = { AlarmsScreen(EditorSamples.emptyAlarms, is24Hour = false, onAddAlarm = {}, onEditAlarm = {}) },
+        ) {
+            composeRule.onNodeWithText("No alarms yet.").assertExists()
+            composeRule.onNodeWithText("Add your first alarm").assert(hasClickAction())
+            composeRule.onNodeWithContentDescription("Add alarm").assert(hasClickAction())
+            composeRule.actionableNodes().forEach { node ->
+                assertMinTouchTarget(node)
+                assertTrue(node.config.getOrNull(SemanticsProperties.Role) == Role.Button, "not a button: ${node.describe()}")
+            }
+        }
+
+    @Test
+    fun `interim alarm rows read time and summary as one button`() =
+        withScreen(
+            PpsThemeMode.Light,
+            content = { AlarmsScreen(EditorSamples.someAlarms, is24Hour = false, onAddAlarm = {}, onEditAlarm = {}) },
+        ) {
+            composeRule.onNode(hasText("6:30 AM") and hasText("Mon, Wed, Fri") and hasClickAction()).assertExists()
+            composeRule.onNode(hasText("7:15 AM") and hasText("Stand-up") and hasClickAction()).assertExists()
+            composeRule.onNode(hasText("9:00 AM") and hasText("Every day") and hasClickAction()).assertExists()
+        }
+
+    @Test
+    @Config(qualifiers = "+w360dp")
+    fun `on a 360 dp screen the day chips stay on one line with 48 dp targets`() =
+        editor(EditorSamples.newAlarm) {
+            assertAccessibilityFloor()
+            val tops =
+                WeekOrder.map { day ->
+                    composeRule
+                        .onNodeWithContentDescription(dayName(day, DayNameStyle.Full))
+                        .fetchSemanticsNode()
+                        .boundsInRoot.top
+                }
+            assertEquals(1, tops.distinct().size, "chips on more than one line: $tops")
+        }
+
+    @Test
+    fun `a label error shows its text and puts the field in error state`() =
+        editor(EditorSamples.labelError) {
+            composeRule.onNodeWithText("Keep the label under 40 characters.", useUnmergedTree = true).assertExists()
+            composeRule
+                .onNode(hasSetTextAction() and hasText("Label"))
+                .assert(SemanticsMatcher.keyIsDefined(SemanticsProperties.Error))
+        }
+
+    @Test
+    fun `a storage failure on Alarms shows neither the empty state nor a list`() =
+        withScreen(
+            PpsThemeMode.Light,
+            content = { AlarmsScreen(EditorSamples.failedAlarms, is24Hour = false, onAddAlarm = {}, onEditAlarm = {}) },
+        ) {
+            composeRule.onNodeWithText("Yawn & Pawn").assertExists()
+            composeRule.onNodeWithText("No alarms yet.").assertDoesNotExist()
+            composeRule.onNodeWithText("Add your first alarm").assertDoesNotExist()
+        }
+
+    @Test
+    fun `a failed save shows the snackbar and the editor stays open`() {
+        val repository = FakeAlarmRepository().apply { failure = DomainError.StorageFailure("disk I/O error") }
+        val viewModel =
+            AlarmEditorViewModel(
+                alarmId = null,
+                repository = repository,
+                saveAlarm = SaveAlarm(repository, FakeIdGenerator(), FakeClock(), AlarmWriteLock()),
+                clock = FakeClock(),
+                timeZoneProvider = FakeTimeZoneProvider(),
+            )
+        var closed = false
+        withScreen(PpsThemeMode.Light, content = { AlarmEditorRoute(alarmId = null, onClose = { closed = true }, viewModel = viewModel) }) {
+            composeRule.onNodeWithText("Save").performClick()
+
+            composeRule.waitUntil(timeoutMillis = 5_000) {
+                composeRule.onAllNodes(hasText("Couldn't save the alarm. Try again.")).fetchSemanticsNodes().isNotEmpty()
+            }
+            composeRule.onNodeWithText("New alarm").assertExists()
+            assertFalse(closed)
+            assertTrue(repository.current.isEmpty())
+        }
+    }
+}

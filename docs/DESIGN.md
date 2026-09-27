@@ -299,7 +299,7 @@ components:
     checkedTrackColor: '{colors.accent}'
     uncheckedBorderColor: '{colors.outline}'
   time-picker:
-    note: 'Material 3 time input, styled with theme tokens; digits in {typography.display}.'
+    note: 'Scrolling wheels (hour, minute, AM/PM on 12 h phones), styled with theme tokens; digits in {typography.display} tabular, capped at 1.3x font scale; centre value on {colors.surface-variant}. Owner decision 2026-09-27.'
   top-app-bar:
     backgroundColor: '{colors.bg}'
     textColor: '{colors.text}'
@@ -563,7 +563,7 @@ Visual specs. Behaviour for every row lives in `EXPERIENCE.md > Component Patter
 | `stepper` | Value in `display` between two 48 dp round icon buttons (− / +). Price values in `tnum`. |
 | `slider` | Material 3 slider, accent active track, `outline` inactive track, value label above thumb. |
 | `switch` | Material 3 switch, accent checked track, `outline` unchecked border. |
-| `time-picker` | Material 3 time input (keyboard-first) or dial; digits in `display`. |
+| `time-picker` | Hour and minute wheels (plus AM/PM on 12 h phones), three values visible, centre value in `text` on a `surface-variant` `{rounded.sm}` band, others in `text-secondary`; digits in `display` with tabular figures, capped at 1.3x font scale so the wheels fit 360 dp at 200%. Owner decision 2026-09-27 (replaces the Material 3 time input). |
 | `top-app-bar` | Flat on `bg`, title in `headline`, back arrow 48 dp. |
 | `nav-bar` | Material 3 navigation bar, 3 items, Material Symbols Rounded; selected icon fill 1 in `accent-text`, label always shown. |
 | `progress-dots` | 8 dp dots, 8 dp apart; active accent and 16 dp wide (pill), inactive `outline`. |

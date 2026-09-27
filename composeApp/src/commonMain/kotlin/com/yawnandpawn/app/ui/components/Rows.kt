@@ -1,5 +1,6 @@
 package com.yawnandpawn.app.ui.components
 
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
@@ -13,10 +14,14 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.semantics.LiveRegionMode
 import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.liveRegion
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import com.yawnandpawn.app.ui.resources.Res
+import com.yawnandpawn.app.ui.resources.symbol_chevron_right
 import com.yawnandpawn.app.ui.resources.symbol_info
 import com.yawnandpawn.app.ui.theme.PpsTheme
 import org.jetbrains.compose.resources.painterResource
@@ -130,3 +135,61 @@ fun SectionLabel(
 private val SETTINGS_ROW_HEIGHT = 56.dp
 
 private val NOTE_ICON_SIZE = 20.dp
+
+/**
+ * A tappable `settings-row`: [label] left, optional [value] in `text-secondary` and a chevron right, 56 dp. TalkBack
+ * reads label and value as one button.
+ */
+@Composable
+fun NavRow(
+    label: String,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+    value: String? = null,
+) {
+    val colors = PpsTheme.colors
+    Row(
+        modifier =
+            modifier
+                .fillMaxWidth()
+                .heightIn(min = SETTINGS_ROW_HEIGHT)
+                .clickable(role = Role.Button, onClick = onClick),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Text(
+            text = label,
+            modifier = Modifier.weight(1f).padding(end = PpsTheme.spacing.space4),
+            style = PpsTheme.typography.body,
+            color = colors.text,
+        )
+        if (value != null) {
+            Text(
+                text = value,
+                modifier = Modifier.weight(1f, fill = false),
+                style = PpsTheme.typography.body,
+                color = colors.textSecondary,
+                textAlign = TextAlign.End,
+            )
+        }
+        Icon(
+            painter = painterResource(Res.drawable.symbol_chevron_right),
+            contentDescription = null,
+            modifier = Modifier.padding(start = PpsTheme.spacing.space2).size(NOTE_ICON_SIZE + PpsTheme.spacing.space1),
+            tint = colors.textSecondary,
+        )
+    }
+}
+
+/** An inline field error in `error` (`caption`), announced politely when it appears. */
+@Composable
+fun InlineError(
+    text: String,
+    modifier: Modifier = Modifier,
+) {
+    Text(
+        text = text,
+        modifier = modifier.semantics { liveRegion = LiveRegionMode.Polite },
+        style = PpsTheme.typography.caption,
+        color = PpsTheme.colors.error,
+    )
+}

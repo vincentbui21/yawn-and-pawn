@@ -47,9 +47,12 @@
 - source_spec: `_bmad-output/implementation-artifacts/spec-1-8-create-and-edit-an-alarm.md`
   summary: On a real phone (Oppo A96, Android 13) the Save button stays hidden behind the keyboard while the label or time field is focused.
   evidence: Device walkthrough 2026-09-27: with the IME shown, uiautomator reports Save at y=2285 under the keyboard, and a tap there hits the keyboard. The `imePadding()` fix is not effective on device (likely the Scaffold's bottom bar is not inset or the window isn't edge-to-edge). Fix in Story 1.9 with an on-device check.
+  status: fixed in design preview round 1: `MainActivity` is edge-to-edge with `windowSoftInputMode="adjustResize"`, so the editor Scaffold's `imePadding()` now receives IME insets and the bottom bar (Save) sits above the keyboard. The uiautomator bounds check on the Oppo A96 is still pending (the phone was locked during the run).
 - source_spec: `_bmad-output/implementation-artifacts/spec-1-8-create-and-edit-an-alarm.md`
   summary: The app does not draw edge-to-edge: the status bar stays system grey instead of matching the theme background.
   evidence: Device screenshots 2026-09-27 (Oppo A96). `MainActivity` doesn't call `enableEdgeToEdge()`; targetSdk 35+ enforces edge-to-edge anyway, so insets must be handled. Fix in Story 1.9.
+  status: fixed in design preview round 1 (`spec-design-preview-whole-app.md`): `MainActivity` and the debug `PreviewActivity` call `enableEdgeToEdge()` (transparent bars over the theme `bg`); on-device confirmation on the Oppo A96 still pending.
 - source_spec: `_bmad-output/implementation-artifacts/spec-1-8-create-and-edit-an-alarm.md`
   summary: Owner decision: should the editor open with the keyboard up on the hour field?
   evidence: Material TimeInput focuses the hour and opens the numeric keyboard immediately ("keyboard input first" per EXPERIENCE.md), covering the lower half of the form. Seen on the Oppo A96 walkthrough.
+  status: resolved by the owner decision 2026-09-27 (`spec-design-preview-whole-app.md`): the time input is now scrolling wheels (`PpsWheelTimePicker`) and no keyboard ever opens; EXPERIENCE.md and DESIGN.md `time-picker` rows updated.

@@ -1,0 +1,107 @@
+package com.yawnandpawn.app.ui.shell
+
+import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.consumeWindowInsets
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.statusBars
+import androidx.compose.foundation.layout.windowInsetsPadding
+import androidx.compose.material3.Icon
+import androidx.compose.material3.NavigationBar
+import androidx.compose.material3.NavigationBarItem
+import androidx.compose.material3.NavigationBarItemDefaults
+import androidx.compose.material3.Scaffold
+import androidx.compose.material3.Text
+import androidx.compose.runtime.Composable
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.semantics.heading
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.unit.dp
+import com.yawnandpawn.app.ui.theme.PpsTheme
+import org.jetbrains.compose.resources.painterResource
+import org.jetbrains.compose.resources.stringResource
+
+/**
+ * The app root: [content] for the [selected] tab above the `nav-bar`. The nav bar is hidden while [showNavBar] is
+ * false (the session lock shows only `panel-session-in-progress`). [content] gets the insets the shell already
+ * handles consumed, so its own status-bar padding still applies exactly once.
+ */
+@Composable
+fun AppShell(
+    selected: AppTab,
+    onSelect: (AppTab) -> Unit,
+    modifier: Modifier = Modifier,
+    showNavBar: Boolean = true,
+    content: @Composable () -> Unit,
+) {
+    Scaffold(
+        modifier = modifier.fillMaxSize(),
+        containerColor = PpsTheme.colors.bg,
+        contentColor = PpsTheme.colors.text,
+        bottomBar = { if (showNavBar) PpsNavBar(selected = selected, onSelect = onSelect) },
+    ) { padding ->
+        Box(modifier = Modifier.fillMaxSize().padding(bottomOnly(padding)).consumeWindowInsets(bottomOnly(padding))) {
+            content()
+        }
+    }
+}
+
+/** The screens draw their own status-bar inset (top bars, Home header), so the shell only pads the bottom. */
+private fun bottomOnly(padding: PaddingValues) = PaddingValues(bottom = padding.calculateBottomPadding())
+
+/**
+ * `nav-bar`: Material 3 navigation bar on `surface`, three items with Material Symbols Rounded icons; the selected
+ * icon is fill 1 in `accent-text`, labels always shown (`text` selected, `text-secondary` otherwise). No indicator
+ * pill, so no colour pair outside the contrast table.
+ */
+@Composable
+fun PpsNavBar(
+    selected: AppTab,
+    onSelect: (AppTab) -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    val colors = PpsTheme.colors
+    NavigationBar(modifier = modifier, containerColor = colors.surface, contentColor = colors.text, tonalElevation = 0.dp) {
+        AppTab.entries.forEach { tab ->
+            val isSelected = tab == selected
+            NavigationBarItem(
+                selected = isSelected,
+                onClick = { onSelect(tab) },
+                icon = { Icon(painter = painterResource(if (isSelected) tab.selectedIcon else tab.icon), contentDescription = null) },
+                label = { Text(text = stringResource(tab.label), style = PpsTheme.typography.label) },
+                alwaysShowLabel = true,
+                colors =
+                    NavigationBarItemDefaults.colors(
+                        selectedIconColor = colors.accentText,
+                        selectedTextColor = colors.text,
+                        unselectedIconColor = colors.textSecondary,
+                        unselectedTextColor = colors.textSecondary,
+                        indicatorColor = colors.surface,
+                    ),
+            )
+        }
+    }
+}
+
+/** A tab whose screen is not built yet (Progress and Settings until design-preview round 2): its title only. */
+@Composable
+fun TabPlaceholder(
+    tab: AppTab,
+    modifier: Modifier = Modifier,
+) {
+    Text(
+        text = stringResource(tab.label),
+        modifier =
+            modifier
+                .fillMaxSize()
+                .background(PpsTheme.colors.bg)
+                .windowInsetsPadding(WindowInsets.statusBars)
+                .padding(horizontal = PpsTheme.spacing.screenMargin, vertical = PpsTheme.spacing.space4)
+                .semantics { heading() },
+        style = PpsTheme.typography.headline,
+        color = PpsTheme.colors.text,
+    )
+}

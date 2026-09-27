@@ -1,0 +1,87 @@
+package com.yawnandpawn.app.ui.checks
+
+import androidx.compose.runtime.Composable
+import com.yawnandpawn.app.ui.resources.Res
+import com.yawnandpawn.app.ui.resources.check_house_hunt
+import com.yawnandpawn.app.ui.resources.check_house_hunt_description
+import com.yawnandpawn.app.ui.resources.check_math
+import com.yawnandpawn.app.ui.resources.check_math_description
+import com.yawnandpawn.app.ui.resources.check_memory
+import com.yawnandpawn.app.ui.resources.check_memory_description
+import com.yawnandpawn.app.ui.resources.check_qr
+import com.yawnandpawn.app.ui.resources.check_qr_description
+import com.yawnandpawn.app.ui.resources.check_word
+import com.yawnandpawn.app.ui.resources.check_word_description
+import com.yawnandpawn.app.ui.resources.difficulty_easy
+import com.yawnandpawn.app.ui.resources.difficulty_hard
+import com.yawnandpawn.app.ui.resources.difficulty_medium
+import com.yawnandpawn.app.ui.resources.symbol_calculate
+import com.yawnandpawn.app.ui.resources.symbol_grid_view
+import com.yawnandpawn.app.ui.resources.symbol_house
+import com.yawnandpawn.app.ui.resources.symbol_qr_code_scanner
+import com.yawnandpawn.app.ui.resources.symbol_sort_by_alpha
+import org.jetbrains.compose.resources.DrawableResource
+import org.jetbrains.compose.resources.stringResource
+
+/** The five proof-of-wake checks (EXPERIENCE.md glossary), in the order pickers list them. */
+enum class CheckType {
+    Math,
+    WordUnscramble,
+    MemorySequence,
+    QrBarcode,
+    HouseHunt,
+    ;
+
+    /** QR/Barcode and House Hunt need the camera; they are never offered as a fallback check. */
+    val usesCamera: Boolean get() = this == QrBarcode || this == HouseHunt
+}
+
+/** Check difficulty (Check setup, `chip-check`). */
+enum class Difficulty { Easy, Medium, Hard }
+
+/** The check's name, as the glossary spells it ("Word Unscramble", "QR/Barcode"). */
+@Composable
+fun CheckType.displayName(): String =
+    stringResource(
+        when (this) {
+            CheckType.Math -> Res.string.check_math
+            CheckType.WordUnscramble -> Res.string.check_word
+            CheckType.MemorySequence -> Res.string.check_memory
+            CheckType.QrBarcode -> Res.string.check_qr
+            CheckType.HouseHunt -> Res.string.check_house_hunt
+        },
+    )
+
+/** The one-line card description (EXPERIENCE.md Check picker, card descriptions). */
+@Composable
+fun CheckType.description(): String =
+    stringResource(
+        when (this) {
+            CheckType.Math -> Res.string.check_math_description
+            CheckType.WordUnscramble -> Res.string.check_word_description
+            CheckType.MemorySequence -> Res.string.check_memory_description
+            CheckType.QrBarcode -> Res.string.check_qr_description
+            CheckType.HouseHunt -> Res.string.check_house_hunt_description
+        },
+    )
+
+/** Material Symbols Rounded icon of the check (`card-alarm` check icons, `check-type-card`). */
+val CheckType.icon: DrawableResource
+    get() =
+        when (this) {
+            CheckType.Math -> Res.drawable.symbol_calculate
+            CheckType.WordUnscramble -> Res.drawable.symbol_sort_by_alpha
+            CheckType.MemorySequence -> Res.drawable.symbol_grid_view
+            CheckType.QrBarcode -> Res.drawable.symbol_qr_code_scanner
+            CheckType.HouseHunt -> Res.drawable.symbol_house
+        }
+
+@Composable
+fun Difficulty.displayName(): String =
+    stringResource(
+        when (this) {
+            Difficulty.Easy -> Res.string.difficulty_easy
+            Difficulty.Medium -> Res.string.difficulty_medium
+            Difficulty.Hard -> Res.string.difficulty_hard
+        },
+    )

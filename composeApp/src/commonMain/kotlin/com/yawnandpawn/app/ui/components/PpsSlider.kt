@@ -26,7 +26,6 @@ import kotlin.math.roundToInt
  * `slider` for a percentage in steps of [stepPercent]: title and current value ([valueText], "80%") above an
  * accent / `outline` Material 3 slider. TalkBack reads [title] and announces [valueText] on every change.
  */
-@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun PercentSlider(
     title: String,
@@ -35,13 +34,37 @@ fun PercentSlider(
     onPercentChange: (Int) -> Unit,
     modifier: Modifier = Modifier,
     stepPercent: Int = PERCENT_STEP,
+) = StepSlider(
+    title = title,
+    valueText = valueText,
+    value = percent,
+    range = 0..MAX_PERCENT,
+    step = stepPercent,
+    onValueChange = onPercentChange,
+    modifier = modifier,
+)
+
+/**
+ * `slider` over [range] in steps of [step] (the grace window: 15 to 30 s in 1 s steps): title and [valueText] above
+ * the slider. TalkBack reads [title] and announces [valueText] on every change.
+ */
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun StepSlider(
+    title: String,
+    valueText: String,
+    value: Int,
+    range: IntRange,
+    step: Int,
+    onValueChange: (Int) -> Unit,
+    modifier: Modifier = Modifier,
 ) {
     val colors = PpsTheme.colors
     val sliderColors =
         SliderDefaults.colors(
             thumbColor = colors.accent,
             activeTrackColor = colors.accent,
-            // No tick marks: 21 stops would add visual noise and extra colour pairs.
+            // No tick marks: many stops would add visual noise and extra colour pairs.
             activeTickColor = Color.Transparent,
             inactiveTrackColor = colors.outline,
             inactiveTickColor = Color.Transparent,
@@ -54,15 +77,15 @@ fun PercentSlider(
             Text(text = valueText, style = PpsTheme.typography.label, color = colors.textSecondary)
         }
         Slider(
-            value = percent.toFloat(),
-            onValueChange = { onPercentChange(snap(it, stepPercent)) },
+            value = value.toFloat(),
+            onValueChange = { onValueChange(snap(it, range, step)) },
             modifier =
                 Modifier.fillMaxWidth().semantics {
                     contentDescription = title
                     stateDescription = valueText
                 },
-            valueRange = 0f..MAX_PERCENT.toFloat(),
-            steps = MAX_PERCENT / stepPercent - 1,
+            valueRange = range.first.toFloat()..range.last.toFloat(),
+            steps = (range.last - range.first) / step - 1,
             colors = sliderColors,
             interactionSource = interactionSource,
             // A 48 dp tall thumb makes the whole slider a 48 dp touch target (the Material thumb is 44 dp).
@@ -79,8 +102,9 @@ fun PercentSlider(
 
 private fun snap(
     value: Float,
+    range: IntRange,
     step: Int,
-): Int = ((value / step).roundToInt() * step).coerceIn(0, MAX_PERCENT)
+): Int = (range.first + ((value - range.first) / step).roundToInt() * step).coerceIn(range)
 
 private const val MAX_PERCENT = 100
 

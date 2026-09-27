@@ -306,7 +306,7 @@ Behavioural rules. Visual specs for every row live in `DESIGN.md > Components` u
 | `stepper` | Base fee, counts | − / + in single steps; long-press repeats. Base fee lowering under lock shows the lock note. |
 | `slider` | Grace window (15 to 30 s, default 20), volume, ramp start level | Value announced on change; steps of 1 s or 5%. |
 | `switch` | Toggles | Immediate effect; no save needed except inside the editor. |
-| `time-picker` | Editor, onboarding | Keyboard input first for TalkBack; dial optional. |
+| `time-picker` | Editor, onboarding | Scrolling wheels: hour and minute, plus AM/PM on 12 h phones; snap to one value, centre value selected; no keyboard ever opens. TalkBack reads each wheel as "Hour, 6" / "Minute, 45"; swipe up or down changes it by one. Targets ≥ 48 dp. (owner decision 2026-09-27, replaces keyboard input first) |
 | `top-app-bar` | Pushed screens | Back returns; unsaved editor changes prompt "Discard changes?" |
 | `nav-bar` | App root | Three items; hidden during the session lock. |
 | `progress-dots` | Onboarding | Show step; back allowed; not tappable. |

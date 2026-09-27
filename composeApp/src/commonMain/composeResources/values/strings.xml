@@ -31,4 +31,167 @@
     <string name="editor_discard_title">Discard changes?</string>
     <string name="editor_discard">Discard</string>
     <string name="editor_keep_editing">Keep editing</string>
+
+    <!-- Time wheel (owner decision 2026-09-27). "Hour" / "Minute" from the design-preview spec; "AM or PM" drafted (docs/design-preview/copy-to-approve.md). -->
+    <string name="time_wheel_hour">Hour</string>
+    <string name="time_wheel_minute">Minute</string>
+    <string name="time_wheel_period">AM or PM</string>
+
+    <!-- Design preview round 1 (spec-design-preview-whole-app). EXPERIENCE.md key strings verbatim; drafts are listed in docs/design-preview/copy-to-approve.md. -->
+    <!-- App shell: nav-bar items (EXPERIENCE.md Information Architecture). -->
+    <string name="nav_alarms">Alarms</string>
+    <string name="nav_progress">Progress</string>
+    <string name="nav_settings">Settings</string>
+
+    <!-- Home -->
+    <string name="home_streak_days">days on time</string>
+    <string name="home_streak_day">day on time</string>
+    <string name="home_paid_week">%1$s paid this week</string>
+    <string name="home_zero_paid">Nothing paid this week. Keep it that way.</string>
+    <string name="home_rings_in_minutes">Rings in %1$d min</string>
+    <string name="home_rings_in_hours">Rings in %1$d h %2$d min</string>
+    <string name="home_rings_in_days">Rings in %1$d d %2$d h</string>
+    <string name="home_reliability_banner">Alarms may not ring. Fix settings</string>
+    <string name="home_fix">Fix</string>
+    <string name="home_missed_note">Your %1$s alarm stopped after 30 minutes. Logged as missed.</string>
+    <string name="home_dismiss">Dismiss</string>
+    <string name="home_fallback_banner">Fallback check used 3 times this week. Re-register your %1$s?</string>
+    <string name="home_reregister">Re-register</string>
+    <string name="session_in_progress_title">Alarm in progress</string>
+    <string name="session_back_to_alarm">Back to alarm</string>
+    <string name="alarm_card_switch">%1$s alarm</string>
+    <string name="alarm_card_summary">%1$s · %2$s</string>
+    <string name="disable_under_lock_hours">Turn off your %1$s alarm? It rings in %2$d h. This is logged.</string>
+    <string name="disable_under_lock_minutes">Turn off your %1$s alarm? It rings in %2$d min. This is logged.</string>
+    <string name="disable_turn_off">Turn off</string>
+    <string name="disable_keep_on">Keep it on</string>
+
+    <!-- Checks -->
+    <string name="check_math">Math</string>
+    <string name="check_word">Word Unscramble</string>
+    <string name="check_memory">Memory Sequence</string>
+    <string name="check_qr">QR/Barcode</string>
+    <string name="check_house_hunt">House Hunt</string>
+    <string name="check_math_description">Solve a few quick sums.</string>
+    <string name="check_word_description">Unscramble a few words.</string>
+    <string name="check_memory_description">Repeat a pattern of tiles.</string>
+    <string name="check_qr_description">Scan a code you placed away from bed.</string>
+    <string name="check_house_hunt_description">Photograph a spot far from your bed.</string>
+    <string name="difficulty_easy">Easy</string>
+    <string name="difficulty_medium">Medium</string>
+    <string name="difficulty_hard">Hard</string>
+
+    <!-- Alarm editor, full (checks, grace window, fee ladder, motivation, test alarm) -->
+    <string name="editor_checks">Checks</string>
+    <string name="editor_check_chip">%1$s · %2$s</string>
+    <string name="editor_mode_random">Random</string>
+    <string name="editor_mode_all">All</string>
+    <string name="editor_no_check">Pick at least one check.</string>
+    <string name="editor_grace_window">Grace window</string>
+    <string name="editor_grace_seconds">%1$d seconds</string>
+    <string name="editor_vibrate_in_grace">Vibrate in grace window</string>
+    <string name="editor_fee_ladder">Snooze 1: %1$s · 2: %2$s · 3: %3$s</string>
+    <string name="editor_motivation">Motivation</string>
+    <string name="editor_message">Message</string>
+    <string name="editor_message_none">None</string>
+    <string name="editor_message_random">Random</string>
+    <string name="editor_after_im_up">After I'm up</string>
+    <string name="editor_mix_into_alarm">Mix into alarm</string>
+    <string name="editor_test_alarm">Test alarm</string>
+    <string name="editor_weakening_under_lock">Saved. Takes effect after tomorrow's %1$s alarm.</string>
+
+    <!-- Sound picker -->
+    <string name="sound_builtin">Built-in</string>
+    <string name="sound_system">System</string>
+    <string name="sound_your_files">Your files</string>
+    <string name="sound_your_file">Your file</string>
+    <string name="sound_pick_file">Pick a file</string>
+    <string name="sound_play_preview">Play preview</string>
+    <string name="sound_stop_preview">Stop preview</string>
+    <string name="sound_file_missing">File missing. Default sound will play.</string>
+
+    <!-- Ringing -->
+    <string name="wake_im_up">I'm up</string>
+    <string name="wake_snooze_price">Snooze · %1$s</string>
+    <string name="wake_session_line">Snooze %1$d of %2$d · %3$s paid this morning</string>
+    <string name="wake_snooze_unavailable">Snooze unavailable: %1$s</string>
+    <string name="wake_snooze_unavailable_talkback">Snooze unavailable, %1$s</string>
+    <string name="wake_reason_offline">offline</string>
+    <string name="wake_reason_max_snoozes">max snoozes reached</string>
+    <string name="wake_reason_price_cap">price cap reached</string>
+    <string name="wake_reason_payment_pending">payment pending</string>
+    <string name="wake_reason_prices_not_loaded">prices not loaded yet</string>
+    <string name="wake_stranded_refund">An earlier %1$s payment is being refunded</string>
+    <string name="wake_unlock_to_snooze">Unlock your phone to snooze</string>
+    <string name="wake_test_no_charge">Test · no charge</string>
+    <string name="wake_direct_boot_note">Your phone restarted, so today's check is Math.</string>
+    <string name="wake_phone_call_note">Paused for your call. Rings again when it ends.</string>
+
+    <!-- Snooze confirm sheet -->
+    <string name="snooze_confirm_title">Snooze for %1$d min?</string>
+    <string name="snooze_confirm_body">This one costs %1$s. The next one costs %2$s.</string>
+    <string name="snooze_confirm_last_body">This one costs %1$s.</string>
+    <string name="snooze_confirm_nudge_body">Is %1$d more minutes worth %2$s? You've got this.</string>
+    <string name="snooze_confirm_tax_note">Google Play shows the final total, including any tax.</string>
+    <string name="snooze_confirm_pay">Pay %1$s and snooze</string>
+    <string name="snooze_confirm_get_up">I'll get up</string>
+    <string name="snooze_unlock_to_pay">Unlock to pay %1$s</string>
+    <string name="snooze_cancel">Cancel</string>
+    <string name="snooze_already_paid_body">You already paid %1$s earlier that wasn't used. Use it for this snooze?</string>
+    <string name="snooze_use_it">Use it</string>
+    <string name="snooze_not_now">Not now</string>
+
+    <!-- Payment outcomes (wake snackbars) -->
+    <string name="payment_unlock_failed">Phone still locked. No charge.</string>
+    <string name="payment_cancelled">Payment cancelled. No charge.</string>
+    <string name="payment_error">Payment didn't go through. No charge.</string>
+    <string name="payment_offline">No connection. No charge.</string>
+    <string name="payment_pending_body">Payment not confirmed yet. If it goes through before you finish, your snooze starts. Otherwise, finish the check to stop the alarm.</string>
+
+    <!-- Check screens -->
+    <string name="grace_running">Quiet for %1$ds. Finish before it rings again.</string>
+    <string name="grace_ended">Time's up. Alarm's back on until you finish.</string>
+    <string name="grace_seconds_left">%1$d seconds left</string>
+    <string name="fallback_link">Can't do this check?</string>
+    <string name="camera_unavailable">Camera isn't available. Pick a fallback check.</string>
+    <string name="math_progress">Problem %1$d of %2$d</string>
+    <string name="math_plus">%1$d plus %2$d</string>
+    <string name="math_times">%1$d times %2$d</string>
+    <string name="math_delete_digit">Delete digit</string>
+    <string name="math_answer">Answer %1$s</string>
+    <string name="math_check">Check</string>
+    <string name="check_wrong_answer">Not quite. Try again.</string>
+    <string name="word_progress">Word %1$d of %2$d</string>
+    <string name="word_letter">Letter %1$s</string>
+    <string name="word_slot_empty">Slot %1$d, empty</string>
+    <string name="word_slot_filled">Slot %1$d, %2$s</string>
+    <string name="word_shuffle">Shuffle</string>
+    <string name="word_clear">Clear</string>
+    <string name="memory_watch">Watch the sequence</string>
+    <string name="memory_your_turn">Your turn</string>
+    <string name="memory_progress">Round %1$d of %2$d</string>
+    <string name="memory_tile">Tile %1$d</string>
+    <string name="qr_header">Scan your code</string>
+    <string name="qr_wrong_code">That's a different code. Scan your registered one.</string>
+    <string name="qr_viewfinder">Camera viewfinder. Point at your code.</string>
+    <string name="qr_torch">Torch</string>
+    <string name="house_hunt_take_photo">Take photo</string>
+    <string name="house_hunt_matched">Matched</string>
+    <string name="house_hunt_no_match">Doesn't match yet. Try the same angle.</string>
+    <string name="house_hunt_checking">Checking</string>
+
+    <!-- Fallback check picker -->
+    <string name="fallback_picker_title">Pick a fallback check</string>
+    <string name="fallback_picker_close">Back to check</string>
+
+    <!-- Success and Snoozed -->
+    <string name="success_zero_snooze">Up on time. %1$d days in a row.</string>
+    <string name="success_zero_snooze_one">Up on time. 1 day in a row.</string>
+    <string name="success_zero_snooze_first">Up on time.</string>
+    <string name="success_after_snooze">You're up. That's what counts.</string>
+    <string name="success_paid_this_morning">%1$s paid this morning</string>
+    <string name="success_test">Test finished. Your alarm works.</string>
+    <string name="success_pending_not_used">Your pending payment wasn't used. Google refunds it automatically.</string>
+    <string name="success_done">Done</string>
+    <string name="snoozed_next_ring">Snoozed. Next ring at %1$s.</string>
 </resources>

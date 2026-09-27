@@ -5,8 +5,11 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
 import kotlinx.datetime.DayOfWeek
+import kotlinx.datetime.LocalDate
 import kotlinx.datetime.LocalTime
 import kotlinx.datetime.isoDayNumber
+import kotlinx.datetime.number
+import java.text.DateFormatSymbols
 import java.time.format.DateTimeFormatter
 import java.time.format.TextStyle
 import java.util.Locale
@@ -41,4 +44,17 @@ actual fun dayName(
     return java.time.DayOfWeek
         .of(day.isoDayNumber)
         .getDisplayName(textStyle, Locale.getDefault())
+}
+
+actual fun periodName(am: Boolean): String {
+    val markers = DateFormatSymbols.getInstance(Locale.getDefault()).amPmStrings
+    return if (am) markers[0] else markers[1]
+}
+
+actual fun formatLongDate(date: LocalDate): String {
+    val locale = Locale.getDefault()
+    val pattern = DateFormat.getBestDateTimePattern(locale, "EEEEMMMMd")
+    return java.time.LocalDate
+        .of(date.year, date.month.number, date.day)
+        .format(DateTimeFormatter.ofPattern(pattern, locale))
 }

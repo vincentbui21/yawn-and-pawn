@@ -2,6 +2,7 @@ package com.yawnandpawn.app.ui.format
 
 import androidx.compose.runtime.Composable
 import kotlinx.datetime.DayOfWeek
+import kotlinx.datetime.LocalDate
 import kotlinx.datetime.LocalTime
 
 /** The phone's 12/24-hour setting; read on every call (no clock read). */
@@ -43,3 +44,9 @@ val WeekOrder: List<DayOfWeek> =
         DayOfWeek.SATURDAY,
         DayOfWeek.SUNDAY,
     )
+
+/** The locale's AM ([am] true) or PM marker, for the 12-hour time wheel. */
+expect fun periodName(am: Boolean): String
+
+/** [date] as a long locale date without the year, for the ringing screen ("Monday, September 28"). */
+expect fun formatLongDate(date: LocalDate): String

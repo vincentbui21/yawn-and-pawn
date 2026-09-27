@@ -29,7 +29,7 @@
 # - Dev moves story to 'review', then runs code-review (fresh context, different LLM recommended)
 # - Retrospective appends its action items to action_items; the status view surfaces open ones
 generated: 09-26-2026 12:36
-last_updated: 09-27-2026 09:53
+last_updated: 09-27-2026 10:07
 project: Yawn & Pawn
 project_key: NOKEY
 tracking_system: file-system
@@ -42,7 +42,7 @@ development_status:
   1-4-google-play-console-setup-owner-task: in-progress  # 2026-09-26: personal dev account created (vincentbui2108@gmail.com, developer name "Yawn & Pawn", $25 paid); identity verification submitted (passport + Helen invoice), awaiting Google; phone verification unlocks after approval. Remaining: app record, payments profile check, internal track upload, license testers (after Story 1.1).
   1-5-spike-s1-pay-for-a-snooze-over-the-lock-screen: backlog
   1-6-time-ports-deadlines-and-alarm-occurrence-math-in-core: done  # merged PR #4 2026-09-27
-  1-7-store-alarms-in-app-db: review
+  1-7-store-alarms-in-app-db: done  # merged PR #5 2026-09-27
   1-8-create-and-edit-an-alarm: backlog
   1-9-alarm-list-on-home-with-the-next-alarm-countdown: backlog
   1-10-schedule-alarms-exactly-and-keep-them-across-reboot-and-cloc: backlog

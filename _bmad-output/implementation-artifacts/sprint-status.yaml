@@ -43,7 +43,7 @@ development_status:
   1-5-spike-s1-pay-for-a-snooze-over-the-lock-screen: backlog
   1-6-time-ports-deadlines-and-alarm-occurrence-math-in-core: done  # merged PR #4 2026-09-27
   1-7-store-alarms-in-app-db: done  # merged PR #5 2026-09-27
-  1-8-create-and-edit-an-alarm: backlog
+  1-8-create-and-edit-an-alarm: in-progress  # claimed by company-laptop 2026-09-27
   1-9-alarm-list-on-home-with-the-next-alarm-countdown: backlog
   1-10-schedule-alarms-exactly-and-keep-them-across-reboot-and-cloc: backlog
   1-11-the-complete-wake-session-state-machine-in-core: backlog

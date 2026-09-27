@@ -12,7 +12,7 @@ _Last updated: 2026-09-26_
 - **Story 1.3** (design tokens generated from DESIGN.md, PpsTheme with Light/Dark/Sunrise, Geist, raw-value detekt rules, contrast and copy-rule tests, debug theme showcase) merged in PR #3.
 - **Story 1.6** (time ports, boot-aware deadlines, DST-safe next-occurrence math, direct-clock detekt ban) merged in PR #4.
 - **Story 1.7** (alarm domain and use cases, Room 3 `app.db` in device-protected storage, backup rules) merged in PR #5.
-- **Story 1.8** (Alarms route with empty state and FAB, Alarm editor with every Epic 1 field, discard dialog) merged in PR #6. Owner check on the phone still to do: add, save, reopen, Back with changes.
+- **Story 1.8** (Alarms route with empty state and FAB, Alarm editor with every Epic 1 field, discard dialog) merged in PR #6. Checked on the owner's Oppo A96 (Android 13) on 2026-09-27: add, save, reopen and the discard dialog work; Save hidden behind the keyboard and the grey status bar are logged for 1.9.
 - **Company laptop set up without admin rights**: Python, GitHub CLI, JDK 17, Android Studio and the Android SDK in the user folder.
 
 ## Waiting on

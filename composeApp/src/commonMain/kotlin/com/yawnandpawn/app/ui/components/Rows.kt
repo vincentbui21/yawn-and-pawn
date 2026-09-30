@@ -38,6 +38,7 @@ import com.yawnandpawn.app.ui.resources.symbol_info
 import com.yawnandpawn.app.ui.resources.symbol_radio_button_checked
 import com.yawnandpawn.app.ui.resources.symbol_radio_button_unchecked
 import com.yawnandpawn.app.ui.theme.PpsTheme
+import com.yawnandpawn.app.ui.theme.TABULAR_FIGURES
 import org.jetbrains.compose.resources.DrawableResource
 import org.jetbrains.compose.resources.painterResource
 
@@ -54,9 +55,10 @@ private fun RowTexts(
     title: String,
     subtitle: String?,
     modifier: Modifier = Modifier,
+    titleColor: Color = PpsTheme.colors.text,
 ) {
     Column(modifier = modifier) {
-        Text(text = title, style = PpsTheme.typography.body, color = PpsTheme.colors.text)
+        Text(text = title, style = PpsTheme.typography.body, color = titleColor)
         if (subtitle != null) Text(text = subtitle, style = PpsTheme.typography.caption, color = PpsTheme.colors.textSecondary)
     }
 }
@@ -118,7 +120,9 @@ fun ValueRow(
 
 /**
  * A tappable `settings-row` (progressive disclosure): [label] with the current [value] as a subtitle and a chevron; the
- * tap opens the sub-screen that sets it. TalkBack reads label and value as one button.
+ * tap opens the sub-screen that sets it. TalkBack reads label and value as one button. [titleColor] `error` marks a
+ * destructive row ("Delete all data", which opens a dialog, so [chevron] is off). Disabled ([enabled] false), the title
+ * is `text-secondary` and the row is not tappable ("Export CSV" with nothing to export).
  */
 @Composable
 fun NavRow(
@@ -127,20 +131,53 @@ fun NavRow(
     modifier: Modifier = Modifier,
     value: String? = null,
     icon: DrawableResource? = null,
+    enabled: Boolean = true,
+    titleColor: Color = PpsTheme.colors.text,
+    chevron: Boolean = true,
 ) {
     val colors = PpsTheme.colors
     Row(
-        modifier = modifier.clickable(role = Role.Button, onClick = onClick).rowFrame(),
+        modifier = modifier.clickable(enabled = enabled, role = Role.Button, onClick = onClick).rowFrame(),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         if (icon != null) RowIcon(icon = icon, tint = colors.text, modifier = Modifier.padding(end = PpsTheme.spacing.space3))
-        RowTexts(title = label, subtitle = value, modifier = Modifier.weight(1f))
-        Icon(
-            painter = painterResource(Res.drawable.symbol_chevron_right),
-            contentDescription = null,
-            modifier = Modifier.padding(start = PpsTheme.spacing.space2).size(CHEVRON_SIZE),
-            tint = colors.textSecondary,
+        RowTexts(
+            title = label,
+            subtitle = value,
+            modifier = Modifier.weight(1f),
+            titleColor = if (enabled) titleColor else colors.textSecondary,
         )
+        if (chevron && enabled) {
+            Icon(
+                painter = painterResource(Res.drawable.symbol_chevron_right),
+                contentDescription = null,
+                modifier = Modifier.padding(start = PpsTheme.spacing.space2).size(CHEVRON_SIZE),
+                tint = colors.textSecondary,
+            )
+        }
+    }
+}
+
+/**
+ * A read-only row of a `card-group` with its value on the right ("This week" · "$3", "Rings" · "2"): [label] in `body`
+ * / `text`, [value] in `body` / `text` with tabular figures (money is always `text`, never green or red). TalkBack reads
+ * both as one.
+ */
+@Composable
+fun ValueEndRow(
+    label: String,
+    value: String,
+    modifier: Modifier = Modifier,
+) {
+    val colors = PpsTheme.colors
+    Row(modifier = modifier.semantics(mergeDescendants = true) { }.rowFrame(), verticalAlignment = Alignment.CenterVertically) {
+        Text(
+            text = label,
+            modifier = Modifier.weight(1f).padding(end = PpsTheme.spacing.space3),
+            style = PpsTheme.typography.body,
+            color = colors.text,
+        )
+        Text(text = value, style = PpsTheme.typography.body.copy(fontFeatureSettings = TABULAR_FIGURES), color = colors.text)
     }
 }
 

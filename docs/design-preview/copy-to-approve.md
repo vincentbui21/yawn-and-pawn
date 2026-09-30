@@ -41,9 +41,35 @@ Drafted for the new sub-screens:
 
 The old `success_zero_snooze` ("Up on time. {n} days in a row.") and `success_zero_snooze_one` strings are no longer used on this screen.
 
+## Round 2 (progress and settings, 2026-09-30)
+
+Every other round 2 string is an EXPERIENCE.md key string or long-form paragraph, used verbatim (outcome labels from the glossary: "On time" · "Snoozed" · "Missed" · "Skipped" · "Test").
+
+| Key | Draft | Screen | Note |
+|---|---|---|---|
+| `progress_chart_title` | Snoozes per week | Progress, title above the `bar-chart` | The chart itself says "Lower is better." (key string). |
+| `day_detail_rings` | Rings | Day detail, session card row | How many times the alarm rang (first ring plus re-rings). |
+| `day_detail_snoozes` | Snoozes | Day detail, session card row | |
+| `day_detail_paid` | Paid | Day detail, session card row | Shown only when something was charged. |
+| `day_detail_time_to_up` | Time to up | Day detail, session card row | Value uses the Progress strings "{minutes} min" / "Under 1 min". |
+| (reused `editor_checks`) | Checks | Day detail, session card row | Same word as the Wake-up check sub-screen. |
+| `purchase_snooze_number` | Snooze {n} | Purchase history, row caption | From DESIGN.md `purchase-row` ("Snooze 2"). |
+| `purchase_row_title` | {date} · {time} | Purchase history, row title | e.g. "Thu, Sep 10 · 7:30 AM" (date and alarm). Rows are grouped in one card per month ("September 2026", from the phone's locale). |
+| `stepper_lower` / `stepper_raise` | Lower {setting} / Raise {setting} | Base fee and Max snoozes steppers (TalkBack) | e.g. "Raise Base fee". |
+| `stepper_value` | {setting}, {value} | Stepper value (TalkBack, announced on change) | e.g. "Base fee, $2". |
+| `progress_day_sessions` | {n} sessions | Calendar day (TalkBack) | The key string "+ ', {n} sessions'" as its own piece; the pieces are joined with ", ". |
+
+Layout choices to look at (no new copy):
+
+- Settings has no "Notifications" or "Usage stats" headings: "Weekly summary" and "Share anonymous usage stats" share one untitled card. Cards with a key-string section name ("Snooze", "Wake", "Appearance") have it as the title above them.
+- Appearance is the System / Light / Dark `segmented-control` inline (EXPERIENCE.md lists theme under `segmented-control`), not a sub-screen.
+- The alarm behaviour disclosure on Payments & refunds is split into its three sentences (one string each) so each paragraph stays under 25 words; the words are verbatim.
+- Reliability checklist: the "Test alarm" row has no "Fix"; it shows a hollow ring until a test has rung, and "Ring a test alarm" below the card rings it.
+- The calendar card is 12 dp from the screen edges (the other cards 20 dp) so seven 48 dp days fit the 360 dp phone.
+- Links (Privacy policy, Terms, Support) open nothing in the preview; tapping one shows the "No browser found." snackbar, tap again to hide it.
+
 ## Not strings, but worth a look
 
 - The Math problem is drawn as digits with "+" or "×" (for example "47 + 38"); TalkBack reads the key string "47 plus 38".
 - The sound names in the preview ("Birdsong", "Marimba", "Rooster", "Argon", "Oxygen", "morning-mix.mp3") and alarm labels ("Stand-up", "Early shift") are fake data, not app copy. The bundled sound names come with Story 1.17.
-- The Progress and Settings tabs show only their title until round 2.
 - Prices are fake and use the phone's local currency through the normal price formatting, with a realistic base fee per currency (for example "$1", "€1", "25.000 ₫" or "¥150"; feedback item 5).

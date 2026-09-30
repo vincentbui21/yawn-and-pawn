@@ -3,12 +3,9 @@ package com.yawnandpawn.app.ui.shell
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.PaddingValues
-import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.consumeWindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.statusBars
-import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.material3.Icon
 import androidx.compose.material3.NavigationBar
 import androidx.compose.material3.NavigationBarItem
@@ -19,10 +16,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.RectangleShape
-import androidx.compose.ui.semantics.heading
-import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
-import com.yawnandpawn.app.ui.components.PpsBackground
 import com.yawnandpawn.app.ui.components.glass
 import com.yawnandpawn.app.ui.theme.PpsTheme
 import org.jetbrains.compose.resources.painterResource
@@ -94,25 +88,5 @@ fun PpsNavBar(
                     ),
             )
         }
-    }
-}
-
-/** A tab whose screen is not built yet (Progress and Settings until design-preview round 2): its title only. */
-@Composable
-fun TabPlaceholder(
-    tab: AppTab,
-    modifier: Modifier = Modifier,
-) {
-    PpsBackground(modifier = modifier) {
-        Text(
-            text = stringResource(tab.label),
-            modifier =
-                Modifier
-                    .windowInsetsPadding(WindowInsets.statusBars)
-                    .padding(horizontal = PpsTheme.spacing.screenMargin, vertical = PpsTheme.spacing.space4)
-                    .semantics { heading() },
-            style = PpsTheme.typography.headline,
-            color = PpsTheme.colors.text,
-        )
     }
 }

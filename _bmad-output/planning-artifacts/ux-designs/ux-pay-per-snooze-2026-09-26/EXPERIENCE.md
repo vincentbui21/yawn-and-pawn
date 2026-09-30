@@ -1,9 +1,9 @@
 ---
 name: Yawn & Pawn
 status: draft
-version: 0.3
+version: 0.4
 owner: Kiet Bui
-updated: 2026-09-28
+updated: 2026-09-30
 sources:
   - _bmad-output/planning-artifacts/prds/prd-pay-per-snooze-2026-09-26/prd.md
   - DESIGN.md
@@ -50,12 +50,12 @@ Bottom navigation with three items: **Alarms** (home), **Progress**, **Settings*
 | QR registration | Check setup | Scan a code or make a printable QR. |
 | Sound picker | Editor "Sound" sub-screen | Built-in sounds, system ringtones, a user file, in sections "Built-in" / "System" / "Your files" under the volume card; preview (FR-SND-1/2). |
 | Recordings | Editor "Motivation" sub-screen, "Record a message" | Record, re-record, play, delete motivation messages (FR-SND-3). |
-| Progress | Nav | Streak, rates, average time to up, snoozes chart, calendar, money (FR-PRG-2/3). |
-| Day detail | `calendar-day` tap | One session: rings, snoozes, paid, checks, fallback, outcome. |
+| Progress | Nav | Streak, rates, average time to up, snoozes chart, calendar, money (FR-PRG-2/3). Design preview round 2 layout (2026-09-30): title "Progress" pinned top-left; `stat-tile`s two per row (current and best streak, on time 7 and 30 days, average time to up); card "Snoozes per week" (draft, `bar-chart`, the tapped week's number above it); the calendar card with the legend; card "Money paid"; a card with "Purchase history" › and "Export CSV". |
+| Day detail | `calendar-day` tap | One session: rings, snoozes, paid, checks, fallback, outcome. Title is the long date; one card per session titled with its alarm time and label: `outcome-marker` with the outcome label, the flags, then "Rings", "Snoozes", "Paid", "Checks", "Time to up" (drafts in docs/design-preview/copy-to-approve.md). Logged alarm changes follow as `note-inline`s. |
 | Purchase history | Progress link | Every charge with date, alarm, snooze number, localized price (FR-PRG-4). |
 | Export CSV | Progress link | Android share sheet with a CSV file (FR-PRG-6). |
-| Settings | Nav | Grouped cards, rows open sub-screens (owner decision 2026-09-27). Snooze (base fee, max snoozes, default length), Wake (default quiet time, vibrate during quiet time default, bright wake screen), Appearance (System / Light / Dark), Notifications (weekly summary), Usage stats (FR-SET-6), Reliability checklist, Payments & refunds, Privacy, Terms, Support, Delete all data. |
-| Reliability checklist | Settings, onboarding step 5, `banner-warning` | Permission and device-setting status with fixes (FR-ONB-2/3). |
+| Settings | Nav | Grouped cards, rows open sub-screens (owner decision 2026-09-27; design preview round 2 layout 2026-09-30). Title "Settings" pinned top-left. Card "Snooze": "Base fee" ›, "Max snoozes per session" ›, "Default snooze length" ›; card "Wake": "Default quiet time" ›, "Vibrate during quiet time" (switch), "Bright wake screen" (switch with its caption); card "Appearance": System / Light / Dark `segmented-control`; a card with "Weekly summary" and "Share anonymous usage stats" (switches); a card with "Reliability checklist" › and "How payments & refunds work" ›; a card with "Privacy policy", "Terms", "Support"; a card with "Delete all data" (`error` text, opens its dialog). Sub-screens: **Base fee** (`stepper`, fee ladder preview, lock note, approximate-price note), **Max snoozes per session** (`stepper` 1 to 5), **Default snooze length** (5 / 9 / 10 / 15 min), **Default quiet time** (15 to 30 s slider). |
+| Reliability checklist | Settings, onboarding step 5, `banner-warning` | Permission and device-setting status with fixes (FR-ONB-2/3). All rows in one `card-group`; "Fix" on "Manufacturer settings" opens its numbered steps as a sub-screen ("Open settings", "I've done this"). |
 | Payments & refunds | Settings | Plain explanation of fees, pending payments and Google refunds (FR-SET-3). |
 | Ringing | Alarm fires (full-screen intent), `notification-ringing` tap | Time, "I'm up", "Snooze · {price}". |
 | Snooze confirm | `button-snooze` tap | Price, next price, nudge, confirm. Includes the unlock step and "already paid" state. |

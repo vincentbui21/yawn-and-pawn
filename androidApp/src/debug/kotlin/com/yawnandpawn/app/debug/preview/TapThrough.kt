@@ -12,9 +12,11 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveableStateHolder
 import androidx.compose.runtime.setValue
 import com.yawnandpawn.app.ui.checks.CheckType
 import com.yawnandpawn.app.ui.checks.Difficulty
+import com.yawnandpawn.app.ui.daydetail.DayDetailScreen
 import com.yawnandpawn.app.ui.editor.AlarmEditorScreen
 import com.yawnandpawn.app.ui.editor.CheckChip
 import com.yawnandpawn.app.ui.editor.EditorIntent
@@ -27,10 +29,22 @@ import com.yawnandpawn.app.ui.home.AlarmCard
 import com.yawnandpawn.app.ui.home.HomeIntent
 import com.yawnandpawn.app.ui.home.HomeScreen
 import com.yawnandpawn.app.ui.home.HomeUiState
+import com.yawnandpawn.app.ui.payments.PaymentsIntent
+import com.yawnandpawn.app.ui.payments.PaymentsScreen
+import com.yawnandpawn.app.ui.payments.ProblemWithChargeScreen
+import com.yawnandpawn.app.ui.progress.ProgressIntent
+import com.yawnandpawn.app.ui.progress.ProgressScreen
+import com.yawnandpawn.app.ui.purchases.PurchaseHistoryScreen
+import com.yawnandpawn.app.ui.reliability.ChecklistItem
+import com.yawnandpawn.app.ui.reliability.ReliabilityIntent
+import com.yawnandpawn.app.ui.reliability.ReliabilityScreen
+import com.yawnandpawn.app.ui.settings.SettingsIntent
+import com.yawnandpawn.app.ui.settings.SettingsPane
+import com.yawnandpawn.app.ui.settings.SettingsScreen
 import com.yawnandpawn.app.ui.shell.AppShell
 import com.yawnandpawn.app.ui.shell.AppTab
-import com.yawnandpawn.app.ui.shell.TabPlaceholder
 import com.yawnandpawn.app.ui.sound.SoundPickerIntent
+import kotlinx.datetime.LocalDate
 
 /** A pushed screen of the tap-through (the shell with its tabs is the root). */
 private sealed interface Pushed {
@@ -39,17 +53,33 @@ private sealed interface Pushed {
     ) : Pushed
 
     data object Wake : Pushed
+
+    data class DayDetail(
+        val date: LocalDate,
+    ) : Pushed
+
+    data object PurchaseHistory : Pushed
+
+    data object Reliability : Pushed
+
+    data object Payments : Pushed
+
+    data object ProblemWithCharge : Pushed
 }
 
 /** The tap-through's fake app state and what each tap does to it. Nothing is stored, scheduled, played or charged. */
 private class TapThroughState(
     startInSession: Boolean,
+    startTab: AppTab,
 ) {
-    var tab by mutableStateOf(AppTab.Alarms)
+    var tab by mutableStateOf(startTab)
     val stack = mutableStateListOf<Pushed>()
     var home by mutableStateOf(PreviewSamples.homeList.copy(sessionInProgress = startInSession))
     var editor by mutableStateOf(EditorUiState())
     val wake = PreviewWakeFlow()
+    var progress by mutableStateOf(PreviewProgressSamples.progress)
+    var settings by mutableStateOf(PreviewProgressSamples.settings)
+    var reliability by mutableStateOf(PreviewProgressSamples.reliabilityMissing)
 
     private fun pop() {
         if (stack.isNotEmpty()) stack.removeAt(stack.lastIndex)
@@ -65,11 +95,20 @@ private class TapThroughState(
      * which in the preview go back to the menu (a real alarm ignores Back; design preview feedback item 6).
      */
     fun back(): Boolean {
-        when (stack.lastOrNull()) {
-            null, Pushed.Wake -> return false
-            is Pushed.Editor -> if (editor.pane != EditorPane.Main) editor = editor.copy(pane = EditorPane.Main) else pop()
+        val top = stack.lastOrNull()
+        val settingsPane = top == null && tab == AppTab.Settings && settings.pane != SettingsPane.Main
+        when {
+            settingsPane -> settings = settings.copy(pane = SettingsPane.Main)
+            top == null || top == Pushed.Wake -> return false
+            top is Pushed.Editor -> if (editor.pane != EditorPane.Main) editor = editor.copy(pane = EditorPane.Main) else pop()
+            top == Pushed.Reliability -> onReliability(ReliabilityIntent.Back)
+            else -> pop()
         }
         return true
+    }
+
+    fun push(screen: Pushed) {
+        stack.add(screen)
     }
 
     fun onHome(intent: HomeIntent) {
@@ -86,6 +125,10 @@ private class TapThroughState(
 
             HomeIntent.BackToAlarm -> {
                 openWake(test = false)
+            }
+
+            HomeIntent.FixSettings -> {
+                push(Pushed.Reliability)
             }
 
             else -> {
@@ -130,6 +173,58 @@ private class TapThroughState(
         home = home.copy(sessionInProgress = false)
         stack.clear()
     }
+
+    fun onProgress(intent: ProgressIntent) {
+        when (intent) {
+            is ProgressIntent.DayTapped -> push(Pushed.DayDetail(intent.date))
+            ProgressIntent.PurchaseHistoryClicked -> push(Pushed.PurchaseHistory)
+            else -> progress = reduceProgress(progress, intent)
+        }
+    }
+
+    fun onSettings(intent: SettingsIntent) {
+        when (intent) {
+            SettingsIntent.ReliabilityClicked, SettingsIntent.FixSettings -> push(Pushed.Reliability)
+            SettingsIntent.PaymentsClicked -> push(Pushed.Payments)
+            SettingsIntent.BackToAlarm -> openWake(test = false)
+            else -> settings = reduceSettings(settings, intent)
+        }
+    }
+
+    fun onReliability(intent: ReliabilityIntent) {
+        when (intent) {
+            ReliabilityIntent.Back -> {
+                if (reliability.showManufacturerSteps) reliability = reliability.copy(showManufacturerSteps = false) else pop()
+            }
+
+            is ReliabilityIntent.FixClicked -> {
+                reliability = reliability.fixed(intent.item)
+            }
+
+            ReliabilityIntent.ManufacturerDone, ReliabilityIntent.OpenManufacturerSettings -> {
+                reliability = reliability.fixed(ChecklistItem.Manufacturer)
+            }
+
+            ReliabilityIntent.RingTestAlarm -> {
+                reliability = reliability.fixed(ChecklistItem.TestAlarm)
+                openWake(test = true)
+            }
+        }
+        // The banners clear themselves once every item is OK.
+        if (reliability.allOk) {
+            home = home.copy(reliabilityProblem = false)
+            settings = settings.copy(reliabilityProblem = false)
+        }
+    }
+
+    fun onPayments(intent: PaymentsIntent) {
+        when (intent) {
+            PaymentsIntent.Back -> pop()
+            PaymentsIntent.ProblemWithChargeClicked -> push(Pushed.ProblemWithCharge)
+            PaymentsIntent.PurchaseHistoryClicked -> push(Pushed.PurchaseHistory)
+            else -> Unit
+        }
+    }
 }
 
 /**
@@ -143,21 +238,26 @@ fun TapThrough(
     is24Hour: Boolean,
     onExit: () -> Unit,
     startInSession: Boolean = false,
+    startTab: AppTab = AppTab.Alarms,
 ) {
-    val state = remember { TapThroughState(startInSession) }
+    val state = remember { TapThroughState(startInSession, startTab) }
     BackHandler { if (!state.back()) onExit() }
+    // Each screen keeps its saved state (scroll position) while a screen is pushed over it, like the app's nav entries.
+    val saved = rememberSaveableStateHolder()
     AnimatedContent(
-        targetState = state.stack.lastOrNull(),
+        targetState = state.stack.size to state.stack.lastOrNull(),
         transitionSpec = {
-            // Deeper (Home, editor, wake) slides in from the end; back slides the other way.
-            if (targetState != null) {
+            // Deeper slides in from the end; back slides the other way.
+            if (targetState.first > initialState.first) {
                 (slideInHorizontally { it } + fadeIn()) togetherWith (slideOutHorizontally { -it / PARALLAX } + fadeOut())
             } else {
                 (slideInHorizontally { -it / PARALLAX } + fadeIn()) togetherWith (slideOutHorizontally { it } + fadeOut())
             }
         },
         label = "tap-through screen",
-    ) { top -> Screen(top = top, state = state, is24Hour = is24Hour) }
+    ) { (depth, top) ->
+        saved.SaveableStateProvider(key = "$depth/$top") { Screen(top = top, state = state, is24Hour = is24Hour) }
+    }
 }
 
 @Composable
@@ -168,11 +268,27 @@ private fun Screen(
 ) {
     when (top) {
         null -> {
-            AppShell(selected = state.tab, onSelect = { state.tab = it }, showNavBar = !state.home.sessionInProgress) {
-                if (state.tab == AppTab.Alarms) {
-                    HomeScreen(state = state.home, is24Hour = is24Hour, onIntent = state::onHome)
-                } else {
-                    TabPlaceholder(state.tab)
+            // The session lock hides the nav bar and every tab shows only "Back to alarm".
+            val sessionLock = state.home.sessionInProgress
+            // A Settings sub-screen is a pushed screen: no nav bar, like the editor's sub-screens.
+            val settingsSubScreen = state.tab == AppTab.Settings && state.settings.pane != SettingsPane.Main
+            AppShell(selected = state.tab, onSelect = { state.tab = it }, showNavBar = !sessionLock && !settingsSubScreen) {
+                when (state.tab) {
+                    AppTab.Alarms -> {
+                        HomeScreen(state = state.home, is24Hour = is24Hour, onIntent = state::onHome)
+                    }
+
+                    AppTab.Progress -> {
+                        ProgressScreen(state = state.progress, onIntent = state::onProgress)
+                    }
+
+                    AppTab.Settings -> {
+                        SettingsScreen(
+                            state = state.settings.copy(sessionInProgress = sessionLock),
+                            is24Hour = is24Hour,
+                            onIntent = state::onSettings,
+                        )
+                    }
                 }
             }
         }
@@ -183,6 +299,31 @@ private fun Screen(
 
         Pushed.Wake -> {
             PreviewWakeScreens(flow = state.wake, is24Hour = is24Hour, onFinished = state::onWakeFinished)
+        }
+
+        is Pushed.DayDetail -> {
+            DayDetailScreen(state = PreviewProgressSamples.dayDetail(top.date), is24Hour = is24Hour, onBack = { state.back() })
+        }
+
+        Pushed.PurchaseHistory -> {
+            PurchaseHistoryScreen(
+                state = PreviewProgressSamples.purchases,
+                is24Hour = is24Hour,
+                onBack = { state.back() },
+                onProblemWithCharge = { state.push(Pushed.ProblemWithCharge) },
+            )
+        }
+
+        Pushed.Reliability -> {
+            ReliabilityScreen(state = state.reliability, onIntent = state::onReliability)
+        }
+
+        Pushed.Payments -> {
+            PaymentsScreen(priceCap = PreviewProgressSamples.priceCap, onIntent = state::onPayments)
+        }
+
+        Pushed.ProblemWithCharge -> {
+            ProblemWithChargeScreen(onIntent = state::onPayments)
         }
     }
 }

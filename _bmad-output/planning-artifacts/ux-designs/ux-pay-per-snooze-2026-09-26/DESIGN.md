@@ -2,9 +2,9 @@
 name: Yawn & Pawn
 description: A calm, warm night-time alarm app that turns into a bright sunrise the moment the alarm rings.
 status: draft
-version: 0.3
+version: 0.4
 owner: Kiet Bui
-updated: 2026-09-28
+updated: 2026-09-30
 sources:
   - _bmad-output/planning-artifacts/prds/prd-pay-per-snooze-2026-09-26/prd.md
   - EXPERIENCE.md
@@ -343,6 +343,9 @@ components:
     valueTypography: '{typography.display}'
     buttonRounded: '{rounded.full}'
     buttonSize: '{spacing.target-min}'
+    buttonBorderColor: '{colors.outline}'
+    disabledColor: '{colors.disabled-content}'
+    note: 'A value longer than 5 characters (a localized price like "25.000 ₫") uses {typography.headline} so it stays on one line on 360 dp.'
   slider:
     activeColor: '{colors.accent}'
     trackColor: '{colors.outline}'
@@ -365,10 +368,12 @@ components:
     inactiveColor: '{colors.outline}'
     size: 8dp
   stat-tile:
-    backgroundColor: '{colors.surface}'
+    backgroundColor: '{colors.glass}'
+    borderColor: '{colors.glass-edge}'
     numberTypography: '{typography.display}'
     numberColor: '{colors.text}'
     rounded: '{rounded.md}'
+    note: 'Glass like every card (owner direction 2026-09-27). Two per row; a pair whose numbers do not fit half the width in display splits into one per row, so no number wraps or clips.'
   bar-chart:
     barColor: '{colors.snoozed}'
     axisColor: '{colors.outline}'
@@ -386,6 +391,7 @@ components:
     todayBorderColor: '{colors.accent}'
     marker: '{components.outcome-marker}'
     size: '{spacing.target-min}'
+    note: 'The calendar card sits {spacing.3} from the screen edges (not screen-margin) so seven 48 dp days fit a 360 dp phone. Days with a session are buttons; the others are read, not tapped.'
   checklist-row:
     okIcon: 'check_circle, {colors.success}'
     problemIcon: 'error, {colors.error}'
@@ -519,6 +525,10 @@ Computed with a WCAG relative-luminance script (2026-09-26; glass and gradient r
 | Light | error / glass+gradient-top | text | 6.28 |
 | Light | accent / glass+gradient-top | graphic | 3.24 |
 | Light | outline / glass+gradient-top | graphic | 3.60 |
+| Light | success / glass+gradient-top (checklist OK, on-time marker) | text | 8.50 |
+| Light | snoozed / glass+gradient-top (snoozes chart, snoozed marker) | text | 5.19 |
+| Light | missed / glass+gradient-top (missed marker) | text | 5.34 |
+| Light | disabled-content / glass+gradient-top (disabled stepper and month buttons) | text | 6.64 |
 | Light | text / glass-strong+text (bar over dark content) | text | 15.25 |
 | Light | text-secondary / glass-strong+text | text | 6.00 |
 | Light | accent-text / glass-strong+text | text | 4.63 |
@@ -563,6 +573,10 @@ Computed with a WCAG relative-luminance script (2026-09-26; glass and gradient r
 | Dark | accent / glass+gradient-top | graphic | 8.21 |
 | Dark | outline / glass+gradient-top | graphic | 3.33 |
 | Dark | outline / glass+bg | graphic | 3.43 |
+| Dark | success / glass+gradient-top (checklist OK, on-time marker) | text | 11.00 |
+| Dark | snoozed / glass+gradient-top (snoozes chart, snoozed marker) | text | 6.74 |
+| Dark | missed / glass+gradient-top (missed marker) | text | 4.91 |
+| Dark | disabled-content / glass+gradient-top (disabled stepper and month buttons) | text | 6.41 |
 | Dark | text / glass-strong+text (bar over light content) | text | 12.19 |
 | Dark | text-secondary / glass-strong+text | text | 5.59 |
 | Dark | accent-text / glass-strong+text | text | 6.67 |
@@ -676,17 +690,17 @@ Visual specs. Behaviour for every row lives in `EXPERIENCE.md > Component Patter
 | `chip-day` | 48 dp, `{rounded.sm}`, one letter. Unselected `surface-variant`; selected accent fill with on-accent letter plus bold weight. Shown in the repeat card only for "Custom". |
 | `chip-check` | `{rounded.sm}`, `surface-variant` fill, `outline` border, check icon + name + difficulty in `label`. |
 | `segmented-control` | Material 3 segmented button, `{rounded.full}` ends, selected segment accent fill with a check icon. |
-| `stepper` | Value in `display` between two 48 dp round icon buttons (− / +). Price values in `tnum`. |
+| `stepper` | Value in `display` between two 48 dp round icon buttons (− / +) with a 1 dp `outline` ring, inside a `card-group`; a button at the end of the range is `disabled-content`. Price values in `tnum`; a value over 5 characters uses `headline` so it stays on one line. |
 | `slider` | Material 3 slider, accent active track, `outline` inactive track, value label above thumb. |
 | `switch` | Material 3 switch, accent checked track, `outline` unchecked border. |
 | `time-picker` | In its own `card-group`. Hour and minute wheels (plus AM/PM on 12 h phones) with "h" and "min" unit labels (`label`, `text-secondary`), three values visible, centre value in `text` on a `surface-variant` `{rounded.sm}` band, others in `text-secondary`; digits in `display` with tabular figures, capped at 1.3x font scale so the wheels fit 360 dp at 200%. Owner decision 2026-09-27 (replaces the Material 3 time input). |
 | `top-app-bar` | Transparent over the background gradient, title in `headline`, back arrow 48 dp. |
 | `nav-bar` | Material 3 navigation bar on `glass-bar` (`glass-strong`, hairline top edge), 3 items, Material Symbols Rounded; selected icon fill 1 in `accent-text`, label always shown. |
 | `progress-dots` | 8 dp dots, 8 dp apart; active accent and 16 dp wide (pill), inactive `outline`. |
-| `stat-tile` | `surface`, `{rounded.md}`, number in `display` (`text`), label in `caption`. Two per row. |
+| `stat-tile` | Glass (`glass`, `glass-edge` hairline), `{rounded.md}`, number in `display` (`text`), label in `caption` (`text-secondary`); "No mornings yet" in `body` when it has no data. Two per row; a pair whose numbers do not fit splits into one per row. |
 | `bar-chart` | Weekly bars in `{colors.snoozed}`, top corners `{rounded.sm}`, `outline` baseline, `text-secondary` labels, caption "Lower is better." |
 | `outcome-marker` | 20 dp glyph, distinct shape per outcome: on time = **filled check circle** (`success`); snoozed = **filled clock** (`snoozed`); missed = **filled cross circle** (`missed`); skipped or test = **hollow ring** (`outline`). Fallback used adds a small `alt_route` badge. Same glyphs in calendar, legend, Day detail and history. |
-| `calendar-day` | 48 dp cell, date number in `caption`, `outcome-marker` below. Today gets a 1 dp accent ring. |
+| `calendar-day` | 48 dp cell, date number in `caption`, `outcome-marker` below (fallback used: the 12 dp `alt_route` badge on its lower right). Today gets a 1 dp accent ring (`rounded.md`). The calendar card sits 12 dp from the screen edges so seven 48 dp cells fit 360 dp; month heading in `title` between 48 dp "Previous month" / "Next month" chevrons; the legend under the grid pairs every glyph with its label. |
 | `checklist-row` | 64 dp. Leading icon, title (`body`), reason (`caption`), trailing status: `check_circle` in `success` with "OK", or `button-outlined` "Fix". |
 | `settings-row` | 56 dp inside a `card-group`. Title (`body`, `text`) with the current value as a subtitle (`caption`, `text-secondary`) and a chevron (`text-secondary`) on the right when it opens a sub-screen; a `switch` on the right for a toggle. |
 | `purchase-row` | 64 dp. Date and alarm (`body`), "Snooze 2" (`caption`), localized price right-aligned in `text` (never accent, green or red). |

@@ -10,7 +10,6 @@ import com.yawnandpawn.app.ui.home.HomeScreen
 import com.yawnandpawn.app.ui.home.HomeUiState
 import com.yawnandpawn.app.ui.shell.AppShell
 import com.yawnandpawn.app.ui.shell.AppTab
-import com.yawnandpawn.app.ui.shell.TabPlaceholder
 import com.yawnandpawn.app.ui.wake.CheckScreen
 import com.yawnandpawn.app.ui.wake.CheckUiState
 import com.yawnandpawn.app.ui.wake.FallbackPickerScreen
@@ -118,12 +117,6 @@ object PreviewCatalog {
 
     val items: List<PreviewItem> =
         listOf(
-            PreviewItem("shell_progress_placeholder", 1, "App shell", "Progress tab (placeholder until round 2)") {
-                AppShell(selected = AppTab.Progress, onSelect = {}) { TabPlaceholder(AppTab.Progress) }
-            },
-            PreviewItem("shell_settings_placeholder", 1, "App shell", "Settings tab (placeholder until round 2)") {
-                AppShell(selected = AppTab.Settings, onSelect = {}) { TabPlaceholder(AppTab.Settings) }
-            },
             home("home_list", "Streak, next alarm, alarm cards", s.homeList, primary = true),
             home("home_half_collapsed", "Scrolled: header half collapsed", s.homeList, scrollItem = 1, scrollDp = HALF_HERO_DP),
             home("home_collapsed", "Scrolled: header collapsed, cards under it", s.homeList, scrollItem = 2, scrollDp = 24),
@@ -198,5 +191,5 @@ object PreviewCatalog {
             PreviewItem("snoozed", 1, "Success and Snoozed", "Snoozed", wake = true) { is24 ->
                 SnoozedScreen(state = s.snoozed, is24Hour = is24)
             },
-        )
+        ) + PreviewRound2.items
 }

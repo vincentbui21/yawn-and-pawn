@@ -9,7 +9,7 @@ _Last updated: 2026-09-28_
 - **Branch `design/preview-epic-1`**, draft PR #7 (for CI only; do not merge until the owner approves all rounds). CI is green. Pull this branch to continue.
 - **Spec:** `_bmad-output/implementation-artifacts/spec-design-preview-whole-app.md` (status `in-progress`, route `dispatch`). Delivery is 3 rounds; the orchestrator runs one implementation per round and stops for owner feedback on the phone.
 - **Round 1 (daily loop) is DONE and owner-approved** ("everything is looking good", 2026-09-28). It covers Home, the full editor with sub-screens, the sound picker, Ringing, Snooze confirm, the checks, Success and Snoozed.
-- **Next: Round 2**, which covers Progress, day detail, purchase history, export, all of Settings with sub-screens, the reliability checklist, and Payments & refunds.
+- **Round 2 (Progress, day detail, purchase history, export, Settings with sub-screens, reliability checklist, Payments & refunds) is implemented (2026-09-30), waiting for the owner's feedback on the phone.** Device screenshots: `docs/design-preview/round-2/`; new drafts to approve under Round 2 in `docs/design-preview/copy-to-approve.md`.
 - **Round 3** after that covers onboarding, check picker and setup, House Hunt and QR registration, and recordings.
 - **Owner design decisions** live in `docs/design-preview/feedback.md` (items 1–20; read them before any UI work). They are also recorded in DESIGN.md v0.3, EXPERIENCE.md and `.claude/skills/pps-design/SKILL.md` (rules 11, 14, 15).
   - Stock Samsung/Oppo Clock style: grouped glass cards on gradient backgrounds, and rows with a value and › that open sub-screens.

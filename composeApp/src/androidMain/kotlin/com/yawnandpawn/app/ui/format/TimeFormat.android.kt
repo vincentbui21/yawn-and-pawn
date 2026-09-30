@@ -58,3 +58,21 @@ actual fun formatLongDate(date: LocalDate): String {
         .of(date.year, date.month.number, date.day)
         .format(DateTimeFormatter.ofPattern(pattern, locale))
 }
+
+actual fun formatDate(
+    date: LocalDate,
+    style: DateStyle,
+): String {
+    val locale = Locale.getDefault()
+    val skeleton =
+        when (style) {
+            DateStyle.MonthYear -> "MMMMy"
+            DateStyle.Numeric -> "Md"
+            DateStyle.DayMonth -> "MMMd"
+            DateStyle.WeekdayDayMonth -> "EEEMMMd"
+        }
+    val pattern = DateFormat.getBestDateTimePattern(locale, skeleton)
+    return java.time.LocalDate
+        .of(date.year, date.month.number, date.day)
+        .format(DateTimeFormatter.ofPattern(pattern, locale))
+}

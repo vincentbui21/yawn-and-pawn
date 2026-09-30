@@ -32,7 +32,6 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.semantics.Role
-import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
@@ -47,6 +46,7 @@ import com.yawnandpawn.app.ui.components.PpsFab
 import com.yawnandpawn.app.ui.components.PpsFilledButton
 import com.yawnandpawn.app.ui.components.PpsSwitch
 import com.yawnandpawn.app.ui.components.RowIcon
+import com.yawnandpawn.app.ui.components.SessionInProgressPanel
 import com.yawnandpawn.app.ui.components.glass
 import com.yawnandpawn.app.ui.components.glassSource
 import com.yawnandpawn.app.ui.components.rememberGlassBackdrop
@@ -75,8 +75,6 @@ import com.yawnandpawn.app.ui.resources.home_reregister
 import com.yawnandpawn.app.ui.resources.home_streak_day
 import com.yawnandpawn.app.ui.resources.home_streak_days
 import com.yawnandpawn.app.ui.resources.home_zero_paid
-import com.yawnandpawn.app.ui.resources.session_back_to_alarm
-import com.yawnandpawn.app.ui.resources.session_in_progress_title
 import com.yawnandpawn.app.ui.theme.PpsTheme
 import org.jetbrains.compose.resources.stringResource
 
@@ -99,7 +97,7 @@ fun HomeScreen(
             Column(modifier = Modifier.fillMaxSize().windowInsetsPadding(WindowInsets.statusBars)) {
                 HomeHeader(streakDays = null, collapse = null, modifier = Modifier.padding(bottom = spacing.space3))
                 if (state.sessionInProgress) {
-                    SessionPanel(onBackToAlarm = { onIntent(HomeIntent.BackToAlarm) })
+                    SessionInProgressPanel(onBackToAlarm = { onIntent(HomeIntent.BackToAlarm) })
                 } else {
                     EmptyHome(state = state, is24Hour = is24Hour, onIntent = onIntent, modifier = Modifier.weight(1f))
                 }
@@ -346,33 +344,6 @@ private fun EmptyHome(
                 modifier = Modifier.padding(top = spacing.space6),
             )
         }
-    }
-}
-
-/** `panel-session-in-progress`: replaces Home content during a session. */
-@Composable
-private fun SessionPanel(onBackToAlarm: () -> Unit) {
-    val spacing = PpsTheme.spacing
-    Column(
-        modifier =
-            Modifier
-                .padding(horizontal = spacing.screenMargin)
-                .fillMaxWidth()
-                .glass(PpsTheme.shapes.md)
-                .padding(spacing.cardPadding),
-        verticalArrangement = Arrangement.spacedBy(spacing.space4),
-    ) {
-        Text(
-            text = stringResource(Res.string.session_in_progress_title),
-            modifier = Modifier.semantics { heading() },
-            style = PpsTheme.typography.headline,
-            color = PpsTheme.colors.text,
-        )
-        PpsFilledButton(
-            text = stringResource(Res.string.session_back_to_alarm),
-            onClick = onBackToAlarm,
-            modifier = Modifier.fillMaxWidth(),
-        )
     }
 }
 

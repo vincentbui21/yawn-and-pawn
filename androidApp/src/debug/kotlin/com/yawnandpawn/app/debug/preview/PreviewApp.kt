@@ -34,6 +34,7 @@ import com.yawnandpawn.app.ui.components.PpsBackground
 import com.yawnandpawn.app.ui.components.PpsSegmentedControl
 import com.yawnandpawn.app.ui.components.SwitchRow
 import com.yawnandpawn.app.ui.format.is24HourClock
+import com.yawnandpawn.app.ui.shell.AppTab
 import com.yawnandpawn.app.ui.theme.PpsTheme
 import com.yawnandpawn.app.ui.theme.PpsThemeMode
 
@@ -56,10 +57,15 @@ fun PreviewFrame(
 
 /** The tap-through entries at the top of the menu (interactive, fake state). */
 private enum class Flow(
+    val round: Int,
     val title: String,
+    val startTab: AppTab = AppTab.Alarms,
+    val startInSession: Boolean = false,
 ) {
-    App("Tap through the app: Home, editor and its sub-screens, test alarm"),
-    Session("Tap through a morning: Back to alarm, Ringing, Check, Success"),
+    App(1, "Tap through the app: Home, editor and its sub-screens, test alarm"),
+    Session(1, "Tap through a morning: Back to alarm, Ringing, Check, Success", startInSession = true),
+    Progress(2, "Tap through Progress: chart, calendar, day detail, purchase history", startTab = AppTab.Progress),
+    Settings(2, "Tap through Settings: sub-screens, checklist, payments, delete dialog", startTab = AppTab.Settings),
 }
 
 /**
@@ -80,7 +86,7 @@ fun PreviewApp() {
         val flow = Flow.entries.firstOrNull { it.name == openFlow }
         when {
             flow != null -> {
-                TapThrough(is24Hour = is24, onExit = { openFlow = null }, startInSession = flow == Flow.Session)
+                TapThrough(is24Hour = is24, onExit = { openFlow = null }, startInSession = flow.startInSession, startTab = flow.startTab)
             }
 
             item != null -> {
@@ -150,17 +156,21 @@ private fun PreviewMenu(
                     SwitchRow(label = "200% font size", checked = largeFont, onCheckedChange = onLargeFont)
                 }
             }
-            item { MenuHeader("Round 1 · The daily loop") }
-            item { MenuCard(title = "Tap through", rows = Flow.entries.map { it.title to { onOpenFlow(it) } }) }
-            grouped.forEach { (key, items) ->
-                item(key = key.second) {
-                    MenuCard(
-                        title = key.second,
-                        rows = items.map { item -> (if (item.wake) "${item.title} (Sunrise)" else item.title) to { onOpenItem(item) } },
-                    )
+            ROUNDS.forEach { (round, heading) ->
+                item(key = "round$round") { MenuHeader(heading) }
+                val flows = Flow.entries.filter { it.round == round }
+                if (flows.isNotEmpty()) {
+                    item(key = "flows$round") { MenuCard(title = "Tap through", rows = flows.map { it.title to { onOpenFlow(it) } }) }
+                }
+                grouped.filterKeys { it.first == round }.forEach { (key, items) ->
+                    item(key = "$round/${key.second}") {
+                        MenuCard(
+                            title = key.second,
+                            rows = items.map { item -> (if (item.wake) "${item.title} (Sunrise)" else item.title) to { onOpenItem(item) } },
+                        )
+                    }
                 }
             }
-            item { MenuHeader("Round 2 · Progress and settings (next)") }
             item { MenuHeader("Round 3 · Setup flows (later)") }
             item { Column(modifier = Modifier.windowInsetsPadding(WindowInsets.navigationBars)) {} }
         }
@@ -214,3 +224,6 @@ private fun mutableBooleanSaveable(value: Boolean) = androidx.compose.runtime.mu
 private fun mutableNullableString() = androidx.compose.runtime.mutableStateOf<String?>(null)
 
 private const val LARGE_FONT_SCALE = 2f
+
+/** The rounds the menu shows, with their headings. */
+private val ROUNDS = listOf(1 to "Round 1 · The daily loop", 2 to "Round 2 · Progress and settings")

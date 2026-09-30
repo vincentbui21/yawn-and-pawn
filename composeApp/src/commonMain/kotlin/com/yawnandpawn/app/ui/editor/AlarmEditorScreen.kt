@@ -2,16 +2,10 @@ package com.yawnandpawn.app.ui.editor
 
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.AnimatedVisibility
-import androidx.compose.animation.ContentTransform
-import androidx.compose.animation.core.CubicBezierEasing
-import androidx.compose.animation.core.tween
 import androidx.compose.animation.expandVertically
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.shrinkVertically
-import androidx.compose.animation.slideInHorizontally
-import androidx.compose.animation.slideOutHorizontally
-import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.ScrollState
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -59,6 +53,7 @@ import com.yawnandpawn.app.ui.components.PpsWheelTimePicker
 import com.yawnandpawn.app.ui.components.SaveCancelPill
 import com.yawnandpawn.app.ui.components.SwitchRow
 import com.yawnandpawn.app.ui.components.TextFieldRow
+import com.yawnandpawn.app.ui.components.subScreenTransition
 import com.yawnandpawn.app.ui.format.countdownText
 import com.yawnandpawn.app.ui.format.formatClockTime
 import com.yawnandpawn.app.ui.format.is24HourClock
@@ -162,7 +157,7 @@ fun AlarmEditorScreen(
         } else {
             AnimatedContent(
                 targetState = state.pane,
-                transitionSpec = { paneTransition(forward = targetState != EditorPane.Main) },
+                transitionSpec = { subScreenTransition(forward = targetState != EditorPane.Main) },
                 label = "editor pane",
             ) { pane ->
                 when (pane) {
@@ -185,17 +180,6 @@ fun AlarmEditorScreen(
             onSafe = { onIntent(EditorIntent.KeepEditing) },
             destructive = true,
         )
-    }
-}
-
-/** EXPERIENCE.md standard transition: 250 ms, Material emphasized easing; a sub-screen slides in from the end. */
-private fun paneTransition(forward: Boolean): ContentTransform {
-    val spec = tween<androidx.compose.ui.unit.IntOffset>(durationMillis = TRANSITION_MILLIS, easing = EmphasizedEasing)
-    val fade = tween<Float>(durationMillis = TRANSITION_MILLIS, easing = EmphasizedEasing)
-    return if (forward) {
-        (slideInHorizontally(spec) { it } + fadeIn(fade)) togetherWith (slideOutHorizontally(spec) { -it / PARALLAX } + fadeOut(fade))
-    } else {
-        (slideInHorizontally(spec) { -it / PARALLAX } + fadeIn(fade)) togetherWith (slideOutHorizontally(spec) { it } + fadeOut(fade))
     }
 }
 
@@ -437,11 +421,3 @@ internal fun motivationSummary(full: FullEditorSections): String {
         )
     return stringResource(Res.string.editor_check_chip, message, timing)
 }
-
-private const val TRANSITION_MILLIS = 250
-
-/** The outgoing screen moves a quarter of the way (a gentle parallax), the incoming one the whole width. */
-private const val PARALLAX = 4
-
-/** Material 3 emphasized easing (EXPERIENCE.md standard transition). */
-private val EmphasizedEasing = CubicBezierEasing(0.2f, 0f, 0f, 1f)

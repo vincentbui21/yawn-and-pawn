@@ -50,3 +50,24 @@ expect fun periodName(am: Boolean): String
 
 /** [date] as a long locale date without the year, for the ringing screen ("Monday, September 28"). */
 expect fun formatLongDate(date: LocalDate): String
+
+/** How a date is written in the phone's locale (Progress, Day detail, Purchase history). */
+enum class DateStyle {
+    /** A calendar or history month heading ("September 2026"). */
+    MonthYear,
+
+    /** A snoozes-chart week label ("9/22"). */
+    Numeric,
+
+    /** A day without the weekday ("Sep 22"). */
+    DayMonth,
+
+    /** A day with its short weekday ("Tue, Sep 22"). */
+    WeekdayDayMonth,
+}
+
+/** [date] in the phone's locale, in [style]. */
+expect fun formatDate(
+    date: LocalDate,
+    style: DateStyle,
+): String

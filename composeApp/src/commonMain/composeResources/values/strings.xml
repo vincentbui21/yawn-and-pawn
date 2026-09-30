@@ -253,15 +253,23 @@
     <string name="progress_insight_weekends">You get up fastest on weekends.</string>
 
     <!-- Day detail -->
-    <string name="day_detail_fallback">Fallback check used</string>
     <string name="day_detail_before_unlock">Rang before your first unlock</string>
     <string name="day_detail_turned_off">Your %1$s alarm was turned off. Logged.</string>
     <string name="day_detail_deleted">Your %1$s alarm was deleted. Logged.</string>
     <string name="day_detail_merged">%1$s alarm merged into this session</string>
-    <string name="day_detail_rings">Rings</string>
-    <string name="day_detail_snoozes">Snoozes</string>
-    <string name="day_detail_paid">Paid</string>
-    <string name="day_detail_time_to_up">Time to up</string>
+    <!-- Day detail redesign (owner, 2026-10-01, feedback item 25); drafts in docs/design-preview/copy-to-approve.md. -->
+    <string name="day_event_rang">Alarm rang</string>
+    <string name="day_event_rang_again">Rang again</string>
+    <string name="day_event_snoozed">Snoozed %1$d min · %2$s</string>
+    <string name="day_event_quiet_ended">Quiet time ran out</string>
+    <string name="day_event_solved_first">%1$s solved first try</string>
+    <string name="day_event_solved_tries">%1$s solved in %2$d tries</string>
+    <string name="day_event_fallback">Fallback check: %1$s</string>
+    <string name="day_event_switched">Check switched to %1$s</string>
+    <string name="day_event_stopped">Stopped after 30 minutes</string>
+    <string name="day_tile_rings">rings</string>
+    <string name="day_tile_paid">paid</string>
+    <string name="day_tile_no_charge">No charge</string>
 
     <!-- Purchase history -->
     <string name="purchase_history_title">Purchase history</string>

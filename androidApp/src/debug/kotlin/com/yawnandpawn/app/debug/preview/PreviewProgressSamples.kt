@@ -3,6 +3,7 @@ package com.yawnandpawn.app.debug.preview
 import com.yawnandpawn.app.ui.checks.CheckType
 import com.yawnandpawn.app.ui.daydetail.AlarmChange
 import com.yawnandpawn.app.ui.daydetail.DayDetailUiState
+import com.yawnandpawn.app.ui.daydetail.MorningEvent
 import com.yawnandpawn.app.ui.daydetail.SessionDetail
 import com.yawnandpawn.app.ui.format.Money
 import com.yawnandpawn.app.ui.progress.CalendarDay
@@ -115,26 +116,43 @@ object PreviewProgressSamples {
 
     private val standUp = LocalTime(7, 30)
 
-    /** F9: one snooze, paid, Math, 12 minutes to up. */
+    private fun t(
+        hour: Int,
+        minute: Int,
+    ) = LocalTime(hour, minute)
+
+    /**
+     * A morning at [alarm] with [snoozes] paid 9-minute snoozes (snooze n costs B x n), then "I'm up" a minute after the
+     * last ring and the check solved a minute later: every time, price and count follows from the one before.
+     */
+    private fun morning(
+        alarm: LocalTime,
+        snoozes: Int,
+        check: CheckType = CheckType.Math,
+        tries: Int = 1,
+    ): List<MorningEvent> =
+        buildList {
+            var minute = alarm.hour * MINUTES_PER_HOUR + alarm.minute
+
+            fun at(m: Int) = LocalTime(m / MINUTES_PER_HOUR, m % MINUTES_PER_HOUR)
+            add(MorningEvent.Rang(at(minute)))
+            for (n in 1..snoozes) {
+                add(MorningEvent.Snoozed(at(minute + 1), SNOOZE_MINUTES, price(n)))
+                minute += SNOOZE_MINUTES + 1
+                add(MorningEvent.Rang(at(minute), again = true))
+            }
+            add(MorningEvent.ImUp(at(minute + 1)))
+            add(MorningEvent.CheckSolved(at(minute + 2), check, tries))
+        }
+
+    /** F4 and F9: two paid snoozes. 07:30 rang, 07:31 snoozed, 07:40 again, 07:41 snoozed, 07:50 again, 07:51 up, 07:52 solved: 22 min. */
     val daySnoozed =
         DayDetailUiState(
             date = sep(10),
-            sessions =
-                listOf(
-                    SessionDetail(
-                        standUp,
-                        "Stand-up",
-                        Outcome.Snoozed,
-                        rings = 2,
-                        snoozes = 1,
-                        paid = price(1),
-                        checks = listOf(CheckType.Math),
-                        minutesToUp = 12,
-                    ),
-                ),
+            sessions = listOf(SessionDetail(standUp, "Stand-up", Outcome.Snoozed, morning(standUp, snoozes = 2))),
         )
 
-    /** F5 and F8: the fallback check, a ring before the first unlock, a merged alarm and a logged change. */
+    /** F5: the camera could not start, the fallback check (Math) took two tries; a 7:35 alarm merged in; a logged change. */
     val dayFallback =
         DayDetailUiState(
             date = sep(9),
@@ -144,14 +162,37 @@ object PreviewProgressSamples {
                         standUp,
                         "Stand-up",
                         Outcome.OnTime,
-                        checks = listOf(CheckType.QrBarcode, CheckType.Math),
-                        minutesToUp = 0,
-                        fallbackUsed = true,
-                        rangBeforeFirstUnlock = true,
-                        mergedAlarmAt = LocalTime(7, 35),
+                        listOf(
+                            MorningEvent.Rang(t(7, 30)),
+                            MorningEvent.ImUp(t(7, 31)),
+                            MorningEvent.FallbackUsed(t(7, 32), CheckType.Math),
+                            MorningEvent.Merged(t(7, 35), t(7, 35)),
+                            MorningEvent.CheckSolved(t(7, 36), CheckType.Math, tries = 2),
+                        ),
                     ),
                 ),
             changes = listOf(AlarmChange(LocalTime(9, 0), deleted = false)),
+        )
+
+    /** F8: rang before the first unlock after a restart, so QR/Barcode became Math; quiet time ran out once. */
+    val dayBeforeUnlock =
+        DayDetailUiState(
+            date = sep(16),
+            sessions =
+                listOf(
+                    SessionDetail(
+                        standUp,
+                        "Stand-up",
+                        Outcome.OnTime,
+                        listOf(
+                            MorningEvent.Rang(t(7, 30), beforeFirstUnlock = true),
+                            MorningEvent.CheckSwitched(t(7, 30), CheckType.Math),
+                            MorningEvent.ImUp(t(7, 31)),
+                            MorningEvent.QuietTimeRanOut(t(7, 32)),
+                            MorningEvent.CheckSolved(t(7, 33), CheckType.Math),
+                        ),
+                    ),
+                ),
         )
 
     val dayTwoSessions =
@@ -159,15 +200,24 @@ object PreviewProgressSamples {
             date = sep(21),
             sessions =
                 listOf(
-                    SessionDetail(LocalTime(5, 45), "Early shift", Outcome.OnTime, checks = listOf(CheckType.Math), minutesToUp = 1),
-                    SessionDetail(standUp, "Stand-up", Outcome.OnTime, checks = listOf(CheckType.Math), minutesToUp = 4),
+                    SessionDetail(t(5, 45), "Early shift", Outcome.OnTime, morning(t(5, 45), snoozes = 0)),
+                    SessionDetail(
+                        standUp,
+                        "Stand-up",
+                        Outcome.OnTime,
+                        morning(standUp, snoozes = 0, check = CheckType.WordUnscramble, tries = 2),
+                    ),
                 ),
         )
 
+    /** Rang at 7:30, no interaction, stopped at 8:00; the 6:15 alarm was deleted that day. */
     val dayMissed =
         DayDetailUiState(
             date = sep(7),
-            sessions = listOf(SessionDetail(standUp, "Stand-up", Outcome.Missed, rings = 1, checks = listOf(CheckType.Math))),
+            sessions =
+                listOf(
+                    SessionDetail(standUp, "Stand-up", Outcome.Missed, listOf(MorningEvent.Rang(t(7, 30)), MorningEvent.Stopped(t(8, 0)))),
+                ),
             changes = listOf(AlarmChange(LocalTime(6, 15), deleted = true)),
         )
 
@@ -177,24 +227,21 @@ object PreviewProgressSamples {
 
     /**
      * The Day detail for a tapped ring dot or calendar day: a sample when there is one, otherwise a morning with that
-     * day's outcome (a snoozed one paid one snooze per snooze of its bar).
+     * day's outcome (Tue 22 one snooze, Wed 23 two, other snoozed days one).
      */
     fun dayDetail(date: LocalDate): DayDetailUiState {
-        listOf(daySnoozed, dayFallback, dayTwoSessions, dayMissed, dayTest, daySkipped).firstOrNull { it.date == date }?.let { return it }
+        listOf(daySnoozed, dayFallback, dayBeforeUnlock, dayTwoSessions, dayMissed, dayTest, daySkipped)
+            .firstOrNull { it.date == date }
+            ?.let { return it }
         val outcome = (august.days + septemberDays).firstOrNull { it.date == date }?.outcome ?: Outcome.OnTime
         val snoozes = if (outcome == Outcome.Snoozed) (snoozesOn[date] ?: 1).coerceAtLeast(1) else 0
-        val session =
-            SessionDetail(
-                standUp,
-                "Stand-up",
-                outcome,
-                rings = snoozes + 1,
-                snoozes = snoozes,
-                paid = if (snoozes > 0) price((1..snoozes).sum()) else null,
-                checks = listOf(CheckType.Math),
-                minutesToUp = if (outcome == Outcome.Snoozed) SNOOZED_MINUTES * snoozes else 3,
-            )
-        return DayDetailUiState(date = date, sessions = listOf(session))
+        val events =
+            when (outcome) {
+                Outcome.Missed -> listOf(MorningEvent.Rang(standUp), MorningEvent.Stopped(t(8, 0)))
+                Outcome.Test, Outcome.Skipped -> emptyList()
+                else -> morning(standUp, snoozes)
+            }
+        return DayDetailUiState(date = date, sessions = listOf(SessionDetail(standUp, "Stand-up", outcome, events)))
     }
 
     // Purchase history ---------------------------------------------------------------------------------------------
@@ -206,6 +253,7 @@ object PreviewProgressSamples {
                     Purchase(sep(23), standUp, 2, price(2)),
                     Purchase(sep(23), standUp, 1, price(1)),
                     Purchase(sep(22), standUp, 1, price(1)),
+                    Purchase(sep(10), standUp, 2, price(2)),
                     Purchase(sep(10), standUp, 1, price(1)),
                     Purchase(sep(2), standUp, 2, price(2)),
                     Purchase(sep(2), standUp, 1, price(1)),
@@ -280,8 +328,10 @@ object PreviewProgressSamples {
     /** Tuesday 22, the first of the two snoozed mornings. */
     private const val FIRST_OF_WEEK = 22
 
-    /** Each snooze adds its 9 minutes to the time to up. */
-    private const val SNOOZED_MINUTES = 9
+    /** The fake alarms' snooze length. */
+    private const val SNOOZE_MINUTES = 9
+
+    private const val MINUTES_PER_HOUR = 60
 
     private const val SEPTEMBER = 9
 

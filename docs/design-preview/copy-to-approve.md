@@ -47,11 +47,6 @@ Every other round 2 string is an EXPERIENCE.md key string or long-form paragraph
 
 | Key | Draft | Screen | Note |
 |---|---|---|---|
-| `day_detail_rings` | Rings | Day detail, session card row | How many times the alarm rang (first ring plus re-rings). |
-| `day_detail_snoozes` | Snoozes | Day detail, session card row | |
-| `day_detail_paid` | Paid | Day detail, session card row | Shown only when something was charged. |
-| `day_detail_time_to_up` | Time to up | Day detail, session card row | Value uses the Progress strings "{minutes} min" / "Under 1 min". |
-| (reused `editor_checks`) | Checks | Day detail, session card row | Same word as the Wake-up check sub-screen. |
 | `purchase_snooze_number` | Snooze {n} | Purchase history, row caption | From DESIGN.md `purchase-row` ("Snooze 2"). |
 | `purchase_row_title` | {date} · {time} | Purchase history, row title | e.g. "Thu, Sep 10 · 7:30 AM" (date and alarm). Rows are grouped in one card per month ("September 2026", from the phone's locale). |
 | `stepper_lower` / `stepper_raise` | Lower {setting} / Raise {setting} | Base fee and Max snoozes steppers (TalkBack) | e.g. "Raise Base fee". |
@@ -92,6 +87,25 @@ Layout choices to look at:
 - The accent tint is a new token, `glass-accent` (12% accent over glass), for the streak card only; plain accent fails on it, so the number and icon use `accent-text`.
 
 The "Snoozes this week" chart and all its strings (title, "Lower is better." on this screen, the average line, the tapped-day header, the bar TalkBack labels) are gone: owner decision 2026-10-01, feedback item 24.
+
+## Day detail redesign (owner feedback item 25, 2026-10-01)
+
+Owner-given: "Stopped after 30 minutes" and the tile idea "rings · snoozes · paid". The Round 2 row labels "Rings", "Snoozes", "Paid", "Time to up" and "Checks" are gone with the table.
+
+| Key | Draft | Screen | Note |
+|---|---|---|---|
+| `day_event_rang` | Alarm rang | Timeline, first ring | |
+| `day_event_rang_again` | Rang again | Timeline, after a snooze | |
+| `day_event_snoozed` | Snoozed {minutes} min · {price} | Timeline | e.g. "Snoozed 9 min · 25.000 ₫". Price through the normal formatting, in `text`. |
+| `day_event_quiet_ended` | Quiet time ran out | Timeline | The grace window ended before the check. |
+| `day_event_switched` | Check switched to {check} | Timeline, before the first unlock | Follows "Rang before your first unlock" (key string). |
+| `day_event_fallback` | Fallback check: {check} | Timeline | |
+| `day_event_solved_first` / `day_event_solved_tries` | {check} solved first try / {check} solved in {n} tries | Timeline, last event | |
+| `day_tile_rings` | rings | Day detail tile | Lowercase like the Progress tiles. |
+| `day_tile_paid` | paid | Day detail tile | |
+| `day_tile_no_charge` | No charge | Paid tile value when nothing was paid | Owner offered "hidden or No charge"; the tile stays so the row keeps three tiles. |
+
+Reused: "I'm up" (key string), "{time} alarm merged into this session" and "Rang before your first unlock" (key strings), "to get up" and "snoozes" (Progress tiles), "{minutes} min" / "Under 1 min".
 
 ## Not strings, but worth a look
 

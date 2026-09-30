@@ -99,6 +99,9 @@ fun ProgressScreen(
     }
 }
 
+/** Values longer than this use the smaller style. */
+private const val LONG_TILE_VALUE = 5
+
 /** A tile with no data yet shows a dash (never an invented number). */
 private const val DASH = "\u2013"
 
@@ -133,6 +136,15 @@ private fun StatTiles(
             Tile(Res.drawable.symbol_timer, average, stringResource(Res.string.progress_tile_to_get_up)),
             Tile(Res.drawable.symbol_snooze, stats.snoozes30Days.toString(), stringResource(Res.string.progress_tile_snoozes)),
         )
+    TileRow(tiles = tiles, modifier = modifier)
+}
+
+/** Three small tiles in one row, 2 + 1 at large font scales (Progress, Day detail). */
+@Composable
+internal fun TileRow(
+    tiles: List<Tile>,
+    modifier: Modifier = Modifier,
+) {
     val rows = if (isLargeFont()) listOf(tiles.take(2), tiles.drop(2)) else listOf(tiles)
     val spacing = PpsTheme.spacing
     Column(modifier = modifier, verticalArrangement = Arrangement.spacedBy(spacing.space2)) {
@@ -147,14 +159,14 @@ private fun StatTiles(
     }
 }
 
-private class Tile(
+internal class Tile(
     val icon: DrawableResource,
     val value: String?,
     val label: String,
 )
 
 @Composable
-private fun StatTile(
+internal fun StatTile(
     tile: Tile,
     modifier: Modifier = Modifier,
 ) {
@@ -168,9 +180,12 @@ private fun StatTile(
         verticalArrangement = Arrangement.spacedBy(PpsTheme.spacing.space1),
     ) {
         RowIcon(icon = tile.icon, tint = colors.textSecondary)
+        val value = tile.value ?: DASH
         Text(
-            text = tile.value ?: DASH,
-            style = PpsTheme.typography.title,
+            text = value,
+            // A long value (a localized price, "25.000 ₫") steps down to `body` so it stays on one line in a third of
+            // a 360 dp row at 100% (at large font scales it may wrap).
+            style = if (value.length > LONG_TILE_VALUE) PpsTheme.typography.body else PpsTheme.typography.title,
             color = colors.text,
         )
         // Short labels on one line at 100% on 360 dp (owner notes 2026-10-01); only large font scales wrap.

@@ -90,8 +90,9 @@ adb -s 4d804fdd shell am start -S -n com.yawnandpawn.app/.debug.preview.PreviewA
 | `progress-dot-chip` | Progress | A ring dot tapped: its label chip |
 | `progress-calendar-chip` | Progress | A calendar day tapped: its label chip |
 | `progress-empty` | Progress | Empty ring |
-| `day-snoozed` | Day detail | Snoozed morning, paid |
-| `day-fallback` | Day detail | Fallback check, before first unlock, merged alarm |
+| `day-snoozed` | Day detail | Snoozed twice, paid: the morning's timeline |
+| `day-fallback` | Day detail | Fallback check, merged alarm, alarm turned off |
+| `day-before-unlock` | Day detail | Before first unlock, check switched, quiet time ran out |
 | `day-two-sessions` | Day detail | Two sessions |
 | `day-missed` | Day detail | Missed, alarm deleted |
 | `day-test` | Day detail | Test day |

@@ -90,3 +90,15 @@ Owner decisions and issues from trying the design preview on the Oppo A96. Each 
       - A tapped dot pops its label chip.
       - Reduced motion shows the final state instantly.
 24. **Drop the "Snoozes this week" bar chart** (owner, 2026-10-01): the ring of 30 mornings already shows each snoozed day, and the "snoozes" tile gives the count. Remove the chart card, its tap state, its strings and its preview state. Owner decision against the PRD's "snoozes chart" in FR-PRG-2: record it in EXPERIENCE.md, and in deferred-work.md for correct-course with the Progress epic.
+25. **Day detail redesign** (owner, 2026-10-01; opened from the ring or calendar chip):
+    - **One-line title:** short weekday, day and month ("Wed, 23 Sep"), never wrapping at 100% on 360 dp.
+    - **Hero card:** outcome glyph and label ("Snoozed"), the alarm "{time} · {label}", and the key figure large ("18 min" with "to get up"; for missed, "Stopped after 30 minutes").
+    - **Three small tiles** matching Progress: rings · snoozes · paid. Money is neutral, and the paid tile is hidden or shows "No charge" when nothing was paid.
+    - **A timeline of the morning** replaces the table. The events come in chronological order, with the time on the left and a dot or glyph on a vertical line:
+      - alarm rang, snoozed (with price), rang again;
+      - I'm up, and quiet time ran out if it did;
+      - check solved (type, first try or number of tries);
+      - fallback check used, before-first-unlock substitution, missed ("Stopped after 30 minutes"), merged alarm;
+      - two sessions on one day each get their own hero and timeline section.
+    - **Animation:** the timeline draws top to bottom with events appearing one after another; reduced motion shows it all at once.
+    - Test and skipped days show only the hero with their outcome label.

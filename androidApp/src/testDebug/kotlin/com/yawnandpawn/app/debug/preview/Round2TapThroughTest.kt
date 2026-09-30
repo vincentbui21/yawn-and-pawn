@@ -13,6 +13,7 @@ import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performScrollTo
 import androidx.compose.ui.test.performTouchInput
 import androidx.test.core.app.ActivityScenario
+import com.yawnandpawn.app.ui.format.formatMoney
 import com.yawnandpawn.app.ui.shell.AppTab
 import com.yawnandpawn.app.ui.theme.PpsThemeMode
 import org.junit.After
@@ -60,7 +61,7 @@ class Round2TapThroughTest {
             composeRule.onNode(day).performScrollTo().performClick()
             composeRule.onNodeWithText("Thu 10 · Snoozed").assertExists()
             composeRule.onAllNodes(day)[0].performClick() // [1] is the chip, which reads the same
-            composeRule.onNodeWithText("Thursday, September 10").assertExists()
+            composeRule.onNodeWithText("Thu, Sep 10").assertExists()
             composeRule.onNodeWithText("Snoozed").assertExists()
             composeRule.onNodeWithContentDescription("Back").performClick()
             composeRule.onNodeWithText("Current streak").assertExists()
@@ -73,8 +74,15 @@ class Round2TapThroughTest {
             composeRule.onAllNodesWithContentDescription("Wednesday 23, Snoozed")[0].performTouchInput { click() }
             // The chip pops under the ring; tapping it opens the day.
             composeRule.onNodeWithText("Wed 23 · Snoozed").performClick()
-            composeRule.onNodeWithText("Wednesday, September 23").assertExists()
+            composeRule.onNodeWithText("Wed, Sep 23").assertExists()
             composeRule.onNodeWithText("Snoozed").assertExists()
+            // The hero, tiles and timeline agree: two snoozes (B x 1, B x 2), three rings, 22 min from first ring to solved.
+            composeRule.onNodeWithText("22 min").assertExists()
+            composeRule.onNodeWithText("3").assertExists()
+            composeRule.onNodeWithText("Snoozed 9 min · ${formatMoney(PreviewSamples.price(1))}", useUnmergedTree = true).assertExists()
+            composeRule.onNodeWithText("Snoozed 9 min · ${formatMoney(PreviewSamples.price(2))}", useUnmergedTree = true).assertExists()
+            composeRule.onNodeWithText(formatMoney(PreviewSamples.price(3)), useUnmergedTree = true).assertExists()
+            composeRule.onNodeWithText("Math solved first try", useUnmergedTree = true).assertExists()
         }
 
     @Test

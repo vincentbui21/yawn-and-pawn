@@ -64,3 +64,28 @@ Owner decisions and issues from trying the design preview on the Oppo A96. Each 
     - Built with Compose animation, not a GIF.
     - Reduced motion shows the final state instantly with no confetti.
     - After-snooze success stays without confetti (EXPERIENCE.md "No animation").
+
+## Round 2 feedback (2026-09-30)
+21. **Progress page redesign** (owner: "it looks so bad"). Inspiration: a cycle-tracker ring of day dots, a learning app's bar-chart and streak cards, and a fitness app's compact calendar and small stat tiles. Brand colours, glass and the money and outcome rules are unchanged. Layout, top to bottom:
+    - **Hero ring card:** the last 30 mornings as dots around a circle, each coloured by outcome with its glyph (on time / snoozed / missed / today; skipped and test days neutral). The centre shows the current streak number large, with "day streak" under it and "/ 30". Legend below with outcome markers. Tapping a dot opens Day detail.
+    - **Three small stat tiles in one row:** icon, number and label for the on-time rate, the average time to get up, and snoozes. Each fits at 360 dp and wraps to 2+1 at 200%.
+    - **Bar chart card**, "Snoozes this week", with rounded bars, today highlighted, and a one-line average summary. Tap a bar for its value.
+    - **Accent streak card:** current streak and best streak, with a short line such as "Keep it going.". Glass with an accent tint; contrast checked.
+    - **Compact month calendar:** small outcome dots under dates, today in a pill, ‹ › for months, and tap a day for Day detail.
+    - **Two cards side by side:** "Money paid" (month total, link to Purchase history), and **Insight**, one short data-based line such as "You get up fastest on weekdays.".
+    - Export CSV as a text button at the end. No Week/Month/All-time tabs.
+    - Empty state keeps the same layout with an empty ring and a short prompt.
+22. **Preview menu search and direct links** (owner, 2026-10-01): a search bar at the top of the debug preview menu that filters states as you type, and a stable id per preview state so a walkthrough can open it directly (`adb shell am start -n com.yawnandpawn.app/.debug.preview.PreviewActivity --es state <id>`, plus `--es theme light|dark` and `--ez font200 true`), listed in `docs/design-preview/states.md`.
+23. **Progress page notes** (owner, 2026-10-01), applied on top of item 21:
+    - **No "Progress" heading.** The page starts with the hero ring; the bottom tab names the page.
+    - **No outcome legend.** Each ring and calendar dot carries its meaning in its shape as well as its colour: filled dot for on time, dot with a small clock for snoozed, hollow ring for missed, neutral small dot for skipped and test, outlined pill for today. Tapping a dot shows a small label chip ("Tue 23 · Snoozed"), and a second tap or the chip opens Day detail. TalkBack reads "{date}, {outcome}". This meets pps-design rule 6 without a legend.
+    - **Stat tile labels on one line** at 100% font on 360 dp: short labels ("on time", "to get up", "snoozes"). Only 200% may wrap.
+    - **Remove Export CSV** from Progress and the preview. Owner decision against PRD FR-PRG-6; the export story is to be removed via correct-course when its epic comes up. Record it in EXPERIENCE.md and deferred-work.md.
+    - **Animation on entering Progress:**
+      - The ring dots appear in a sweep around the circle, staggered.
+      - The streak number counts up.
+      - The chart bars grow from the bottom, staggered.
+      - Tiles and cards fade and slide up in sequence.
+      - The calendar slides between months.
+      - A tapped dot pops its label chip.
+      - Reduced motion shows the final state instantly.

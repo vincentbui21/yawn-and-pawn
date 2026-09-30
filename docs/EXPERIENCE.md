@@ -50,10 +50,10 @@ Bottom navigation with three items: **Alarms** (home), **Progress**, **Settings*
 | QR registration | Check setup | Scan a code or make a printable QR. |
 | Sound picker | Editor "Sound" sub-screen | Built-in sounds, system ringtones, a user file, in sections "Built-in" / "System" / "Your files" under the volume card; preview (FR-SND-1/2). |
 | Recordings | Editor "Motivation" sub-screen, "Record a message" | Record, re-record, play, delete motivation messages (FR-SND-3). |
-| Progress | Nav | Streak, rates, average time to up, snoozes chart, calendar, money (FR-PRG-2/3). Design preview round 2 layout (2026-09-30): title "Progress" pinned top-left; `stat-tile`s two per row (current and best streak, on time 7 and 30 days, average time to up); card "Snoozes per week" (draft, `bar-chart`, the tapped week's number above it); the calendar card with the legend; card "Money paid"; a card with "Purchase history" › and "Export CSV". |
+| Progress | Nav | Streak, rates, average time to up, snoozes chart, calendar, money (FR-PRG-2/3). Owner redesign 2026-09-30 and notes 2026-10-01 (feedback items 21 and 23), top to bottom, no heading (the tab names it), no period tabs, no legend: `progress-ring` of the last 30 mornings (tap a dot for its label chip "Tue 23 · Snoozed", tap again or the chip for Day detail) with the streak, "/ 30" and "day streak" in the centre; three small `stat-tile`s in one row ("on time", "to get up", "snoozes", one line at 100% on 360 dp); `bar-chart` "Snoozes this week" (last 7 days, today highlighted, tap a bar for its value, one-line average); `card-streak` ("Current streak", "Best streak", "Keep it going."); the compact calendar (‹ › for past months, slides between them; tap a day for its chip, again for Day detail); "Money paid" (this month, "Purchase history" link) beside the Insight card. Entry animation: cards fade and rise in sequence, the ring dots sweep in, the streak counts up, the bars grow; reduced motion shows the final state. Empty: the empty ring with "Your first morning shows up here.", the calendar and "Purchase history". No CSV export (owner decision 2026-10-01 against FR-PRG-6; the export story goes via correct-course). |
 | Day detail | `calendar-day` tap | One session: rings, snoozes, paid, checks, fallback, outcome. Title is the long date; one card per session titled with its alarm time and label: `outcome-marker` with the outcome label, the flags, then "Rings", "Snoozes", "Paid", "Checks", "Time to up" (drafts in docs/design-preview/copy-to-approve.md). Logged alarm changes follow as `note-inline`s. |
 | Purchase history | Progress link | Every charge with date, alarm, snooze number, localized price (FR-PRG-4). |
-| Export CSV | Progress link | Android share sheet with a CSV file (FR-PRG-6). |
+| ~~Export CSV~~ | Removed | Owner decision 2026-10-01 (feedback item 23): no CSV export in the app, against PRD FR-PRG-6 (Could). The export story is to be removed via correct-course when its epic comes up. |
 | Settings | Nav | Grouped cards, rows open sub-screens (owner decision 2026-09-27; design preview round 2 layout 2026-09-30). Title "Settings" pinned top-left. Card "Snooze": "Base fee" ›, "Max snoozes per session" ›, "Default snooze length" ›; card "Wake": "Default quiet time" ›, "Vibrate during quiet time" (switch), "Bright wake screen" (switch with its caption); card "Appearance": System / Light / Dark `segmented-control`; a card with "Weekly summary" and "Share anonymous usage stats" (switches); a card with "Reliability checklist" › and "How payments & refunds work" ›; a card with "Privacy policy", "Terms", "Support"; a card with "Delete all data" (`error` text, opens its dialog). Sub-screens: **Base fee** (`stepper`, fee ladder preview, lock note, approximate-price note), **Max snoozes per session** (`stepper` 1 to 5), **Default snooze length** (5 / 9 / 10 / 15 min), **Default quiet time** (15 to 30 s slider). |
 | Reliability checklist | Settings, onboarding step 5, `banner-warning` | Permission and device-setting status with fixes (FR-ONB-2/3). All rows in one `card-group`; "Fix" on "Manufacturer settings" opens its numbered steps as a sub-screen ("Open settings", "I've done this"). |
 | Payments & refunds | Settings | Plain explanation of fees, pending payments and Google refunds (FR-SET-3). |
@@ -161,7 +161,6 @@ All strings live in resources (NFR-10). `{price}`, `{nextPrice}`, `{minutes}`, `
 | Progress empty | "Your first morning shows up here." |
 | Home empty | "No alarms yet." · "Add your first alarm" |
 | Purchase history empty | "No snoozes paid. Keep it that way." |
-| Export empty | "Nothing to export yet." |
 | Recordings empty | "Record a message for your morning self." |
 | Math check, progress | "Problem {n} of {count}" |
 | Math check, problem (TalkBack) | Spoken form with "plus" / "times", e.g. "47 plus 38" |
@@ -220,15 +219,15 @@ All strings live in resources (NFR-10). `{price}`, `{nextPrice}`, `{minutes}`, `
 | Reliability checklist, manufacturer guidance | "Open settings" · "I've done this" (steps in Long-form copy) |
 | Home hero, streak label | "days on time" · "day on time" (1) |
 | Home hero, money line | "{paid} paid this week" |
-| Progress, stat tiles | "Current streak" · "Best streak" · "On time · 7 days" · "On time · 30 days" · "Average time to up" |
+| Progress, stat tiles | "on time" · "to get up" · "snoozes" (owner notes 2026-10-01); streak card "Current streak" · "Best streak" · "Keep it going." (owner redesign 2026-09-30) |
+| Progress, ring (owner redesign 2026-09-30) | Centre "{streak}" · "/ 30" · "day streak"; a dot reads like a calendar day, plus ", today" for today; label chip "{weekday} {day} · {outcome}" (draft) |
+| Progress, Insight card (owner redesign 2026-09-30) | Title "Insight" · one line from the user's data: "You get up fastest on weekdays." / "You get up fastest on weekends." |
 | Progress, average time | "{minutes} min" · "Under 1 min" |
-| Progress, tile without data | "No mornings yet" |
-| Progress, snoozes chart | "Lower is better." · bar value "{n} snoozes" / "1 snooze" |
-| Progress, chart bar (TalkBack) | "Week of {date}, {n} snoozes" / "Week of {date}, 1 snooze" |
-| Progress, money | "Money paid" · "This week" · "This month" · "All time" |
+| Progress, snoozes chart | Title "Snoozes this week" (owner redesign 2026-09-30) · "Average {n} snoozes a morning." (draft) · "Lower is better." · bar value "{n} snoozes" / "1 snooze" |
+| Progress, chart bar (TalkBack) | "{weekday}, {n} snoozes" / "{weekday}, 1 snooze" (the chart shows days since 2026-09-30) |
+| Progress, money | "Money paid" · "This month" (the card shows the month total and links to "Purchase history", owner redesign 2026-09-30) |
 | Progress, calendar navigation (TalkBack) | "Previous month" / "Next month" |
 | Progress, calendar day (TalkBack) | "{weekday} {day}, {outcome}" + ", fallback check used" + ", {n} sessions" · empty day "{weekday} {day}, no alarm" |
-| Progress, export link | "Export CSV" |
 | Day detail, flags | "Fallback check used" · "Rang before your first unlock" |
 | Day detail, alarm changes | "Your {time} alarm was turned off. Logged." · "Your {time} alarm was deleted. Logged." |
 | Weekly summary, channel | "Weekly summary" |
@@ -316,9 +315,12 @@ Behavioural rules. Visual specs for every row live in `DESIGN.md > Components` u
 | `top-app-bar` | Pushed screens | Back returns; unsaved editor changes prompt "Discard changes?" |
 | `nav-bar` | App root | Three items; hidden during the session lock. |
 | `progress-dots` | Onboarding | Show step; back allowed; not tappable. |
-| `stat-tile` | Progress | Current / best streak, on-time rate (7 d / 30 d), average minutes from first ring to up. Not tappable. |
-| `bar-chart` | Progress | Snoozes per week, last 8 weeks. Tap a bar for the week's number. TalkBack reads each week as a value. |
-| `outcome-marker` | Calendar, legend, Day detail, history | Always paired with a label (visible in legend and Day detail, spoken in calendar). |
+| `progress-ring` | Progress | The last 30 mornings as outcome glyphs around the streak (owner redesign 2026-09-30). Tapping a dot with a session opens Day detail. The dots are read by TalkBack but are not separate buttons (30 × 48 dp does not fit a ring); the calendar's days are the accessible way to Day detail. Static: no animation. |
+| `card-streak` | Progress | Current and best streak on the accent-tinted glass. Not tappable. |
+| `stat-tile` | Progress | On-time rate (30 d), average minutes from first ring to up, snoozes (30 d). Three in a row, 2 + 1 at large font scales. Not tappable. |
+| `bar-chart` | Progress | Snoozes per day, last 7 days, today highlighted (owner redesign 2026-09-30). Tap a bar for the day's number. TalkBack reads each day as a value. |
+| `outcome-marker` | Ring, calendar, Day detail | Meaning carried by shape as well as colour (owner decision 2026-10-01), so no legend: the label is on the tap chip and in Day detail, and spoken by TalkBack ("{date}, {outcome}"). |
+| `chip-day` (label chip) | Progress ring, calendar | A first tap on a day shows "{Tue 23} · {Snoozed}" with a chevron under the ring or calendar; a second tap on the day or a tap on the chip opens Day detail. Pops in (instant with reduced motion). |
 | `calendar-day` | Progress | Tap → Day detail. TalkBack: "Tuesday 14, on time" (or snoozed, missed, test, skipped; "fallback check used" when relevant). Skipped rendering is conditional on PRD Q9. |
 | `checklist-row` | Reliability checklist | "Fix" deep-links to the system setting; status re-checked on return. Camera and microphone rows appear only when needed. |
 | `settings-row` | Editor, Settings, pickers | Progressive disclosure (owner decision 2026-09-27): title with the current value as a subtitle and a chevron; tap opens the sub-screen that sets it (back arrow returns, the change is kept). A toggle row has a switch instead. Rows unavailable during a session. |
@@ -398,7 +400,6 @@ Behavioural rules. Visual specs for every row live in `DESIGN.md > Components` u
 | Empty | Progress | "Your first morning shows up here." |
 | Test or skipped day | Day detail | Outcome label only; excluded from rates and streaks. |
 | Empty | Purchase history | "No snoozes paid. Keep it that way." |
-| No data | Export CSV | Button disabled with "Nothing to export yet." |
 | All OK | Reliability checklist | Every row "OK"; `button-outlined` "Ring a test alarm" stays. |
 | Session active | Settings | Not reachable (session lock). |
 | Large font (200%) and TalkBack | All | See Accessibility Floor. |
@@ -562,15 +563,15 @@ Failure: he ignores it → the banner stays on Home (not dismissible) until fixe
 
 Failure: she swipes up and enters her PIN on the lock screen; the wake screen stays on top, the button becomes "Snooze · $1", the Math check stays for this ring, and F4 continues.
 
-### F9 — Review progress and export (Marco, Sunday evening)
+### F9 — Review progress (Marco, Sunday evening)
 
 1. The weekly summary notification says "6 on-time mornings, nothing paid. Nice." He taps it.
 2. Progress: streak 12 (best 12), on-time 86% (30 d), average 3 min to up, snoozes chart.
 3. He taps a calendar day with a clock glyph: Day detail shows one snooze, $2, Math, 7 min.
 4. Purchase history lists the $2 charge.
-5. **Climax:** "Export CSV" opens the share sheet and he saves the file.
+5. **Climax:** he sees 12 on the ring and one snooze all week; nothing to fix.
 
-Failure: nothing logged yet → "Nothing to export yet."
+Failure: nothing logged yet → the empty ring with "Your first morning shows up here." (CSV export removed, owner decision 2026-10-01.)
 
 ### F10 — Record a motivation message (Linh, evening)
 

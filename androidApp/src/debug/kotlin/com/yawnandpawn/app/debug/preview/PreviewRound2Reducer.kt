@@ -10,15 +10,16 @@ import com.yawnandpawn.app.ui.settings.SettingsIntent
 import com.yawnandpawn.app.ui.settings.SettingsPane
 import com.yawnandpawn.app.ui.settings.SettingsUiState
 
-/** Progress in the tap-through: bars select, the months switch between the fake September and August. */
+/** Progress in the tap-through: bars and days select (a day shows its chip), the months switch between September and August. */
 internal fun reduceProgress(
     state: ProgressUiState,
     intent: ProgressIntent,
 ): ProgressUiState =
     when (intent) {
-        is ProgressIntent.WeekTapped -> state.copy(selectedWeek = intent.index)
-        ProgressIntent.PreviousMonth -> state.copy(calendar = PreviewProgressSamples.august)
-        ProgressIntent.NextMonth -> state.copy(calendar = PreviewProgressSamples.september)
+        is ProgressIntent.DayBarTapped -> state.copy(selectedDay = intent.index)
+        is ProgressIntent.DaySelected -> state.copy(selection = intent.selection)
+        ProgressIntent.PreviousMonth -> state.copy(calendar = PreviewProgressSamples.august, selection = null)
+        ProgressIntent.NextMonth -> state.copy(calendar = PreviewProgressSamples.september, selection = null)
         else -> state
     }
 

@@ -176,9 +176,18 @@ private class TapThroughState(
 
     fun onProgress(intent: ProgressIntent) {
         when (intent) {
-            is ProgressIntent.DayTapped -> push(Pushed.DayDetail(intent.date))
-            ProgressIntent.PurchaseHistoryClicked -> push(Pushed.PurchaseHistory)
-            else -> progress = reduceProgress(progress, intent)
+            is ProgressIntent.DayTapped -> {
+                progress = progress.copy(selection = null)
+                push(Pushed.DayDetail(intent.date))
+            }
+
+            ProgressIntent.PurchaseHistoryClicked -> {
+                push(Pushed.PurchaseHistory)
+            }
+
+            else -> {
+                progress = reduceProgress(progress, intent)
+            }
         }
     }
 

@@ -1,12 +1,17 @@
 package com.yawnandpawn.app.debug.preview
 
 import androidx.activity.compose.setContent
+import androidx.compose.ui.test.click
+import androidx.compose.ui.test.hasClickAction
+import androidx.compose.ui.test.hasContentDescription
 import androidx.compose.ui.test.hasText
 import androidx.compose.ui.test.junit4.createEmptyComposeRule
+import androidx.compose.ui.test.onAllNodesWithContentDescription
 import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performScrollTo
+import androidx.compose.ui.test.performTouchInput
 import androidx.test.core.app.ActivityScenario
 import com.yawnandpawn.app.ui.shell.AppTab
 import com.yawnandpawn.app.ui.theme.PpsThemeMode
@@ -47,13 +52,37 @@ class Round2TapThroughTest {
     }
 
     @Test
-    fun `a calendar day opens Day detail and Back returns to Progress`() =
+    fun `a calendar day shows its chip, a second tap opens Day detail and Back returns to Progress`() =
         tapThrough(AppTab.Progress) {
-            composeRule.onNodeWithContentDescription("Thursday 10, Snoozed").performScrollTo().performClick()
+            // The calendar's day is the button (the ring's dot reads the same but is not a separate button).
+            val day = hasContentDescription("Thursday 10, Snoozed") and hasClickAction()
+            // The first tap shows the label chip, the second opens the day.
+            composeRule.onNode(day).performScrollTo().performClick()
+            composeRule.onNodeWithText("Thu 10 · Snoozed").assertExists()
+            composeRule.onAllNodes(day)[0].performClick() // [1] is the chip, which reads the same
             composeRule.onNodeWithText("Thursday, September 10").assertExists()
             composeRule.onNodeWithText("Snoozed").assertExists()
             composeRule.onNodeWithContentDescription("Back").performClick()
             composeRule.onNodeWithText("Current streak").assertExists()
+        }
+
+    @Test
+    fun `a dot on the ring shows its chip, and the chip opens that morning's Day detail`() =
+        tapThrough(AppTab.Progress) {
+            // The ring comes first; the calendar below reads the same day the same way.
+            composeRule.onAllNodesWithContentDescription("Wednesday 23, Snoozed")[0].performTouchInput { click() }
+            // The chip pops under the ring; tapping it opens the day.
+            composeRule.onNodeWithText("Wed 23 · Snoozed").performClick()
+            composeRule.onNodeWithText("Wednesday, September 23").assertExists()
+            composeRule.onNodeWithText("Snoozed").assertExists()
+        }
+
+    @Test
+    fun `the chart header shows the week's total, and a tapped bar that day`() =
+        tapThrough(AppTab.Progress) {
+            composeRule.onNodeWithText("3 snoozes").assertExists()
+            composeRule.onNodeWithContentDescription("Wednesday, 2 snoozes").performScrollTo().performTouchInput { click() }
+            composeRule.onNodeWithText("Wed · 2 snoozes").assertExists()
         }
 
     @Test

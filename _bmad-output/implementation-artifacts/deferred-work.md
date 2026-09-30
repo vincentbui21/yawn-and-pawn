@@ -68,3 +68,6 @@
 - source_spec: `_bmad-output/implementation-artifacts/spec-design-preview-whole-app.md`
   summary: Exempt the time-wheel tick from the Story 1.17 bundled-sound loudness check.
   evidence: `composeApp/src/androidMain/res/raw/wheel_tick.wav` (12 ms, 3.2 kHz, peak -12 dBFS, generated in-repo) is a deliberately quiet UI sound (feedback item 17). The loudness gate (peak >= -3 dBFS, >= -14 LUFS) is not built yet, so there is no exemption list to add it to; Story 1.17 must scope its check to alarm sounds or exempt this file.
+- source_spec: `_bmad-output/implementation-artifacts/spec-design-preview-whole-app.md`
+  summary: Remove the FR-PRG-6 export story via correct-course.
+  evidence: Owner decision 2026-10-01 (docs/design-preview/feedback.md item 23): no "Export CSV" in the app. The design preview removed it from Progress and EXPERIENCE.md (IA row struck through, export strings and state row removed, F9 without export). PRD FR-PRG-6 [Could] and its Epic 6 story (epics.md, Refs FR-PRG-6) still exist; run correct-course when Epic 6 comes up to drop the story and update the PRD.

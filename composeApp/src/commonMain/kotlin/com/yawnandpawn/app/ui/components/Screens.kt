@@ -29,19 +29,20 @@ import org.jetbrains.compose.resources.stringResource
 
 /**
  * A bottom-navigation tab screen (Progress, Settings): the background gradient, [title] pinned top-left in `headline`
- * under the status bar, and [content] as a scrolling column of `card-group`s below it (clipped under the title, so no
- * card text shows behind the status bar). [overlay] draws over the screen (a `snackbar` at the bottom).
+ * under the status bar (none on Progress, owner decision 2026-10-01: the tab names it), and [content] as a scrolling
+ * column of `card-group`s below it (clipped under the title or the status bar, so no card text shows behind the status
+ * bar). [overlay] draws over the screen (a `snackbar` at the bottom).
  */
 @Composable
 fun TabScreen(
-    title: String,
+    title: String?,
     modifier: Modifier = Modifier,
     overlay: @Composable () -> Unit = {},
     content: @Composable ColumnScope.() -> Unit,
 ) {
     PpsBackground(modifier = modifier) {
-        Column(modifier = Modifier.fillMaxSize()) {
-            ScreenTitle(title = title, modifier = Modifier.windowInsetsPadding(WindowInsets.statusBars))
+        Column(modifier = Modifier.fillMaxSize().windowInsetsPadding(WindowInsets.statusBars)) {
+            if (title != null) ScreenTitle(title = title)
             ScreenColumn(modifier = Modifier.weight(1f), content = content)
         }
         Box(modifier = Modifier.align(Alignment.BottomCenter)) { overlay() }

@@ -34,6 +34,8 @@ colors:
   glass: '#FFFFFFB8'
   glass-strong: '#FFFFFFEB'
   glass-edge: '#1A17141A'
+  # Accent tint over glass (owner decision 2026-09-30, feedback item 21: the Progress streak card). 12% accent.
+  glass-accent: '#D96F141F'
   # Dark theme (primary design target for app screens).
   bg-dark: '#111214'
   surface-dark: '#1A1B1E'
@@ -58,6 +60,7 @@ colors:
   glass-dark: '#1A1B1EB8'
   glass-strong-dark: '#1A1B1EEB'
   glass-edge-dark: '#F2EFEA1A'
+  glass-accent-dark: '#F5A04E1F'
   # Sunrise theme (wake screens only: ringing, snooze confirm, checks, success, snoozed).
   bg-sunrise: '#FFF6EA'
   surface-sunrise: '#FFFFFF'
@@ -79,6 +82,7 @@ colors:
   glass-sunrise: '#FFFFFFB8'
   glass-strong-sunrise: '#FFFFFFEB'
   glass-edge-sunrise: '#1A17141A'
+  glass-accent-sunrise: '#D96F141F'
 typography:
   clock-xl:
     fontFamily: Geist
@@ -367,6 +371,23 @@ components:
     activeColor: '{colors.accent}'
     inactiveColor: '{colors.outline}'
     size: 8dp
+  progress-ring:
+    backgroundColor: '{colors.glass}'
+    trackColor: '{colors.outline-subtle}'
+    dot: '{components.outcome-marker} at 16dp; no alarm: 4dp dot in {colors.outline-subtle} (decorative)'
+    todayShape: 'outlined pill 32 x 22dp, 1.5dp {colors.accent}'
+    todayRingColor: '{colors.accent}'
+    numberTypography: '{typography.display}'
+    numberColor: '{colors.accent-text}'
+    size: 'up to 280dp'
+    note: 'Progress hero (owner decision 2026-09-30, feedback item 21): the last 30 mornings clockwise from the top, today ringed 2dp in accent; centre streak, "/ 30" in title / text-secondary, "day streak" in body.'
+  card-streak:
+    backgroundColor: '{colors.glass} + {colors.glass-accent}'
+    borderColor: '{colors.glass-edge}'
+    numberTypography: '{typography.display}'
+    numberColor: '{colors.accent-text}'
+    iconColor: '{colors.accent-text}'
+    rounded: '{rounded.md}'
   stat-tile:
     backgroundColor: '{colors.glass}'
     borderColor: '{colors.glass-edge}'
@@ -480,6 +501,7 @@ The palette is warm greys plus one accent. Nothing is pure black or pure white a
 
 - `{colors.glass}` (72% alpha) for cards (`card-group`, `card-alarm`, `card-hero`, `banner-warning`, `panel-session-in-progress`) over the static gradient.
 - `{colors.glass-strong}` (92% alpha) for surfaces over moving content (`glass-bar`: `pill-save`, `nav-bar`, `sheet-snooze-confirm`). It is dense enough that text passes even over the worst content behind it (dark `text` in light themes, light `text` in Dark).
+- `{colors.glass-accent}` (12% accent, owner decision 2026-09-30, feedback item 21) is drawn over `glass` for the one highlighted card on a screen (the Progress streak card). Text on it is `text`, `text-secondary` or `accent-text`; plain accent fails on it (2.83) and is not used there.
 - `{colors.glass-edge}` is a `{spacing.hairline}` decorative edge and the divider between rows in a card (like `outline-subtle`, never the only boundary of a control).
 - **Blur:** `glass-bar` surfaces that float over content (the snooze confirm sheet) blur what is beneath them by `{spacing.glass-blur}` on Android 12+; the bottom pill no longer overlaps content (2026-09-28), so it has nothing to blur (API 31+, the built-in `RenderEffect` through Compose, no extra library). Below API 31 they are the same translucent surfaces without blur. Cards sit over the static gradient, where a blur looks identical to no blur, so they use the fill only; nothing blurs a constantly animating list.
 - Contrast is verified for text and controls on glass composited over the worst case behind it (the darker gradient top, or the darkest or lightest content under a `glass-bar`); see the `glass+...` rows below.
@@ -529,6 +551,10 @@ Computed with a WCAG relative-luminance script (2026-09-26; glass and gradient r
 | Light | snoozed / glass+gradient-top (snoozes chart, snoozed marker) | text | 5.19 |
 | Light | missed / glass+gradient-top (missed marker) | text | 5.34 |
 | Light | disabled-content / glass+gradient-top (disabled stepper and month buttons) | text | 6.64 |
+| Light | text / glass-accent+glass+gradient-top (streak card) | text | 15.05 |
+| Light | text-secondary / glass-accent+glass+gradient-top | text | 5.91 |
+| Light | accent-text / glass-accent+glass+gradient-top (streak number, icon) | text | 4.56 |
+| Light | accent / glass-accent+glass+gradient-top | graphic | **2.83, fails: no plain accent on the tinted card, accent-text instead** |
 | Light | text / glass-strong+text (bar over dark content) | text | 15.25 |
 | Light | text-secondary / glass-strong+text | text | 6.00 |
 | Light | accent-text / glass-strong+text | text | 4.63 |
@@ -577,6 +603,9 @@ Computed with a WCAG relative-luminance script (2026-09-26; glass and gradient r
 | Dark | snoozed / glass+gradient-top (snoozes chart, snoozed marker) | text | 6.74 |
 | Dark | missed / glass+gradient-top (missed marker) | text | 4.91 |
 | Dark | disabled-content / glass+gradient-top (disabled stepper and month buttons) | text | 6.41 |
+| Dark | text / glass-accent+glass+gradient-top (streak card) | text | 12.02 |
+| Dark | text-secondary / glass-accent+glass+gradient-top | text | 5.51 |
+| Dark | accent-text / glass-accent+glass+gradient-top (streak number, icon) | text | 6.58 |
 | Dark | text / glass-strong+text (bar over light content) | text | 12.19 |
 | Dark | text-secondary / glass-strong+text | text | 5.59 |
 | Dark | accent-text / glass-strong+text | text | 6.67 |
@@ -697,10 +726,12 @@ Visual specs. Behaviour for every row lives in `EXPERIENCE.md > Component Patter
 | `top-app-bar` | Transparent over the background gradient, title in `headline`, back arrow 48 dp. |
 | `nav-bar` | Material 3 navigation bar on `glass-bar` (`glass-strong`, hairline top edge), 3 items, Material Symbols Rounded; selected icon fill 1 in `accent-text`, label always shown. |
 | `progress-dots` | 8 dp dots, 8 dp apart; active accent and 16 dp wide (pill), inactive `outline`. |
-| `stat-tile` | Glass (`glass`, `glass-edge` hairline), `{rounded.md}`, number in `display` (`text`), label in `caption` (`text-secondary`); "No mornings yet" in `body` when it has no data. Two per row; a pair whose numbers do not fit splits into one per row. |
-| `bar-chart` | Weekly bars in `{colors.snoozed}`, top corners `{rounded.sm}`, `outline` baseline, `text-secondary` labels, caption "Lower is better." |
-| `outcome-marker` | 20 dp glyph, distinct shape per outcome: on time = **filled check circle** (`success`); snoozed = **filled clock** (`snoozed`); missed = **filled cross circle** (`missed`); skipped or test = **hollow ring** (`outline`). Fallback used adds a small `alt_route` badge. Same glyphs in calendar, legend, Day detail and history. |
-| `calendar-day` | 48 dp cell, date number in `caption`, `outcome-marker` below (fallback used: the 12 dp `alt_route` badge on its lower right). Today gets a 1 dp accent ring (`rounded.md`). The calendar card sits 12 dp from the screen edges so seven 48 dp cells fit 360 dp; month heading in `title` between 48 dp "Previous month" / "Next month" chevrons; the legend under the grid pairs every glyph with its label. |
+| `progress-ring` | Progress hero card, the first thing on the page (owner decisions 2026-09-30 and 2026-10-01): 30 `outcome-marker` shapes (16 dp) on a hairline `outline-subtle` circle, up to 280 dp, clockwise from the top to today (in an outlined accent pill, 32 x 22 dp); a day without an alarm is a faint 4 dp `outline-subtle` dot. Centre: streak in `display` / `accent-text`, "/ 30" in `title` / `text-secondary`, "day streak" in `body`; empty, "Your first morning shows up here.". No legend. The label chip (`inverse-surface` / `inverse-text` pill, `label`, chevron, 48 dp target) pops in under the ring for a tapped dot. |
+| `card-streak` | Glass with the `glass-accent` tint, `glass-edge` hairline, `{rounded.md}`: sunrise icon and "Current streak" (`caption`), the number in `display` / `accent-text` with "days on time", "Best streak" and its number in `headline` / `text` on the right (stacked at large font scales), "Keep it going." in `text-secondary`. |
+| `stat-tile` | Progress (redesign 2026-09-30): three small tiles in one row (2 + 1 from 150% font scale), glass, `{rounded.md}`, 12 dp padding: an icon in `text-secondary`, the number in `title` (`text`), a short one-line label in `caption` (`text-secondary`: "on time", "to get up", "snoozes"). |
+| `bar-chart` | "Snoozes this week" (redesign 2026-09-30): the last 7 days as 20 dp `{rounded.full}` bars in `{colors.snoozed}` (a day without snoozes is a 6 dp `outline` stub), weekday initials under them with today in an outlined accent pill, the week total at the top right ("3 snoozes"; a tapped bar shows that day, "Wed · 2 snoozes"), and the summary line "Average {n} snoozes a morning. Lower is better." in `caption` / `text-secondary`. |
+| `outcome-marker` | Distinct shape per outcome, so it reads without a legend (owner decision 2026-10-01): on time = **filled dot** (`success`); snoozed = **dot with a small clock** (`snoozed`, the filled clock glyph); missed = **hollow ring** (`missed`); skipped or test = **small neutral dot** (`outline`); today = an **outlined accent pill** around the day; the day a label chip refers to gets a 1.5 dp selection ring in `text` (fix 2026-10-01). Same shapes in the ring, calendar and Day detail. The fallback `alt_route` badge stays in Day detail only; the ring and calendar say it to TalkBack. |
+| `calendar-day` | 48 dp cell, date number in `caption`, a 14 dp `outcome-marker` shape below. Today's date sits in an outlined accent pill. The calendar card sits 12 dp from the screen edges so seven 48 dp cells fit 360 dp; month heading in `title` between 48 dp "Previous month" / "Next month" chevrons; the grid slides between months; a tapped day's label chip pops in under the grid. No legend (owner decision 2026-10-01). |
 | `checklist-row` | 64 dp. Leading icon, title (`body`), reason (`caption`), trailing status: `check_circle` in `success` with "OK", or `button-outlined` "Fix". |
 | `settings-row` | 56 dp inside a `card-group`. Title (`body`, `text`) with the current value as a subtitle (`caption`, `text-secondary`) and a chevron (`text-secondary`) on the right when it opens a sub-screen; a `switch` on the right for a toggle. |
 | `purchase-row` | 64 dp. Date and alarm (`body`), "Snooze 2" (`caption`), localized price right-aligned in `text` (never accent, green or red). |

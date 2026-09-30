@@ -4,8 +4,10 @@ import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -16,18 +18,24 @@ import androidx.compose.foundation.layout.statusBars
 import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.Density
+import com.yawnandpawn.app.ui.components.DismissButton
 import com.yawnandpawn.app.ui.components.GroupCard
 import com.yawnandpawn.app.ui.components.GroupDivider
 import com.yawnandpawn.app.ui.components.PpsBackground
@@ -56,16 +64,18 @@ fun PreviewFrame(
 }
 
 /** The tap-through entries at the top of the menu (interactive, fake state). */
-private enum class Flow(
+internal enum class Flow(
     val round: Int,
     val title: String,
+    /** The deep-link id (`--es state <id>`). */
+    val stateId: String,
     val startTab: AppTab = AppTab.Alarms,
     val startInSession: Boolean = false,
 ) {
-    App(1, "Tap through the app: Home, editor and its sub-screens, test alarm"),
-    Session(1, "Tap through a morning: Back to alarm, Ringing, Check, Success", startInSession = true),
-    Progress(2, "Tap through Progress: chart, calendar, day detail, purchase history", startTab = AppTab.Progress),
-    Settings(2, "Tap through Settings: sub-screens, checklist, payments, delete dialog", startTab = AppTab.Settings),
+    App(1, "Tap through the app: Home, editor and its sub-screens, test alarm", "tap-app"),
+    Session(1, "Tap through a morning: Back to alarm, Ringing, Check, Success", "tap-morning", startInSession = true),
+    Progress(2, "Tap through Progress: ring, chart, calendar, day detail, purchase history", "tap-progress", startTab = AppTab.Progress),
+    Settings(2, "Tap through Settings: sub-screens, checklist, payments, delete dialog", "tap-settings", startTab = AppTab.Settings),
 }
 
 /**
@@ -73,11 +83,13 @@ private enum class Flow(
  * with Light / Dark and 200% font toggles, plus tap-through flows. Menu labels are developer text, not app copy.
  */
 @Composable
-fun PreviewApp() {
-    var dark by rememberSaveable { mutableBooleanSaveable(false) }
-    var largeFont by rememberSaveable { mutableBooleanSaveable(false) }
-    var openItem by rememberSaveable { mutableNullableString() }
-    var openFlow by rememberSaveable { mutableNullableString() }
+fun PreviewApp(launch: PreviewLaunch = PreviewLaunch()) {
+    var dark by rememberSaveable { mutableBooleanSaveable(launch.dark) }
+    var largeFont by rememberSaveable { mutableBooleanSaveable(launch.largeFont) }
+    // A deep link (`--es state <id>`) opens its item or tap-through directly; Back from it returns to the menu.
+    var openItem by rememberSaveable { mutableNullableString(PreviewCatalog.items.firstOrNull { it.stateId == launch.state }?.id) }
+    var openFlow by rememberSaveable { mutableNullableString(Flow.entries.firstOrNull { it.stateId == launch.state }?.name) }
+    var query by rememberSaveable { mutableStateOf("") }
     val mode = if (dark) PpsThemeMode.Dark else PpsThemeMode.Light
 
     PreviewFrame(mode = mode, largeFont = largeFont) {
@@ -98,6 +110,8 @@ fun PreviewApp() {
 
             else -> {
                 PreviewMenu(
+                    query = query,
+                    onQuery = { query = it },
                     dark = dark,
                     largeFont = largeFont,
                     onDark = { dark = it },
@@ -112,6 +126,8 @@ fun PreviewApp() {
 
 @Composable
 private fun PreviewMenu(
+    query: String,
+    onQuery: (String) -> Unit,
     dark: Boolean,
     largeFont: Boolean,
     onDark: (Boolean) -> Unit,
@@ -121,44 +137,30 @@ private fun PreviewMenu(
 ) {
     val colors = PpsTheme.colors
     val spacing = PpsTheme.spacing
-    val grouped = PreviewCatalog.items.groupBy { it.round to it.group }
+    val grouped = PreviewCatalog.items.filter { it.matches(query) }.groupBy { it.round to it.group }
+    val shownFlows = Flow.entries.filter { it.matches(query) }
     PpsBackground {
         LazyColumn(
             modifier = Modifier.fillMaxSize().windowInsetsPadding(WindowInsets.statusBars),
             contentPadding = PaddingValues(horizontal = spacing.screenMargin, vertical = spacing.space4),
             verticalArrangement = Arrangement.spacedBy(spacing.space3),
         ) {
-            item {
-                Column {
+            item { MenuTop(dark = dark, largeFont = largeFont, onDark = onDark, onLargeFont = onLargeFont) }
+            item(key = "search") { SearchField(query = query, onQuery = onQuery) }
+            if (grouped.isEmpty() && shownFlows.isEmpty()) {
+                item(key = "none") {
                     Text(
-                        text = "Yawn & Pawn Preview",
-                        modifier = Modifier.semantics { heading() },
-                        style = PpsTheme.typography.headline,
-                        color = colors.text,
-                    )
-                    Text(
-                        text = "Fake data only. Nothing is saved, scheduled, played or charged. Back returns here.",
-                        style = PpsTheme.typography.caption,
+                        text = "No matches",
+                        modifier = Modifier.padding(horizontal = spacing.cardPadding, vertical = spacing.space4),
+                        style = PpsTheme.typography.body,
                         color = colors.textSecondary,
                     )
                 }
             }
-            item {
-                GroupCard {
-                    PpsSegmentedControl(
-                        options = listOf(false, true),
-                        selected = dark,
-                        label = { if (it) "Dark" else "Light" },
-                        onSelect = onDark,
-                        modifier = Modifier.padding(spacing.cardPadding),
-                    )
-                    GroupDivider()
-                    SwitchRow(label = "200% font size", checked = largeFont, onCheckedChange = onLargeFont)
-                }
-            }
             ROUNDS.forEach { (round, heading) ->
+                val flows = shownFlows.filter { it.round == round }
+                if (flows.isEmpty() && grouped.keys.none { it.first == round }) return@forEach
                 item(key = "round$round") { MenuHeader(heading) }
-                val flows = Flow.entries.filter { it.round == round }
                 if (flows.isNotEmpty()) {
                     item(key = "flows$round") { MenuCard(title = "Tap through", rows = flows.map { it.title to { onOpenFlow(it) } }) }
                 }
@@ -171,8 +173,46 @@ private fun PreviewMenu(
                     }
                 }
             }
-            item { MenuHeader("Round 3 · Setup flows (later)") }
+            if (query.isBlank()) item { MenuHeader(ROUND_HEADINGS.getValue(LATER_ROUND)) }
             item { Column(modifier = Modifier.windowInsetsPadding(WindowInsets.navigationBars)) {} }
+        }
+    }
+}
+
+/** The menu's title, its note, and the Light / Dark and 200% toggles (above the search and the list). */
+@Composable
+private fun MenuTop(
+    dark: Boolean,
+    largeFont: Boolean,
+    onDark: (Boolean) -> Unit,
+    onLargeFont: (Boolean) -> Unit,
+) {
+    val colors = PpsTheme.colors
+    val spacing = PpsTheme.spacing
+    Column(verticalArrangement = Arrangement.spacedBy(spacing.space3)) {
+        Column {
+            Text(
+                text = "Yawn & Pawn Preview",
+                modifier = Modifier.semantics { heading() },
+                style = PpsTheme.typography.headline,
+                color = colors.text,
+            )
+            Text(
+                text = "Fake data only. Nothing is saved, scheduled, played or charged. Back returns here.",
+                style = PpsTheme.typography.caption,
+                color = colors.textSecondary,
+            )
+        }
+        GroupCard {
+            PpsSegmentedControl(
+                options = listOf(false, true),
+                selected = dark,
+                label = { if (it) "Dark" else "Light" },
+                onSelect = onDark,
+                modifier = Modifier.padding(spacing.cardPadding),
+            )
+            GroupDivider()
+            SwitchRow(label = "200% font size", checked = largeFont, onCheckedChange = onLargeFont)
         }
     }
 }
@@ -219,11 +259,55 @@ private fun MenuRow(
     )
 }
 
-private fun mutableBooleanSaveable(value: Boolean) = androidx.compose.runtime.mutableStateOf(value)
+private fun mutableBooleanSaveable(value: Boolean) = mutableStateOf(value)
 
-private fun mutableNullableString() = androidx.compose.runtime.mutableStateOf<String?>(null)
+private fun mutableNullableString(value: String? = null) = mutableStateOf(value)
+
+/**
+ * The menu's search field (debug text, not app copy): filters as you type on screen, state, round and id, with a
+ * clear button while there is a query.
+ */
+@Composable
+private fun SearchField(
+    query: String,
+    onQuery: (String) -> Unit,
+) {
+    val colors = PpsTheme.colors
+    val spacing = PpsTheme.spacing
+    GroupCard {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            BasicTextField(
+                value = query,
+                onValueChange = onQuery,
+                modifier =
+                    Modifier
+                        .weight(1f)
+                        .heightIn(min = spacing.targetMin)
+                        .semantics { contentDescription = "Search screens and states" },
+                textStyle = PpsTheme.typography.body.copy(color = colors.text),
+                singleLine = true,
+                cursorBrush = SolidColor(colors.text),
+                decorationBox = { field ->
+                    Box(
+                        modifier = Modifier.padding(horizontal = spacing.cardPadding, vertical = spacing.space3),
+                        contentAlignment = Alignment.CenterStart,
+                    ) {
+                        if (query.isEmpty()) {
+                            Text(text = "Search screens and states", style = PpsTheme.typography.body, color = colors.textSecondary)
+                        }
+                        field()
+                    }
+                },
+            )
+            if (query.isNotEmpty()) DismissButton(label = "Clear search", onClick = { onQuery("") })
+        }
+    }
+}
 
 private const val LARGE_FONT_SCALE = 2f
 
 /** The rounds the menu shows, with their headings. */
-private val ROUNDS = listOf(1 to "Round 1 · The daily loop", 2 to "Round 2 · Progress and settings")
+private val ROUNDS = ROUND_HEADINGS.filterKeys { it < LATER_ROUND }.toList()
+
+/** Round 3 has no states yet: the menu only shows its heading. */
+private const val LATER_ROUND = 3

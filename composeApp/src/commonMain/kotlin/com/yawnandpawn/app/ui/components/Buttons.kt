@@ -49,7 +49,7 @@ fun PpsFilledButton(
 
 /**
  * `button-text`: a tertiary action, 48 dp target, `accent-text` label. [contentColor] overrides it for a
- * destructive dialog action (`error`).
+ * destructive dialog action (`error`); disabled, the label is `disabled-content`.
  */
 @Composable
 fun PpsTextButton(
@@ -57,12 +57,14 @@ fun PpsTextButton(
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
     contentColor: Color = PpsTheme.colors.accentText,
+    enabled: Boolean = true,
 ) {
     TextButton(
         onClick = onClick,
         modifier = modifier.heightIn(min = PpsTheme.spacing.targetMin),
+        enabled = enabled,
         shape = PpsTheme.shapes.full,
-        colors = ButtonDefaults.textButtonColors(contentColor = contentColor),
+        colors = ButtonDefaults.textButtonColors(contentColor = contentColor, disabledContentColor = PpsTheme.colors.disabledContent),
     ) {
         Text(text = text, style = PpsTheme.typography.label)
     }

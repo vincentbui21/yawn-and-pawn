@@ -1,7 +1,6 @@
 package com.yawnandpawn.app.ui.progress
 
 import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.IntrinsicSize
 import androidx.compose.foundation.layout.Row
@@ -11,43 +10,50 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.semantics.semantics
-import androidx.compose.ui.text.rememberTextMeasurer
-import com.yawnandpawn.app.ui.components.GroupCard
-import com.yawnandpawn.app.ui.components.GroupDivider
-import com.yawnandpawn.app.ui.components.NavRow
+import com.yawnandpawn.app.ui.components.PpsTextButton
+import com.yawnandpawn.app.ui.components.RowIcon
 import com.yawnandpawn.app.ui.components.TabScreen
-import com.yawnandpawn.app.ui.components.ValueEndRow
 import com.yawnandpawn.app.ui.components.glass
+import com.yawnandpawn.app.ui.format.Money
 import com.yawnandpawn.app.ui.format.formatMoney
 import com.yawnandpawn.app.ui.resources.Res
-import com.yawnandpawn.app.ui.resources.nav_progress
-import com.yawnandpawn.app.ui.resources.progress_average_time
+import com.yawnandpawn.app.ui.resources.home_streak_day
+import com.yawnandpawn.app.ui.resources.home_streak_days
 import com.yawnandpawn.app.ui.resources.progress_best_streak
 import com.yawnandpawn.app.ui.resources.progress_current_streak
-import com.yawnandpawn.app.ui.resources.progress_empty
-import com.yawnandpawn.app.ui.resources.progress_export
-import com.yawnandpawn.app.ui.resources.progress_export_empty
+import com.yawnandpawn.app.ui.resources.progress_insight_title
+import com.yawnandpawn.app.ui.resources.progress_insight_weekdays
+import com.yawnandpawn.app.ui.resources.progress_insight_weekends
 import com.yawnandpawn.app.ui.resources.progress_minutes
-import com.yawnandpawn.app.ui.resources.progress_money_all
 import com.yawnandpawn.app.ui.resources.progress_money_month
 import com.yawnandpawn.app.ui.resources.progress_money_title
-import com.yawnandpawn.app.ui.resources.progress_money_week
-import com.yawnandpawn.app.ui.resources.progress_no_mornings
-import com.yawnandpawn.app.ui.resources.progress_on_time_30
-import com.yawnandpawn.app.ui.resources.progress_on_time_7
 import com.yawnandpawn.app.ui.resources.progress_percent
+import com.yawnandpawn.app.ui.resources.progress_streak_keep_going
+import com.yawnandpawn.app.ui.resources.progress_tile_on_time
+import com.yawnandpawn.app.ui.resources.progress_tile_snoozes
+import com.yawnandpawn.app.ui.resources.progress_tile_to_get_up
 import com.yawnandpawn.app.ui.resources.progress_under_minute
 import com.yawnandpawn.app.ui.resources.purchase_history_title
+import com.yawnandpawn.app.ui.resources.symbol_lightbulb
+import com.yawnandpawn.app.ui.resources.symbol_snooze
+import com.yawnandpawn.app.ui.resources.symbol_timer
+import com.yawnandpawn.app.ui.resources.symbol_wb_sunny
+import com.yawnandpawn.app.ui.resources.symbol_wb_twilight
 import com.yawnandpawn.app.ui.theme.PpsTheme
+import org.jetbrains.compose.resources.DrawableResource
 import org.jetbrains.compose.resources.stringResource
 
 /**
- * Progress (the Progress tab), stateless: the `stat-tile`s (streaks, on-time rates, average time to up), the weekly
- * snoozes `bar-chart`, the calendar of `calendar-day`s with `outcome-marker`s, "Money paid", and the links to Purchase
- * history and "Export CSV". With no mornings logged: "Your first morning shows up here." and the links, export disabled.
+ * Progress (the Progress tab), stateless, owner redesign 2026-09-30 and notes 2026-10-01 (feedback items 21 and 23), top
+ * to bottom with no heading (the tab names it): the hero ring of the last 30 mornings with the streak in the centre,
+ * three small `stat-tile`s, "Snoozes this week", the accent streak card, the compact month calendar, and "Money paid"
+ * beside the Insight card. No period tabs, no export (owner decision against FR-PRG-6). On entry the cards fade and rise
+ * in sequence, the ring sweeps in, the streak counts up and the bars grow; reduced motion shows the final state at once.
+ * With nothing logged: the empty ring with its prompt, the calendar and Purchase history.
  */
 @Composable
 fun ProgressScreen(
@@ -55,82 +61,111 @@ fun ProgressScreen(
     onIntent: (ProgressIntent) -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    TabScreen(title = stringResource(Res.string.nav_progress), modifier = modifier) {
+    val entered = rememberEntered()
+    TabScreen(title = null, modifier = modifier) {
         val stats = state.stats
-        if (stats == null) {
-            GroupCard {
-                Text(
-                    text = stringResource(Res.string.progress_empty),
-                    modifier = Modifier.padding(PpsTheme.spacing.cardPadding),
-                    style = PpsTheme.typography.body,
-                    color = PpsTheme.colors.text,
+        var order = 0
+        HeroRing(
+            ring = state.ring,
+            today = state.today,
+            streak = stats?.currentStreak,
+            selection = state.selection,
+            entered = entered,
+            onIntent = onIntent,
+            modifier = Modifier.entrance(entered, order++),
+        )
+        if (stats != null) {
+            StatTiles(stats, modifier = Modifier.entrance(entered, order++))
+            if (state.week.isNotEmpty()) {
+                WeekChart(
+                    week = state.week,
+                    today = state.today,
+                    selected = state.selectedDay,
+                    average = state.averageSnoozesPerMorning,
+                    entered = entered,
+                    onIntent = onIntent,
+                    modifier = Modifier.entrance(entered, order++),
                 )
             }
-        } else {
-            StatTiles(stats)
-            if (state.weeks.isNotEmpty()) SnoozesChart(weeks = state.weeks, selected = state.selectedWeek, onIntent = onIntent)
-            state.calendar?.let { OutcomeCalendar(month = it, onIntent = onIntent) }
-            state.money?.let { MoneyCard(it) }
+            StreakCard(current = stats.currentStreak, best = stats.bestStreak, modifier = Modifier.entrance(entered, order++))
         }
-        LinksCard(canExport = state.canExport, onIntent = onIntent)
+        state.calendar?.let {
+            OutcomeCalendar(month = it, selection = state.selection, onIntent = onIntent, modifier = Modifier.entrance(entered, order++))
+        }
+        if (stats != null) {
+            MoneyAndInsight(
+                paid = state.paidThisMonth,
+                insight = state.insight,
+                onIntent = onIntent,
+                modifier = Modifier.entrance(entered, order),
+            )
+        } else {
+            PpsTextButton(
+                text = stringResource(Res.string.purchase_history_title),
+                onClick = { onIntent(ProgressIntent.PurchaseHistoryClicked) },
+                modifier = Modifier.entrance(entered, order),
+            )
+        }
     }
 }
 
+/** A tile with no data yet shows a dash (never an invented number). */
+private const val DASH = "\u2013"
+
+/** Font scale from which the three tiles wrap to 2 + 1 and the side-by-side cards stack. */
+private const val LARGE_FONT_SCALE = 1.5f
+
+@Composable
+private fun isLargeFont(): Boolean = LocalDensity.current.fontScale >= LARGE_FONT_SCALE
+
 /**
- * Two `stat-tile`s per row (a pair whose numbers do not fit half the width splits into one per row): glass, number in
- * `display` (`text`), label in `caption`. A tile without data says "No mornings yet". Not tappable.
+ * Three small `stat-tile`s in one row (2 + 1 at large font scales): an icon (`text-secondary`), the number in `title`
+ * (`text`) and a short label in `caption` ("on time", "to get up", "snoozes"). Not tappable.
  */
 @Composable
-private fun StatTiles(stats: ProgressStats) {
+private fun StatTiles(
+    stats: ProgressStats,
+    modifier: Modifier = Modifier,
+) {
     val average =
         stats.averageMinutesToUp?.let {
             if (it < 1) stringResource(Res.string.progress_under_minute) else stringResource(Res.string.progress_minutes, it)
         }
     val tiles =
         listOf(
-            stringResource(Res.string.progress_current_streak) to stats.currentStreak.toString(),
-            stringResource(Res.string.progress_best_streak) to stats.bestStreak.toString(),
-            stringResource(Res.string.progress_on_time_7) to percentText(stats.onTime7Days),
-            stringResource(Res.string.progress_on_time_30) to percentText(stats.onTime30Days),
-            stringResource(Res.string.progress_average_time) to average,
+            Tile(
+                Res.drawable.symbol_wb_sunny,
+                stats.onTime30Days?.let {
+                    stringResource(Res.string.progress_percent, it)
+                },
+                stringResource(Res.string.progress_tile_on_time),
+            ),
+            Tile(Res.drawable.symbol_timer, average, stringResource(Res.string.progress_tile_to_get_up)),
+            Tile(Res.drawable.symbol_snooze, stats.snoozes30Days.toString(), stringResource(Res.string.progress_tile_snoozes)),
         )
+    val rows = if (isLargeFont()) listOf(tiles.take(2), tiles.drop(2)) else listOf(tiles)
     val spacing = PpsTheme.spacing
-    val display = PpsTheme.typography.display
-    val measurer = rememberTextMeasurer()
-    val density = LocalDensity.current
-    BoxWithConstraints {
-        // Tiles pair up two per row while both numbers fit half the width in `display`; a pair that does not ("100%" on a
-        // 360 dp phone) splits into one per row, so no number wraps or clips.
-        val half = (maxWidth - spacing.space3) / 2 - spacing.cardPadding * 2
-        val fits = { value: String? ->
-            value == null || with(density) {
-                measurer
-                    .measure(value, display)
-                    .size.width
-                    .toDp()
-            } <= half
-        }
-        val rows = tiles.chunked(2).flatMap { pair -> if (pair.all { fits(it.second) }) listOf(pair) else pair.map { listOf(it) } }
-        Column(verticalArrangement = Arrangement.spacedBy(spacing.space3)) {
-            rows.forEach { row ->
-                Row(
-                    modifier = Modifier.fillMaxWidth().height(IntrinsicSize.Min),
-                    horizontalArrangement = Arrangement.spacedBy(spacing.space3),
-                ) {
-                    row.forEach { (label, value) -> StatTile(label = label, value = value, modifier = Modifier.weight(1f).fillMaxHeight()) }
-                }
+    Column(modifier = modifier, verticalArrangement = Arrangement.spacedBy(spacing.space2)) {
+        rows.forEach { row ->
+            Row(
+                modifier = Modifier.fillMaxWidth().height(IntrinsicSize.Min),
+                horizontalArrangement = Arrangement.spacedBy(spacing.space2),
+            ) {
+                row.forEach { tile -> StatTile(tile, modifier = Modifier.weight(1f).fillMaxHeight()) }
             }
         }
     }
 }
 
-@Composable
-private fun percentText(value: Int?): String? = value?.let { stringResource(Res.string.progress_percent, it) }
+private class Tile(
+    val icon: DrawableResource,
+    val value: String?,
+    val label: String,
+)
 
 @Composable
 private fun StatTile(
-    label: String,
-    value: String?,
+    tile: Tile,
     modifier: Modifier = Modifier,
 ) {
     val colors = PpsTheme.colors
@@ -138,45 +173,165 @@ private fun StatTile(
         modifier =
             modifier
                 .glass(PpsTheme.shapes.md)
-                .padding(PpsTheme.spacing.cardPadding)
+                .padding(PpsTheme.spacing.space3)
                 .semantics(mergeDescendants = true) { },
         verticalArrangement = Arrangement.spacedBy(PpsTheme.spacing.space1),
     ) {
-        if (value != null) {
-            Text(text = value, style = PpsTheme.typography.display, color = colors.text)
-        } else {
-            Text(text = stringResource(Res.string.progress_no_mornings), style = PpsTheme.typography.body, color = colors.textSecondary)
-        }
-        Text(text = label, style = PpsTheme.typography.caption, color = colors.textSecondary)
+        RowIcon(icon = tile.icon, tint = colors.textSecondary)
+        Text(
+            text = tile.value ?: DASH,
+            style = PpsTheme.typography.title,
+            color = colors.text,
+        )
+        // Short labels on one line at 100% on 360 dp (owner notes 2026-10-01); only large font scales wrap.
+        Text(text = tile.label, style = PpsTheme.typography.caption, color = colors.textSecondary)
     }
 }
 
-/** "Money paid": this week, this month, all time, in `text` (money is never green or red). */
+/**
+ * The accent streak card: glass with the `glass-accent` tint. "Current streak" with the number in `display`
+ * (`accent-text`, never plain accent on the tint) and "days on time", "Best streak" with its number, and "Keep it going."
+ * while a streak runs. Stacks at large font scales.
+ */
 @Composable
-private fun MoneyCard(money: MoneyPaid) {
-    GroupCard(title = stringResource(Res.string.progress_money_title)) {
-        ValueEndRow(label = stringResource(Res.string.progress_money_week), value = formatMoney(money.thisWeek))
-        GroupDivider()
-        ValueEndRow(label = stringResource(Res.string.progress_money_month), value = formatMoney(money.thisMonth))
-        GroupDivider()
-        ValueEndRow(label = stringResource(Res.string.progress_money_all), value = formatMoney(money.allTime))
-    }
-}
-
-/** Purchase history and "Export CSV" (disabled with "Nothing to export yet." while nothing is logged). */
-@Composable
-private fun LinksCard(
-    canExport: Boolean,
-    onIntent: (ProgressIntent) -> Unit,
+private fun StreakCard(
+    current: Int,
+    best: Int,
+    modifier: Modifier = Modifier,
 ) {
-    GroupCard {
-        NavRow(label = stringResource(Res.string.purchase_history_title), onClick = { onIntent(ProgressIntent.PurchaseHistoryClicked) })
-        GroupDivider()
-        NavRow(
-            label = stringResource(Res.string.progress_export),
-            onClick = { onIntent(ProgressIntent.ExportClicked) },
-            value = if (canExport) null else stringResource(Res.string.progress_export_empty),
-            enabled = canExport,
+    val colors = PpsTheme.colors
+    val spacing = PpsTheme.spacing
+    val currentPart = @Composable {
+        Column {
+            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(spacing.space2)) {
+                RowIcon(icon = Res.drawable.symbol_wb_twilight, tint = colors.accentText)
+                Text(
+                    text = stringResource(Res.string.progress_current_streak),
+                    style = PpsTheme.typography.caption,
+                    color = colors.textSecondary,
+                )
+            }
+            Row(verticalAlignment = Alignment.Bottom) {
+                Text(text = current.toString(), style = PpsTheme.typography.display, color = colors.accentText)
+                Text(
+                    text = stringResource(if (current == 1) Res.string.home_streak_day else Res.string.home_streak_days),
+                    modifier = Modifier.padding(start = spacing.space2, bottom = spacing.space2),
+                    style = PpsTheme.typography.body,
+                    color = colors.text,
+                )
+            }
+        }
+    }
+    val bestPart = @Composable {
+        Column {
+            Text(text = stringResource(Res.string.progress_best_streak), style = PpsTheme.typography.caption, color = colors.textSecondary)
+            Text(text = best.toString(), style = PpsTheme.typography.headline, color = colors.text)
+        }
+    }
+    Column(
+        modifier =
+            modifier
+                .fillMaxWidth()
+                .glass(PpsTheme.shapes.md, accentTint = true)
+                .padding(spacing.cardPadding)
+                .semantics(mergeDescendants = true) { },
+        verticalArrangement = Arrangement.spacedBy(spacing.space2),
+    ) {
+        if (isLargeFont()) {
+            currentPart()
+            bestPart()
+        } else {
+            Row(verticalAlignment = Alignment.Bottom) {
+                Column(modifier = Modifier.weight(1f)) { currentPart() }
+                bestPart()
+            }
+        }
+        if (current > 0) {
+            Text(
+                text = stringResource(Res.string.progress_streak_keep_going),
+                style = PpsTheme.typography.body,
+                color = colors.textSecondary,
+            )
+        }
+    }
+}
+
+/** "Money paid" (this month's total in `text`, a link to Purchase history) beside the Insight card; stacked at large font. */
+@Composable
+private fun MoneyAndInsight(
+    paid: Money?,
+    insight: Insight?,
+    onIntent: (ProgressIntent) -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    val spacing = PpsTheme.spacing
+    val money = @Composable { modifier: Modifier -> MoneyCard(paid = paid, onIntent = onIntent, modifier = modifier) }
+    val insightCard = @Composable { modifier: Modifier -> insight?.let { InsightCard(it, modifier) } }
+    if (isLargeFont() || insight == null) {
+        Column(modifier = modifier, verticalArrangement = Arrangement.spacedBy(spacing.space3)) {
+            money(Modifier.fillMaxWidth())
+            insightCard(Modifier.fillMaxWidth())
+        }
+    } else {
+        Row(modifier = modifier.fillMaxWidth().height(IntrinsicSize.Min), horizontalArrangement = Arrangement.spacedBy(spacing.space3)) {
+            money(Modifier.weight(1f).fillMaxHeight())
+            insightCard(Modifier.weight(1f).fillMaxHeight())
+        }
+    }
+}
+
+@Composable
+private fun MoneyCard(
+    paid: Money?,
+    onIntent: (ProgressIntent) -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    val colors = PpsTheme.colors
+    Column(
+        modifier = modifier.glass(PpsTheme.shapes.md).padding(start = PpsTheme.spacing.cardPadding, top = PpsTheme.spacing.cardPadding),
+    ) {
+        Column(modifier = Modifier.padding(end = PpsTheme.spacing.cardPadding).semantics(mergeDescendants = true) { }) {
+            Text(text = stringResource(Res.string.progress_money_title), style = PpsTheme.typography.caption, color = colors.textSecondary)
+            paid?.let { Text(text = formatMoney(it), style = PpsTheme.typography.title, color = colors.text) }
+            Text(text = stringResource(Res.string.progress_money_month), style = PpsTheme.typography.caption, color = colors.textSecondary)
+        }
+        PpsTextButton(
+            text = stringResource(Res.string.purchase_history_title),
+            onClick = { onIntent(ProgressIntent.PurchaseHistoryClicked) },
+            modifier = Modifier.padding(end = PpsTheme.spacing.space1),
+        )
+    }
+}
+
+/** The Insight card: a lightbulb, "Insight" and one short line from the user's own data. */
+@Composable
+private fun InsightCard(
+    insight: Insight,
+    modifier: Modifier = Modifier,
+) {
+    val colors = PpsTheme.colors
+    Column(
+        modifier = modifier.glass(PpsTheme.shapes.md).padding(PpsTheme.spacing.cardPadding).semantics(mergeDescendants = true) { },
+        verticalArrangement = Arrangement.spacedBy(PpsTheme.spacing.space1),
+    ) {
+        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(PpsTheme.spacing.space2)) {
+            RowIcon(icon = Res.drawable.symbol_lightbulb, tint = colors.textSecondary)
+            Text(
+                text = stringResource(Res.string.progress_insight_title),
+                style = PpsTheme.typography.caption,
+                color = colors.textSecondary,
+            )
+        }
+        Text(
+            text =
+                stringResource(
+                    when (insight) {
+                        Insight.FastestOnWeekdays -> Res.string.progress_insight_weekdays
+                        Insight.FastestOnWeekends -> Res.string.progress_insight_weekends
+                    },
+                ),
+            style = PpsTheme.typography.body,
+            color = colors.text,
         )
     }
 }

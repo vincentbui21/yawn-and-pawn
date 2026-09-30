@@ -47,6 +47,7 @@ object PpsTokens {
         val glass = Color(0xB8FFFFFF)
         val glassStrong = Color(0xEBFFFFFF)
         val glassEdge = Color(0x1A1A1714)
+        val glassAccent = Color(0x1FD96F14)
     }
 
     /** Dark colour set. */
@@ -74,6 +75,7 @@ object PpsTokens {
         val glass = Color(0xB81A1B1E)
         val glassStrong = Color(0xEB1A1B1E)
         val glassEdge = Color(0x1AF2EFEA)
+        val glassAccent = Color(0x1FF5A04E)
     }
 
     /** Sunrise colour set. */
@@ -98,6 +100,7 @@ object PpsTokens {
         val glass = Color(0xB8FFFFFF)
         val glassStrong = Color(0xEBFFFFFF)
         val glassEdge = Color(0x1A1A1714)
+        val glassAccent = Color(0x1FD96F14)
     }
 
     /** Every colour token by its DESIGN.md key. */
@@ -126,6 +129,7 @@ object PpsTokens {
             "glass" to Light.glass,
             "glass-strong" to Light.glassStrong,
             "glass-edge" to Light.glassEdge,
+            "glass-accent" to Light.glassAccent,
             "bg-dark" to Dark.bg,
             "surface-dark" to Dark.surface,
             "surface-variant-dark" to Dark.surfaceVariant,
@@ -149,6 +153,7 @@ object PpsTokens {
             "glass-dark" to Dark.glass,
             "glass-strong-dark" to Dark.glassStrong,
             "glass-edge-dark" to Dark.glassEdge,
+            "glass-accent-dark" to Dark.glassAccent,
             "bg-sunrise" to Sunrise.bg,
             "surface-sunrise" to Sunrise.surface,
             "surface-variant-sunrise" to Sunrise.surfaceVariant,
@@ -169,6 +174,7 @@ object PpsTokens {
             "glass-sunrise" to Sunrise.glass,
             "glass-strong-sunrise" to Sunrise.glassStrong,
             "glass-edge-sunrise" to Sunrise.glassEdge,
+            "glass-accent-sunrise" to Sunrise.glassAccent,
         )
 
     /** Type ramp (DESIGN.md `typography`). */

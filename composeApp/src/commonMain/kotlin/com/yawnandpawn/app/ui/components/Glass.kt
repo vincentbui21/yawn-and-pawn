@@ -93,13 +93,15 @@ fun Modifier.glassSource(backdrop: GlassBackdrop): Modifier =
 /**
  * A glass surface in [shape]: the translucent fill ([strong] = `glass-strong` for bars and sheets over moving content,
  * otherwise `glass`) with a `glass-edge` hairline. With a [backdrop] and Android 12+, the content beneath is drawn
- * blurred by `glass-blur` behind the fill; below API 31 the fill alone.
+ * blurred by `glass-blur` behind the fill; below API 31 the fill alone. [accentTint] adds the `glass-accent` tint over the
+ * fill (one highlighted card per screen; accent-text, not accent, on it: DESIGN.md contrast table).
  */
 @Composable
 fun Modifier.glass(
     shape: Shape,
     strong: Boolean = false,
     backdrop: GlassBackdrop? = null,
+    accentTint: Boolean = false,
 ): Modifier {
     val colors = PpsTheme.colors
     val spacing = PpsTheme.spacing
@@ -125,6 +127,7 @@ fun Modifier.glass(
         .clip(shape)
         .then(blurred)
         .background(fill, shape)
+        .then(if (accentTint) Modifier.background(colors.glassAccent, shape) else Modifier)
         .border(spacing.hairline, colors.glassEdge, shape)
 }
 

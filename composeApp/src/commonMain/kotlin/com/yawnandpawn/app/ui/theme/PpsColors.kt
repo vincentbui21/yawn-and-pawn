@@ -40,6 +40,8 @@ data class PpsColors(
     val glassStrong: Color,
     /** The faint hairline edge of every glass surface (`glass-edge`, decorative). */
     val glassEdge: Color,
+    /** Accent tint drawn over [glass] for the one highlighted card (the Progress streak card, `glass-accent`). */
+    val glassAccent: Color,
     val isDark: Boolean,
 )
 
@@ -69,6 +71,7 @@ val LightPpsColors: PpsColors =
             glass = glass,
             glassStrong = glassStrong,
             glassEdge = glassEdge,
+            glassAccent = glassAccent,
             isDark = false,
         )
     }
@@ -99,6 +102,7 @@ val DarkPpsColors: PpsColors =
             glass = glass,
             glassStrong = glassStrong,
             glassEdge = glassEdge,
+            glassAccent = glassAccent,
             isDark = true,
         )
     }
@@ -134,6 +138,7 @@ val SunrisePpsColors: PpsColors =
             glass = glass,
             glassStrong = glassStrong,
             glassEdge = glassEdge,
+            glassAccent = glassAccent,
             isDark = false,
         )
     }

@@ -47,7 +47,6 @@ Every other round 2 string is an EXPERIENCE.md key string or long-form paragraph
 
 | Key | Draft | Screen | Note |
 |---|---|---|---|
-| `progress_chart_title` | Snoozes per week | Progress, title above the `bar-chart` | The chart itself says "Lower is better." (key string). |
 | `day_detail_rings` | Rings | Day detail, session card row | How many times the alarm rang (first ring plus re-rings). |
 | `day_detail_snoozes` | Snoozes | Day detail, session card row | |
 | `day_detail_paid` | Paid | Day detail, session card row | Shown only when something was charged. |
@@ -67,6 +66,33 @@ Layout choices to look at (no new copy):
 - Reliability checklist: the "Test alarm" row has no "Fix"; it shows a hollow ring until a test has rung, and "Ring a test alarm" below the card rings it.
 - The calendar card is 12 dp from the screen edges (the other cards 20 dp) so seven 48 dp days fit the 360 dp phone.
 - Links (Privacy policy, Terms, Support) open nothing in the preview; tapping one shows the "No browser found." snackbar, tap again to hide it.
+
+## Progress redesign (owner feedback item 21, 2026-09-30)
+
+Owner-given in item 21, so nothing to approve: "day streak" · "Snoozes this week" · "Keep it going." · "Insight" · "You get up fastest on weekdays.". The Round 2 draft "Snoozes per week" is gone with the 8-week chart, and so are "On time · 7 days", "This week" and "All time" on this screen.
+
+| Key | Draft | Screen | Note |
+|---|---|---|---|
+| `progress_ring_of` | / {n} | Progress ring, after the streak number | "5 / 30": the streak out of the 30 mornings shown. |
+| `progress_day_today` | today | Ring dot (TalkBack), appended to today's dot | "Monday 28, On time, today". |
+| `progress_chart_average` | Average {n} snoozes a morning. | "Snoozes this week", summary line | {n} with one decimal in the phone's locale ("0.4"), followed by the key string "Lower is better.". |
+| `progress_bar_day` / `progress_bar_day_one` | {weekday}, {n} snoozes / {weekday}, 1 snooze | Chart bar (TalkBack) | Replaces "Week of {date}, ..." now that bars are days. |
+| `progress_insight_weekends` | You get up fastest on weekends. | Insight card | The other half of the owner's template. |
+
+Owner notes 2026-10-01 (item 23), owner-given so nothing to approve: tile labels "on time" · "to get up" · "snoozes"; the legend, its "Today" label and "Export CSV" / "Nothing to export yet." are gone.
+
+| Key | Draft | Screen | Note |
+|---|---|---|---|
+| `progress_chip` | {weekday} {day} · {outcome} | Label chip of a tapped ring dot or calendar day | e.g. "Tue 23 · Snoozed", from the owner's example; weekday from the phone's locale. TalkBack reads the full "Tuesday 23, Snoozed". |
+| `progress_bar_selected` | {weekday} · {n snoozes} | "Snoozes this week" header when a bar is tapped | e.g. "Wed · 2 snoozes"; with no bar tapped the header shows the week total ("3 snoozes"). |
+
+Layout choices to look at:
+
+- A tile without data (only before the first morning, which shows the empty ring instead) shows a dash, not "No mornings yet".
+- The fallback `alt_route` badge is no longer drawn on ring and calendar dots (no legend to explain it); Day detail and TalkBack still say "Fallback check used".
+- The streak card reuses the Home label "days on time" next to the number; the ring centre uses the owner's "day streak".
+- Ring dots can be tapped but are not separate TalkBack buttons (30 × 48 dp does not fit a ring); TalkBack reads each dot and opens a day from the calendar instead.
+- The accent tint is a new token, `glass-accent` (12% accent over glass), for the streak card only; plain accent fails on it, so the number and icon use `accent-text`.
 
 ## Not strings, but worth a look
 

@@ -7,11 +7,14 @@ import com.yawnandpawn.app.ui.daydetail.SessionDetail
 import com.yawnandpawn.app.ui.format.Money
 import com.yawnandpawn.app.ui.progress.CalendarDay
 import com.yawnandpawn.app.ui.progress.CalendarMonth
-import com.yawnandpawn.app.ui.progress.MoneyPaid
+import com.yawnandpawn.app.ui.progress.DaySelection
+import com.yawnandpawn.app.ui.progress.DaySnoozes
+import com.yawnandpawn.app.ui.progress.Insight
 import com.yawnandpawn.app.ui.progress.Outcome
 import com.yawnandpawn.app.ui.progress.ProgressStats
 import com.yawnandpawn.app.ui.progress.ProgressUiState
-import com.yawnandpawn.app.ui.progress.WeekSnoozes
+import com.yawnandpawn.app.ui.progress.RING_DAYS
+import com.yawnandpawn.app.ui.progress.RingDay
 import com.yawnandpawn.app.ui.purchases.Purchase
 import com.yawnandpawn.app.ui.purchases.PurchaseHistoryUiState
 import com.yawnandpawn.app.ui.reliability.ChecklistItem
@@ -21,12 +24,14 @@ import com.yawnandpawn.app.ui.reliability.ReliabilityUiState
 import com.yawnandpawn.app.ui.settings.SettingsPane
 import com.yawnandpawn.app.ui.settings.SettingsUiState
 import com.yawnandpawn.app.ui.settings.WeakeningNote
+import kotlinx.datetime.DateTimeUnit
 import kotlinx.datetime.LocalDate
 import kotlinx.datetime.LocalTime
+import kotlinx.datetime.minus
 
 /**
  * Fake data for design preview round 2 (progress and settings), from EXPERIENCE.md Key Flows F6, F7 and F9: Linh's
- * September with a 12-day streak, a few snoozes, a missed morning, a fallback check and a test alarm. Prices go through
+ * September with a 5-day streak (best 12), a few snoozes, a missed morning, a fallback check and a test alarm. Prices go through
  * [PreviewSamples.price], in the phone's currency.
  */
 object PreviewProgressSamples {
@@ -53,10 +58,10 @@ object PreviewProgressSamples {
             add(CalendarDay(sep(12), Outcome.Test))
             for (day in 14..18) add(CalendarDay(sep(day), Outcome.OnTime))
             add(CalendarDay(sep(19), Outcome.Skipped))
-            add(CalendarDay(sep(21), Outcome.OnTime))
-            add(CalendarDay(sep(22), Outcome.OnTime, sessions = 2))
-            for (day in 23..25) add(CalendarDay(sep(day), Outcome.OnTime))
-            add(CalendarDay(sep(28), Outcome.OnTime))
+            add(CalendarDay(sep(21), Outcome.OnTime, sessions = 2))
+            add(CalendarDay(sep(22), Outcome.Snoozed))
+            add(CalendarDay(sep(23), Outcome.Snoozed))
+            for (day in 24..28) add(CalendarDay(sep(day), Outcome.OnTime))
         }
 
     val september = CalendarMonth(firstDay = sep(1), days = septemberDays, today = today, hasPrevious = true, hasNext = false)
@@ -74,31 +79,44 @@ object PreviewProgressSamples {
             hasNext = true,
         )
 
-    private val weeks =
-        listOf(
-            WeekSnoozes(LocalDate(2026, 8, 3), 6),
-            WeekSnoozes(LocalDate(2026, 8, 10), 4),
-            WeekSnoozes(LocalDate(2026, 8, 17), 5),
-            WeekSnoozes(LocalDate(2026, 8, 24), 3),
-            WeekSnoozes(LocalDate(2026, 8, 31), 1),
-            WeekSnoozes(sep(7), 2),
-            WeekSnoozes(sep(14), 0),
-            WeekSnoozes(sep(21), 0),
-        )
+    /** The last 30 mornings, Aug 30 to today, oldest first, from the two months' calendars. */
+    private val ring: List<RingDay> =
+        (RING_DAYS - 1 downTo 0).map { back ->
+            val date = today.minus(back, DateTimeUnit.DAY)
+            val day = (august.days + septemberDays).firstOrNull { it.date == date }
+            RingDay(date, day?.outcome, day?.fallbackUsed ?: false)
+        }
+
+    /** Tue 22 to Mon 28: two snoozed mornings, then five on time. */
+    private val week =
+        listOf(1, 2, 0, 0, 0, 0, 0).mapIndexed { index, snoozes -> DaySnoozes(sep(FIRST_OF_WEEK + index), snoozes) }
 
     val progress =
         ProgressUiState(
-            stats = ProgressStats(currentStreak = 12, bestStreak = 12, onTime7Days = 100, onTime30Days = 86, averageMinutesToUp = 3),
-            weeks = weeks,
+            today = today,
+            ring = ring,
+            stats = ProgressStats(currentStreak = 5, bestStreak = 12, onTime30Days = 80, averageMinutesToUp = 3, snoozes30Days = 8),
+            week = week,
+            averageSnoozesPerMorning = 0.4,
             calendar = september,
-            money = MoneyPaid(thisWeek = price(0), thisMonth = price(3), allTime = price(21)),
-            canExport = true,
+            paidThisMonth = price(9),
+            insight = Insight.FastestOnWeekdays,
         )
 
-    /** A bar tapped: the first week, 6 snoozes. */
-    val progressWeekSelected = progress.copy(selectedWeek = 0)
+    /** A bar tapped: Wednesday 23, 2 snoozes. */
+    val progressDaySelected = progress.copy(selectedDay = 1)
 
-    val progressEmpty = ProgressUiState()
+    /** A ring dot tapped once: its label chip under the ring. */
+    val progressDotChip = progress.copy(selection = DaySelection(sep(SNOOZED_DAY), Outcome.Snoozed, inCalendar = false))
+
+    /** A calendar day tapped once: its label chip under the calendar. */
+    val progressCalendarChip = progress.copy(selection = DaySelection(sep(SNOOZED_DAY), Outcome.Snoozed, inCalendar = true))
+
+    val progressEmpty =
+        ProgressUiState(
+            today = today,
+            calendar = september.copy(days = emptyList(), hasPrevious = false),
+        )
 
     // Day detail ---------------------------------------------------------------------------------------------------
 
@@ -145,7 +163,7 @@ object PreviewProgressSamples {
 
     val dayTwoSessions =
         DayDetailUiState(
-            date = sep(22),
+            date = sep(21),
             sessions =
                 listOf(
                     SessionDetail(LocalTime(5, 45), "Early shift", Outcome.OnTime, checks = listOf(CheckType.Math), minutesToUp = 1),
@@ -164,13 +182,27 @@ object PreviewProgressSamples {
 
     val daySkipped = DayDetailUiState(date = sep(19), sessions = listOf(SessionDetail(LocalTime(9, 0), null, Outcome.Skipped)))
 
-    /** The Day detail for a tapped calendar day: a sample when there is one, otherwise a plain on-time morning. */
-    fun dayDetail(date: LocalDate): DayDetailUiState =
-        listOf(daySnoozed, dayFallback, dayTwoSessions, dayMissed, dayTest, daySkipped).firstOrNull { it.date == date }
-            ?: DayDetailUiState(
-                date = date,
-                sessions = listOf(SessionDetail(standUp, "Stand-up", Outcome.OnTime, checks = listOf(CheckType.Math), minutesToUp = 3)),
+    /**
+     * The Day detail for a tapped ring dot or calendar day: a sample when there is one, otherwise a morning with that
+     * day's outcome (a snoozed one paid one snooze per snooze of its bar).
+     */
+    fun dayDetail(date: LocalDate): DayDetailUiState {
+        listOf(daySnoozed, dayFallback, dayTwoSessions, dayMissed, dayTest, daySkipped).firstOrNull { it.date == date }?.let { return it }
+        val outcome = (august.days + septemberDays).firstOrNull { it.date == date }?.outcome ?: Outcome.OnTime
+        val snoozes = if (outcome == Outcome.Snoozed) (week.firstOrNull { it.date == date }?.snoozes ?: 1).coerceAtLeast(1) else 0
+        val session =
+            SessionDetail(
+                standUp,
+                "Stand-up",
+                outcome,
+                rings = snoozes + 1,
+                snoozes = snoozes,
+                paid = if (snoozes > 0) price((1..snoozes).sum()) else null,
+                checks = listOf(CheckType.Math),
+                minutesToUp = if (outcome == Outcome.Snoozed) SNOOZED_MINUTES * snoozes else 3,
             )
+        return DayDetailUiState(date = date, sessions = listOf(session))
+    }
 
     // Purchase history ---------------------------------------------------------------------------------------------
 
@@ -178,6 +210,9 @@ object PreviewProgressSamples {
         PurchaseHistoryUiState(
             purchases =
                 listOf(
+                    Purchase(sep(23), standUp, 2, price(2)),
+                    Purchase(sep(23), standUp, 1, price(1)),
+                    Purchase(sep(22), standUp, 1, price(1)),
                     Purchase(sep(10), standUp, 1, price(1)),
                     Purchase(sep(2), standUp, 2, price(2)),
                     Purchase(sep(2), standUp, 1, price(1)),
@@ -245,6 +280,15 @@ object PreviewProgressSamples {
     private const val CAP_MULTIPLE = 15
 
     private const val YEAR = 2026
+
+    /** Wednesday 23: two snoozes. */
+    private const val SNOOZED_DAY = 23
+
+    /** The first day of "Snoozes this week" (Tuesday 22). */
+    private const val FIRST_OF_WEEK = 22
+
+    /** Each snooze adds its 9 minutes to the time to up. */
+    private const val SNOOZED_MINUTES = 9
 
     private const val SEPTEMBER = 9
 

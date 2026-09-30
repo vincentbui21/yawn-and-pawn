@@ -1,5 +1,6 @@
 package com.yawnandpawn.app.ui.progress
 
+import androidx.compose.animation.AnimatedContent
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -7,18 +8,16 @@ import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
-import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.wrapContentWidth
-import androidx.compose.foundation.shape.ZeroCornerSize
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.IconButtonDefaults
@@ -27,9 +26,9 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.layout
-import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.semantics.contentDescription
@@ -39,24 +38,23 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
-import com.yawnandpawn.app.ui.components.GroupCard
+import com.yawnandpawn.app.ui.components.glass
+import com.yawnandpawn.app.ui.components.subScreenTransition
 import com.yawnandpawn.app.ui.format.DateStyle
 import com.yawnandpawn.app.ui.format.DayNameStyle
 import com.yawnandpawn.app.ui.format.WeekOrder
 import com.yawnandpawn.app.ui.format.dayName
 import com.yawnandpawn.app.ui.format.formatDate
+import com.yawnandpawn.app.ui.format.formatOneDecimal
 import com.yawnandpawn.app.ui.resources.Res
-import com.yawnandpawn.app.ui.resources.day_detail_fallback
+import com.yawnandpawn.app.ui.resources.progress_bar_day
+import com.yawnandpawn.app.ui.resources.progress_bar_day_one
+import com.yawnandpawn.app.ui.resources.progress_bar_selected
 import com.yawnandpawn.app.ui.resources.progress_bar_snooze_one
 import com.yawnandpawn.app.ui.resources.progress_bar_snoozes
-import com.yawnandpawn.app.ui.resources.progress_bar_week
-import com.yawnandpawn.app.ui.resources.progress_bar_week_one
+import com.yawnandpawn.app.ui.resources.progress_chart_average
 import com.yawnandpawn.app.ui.resources.progress_chart_caption
 import com.yawnandpawn.app.ui.resources.progress_chart_title
-import com.yawnandpawn.app.ui.resources.progress_day_fallback
-import com.yawnandpawn.app.ui.resources.progress_day_no_alarm
-import com.yawnandpawn.app.ui.resources.progress_day_outcome
-import com.yawnandpawn.app.ui.resources.progress_day_sessions
 import com.yawnandpawn.app.ui.resources.progress_next_month
 import com.yawnandpawn.app.ui.resources.progress_previous_month
 import com.yawnandpawn.app.ui.resources.symbol_chevron_left
@@ -69,93 +67,134 @@ import org.jetbrains.compose.resources.painterResource
 import org.jetbrains.compose.resources.stringResource
 
 /**
- * The snoozes `bar-chart`: one bar per week (the last 8), in `snoozed` with `rounded.sm` top corners on an `outline`
- * baseline, week labels in `text-secondary`, caption "Lower is better.". Tapping anywhere over a bar shows its number
- * ("3 snoozes") above the chart. Bars are values, not buttons: TalkBack reads each as "Week of 9/22, 3 snoozes".
+ * "Snoozes this week" (owner decision 2026-09-30): the last 7 days as rounded bars in `snoozed` (a day without snoozes is
+ * a short `outline` stub), the weekday initials under them with today in an accent pill, the tapped day's number at the
+ * top ("2 snoozes") and a one-line average summary with "Lower is better.". Tapping anywhere over a bar selects it; bars
+ * are values, not buttons: TalkBack reads each as "Wednesday, 2 snoozes".
  */
 @Composable
-internal fun SnoozesChart(
-    weeks: List<WeekSnoozes>,
+internal fun WeekChart(
+    week: List<DaySnoozes>,
+    today: LocalDate?,
     selected: Int?,
+    average: Double?,
+    entered: Boolean,
     onIntent: (ProgressIntent) -> Unit,
+    modifier: Modifier = Modifier,
 ) {
     val colors = PpsTheme.colors
     val spacing = PpsTheme.spacing
-    val shown = (selected ?: weeks.lastIndex).coerceIn(weeks.indices)
-    // At large font scales every other week label is left out so none clips (the bars and TalkBack keep all weeks).
-    val labelStep = if (LocalDensity.current.fontScale > LABEL_FONT_SCALE) 2 else 1
-    GroupCard(title = stringResource(Res.string.progress_chart_title)) {
-        Column(modifier = Modifier.padding(spacing.cardPadding), verticalArrangement = Arrangement.spacedBy(spacing.space2)) {
-            Text(text = snoozeCount(weeks[shown].snoozes), style = PpsTheme.typography.title, color = colors.text)
-            Bars(weeks = weeks, onIntent = onIntent)
-            Box(modifier = Modifier.fillMaxWidth().height(spacing.hairline).background(colors.outline))
-            Row(modifier = Modifier.fillMaxWidth().clearAndSetSemantics { }) {
-                weeks.forEachIndexed { index, week ->
-                    val showLabel = (weeks.lastIndex - index) % labelStep == 0
-                    // Centred under its bar at its full width: a label wider than its bar spills over the empty
-                    // neighbouring slots (at large font scales only every other week has a label), never clipped.
-                    Box(modifier = Modifier.weight(1f), contentAlignment = Alignment.Center) {
-                        if (showLabel) {
-                            Text(
-                                text = formatDate(week.weekStart, DateStyle.Numeric),
-                                modifier = Modifier.wrapContentWidth(unbounded = true),
-                                style = PpsTheme.typography.caption,
-                                fontWeight = if (index == shown) FontWeight.SemiBold else null,
-                                color = if (index == shown) colors.text else colors.textSecondary,
-                                maxLines = 1,
-                                softWrap = false,
-                            )
-                        }
-                    }
+    val shown = (selected ?: week.lastIndex).coerceIn(week.indices)
+    Column(
+        modifier = modifier.fillMaxWidth().glass(PpsTheme.shapes.md).padding(spacing.cardPadding),
+        verticalArrangement = Arrangement.spacedBy(spacing.space3),
+    ) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Text(
+                text = stringResource(Res.string.progress_chart_title),
+                modifier = Modifier.weight(1f).padding(end = spacing.space2).semantics { heading() },
+                style = PpsTheme.typography.title,
+                color = colors.text,
+            )
+            // No bar tapped: the week's total; a tapped bar: that day ("Wed · 2 snoozes").
+            val headerValue =
+                if (selected == null) {
+                    snoozeCount(week.sumOf { it.snoozes })
+                } else {
+                    stringResource(
+                        Res.string.progress_bar_selected,
+                        dayName(week[shown].date.dayOfWeek, DayNameStyle.Short),
+                        snoozeCount(week[shown].snoozes),
+                    )
+                }
+            Text(text = headerValue, style = PpsTheme.typography.label, color = colors.text)
+        }
+        Bars(week = week, entered = entered, onIntent = onIntent)
+        Row(modifier = Modifier.fillMaxWidth().clearAndSetSemantics { }) {
+            week.forEachIndexed { index, day ->
+                Box(modifier = Modifier.weight(1f), contentAlignment = Alignment.Center) {
+                    DayInitial(
+                        text = dayName(day.date.dayOfWeek, DayNameStyle.Narrow),
+                        today = day.date == today,
+                        selected = index == shown,
+                    )
                 }
             }
-            Text(
-                text = stringResource(Res.string.progress_chart_caption),
-                style = PpsTheme.typography.caption,
-                color = colors.textSecondary,
-            )
         }
+        val summary =
+            listOfNotNull(
+                average?.let { stringResource(Res.string.progress_chart_average, formatOneDecimal(it)) },
+                stringResource(Res.string.progress_chart_caption),
+            ).joinToString(" ")
+        Text(text = summary, style = PpsTheme.typography.caption, color = colors.textSecondary)
     }
 }
 
-/** The bars, bottom-aligned; a tap anywhere over a bar selects its week. */
+/** A weekday initial or date number: in an outlined accent pill for today (owner notes 2026-10-01); bold when selected. */
+@Composable
+private fun DayInitial(
+    text: String,
+    today: Boolean,
+    selected: Boolean,
+) {
+    val colors = PpsTheme.colors
+    Text(
+        text = text,
+        modifier =
+            Modifier
+                .widthIn(min = PILL_WIDTH)
+                .then(if (today) Modifier.border(TODAY_RING, colors.accent, PpsTheme.shapes.full) else Modifier)
+                .padding(horizontal = PpsTheme.spacing.space1, vertical = PILL_VERTICAL),
+        style = PpsTheme.typography.caption,
+        fontWeight = if (today || selected) FontWeight.SemiBold else null,
+        color =
+            if (today || selected) colors.text else colors.textSecondary,
+        textAlign = TextAlign.Center,
+        maxLines = 1,
+    )
+}
+
+/** The bars, bottom-aligned; a tap anywhere over a bar selects its day. */
 @Composable
 private fun Bars(
-    weeks: List<WeekSnoozes>,
+    week: List<DaySnoozes>,
+    entered: Boolean,
     onIntent: (ProgressIntent) -> Unit,
 ) {
     val colors = PpsTheme.colors
-    val spacing = PpsTheme.spacing
-    val max = weeks.maxOf { it.snoozes }.coerceAtLeast(1)
+    val max = week.maxOf { it.snoozes }.coerceAtLeast(1)
     Row(
         modifier =
             Modifier
                 .fillMaxWidth()
                 .height(CHART_HEIGHT)
-                .pointerInput(weeks.size) {
+                .pointerInput(week.size) {
                     detectTapGestures { offset ->
-                        val index = (offset.x / (size.width.toFloat() / weeks.size)).toInt().coerceIn(weeks.indices)
-                        onIntent(ProgressIntent.WeekTapped(index))
+                        val index = (offset.x / (size.width.toFloat() / week.size)).toInt().coerceIn(week.indices)
+                        onIntent(ProgressIntent.DayBarTapped(index))
                     }
                 },
         verticalAlignment = Alignment.Bottom,
     ) {
-        weeks.forEach { week ->
-            val description = weekDescription(week)
+        week.forEachIndexed { index, day ->
+            val description = barDescription(day)
+            // The bars grow from the bottom on entry, one after the other.
+            val grow = entranceProgress(entered, delayMillis = BAR_DELAY_MILLIS + index * BAR_STAGGER_MILLIS)
             Box(
                 modifier = Modifier.weight(1f).fillMaxHeight().semantics { contentDescription = description },
                 contentAlignment = Alignment.BottomCenter,
             ) {
-                if (week.snoozes > 0) {
+                val bar = Modifier.width(BAR_WIDTH).clip(PpsTheme.shapes.full)
+                if (day.snoozes > 0) {
                     Box(
                         modifier =
-                            Modifier
-                                .padding(horizontal = spacing.space2)
-                                .fillMaxWidth()
-                                .fillMaxHeight(week.snoozes.toFloat() / max)
-                                .clip(PpsTheme.shapes.sm.copy(bottomStart = ZeroCornerSize, bottomEnd = ZeroCornerSize))
-                                .background(colors.snoozed),
+                            bar
+                                .fillMaxHeight(
+                                    (day.snoozes.toFloat() / max * grow).coerceAtLeast(MIN_FRACTION),
+                                ).background(colors.snoozed),
                     )
+                } else {
+                    Box(modifier = bar.height(STUB_HEIGHT).graphicsLayer { alpha = grow }.background(colors.outline))
                 }
             }
         }
@@ -167,56 +206,89 @@ private fun snoozeCount(n: Int): String =
     if (n == 1) stringResource(Res.string.progress_bar_snooze_one) else stringResource(Res.string.progress_bar_snoozes, n)
 
 @Composable
-private fun weekDescription(week: WeekSnoozes): String {
-    val date = formatDate(week.weekStart, DateStyle.DayMonth)
-    return if (week.snoozes == 1) {
-        stringResource(Res.string.progress_bar_week_one, date)
+private fun barDescription(day: DaySnoozes): String {
+    val weekday = dayName(day.date.dayOfWeek, DayNameStyle.Full)
+    return if (day.snoozes == 1) {
+        stringResource(Res.string.progress_bar_day_one, weekday)
     } else {
-        stringResource(Res.string.progress_bar_week, date, week.snoozes)
+        stringResource(Res.string.progress_bar_day, weekday, day.snoozes)
     }
 }
 
 /**
- * The calendar: month heading with "Previous month" / "Next month", weekday initials, then one 48 dp `calendar-day` per
- * date with its `outcome-marker` (and the `alt_route` badge when a fallback check was used); today has a 1 dp accent
- * ring. A day with a session opens Day detail. Below it, the legend pairs every glyph with its label. The card sits
- * 12 dp from the screen edges instead of 20 so seven 48 dp days fit a 360 dp phone.
+ * The compact month calendar (owner decisions 2026-09-30 and 2026-10-01): month heading between 48 dp "Previous month" /
+ * "Next month", weekday initials, then one 48 dp `calendar-day` per date with its small `outcome-marker` shape under it;
+ * today's date sits in an outlined accent pill. The month slides left or right when it changes. A day with a session is
+ * a button: the first tap shows its label chip under the grid, a second tap or the chip opens Day detail. The card sits
+ * 12 dp from the screen edges so seven 48 dp days fit 360 dp.
  */
 @Composable
 internal fun OutcomeCalendar(
     month: CalendarMonth,
+    selection: DaySelection?,
     onIntent: (ProgressIntent) -> Unit,
+    modifier: Modifier = Modifier,
 ) {
     val spacing = PpsTheme.spacing
-    GroupCard(modifier = Modifier.bleed(spacing.screenMargin - spacing.space3)) {
-        Column(modifier = Modifier.padding(vertical = spacing.space2)) {
-            MonthHeader(month = month, onIntent = onIntent)
-            Row(modifier = Modifier.fillMaxWidth().clearAndSetSemantics { }) {
-                WeekOrder.forEach { day ->
-                    Text(
-                        text = dayName(day, DayNameStyle.Narrow),
-                        modifier = Modifier.weight(1f),
-                        style = PpsTheme.typography.caption,
-                        color = PpsTheme.colors.textSecondary,
-                        textAlign = TextAlign.Center,
-                    )
-                }
+    Column(
+        modifier =
+            modifier
+                .bleed(spacing.screenMargin - spacing.space3)
+                .fillMaxWidth()
+                .glass(PpsTheme.shapes.md)
+                .padding(vertical = spacing.space2),
+    ) {
+        MonthHeader(month = month, onIntent = onIntent)
+        Row(modifier = Modifier.fillMaxWidth().clearAndSetSemantics { }) {
+            WeekOrder.forEach { day ->
+                Text(
+                    text = dayName(day, DayNameStyle.Narrow),
+                    modifier = Modifier.weight(1f),
+                    style = PpsTheme.typography.caption,
+                    color = PpsTheme.colors.textSecondary,
+                    textAlign = TextAlign.Center,
+                )
             }
-            val leading = month.firstDay.dayOfWeek.isoDayNumber - 1
-            val cells = List(leading) { null } + (1..month.length).toList()
-            cells.chunked(DAYS_PER_WEEK).forEach { week ->
-                Row(modifier = Modifier.fillMaxWidth()) {
-                    week.forEach { dayOfMonth ->
-                        if (dayOfMonth == null) {
-                            Spacer(modifier = Modifier.weight(1f))
-                        } else {
-                            DayCell(month = month, dayOfMonth = dayOfMonth, onIntent = onIntent, modifier = Modifier.weight(1f))
-                        }
+        }
+        AnimatedContent(
+            targetState = month,
+            transitionSpec = { subScreenTransition(forward = targetState.firstDay > initialState.firstDay) },
+            contentKey = { it.firstDay },
+            label = "calendar month",
+        ) { shown -> MonthGrid(month = shown, selection = selection, onIntent = onIntent) }
+        DayChip(
+            selection = selection?.takeIf { it.inCalendar },
+            onOpen = { onIntent(ProgressIntent.DayTapped(it.date)) },
+        )
+    }
+}
+
+@Composable
+private fun MonthGrid(
+    month: CalendarMonth,
+    selection: DaySelection?,
+    onIntent: (ProgressIntent) -> Unit,
+) {
+    Column {
+        val leading = month.firstDay.dayOfWeek.isoDayNumber - 1
+        val cells = List(leading) { null } + (1..month.length).toList()
+        cells.chunked(DAYS_PER_WEEK).forEach { week ->
+            Row(modifier = Modifier.fillMaxWidth()) {
+                week.forEach { dayOfMonth ->
+                    if (dayOfMonth == null) {
+                        Spacer(modifier = Modifier.weight(1f))
+                    } else {
+                        DayCell(
+                            month = month,
+                            dayOfMonth = dayOfMonth,
+                            selection = selection,
+                            onIntent = onIntent,
+                            modifier = Modifier.weight(1f),
+                        )
                     }
-                    repeat(DAYS_PER_WEEK - week.size) { Spacer(modifier = Modifier.weight(1f)) }
                 }
+                repeat(DAYS_PER_WEEK - week.size) { Spacer(modifier = Modifier.weight(1f)) }
             }
-            Legend(modifier = Modifier.padding(start = spacing.cardPadding, end = spacing.cardPadding, top = spacing.space3))
         }
     }
 }
@@ -267,90 +339,48 @@ private fun MonthButton(
     }
 }
 
-/** One `calendar-day`: the date in `caption`, its marker below; today ringed in accent. */
+/** One `calendar-day`: the date in `caption` (today in an outlined accent pill), a small marker shape below. */
 @Composable
 private fun DayCell(
     month: CalendarMonth,
     dayOfMonth: Int,
+    selection: DaySelection?,
     onIntent: (ProgressIntent) -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    val colors = PpsTheme.colors
     val date = LocalDate(month.firstDay.year, month.firstDay.month, dayOfMonth)
     val day = month.day(dayOfMonth)
     val description = dayDescription(date, day)
-    val isToday = date == month.today
     Box(
         modifier =
             modifier
                 .heightIn(min = PpsTheme.spacing.targetMin)
                 .then(
                     if (day != null) {
-                        Modifier.clickable(role = Role.Button, onClick = { onIntent(ProgressIntent.DayTapped(date)) })
+                        Modifier.clickable(
+                            role = Role.Button,
+                            onClick = { onIntent(tapIntent(DaySelection(date, day.outcome, inCalendar = true), selection)) },
+                        )
                     } else {
                         Modifier
                     },
                 ).semantics { contentDescription = description },
         contentAlignment = Alignment.Center,
     ) {
+        // The day the chip refers to has a selection ring in `text` (not the accent of today's pill).
+        val isSelected = selection?.inCalendar == true && selection.date == date
         Column(
             modifier =
                 Modifier
                     .clearAndSetSemantics { }
-                    .then(if (isToday) Modifier.border(1.dp, colors.accent, PpsTheme.shapes.md) else Modifier)
-                    .padding(horizontal = PpsTheme.spacing.space1, vertical = PpsTheme.spacing.space1),
+                    .then(if (isSelected) Modifier.border(SELECTED_RING, PpsTheme.colors.text, PpsTheme.shapes.md) else Modifier)
+                    .padding(horizontal = PILL_VERTICAL, vertical = PILL_VERTICAL),
             horizontalAlignment = Alignment.CenterHorizontally,
         ) {
-            Text(
-                text = dayOfMonth.toString(),
-                style = PpsTheme.typography.caption,
-                color = colors.text,
-                textAlign = TextAlign.Center,
-            )
-            Box(modifier = Modifier.size(MARKER_BOX)) {
-                if (day != null) {
-                    OutcomeMarker(day.outcome, modifier = Modifier.align(Alignment.Center))
-                    if (day.fallbackUsed) FallbackBadge(modifier = Modifier.align(Alignment.BottomEnd).offset(x = BADGE_OFFSET))
-                }
+            DayInitial(text = dayOfMonth.toString(), today = date == month.today, selected = isSelected)
+            Box(modifier = Modifier.padding(top = PILL_VERTICAL).size(MARKER)) {
+                if (day != null) OutcomeMarker(day.outcome, modifier = Modifier.align(Alignment.Center), size = MARKER)
             }
-        }
-    }
-}
-
-/** "Tuesday 14, On time" + ", fallback check used" + ", 2 sessions"; a day without a session "Tuesday 14, no alarm". */
-@Composable
-private fun dayDescription(
-    date: LocalDate,
-    day: CalendarDay?,
-): String {
-    val weekday = dayName(date.dayOfWeek, DayNameStyle.Full)
-    if (day == null) return stringResource(Res.string.progress_day_no_alarm, weekday, date.day)
-    val parts =
-        listOfNotNull(
-            stringResource(Res.string.progress_day_outcome, weekday, date.day, day.outcome.label()),
-            if (day.fallbackUsed) stringResource(Res.string.progress_day_fallback) else null,
-            if (day.sessions > 1) stringResource(Res.string.progress_day_sessions, day.sessions) else null,
-        )
-    return parts.joinToString(", ")
-}
-
-/** The legend: every glyph with its label (outcomes never rely on colour), and the fallback badge. */
-@Composable
-private fun Legend(modifier: Modifier = Modifier) {
-    val spacing = PpsTheme.spacing
-    FlowRow(
-        modifier = modifier.fillMaxWidth(),
-        horizontalArrangement = Arrangement.spacedBy(spacing.space4),
-        verticalArrangement = Arrangement.spacedBy(spacing.space2),
-    ) {
-        Outcome.entries.forEach { OutcomeLabel(it) }
-        Row(
-            modifier = Modifier.semantics(mergeDescendants = true) { },
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(spacing.space1),
-        ) {
-            FallbackBadge(size = PpsTheme.spacing.space5)
-            Text(text = stringResource(Res.string.day_detail_fallback), style = PpsTheme.typography.caption, color = PpsTheme.colors.text)
         }
     }
 }
@@ -371,13 +401,30 @@ private fun Modifier.bleed(horizontal: Dp): Modifier =
 
 private const val DAYS_PER_WEEK = 7
 
-/** Above this font scale the chart shows every other week label. */
-private const val LABEL_FONT_SCALE = 1.3f
+private val CHART_HEIGHT = 112.dp
 
-private val CHART_HEIGHT = 120.dp
+private val BAR_WIDTH = 20.dp
 
-/** Room for the 20 dp marker under the date. */
-private val MARKER_BOX = 20.dp
+/** A day without snoozes still shows where its bar would be. */
+private val STUB_HEIGHT = 6.dp
 
-/** The fallback badge overlaps the marker's lower right corner. */
-private val BADGE_OFFSET = 6.dp
+/** The today pill around a weekday initial or date. */
+private val PILL_WIDTH = 28.dp
+
+private val PILL_VERTICAL = 2.dp
+
+/** The compact calendar's outcome glyph. */
+private val MARKER = 14.dp
+
+private val TODAY_RING = 1.5.dp
+
+/** The selected day's ring (`text`). */
+private val SELECTED_RING = 1.5.dp
+
+/** The bars start growing once the cards above have come in. */
+private const val BAR_DELAY_MILLIS = 250
+
+private const val BAR_STAGGER_MILLIS = 60
+
+/** A growing bar never draws thinner than its rounded ends. */
+private const val MIN_FRACTION = 0.01f

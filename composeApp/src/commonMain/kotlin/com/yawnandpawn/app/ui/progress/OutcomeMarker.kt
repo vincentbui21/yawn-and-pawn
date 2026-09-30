@@ -1,14 +1,14 @@
 package com.yawnandpawn.app.ui.progress
 
-import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.background
+import androidx.compose.foundation.border
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.size
 import androidx.compose.material3.Icon
-import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import com.yawnandpawn.app.ui.components.ICON_SIZE
@@ -19,9 +19,6 @@ import com.yawnandpawn.app.ui.resources.outcome_skipped
 import com.yawnandpawn.app.ui.resources.outcome_snoozed
 import com.yawnandpawn.app.ui.resources.outcome_test
 import com.yawnandpawn.app.ui.resources.symbol_alt_route
-import com.yawnandpawn.app.ui.resources.symbol_cancel_fill1
-import com.yawnandpawn.app.ui.resources.symbol_check_circle_fill1
-import com.yawnandpawn.app.ui.resources.symbol_radio_button_unchecked
 import com.yawnandpawn.app.ui.resources.symbol_schedule_fill1
 import com.yawnandpawn.app.ui.theme.PpsTheme
 import org.jetbrains.compose.resources.painterResource
@@ -41,9 +38,10 @@ fun Outcome.label(): String =
     )
 
 /**
- * `outcome-marker`: a distinct glyph per outcome, never colour alone: on time a filled check circle (`success`), snoozed
- * a filled clock (`snoozed`), missed a filled cross circle (`missed`), skipped or test a hollow ring (`outline`).
- * Decorative: the label next to it (legend, Day detail) or the day's TalkBack text says the outcome.
+ * `outcome-marker` (owner decision 2026-10-01, feedback item 23): the outcome carried by its shape as well as its colour,
+ * so no legend is needed: on time a filled dot (`success`), snoozed a dot with a small clock (`snoozed`), missed a hollow
+ * ring (`missed`), skipped or test a small neutral dot (`outline`). Decorative: the day's TalkBack text or the label
+ * next to it says the outcome. [size] is the box; the shapes sit inside it.
  */
 @Composable
 fun OutcomeMarker(
@@ -52,17 +50,34 @@ fun OutcomeMarker(
     size: Dp = ICON_SIZE,
 ) {
     val colors = PpsTheme.colors
-    val (icon, tint) =
+    val shape = PpsTheme.shapes.full
+    Box(modifier = modifier.size(size), contentAlignment = Alignment.Center) {
         when (outcome) {
-            Outcome.OnTime -> Res.drawable.symbol_check_circle_fill1 to colors.success
-            Outcome.Snoozed -> Res.drawable.symbol_schedule_fill1 to colors.snoozed
-            Outcome.Missed -> Res.drawable.symbol_cancel_fill1 to colors.missed
-            Outcome.Skipped, Outcome.Test -> Res.drawable.symbol_radio_button_unchecked to colors.outline
+            Outcome.OnTime -> {
+                Box(modifier = Modifier.size(size * DOT_FRACTION).clip(shape).background(colors.success))
+            }
+
+            Outcome.Snoozed -> {
+                Icon(
+                    painter = painterResource(Res.drawable.symbol_schedule_fill1),
+                    contentDescription = null,
+                    modifier = Modifier.size(size),
+                    tint = colors.snoozed,
+                )
+            }
+
+            Outcome.Missed -> {
+                Box(modifier = Modifier.size(size * DOT_FRACTION).border(size * RING_FRACTION, colors.missed, shape))
+            }
+
+            Outcome.Skipped, Outcome.Test -> {
+                Box(modifier = Modifier.size(size * SMALL_FRACTION).clip(shape).background(colors.outline))
+            }
         }
-    Icon(painter = painterResource(icon), contentDescription = null, modifier = modifier.size(size), tint = tint)
+    }
 }
 
-/** The small `alt_route` badge for "fallback check used" (`text-secondary`), decorative. */
+/** The small `alt_route` badge for "fallback check used" (`text-secondary`), decorative (Day detail). */
 @Composable
 fun FallbackBadge(
     modifier: Modifier = Modifier,
@@ -76,21 +91,13 @@ fun FallbackBadge(
     )
 }
 
-/** A marker with its visible label (legend, Day detail): read as the label alone. */
-@Composable
-fun OutcomeLabel(
-    outcome: Outcome,
-    modifier: Modifier = Modifier,
-) {
-    Row(
-        modifier = modifier.semantics(mergeDescendants = true) { },
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(PpsTheme.spacing.space1),
-    ) {
-        OutcomeMarker(outcome)
-        Text(text = outcome.label(), style = PpsTheme.typography.caption, color = PpsTheme.colors.text)
-    }
-}
+/** The filled and hollow dots fill most of the box (the clock glyph has its own margin). */
+private const val DOT_FRACTION = 0.84f
 
-/** The fallback badge in the calendar (a corner of the day's marker). */
+/** The missed ring's stroke. */
+private const val RING_FRACTION = 0.14f
+
+/** Skipped and test: a small neutral dot. */
+private const val SMALL_FRACTION = 0.42f
+
 private val BADGE_SIZE = 12.dp

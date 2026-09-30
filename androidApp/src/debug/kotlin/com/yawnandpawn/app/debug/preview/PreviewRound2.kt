@@ -86,9 +86,16 @@ object PreviewRound2 {
 
     val items: List<PreviewItem> =
         listOf(
-            progress("progress_full", "Streaks, rates, snoozes chart, calendar, money", s.progress, primary = true),
-            progress("progress_week_tapped", "A week's bar tapped", s.progressWeekSelected),
-            progress("progress_empty", "Empty (export disabled)", s.progressEmpty, primary = true),
+            progress(
+                "progress_full",
+                "Ring of 30 mornings, tiles, week chart, streak, calendar, money, insight",
+                s.progress,
+                primary = true,
+            ),
+            progress("progress_day_tapped", "A day's bar tapped", s.progressDaySelected),
+            progress("progress_dot_chip", "A ring dot tapped: its label chip", s.progressDotChip, primary = true),
+            progress("progress_calendar_chip", "A calendar day tapped: its label chip", s.progressCalendarChip),
+            progress("progress_empty", "Empty ring", s.progressEmpty, primary = true),
             day("day_snoozed", "Snoozed morning, paid", s.daySnoozed, primary = true),
             day("day_fallback", "Fallback check, before first unlock, merged alarm", s.dayFallback),
             day("day_two_sessions", "Two sessions", s.dayTwoSessions),

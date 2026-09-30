@@ -28,3 +28,6 @@ data class Money(
 
 /** [money] in the phone's locale with its currency ("$3", "3 €"); whole amounts drop the decimals. */
 expect fun formatMoney(money: Money): String
+
+/** [value] as a locale number with one decimal ("0.4", "0,4"), for averages. */
+expect fun formatOneDecimal(value: Double): String

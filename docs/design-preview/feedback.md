@@ -115,3 +115,5 @@ Owner decisions and issues from trying the design preview on the Oppo A96. Each 
 
       These rows move out of Settings, so Settings keeps only app behaviour (Snooze, Wake, Appearance, Notifications, Usage stats, Reliability checklist).
     - The tab label "You" can later become "Account" with a one-word change.
+
+## Round 2 approved (owner, 2026-10-01): "everything is looking good".

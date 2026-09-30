@@ -17,7 +17,7 @@ adb -s 4d804fdd shell am start -S -n com.yawnandpawn.app/.debug.preview.PreviewA
 
 | Id | Screen | State |
 |---|---|---|
-| `tap-app` | Tap through | Tap through the app: Home, editor and its sub-screens, test alarm |
+| `tap-app` | Tap through | Tap through the app: tabs, the + for a new alarm, editor, test alarm |
 | `tap-morning` | Tap through | Tap through a morning: Back to alarm, Ringing, Check, Success |
 | `home-list` | Alarms (Home) | Streak, next alarm, alarm cards |
 | `home-half-collapsed` | Alarms (Home) | Scrolled: header half collapsed |
@@ -85,7 +85,8 @@ adb -s 4d804fdd shell am start -S -n com.yawnandpawn.app/.debug.preview.PreviewA
 | Id | Screen | State |
 |---|---|---|
 | `tap-progress` | Tap through | Tap through Progress: ring, chart, calendar, day detail, purchase history |
-| `tap-settings` | Tap through | Tap through Settings: sub-screens, checklist, payments, delete dialog |
+| `tap-settings` | Tap through | Tap through Settings: sub-screens, reliability checklist |
+| `tap-you` | Tap through | Tap through You: purchase history, payments, delete dialog |
 | `progress-full` | Progress | Ring of 30 mornings, tiles, week chart, streak, calendar, money, insight |
 | `progress-dot-chip` | Progress | A ring dot tapped: its label chip |
 | `progress-calendar-chip` | Progress | A calendar day tapped: its label chip |
@@ -101,8 +102,9 @@ adb -s 4d804fdd shell am start -S -n com.yawnandpawn.app/.debug.preview.PreviewA
 | `purchases-empty` | Purchase history | Empty |
 | `settings-main` | Settings | All sections |
 | `settings-reliability-banner` | Settings | Permission missing banner |
-| `settings-delete-dialog` | Settings | Delete all data |
-| `settings-no-browser` | Settings | Link without a browser |
+| `you-main` | You | Money, privacy and your data, help |
+| `you-delete-dialog` | You | Delete all data |
+| `you-no-browser` | You | Link without a browser |
 | `settings-session` | Settings | During a session (session lock) |
 | `settings-base-fee` | Settings sub-screens | Base fee |
 | `settings-base-fee-weakening` | Settings sub-screens | Base fee lowered under lock |

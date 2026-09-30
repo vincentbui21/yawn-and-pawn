@@ -38,9 +38,6 @@ data class SettingsUiState(
     val pane: SettingsPane = SettingsPane.Main,
     /** A weakening change was saved under the commitment lock. */
     val weakening: WeakeningNote? = null,
-    val showDeleteDialog: Boolean = false,
-    /** A link had no app to open it: "No browser found.". */
-    val noBrowser: Boolean = false,
 ) {
     companion object {
         const val DEFAULT_MAX_SNOOZES = 5
@@ -98,20 +95,6 @@ sealed interface SettingsIntent {
     data object FixSettings : SettingsIntent
 
     data object ReliabilityClicked : SettingsIntent
-
-    data object PaymentsClicked : SettingsIntent
-
-    data object PrivacyClicked : SettingsIntent
-
-    data object TermsClicked : SettingsIntent
-
-    data object SupportClicked : SettingsIntent
-
-    data object DeleteAllClicked : SettingsIntent
-
-    data object DeleteConfirmed : SettingsIntent
-
-    data object DeleteCancelled : SettingsIntent
 
     data object BackToAlarm : SettingsIntent
 }

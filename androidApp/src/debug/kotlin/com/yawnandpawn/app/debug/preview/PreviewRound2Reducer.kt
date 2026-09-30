@@ -9,6 +9,8 @@ import com.yawnandpawn.app.ui.reliability.ReliabilityUiState
 import com.yawnandpawn.app.ui.settings.SettingsIntent
 import com.yawnandpawn.app.ui.settings.SettingsPane
 import com.yawnandpawn.app.ui.settings.SettingsUiState
+import com.yawnandpawn.app.ui.you.YouIntent
+import com.yawnandpawn.app.ui.you.YouUiState
 
 /** Progress in the tap-through: days select (a day shows its chip), the months switch between September and August. */
 internal fun reduceProgress(
@@ -45,21 +47,6 @@ internal fun reduceSettings(
 
         SettingsIntent.RaiseBaseFee -> {
             state.withFee(state.higherFee)
-        }
-
-        // The preview opens no links: it shows what a phone without a browser sees (tap again to hide it).
-        SettingsIntent.PrivacyClicked, SettingsIntent.TermsClicked, SettingsIntent.SupportClicked -> {
-            state.copy(
-                noBrowser = !state.noBrowser,
-            )
-        }
-
-        SettingsIntent.DeleteAllClicked -> {
-            state.copy(showDeleteDialog = true)
-        }
-
-        SettingsIntent.DeleteConfirmed, SettingsIntent.DeleteCancelled -> {
-            state.copy(showDeleteDialog = false)
         }
 
         else -> {
@@ -108,3 +95,28 @@ internal fun ReliabilityUiState.fixed(item: ChecklistItem): ReliabilityUiState =
 
 /** The preview's base fee goes up to 5 tiers. */
 private const val MAX_FEE_MULTIPLE = 5
+
+/** The You tab in the tap-through: links show what a phone without a browser sees, "Delete all data" asks first. */
+internal fun reduceYou(
+    state: YouUiState,
+    intent: YouIntent,
+): YouUiState =
+    when (intent) {
+        YouIntent.PrivacyClicked, YouIntent.TermsClicked, YouIntent.SupportClicked, YouIntent.AboutClicked -> {
+            state.copy(
+                noBrowser = !state.noBrowser,
+            )
+        }
+
+        YouIntent.DeleteAllClicked -> {
+            state.copy(showDeleteDialog = true)
+        }
+
+        YouIntent.DeleteConfirmed, YouIntent.DeleteCancelled -> {
+            state.copy(showDeleteDialog = false)
+        }
+
+        else -> {
+            state
+        }
+    }

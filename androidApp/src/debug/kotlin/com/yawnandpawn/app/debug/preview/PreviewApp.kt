@@ -72,10 +72,11 @@ internal enum class Flow(
     val startTab: AppTab = AppTab.Alarms,
     val startInSession: Boolean = false,
 ) {
-    App(1, "Tap through the app: Home, editor and its sub-screens, test alarm", "tap-app"),
+    App(1, "Tap through the app: tabs, the + for a new alarm, editor, test alarm", "tap-app"),
     Session(1, "Tap through a morning: Back to alarm, Ringing, Check, Success", "tap-morning", startInSession = true),
     Progress(2, "Tap through Progress: ring, chart, calendar, day detail, purchase history", "tap-progress", startTab = AppTab.Progress),
-    Settings(2, "Tap through Settings: sub-screens, checklist, payments, delete dialog", "tap-settings", startTab = AppTab.Settings),
+    Settings(2, "Tap through Settings: sub-screens, reliability checklist", "tap-settings", startTab = AppTab.Settings),
+    You(2, "Tap through You: purchase history, payments, delete dialog", "tap-you", startTab = AppTab.You),
 }
 
 /**

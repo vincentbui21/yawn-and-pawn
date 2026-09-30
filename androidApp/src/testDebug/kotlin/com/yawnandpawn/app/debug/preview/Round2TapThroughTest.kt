@@ -1,6 +1,7 @@
 package com.yawnandpawn.app.debug.preview
 
 import androidx.activity.compose.setContent
+import androidx.compose.ui.semantics.SemanticsActions
 import androidx.compose.ui.test.click
 import androidx.compose.ui.test.hasClickAction
 import androidx.compose.ui.test.hasContentDescription
@@ -11,6 +12,7 @@ import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performScrollTo
+import androidx.compose.ui.test.performSemanticsAction
 import androidx.compose.ui.test.performTouchInput
 import androidx.test.core.app.ActivityScenario
 import com.yawnandpawn.app.ui.format.formatMoney
@@ -90,7 +92,8 @@ class Round2TapThroughTest {
         tapThrough(AppTab.Progress) {
             composeRule.onNodeWithContentDescription("Previous month").performScrollTo().performClick()
             composeRule.onNodeWithText("August 2026").assertExists()
-            composeRule.onNodeWithText("Purchase history").performScrollTo().performClick()
+            // Scrolled into view it may still sit under the floating nav bar, so act on it directly.
+            composeRule.onNodeWithText("Purchase history").performScrollTo().performSemanticsAction(SemanticsActions.OnClick)
             composeRule.onNode(hasText("Not used, refunded automatically by Google")).assertExists()
         }
 
@@ -109,14 +112,25 @@ class Round2TapThroughTest {
         }
 
     @Test
-    fun `Fix on the checklist turns the row OK and Delete all data asks first`() =
+    fun `Fix on the checklist turns the row OK`() =
         tapThrough(AppTab.Settings) {
             composeRule.onNodeWithText("Reliability checklist").performScrollTo().performClick()
             composeRule.onNodeWithText("Alarm may not ring: battery optimization turned back on").assertExists()
             composeRule.onAllNodes(hasText("Fix"))[1].performClick()
             composeRule.onNodeWithText("Alarm may not ring: battery optimization turned back on").assertDoesNotExist()
-            composeRule.onNodeWithContentDescription("Back").performClick()
+        }
 
+    @Test
+    fun `the + opens a new alarm from any tab, and the You tab holds the money and data rows`() =
+        tapThrough(AppTab.Progress) {
+            // Settings keeps app behaviour only (owner decision 2026-10-01).
+            composeRule.onNodeWithContentDescription("Settings").performClick()
+            composeRule.onNodeWithText("Delete all data").assertDoesNotExist()
+            composeRule.onNodeWithContentDescription("Add alarm").performClick()
+            composeRule.onNodeWithText("New alarm").assertExists()
+            composeRule.onNodeWithText("Cancel").performClick()
+            composeRule.onNodeWithContentDescription("You").performClick()
+            composeRule.onNodeWithText("Purchase history").assertExists()
             composeRule.onNodeWithText("Delete all data").performScrollTo().performClick()
             composeRule.onNodeWithText("Delete all data?").assertExists()
             composeRule.onNodeWithText("Keep it").performClick()

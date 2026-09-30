@@ -24,6 +24,7 @@ import com.yawnandpawn.app.ui.reliability.ReliabilityUiState
 import com.yawnandpawn.app.ui.settings.SettingsPane
 import com.yawnandpawn.app.ui.settings.SettingsUiState
 import com.yawnandpawn.app.ui.settings.WeakeningNote
+import com.yawnandpawn.app.ui.you.YouUiState
 import kotlinx.datetime.DateTimeUnit
 import kotlinx.datetime.LocalDate
 import kotlinx.datetime.LocalTime
@@ -272,9 +273,13 @@ object PreviewProgressSamples {
 
     val settingsReliability = settings.copy(reliabilityProblem = true)
 
-    val settingsDeleteDialog = settings.copy(showDeleteDialog = true)
+    // You -----------------------------------------------------------------------------------------------------------
 
-    val settingsNoBrowser = settings.copy(noBrowser = true)
+    val you = YouUiState(appVersion = "0.1.0")
+
+    val youDeleteDialog = you.copy(showDeleteDialog = true)
+
+    val youNoBrowser = you.copy(noBrowser = true)
 
     val settingsSession = settings.copy(sessionInProgress = true)
 

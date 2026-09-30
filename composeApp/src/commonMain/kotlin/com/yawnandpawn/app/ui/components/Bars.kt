@@ -141,13 +141,15 @@ fun ScreenColumn(
     content: @Composable ColumnScope.() -> Unit,
 ) {
     val spacing = PpsTheme.spacing
+    // Under the floating nav bar the last card ends above the capsule.
+    val navBar = LocalNavBarClearance.current
     Column(
         modifier =
             modifier
                 .fillMaxSize()
                 .verticalScroll(rememberScrollState())
                 .navigationBarsPadding()
-                .padding(start = spacing.screenMargin, end = spacing.screenMargin, top = spacing.space2, bottom = bottomClearance),
+                .padding(start = spacing.screenMargin, end = spacing.screenMargin, top = spacing.space2, bottom = bottomClearance + navBar),
         verticalArrangement = Arrangement.spacedBy(spacing.space3),
         content = content,
     )

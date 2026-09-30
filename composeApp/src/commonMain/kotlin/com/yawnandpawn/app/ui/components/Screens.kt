@@ -14,6 +14,7 @@ import androidx.compose.foundation.layout.statusBars
 import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -21,11 +22,18 @@ import androidx.compose.ui.semantics.LiveRegionMode
 import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.liveRegion
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.unit.dp
 import com.yawnandpawn.app.ui.resources.Res
 import com.yawnandpawn.app.ui.resources.session_back_to_alarm
 import com.yawnandpawn.app.ui.resources.session_in_progress_title
 import com.yawnandpawn.app.ui.theme.PpsTheme
 import org.jetbrains.compose.resources.stringResource
+
+/**
+ * How far a tab screen's scrolling content must end above the bottom of the screen so its last row sits above the
+ * floating `nav-bar` capsule (0 when the bar is hidden, or outside the app shell). Includes the navigation bar inset.
+ */
+val LocalNavBarClearance = staticCompositionLocalOf { 0.dp }
 
 /**
  * A bottom-navigation tab screen (Progress, Settings): the background gradient, [title] pinned top-left in `headline`
@@ -45,7 +53,7 @@ fun TabScreen(
             if (title != null) ScreenTitle(title = title)
             ScreenColumn(modifier = Modifier.weight(1f), content = content)
         }
-        Box(modifier = Modifier.align(Alignment.BottomCenter)) { overlay() }
+        Box(modifier = Modifier.align(Alignment.BottomCenter).padding(bottom = LocalNavBarClearance.current)) { overlay() }
     }
 }
 

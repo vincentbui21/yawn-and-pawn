@@ -107,6 +107,19 @@ Owner-given: "Stopped after 30 minutes" and the tile idea "rings · snoozes · p
 
 Reused: "I'm up" (key string), "{time} alarm merged into this session" and "Rang before your first unlock" (key strings), "to get up" and "snoozes" (Progress tiles), "{minutes} min" / "Under 1 min".
 
+## Nav bar and the You tab (owner feedback item 26, 2026-10-01)
+
+| Key | Draft | Screen | Note |
+|---|---|---|---|
+| `nav_you` | You | Nav bar tab, You tab title | Owner-given; can become "Account" later with a one-word change. |
+| `you_money` | Money | You, section title | Purchase history, How payments & refunds work. |
+| `you_privacy_data` | Privacy and your data | You, section title | Privacy policy, Delete all data. |
+| `you_help` | Help | You, section title | Support, Terms, About. |
+| `you_about` | About | You, row | |
+| `you_version` | Version {version} | You, About row value | e.g. "Version 0.1.0". |
+
+The "+" reads "Add alarm" (existing key string, was the Home FAB). The moved rows keep their strings.
+
 ## Not strings, but worth a look
 
 - The Math problem is drawn as digits with "+" or "×" (for example "47 + 38"); TalkBack reads the key string "47 plus 38".

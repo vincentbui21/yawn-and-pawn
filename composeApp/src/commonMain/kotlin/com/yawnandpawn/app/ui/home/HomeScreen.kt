@@ -40,9 +40,9 @@ import com.yawnandpawn.app.ui.checks.icon
 import com.yawnandpawn.app.ui.components.BannerWarning
 import com.yawnandpawn.app.ui.components.ConfirmDialog
 import com.yawnandpawn.app.ui.components.DismissButton
+import com.yawnandpawn.app.ui.components.LocalNavBarClearance
 import com.yawnandpawn.app.ui.components.NoteInline
 import com.yawnandpawn.app.ui.components.PpsBackground
-import com.yawnandpawn.app.ui.components.PpsFab
 import com.yawnandpawn.app.ui.components.PpsFilledButton
 import com.yawnandpawn.app.ui.components.PpsSwitch
 import com.yawnandpawn.app.ui.components.RowIcon
@@ -105,13 +105,6 @@ fun HomeScreen(
         } else {
             HomeList(state = state, is24Hour = is24Hour, onIntent = onIntent, listState = listState)
         }
-        if (!state.sessionInProgress) {
-            PpsFab(
-                contentDescription = stringResource(Res.string.alarms_add_alarm),
-                onClick = { onIntent(HomeIntent.AddAlarm) },
-                modifier = Modifier.align(Alignment.BottomEnd).navigationBarsPadding().padding(spacing.screenMargin),
-            )
-        }
     }
     state.disableDialog?.let { dialog -> DisableDialog(dialog = dialog, is24Hour = is24Hour, onIntent = onIntent) }
 }
@@ -143,13 +136,14 @@ private fun HomeList(
                     .fillMaxSize()
                     .glassSource(backdrop)
                     .fadeUnderHeader(zoneBottom = { statusBarTop + with(density) { headerHeight.toPx() } }, fade = fade, opaque = opaque),
-            // Starts below the pinned header (and its fade); room below the last card so its switch clears the FAB.
+            // Starts below the pinned header (and its fade); the last card ends above the floating nav bar (its "+" adds
+            // an alarm; owner decision 2026-10-01 replaced the FAB).
             contentPadding =
                 PaddingValues(
                     start = spacing.screenMargin,
                     end = spacing.screenMargin,
                     top = headerHeight + spacing.space3,
-                    bottom = LIST_BOTTOM_PADDING,
+                    bottom = LocalNavBarClearance.current + spacing.space6,
                 ),
             verticalArrangement = Arrangement.spacedBy(spacing.space3),
         ) {
@@ -325,7 +319,14 @@ private fun EmptyHome(
     modifier: Modifier = Modifier,
 ) {
     val spacing = PpsTheme.spacing
-    Column(modifier = modifier.fillMaxWidth().padding(horizontal = spacing.screenMargin)) {
+    Column(
+        modifier =
+            modifier.fillMaxWidth().padding(
+                start = spacing.screenMargin,
+                end = spacing.screenMargin,
+                bottom = LocalNavBarClearance.current,
+            ),
+    ) {
         Notices(state = state, is24Hour = is24Hour, onIntent = onIntent)
         Column(
             modifier = Modifier.weight(1f).fillMaxWidth(),
@@ -384,6 +385,3 @@ private fun DisableDialog(
 }
 
 private const val HOURS_PER_DAY = 24
-
-/** FAB 56 dp + its 20 dp margin + a 24 dp gap, so the last card's switch is above the FAB when scrolled to the end. */
-private val LIST_BOTTOM_PADDING = 100.dp

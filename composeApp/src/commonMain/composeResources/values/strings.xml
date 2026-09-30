@@ -60,6 +60,13 @@
     <string name="nav_alarms">Alarms</string>
     <string name="nav_progress">Progress</string>
     <string name="nav_settings">Settings</string>
+    <!-- Nav bar redesign (owner decision 2026-10-01, feedback item 26); drafts in docs/design-preview/copy-to-approve.md. -->
+    <string name="nav_you">You</string>
+    <string name="you_money">Money</string>
+    <string name="you_privacy_data">Privacy and your data</string>
+    <string name="you_help">Help</string>
+    <string name="you_about">About</string>
+    <string name="you_version">Version %1$s</string>
 
     <!-- Home -->
     <string name="home_streak_days">days on time</string>

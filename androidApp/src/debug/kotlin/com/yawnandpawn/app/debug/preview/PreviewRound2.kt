@@ -16,6 +16,8 @@ import com.yawnandpawn.app.ui.settings.SettingsScreen
 import com.yawnandpawn.app.ui.settings.SettingsUiState
 import com.yawnandpawn.app.ui.shell.AppShell
 import com.yawnandpawn.app.ui.shell.AppTab
+import com.yawnandpawn.app.ui.you.YouScreen
+import com.yawnandpawn.app.ui.you.YouUiState
 
 /**
  * Design preview round 2, progress and settings: Progress (full, a tapped week, empty), Day detail (snoozed, fallback,
@@ -77,6 +79,16 @@ object PreviewRound2 {
         }
     }
 
+    private fun you(
+        id: String,
+        title: String,
+        state: YouUiState,
+        primary: Boolean = false,
+        hasDialog: Boolean = false,
+    ) = item(id, "You", title, primary = primary, hasDialog = hasDialog) {
+        AppShell(selected = AppTab.You, onSelect = {}) { YouScreen(state = state, onIntent = {}) }
+    }
+
     private fun reliability(
         id: String,
         title: String,
@@ -106,8 +118,9 @@ object PreviewRound2 {
             purchases("purchases_empty", "Empty", s.purchasesEmpty),
             settings("settings_main", "All sections", s.settings, primary = true),
             settings("settings_reliability_banner", "Permission missing banner", s.settingsReliability),
-            settings("settings_delete_dialog", "Delete all data", s.settingsDeleteDialog, hasDialog = true),
-            settings("settings_no_browser", "Link without a browser", s.settingsNoBrowser),
+            you("you_main", "Money, privacy and your data, help", s.you, primary = true),
+            you("you_delete_dialog", "Delete all data", s.youDeleteDialog, hasDialog = true),
+            you("you_no_browser", "Link without a browser", s.youNoBrowser),
             settings("settings_session", "During a session (session lock)", s.settingsSession),
             settings("settings_base_fee", "Base fee", s.settingsBaseFee, group = "Settings sub-screens", primary = true),
             settings(

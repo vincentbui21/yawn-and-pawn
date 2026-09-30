@@ -84,8 +84,9 @@ import org.jetbrains.compose.resources.stringResource
 /**
  * Settings (the Settings tab), stateless, in grouped `card-group`s whose rows show their value and open a sub-screen
  * (owner decision 2026-09-27): Snooze (base fee, max snoozes, default length), Wake (default quiet time, vibrate during
- * quiet time, bright wake screen), Appearance (System / Light / Dark), weekly summary and usage stats, the Reliability
- * checklist and Payments & refunds, Privacy policy, Terms, Support, and "Delete all data" (with its dialog). The
+ * quiet time, bright wake screen), Appearance (System / Light / Dark), weekly summary and usage stats, and the
+ * Reliability checklist: app behaviour only (owner decision 2026-10-01, feedback item 26: payments, privacy, delete all
+ * data, support, terms and about moved to the You tab). The
  * reliability `banner-warning` sits on top while an item fails. During a session only `panel-session-in-progress` shows.
  */
 @Composable
@@ -116,20 +117,6 @@ fun SettingsScreen(
                 SettingsSubScreen(pane = pane, state = state, is24Hour = is24Hour, onIntent = onIntent)
             }
         }
-        if (state.noBrowser) {
-            AppSnackbar(text = stringResource(Res.string.settings_no_browser), modifier = Modifier.align(Alignment.BottomCenter))
-        }
-    }
-    if (state.showDeleteDialog) {
-        ConfirmDialog(
-            title = stringResource(Res.string.settings_delete_title),
-            body = stringResource(Res.string.settings_delete_body),
-            confirmText = stringResource(Res.string.settings_delete_confirm),
-            safeText = stringResource(Res.string.settings_delete_keep),
-            onConfirm = { onIntent(SettingsIntent.DeleteConfirmed) },
-            onSafe = { onIntent(SettingsIntent.DeleteCancelled) },
-            destructive = true,
-        )
     }
 }
 
@@ -189,7 +176,7 @@ private fun SettingsMain(
     }
 }
 
-/** Appearance, weekly summary and usage stats, the checklist and payments, the links, and "Delete all data". */
+/** Appearance, weekly summary and usage stats, and the Reliability checklist. */
 @Composable
 private fun GeneralCards(
     state: SettingsUiState,
@@ -219,23 +206,6 @@ private fun GeneralCards(
     }
     GroupCard {
         NavRow(label = stringResource(Res.string.settings_reliability), onClick = { onIntent(SettingsIntent.ReliabilityClicked) })
-        GroupDivider()
-        NavRow(label = stringResource(Res.string.settings_payments), onClick = { onIntent(SettingsIntent.PaymentsClicked) })
-    }
-    GroupCard {
-        NavRow(label = stringResource(Res.string.settings_privacy), onClick = { onIntent(SettingsIntent.PrivacyClicked) })
-        GroupDivider()
-        NavRow(label = stringResource(Res.string.settings_terms), onClick = { onIntent(SettingsIntent.TermsClicked) })
-        GroupDivider()
-        NavRow(label = stringResource(Res.string.settings_support), onClick = { onIntent(SettingsIntent.SupportClicked) })
-    }
-    GroupCard {
-        NavRow(
-            label = stringResource(Res.string.settings_delete_all),
-            onClick = { onIntent(SettingsIntent.DeleteAllClicked) },
-            titleColor = PpsTheme.colors.error,
-            chevron = false,
-        )
     }
 }
 

@@ -102,3 +102,16 @@ Owner decisions and issues from trying the design preview on the Oppo A96. Each 
       - two sessions on one day each get their own hero and timeline section.
     - **Animation:** the timeline draws top to bottom with events appearing one after another; reduced motion shows it all at once.
     - Test and skipped days show only the hero with their outcome label.
+26. **Navigation bar redesign** (owner, 2026-10-01; inspiration: a nav bar style sheet, bottom-left style with a centre "+"):
+    - A floating glass capsule: rounded, glass-strong with blur over the scrolling content, a gap above the bottom edge and from the sides, and content padding so nothing hides behind it.
+    - **Five slots: Alarms · Progress · (+) · Settings · You.**
+    - The centre "+" is a raised accent circle that creates a new alarm from any tab. It replaces the floating + button on Home.
+    - Tabs show an icon and a short label. The selected tab uses the accent with a filled icon; the others are neutral.
+    - Tab changes animate: the icon fills and the label colour changes. Reduced motion makes it instant.
+    - **"You" tab: a personal page with no sign-in** (the app still has no account or backend, NFR-4). It holds:
+      - money: Purchase history, and Payments & refunds;
+      - privacy and your data: Delete all data, privacy policy;
+      - help and support, terms, and about.
+
+      These rows move out of Settings, so Settings keeps only app behaviour (Snooze, Wake, Appearance, Notifications, Usage stats, Reliability checklist).
+    - The tab label "You" can later become "Account" with a one-word change.

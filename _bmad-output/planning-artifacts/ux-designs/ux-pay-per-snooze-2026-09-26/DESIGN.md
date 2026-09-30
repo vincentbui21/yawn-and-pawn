@@ -295,7 +295,7 @@ components:
     compactChipColor: '{colors.glass-strong}'
     compactNumberColor: '{colors.accent-text}'
     compactNumberTypography: '{typography.title}'
-    note: 'Home header (owner decision 2026-09-28, Samsung Weather). Title pinned top-left in headline; glass chip fades in over the first 16dp of scroll; card-hero fades out by 60% of the collapse, shrinks 10% and lags 20% as it scrolls under; from 50% the compact streak chip fades and rises 8dp in beside (or, when it does not fit, under) the title. Title shrinks from headline to title size (like the small pinned ''Lahti'') so the compact chip stays on its row (wraps only when it cannot fit, e.g. 200% font). Both chips are glass-strong with real blur on API 31+. Scrolled content fades out over the 12 dp above the bottom of the chips and is hidden from there up through the status bar, so no card text shows behind or above the chips. The last card clears the FAB (100 dp bottom padding).'
+    note: 'Home header (owner decision 2026-09-28, Samsung Weather). Title pinned top-left in headline; glass chip fades in over the first 16dp of scroll; card-hero fades out by 60% of the collapse, shrinks 10% and lags 20% as it scrolls under; from 50% the compact streak chip fades and rises 8dp in beside (or, when it does not fit, under) the title. Title shrinks from headline to title size (like the small pinned ''Lahti'') so the compact chip stays on its row (wraps only when it cannot fit, e.g. 200% font). Both chips are glass-strong with real blur on API 31+. Scrolled content fades out over the 12 dp above the bottom of the chips and is hidden from there up through the status bar, so no card text shows behind or above the chips. The last card ends above the floating nav bar (owner decision 2026-10-01).'
   pill-save:
     backgroundColor: '{colors.glass-strong}'
     borderColor: '{colors.glass-edge}'
@@ -304,11 +304,6 @@ components:
     typography: '{typography.label}'
     rounded: '{rounded.full}'
     height: 56dp
-  fab:
-    backgroundColor: '{colors.accent}'
-    iconColor: '{colors.on-accent}'
-    rounded: '{rounded.full}'
-    size: 56dp
   banner-warning:
     backgroundColor: '{colors.glass}'
     borderColor: '{colors.glass-edge}'
@@ -367,6 +362,13 @@ components:
     borderColor: '{colors.glass-edge}'
     selectedIconColor: '{colors.accent-text}'
     iconColor: '{colors.text-secondary}'
+    labelTypography: '{typography.caption}'
+    rounded: '{rounded.full}'
+    height: 64dp
+    addButtonColor: '{colors.accent}'
+    addIconColor: '{colors.on-accent}'
+    addSize: 56dp
+    note: 'Floating capsule (owner decision 2026-10-01, feedback item 26): screen-margin from the sides, 12dp above the navigation bar, glass-strong with real blur on API 31+; the raised + sits in the middle slot, 14dp above the capsule centre.'
   progress-dots:
     activeColor: '{colors.accent}'
     inactiveColor: '{colors.outline}'
@@ -477,7 +479,7 @@ Three locks hold the look together: **one accent colour** (Sunrise orange), **on
 
 The palette is warm greys plus one accent. Nothing is pure black or pure white as a background.
 
-- **Sunrise orange** (`{colors.accent}` light and Sunrise, `{colors.accent-dark}` dark) is the only chromatic brand colour. It fills the primary action ("I'm up", Save, FAB), selected states and the countdown ring. As a large filled shape it passes 3:1. Accent-coloured **text** on light backgrounds always uses `{colors.accent-text}` (5.1:1), including the Home streak number. Dark mode uses a lighter, softer orange that passes as text.
+- **Sunrise orange** (`{colors.accent}` light and Sunrise, `{colors.accent-dark}` dark) is the only chromatic brand colour. It fills the primary action ("I'm up", Save, the nav bar "+"), selected states and the countdown ring. As a large filled shape it passes 3:1. Accent-coloured **text** on light backgrounds always uses `{colors.accent-text}` (5.1:1), including the Home streak number. Dark mode uses a lighter, softer orange that passes as text.
 - **Warm greys** (`bg`, `surface`, `surface-variant`, `outline`, `outline-subtle`, `text`, `text-secondary`) carry everything else. `outline` is for borders that must be seen (3:1); `outline-subtle` is decorative only.
 - **Outcome colours** (`success`, `snoozed`, `missed`) exist for Progress and Day detail. `success` means "on time" only; it is never used for money. `snoozed` is a muted brick, not an alarm red. **Colour is never the only signal:** `success` and `snoozed` differ in luminance by at least 1.6:1 in every theme, and each outcome has its own glyph (see `outcome-marker`).
 - **Error** (`{colors.error}`) is for real errors only: payment failed, permission missing, wrong answer, alarm may not ring.
@@ -488,7 +490,7 @@ The palette is warm greys plus one accent. Nothing is pure black or pure white a
 
 **Background gradients (owner decision 2026-09-27).** Every screen has a subtle solid-to-solid vertical fade in Yawn & Pawn's own warm tones, never purple, never multi-colour:
 
-- **Light and Dark app screens:** `{colors.gradient-top}` (a warm peach in Light, a warm brown-black in Dark) at the top, fading into `bg` by 60% of the screen height; flat `bg` below, where the FAB, the bottom pill and the nav bar sit.
+- **Light and Dark app screens:** `{colors.gradient-top}` (a warm peach in Light, a warm brown-black in Dark) at the top, fading into `bg` by 60% of the screen height; flat `bg` below, where the bottom pill and the nav bar sit.
 - **Sunrise (every wake screen):** `{colors.sunrise-gradient-top}` fading into `{colors.bg-sunrise}` over the **top 40%** only; the thumb zone is always flat `{colors.bg-sunrise}`.
 - Accent on the Light and Sunrise gradient tops fails (2.89 and 2.73), so **no accent element sits directly on a gradient**: accent controls live on glass cards (3.24 / 3.17) or on the flat bottom.
 
@@ -676,7 +678,7 @@ Locked radius system. No other radii.
 | `{rounded.sm}` | 8 dp | Chips, inputs, letter tiles, snackbars, small thumbnails |
 | `{rounded.md}` | 16 dp | Cards, list items, check tiles, number-pad keys, viewfinder frame |
 | `{rounded.lg}` | 28 dp | Bottom sheets, dialogs |
-| `{rounded.full}` | 9999px | Primary and wake buttons, FAB, shutter, segmented control, badges |
+| `{rounded.full}` | 9999px | Primary and wake buttons, the nav bar capsule and its +, shutter, segmented control, badges |
 
 ## Components
 
@@ -705,9 +707,9 @@ Visual specs. Behaviour for every row lives in `EXPERIENCE.md > Component Patter
 | `background-gradient` | Every screen's background: `gradient-top` fading into `bg` over the top 60% (Sunrise: `sunrise-gradient-top` into `bg-sunrise` over the top 40%), flat below. No accent directly on it. |
 | `card-group` | `{colors.glass}` fill, `{spacing.hairline}` `glass-edge` border, `{rounded.md}`. Rows inside have `{spacing.card-padding}` side padding and hairline `glass-edge` dividers between them. Used for every group of settings: editor, sub-screens, Settings, pickers, onboarding. |
 | `glass-bar` | `{colors.glass-strong}` with a `glass-edge` hairline, background blur `{spacing.glass-blur}` on Android 12+. For `pill-save`, `nav-bar` and `sheet-snooze-confirm`. |
-| `header-collapsing` | Home only. "Yawn & Pawn" pinned top-left in `headline`; a `glass-strong` pill chip fades in behind it over the first 16 dp of scroll. `card-hero` fades out by 60% of the collapse, shrinks to 90% towards its top-left and lags 20% of its height as it scrolls under the header; from 50% (a cross-fade, so the streak never shows twice) the compact chip (`glass-strong`, streak number in `title` / `accent-text`, "days on time" in `label`) fades and rises 8 dp in beside the title. The title shrinks from `headline` to `title` size as it collapses, so the compact chip stays beside it (it wraps under only when it cannot fit, e.g. at 200%); both chips blur on Android 12+. **Header zone:** scrolled content fades out over the 12 dp above the bottom of the chips and is hidden above that, through the status bar, so no card text shows behind or above the chips. The list ends 100 dp above the nav bar so the last card clears the FAB. |
+| `header-collapsing` | Home only. "Yawn & Pawn" pinned top-left in `headline`; a `glass-strong` pill chip fades in behind it over the first 16 dp of scroll. `card-hero` fades out by 60% of the collapse, shrinks to 90% towards its top-left and lags 20% of its height as it scrolls under the header; from 50% (a cross-fade, so the streak never shows twice) the compact chip (`glass-strong`, streak number in `title` / `accent-text`, "days on time" in `label`) fades and rises 8 dp in beside the title. The title shrinks from `headline` to `title` size as it collapses, so the compact chip stays beside it (it wraps under only when it cannot fit, e.g. at 200%); both chips blur on Android 12+. **Header zone:** scrolled content fades out over the 12 dp above the bottom of the chips and is hidden above that, through the status bar, so no card text shows behind or above the chips. The list ends above the floating nav bar capsule. |
 | `pill-save` | `glass-bar` in its own bottom area (never over content), 56 dp, `{rounded.full}`, full width minus `screen-margin`, two equal halves split by a hairline: "Cancel" (`text`) and "Save" (`accent-text`, bold), both `label`, each at least 48 dp. |
-| `fab` | 56 dp, `{rounded.full}`, accent fill, "+" in on-accent. Bottom right, 20 dp from edges. |
+| ~~`fab`~~ | Removed from Home (owner decision 2026-10-01): the nav bar's raised "+" replaces it (same 56 dp accent circle). |
 | `banner-warning` | `{colors.glass}` fill with a `glass-edge` hairline, `{rounded.md}`, leading `error` icon in `{colors.error}`, message in `body`, `button-text` "Fix". Info variant: `info` icon in `text-secondary`, no error colour. |
 | `panel-session-in-progress` | Replaces Home content during a session. `{colors.glass}` card, "Alarm in progress" in `headline`, one `button-filled` "Back to alarm". |
 | `note-inline` | Leading `info` icon + `caption` in `text-secondary`. Used for commitment-lock notes, Direct Boot notice, approximate prices. On wake screens uses `-sunrise` tokens. |
@@ -719,7 +721,7 @@ Visual specs. Behaviour for every row lives in `EXPERIENCE.md > Component Patter
 | `switch` | Material 3 switch, accent checked track, `outline` unchecked border. |
 | `time-picker` | In its own `card-group`. Hour and minute wheels (plus AM/PM on 12 h phones) with "h" and "min" unit labels (`label`, `text-secondary`), three values visible, centre value in `text` on a `surface-variant` `{rounded.sm}` band, others in `text-secondary`; digits in `display` with tabular figures, capped at 1.3x font scale so the wheels fit 360 dp at 200%. Owner decision 2026-09-27 (replaces the Material 3 time input). |
 | `top-app-bar` | Transparent over the background gradient, title in `headline`, back arrow 48 dp. |
-| `nav-bar` | Material 3 navigation bar on `glass-bar` (`glass-strong`, hairline top edge), 3 items, Material Symbols Rounded; selected icon fill 1 in `accent-text`, label always shown. |
+| `nav-bar` | Floating capsule (owner decision 2026-10-01): `glass-strong` with a `glass-edge` hairline and blurred backdrop on Android 12+, `{rounded.full}`, 64 dp, `screen-margin` from the sides and 12 dp above the navigation bar. Five slots: Alarms · Progress · raised "+" · Settings · You. Tabs: Material Symbols Rounded icon (24 dp) and a `caption` label; selected in `accent-text` with the fill 1 icon, others `text-secondary`; each ≥ 48 dp. The "+" is a 56 dp `accent` circle with the `on-accent` plus, raised 14 dp. At large font scales only the selected tab shows its label, in a wider slot. Content pads its end so nothing hides behind the capsule. Pairs: `accent-text` and `text-secondary` on `glass-strong+text` (in the table), `on-accent / accent`; no new colour pairs. |
 | `progress-dots` | 8 dp dots, 8 dp apart; active accent and 16 dp wide (pill), inactive `outline`. |
 | `progress-ring` | Progress hero card, the first thing on the page (owner decisions 2026-09-30 and 2026-10-01): 30 `outcome-marker` shapes (16 dp) on a hairline `outline-subtle` circle, up to 280 dp, clockwise from the top to today (in an outlined accent pill, 32 x 22 dp); a day without an alarm is a faint 4 dp `outline-subtle` dot. Centre: streak in `display` / `accent-text`, "/ 30" in `title` / `text-secondary`, "day streak" in `body`; empty, "Your first morning shows up here.". No legend. The label chip (`inverse-surface` / `inverse-text` pill, `label`, chevron, 48 dp target) pops in under the ring for a tapped dot. |
 | `card-streak` | Glass with the `glass-accent` tint, `glass-edge` hairline, `{rounded.md}`: sunrise icon and "Current streak" (`caption`), the number in `display` / `accent-text` with "days on time", "Best streak" and its number in `headline` / `text` on the right (stacked at large font scales), "Keep it going." in `text-secondary`. |

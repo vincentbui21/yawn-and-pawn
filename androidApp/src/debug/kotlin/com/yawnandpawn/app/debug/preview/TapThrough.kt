@@ -44,6 +44,8 @@ import com.yawnandpawn.app.ui.settings.SettingsScreen
 import com.yawnandpawn.app.ui.shell.AppShell
 import com.yawnandpawn.app.ui.shell.AppTab
 import com.yawnandpawn.app.ui.sound.SoundPickerIntent
+import com.yawnandpawn.app.ui.you.YouIntent
+import com.yawnandpawn.app.ui.you.YouScreen
 import kotlinx.datetime.LocalDate
 
 /** A pushed screen of the tap-through (the shell with its tabs is the root). */
@@ -80,6 +82,7 @@ private class TapThroughState(
     var progress by mutableStateOf(PreviewProgressSamples.progress)
     var settings by mutableStateOf(PreviewProgressSamples.settings)
     var reliability by mutableStateOf(PreviewProgressSamples.reliabilityMissing)
+    var you by mutableStateOf(PreviewProgressSamples.you)
 
     private fun pop() {
         if (stack.isNotEmpty()) stack.removeAt(stack.lastIndex)
@@ -194,7 +197,6 @@ private class TapThroughState(
     fun onSettings(intent: SettingsIntent) {
         when (intent) {
             SettingsIntent.ReliabilityClicked, SettingsIntent.FixSettings -> push(Pushed.Reliability)
-            SettingsIntent.PaymentsClicked -> push(Pushed.Payments)
             SettingsIntent.BackToAlarm -> openWake(test = false)
             else -> settings = reduceSettings(settings, intent)
         }
@@ -277,29 +279,7 @@ private fun Screen(
 ) {
     when (top) {
         null -> {
-            // The session lock hides the nav bar and every tab shows only "Back to alarm".
-            val sessionLock = state.home.sessionInProgress
-            // A Settings sub-screen is a pushed screen: no nav bar, like the editor's sub-screens.
-            val settingsSubScreen = state.tab == AppTab.Settings && state.settings.pane != SettingsPane.Main
-            AppShell(selected = state.tab, onSelect = { state.tab = it }, showNavBar = !sessionLock && !settingsSubScreen) {
-                when (state.tab) {
-                    AppTab.Alarms -> {
-                        HomeScreen(state = state.home, is24Hour = is24Hour, onIntent = state::onHome)
-                    }
-
-                    AppTab.Progress -> {
-                        ProgressScreen(state = state.progress, onIntent = state::onProgress)
-                    }
-
-                    AppTab.Settings -> {
-                        SettingsScreen(
-                            state = state.settings.copy(sessionInProgress = sessionLock),
-                            is24Hour = is24Hour,
-                            onIntent = state::onSettings,
-                        )
-                    }
-                }
-            }
+            Tabs(state = state, is24Hour = is24Hour)
         }
 
         is Pushed.Editor -> {
@@ -333,6 +313,56 @@ private fun Screen(
 
         Pushed.ProblemWithCharge -> {
             ProblemWithChargeScreen(onIntent = state::onPayments)
+        }
+    }
+}
+
+/** The You tab: its rows push Purchase history and Payments; the rest is local state. */
+private fun TapThroughState.onYou(intent: YouIntent) {
+    when (intent) {
+        YouIntent.PurchaseHistoryClicked -> push(Pushed.PurchaseHistory)
+        YouIntent.PaymentsClicked -> push(Pushed.Payments)
+        else -> you = reduceYou(you, intent)
+    }
+}
+
+/** The app shell with its four tabs and the floating nav bar. */
+@Composable
+private fun Tabs(
+    state: TapThroughState,
+    is24Hour: Boolean,
+) {
+    // The session lock hides the nav bar and every tab shows only "Back to alarm".
+    val sessionLock = state.home.sessionInProgress
+    // A Settings sub-screen is a pushed screen: no nav bar, like the editor's sub-screens.
+    val settingsSubScreen = state.tab == AppTab.Settings && state.settings.pane != SettingsPane.Main
+    AppShell(
+        selected = state.tab,
+        onSelect = { state.tab = it },
+        // The centre "+" starts a new alarm from any tab (owner decision 2026-10-01).
+        onAdd = { state.onHome(HomeIntent.AddAlarm) },
+        showNavBar = !sessionLock && !settingsSubScreen,
+    ) {
+        when (state.tab) {
+            AppTab.Alarms -> {
+                HomeScreen(state = state.home, is24Hour = is24Hour, onIntent = state::onHome)
+            }
+
+            AppTab.Progress -> {
+                ProgressScreen(state = state.progress, onIntent = state::onProgress)
+            }
+
+            AppTab.Settings -> {
+                SettingsScreen(
+                    state = state.settings.copy(sessionInProgress = sessionLock),
+                    is24Hour = is24Hour,
+                    onIntent = state::onSettings,
+                )
+            }
+
+            AppTab.You -> {
+                YouScreen(state = state.you, onIntent = state::onYou)
+            }
         }
     }
 }

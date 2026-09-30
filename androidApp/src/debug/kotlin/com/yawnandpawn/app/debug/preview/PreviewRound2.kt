@@ -92,7 +92,6 @@ object PreviewRound2 {
                 s.progress,
                 primary = true,
             ),
-            progress("progress_day_tapped", "A day's bar tapped", s.progressDaySelected),
             progress("progress_dot_chip", "A ring dot tapped: its label chip", s.progressDotChip, primary = true),
             progress("progress_calendar_chip", "A calendar day tapped: its label chip", s.progressCalendarChip),
             progress("progress_empty", "Empty ring", s.progressEmpty, primary = true),

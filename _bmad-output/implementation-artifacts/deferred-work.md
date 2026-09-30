@@ -71,3 +71,6 @@
 - source_spec: `_bmad-output/implementation-artifacts/spec-design-preview-whole-app.md`
   summary: Remove the FR-PRG-6 export story via correct-course.
   evidence: Owner decision 2026-10-01 (docs/design-preview/feedback.md item 23): no "Export CSV" in the app. The design preview removed it from Progress and EXPERIENCE.md (IA row struck through, export strings and state row removed, F9 without export). PRD FR-PRG-6 [Could] and its Epic 6 story (epics.md, Refs FR-PRG-6) still exist; run correct-course when Epic 6 comes up to drop the story and update the PRD.
+- source_spec: `_bmad-output/implementation-artifacts/spec-design-preview-whole-app.md`
+  summary: Drop the "snoozes chart" from FR-PRG-2 via correct-course.
+  evidence: Owner decision 2026-10-01 (docs/design-preview/feedback.md item 24): no snoozes bar chart on Progress; the ring of 30 mornings shows each snoozed day and the "snoozes" tile gives the count. The design preview removed the chart, its strings and its preview state, and EXPERIENCE.md / DESIGN.md no longer list `bar-chart`. PRD FR-PRG-2 and the Epic 6 progress story still name a snoozes chart; run correct-course with the Progress epic to update them.

@@ -28,12 +28,6 @@ data class RingDay(
     val fallbackUsed: Boolean = false,
 )
 
-/** One bar of "Snoozes this week": a day of the last 7 and its snoozes. */
-data class DaySnoozes(
-    val date: LocalDate,
-    val snoozes: Int,
-)
-
 /** A day of the calendar with at least one session. */
 data class CalendarDay(
     val date: LocalDate,
@@ -73,20 +67,14 @@ enum class Insight {
 
 /**
  * What Progress renders (owner redesign 2026-09-30 and notes 2026-10-01, feedback items 21 and 23). With no mornings
- * logged yet ([isEmpty]) the ring is empty with the prompt, and the calendar and Purchase history follow. No export (owner
- * decision 2026-10-01 against FR-PRG-6).
+ * logged yet ([isEmpty]) the ring is empty with the prompt, and the calendar and Purchase history follow. No export and no
+ * snoozes chart (owner decisions 2026-10-01 against FR-PRG-6 and FR-PRG-2's chart).
  */
 data class ProgressUiState(
     val today: LocalDate? = null,
     /** The last 30 mornings, oldest first, ending today. Empty: 30 blank dots. */
     val ring: List<RingDay> = emptyList(),
     val stats: ProgressStats? = null,
-    /** The last 7 days, oldest first, ending today. */
-    val week: List<DaySnoozes> = emptyList(),
-    /** The tapped bar, whose number shows in the chart card; `null` shows today. */
-    val selectedDay: Int? = null,
-    /** Snoozes per morning over the last 7 days, for the chart's summary line. */
-    val averageSnoozesPerMorning: Double? = null,
     val calendar: CalendarMonth? = null,
     /** Paid this month (money is always `text`, never green or red). */
     val paidThisMonth: Money? = null,
@@ -99,10 +87,6 @@ data class ProgressUiState(
 
 /** Everything the user can do on Progress. */
 sealed interface ProgressIntent {
-    data class DayBarTapped(
-        val index: Int,
-    ) : ProgressIntent
-
     data object PreviousMonth : ProgressIntent
 
     data object NextMonth : ProgressIntent

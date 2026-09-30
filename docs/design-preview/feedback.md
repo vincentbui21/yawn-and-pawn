@@ -89,3 +89,4 @@ Owner decisions and issues from trying the design preview on the Oppo A96. Each 
       - The calendar slides between months.
       - A tapped dot pops its label chip.
       - Reduced motion shows the final state instantly.
+24. **Drop the "Snoozes this week" bar chart** (owner, 2026-10-01): the ring of 30 mornings already shows each snoozed day, and the "snoozes" tile gives the count. Remove the chart card, its tap state, its strings and its preview state. Owner decision against the PRD's "snoozes chart" in FR-PRG-2: record it in EXPERIENCE.md, and in deferred-work.md for correct-course with the Progress epic.

@@ -122,6 +122,8 @@ Round 2 rework 2 (2026-10-01, owner feedback item 23: Progress notes, on top of 
 - Preview: new states `progress-dot-chip` and `progress-calendar-chip`; `progress-empty` without export. Tests: tap-through tests tap twice (chip, then Day detail); baselines re-recorded (Progress, Day detail, the menu).
 - Device (Oppo A96, 360 dp, via deep links, 2026-10-01): `docs/design-preview/round-2/` 02 to 04 (top, scrolled, end), 05 (a tapped dot with its chip), 06 (the chip opened Day detail), 23 (dark), 27 (empty), 28 and 29 (200%), 08-entry-a to c (entry animation frames taken right after switching to the tab). ColorOS has no `screenrecord` and the animator scale cannot be changed over adb, so there is no video.
 
+Round 2 rework 3 (2026-10-01, owner feedback item 24): the "Snoozes this week" bar chart is gone from Progress (card, tap state, strings, `formatOneDecimal`, the `progress-day-tapped` preview state and its test and baselines); the entry sequence keeps its other steps. Owner decision against FR-PRG-2's "snoozes chart", recorded in EXPERIENCE.md and deferred-work.md.
+
 ## Spec Change Log
 - Owner renegotiation (2026-09-27, after the round 1 device walkthrough): the design direction in docs/design-preview/feedback.md items 2–15 overrides the Round 1 layout (grouped card sections, frosted glass surfaces on gradient backgrounds in every theme, progressive disclosure into sub-screens, bottom Cancel | Save pill, animation, "Quiet time" naming, no starting-volume slider; brand colours unchanged; new glass and gradient tokens go into DESIGN.md with contrast checks). Rounds 2–3 follow the same pattern. KEEP: stateless screens, preview menu, wheel picker, edge-to-edge and IME fixes, screenshots and semantics tests.
 

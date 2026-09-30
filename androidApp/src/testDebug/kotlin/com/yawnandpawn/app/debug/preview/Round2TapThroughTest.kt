@@ -78,14 +78,6 @@ class Round2TapThroughTest {
         }
 
     @Test
-    fun `the chart header shows the week's total, and a tapped bar that day`() =
-        tapThrough(AppTab.Progress) {
-            composeRule.onNodeWithText("3 snoozes").assertExists()
-            composeRule.onNodeWithContentDescription("Wednesday, 2 snoozes").performScrollTo().performTouchInput { click() }
-            composeRule.onNodeWithText("Wed · 2 snoozes").assertExists()
-        }
-
-    @Test
     fun `Previous month shows August and Purchase history opens`() =
         tapThrough(AppTab.Progress) {
             composeRule.onNodeWithContentDescription("Previous month").performScrollTo().performClick()

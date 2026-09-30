@@ -395,11 +395,6 @@ components:
     numberColor: '{colors.text}'
     rounded: '{rounded.md}'
     note: 'Glass like every card (owner direction 2026-09-27). Two per row; a pair whose numbers do not fit half the width in display splits into one per row, so no number wraps or clips.'
-  bar-chart:
-    barColor: '{colors.snoozed}'
-    axisColor: '{colors.outline}'
-    labelColor: '{colors.text-secondary}'
-    barRounded: '{rounded.sm}'
   outcome-marker:
     onTime: 'check_circle, fill 1, {colors.success}'
     snoozed: 'schedule (clock), fill 1, {colors.snoozed}'
@@ -548,7 +543,7 @@ Computed with a WCAG relative-luminance script (2026-09-26; glass and gradient r
 | Light | accent / glass+gradient-top | graphic | 3.24 |
 | Light | outline / glass+gradient-top | graphic | 3.60 |
 | Light | success / glass+gradient-top (checklist OK, on-time marker) | text | 8.50 |
-| Light | snoozed / glass+gradient-top (snoozes chart, snoozed marker) | text | 5.19 |
+| Light | snoozed / glass+gradient-top (snoozed marker) | text | 5.19 |
 | Light | missed / glass+gradient-top (missed marker) | text | 5.34 |
 | Light | disabled-content / glass+gradient-top (disabled stepper and month buttons) | text | 6.64 |
 | Light | text / glass-accent+glass+gradient-top (streak card) | text | 15.05 |
@@ -600,7 +595,7 @@ Computed with a WCAG relative-luminance script (2026-09-26; glass and gradient r
 | Dark | outline / glass+gradient-top | graphic | 3.33 |
 | Dark | outline / glass+bg | graphic | 3.43 |
 | Dark | success / glass+gradient-top (checklist OK, on-time marker) | text | 11.00 |
-| Dark | snoozed / glass+gradient-top (snoozes chart, snoozed marker) | text | 6.74 |
+| Dark | snoozed / glass+gradient-top (snoozed marker) | text | 6.74 |
 | Dark | missed / glass+gradient-top (missed marker) | text | 4.91 |
 | Dark | disabled-content / glass+gradient-top (disabled stepper and month buttons) | text | 6.41 |
 | Dark | text / glass-accent+glass+gradient-top (streak card) | text | 12.02 |
@@ -729,7 +724,6 @@ Visual specs. Behaviour for every row lives in `EXPERIENCE.md > Component Patter
 | `progress-ring` | Progress hero card, the first thing on the page (owner decisions 2026-09-30 and 2026-10-01): 30 `outcome-marker` shapes (16 dp) on a hairline `outline-subtle` circle, up to 280 dp, clockwise from the top to today (in an outlined accent pill, 32 x 22 dp); a day without an alarm is a faint 4 dp `outline-subtle` dot. Centre: streak in `display` / `accent-text`, "/ 30" in `title` / `text-secondary`, "day streak" in `body`; empty, "Your first morning shows up here.". No legend. The label chip (`inverse-surface` / `inverse-text` pill, `label`, chevron, 48 dp target) pops in under the ring for a tapped dot. |
 | `card-streak` | Glass with the `glass-accent` tint, `glass-edge` hairline, `{rounded.md}`: sunrise icon and "Current streak" (`caption`), the number in `display` / `accent-text` with "days on time", "Best streak" and its number in `headline` / `text` on the right (stacked at large font scales), "Keep it going." in `text-secondary`. |
 | `stat-tile` | Progress (redesign 2026-09-30): three small tiles in one row (2 + 1 from 150% font scale), glass, `{rounded.md}`, 12 dp padding: an icon in `text-secondary`, the number in `title` (`text`), a short one-line label in `caption` (`text-secondary`: "on time", "to get up", "snoozes"). |
-| `bar-chart` | "Snoozes this week" (redesign 2026-09-30): the last 7 days as 20 dp `{rounded.full}` bars in `{colors.snoozed}` (a day without snoozes is a 6 dp `outline` stub), weekday initials under them with today in an outlined accent pill, the week total at the top right ("3 snoozes"; a tapped bar shows that day, "Wed · 2 snoozes"), and the summary line "Average {n} snoozes a morning. Lower is better." in `caption` / `text-secondary`. |
 | `outcome-marker` | Distinct shape per outcome, so it reads without a legend (owner decision 2026-10-01): on time = **filled dot** (`success`); snoozed = **dot with a small clock** (`snoozed`, the filled clock glyph); missed = **hollow ring** (`missed`); skipped or test = **small neutral dot** (`outline`); today = an **outlined accent pill** around the day; the day a label chip refers to gets a 1.5 dp selection ring in `text` (fix 2026-10-01). Same shapes in the ring, calendar and Day detail. The fallback `alt_route` badge stays in Day detail only; the ring and calendar say it to TalkBack. |
 | `calendar-day` | 48 dp cell, date number in `caption`, a 14 dp `outcome-marker` shape below. Today's date sits in an outlined accent pill. The calendar card sits 12 dp from the screen edges so seven 48 dp cells fit 360 dp; month heading in `title` between 48 dp "Previous month" / "Next month" chevrons; the grid slides between months; a tapped day's label chip pops in under the grid. No legend (owner decision 2026-10-01). |
 | `checklist-row` | 64 dp. Leading icon, title (`body`), reason (`caption`), trailing status: `check_circle` in `success` with "OK", or `button-outlined` "Fix". |

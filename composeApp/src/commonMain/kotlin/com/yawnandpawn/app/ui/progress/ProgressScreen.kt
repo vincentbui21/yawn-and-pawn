@@ -50,9 +50,10 @@ import org.jetbrains.compose.resources.stringResource
 /**
  * Progress (the Progress tab), stateless, owner redesign 2026-09-30 and notes 2026-10-01 (feedback items 21 and 23), top
  * to bottom with no heading (the tab names it): the hero ring of the last 30 mornings with the streak in the centre,
- * three small `stat-tile`s, "Snoozes this week", the accent streak card, the compact month calendar, and "Money paid"
- * beside the Insight card. No period tabs, no export (owner decision against FR-PRG-6). On entry the cards fade and rise
- * in sequence, the ring sweeps in, the streak counts up and the bars grow; reduced motion shows the final state at once.
+ * three small `stat-tile`s, the accent streak card, the compact month calendar, and "Money paid"
+ * beside the Insight card. No period tabs, no export and no snoozes chart (owner decisions against FR-PRG-6 and
+ * FR-PRG-2's chart, 2026-10-01: the ring shows each snoozed day and the "snoozes" tile the count). On entry the cards fade and rise
+ * in sequence, the ring sweeps in and the streak counts up; reduced motion shows the final state at once.
  * With nothing logged: the empty ring with its prompt, the calendar and Purchase history.
  */
 @Composable
@@ -76,17 +77,6 @@ fun ProgressScreen(
         )
         if (stats != null) {
             StatTiles(stats, modifier = Modifier.entrance(entered, order++))
-            if (state.week.isNotEmpty()) {
-                WeekChart(
-                    week = state.week,
-                    today = state.today,
-                    selected = state.selectedDay,
-                    average = state.averageSnoozesPerMorning,
-                    entered = entered,
-                    onIntent = onIntent,
-                    modifier = Modifier.entrance(entered, order++),
-                )
-            }
             StreakCard(current = stats.currentStreak, best = stats.bestStreak, modifier = Modifier.entrance(entered, order++))
         }
         state.calendar?.let {

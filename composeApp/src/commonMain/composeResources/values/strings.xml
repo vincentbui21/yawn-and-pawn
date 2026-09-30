@@ -229,10 +229,6 @@
     <string name="progress_minutes">%1$d min</string>
     <string name="progress_under_minute">Under 1 min</string>
     <string name="progress_percent">%1$d%</string>
-    <string name="progress_chart_title">Snoozes this week</string>
-    <string name="progress_chart_caption">Lower is better.</string>
-    <string name="progress_bar_snoozes">%1$d snoozes</string>
-    <string name="progress_bar_snooze_one">1 snooze</string>
     <string name="progress_money_title">Money paid</string>
     <string name="progress_money_month">This month</string>
     <string name="progress_previous_month">Previous month</string>
@@ -249,12 +245,8 @@
     <string name="progress_tile_to_get_up">to get up</string>
     <string name="progress_tile_snoozes">snoozes</string>
     <string name="progress_chip">%1$s %2$d · %3$s</string>
-    <string name="progress_bar_selected">%1$s · %2$s</string>
     <string name="progress_ring_of">/ %1$d</string>
     <string name="progress_day_today">today</string>
-    <string name="progress_chart_average">Average %1$s snoozes a morning.</string>
-    <string name="progress_bar_day">%1$s, %2$d snoozes</string>
-    <string name="progress_bar_day_one">%1$s, 1 snooze</string>
     <string name="progress_streak_keep_going">Keep it going.</string>
     <string name="progress_insight_title">Insight</string>
     <string name="progress_insight_weekdays">You get up fastest on weekdays.</string>

@@ -45,16 +45,7 @@ import com.yawnandpawn.app.ui.format.DayNameStyle
 import com.yawnandpawn.app.ui.format.WeekOrder
 import com.yawnandpawn.app.ui.format.dayName
 import com.yawnandpawn.app.ui.format.formatDate
-import com.yawnandpawn.app.ui.format.formatOneDecimal
 import com.yawnandpawn.app.ui.resources.Res
-import com.yawnandpawn.app.ui.resources.progress_bar_day
-import com.yawnandpawn.app.ui.resources.progress_bar_day_one
-import com.yawnandpawn.app.ui.resources.progress_bar_selected
-import com.yawnandpawn.app.ui.resources.progress_bar_snooze_one
-import com.yawnandpawn.app.ui.resources.progress_bar_snoozes
-import com.yawnandpawn.app.ui.resources.progress_chart_average
-import com.yawnandpawn.app.ui.resources.progress_chart_caption
-import com.yawnandpawn.app.ui.resources.progress_chart_title
 import com.yawnandpawn.app.ui.resources.progress_next_month
 import com.yawnandpawn.app.ui.resources.progress_previous_month
 import com.yawnandpawn.app.ui.resources.symbol_chevron_left
@@ -65,70 +56,6 @@ import kotlinx.datetime.isoDayNumber
 import org.jetbrains.compose.resources.DrawableResource
 import org.jetbrains.compose.resources.painterResource
 import org.jetbrains.compose.resources.stringResource
-
-/**
- * "Snoozes this week" (owner decision 2026-09-30): the last 7 days as rounded bars in `snoozed` (a day without snoozes is
- * a short `outline` stub), the weekday initials under them with today in an accent pill, the tapped day's number at the
- * top ("2 snoozes") and a one-line average summary with "Lower is better.". Tapping anywhere over a bar selects it; bars
- * are values, not buttons: TalkBack reads each as "Wednesday, 2 snoozes".
- */
-@Composable
-internal fun WeekChart(
-    week: List<DaySnoozes>,
-    today: LocalDate?,
-    selected: Int?,
-    average: Double?,
-    entered: Boolean,
-    onIntent: (ProgressIntent) -> Unit,
-    modifier: Modifier = Modifier,
-) {
-    val colors = PpsTheme.colors
-    val spacing = PpsTheme.spacing
-    val shown = (selected ?: week.lastIndex).coerceIn(week.indices)
-    Column(
-        modifier = modifier.fillMaxWidth().glass(PpsTheme.shapes.md).padding(spacing.cardPadding),
-        verticalArrangement = Arrangement.spacedBy(spacing.space3),
-    ) {
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            Text(
-                text = stringResource(Res.string.progress_chart_title),
-                modifier = Modifier.weight(1f).padding(end = spacing.space2).semantics { heading() },
-                style = PpsTheme.typography.title,
-                color = colors.text,
-            )
-            // No bar tapped: the week's total; a tapped bar: that day ("Wed · 2 snoozes").
-            val headerValue =
-                if (selected == null) {
-                    snoozeCount(week.sumOf { it.snoozes })
-                } else {
-                    stringResource(
-                        Res.string.progress_bar_selected,
-                        dayName(week[shown].date.dayOfWeek, DayNameStyle.Short),
-                        snoozeCount(week[shown].snoozes),
-                    )
-                }
-            Text(text = headerValue, style = PpsTheme.typography.label, color = colors.text)
-        }
-        Bars(week = week, entered = entered, onIntent = onIntent)
-        Row(modifier = Modifier.fillMaxWidth().clearAndSetSemantics { }) {
-            week.forEachIndexed { index, day ->
-                Box(modifier = Modifier.weight(1f), contentAlignment = Alignment.Center) {
-                    DayInitial(
-                        text = dayName(day.date.dayOfWeek, DayNameStyle.Narrow),
-                        today = day.date == today,
-                        selected = index == shown,
-                    )
-                }
-            }
-        }
-        val summary =
-            listOfNotNull(
-                average?.let { stringResource(Res.string.progress_chart_average, formatOneDecimal(it)) },
-                stringResource(Res.string.progress_chart_caption),
-            ).joinToString(" ")
-        Text(text = summary, style = PpsTheme.typography.caption, color = colors.textSecondary)
-    }
-}
 
 /** A weekday initial or date number: in an outlined accent pill for today (owner notes 2026-10-01); bold when selected. */
 @Composable
@@ -152,67 +79,6 @@ private fun DayInitial(
         textAlign = TextAlign.Center,
         maxLines = 1,
     )
-}
-
-/** The bars, bottom-aligned; a tap anywhere over a bar selects its day. */
-@Composable
-private fun Bars(
-    week: List<DaySnoozes>,
-    entered: Boolean,
-    onIntent: (ProgressIntent) -> Unit,
-) {
-    val colors = PpsTheme.colors
-    val max = week.maxOf { it.snoozes }.coerceAtLeast(1)
-    Row(
-        modifier =
-            Modifier
-                .fillMaxWidth()
-                .height(CHART_HEIGHT)
-                .pointerInput(week.size) {
-                    detectTapGestures { offset ->
-                        val index = (offset.x / (size.width.toFloat() / week.size)).toInt().coerceIn(week.indices)
-                        onIntent(ProgressIntent.DayBarTapped(index))
-                    }
-                },
-        verticalAlignment = Alignment.Bottom,
-    ) {
-        week.forEachIndexed { index, day ->
-            val description = barDescription(day)
-            // The bars grow from the bottom on entry, one after the other.
-            val grow = entranceProgress(entered, delayMillis = BAR_DELAY_MILLIS + index * BAR_STAGGER_MILLIS)
-            Box(
-                modifier = Modifier.weight(1f).fillMaxHeight().semantics { contentDescription = description },
-                contentAlignment = Alignment.BottomCenter,
-            ) {
-                val bar = Modifier.width(BAR_WIDTH).clip(PpsTheme.shapes.full)
-                if (day.snoozes > 0) {
-                    Box(
-                        modifier =
-                            bar
-                                .fillMaxHeight(
-                                    (day.snoozes.toFloat() / max * grow).coerceAtLeast(MIN_FRACTION),
-                                ).background(colors.snoozed),
-                    )
-                } else {
-                    Box(modifier = bar.height(STUB_HEIGHT).graphicsLayer { alpha = grow }.background(colors.outline))
-                }
-            }
-        }
-    }
-}
-
-@Composable
-private fun snoozeCount(n: Int): String =
-    if (n == 1) stringResource(Res.string.progress_bar_snooze_one) else stringResource(Res.string.progress_bar_snoozes, n)
-
-@Composable
-private fun barDescription(day: DaySnoozes): String {
-    val weekday = dayName(day.date.dayOfWeek, DayNameStyle.Full)
-    return if (day.snoozes == 1) {
-        stringResource(Res.string.progress_bar_day_one, weekday)
-    } else {
-        stringResource(Res.string.progress_bar_day, weekday, day.snoozes)
-    }
 }
 
 /**
@@ -401,13 +267,6 @@ private fun Modifier.bleed(horizontal: Dp): Modifier =
 
 private const val DAYS_PER_WEEK = 7
 
-private val CHART_HEIGHT = 112.dp
-
-private val BAR_WIDTH = 20.dp
-
-/** A day without snoozes still shows where its bar would be. */
-private val STUB_HEIGHT = 6.dp
-
 /** The today pill around a weekday initial or date. */
 private val PILL_WIDTH = 28.dp
 
@@ -420,11 +279,3 @@ private val TODAY_RING = 1.5.dp
 
 /** The selected day's ring (`text`). */
 private val SELECTED_RING = 1.5.dp
-
-/** The bars start growing once the cards above have come in. */
-private const val BAR_DELAY_MILLIS = 250
-
-private const val BAR_STAGGER_MILLIS = 60
-
-/** A growing bar never draws thinner than its rounded ends. */
-private const val MIN_FRACTION = 0.01f

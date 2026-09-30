@@ -16,10 +16,3 @@ actual fun formatMoney(money: Money): String {
 }
 
 private const val MICRO_DIGITS = 6
-
-actual fun formatOneDecimal(value: Double): String {
-    val format = NumberFormat.getNumberInstance(Locale.getDefault())
-    format.minimumFractionDigits = 1
-    format.maximumFractionDigits = 1
-    return format.format(value)
-}

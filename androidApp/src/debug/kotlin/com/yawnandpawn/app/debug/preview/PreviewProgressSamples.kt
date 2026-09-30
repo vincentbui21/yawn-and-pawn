@@ -8,7 +8,6 @@ import com.yawnandpawn.app.ui.format.Money
 import com.yawnandpawn.app.ui.progress.CalendarDay
 import com.yawnandpawn.app.ui.progress.CalendarMonth
 import com.yawnandpawn.app.ui.progress.DaySelection
-import com.yawnandpawn.app.ui.progress.DaySnoozes
 import com.yawnandpawn.app.ui.progress.Insight
 import com.yawnandpawn.app.ui.progress.Outcome
 import com.yawnandpawn.app.ui.progress.ProgressStats
@@ -87,24 +86,18 @@ object PreviewProgressSamples {
             RingDay(date, day?.outcome, day?.fallbackUsed ?: false)
         }
 
-    /** Tue 22 to Mon 28: two snoozed mornings, then five on time. */
-    private val week =
-        listOf(1, 2, 0, 0, 0, 0, 0).mapIndexed { index, snoozes -> DaySnoozes(sep(FIRST_OF_WEEK + index), snoozes) }
+    /** Snoozes of the snoozed mornings Tue 22 and Wed 23 (their Day detail and purchases). */
+    private val snoozesOn = mapOf(sep(FIRST_OF_WEEK) to 1, sep(FIRST_OF_WEEK + 1) to 2)
 
     val progress =
         ProgressUiState(
             today = today,
             ring = ring,
             stats = ProgressStats(currentStreak = 5, bestStreak = 12, onTime30Days = 80, averageMinutesToUp = 3, snoozes30Days = 8),
-            week = week,
-            averageSnoozesPerMorning = 0.4,
             calendar = september,
             paidThisMonth = price(9),
             insight = Insight.FastestOnWeekdays,
         )
-
-    /** A bar tapped: Wednesday 23, 2 snoozes. */
-    val progressDaySelected = progress.copy(selectedDay = 1)
 
     /** A ring dot tapped once: its label chip under the ring. */
     val progressDotChip = progress.copy(selection = DaySelection(sep(SNOOZED_DAY), Outcome.Snoozed, inCalendar = false))
@@ -189,7 +182,7 @@ object PreviewProgressSamples {
     fun dayDetail(date: LocalDate): DayDetailUiState {
         listOf(daySnoozed, dayFallback, dayTwoSessions, dayMissed, dayTest, daySkipped).firstOrNull { it.date == date }?.let { return it }
         val outcome = (august.days + septemberDays).firstOrNull { it.date == date }?.outcome ?: Outcome.OnTime
-        val snoozes = if (outcome == Outcome.Snoozed) (week.firstOrNull { it.date == date }?.snoozes ?: 1).coerceAtLeast(1) else 0
+        val snoozes = if (outcome == Outcome.Snoozed) (snoozesOn[date] ?: 1).coerceAtLeast(1) else 0
         val session =
             SessionDetail(
                 standUp,
@@ -284,7 +277,7 @@ object PreviewProgressSamples {
     /** Wednesday 23: two snoozes. */
     private const val SNOOZED_DAY = 23
 
-    /** The first day of "Snoozes this week" (Tuesday 22). */
+    /** Tuesday 22, the first of the two snoozed mornings. */
     private const val FIRST_OF_WEEK = 22
 
     /** Each snooze adds its 9 minutes to the time to up. */

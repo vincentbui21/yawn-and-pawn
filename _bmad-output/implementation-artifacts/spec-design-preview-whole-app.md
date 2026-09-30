@@ -67,7 +67,7 @@ context:
 ## Tasks & Acceptance
 
 **Execution:**
-- [ ] Round 1 -- wheel picker + device fixes; shell and daily-loop screens; preview menu and launcher entry; screenshots/semantics; install and device walkthrough screenshots.
+- [x] Round 1 -- wheel picker + device fixes; shell and daily-loop screens; preview menu and launcher entry; screenshots/semantics; install and device walkthrough screenshots.
 - [ ] Round 2 -- progress and settings screens; same checks and walkthrough.
 - [ ] Round 3 -- setup-flow screens; same checks and walkthrough.
 - [x] `docs/design-preview/copy-to-approve.md` -- kept current each round (round 1 done).

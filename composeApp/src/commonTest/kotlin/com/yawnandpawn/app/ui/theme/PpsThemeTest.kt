@@ -40,8 +40,10 @@ class PpsThemeTest {
         assertEquals(PpsTokens.Light.bg, PpsColorSet.Light.colors().bg)
         assertEquals(PpsTokens.Dark.accentText, PpsColorSet.Dark.colors().accentText)
         assertEquals(PpsTokens.Sunrise.accent, PpsColorSet.Sunrise.colors().accent)
-        assertEquals(PpsTokens.Sunrise.sunriseGradientTop, SunrisePpsColors.sunriseGradientTop)
-        assertNull(LightPpsColors.sunriseGradientTop)
+        assertEquals(PpsTokens.Sunrise.sunriseGradientTop, SunrisePpsColors.gradientTop)
+        assertEquals(PpsTokens.Light.gradientTop, LightPpsColors.gradientTop)
+        assertEquals(PpsTokens.Dark.glassStrong, DarkPpsColors.glassStrong)
+        assertEquals(PpsTokens.Sunrise.glass, SunrisePpsColors.glass)
         assertTrue(DarkPpsColors.isDark)
         assertFalse(SunrisePpsColors.isDark)
     }

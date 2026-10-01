@@ -69,8 +69,11 @@ class DesignTokenParserTest {
     }
 
     @Test
-    fun `an alpha colour is rejected`() {
-        failureMessage(withColor("'#FFD96F14'"))
+    fun `an eight digit colour is read as RRGGBBAA, a seven digit one is rejected`() {
+        val tokens = DesignTokenParser.parse(withColor("'#ffffffb8'"))
+
+        assertEquals(ColorToken("accent", "#FFFFFFB8"), tokens.colors[1])
+        failureMessage(withColor("'#FFD96F1'"))
     }
 
     @Test

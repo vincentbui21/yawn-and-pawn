@@ -23,7 +23,7 @@ private fun ComponentGallery(mode: PpsThemeMode) {
             verticalArrangement = Arrangement.spacedBy(PpsTheme.spacing.space4),
         ) {
             PpsTopAppBar(title = "New alarm", backContentDescription = "Back", onBack = {})
-            PpsTimeInput(initialTime = EditorForm.DEFAULT_TIME, is24Hour = false, onTimeChange = {})
+            PpsWheelTimePicker(time = EditorForm.DEFAULT_TIME, is24Hour = false, onTimeChange = {})
             NoteInline(text = "Rings tomorrow at 7:00 AM.")
             DayChipRow(selectedDays = setOf(DayOfWeek.MONDAY, DayOfWeek.FRIDAY), onToggle = {})
             PpsTextField(value = "", onValueChange = {}, label = "Label")

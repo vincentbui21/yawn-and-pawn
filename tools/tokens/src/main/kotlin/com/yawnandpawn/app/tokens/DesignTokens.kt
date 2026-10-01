@@ -5,7 +5,10 @@ import org.yaml.snakeyaml.Yaml
 import org.yaml.snakeyaml.constructor.SafeConstructor
 import org.yaml.snakeyaml.error.YAMLException
 
-/** A colour token, e.g. `accent-dark` = `#F5A04E` (always upper-case `#RRGGBB`). */
+/**
+ * A colour token, e.g. `accent-dark` = `#F5A04E`: always upper-case `#RRGGBB`, or `#RRGGBBAA` (CSS order, alpha last)
+ * for a translucent token such as the glass fill.
+ */
 data class ColorToken(
     val name: String,
     val hex: String,
@@ -53,7 +56,7 @@ class TokenParseException(
 
 /** Parses the YAML frontmatter of DESIGN.md. Pure; throws [TokenParseException] naming the bad key. */
 object DesignTokenParser {
-    private val hexColor = Regex("^#[0-9A-Fa-f]{6}$")
+    private val hexColor = Regex("^#[0-9A-Fa-f]{6}([0-9A-Fa-f]{2})?$")
     private val dpValue = Regex("^(\\d+)dp$")
     private val spValue = Regex("^(\\d+)sp$")
 
@@ -110,7 +113,7 @@ object DesignTokenParser {
     ): ColorToken {
         val text = value?.toString().orEmpty()
         if (!hexColor.matches(text)) {
-            throw TokenParseException("Colour token 'colors.$key' has value '$value'; expected #RRGGBB")
+            throw TokenParseException("Colour token 'colors.$key' has value '$value'; expected #RRGGBB or #RRGGBBAA")
         }
         return ColorToken(key, text.uppercase())
     }

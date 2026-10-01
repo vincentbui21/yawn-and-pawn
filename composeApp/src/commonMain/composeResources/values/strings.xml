@@ -7,13 +7,15 @@
     <string name="alarms_add_alarm">Add alarm</string>
     <string name="repeat_every_day">Every day</string>
     <string name="repeat_once">Once</string>
+    <!-- Owner decision 2026-09-27 (design preview feedback item 7): Mon to Fri, and Sat and Sun. -->
+    <string name="repeat_weekdays">Weekdays</string>
+    <string name="repeat_weekends">Weekends</string>
 
     <!-- Alarm editor (Story 1.8). Key strings from EXPERIENCE.md; the rest owner-approved 2026-09-27. -->
     <string name="editor_new_title">New alarm</string>
     <string name="editor_edit_title">Edit alarm</string>
     <string name="editor_back">Back</string>
     <string name="editor_repeat">Repeat</string>
-    <string name="editor_label">Label</string>
     <string name="editor_label_too_long">Keep the label under 40 characters.</string>
     <string name="editor_snooze_length">Snooze length</string>
     <string name="editor_snooze_minutes">%1$d min</string>
@@ -22,7 +24,6 @@
     <string name="editor_sound_default">Sunrise</string>
     <string name="editor_volume">Volume</string>
     <string name="editor_gradual_volume">Gradually increase volume</string>
-    <string name="editor_starting_volume">Starting volume</string>
     <string name="editor_percent">%1$d%</string>
     <string name="editor_vibration">Vibration</string>
     <string name="editor_save">Save</string>
@@ -31,4 +32,429 @@
     <string name="editor_discard_title">Discard changes?</string>
     <string name="editor_discard">Discard</string>
     <string name="editor_keep_editing">Keep editing</string>
+
+    <!-- Time wheel (owner decision 2026-09-27). "Hour" / "Minute" from the design-preview spec; "AM or PM" drafted (docs/design-preview/copy-to-approve.md). -->
+    <string name="time_wheel_hour">Hour</string>
+    <string name="time_wheel_minute">Minute</string>
+    <string name="time_wheel_period">AM or PM</string>
+    <!-- Unit labels after the wheels (owner decision 2026-09-27, feedback item 10). -->
+    <string name="time_wheel_hour_unit">h</string>
+    <string name="time_wheel_minute_unit">min</string>
+
+    <!-- Alarm editor layout (owner decision 2026-09-27, feedback items 2, 3, 8 to 11). Owner-given copy, plus drafts in docs/design-preview/copy-to-approve.md. -->
+    <string name="editor_cancel">Cancel</string>
+    <string name="editor_alarm_name">Alarm name</string>
+    <string name="repeat_custom">Custom</string>
+    <string name="editor_wake_check">Wake-up check</string>
+    <string name="editor_snooze">Snooze</string>
+    <string name="editor_quiet_time">Quiet time</string>
+    <string name="editor_vibrate_quiet_time">Vibrate during quiet time</string>
+    <string name="editor_quiet_time_note">After I'm up, the alarm stays quiet this long while you do your check.</string>
+    <string name="editor_check_mode">Mode</string>
+    <string name="editor_difficulty">Difficulty</string>
+    <string name="editor_record_message">Record a message</string>
+    <string name="editor_when_it_plays">When it plays</string>
+
+    <!-- Design preview round 1 (spec-design-preview-whole-app). EXPERIENCE.md key strings verbatim; drafts are listed in docs/design-preview/copy-to-approve.md. -->
+    <!-- App shell: nav-bar items (EXPERIENCE.md Information Architecture). -->
+    <string name="nav_alarms">Alarms</string>
+    <string name="nav_progress">Progress</string>
+    <string name="nav_settings">Settings</string>
+    <!-- Nav bar redesign (owner decision 2026-10-01, feedback item 26); drafts in docs/design-preview/copy-to-approve.md. -->
+    <string name="nav_you">You</string>
+    <string name="you_money">Money</string>
+    <string name="you_privacy_data">Privacy and your data</string>
+    <string name="you_help">Help</string>
+    <string name="you_about">About</string>
+    <string name="you_version">Version %1$s</string>
+
+    <!-- Home -->
+    <string name="home_streak_days">days on time</string>
+    <string name="home_streak_day">day on time</string>
+    <string name="home_paid_week">%1$s paid this week</string>
+    <string name="home_zero_paid">Nothing paid this week. Keep it that way.</string>
+    <string name="home_rings_in_minutes">Rings in %1$d min</string>
+    <string name="home_rings_in_hours">Rings in %1$d h %2$d min</string>
+    <string name="home_rings_in_days">Rings in %1$d d %2$d h</string>
+    <string name="home_reliability_banner">Alarms may not ring. Fix settings</string>
+    <string name="home_fix">Fix</string>
+    <string name="home_missed_note">Your %1$s alarm stopped after 30 minutes. Logged as missed.</string>
+    <string name="home_dismiss">Dismiss</string>
+    <string name="home_fallback_banner">Fallback check used 3 times this week. Re-register your %1$s?</string>
+    <string name="home_reregister">Re-register</string>
+    <string name="session_in_progress_title">Alarm in progress</string>
+    <string name="session_back_to_alarm">Back to alarm</string>
+    <string name="alarm_card_switch">%1$s alarm</string>
+    <string name="alarm_card_summary">%1$s · %2$s</string>
+    <string name="disable_under_lock_hours">Turn off your %1$s alarm? It rings in %2$d h. This is logged.</string>
+    <string name="disable_under_lock_minutes">Turn off your %1$s alarm? It rings in %2$d min. This is logged.</string>
+    <string name="disable_turn_off">Turn off</string>
+    <string name="disable_keep_on">Keep it on</string>
+
+    <!-- Checks -->
+    <string name="check_math">Math</string>
+    <string name="check_word">Word Unscramble</string>
+    <string name="check_memory">Memory Sequence</string>
+    <string name="check_qr">QR/Barcode</string>
+    <string name="check_house_hunt">House Hunt</string>
+    <string name="check_math_description">Solve a few quick sums.</string>
+    <string name="check_word_description">Unscramble a few words.</string>
+    <string name="check_memory_description">Repeat a pattern of tiles.</string>
+    <string name="check_qr_description">Scan a code you placed away from bed.</string>
+    <string name="check_house_hunt_description">Photograph a spot far from your bed.</string>
+    <string name="difficulty_easy">Easy</string>
+    <string name="difficulty_medium">Medium</string>
+    <string name="difficulty_hard">Hard</string>
+
+    <!-- Alarm editor, full (checks, grace window, fee ladder, motivation, test alarm) -->
+    <string name="editor_checks">Checks</string>
+    <string name="editor_check_chip">%1$s · %2$s</string>
+    <string name="editor_mode_random">Random</string>
+    <string name="editor_mode_all">All</string>
+    <string name="editor_no_check">Pick at least one check.</string>
+    <string name="editor_grace_seconds">%1$d seconds</string>
+    <string name="editor_fee_ladder">Snooze 1: %1$s · 2: %2$s · 3: %3$s</string>
+    <string name="editor_motivation">Motivation</string>
+    <string name="editor_message">Message</string>
+    <string name="editor_message_none">None</string>
+    <string name="editor_message_random">Random</string>
+    <string name="editor_after_im_up">After I'm up</string>
+    <string name="editor_mix_into_alarm">Mix into alarm</string>
+    <string name="editor_test_alarm">Test alarm</string>
+    <string name="editor_weakening_under_lock">Saved. Takes effect after tomorrow's %1$s alarm.</string>
+
+    <!-- Sound picker -->
+    <string name="sound_builtin">Built-in</string>
+    <string name="sound_system">System</string>
+    <string name="sound_your_files">Your files</string>
+    <string name="sound_your_file">Your file</string>
+    <string name="sound_pick_file">Pick a file</string>
+    <string name="sound_play_preview">Play preview</string>
+    <string name="sound_stop_preview">Stop preview</string>
+    <string name="sound_file_missing">File missing. Default sound will play.</string>
+
+    <!-- Ringing -->
+    <string name="wake_im_up">I'm up</string>
+    <string name="wake_snooze_price">Snooze · %1$s</string>
+    <string name="wake_session_line">Snooze %1$d of %2$d · %3$s paid this morning</string>
+    <string name="wake_snooze_unavailable">Snooze unavailable: %1$s</string>
+    <string name="wake_snooze_unavailable_talkback">Snooze unavailable, %1$s</string>
+    <string name="wake_reason_offline">offline</string>
+    <string name="wake_reason_max_snoozes">max snoozes reached</string>
+    <string name="wake_reason_price_cap">price cap reached</string>
+    <string name="wake_reason_payment_pending">payment pending</string>
+    <string name="wake_reason_prices_not_loaded">prices not loaded yet</string>
+    <string name="wake_stranded_refund">An earlier %1$s payment is being refunded</string>
+    <string name="wake_unlock_to_snooze">Unlock your phone to snooze</string>
+    <string name="wake_test_no_charge">Test · no charge</string>
+    <string name="wake_direct_boot_note">Your phone restarted, so today's check is Math.</string>
+    <string name="wake_phone_call_note">Paused for your call. Rings again when it ends.</string>
+
+    <!-- Snooze confirm sheet -->
+    <string name="snooze_confirm_title">Snooze for %1$d min?</string>
+    <string name="snooze_confirm_body">This one costs %1$s. The next one costs %2$s.</string>
+    <string name="snooze_confirm_last_body">This one costs %1$s.</string>
+    <string name="snooze_confirm_nudge_body">Is %1$d more minutes worth %2$s? You've got this.</string>
+    <string name="snooze_confirm_tax_note">Google Play shows the final total, including any tax.</string>
+    <string name="snooze_confirm_pay">Pay %1$s and snooze</string>
+    <string name="snooze_confirm_get_up">I'll get up</string>
+    <string name="snooze_unlock_to_pay">Unlock to pay %1$s</string>
+    <string name="snooze_cancel">Cancel</string>
+    <string name="snooze_already_paid_body">You already paid %1$s earlier that wasn't used. Use it for this snooze?</string>
+    <string name="snooze_use_it">Use it</string>
+    <string name="snooze_not_now">Not now</string>
+
+    <!-- Payment outcomes (wake snackbars) -->
+    <string name="payment_unlock_failed">Phone still locked. No charge.</string>
+    <string name="payment_cancelled">Payment cancelled. No charge.</string>
+    <string name="payment_error">Payment didn't go through. No charge.</string>
+    <string name="payment_offline">No connection. No charge.</string>
+    <string name="payment_pending_body">Payment not confirmed yet. If it goes through before you finish, your snooze starts. Otherwise, finish the check to stop the alarm.</string>
+
+    <!-- Check screens -->
+    <string name="grace_running">Quiet for %1$ds. Finish before it rings again.</string>
+    <string name="grace_ended">Time's up. Alarm's back on until you finish.</string>
+    <string name="grace_seconds_left">%1$d seconds left</string>
+    <string name="fallback_link">Can't do this check?</string>
+    <string name="camera_unavailable">Camera isn't available. Pick a fallback check.</string>
+    <string name="math_progress">Problem %1$d of %2$d</string>
+    <string name="math_plus">%1$d plus %2$d</string>
+    <string name="math_times">%1$d times %2$d</string>
+    <string name="math_delete_digit">Delete digit</string>
+    <string name="math_answer">Answer %1$s</string>
+    <string name="math_check">Check</string>
+    <string name="check_wrong_answer">Not quite. Try again.</string>
+    <string name="word_progress">Word %1$d of %2$d</string>
+    <string name="word_letter">Letter %1$s</string>
+    <string name="word_slot_empty">Slot %1$d, empty</string>
+    <string name="word_slot_filled">Slot %1$d, %2$s</string>
+    <string name="word_shuffle">Shuffle</string>
+    <string name="word_clear">Clear</string>
+    <string name="memory_watch">Watch the sequence</string>
+    <string name="memory_your_turn">Your turn</string>
+    <string name="memory_progress">Round %1$d of %2$d</string>
+    <string name="memory_tile">Tile %1$d</string>
+    <string name="qr_header">Scan your code</string>
+    <string name="qr_wrong_code">That's a different code. Scan your registered one.</string>
+    <string name="qr_viewfinder">Camera viewfinder. Point at your code.</string>
+    <string name="qr_torch">Torch</string>
+    <string name="house_hunt_take_photo">Take photo</string>
+    <string name="house_hunt_matched">Matched</string>
+    <string name="house_hunt_no_match">Doesn't match yet. Try the same angle.</string>
+    <string name="house_hunt_checking">Checking</string>
+
+    <!-- Fallback check picker -->
+    <string name="fallback_picker_title">Pick a fallback check</string>
+    <string name="fallback_picker_close">Back to check</string>
+
+    <!-- Success and Snoozed -->
+    <string name="success_zero_snooze">Up on time. %1$d days in a row.</string>
+    <string name="success_zero_snooze_one">Up on time. 1 day in a row.</string>
+    <string name="success_zero_snooze_first">Up on time.</string>
+    <!-- Under the streak number on Success (owner decision 2026-09-28, feedback item 19); the singular is a draft. -->
+    <string name="success_days_in_a_row">days in a row</string>
+    <string name="success_day_in_a_row">day in a row</string>
+    <string name="success_after_snooze">You're up. That's what counts.</string>
+    <string name="success_paid_this_morning">%1$s paid this morning</string>
+    <string name="success_test">Test finished. Your alarm works.</string>
+    <string name="success_pending_not_used">Your pending payment wasn't used. Google refunds it automatically.</string>
+    <string name="success_done">Done</string>
+    <string name="snoozed_next_ring">Snoozed. Next ring at %1$s.</string>
+
+    <!-- Design preview round 2: progress and settings. EXPERIENCE.md key strings and long-form copy verbatim; drafts are listed in docs/design-preview/copy-to-approve.md. -->
+    <!-- Outcomes (EXPERIENCE.md glossary), with the outcome-marker glyphs. -->
+    <string name="outcome_on_time">On time</string>
+    <string name="outcome_snoozed">Snoozed</string>
+    <string name="outcome_missed">Missed</string>
+    <string name="outcome_skipped">Skipped</string>
+    <string name="outcome_test">Test</string>
+
+    <!-- Progress -->
+    <string name="progress_empty">Your first morning shows up here.</string>
+    <string name="progress_current_streak">Current streak</string>
+    <string name="progress_best_streak">Best streak</string>
+    <string name="progress_minutes">%1$d min</string>
+    <string name="progress_under_minute">Under 1 min</string>
+    <string name="progress_percent">%1$d%</string>
+    <string name="progress_money_title">Money paid</string>
+    <string name="progress_money_month">This month</string>
+    <string name="progress_previous_month">Previous month</string>
+    <string name="progress_next_month">Next month</string>
+    <string name="progress_day_outcome">%1$s %2$d, %3$s</string>
+    <string name="progress_day_fallback">fallback check used</string>
+    <string name="progress_day_sessions">%1$d sessions</string>
+    <string name="progress_day_no_alarm">%1$s %2$d, no alarm</string>
+
+    <!-- Progress redesign (owner decision 2026-09-30, feedback item 21); drafts in docs/design-preview/copy-to-approve.md. -->
+    <string name="progress_ring_streak">day streak</string>
+    <!-- Owner notes 2026-10-01 (feedback item 23): short one-line tile labels, and the label chip of a tapped dot. -->
+    <string name="progress_tile_on_time">on time</string>
+    <string name="progress_tile_to_get_up">to get up</string>
+    <string name="progress_tile_snoozes">snoozes</string>
+    <string name="progress_chip">%1$s %2$d · %3$s</string>
+    <string name="progress_ring_of">/ %1$d</string>
+    <string name="progress_day_today">today</string>
+    <string name="progress_streak_keep_going">Keep it going.</string>
+    <string name="progress_insight_title">Insight</string>
+    <string name="progress_insight_weekdays">You get up fastest on weekdays.</string>
+    <string name="progress_insight_weekends">You get up fastest on weekends.</string>
+
+    <!-- Day detail -->
+    <string name="day_detail_before_unlock">Rang before your first unlock</string>
+    <string name="day_detail_turned_off">Your %1$s alarm was turned off. Logged.</string>
+    <string name="day_detail_deleted">Your %1$s alarm was deleted. Logged.</string>
+    <string name="day_detail_merged">%1$s alarm merged into this session</string>
+    <!-- Day detail redesign (owner, 2026-10-01, feedback item 25); drafts in docs/design-preview/copy-to-approve.md. -->
+    <string name="day_event_rang">Alarm rang</string>
+    <string name="day_event_rang_again">Rang again</string>
+    <string name="day_event_snoozed">Snoozed %1$d min · %2$s</string>
+    <string name="day_event_quiet_ended">Quiet time ran out</string>
+    <string name="day_event_solved_first">%1$s solved first try</string>
+    <string name="day_event_solved_tries">%1$s solved in %2$d tries</string>
+    <string name="day_event_fallback">Fallback check: %1$s</string>
+    <string name="day_event_switched">Check switched to %1$s</string>
+    <string name="day_event_stopped">Stopped after 30 minutes</string>
+    <string name="day_tile_rings">rings</string>
+    <string name="day_tile_paid">paid</string>
+    <string name="day_tile_no_charge">No charge</string>
+
+    <!-- Purchase history -->
+    <string name="purchase_history_title">Purchase history</string>
+    <string name="purchase_history_empty">No snoozes paid. Keep it that way.</string>
+    <string name="purchase_row_title">%1$s · %2$s</string>
+    <string name="purchase_snooze_number">Snooze %1$d</string>
+    <string name="purchase_stranded">Not used, refunded automatically by Google</string>
+
+    <!-- Settings -->
+    <string name="settings_snooze">Snooze</string>
+    <string name="settings_base_fee">Base fee</string>
+    <string name="settings_max_snoozes">Max snoozes per session</string>
+    <string name="settings_default_snooze_length">Default snooze length</string>
+    <string name="settings_wake">Wake</string>
+    <string name="settings_default_quiet_time">Default quiet time</string>
+    <string name="settings_bright_wake">Bright wake screen</string>
+    <string name="settings_bright_wake_caption">Raises screen brightness on alarm screens.</string>
+    <string name="settings_appearance">Appearance</string>
+    <string name="settings_theme_system">System</string>
+    <string name="settings_theme_light">Light</string>
+    <string name="settings_theme_dark">Dark</string>
+    <string name="settings_weekly_summary">Weekly summary</string>
+    <string name="settings_usage_stats">Share anonymous usage stats</string>
+    <string name="settings_reliability">Reliability checklist</string>
+    <string name="settings_payments">How payments &amp; refunds work</string>
+    <string name="settings_privacy">Privacy policy</string>
+    <string name="settings_terms">Terms</string>
+    <string name="settings_support">Support</string>
+    <string name="settings_delete_all">Delete all data</string>
+    <string name="settings_delete_title">Delete all data?</string>
+    <string name="settings_delete_body">Alarms, history, purchase records and settings are removed from this phone. This can't be undone.</string>
+    <string name="settings_delete_confirm">Delete</string>
+    <string name="settings_delete_keep">Keep it</string>
+    <string name="settings_no_browser">No browser found.</string>
+    <string name="settings_base_fee_lock">You can raise it anytime. Lowering it waits until after your next alarm.</string>
+    <string name="settings_prices_approximate">Approximate. Your local price shows when you're online.</string>
+    <string name="settings_weakening_today">Saved. Takes effect after today's %1$s alarm.</string>
+    <string name="stepper_lower">Lower %1$s</string>
+    <string name="stepper_raise">Raise %1$s</string>
+    <string name="stepper_value">%1$s, %2$s</string>
+
+    <!-- Reliability checklist -->
+    <string name="reliability_notifications">Notifications</string>
+    <string name="reliability_notifications_reason">Needed to show your alarm.</string>
+    <string name="reliability_full_screen">Full-screen alarm</string>
+    <string name="reliability_full_screen_reason">Shows the alarm over the lock screen.</string>
+    <string name="reliability_exact">Exact alarms</string>
+    <string name="reliability_exact_reason">Lets the alarm ring on time.</string>
+    <string name="reliability_dnd">Do Not Disturb</string>
+    <string name="reliability_dnd_reason">Do Not Disturb must allow alarms.</string>
+    <string name="reliability_battery">Battery</string>
+    <string name="reliability_battery_reason">Stops Android from pausing your alarm.</string>
+    <string name="reliability_manufacturer">Manufacturer settings</string>
+    <string name="reliability_manufacturer_reason">Your phone may stop apps in the background.</string>
+    <string name="reliability_camera">Camera</string>
+    <string name="reliability_camera_reason">Needed for your QR/Barcode and House Hunt checks.</string>
+    <string name="reliability_microphone">Microphone</string>
+    <string name="reliability_microphone_reason">Needed to record messages.</string>
+    <string name="reliability_test">Test alarm</string>
+    <string name="reliability_test_reason">Ring a test with your phone locked.</string>
+    <string name="reliability_revoked_battery">Alarm may not ring: battery optimization turned back on</string>
+    <string name="reliability_revoked_notifications">Alarm may not ring: notifications turned off</string>
+    <string name="reliability_revoked_full_screen">Alarm may not ring: full-screen alarm turned off</string>
+    <string name="reliability_revoked_exact">Alarm may not ring: exact alarms turned off</string>
+    <string name="reliability_revoked_dnd">Alarm may not ring: Do Not Disturb blocks alarms</string>
+    <string name="reliability_revoked_manufacturer">Alarm may not ring: check your phone's background settings again</string>
+    <string name="reliability_ok">OK</string>
+    <string name="reliability_ring_test">Ring a test alarm</string>
+    <string name="reliability_open_settings">Open settings</string>
+    <string name="reliability_done_this">I've done this</string>
+    <string name="reliability_xiaomi_step_1">Turn on Autostart for Yawn &amp; Pawn.</string>
+    <string name="reliability_xiaomi_step_2">Set Battery saver to “No restrictions”.</string>
+    <string name="reliability_xiaomi_step_3">Lock the app in Recents so it stays open.</string>
+
+    <!-- How payments & refunds work (long-form copy, one string per paragraph) -->
+    <string name="payments_fee_body">Each snooze costs your base fee times the snooze number. Google Play shows the price in your local currency.</string>
+    <string name="payments_cap_body">You can snooze up to your max snoozes per session, and one morning never costs more than %1$s.</string>
+    <string name="payments_lock_body">Your fee is locked for the morning. You can raise it anytime. Lowering it waits until after your next alarm.</string>
+    <string name="payments_pending_body">A pending payment only starts your snooze if it goes through before you finish. Otherwise, finish the check to stop the alarm.</string>
+    <string name="payments_unused_body">Payments that weren't used are refunded automatically by Google.</string>
+    <string name="payments_self_refund_body">Google lets you request a refund yourself within 48 hours of a charge.</string>
+    <!-- Alarm behaviour disclosure (FR-ONB-5), verbatim, one string per sentence so each stays under 25 words. -->
+    <string name="disclosure_ringing_body">Your alarm keeps ringing until you finish your check or pay to snooze.</string>
+    <string name="disclosure_usable_body">Your phone stays usable: calls, other apps and emergency calls all work.</string>
+    <string name="disclosure_escape_body">Other ways to stop it: force-stop or uninstall the app, turn off the phone, or leave it 30 minutes.</string>
+    <string name="purchase_auth_tip">Turn on purchase authentication in Google Play so every snooze needs your fingerprint or password.</string>
+
+    <!-- Problem with a charge? -->
+    <string name="problem_title">Problem with a charge?</string>
+    <string name="problem_pending_body">A pending payment only charges you if it goes through.</string>
+    <string name="problem_open_play">Open Google Play order history</string>
+    <string name="problem_email_support">Email support</string>
+
+    <!-- Design preview round 3: setup flows. EXPERIENCE.md key strings verbatim; drafts are listed in docs/design-preview/copy-to-approve.md. -->
+    <!-- Onboarding (FR-ONB-1/5/6). The mission "how it works" line and the analytics choice are split into their sentences, verbatim. -->
+    <string name="onboarding_mission_body">This app makes money only when you snooze. We hope you never pay us.</string>
+    <string name="onboarding_how_snooze">Snooze costs money.</string>
+    <string name="onboarding_how_wake">Waking up is free.</string>
+    <string name="onboarding_start">Let's set it up</string>
+    <string name="onboarding_disclosure_title">How your alarm works</string>
+    <string name="onboarding_understand">I understand</string>
+    <string name="onboarding_base_fee_title">Choose your snooze fee</string>
+    <string name="onboarding_continue">Continue</string>
+    <string name="onboarding_first_alarm_title">When should it ring?</string>
+    <string name="onboarding_checks_title">How will you prove you're up?</string>
+    <string name="onboarding_reliability_title">Make sure it rings</string>
+    <string name="onboarding_analytics_title">Share anonymous usage stats?</string>
+    <string name="onboarding_analytics_body">Off unless you turn it on.</string>
+    <string name="onboarding_share">Share</string>
+    <string name="onboarding_no_thanks">No thanks</string>
+    <string name="onboarding_test_title">Test your alarm</string>
+    <string name="onboarding_test_body">Lock your phone. We'll ring in 10 seconds.</string>
+    <string name="onboarding_bright_wake">Your alarm screen turns bright to help you wake. Change it in Settings.</string>
+    <string name="onboarding_test_not_locked">Your phone wasn't locked. Try again with it locked.</string>
+    <string name="onboarding_skip_test">Skip for now</string>
+    <string name="onboarding_step">Step %1$d of %2$d</string>
+    <string name="home_test_skipped">Ring a test alarm with your phone locked to check it works.</string>
+
+    <!-- Check picker and Check setup -->
+    <string name="check_try_it">Try it</string>
+    <string name="check_needs_camera">Needs the camera. If it can't be used, you'll get a fallback check.</string>
+    <string name="check_memory_talkback">Uses numbered tiles with TalkBack.</string>
+    <string name="check_move_up">Move up</string>
+    <string name="check_move_down">Move down</string>
+    <string name="check_preview_done">Nice. That's how it works.</string>
+    <string name="check_picker_your_checks">Your checks</string>
+    <string name="check_count_problems_label">Problems</string>
+    <string name="check_count_words_label">Words</string>
+    <string name="check_count_rounds_label">Rounds</string>
+    <string name="check_count_problems">%1$d problems</string>
+    <string name="check_count_problem">1 problem</string>
+    <string name="check_count_words">%1$d words</string>
+    <string name="check_count_word">1 word</string>
+    <string name="check_count_rounds">%1$d rounds</string>
+    <string name="check_count_round">1 round</string>
+    <string name="camera_unavailable_setup">Camera isn't available.</string>
+
+    <!-- QR/Barcode registration and the printable QR -->
+    <string name="qr_no_code">Scan a code to use this check.</string>
+    <string name="qr_your_code">Your code</string>
+    <string name="qr_code_saved">Code saved</string>
+    <string name="qr_use_code">Use this code</string>
+    <string name="qr_scan_again">Scan again</string>
+    <string name="qr_printable">Make a printable QR</string>
+    <string name="qr_printable_body">Stick it somewhere far from your bed.</string>
+    <string name="qr_print">Print or save as PDF</string>
+    <string name="qr_pdf_line">Scan this to stop your alarm.</string>
+    <string name="qr_replace_dialog">Replace your QR code? The old one stops working.</string>
+    <string name="qr_replace">Replace</string>
+    <string name="qr_image">QR code for your alarm</string>
+
+    <!-- House Hunt registration -->
+    <string name="house_hunt_photos_title">House Hunt photos</string>
+    <string name="house_hunt_photos_body">Take 1 to 3 photos of one spot far from your bed.</string>
+    <string name="house_hunt_remove">Remove</string>
+    <string name="house_hunt_photo">Photo %1$d</string>
+    <string name="house_hunt_test_match">Test match</string>
+    <string name="house_hunt_photo_failed">Couldn't use that photo. Try again.</string>
+    <string name="house_hunt_need_photo">Take at least one photo.</string>
+    <string name="house_hunt_not_restored">House Hunt photos weren't restored. Retake them.</string>
+    <string name="house_hunt_retake">Retake</string>
+    <string name="house_hunt_photo_count">%1$d photos</string>
+    <string name="house_hunt_photo_one">1 photo</string>
+
+    <!-- Recordings (FR-SND-3) -->
+    <string name="recordings_title">Recordings</string>
+    <string name="recordings_empty">Record a message for your morning self.</string>
+    <string name="recordings_mic_off">Microphone is off. Turn it on in Settings.</string>
+    <string name="recordings_too_short">Too short. Try again.</string>
+    <string name="recordings_start">Start recording</string>
+    <string name="recordings_stop">Stop recording</string>
+    <string name="recordings_play">Play message</string>
+    <string name="recordings_pause">Pause message</string>
+    <string name="recordings_replay">Replay message</string>
+    <string name="recordings_name">Message %1$d</string>
+    <string name="recordings_rerecord">Re-record</string>
+    <string name="recordings_time">%1$s / %2$s</string>
+    <string name="recordings_yours">Your messages</string>
+    <string name="recordings_delete_named">Delete %1$s</string>
+    <string name="recordings_delete_dialog">Delete this message? Alarms using it will play no message.</string>
 </resources>

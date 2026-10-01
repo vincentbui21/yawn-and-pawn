@@ -17,6 +17,7 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import com.yawnandpawn.app.ui.resources.Res
@@ -53,11 +54,12 @@ fun <T> PpsSegmentedControl(
                         activeContainerColor = colors.accent,
                         activeContentColor = colors.onAccent,
                         activeBorderColor = colors.outline,
-                        inactiveContainerColor = colors.bg,
+                        // Clear, so the glass card shows through (text and outline on glass are in the contrast table).
+                        inactiveContainerColor = Color.Transparent,
                         inactiveContentColor = colors.text,
                         inactiveBorderColor = colors.outline,
                     ),
-                contentPadding = PaddingValues(horizontal = spacing.space2, vertical = spacing.space1),
+                contentPadding = PaddingValues(horizontal = spacing.space1, vertical = spacing.space1),
                 // The check sits inside the label row, so the label wraps beside it instead of overflowing.
                 icon = {},
             ) {
@@ -81,5 +83,5 @@ fun <T> PpsSegmentedControl(
     }
 }
 
-/** Material 3 segmented-button icon size. */
-private val CHECK_ICON_SIZE = 18.dp
+/** Slightly under the Material 18 dp, so "Weekdays" with its check fits a third of a 360 dp card. */
+private val CHECK_ICON_SIZE = 16.dp

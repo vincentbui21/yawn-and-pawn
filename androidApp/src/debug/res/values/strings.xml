@@ -1,0 +1,4 @@
+<resources>
+    <!-- Launcher label of the debug-only design preview (not app copy; release builds do not have it). -->
+    <string name="preview_launcher_label">Yawn &amp; Pawn Preview</string>
+</resources>

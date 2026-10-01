@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- Debug build only: the theme showcase (Story 1.3). Release builds never contain it. -->
+<!-- Debug build only: the theme showcase (Story 1.3) and the design preview. Release builds never contain them. -->
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
 
     <application>
@@ -7,6 +7,19 @@
         <activity
             android:name=".debug.ThemeShowcaseActivity"
             android:exported="true" />
+
+        <!-- Design preview: its own launcher icon "Yawn & Pawn Preview" and its own task, next to the real app. -->
+        <activity
+            android:name=".debug.preview.PreviewActivity"
+            android:exported="true"
+            android:label="@string/preview_launcher_label"
+            android:taskAffinity="com.yawnandpawn.app.preview"
+            android:windowSoftInputMode="adjustResize">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+        </activity>
     </application>
 
 </manifest>

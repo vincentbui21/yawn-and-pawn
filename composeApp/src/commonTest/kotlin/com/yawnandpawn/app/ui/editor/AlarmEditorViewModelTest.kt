@@ -141,7 +141,6 @@ class AlarmEditorViewModelTest {
             viewModel.onIntent(EditorIntent.LabelChanged("Stand-up"))
             viewModel.onIntent(EditorIntent.SnoozeLengthSelected(15))
             viewModel.onIntent(EditorIntent.VolumeChanged(70))
-            viewModel.onIntent(EditorIntent.RampStartChanged(30))
             viewModel.onIntent(EditorIntent.VibrationToggled(false))
 
             viewModel.onIntent(EditorIntent.SaveClicked)
@@ -155,7 +154,7 @@ class AlarmEditorViewModelTest {
             assertEquals(15, alarm.snoozeLengthMinutes)
             assertEquals(70, alarm.volumePercent)
             assertTrue(alarm.gradualVolume)
-            assertEquals(30, alarm.rampStartPercent)
+            assertEquals(20, alarm.rampStartPercent, "the ramp start is the fixed default")
             assertFalse(alarm.vibration)
             assertEquals(Alarm.DEFAULT_SOUND_REF, alarm.soundRef)
             assertEquals(Alarm.DEFAULT_GRACE_SECONDS, alarm.graceSeconds)
@@ -271,28 +270,97 @@ class AlarmEditorViewModelTest {
         }
 
     @Test
-    fun `the starting volume never goes above the volume`() =
+    fun `the ramp start is fixed at 20 and never saved above the volume`() =
         runTest(dispatcher) {
-            val viewModel = viewModel()
-
-            viewModel.onIntent(EditorIntent.RampStartChanged(95))
-            assertEquals(80, viewModel.state.value.form.rampStartPercent)
+            repository.upsert(stored)
+            val viewModel = viewModel(stored.id)
+            advanceUntilIdle()
             viewModel.onIntent(EditorIntent.VolumeChanged(15))
-            assertEquals(15, viewModel.state.value.form.rampStartPercent)
-            viewModel.onIntent(EditorIntent.VolumeChanged(90))
-            assertEquals(15, viewModel.state.value.form.rampStartPercent, "raising the volume leaves the start level alone")
+
+            viewModel.onIntent(EditorIntent.SaveClicked)
+            advanceUntilIdle()
+
+            assertEquals(15, repository.current.single().rampStartPercent, "20, clamped to a 15% volume so it stays valid")
         }
 
     @Test
-    fun `turning the gradual volume off hides the starting level but keeps its value`() =
+    fun `turning the gradual volume off keeps the fixed ramp start`() =
         runTest(dispatcher) {
             val viewModel = viewModel()
 
             viewModel.onIntent(EditorIntent.GradualVolumeToggled(false))
+            viewModel.onIntent(EditorIntent.SaveClicked)
             advanceUntilIdle()
 
-            assertFalse(viewModel.state.value.form.gradualVolume)
-            assertEquals(20, viewModel.state.value.form.rampStartPercent)
+            assertFalse(repository.current.single().gradualVolume)
+            assertEquals(20, repository.current.single().rampStartPercent)
+        }
+
+    @Test
+    fun `a row opens its sub-screen and Back returns to the main screen without closing`() =
+        runTest(dispatcher) {
+            val viewModel = viewModel()
+            val effects = effectsOf(viewModel)
+
+            viewModel.onIntent(EditorIntent.PaneOpened(EditorPane.Snooze))
+            assertEquals(EditorPane.Snooze, viewModel.state.value.pane)
+            viewModel.onIntent(EditorIntent.SnoozeLengthSelected(15))
+            viewModel.onIntent(EditorIntent.BackRequested)
+            advanceUntilIdle()
+
+            assertEquals(EditorPane.Main, viewModel.state.value.pane)
+            assertEquals(15, viewModel.state.value.form.snoozeLengthMinutes)
+            assertFalse(viewModel.state.value.showDiscardDialog)
+            assertEquals(emptyList(), effects)
+        }
+
+    @Test
+    fun `the repeat quick choices set the days, and Custom shows the chips`() =
+        runTest(dispatcher) {
+            val viewModel = viewModel()
+            assertEquals(RepeatChoice.Once, viewModel.state.value.repeatChoice)
+
+            viewModel.onIntent(EditorIntent.RepeatChosen(RepeatChoice.Weekdays))
+            assertEquals(com.yawnandpawn.app.ui.format.Weekdays, viewModel.state.value.form.repeatDays)
+            assertEquals(RepeatChoice.Weekdays, viewModel.state.value.repeatChoice)
+
+            viewModel.onIntent(EditorIntent.RepeatChosen(RepeatChoice.Custom))
+            assertEquals(RepeatChoice.Custom, viewModel.state.value.repeatChoice, "Custom stays chosen with the weekdays set")
+            viewModel.onIntent(EditorIntent.DayToggled(DayOfWeek.FRIDAY))
+            assertEquals(4, viewModel.state.value.form.repeatDays.size)
+
+            viewModel.onIntent(EditorIntent.RepeatChosen(RepeatChoice.Once))
+            assertEquals(emptySet(), viewModel.state.value.form.repeatDays)
+            assertEquals(RepeatChoice.Once, viewModel.state.value.repeatChoice)
+        }
+
+    @Test
+    fun `a stored alarm on custom days opens with Custom chosen`() =
+        runTest(dispatcher) {
+            repository.upsert(stored)
+            val viewModel = viewModel(stored.id)
+            advanceUntilIdle()
+
+            assertEquals(RepeatChoice.Custom, viewModel.state.value.repeatChoice)
+        }
+
+    @Test
+    fun `the header counts down to the next ring`() =
+        runTest(dispatcher) {
+            val viewModel = viewModel()
+
+            // 08:00 now; 07:00 tomorrow is 23 h away.
+            assertEquals(
+                com.yawnandpawn.app.ui.format.Countdown
+                    .HoursMinutes(23, 0),
+                viewModel.state.value.ringsIn,
+            )
+            viewModel.onIntent(EditorIntent.TimeChanged(LocalTime(8, 45)))
+            assertEquals(
+                com.yawnandpawn.app.ui.format.Countdown
+                    .Minutes(45),
+                viewModel.state.value.ringsIn,
+            )
         }
 
     @Test
@@ -470,21 +538,6 @@ class AlarmEditorViewModelTest {
             assertEquals(30, saved.graceSeconds)
             assertEquals(Alarm.DEFAULT_SOUND_REF, saved.soundRef)
             assertEquals(listOf<EditorEffect>(EditorEffect.Close), effects)
-        }
-
-    @Test
-    fun `with gradual volume off the hidden start level is not clamped until saving`() =
-        runTest(dispatcher) {
-            val viewModel = viewModel()
-            viewModel.onIntent(EditorIntent.GradualVolumeToggled(false))
-
-            viewModel.onIntent(EditorIntent.VolumeChanged(10))
-            assertEquals(20, viewModel.state.value.form.rampStartPercent)
-            viewModel.onIntent(EditorIntent.GradualVolumeToggled(true))
-            viewModel.onIntent(EditorIntent.SaveClicked)
-            advanceUntilIdle()
-
-            assertEquals(10, repository.current.single().rampStartPercent, "clamped at save once gradual is on")
         }
 
     @Test

@@ -43,6 +43,11 @@ object PpsTokens {
         val inverseSurface = Color(0xFF1A1714)
         val inverseText = Color(0xFFFAF8F5)
         val inverseAccent = Color(0xFFF5A04E)
+        val gradientTop = Color(0xFFF7ECDF)
+        val glass = Color(0xB8FFFFFF)
+        val glassStrong = Color(0xEBFFFFFF)
+        val glassEdge = Color(0x1A1A1714)
+        val glassAccent = Color(0x1FD96F14)
     }
 
     /** Dark colour set. */
@@ -66,6 +71,11 @@ object PpsTokens {
         val inverseSurface = Color(0xFFF2EFEA)
         val inverseText = Color(0xFF111214)
         val inverseAccent = Color(0xFFA8520A)
+        val gradientTop = Color(0xFF1F1A17)
+        val glass = Color(0xB81A1B1E)
+        val glassStrong = Color(0xEB1A1B1E)
+        val glassEdge = Color(0x1AF2EFEA)
+        val glassAccent = Color(0x1FF5A04E)
     }
 
     /** Sunrise colour set. */
@@ -87,6 +97,10 @@ object PpsTokens {
         val inverseSurface = Color(0xFF1A1714)
         val inverseText = Color(0xFFFFF6EA)
         val sunriseGradientTop = Color(0xFFFFE3C2)
+        val glass = Color(0xB8FFFFFF)
+        val glassStrong = Color(0xEBFFFFFF)
+        val glassEdge = Color(0x1A1A1714)
+        val glassAccent = Color(0x1FD96F14)
     }
 
     /** Every colour token by its DESIGN.md key. */
@@ -111,6 +125,11 @@ object PpsTokens {
             "inverse-surface" to Light.inverseSurface,
             "inverse-text" to Light.inverseText,
             "inverse-accent" to Light.inverseAccent,
+            "gradient-top" to Light.gradientTop,
+            "glass" to Light.glass,
+            "glass-strong" to Light.glassStrong,
+            "glass-edge" to Light.glassEdge,
+            "glass-accent" to Light.glassAccent,
             "bg-dark" to Dark.bg,
             "surface-dark" to Dark.surface,
             "surface-variant-dark" to Dark.surfaceVariant,
@@ -130,6 +149,11 @@ object PpsTokens {
             "inverse-surface-dark" to Dark.inverseSurface,
             "inverse-text-dark" to Dark.inverseText,
             "inverse-accent-dark" to Dark.inverseAccent,
+            "gradient-top-dark" to Dark.gradientTop,
+            "glass-dark" to Dark.glass,
+            "glass-strong-dark" to Dark.glassStrong,
+            "glass-edge-dark" to Dark.glassEdge,
+            "glass-accent-dark" to Dark.glassAccent,
             "bg-sunrise" to Sunrise.bg,
             "surface-sunrise" to Sunrise.surface,
             "surface-variant-sunrise" to Sunrise.surfaceVariant,
@@ -147,6 +171,10 @@ object PpsTokens {
             "inverse-surface-sunrise" to Sunrise.inverseSurface,
             "inverse-text-sunrise" to Sunrise.inverseText,
             "sunrise-gradient-top" to Sunrise.sunriseGradientTop,
+            "glass-sunrise" to Sunrise.glass,
+            "glass-strong-sunrise" to Sunrise.glassStrong,
+            "glass-edge-sunrise" to Sunrise.glassEdge,
+            "glass-accent-sunrise" to Sunrise.glassAccent,
         )
 
     /** Type ramp (DESIGN.md `typography`). */
@@ -225,5 +253,7 @@ object PpsTokens {
         val targetWake: Dp = 64.dp
         val targetWakeHero: Dp = 72.dp
         val ringStroke: Dp = 8.dp
+        val glassBlur: Dp = 24.dp
+        val hairline: Dp = 1.dp
     }
 }

@@ -1,5 +1,6 @@
 package com.yawnandpawn.app.ui.components
 
+import androidx.compose.animation.animateColorAsState
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -10,6 +11,7 @@ import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.selection.toggleable
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -38,13 +40,15 @@ fun DayChip(
     modifier: Modifier = Modifier,
 ) {
     val colors = PpsTheme.colors
+    // The chip animates its state (owner decision 2026-09-27); the animator duration scale 0 makes it instant.
+    val fill by animateColorAsState(if (selected) colors.accent else colors.surfaceVariant)
     Box(
         modifier =
             modifier
                 .widthIn(max = PpsTheme.spacing.targetMin)
                 .height(PpsTheme.spacing.targetMin)
                 .clip(PpsTheme.shapes.sm)
-                .background(if (selected) colors.accent else colors.surfaceVariant)
+                .background(fill)
                 .semantics { contentDescription = fullName }
                 .toggleable(value = selected, role = Role.Checkbox, onValueChange = onToggle),
         contentAlignment = Alignment.Center,

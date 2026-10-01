@@ -2,9 +2,9 @@
 name: Yawn & Pawn
 description: A calm, warm night-time alarm app that turns into a bright sunrise the moment the alarm rings.
 status: draft
-version: 0.2
+version: 0.5
 owner: Kiet Bui
-updated: 2026-09-26
+updated: 2026-10-01
 sources:
   - _bmad-output/planning-artifacts/prds/prd-pay-per-snooze-2026-09-26/prd.md
   - EXPERIENCE.md
@@ -29,6 +29,13 @@ colors:
   inverse-surface: '#1A1714'
   inverse-text: '#FAF8F5'
   inverse-accent: '#F5A04E'
+  # Glass and gradient (owner decision 2026-09-27). #RRGGBBAA = translucent, alpha last.
+  gradient-top: '#F7ECDF'
+  glass: '#FFFFFFB8'
+  glass-strong: '#FFFFFFEB'
+  glass-edge: '#1A17141A'
+  # Accent tint over glass (owner decision 2026-09-30, feedback item 21: the Progress streak card). 12% accent.
+  glass-accent: '#D96F141F'
   # Dark theme (primary design target for app screens).
   bg-dark: '#111214'
   surface-dark: '#1A1B1E'
@@ -49,6 +56,11 @@ colors:
   inverse-surface-dark: '#F2EFEA'
   inverse-text-dark: '#111214'
   inverse-accent-dark: '#A8520A'
+  gradient-top-dark: '#1F1A17'
+  glass-dark: '#1A1B1EB8'
+  glass-strong-dark: '#1A1B1EEB'
+  glass-edge-dark: '#F2EFEA1A'
+  glass-accent-dark: '#F5A04E1F'
   # Sunrise theme (wake screens only: ringing, snooze confirm, checks, success, snoozed).
   bg-sunrise: '#FFF6EA'
   surface-sunrise: '#FFFFFF'
@@ -67,6 +79,10 @@ colors:
   inverse-surface-sunrise: '#1A1714'
   inverse-text-sunrise: '#FFF6EA'
   sunrise-gradient-top: '#FFE3C2'
+  glass-sunrise: '#FFFFFFB8'
+  glass-strong-sunrise: '#FFFFFFEB'
+  glass-edge-sunrise: '#1A17141A'
+  glass-accent-sunrise: '#D96F141F'
 typography:
   clock-xl:
     fontFamily: Geist
@@ -132,6 +148,8 @@ spacing:
   target-wake: 64dp
   target-wake-hero: 72dp
   ring-stroke: 8dp
+  glass-blur: 24dp
+  hairline: 1dp
   thumb-zone: 'bottom 40% of screen height'
 components:
   # App-screen components reference light token names; Dark resolves the same role
@@ -161,7 +179,9 @@ components:
     rounded: '{rounded.full}'
     height: '{spacing.target-wake}'
   sheet-snooze-confirm:
-    backgroundColor: '{colors.surface-sunrise}'
+    backgroundColor: '{colors.glass-strong-sunrise}'
+    borderColor: '{colors.glass-edge-sunrise}'
+    blurRadius: '{spacing.glass-blur}'
     textColor: '{colors.text-sunrise}'
     rounded: '{rounded.lg}'
     priceTypography: '{typography.display}'
@@ -239,31 +259,61 @@ components:
     rounded: '{rounded.md}'
     padding: '{spacing.card-padding}'
   card-hero:
-    backgroundColor: '{colors.surface}'
+    backgroundColor: '{colors.glass}'
+    borderColor: '{colors.glass-edge}'
     numberColor: '{colors.accent-text}'
     numberColorDark: '{colors.accent-dark}'
     numberTypography: '{typography.display}'
     rounded: '{rounded.md}'
     padding: '{spacing.card-padding}'
   card-alarm:
-    backgroundColor: '{colors.surface}'
+    backgroundColor: '{colors.glass}'
+    borderColor: '{colors.glass-edge}'
     textColor: '{colors.text}'
     timeTypography: '{typography.title}'
     rounded: '{rounded.md}'
     padding: '{spacing.card-padding}'
-  fab:
-    backgroundColor: '{colors.accent}'
-    iconColor: '{colors.on-accent}'
+  background-gradient:
+    topColor: '{colors.gradient-top}'
+    bottomColor: '{colors.bg}'
+    sunriseTopColor: '{colors.sunrise-gradient-top}'
+    note: 'Vertical fade over the top 60% of every app screen (top 40% on wake screens), flat below. Owner decision 2026-09-27.'
+  card-group:
+    backgroundColor: '{colors.glass}'
+    borderColor: '{colors.glass-edge}'
+    borderWidth: '{spacing.hairline}'
+    dividerColor: '{colors.glass-edge}'
+    rounded: '{rounded.md}'
+    rowPadding: '{spacing.card-padding}'
+  glass-bar:
+    backgroundColor: '{colors.glass-strong}'
+    borderColor: '{colors.glass-edge}'
+    blurRadius: '{spacing.glass-blur}'
+    note: 'Surfaces over moving content: pill-save, nav-bar, sheet-snooze-confirm. Real blur on Android 12+ only.'
+  header-collapsing:
+    titleChipColor: '{colors.glass-strong}'
+    compactChipColor: '{colors.glass-strong}'
+    compactNumberColor: '{colors.accent-text}'
+    compactNumberTypography: '{typography.title}'
+    note: 'Home header (owner decision 2026-09-28, Samsung Weather). Title pinned top-left in headline; glass chip fades in over the first 16dp of scroll; card-hero fades out by 60% of the collapse, shrinks 10% and lags 20% as it scrolls under; from 50% the compact streak chip fades and rises 8dp in beside (or, when it does not fit, under) the title. Title shrinks from headline to title size (like the small pinned ''Lahti'') so the compact chip stays on its row (wraps only when it cannot fit, e.g. 200% font). Both chips are glass-strong with real blur on API 31+. Scrolled content fades out over the 12 dp above the bottom of the chips and is hidden from there up through the status bar, so no card text shows behind or above the chips. The last card ends above the floating nav bar (owner decision 2026-10-01).'
+  pill-save:
+    backgroundColor: '{colors.glass-strong}'
+    borderColor: '{colors.glass-edge}'
+    cancelColor: '{colors.text}'
+    saveColor: '{colors.accent-text}'
+    typography: '{typography.label}'
     rounded: '{rounded.full}'
-    size: 56dp
+    height: 56dp
   banner-warning:
-    backgroundColor: '{colors.surface-variant}'
+    backgroundColor: '{colors.glass}'
+    borderColor: '{colors.glass-edge}'
     iconColor: '{colors.error}'
     infoIconColor: '{colors.text-secondary}'
     textColor: '{colors.text}'
     rounded: '{rounded.md}'
   panel-session-in-progress:
-    backgroundColor: '{colors.surface}'
+    backgroundColor: '{colors.glass}'
+    borderColor: '{colors.glass-edge}'
     textColor: '{colors.text}'
     rounded: '{rounded.md}'
   note-inline:
@@ -292,6 +342,9 @@ components:
     valueTypography: '{typography.display}'
     buttonRounded: '{rounded.full}'
     buttonSize: '{spacing.target-min}'
+    buttonBorderColor: '{colors.outline}'
+    disabledColor: '{colors.disabled-content}'
+    note: 'A value longer than 5 characters (a localized price like "25.000 ₫") uses {typography.headline} so it stays on one line on 360 dp.'
   slider:
     activeColor: '{colors.accent}'
     trackColor: '{colors.outline}'
@@ -299,29 +352,51 @@ components:
     checkedTrackColor: '{colors.accent}'
     uncheckedBorderColor: '{colors.outline}'
   time-picker:
-    note: 'Material 3 time input, styled with theme tokens; digits in {typography.display}.'
+    note: 'Scrolling wheels (hour, minute, AM/PM on 12 h phones) in their own card-group, "h" / "min" unit labels in {typography.label}; digits in {typography.display} tabular, capped at 1.3x font scale; centre value on {colors.surface-variant}. Owner decision 2026-09-27.'
   top-app-bar:
-    backgroundColor: '{colors.bg}'
+    backgroundColor: transparent
     textColor: '{colors.text}'
     typography: '{typography.headline}'
   nav-bar:
-    backgroundColor: '{colors.surface}'
+    backgroundColor: '{colors.glass-strong}'
+    borderColor: '{colors.glass-edge}'
     selectedIconColor: '{colors.accent-text}'
     iconColor: '{colors.text-secondary}'
+    labelTypography: '{typography.caption}'
+    rounded: '{rounded.full}'
+    height: 64dp
+    addButtonColor: '{colors.accent}'
+    addIconColor: '{colors.on-accent}'
+    addSize: 56dp
+    note: 'Floating capsule (owner decision 2026-10-01, feedback item 26): screen-margin from the sides, 12dp above the navigation bar, glass-strong with real blur on API 31+; the raised + sits in the middle slot, 14dp above the capsule centre.'
   progress-dots:
     activeColor: '{colors.accent}'
     inactiveColor: '{colors.outline}'
     size: 8dp
+  progress-ring:
+    backgroundColor: '{colors.glass}'
+    trackColor: '{colors.outline-subtle}'
+    dot: '{components.outcome-marker} at 16dp; no alarm: 4dp dot in {colors.outline-subtle} (decorative)'
+    todayShape: 'outlined pill 32 x 22dp, 1.5dp {colors.accent}'
+    todayRingColor: '{colors.accent}'
+    numberTypography: '{typography.display}'
+    numberColor: '{colors.accent-text}'
+    size: 'up to 280dp'
+    note: 'Progress hero (owner decision 2026-09-30, feedback item 21): the last 30 mornings clockwise from the top, today ringed 2dp in accent; centre streak, "/ 30" in title / text-secondary, "day streak" in body.'
+  card-streak:
+    backgroundColor: '{colors.glass} + {colors.glass-accent}'
+    borderColor: '{colors.glass-edge}'
+    numberTypography: '{typography.display}'
+    numberColor: '{colors.accent-text}'
+    iconColor: '{colors.accent-text}'
+    rounded: '{rounded.md}'
   stat-tile:
-    backgroundColor: '{colors.surface}'
+    backgroundColor: '{colors.glass}'
+    borderColor: '{colors.glass-edge}'
     numberTypography: '{typography.display}'
     numberColor: '{colors.text}'
     rounded: '{rounded.md}'
-  bar-chart:
-    barColor: '{colors.snoozed}'
-    axisColor: '{colors.outline}'
-    labelColor: '{colors.text-secondary}'
-    barRounded: '{rounded.sm}'
+    note: 'Glass like every card (owner direction 2026-09-27). Two per row; a pair whose numbers do not fit half the width in display splits into one per row, so no number wraps or clips.'
   outcome-marker:
     onTime: 'check_circle, fill 1, {colors.success}'
     snoozed: 'schedule (clock), fill 1, {colors.snoozed}'
@@ -334,6 +409,7 @@ components:
     todayBorderColor: '{colors.accent}'
     marker: '{components.outcome-marker}'
     size: '{spacing.target-min}'
+    note: 'The calendar card sits {spacing.3} from the screen edges (not screen-margin) so seven 48 dp days fit a 360 dp phone. Days with a session are buttons; the others are read, not tapped.'
   checklist-row:
     okIcon: 'check_circle, {colors.success}'
     problemIcon: 'error, {colors.error}'
@@ -341,6 +417,8 @@ components:
   settings-row:
     textColor: '{colors.text}'
     valueColor: '{colors.text-secondary}'
+    valueTypography: '{typography.caption}'
+    chevronColor: '{colors.text-secondary}'
     height: 56dp
   purchase-row:
     textColor: '{colors.text}'
@@ -401,20 +479,33 @@ Three locks hold the look together: **one accent colour** (Sunrise orange), **on
 
 The palette is warm greys plus one accent. Nothing is pure black or pure white as a background.
 
-- **Sunrise orange** (`{colors.accent}` light and Sunrise, `{colors.accent-dark}` dark) is the only chromatic brand colour. It fills the primary action ("I'm up", Save, FAB), selected states and the countdown ring. As a large filled shape it passes 3:1. Accent-coloured **text** on light backgrounds always uses `{colors.accent-text}` (5.1:1), including the Home streak number. Dark mode uses a lighter, softer orange that passes as text.
+- **Sunrise orange** (`{colors.accent}` light and Sunrise, `{colors.accent-dark}` dark) is the only chromatic brand colour. It fills the primary action ("I'm up", Save, the nav bar "+"), selected states and the countdown ring. As a large filled shape it passes 3:1. Accent-coloured **text** on light backgrounds always uses `{colors.accent-text}` (5.1:1), including the Home streak number. Dark mode uses a lighter, softer orange that passes as text.
 - **Warm greys** (`bg`, `surface`, `surface-variant`, `outline`, `outline-subtle`, `text`, `text-secondary`) carry everything else. `outline` is for borders that must be seen (3:1); `outline-subtle` is decorative only.
 - **Outcome colours** (`success`, `snoozed`, `missed`) exist for Progress and Day detail. `success` means "on time" only; it is never used for money. `snoozed` is a muted brick, not an alarm red. **Colour is never the only signal:** `success` and `snoozed` differ in luminance by at least 1.6:1 in every theme, and each outcome has its own glyph (see `outcome-marker`).
 - **Error** (`{colors.error}`) is for real errors only: payment failed, permission missing, wrong answer, alarm may not ring.
 - **Disabled** (`disabled-container`, `disabled-content`) is a real token pair, not a 38% opacity. A disabled Snooze button carries its reason as its label, so the label must pass 4.5:1.
-- **Inverse** (`inverse-surface`, `inverse-text`, `inverse-accent`) is for snackbars only.
+- **Inverse** (`inverse-surface`, `inverse-text`, `inverse-accent`) is for snackbars only, plus three dark-on-light or light-on-dark surfaces that need the strongest pair: the Progress label chip, the camera `viewfinder` placeholder (Light and Sunrise) and the printable QR sheet in Dark (16.34).
 
 **Theme strategy.** App screens follow the system light/dark setting, with a manual override (System / Light / Dark) in Settings. Dark is the primary design target; setup mostly happens at night. Wake screens (ringing, snooze confirm, checks, success, snoozed) always use the **Sunrise** set, and the "Bright wake screen" setting (default on) raises brightness to maximum. Bright light after waking reduces sleep inertia ([Hilditch et al., J Sleep Res 2022](https://onlinelibrary.wiley.com/doi/10.1111/jsr.13558)). Three token sets under one `MaterialTheme` is a documented exception to the single-theme lock. No health claims about blue light.
 
-**Sunrise gradient.** An optional solid-to-solid vertical fade from `{colors.sunrise-gradient-top}` to `{colors.bg-sunrise}` is allowed on the ringing screen only, and only in the **top 40%** (behind label, clock and date). Accent on the gradient top is 2.73:1 and fails, so no accent element ever sits on the gradient. The thumb zone is always flat `{colors.bg-sunrise}`.
+**Background gradients (owner decision 2026-09-27).** Every screen has a subtle solid-to-solid vertical fade in Yawn & Pawn's own warm tones, never purple, never multi-colour:
+
+- **Light and Dark app screens:** `{colors.gradient-top}` (a warm peach in Light, a warm brown-black in Dark) at the top, fading into `bg` by 60% of the screen height; flat `bg` below, where the bottom pill and the nav bar sit.
+- **Sunrise (every wake screen):** `{colors.sunrise-gradient-top}` fading into `{colors.bg-sunrise}` over the **top 40%** only; the thumb zone is always flat `{colors.bg-sunrise}`.
+- Accent on the Light and Sunrise gradient tops fails (2.89 and 2.73), so **no accent element sits directly on a gradient**: accent controls live on glass cards (3.24 / 3.17) or on the flat bottom.
+
+**Glass surfaces (owner decision 2026-09-27, reference: Samsung Weather).** Cards, sheets and the bottom pill are translucent "frosted" surfaces over the gradient, with a faint hairline edge:
+
+- `{colors.glass}` (72% alpha) for cards (`card-group`, `card-alarm`, `card-hero`, `banner-warning`, `panel-session-in-progress`) over the static gradient.
+- `{colors.glass-strong}` (92% alpha) for surfaces over moving content (`glass-bar`: `pill-save`, `nav-bar`, `sheet-snooze-confirm`). It is dense enough that text passes even over the worst content behind it (dark `text` in light themes, light `text` in Dark).
+- `{colors.glass-accent}` (12% accent, owner decision 2026-09-30, feedback item 21) is drawn over `glass` for the one highlighted card on a screen (the Progress streak card). Text on it is `text`, `text-secondary` or `accent-text`; plain accent fails on it (2.83) and is not used there.
+- `{colors.glass-edge}` is a `{spacing.hairline}` decorative edge and the divider between rows in a card (like `outline-subtle`, never the only boundary of a control).
+- **Blur:** `glass-bar` surfaces that float over content (the snooze confirm sheet) blur what is beneath them by `{spacing.glass-blur}` on Android 12+; the bottom pill no longer overlaps content (2026-09-28), so it has nothing to blur (API 31+, the built-in `RenderEffect` through Compose, no extra library). Below API 31 they are the same translucent surfaces without blur. Cards sit over the static gradient, where a blur looks identical to no blur, so they use the fill only; nothing blurs a constantly animating list.
+- Contrast is verified for text and controls on glass composited over the worst case behind it (the darker gradient top, or the darkest or lightest content under a `glass-bar`); see the `glass+...` rows below.
 
 ### Verified contrast (WCAG 2.x)
 
-Computed with a Python WCAG relative-luminance script (2026-09-26). Text needs ≥ 4.5, graphics and UI shapes ≥ 3.0. "Info" rows are luminance separations, not WCAG pairs. **Any new pair must be added here with its ratio before it ships.**
+Computed with a WCAG relative-luminance script (2026-09-26; glass and gradient rows 2026-09-27). A pair side written `glass+gradient-top` is the translucent token composited over the token after the `+` (`ContrastTest` recomputes it the same way). Text needs ≥ 4.5, graphics and UI shapes ≥ 3.0. "Info" rows are luminance separations, not WCAG pairs. **Any new pair must be added here with its ratio before it ships.**
 
 | Theme | Pair | Kind | Ratio |
 |---|---|---|---|
@@ -443,6 +534,28 @@ Computed with a Python WCAG relative-luminance script (2026-09-26). Text needs �
 | Light | disabled-content / bg | text | 6.53 |
 | Light | inverse-text / inverse-surface | text | 16.84 |
 | Light | inverse-accent / inverse-surface | text | 8.52 |
+| Light | text / gradient-top | text | 15.31 |
+| Light | text-secondary / gradient-top | text | 6.03 |
+| Light | accent-text / gradient-top | text | 4.65 |
+| Light | outline / gradient-top | graphic | 3.21 |
+| Light | text / glass+gradient-top | text | 17.15 |
+| Light | text-secondary / glass+gradient-top | text | 6.75 |
+| Light | accent-text / glass+gradient-top | text | 5.21 |
+| Light | error / glass+gradient-top | text | 6.28 |
+| Light | accent / glass+gradient-top | graphic | 3.24 |
+| Light | outline / glass+gradient-top | graphic | 3.60 |
+| Light | success / glass+gradient-top (checklist OK, on-time marker) | text | 8.50 |
+| Light | snoozed / glass+gradient-top (snoozed marker) | text | 5.19 |
+| Light | missed / glass+gradient-top (missed marker) | text | 5.34 |
+| Light | disabled-content / glass+gradient-top (disabled stepper and month buttons) | text | 6.64 |
+| Light | text / glass-accent+glass+gradient-top (streak card) | text | 15.05 |
+| Light | text-secondary / glass-accent+glass+gradient-top | text | 5.91 |
+| Light | accent-text / glass-accent+glass+gradient-top (streak number, icon) | text | 4.56 |
+| Light | accent / glass-accent+glass+gradient-top | graphic | **2.83, fails: no plain accent on the tinted card, accent-text instead** |
+| Light | text / glass-strong+text (bar over dark content) | text | 15.25 |
+| Light | text-secondary / glass-strong+text | text | 6.00 |
+| Light | accent-text / glass-strong+text | text | 4.63 |
+| Light | accent / gradient-top | graphic | **2.89, fails: no accent directly on the gradient** |
 | Light | success / snoozed | info | 1.64 |
 | Light | success / missed | info | 1.59 |
 | Light | snoozed / missed | info | 1.03 (told apart by glyph) |
@@ -471,6 +584,28 @@ Computed with a Python WCAG relative-luminance script (2026-09-26). Text needs �
 | Dark | disabled-content / bg | text | 6.97 |
 | Dark | inverse-text / inverse-surface | text | 16.34 |
 | Dark | inverse-accent / inverse-surface | text | 4.72 |
+| Dark | text / gradient-top | text | 15.03 |
+| Dark | text-secondary / gradient-top | text | 6.89 |
+| Dark | accent-text / gradient-top | text | 8.22 |
+| Dark | accent / gradient-top | graphic | 8.22 |
+| Dark | outline / gradient-top | graphic | 3.33 |
+| Dark | text / glass+gradient-top | text | 15.01 |
+| Dark | text-secondary / glass+gradient-top | text | 6.88 |
+| Dark | accent-text / glass+gradient-top | text | 8.21 |
+| Dark | error / glass+gradient-top | text | 10.08 |
+| Dark | accent / glass+gradient-top | graphic | 8.21 |
+| Dark | outline / glass+gradient-top | graphic | 3.33 |
+| Dark | outline / glass+bg | graphic | 3.43 |
+| Dark | success / glass+gradient-top (checklist OK, on-time marker) | text | 11.00 |
+| Dark | snoozed / glass+gradient-top (snoozed marker) | text | 6.74 |
+| Dark | missed / glass+gradient-top (missed marker) | text | 4.91 |
+| Dark | disabled-content / glass+gradient-top (disabled stepper and month buttons) | text | 6.41 |
+| Dark | text / glass-accent+glass+gradient-top (streak card) | text | 12.02 |
+| Dark | text-secondary / glass-accent+glass+gradient-top | text | 5.51 |
+| Dark | accent-text / glass-accent+glass+gradient-top (streak number, icon) | text | 6.58 |
+| Dark | text / glass-strong+text (bar over light content) | text | 12.19 |
+| Dark | text-secondary / glass-strong+text | text | 5.59 |
+| Dark | accent-text / glass-strong+text | text | 6.67 |
 | Dark | success / snoozed | info | 1.63 |
 | Dark | success / missed | info | 2.24 |
 | Dark | snoozed / missed | info | 1.37 (told apart by glyph) |
@@ -496,6 +631,17 @@ Computed with a Python WCAG relative-luminance script (2026-09-26). Text needs �
 | Sunrise | disabled-content / disabled-container | text | 5.63 |
 | Sunrise | disabled-content / bg | text | 6.47 |
 | Sunrise | inverse-text / inverse-surface | text | 16.68 |
+| Sunrise | error / sunrise-gradient-top | text | 5.30 |
+| Sunrise | accent-text / sunrise-gradient-top | text | **4.39, fails: accent text (the success streak) sits on glass** |
+| Sunrise | text / glass+sunrise-gradient-top | text | 16.82 |
+| Sunrise | text-secondary / glass+sunrise-gradient-top | text | 6.62 |
+| Sunrise | accent-text / glass+sunrise-gradient-top | text | 5.11 |
+| Sunrise | error / glass+sunrise-gradient-top | text | 6.16 |
+| Sunrise | accent / glass+sunrise-gradient-top (countdown ring on the header card) | graphic | 3.17 |
+| Sunrise | outline / glass+sunrise-gradient-top | graphic | 3.53 |
+| Sunrise | text / glass-strong+text (sheet over dark content) | text | 15.25 |
+| Sunrise | text-secondary / glass-strong+text | text | 6.00 |
+| Sunrise | outline / glass-strong+text (Pay button border on the sheet) | graphic | 3.20 |
 | Sunrise | accent / surface-variant | graphic | **2.89, fails: never place accent on surface-variant** |
 | Sunrise | accent / sunrise-gradient-top | graphic | **2.73, fails: no accent on the gradient** |
 
@@ -514,10 +660,14 @@ Computed with a Python WCAG relative-luminance script (2026-09-26). Text needs �
 - Touch targets: `{spacing.target-min}` (48 dp) everywhere; **every wake-screen action ≥ `{spacing.target-wake}` (64 dp)**; "I'm up" and the House Hunt shutter are `{spacing.target-wake-hero}` (72 dp).
 - **Thumb zone** = bottom 40% of the screen. All wake actions live there and never scroll off screen, at any font scale.
 - Single column always. One main job per screen.
+- **Grouped cards (owner decision 2026-09-27, after the Oppo and Samsung stock Clock apps):** related rows sit together in one `card-group` with hairline dividers between rows, on every app screen; cards are 12 dp apart; a short section title in `label` / `text-secondary` may sit above a card.
+- **Progressive disclosure:** a row shows its title, the current value as a subtitle (`caption`, `text-secondary`) and a chevron; tapping opens a sub-screen (back arrow, same background) to set it. One screen never shows every option.
+- **Bottom pill (owner decision 2026-09-28, Samsung editor):** screens with a Save have `pill-save` ("Cancel | Save") in **its own bottom area**, 16 dp above the navigation bar and above the keyboard. The scrolling content ends above that area and never runs under the pill: scrolled to the end, the last row is fully visible.
+- **Collapsing header (owner decision 2026-09-28, Samsung Weather):** Home pins its title top-left and collapses `card-hero` into a compact chip beside it as the list scrolls; cards scroll up underneath the pinned header. See `header-collapsing`.
 
 ## Elevation & Depth
 
-Flat by default. Surfaces separate by tone (`bg` → `surface` → `surface-variant`), not shadows. Only bottom sheets and dialogs get elevation, tonal Material 3 levels 1 to 3. No glows, no decorative shadows.
+Glass on a gradient (owner decision 2026-09-27), still without shadows: surfaces separate by translucency and a hairline edge (`card-group`, `glass-bar`), not by drop shadows. Dialogs stay opaque `surface` (a translucent dialog over a scrim is hard to read). No glows, no decorative shadows, no coloured blur.
 
 ## Shapes
 
@@ -528,7 +678,7 @@ Locked radius system. No other radii.
 | `{rounded.sm}` | 8 dp | Chips, inputs, letter tiles, snackbars, small thumbnails |
 | `{rounded.md}` | 16 dp | Cards, list items, check tiles, number-pad keys, viewfinder frame |
 | `{rounded.lg}` | 28 dp | Bottom sheets, dialogs |
-| `{rounded.full}` | 9999px | Primary and wake buttons, FAB, shutter, segmented control, badges |
+| `{rounded.full}` | 9999px | Primary and wake buttons, the nav bar capsule and its +, shutter, segmented control, badges |
 
 ## Components
 
@@ -538,7 +688,7 @@ Visual specs. Behaviour for every row lives in `EXPERIENCE.md > Component Patter
 |---|---|
 | `button-wake-primary` | "I'm up". Full width, 72 dp, `{rounded.full}`, `{colors.accent-sunrise}` fill, `{colors.on-accent-sunrise}` label in `{typography.button-wake}`. Largest element on every wake screen. Sits on flat `{colors.bg-sunrise}`. |
 | `button-snooze` | One component, all wake screens. Full width, **64 dp**, `{rounded.full}`, 1 dp `{colors.outline-sunrise}` border, `{colors.text-sunrise}` label "Snooze · {price}" in `{typography.button-wake}`. Placed 16 dp below "I'm up" on ringing; at the bottom of the check footer on check screens (same height). Variant `button-snooze-disabled`: no border, `{colors.disabled-container-sunrise}` fill, `{colors.disabled-content-sunrise}` label with the reason (5.63:1), leading `block` icon, or `lock` icon for "Unlock your phone to snooze" before first unlock. Test alarm uses it with "Test · no charge". Same 64 dp height in every variant. |
-| `sheet-snooze-confirm` | Bottom sheet, `{colors.surface-sunrise}`, top corners `{rounded.lg}`, 24 dp padding. Top to bottom: title (`{typography.headline}`), price (`{typography.display}`, `{colors.text-sunrise}`, never accent), next-price line (`body`), nudge (`body`, `{colors.text-secondary-sunrise}`), tax note (`caption`, `text-secondary-sunrise`) where prices exclude tax, then two stacked full-width 64 dp buttons: **"Pay {price} and snooze"** (outlined, like `button-snooze`) **above**, **"I'll get up"** (filled, like `button-wake-primary` but 64 dp) at the **bottom**. States: *confirm*, *unlocking* (lock icon, "Unlock to pay {price}", one outlined "Cancel" 64 dp), *already paid* (same layout: "Use it" outlined above, "Not now" filled at the bottom). |
+| `sheet-snooze-confirm` | Bottom sheet on `glass-bar` (`{colors.glass-strong-sunrise}`, blurred backdrop on Android 12+), top corners `{rounded.lg}`, 24 dp padding. Top to bottom: title (`{typography.headline}`), price (`{typography.display}`, `{colors.text-sunrise}`, never accent), next-price line (`body`), nudge (`body`, `{colors.text-secondary-sunrise}`), tax note (`caption`, `text-secondary-sunrise`) where prices exclude tax, then two stacked full-width 64 dp buttons: **"Pay {price} and snooze"** (outlined, like `button-snooze`) **above**, **"I'll get up"** (filled, like `button-wake-primary` but 64 dp) at the **bottom**. States: *confirm*, *unlocking* (lock icon, "Unlock to pay {price}", one outlined "Cancel" 64 dp), *already paid* (same layout: "Use it" outlined above, "Not now" filled at the bottom). |
 | `button-filled` | App primary action (Save, Done, Let's set it up). 48 dp min, `{rounded.full}`, accent fill, on-accent label in `label`. |
 | `button-outlined` | App secondary action. 48 dp, `{rounded.full}`, `outline` border, `text` label. |
 | `button-text` | Tertiary action (Test alarm, links). `accent-text` label, 48 dp target. |
@@ -547,35 +697,46 @@ Visual specs. Behaviour for every row lives in `EXPERIENCE.md > Component Patter
 | `memory-tile` | ≥ 64 dp square, `{rounded.md}`, `surface-sunrise` fill with 1 dp `outline-sunrise` border. Lit: `accent-sunrise` fill (3.37:1 on surface) with its number in `on-accent-sunrise`. 3×3 (4×4 on Hard). Accessible variant shows numbers 1 to 9 on every tile. |
 | `letter-tile` | 48 dp, `{rounded.sm}`, `surface-variant-sunrise` fill, `outline-sunrise` border, letter in `title`. Answer slots are empty tiles with a dashed `outline-sunrise` border. |
 | `text-field` | Material outlined field, `{rounded.sm}`, `outline` border, `error` border and supporting text on error. Math answer field uses `display` digits. |
-| `viewfinder` | Full-width camera preview inside a `{rounded.md}` frame. House Hunt adds a 72 dp ghost thumbnail of the reference photo, top-left, `{rounded.sm}`. QR adds a centred square guide. Torch toggle 48 dp. |
+| `viewfinder` | Full-width camera preview inside a `{rounded.md}` frame. House Hunt adds a 72 dp ghost thumbnail of the reference photo, top-left, `{rounded.sm}`. QR adds a centred square guide. Torch toggle 48 dp. The design preview's feed placeholder is a flat fill, 4:3: `inverse-surface` with `inverse-text` guides and icons in Light and Sunrise, `bg` with `text` and a hairline `glass-edge` frame in Dark (text / bg 16.34), so it stands out from the dark card (round 3). On app screens (registration) it sits inside a glass card. |
 | `shutter` | 72 dp circle, `accent-sunrise` fill, `on-accent-sunrise` camera icon, centred in the thumb zone. |
 | `fallback-link` | Text button "Can't do this check?" in `{colors.accent-text-sunrise}`, `body`, 48 dp target, centred above the snooze button. |
-| `check-type-card` | `surface` card, `{rounded.md}`, icon + name (`title`) + one line (`body`, `text-secondary`), "Try it" `button-text`. Selected: 2 dp `accent` border plus a check icon (not colour alone). Used in onboarding, Check picker and the Fallback check picker (Sunrise tokens there). |
-| `card-hero` | Home top card. Streak number in `display`, `{colors.accent-text}` (light) / `{colors.accent-dark}` (dark), "days on time" in `body`, "$X paid this week" in `text-secondary`. |
-| `card-alarm` | `surface`, `{rounded.md}`. Time in `title`, repeat days and label in `caption`, check icons (20 dp, `text-secondary`), `switch` on the right. |
-| `fab` | 56 dp, `{rounded.full}`, accent fill, "+" in on-accent. Bottom right, 20 dp from edges. |
-| `banner-warning` | `surface-variant` fill, `{rounded.md}`, leading `error` icon in `{colors.error}`, message in `body`, `button-text` "Fix". Info variant: `info` icon in `text-secondary`, no error colour. |
-| `panel-session-in-progress` | Replaces Home content during a session. `surface` card, "Alarm in progress" in `headline`, one `button-filled` "Back to alarm". |
+| `check-type-card` | `surface` card, `{rounded.md}`, icon + name (`title`) + one line (`body`, `text-secondary`), "Try it" `button-text`. Selected: 2 dp `accent` border plus a check icon (not colour alone). Used in onboarding, Check picker and the Fallback check picker (Sunrise tokens there). In the Check picker and onboarding (owner direction 2026-09-27, round 3) it is a 56 dp row of the "Checks" `card-group`: icon, name (`body`), its line and the camera note (`caption`, `text-secondary`), a check box in `accent-text` when selected (not colour alone); "Try it" moved to Check setup. The selected checks follow in "Your checks" as `settings-row`s with their setup as the value and, in All mode, 48 dp "Move up" / "Move down" arrows before them. |
+| `success-celebration` | Success, on time only (owner decision 2026-09-28). The glass card shows the streak number (`display`, `accent-text`), "days in a row" (`title`, `text`) directly under it, then "Up on time." (`headline`). Confetti: 48 small 6 × 10 dp pieces in `accent`, `accent-text`, `success` and `sunrise-gradient-top`, decorative (no contrast requirement, never carrying meaning), drawn over the screen for 1.5 s, then gone. |
+| `card-hero` | Home top card, `{colors.glass}` with a `glass-edge` hairline. Streak number in `display`, `{colors.accent-text}` (light) / `{colors.accent-dark}` (dark), "days on time" in `body`, "$X paid this week" in `text-secondary`. |
+| `card-alarm` | `{colors.glass}` with a `glass-edge` hairline, `{rounded.md}`. Time in `title`, repeat days and label in `caption`, check icons (20 dp, `text-secondary`), `switch` on the right. Animates in and out when added or removed. |
+| `background-gradient` | Every screen's background: `gradient-top` fading into `bg` over the top 60% (Sunrise: `sunrise-gradient-top` into `bg-sunrise` over the top 40%), flat below. No accent directly on it. |
+| `card-group` | `{colors.glass}` fill, `{spacing.hairline}` `glass-edge` border, `{rounded.md}`. Rows inside have `{spacing.card-padding}` side padding and hairline `glass-edge` dividers between them. Used for every group of settings: editor, sub-screens, Settings, pickers, onboarding. |
+| `glass-bar` | `{colors.glass-strong}` with a `glass-edge` hairline, background blur `{spacing.glass-blur}` on Android 12+. For `pill-save`, `nav-bar` and `sheet-snooze-confirm`. |
+| `header-collapsing` | Home only. "Yawn & Pawn" pinned top-left in `headline`; a `glass-strong` pill chip fades in behind it over the first 16 dp of scroll. `card-hero` fades out by 60% of the collapse, shrinks to 90% towards its top-left and lags 20% of its height as it scrolls under the header; from 50% (a cross-fade, so the streak never shows twice) the compact chip (`glass-strong`, streak number in `title` / `accent-text`, "days on time" in `label`) fades and rises 8 dp in beside the title. The title shrinks from `headline` to `title` size as it collapses, so the compact chip stays beside it (it wraps under only when it cannot fit, e.g. at 200%); both chips blur on Android 12+. **Header zone:** scrolled content fades out over the 12 dp above the bottom of the chips and is hidden above that, through the status bar, so no card text shows behind or above the chips. The list ends above the floating nav bar capsule. |
+| `pill-save` | `glass-bar` in its own bottom area (never over content), 56 dp, `{rounded.full}`, full width minus `screen-margin`, two equal halves split by a hairline: "Cancel" (`text`) and "Save" (`accent-text`, bold), both `label`, each at least 48 dp. |
+| ~~`fab`~~ | Removed from Home (owner decision 2026-10-01): the nav bar's raised "+" replaces it (same 56 dp accent circle). |
+| `banner-warning` | `{colors.glass}` fill with a `glass-edge` hairline, `{rounded.md}`, leading `error` icon in `{colors.error}`, message in `body`, `button-text` "Fix". Info variant: `info` icon in `text-secondary`, no error colour. |
+| `panel-session-in-progress` | Replaces Home content during a session. `{colors.glass}` card, "Alarm in progress" in `headline`, one `button-filled` "Back to alarm". |
 | `note-inline` | Leading `info` icon + `caption` in `text-secondary`. Used for commitment-lock notes, Direct Boot notice, approximate prices. On wake screens uses `-sunrise` tokens. |
-| `chip-day` | 48 dp, `{rounded.sm}`, one letter. Unselected `surface-variant`; selected accent fill with on-accent letter plus bold weight. |
+| `chip-day` | 48 dp, `{rounded.sm}`, one letter. Unselected `surface-variant`; selected accent fill with on-accent letter plus bold weight. Shown in the repeat card only for "Custom". |
 | `chip-check` | `{rounded.sm}`, `surface-variant` fill, `outline` border, check icon + name + difficulty in `label`. |
 | `segmented-control` | Material 3 segmented button, `{rounded.full}` ends, selected segment accent fill with a check icon. |
-| `stepper` | Value in `display` between two 48 dp round icon buttons (− / +). Price values in `tnum`. |
+| `stepper` | Value in `display` between two 48 dp round icon buttons (− / +) with a 1 dp `outline` ring, inside a `card-group`; a button at the end of the range is `disabled-content`. Price values in `tnum`; a value over 5 characters uses `headline` so it stays on one line. |
 | `slider` | Material 3 slider, accent active track, `outline` inactive track, value label above thumb. |
 | `switch` | Material 3 switch, accent checked track, `outline` unchecked border. |
-| `time-picker` | Material 3 time input (keyboard-first) or dial; digits in `display`. |
-| `top-app-bar` | Flat on `bg`, title in `headline`, back arrow 48 dp. |
-| `nav-bar` | Material 3 navigation bar, 3 items, Material Symbols Rounded; selected icon fill 1 in `accent-text`, label always shown. |
-| `progress-dots` | 8 dp dots, 8 dp apart; active accent and 16 dp wide (pill), inactive `outline`. |
-| `stat-tile` | `surface`, `{rounded.md}`, number in `display` (`text`), label in `caption`. Two per row. |
-| `bar-chart` | Weekly bars in `{colors.snoozed}`, top corners `{rounded.sm}`, `outline` baseline, `text-secondary` labels, caption "Lower is better." |
-| `outcome-marker` | 20 dp glyph, distinct shape per outcome: on time = **filled check circle** (`success`); snoozed = **filled clock** (`snoozed`); missed = **filled cross circle** (`missed`); skipped or test = **hollow ring** (`outline`). Fallback used adds a small `alt_route` badge. Same glyphs in calendar, legend, Day detail and history. |
-| `calendar-day` | 48 dp cell, date number in `caption`, `outcome-marker` below. Today gets a 1 dp accent ring. |
+| `time-picker` | In its own `card-group`. Hour and minute wheels (plus AM/PM on 12 h phones) with "h" and "min" unit labels (`label`, `text-secondary`), three values visible, centre value in `text` on a `surface-variant` `{rounded.sm}` band, others in `text-secondary`; digits in `display` with tabular figures, capped at 1.3x font scale so the wheels fit 360 dp at 200%. Owner decision 2026-09-27 (replaces the Material 3 time input). |
+| `top-app-bar` | Transparent over the background gradient, title in `headline`, back arrow 48 dp. |
+| `nav-bar` | Floating capsule (owner decision 2026-10-01): `glass-strong` with a `glass-edge` hairline and blurred backdrop on Android 12+, `{rounded.full}`, 64 dp, `screen-margin` from the sides and 12 dp above the navigation bar. Five slots: Alarms · Progress · raised "+" · Settings · You. Tabs: Material Symbols Rounded icon (24 dp) and a `caption` label; selected in `accent-text` with the fill 1 icon, others `text-secondary`; each ≥ 48 dp. The "+" is a 56 dp `accent` circle with the `on-accent` plus, raised 14 dp. At large font scales only the selected tab shows its label, in a wider slot. Content pads its end so nothing hides behind the capsule. Pairs: `accent-text` and `text-secondary` on `glass-strong+text` (in the table), `on-accent / accent`; no new colour pairs. |
+| `progress-dots` | 8 dp dots, 8 dp apart; active accent and 16 dp wide (pill), inactive `outline`. On a small `glass` capsule at the top of onboarding, centred in the row with the back arrow: accent on glass+gradient-top passes (3.24 Light), accent directly on the gradient would not (2.89). The active dot slides and changes colour between steps. |
+| `progress-ring` | Progress hero card, the first thing on the page (owner decisions 2026-09-30 and 2026-10-01): 30 `outcome-marker` shapes (16 dp) on a hairline `outline-subtle` circle, up to 280 dp, clockwise from the top to today (in an outlined accent pill, 32 x 22 dp); a day without an alarm is a faint 4 dp `outline-subtle` dot. Centre: streak in `display` / `accent-text`, "/ 30" in `title` / `text-secondary`, "day streak" in `body`; empty, "Your first morning shows up here.". No legend. The label chip (`inverse-surface` / `inverse-text` pill, `label`, chevron, 48 dp target) pops in under the ring for a tapped dot. |
+| `card-streak` | Glass with the `glass-accent` tint, `glass-edge` hairline, `{rounded.md}`: sunrise icon and "Current streak" (`caption`), the number in `display` / `accent-text` with "days on time", "Best streak" and its number in `headline` / `text` on the right (stacked at large font scales), "Keep it going." in `text-secondary`. |
+| `stat-tile` | Progress (redesign 2026-09-30): three small tiles in one row (2 + 1 from 150% font scale), glass, `{rounded.md}`, 12 dp padding: an icon in `text-secondary`, the number in `title` (`text`), a short one-line label in `caption` (`text-secondary`: "on time", "to get up", "snoozes"). |
+| `day-hero` | Day detail (owner redesign 2026-10-01): glass card, `{rounded.md}`: the `outcome-marker` (24 dp) and label in `title`, "{time} · {label}" in `body` / `text-secondary`, the key figure in `display` / `text` with "to get up" in `body` / `text-secondary` (missed: "Stopped after 30 minutes" in `headline`). Then three `stat-tile`s (rings, snoozes, paid; money in `text`). |
+| `morning-timeline` | Day detail: a glass card of rows (min 44 dp): the time in `caption` / `text-secondary` with tabular figures (64 dp column), a 24 dp column with the event glyph on a 1.5 dp `outline-subtle` line (decorative), the event in `body` / `text`. Glyphs: snoozed, "I'm up" and stopped use the `outcome-marker` shapes (`snoozed`, `success`, `missed`); the others are Material Symbols icons in `text-secondary` (alarm, lock, timer, alt_route, the check's icon). The line grows and each event fades and slides in 90 ms after the one before. No new colour pairs. |
+| `outcome-marker` | Distinct shape per outcome, so it reads without a legend (owner decision 2026-10-01): on time = **filled dot** (`success`); snoozed = **dot with a small clock** (`snoozed`, the filled clock glyph); missed = **hollow ring** (`missed`); skipped or test = **small neutral dot** (`outline`); today = an **outlined accent pill** around the day; the day a label chip refers to gets a 1.5 dp selection ring in `text` (fix 2026-10-01). Same shapes in the ring, calendar and Day detail. The fallback `alt_route` badge stays in Day detail only; the ring and calendar say it to TalkBack. |
+| `calendar-day` | 48 dp cell, date number in `caption`, a 14 dp `outcome-marker` shape below. Today's date sits in an outlined accent pill. The calendar card sits 12 dp from the screen edges so seven 48 dp cells fit 360 dp; month heading in `title` between 48 dp "Previous month" / "Next month" chevrons; the grid slides between months; a tapped day's label chip pops in under the grid. No legend (owner decision 2026-10-01). |
 | `checklist-row` | 64 dp. Leading icon, title (`body`), reason (`caption`), trailing status: `check_circle` in `success` with "OK", or `button-outlined` "Fix". |
-| `settings-row` | 56 dp. Label left, value (`text-secondary`) or chevron right. |
+| `settings-row` | 56 dp inside a `card-group`. Title (`body`, `text`) with the current value as a subtitle (`caption`, `text-secondary`) and a chevron (`text-secondary`) on the right when it opens a sub-screen; a `switch` on the right for a toggle. |
 | `purchase-row` | 64 dp. Date and alarm (`body`), "Snooze 2" (`caption`), localized price right-aligned in `text` (never accent, green or red). |
 | `sound-row` | 56 dp. Radio selection, sound name (`body`), source caption, 48 dp preview play button. |
-| `recorder` | 72 dp round record button (accent, on-accent mic icon), elapsed and max time "0:12 / 1:00" in `display`, level meter in `text-secondary`. |
+| `recorder` | 72 dp round record button (accent, on-accent mic icon), elapsed and max time "0:12 / 1:00" in `display`, level meter in `text-secondary`. In a glass card (accent on glass). While recording the button shows the stop square; disabled (microphone off) it is the `disabled-container` / `disabled-content` pair. The level meter is 24 thin `text-secondary` bars, 32 dp tall, decorative. A take shows a 48 dp play button, `button-text` "Re-record" and "Delete" (`error`), then `button-filled` "Save"; saved messages are 56 dp rows with 48 dp play / pause and delete. |
+| `photo-slot` | House Hunt registration (round 3): a taken photo is a 72 dp `{rounded.sm}` `surface-variant` thumbnail (the preview shows the house icon in `text`) with `button-text` "Remove" under it; an empty slot is a 72 dp dashed `outline` square (decorative). Three slots in a wrapping row, so "Remove" never breaks at 200%. The `shutter` sits under the viewfinder in the same glass card (accent on glass, 3.24) and turns `disabled-container` with three photos. |
+| `printable-qr` | QR registration (round 3): the page as it prints inside a glass card, a `{rounded.md}` sheet with 24 dp padding, the 200 dp code and "Scan this to stop your alarm." (`body`). The sheet is dark on light in both themes so it scans: `text` on `surface` in Light (17.85), `inverse-text` on `inverse-surface` in Dark (16.34). Then `button-filled` "Print or save as PDF". |
 | `motivation-player` | `surface-sunrise` card, `{rounded.md}`, 48 dp play/pause and replay, progress bar in accent. |
 | `dialog-confirm` | Material 3 dialog, `{rounded.lg}`, title `headline`, body `body`, actions `button-text` (confirm uses `error` text colour only when destructive). |
 | `snackbar` | `{colors.inverse-surface}` container, `{colors.inverse-text}` message, optional action in `{colors.inverse-accent}`, `{rounded.sm}`. On wake screens: no action, message only. |
@@ -595,7 +756,9 @@ Visual specs. Behaviour for every row lives in `EXPERIENCE.md > Component Patter
 | Make "I'm up" the largest wake action; Snooze visible, outlined, priced | Hidden, disguised or greyed-out-without-reason Snooze |
 | Every wake action ≥ 64 dp in the thumb zone | Wake actions under 64 dp or below the fold |
 | Tonal separation between surfaces | Decorative shadows, glows, gradient text |
-| Sunrise gradient in the top 40% of ringing only | Accent on the gradient; multi-colour mesh gradients |
+| Subtle warm background gradient on every screen (top 60%, wake screens top 40%) | Accent directly on a gradient; purple or multi-colour mesh gradients |
+| Glass cards with a hairline edge; blur only on bars and sheets over moving content (Android 12+) | Blur on constantly animating lists; drop shadows under glass |
+| Related rows grouped in one card; the value as a subtitle, a chevron to a sub-screen | Every option on one long screen |
 | Warm greys | Pure `#000000` or pure `#FFFFFF` backgrounds |
 | Design Light, Dark and Sunrise together | Shipping one theme and "fixing dark later" |
 | Add every new colour pair to the contrast table | Shipping an unverified pair |

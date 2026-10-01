@@ -93,9 +93,9 @@ class AlarmScreensSemanticsTest {
         }
     }
 
-    private fun assertAccessibilityFloor() {
+    private fun assertAccessibilityFloor(minControls: Int = 6) {
         val nodes = composeRule.actionableNodes()
-        assertTrue(nodes.size > 5, "found only ${nodes.size} controls")
+        assertTrue(nodes.size >= minControls, "found only ${nodes.size} controls")
         nodes.forEach { node ->
             assertMinTouchTarget(node)
             assertTrue(node.label().isNotEmpty(), "no TalkBack label: ${node.describe()}")
@@ -162,8 +162,14 @@ class AlarmScreensSemanticsTest {
         }
 
     @Test
-    fun `snooze length segments are radio buttons with 9 min selected by default`() =
-        editor(EditorSamples.newAlarm) {
+    fun `the Sound and Snooze sub-screens meet the accessibility floor`() {
+        editor(EditorSamples.soundPane) { assertAccessibilityFloor(minControls = 3) }
+        editor(EditorSamples.snoozePane) { assertAccessibilityFloor(minControls = 5) }
+    }
+
+    @Test
+    fun `snooze lengths are radio buttons with 9 min selected by default`() =
+        editor(EditorSamples.snoozePane) {
             composeRule.onNode(hasText("9 min") and hasClickAction()).assertIsSelected()
             composeRule
                 .onNode(hasText("5 min") and hasClickAction())
@@ -171,31 +177,36 @@ class AlarmScreensSemanticsTest {
         }
 
     @Test
-    fun `sliders are labelled and announce their value`() =
-        editor(EditorSamples.newAlarm) {
+    fun `the volume slider is labelled and announces its value, and there is no starting-volume slider`() =
+        editor(EditorSamples.soundPane) {
             composeRule
                 .onNode(
                     hasContentDescription("Volume"),
                 ).assert(SemanticsMatcher.expectValue(SemanticsProperties.StateDescription, "80%"))
-            composeRule
-                .onNode(hasContentDescription("Starting volume"))
-                .assert(SemanticsMatcher.expectValue(SemanticsProperties.StateDescription, "20%"))
+            composeRule.onNode(hasContentDescription("Starting volume")).assertDoesNotExist()
+            composeRule.onNodeWithText("Starting volume").assertDoesNotExist()
         }
 
     @Test
-    fun `switches read their label with the switch role and state`() =
-        editor(EditorSamples.gradualOff) {
+    fun `switches read their label with the switch role and state`() {
+        editor(EditorSamples.soundGradualOff) {
             composeRule.onNode(hasText("Gradually increase volume") and hasClickAction()).assertIsOff()
-            composeRule.onNode(hasText("Vibration") and hasClickAction()).assertIsOn()
             composeRule.onNode(hasContentDescription("Starting volume")).assertDoesNotExist()
         }
+        editor(EditorSamples.newAlarm) { composeRule.onNode(hasText("Vibration") and hasClickAction()).assertIsOn() }
+    }
 
     @Test
-    fun `the top app bar back arrow is labelled Back`() =
+    fun `the pill has Cancel and Save, and a sub-screen's back arrow is labelled Back`() {
         editor(EditorSamples.editAlarm) {
-            composeRule.onNodeWithContentDescription("Back").assert(hasClickAction())
+            composeRule.onNodeWithText("Cancel").assert(hasClickAction())
+            composeRule.onNodeWithText("Save").assert(hasClickAction())
             composeRule.onNodeWithText("Edit alarm").assertExists()
         }
+        editor(EditorSamples.snoozePane) {
+            composeRule.onNodeWithContentDescription("Back").assert(hasClickAction())
+        }
+    }
 
     @Test
     fun `the Alarms empty state and FAB meet the accessibility floor`() =
@@ -226,7 +237,7 @@ class AlarmScreensSemanticsTest {
     @Test
     @Config(qualifiers = "+w360dp")
     fun `on a 360 dp screen the day chips stay on one line with 48 dp targets`() =
-        editor(EditorSamples.newAlarm) {
+        editor(EditorSamples.editAlarm) {
             assertAccessibilityFloor()
             val tops =
                 WeekOrder.map { day ->
@@ -243,7 +254,7 @@ class AlarmScreensSemanticsTest {
         editor(EditorSamples.labelError) {
             composeRule.onNodeWithText("Keep the label under 40 characters.", useUnmergedTree = true).assertExists()
             composeRule
-                .onNode(hasSetTextAction() and hasText("Label"))
+                .onNode(hasSetTextAction() and hasContentDescription("Alarm name"))
                 .assert(SemanticsMatcher.keyIsDefined(SemanticsProperties.Error))
         }
 

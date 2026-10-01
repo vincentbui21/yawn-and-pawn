@@ -1,5 +1,6 @@
 package com.yawnandpawn.app.ui.components
 
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.size
 import androidx.compose.material3.Button
@@ -7,6 +8,7 @@ import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.FloatingActionButtonDefaults
 import androidx.compose.material3.Icon
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -47,7 +49,7 @@ fun PpsFilledButton(
 
 /**
  * `button-text`: a tertiary action, 48 dp target, `accent-text` label. [contentColor] overrides it for a
- * destructive dialog action (`error`).
+ * destructive dialog action (`error`); disabled, the label is `disabled-content`.
  */
 @Composable
 fun PpsTextButton(
@@ -55,12 +57,14 @@ fun PpsTextButton(
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
     contentColor: Color = PpsTheme.colors.accentText,
+    enabled: Boolean = true,
 ) {
     TextButton(
         onClick = onClick,
         modifier = modifier.heightIn(min = PpsTheme.spacing.targetMin),
+        enabled = enabled,
         shape = PpsTheme.shapes.full,
-        colors = ButtonDefaults.textButtonColors(contentColor = contentColor),
+        colors = ButtonDefaults.textButtonColors(contentColor = contentColor, disabledContentColor = PpsTheme.colors.disabledContent),
     ) {
         Text(text = text, style = PpsTheme.typography.label)
     }
@@ -88,3 +92,22 @@ fun PpsFab(
 
 /** DESIGN.md `fab.size`. */
 private val FAB_SIZE = 56.dp
+
+/** `button-outlined`: an app secondary action. 48 dp, full radius, `outline` border, `text` label in `label`. */
+@Composable
+fun PpsOutlinedButton(
+    text: String,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    val colors = PpsTheme.colors
+    OutlinedButton(
+        onClick = onClick,
+        modifier = modifier.heightIn(min = PpsTheme.spacing.targetMin),
+        shape = PpsTheme.shapes.full,
+        border = BorderStroke(1.dp, colors.outline),
+        colors = ButtonDefaults.outlinedButtonColors(contentColor = colors.text),
+    ) {
+        Text(text = text, style = PpsTheme.typography.label, textAlign = TextAlign.Center)
+    }
+}

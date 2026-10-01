@@ -48,6 +48,14 @@ class TokenSourceWriterTest {
     }
 
     @Test
+    fun `a translucent RRGGBBAA colour is rendered with its alpha first`() {
+        val tokens = DesignTokenParser.parse(fixture)
+        val glass = tokens.copy(colors = tokens.colors + ColorToken("glass", "#FFFFFFB8"))
+
+        assertTrue(TokenSourceWriter.render(glass, "p", "DESIGN.md").contains("val glass = Color(0xB8FFFFFF)"))
+    }
+
+    @Test
     fun `two keys that map to the same Kotlin name are rejected`() {
         val tokens = DesignTokenParser.parse(fixture)
         val clash = tokens.copy(spacing = tokens.spacing + SpacingToken("screen--margin", 4))

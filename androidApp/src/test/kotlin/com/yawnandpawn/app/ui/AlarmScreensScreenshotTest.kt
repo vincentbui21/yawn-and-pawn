@@ -10,6 +10,7 @@ import com.yawnandpawn.app.screenshotOptions
 import com.yawnandpawn.app.ui.alarms.AlarmsScreen
 import com.yawnandpawn.app.ui.alarms.AlarmsUiState
 import com.yawnandpawn.app.ui.editor.AlarmEditorScreen
+import com.yawnandpawn.app.ui.editor.EditorPane
 import com.yawnandpawn.app.ui.editor.EditorUiState
 import com.yawnandpawn.app.ui.theme.PpsThemeMode
 import org.junit.After
@@ -44,7 +45,7 @@ class AlarmScreensScreenshotTest {
         state: EditorUiState,
         mode: PpsThemeMode,
     ) = withScreen(mode, content = { AlarmEditorScreen(state = state, is24Hour = false, onIntent = {}) }) {
-        composeRule.onNodeWithText("Save").assertExists()
+        if (state.pane == EditorPane.Main) composeRule.onNodeWithText("Save").assertExists()
         if (state.showDiscardDialog) {
             composeRule.onNodeWithText("Discard changes?").assertExists()
             capture(name, allWindows = true)
@@ -149,8 +150,20 @@ class AlarmScreensScreenshotTest {
     fun `label error in Light at 200 percent`() =
         editor("alarm_editor_label_error_light_font200", EditorSamples.labelError, PpsThemeMode.Light)
 
+    @Test
+    fun `Sound sub-screen in Light`() = editor("alarm_editor_sound_light", EditorSamples.soundPane, PpsThemeMode.Light)
+
+    @Test
+    fun `Sound sub-screen in Dark`() = editor("alarm_editor_sound_dark", EditorSamples.soundPane, PpsThemeMode.Dark)
+
+    @Test
+    fun `Snooze sub-screen in Light`() = editor("alarm_editor_snooze_light", EditorSamples.snoozePane, PpsThemeMode.Light)
+
+    @Test
+    fun `Snooze sub-screen in Dark`() = editor("alarm_editor_snooze_dark", EditorSamples.snoozePane, PpsThemeMode.Dark)
+
     /** The narrowest supported phone width: the seven day chips stay on one line. */
     @Test
     @Config(qualifiers = "+w360dp")
-    fun `new alarm in Light on a 360 dp screen`() = editor("alarm_editor_new_light_w360", EditorSamples.newAlarm, PpsThemeMode.Light)
+    fun `new alarm in Light on a 360 dp screen`() = editor("alarm_editor_new_light_w360", EditorSamples.editAlarm, PpsThemeMode.Light)
 }

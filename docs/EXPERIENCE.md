@@ -1,9 +1,9 @@
 ---
 name: Yawn & Pawn
 status: draft
-version: 0.2
+version: 0.5
 owner: Kiet Bui
-updated: 2026-09-26
+updated: 2026-10-01
 sources:
   - _bmad-output/planning-artifacts/prds/prd-pay-per-snooze-2026-09-26/prd.md
   - DESIGN.md
@@ -28,7 +28,8 @@ How the app works: structure, behaviour, states, words and journeys. How it look
 |---|---|
 | Check | A proof-of-wake check: Memory Sequence, Math, House Hunt, QR/Barcode, Word Unscramble. |
 | Session | From first ring until the check is done or the session times out (PRD §6.1). |
-| Grace window | The muted countdown (15 to 30 s) after "I'm up". |
+| Grace window | The muted countdown (15 to 30 s) after "I'm up". Internal and planning name only. |
+| Quiet time | The user-facing name of the grace window in every UI string (owner decision 2026-09-27): editor row "Quiet time", "Vibrate during quiet time", Settings "Default quiet time". Code keeps `graceSeconds`. |
 | Fallback check | The replacement check offered when the configured check can't physically be done (FR-PWK-11). Never called "backup". |
 | Commitment lock | Weakening changes within 8 h of an enabled alarm take effect after that alarm. |
 | Outcomes | On time · Snoozed · Missed · Skipped · Test (FR-PRG-1). |
@@ -36,30 +37,31 @@ How the app works: structure, behaviour, states, words and journeys. How it look
 
 ## Information Architecture
 
-Bottom navigation with three items: **Alarms** (home), **Progress**, **Settings**. Everything else is a pushed screen or bottom sheet. Wake screens are one separate full-screen activity outside the navigation, shown over the lock screen.
+Bottom navigation (owner decision 2026-10-01, feedback item 26): a floating glass capsule with five slots, **Alarms** (home) · **Progress** · **+** · **Settings** · **You**. The centre "+" is a raised accent circle that starts a new alarm from any tab (it replaced Home's FAB). Everything else is a pushed screen or bottom sheet. Wake screens are one separate full-screen activity outside the navigation, shown over the lock screen.
 
 | Surface | Reached from | Purpose |
 |---|---|---|
-| Onboarding (8 steps) | First launch | Mission, alarm behaviour disclosure and consent, base fee, first alarm, checks, reliability checklist, analytics choice, test alarm (FR-ONB-1/5/6). |
+| Onboarding (8 steps) | First launch | Mission, alarm behaviour disclosure and consent, base fee, first alarm, checks, reliability checklist, analytics choice, test alarm (FR-ONB-1/5/6). Design preview round 3 layout (2026-10-01, owner direction items 8, 9, 12, 14, 15): one job per step on the gradient, a back arrow from step 2 and the `progress-dots` on a small glass capsule at the top, the step's cards scrolling, its actions in their own bottom area. 1 the app name, the mission, and "Snooze costs money." · "Waking up is free." in a glass card, "Let's set it up"; 2 the disclosure in three paragraphs, "I understand"; 3 the base fee `stepper`, the fee ladder, lock note, approximate-price note when prices never loaded, purchase authentication tip, "Continue"; 4 "When should it ring?" with the editor's time wheel and Once · Weekdays · Custom; 5 "How will you prove you're up?" with the Check picker (a selected check's row opens Check setup; "Continue" disabled with none); 6 "Make sure it rings" with the checklist card (no test row: step 8 is the test); 7 "Share anonymous usage stats?" "Off unless you turn it on." with two equal `button-outlined` "Share" / "No thanks"; 8 "Lock your phone. We'll ring in 10 seconds.", the bright wake screen note, "Ring a test alarm" and "Skip for now" (not locked: "Your phone wasn't locked. Try again with it locked." on glass with the error icon). Skipping leaves the Home note "Ring a test alarm with your phone locked to check it works." until dismissed. |
 | Alarms (Home) | Nav, app open | Streak and money hero, next alarm, alarm list, add alarm. |
-| Alarm editor | `card-alarm` tap, `fab` | Time, repeat, label, checks (mode Random / All), grace window (15 to 30 s) and vibrate in grace, snooze length (5 / 9 / 10 / 15) with fee ladder, sound (volume, "Gradually increase volume" switch with ramp start level shown only when on, vibration), motivation (recording, After I'm up / Mix into alarm). Bottom bar: "Test alarm" and "Save". |
-| Check picker | Editor "Checks" section | Choose check types and mode (Random / All). |
-| Check setup | Check picker | Difficulty, count, "Try it" preview (FR-PWK-12). |
-| House Hunt registration | Check setup | Capture 1 to 3 reference photos, test match. |
-| QR registration | Check setup | Scan a code or make a printable QR. |
-| Sound picker | Editor "Sound" section | Built-in sounds, system ringtones, a user file; preview (FR-SND-1/2). |
-| Recordings | Editor "Motivation" section | Record, re-record, play, delete motivation messages (FR-SND-3). |
-| Progress | Nav | Streak, rates, average time to up, snoozes chart, calendar, money (FR-PRG-2/3). |
-| Day detail | `calendar-day` tap | One session: rings, snoozes, paid, checks, fallback, outcome. |
+| Alarm editor | `card-alarm` tap, the nav bar's "+" | Owner decision 2026-09-27 (grouped cards, progressive disclosure). Header "New alarm" / "Edit alarm" with "Rings in {...}" under it; the time wheel in its own card ("h" / "min" labels, AM/PM on 12 h phones); repeat "Once" · "Weekdays" · "Custom" (Custom expands to the day chips); card 1: "Alarm name" (inline field) · "Sound" (value ›) · "Vibration" (switch); card 2: "Wake-up check" (value ›) · "Quiet time" (value ›) · "Snooze" (value ›) · "Motivation" (value ›); "Test alarm" text button under the cards; floating "Cancel \| Save" pill at the bottom, above the keyboard. Each › row opens a sub-screen with a back arrow: **Sound** (volume slider, "Gradually increase volume" switch, then the Sound picker list); **Snooze** (length 5 / 9 / 10 / 15 min, fee ladder); **Wake-up check** (check types, Random / All, difficulty); **Quiet time** (15 to 30 s slider, "Vibrate during quiet time"); **Motivation** (message, "Record a message", when it plays). |
+| Check picker | Editor "Wake-up check" sub-screen, onboarding | Choose check types and mode (Random / All). In the editor it is the Wake-up check sub-screen (with difficulty). Round 3 layout (2026-10-01): card "Checks" with one `check-type-card` row per check (icon, name, its line, the camera note; TalkBack on: Memory Sequence's numbered-tiles note; a check box); "Mode" Random / All with two or more; "Your checks" with each selected check's setup as its value ("Medium · 2 problems", "Code saved", "2 photos", or what is missing) and a chevron to Check setup, in All mode with "Move up" / "Move down" for the order. Difficulty moved from this screen into Check setup (progressive disclosure). Camera unavailable: "Camera isn't available." · "Fix" banner on top. |
+| Check setup | Check picker | Difficulty, count, "Try it" preview (FR-PWK-12). Round 3 layout: the check's line (camera note, TalkBack note) in a card; Math, Word Unscramble, Memory Sequence: "Difficulty" Easy / Medium / Hard as radio rows (a segmented control broke "Medium" at 200% on 360 dp) and a `stepper` for "Problems" / "Words" / "Rounds" (1 to 5); QR/Barcode: "Your code" › (QR registration) and "Make a printable QR" ›; House Hunt: "House Hunt photos" › (its registration), the not-restored banner with "Retake". "Try it" (`button-text`) is enabled once the check has its code or photo and a camera. "Try it" opens the check in Sunrise like the real morning, without quiet-time ring or snooze, a close "Back", and on success "Nice. That's how it works." with "Done". |
+| House Hunt registration | Check setup | Capture 1 to 3 reference photos, test match. Round 3 layout: "House Hunt photos" with its line, the `viewfinder` and the 72 dp `shutter` in a glass card (disabled with three photos), the three photo slots (72 dp thumbnails with "Remove", empty dashed slots), "Test match" with its result, the errors under the photos, and the "Cancel \| Save" pill in its own bottom area ("Save" with no photo shows "Take at least one photo."). |
+| QR registration | Check setup | Scan a code or make a printable QR. Round 3 layout: the `viewfinder` with the square guide and torch in a glass card ("Scan a code to use this check." under it); a found code shows a check in the guide, "Use this code" (filled) and "Scan again"; then "Make a printable QR" ›: "Stick it somewhere far from your bed.", the page as it prints (the code with "Scan this to stop your alarm." on a light sheet in both themes) and "Print or save as PDF", which asks "Replace your QR code? The old one stops working." when a code is saved. |
+| Sound picker | Editor "Sound" sub-screen | Built-in sounds, system ringtones, a user file, in sections "Built-in" / "System" / "Your files" under the volume card; preview (FR-SND-1/2). |
+| Recordings | Editor "Motivation" sub-screen, "Record a message" | Record, re-record, play, delete motivation messages (FR-SND-3). Round 3 layout: title "Recordings" (draft); the `recorder` in a glass card ("Record a message for your morning self." while there are none, "0:09 / 1:00", level meter, the 72 dp record button); after a take play, "Re-record", "Delete" and "Save"; then "Your messages" with play / pause and delete per message ("Delete this message? ..."). Microphone off: its banner with "Fix" and the record button disabled; under 1 s: the "Too short. Try again." snackbar. |
+| Progress | Nav | Streak, rates, average time to up, calendar, money (FR-PRG-2/3; no snoozes chart, owner decision 2026-10-01, feedback item 24). Owner redesign 2026-09-30 and notes 2026-10-01 (feedback items 21 and 23), top to bottom, no heading (the tab names it), no period tabs, no legend: `progress-ring` of the last 30 mornings (tap a dot for its label chip "Tue 23 · Snoozed", tap again or the chip for Day detail) with the streak, "/ 30" and "day streak" in the centre; three small `stat-tile`s in one row ("on time", "to get up", "snoozes", one line at 100% on 360 dp); `card-streak` ("Current streak", "Best streak", "Keep it going."); the compact calendar (‹ › for past months, slides between them; tap a day for its chip, again for Day detail); "Money paid" (this month, "Purchase history" link) beside the Insight card. Entry animation: cards fade and rise in sequence, the ring dots sweep in, the streak counts up; reduced motion shows the final state. Empty: the empty ring with "Your first morning shows up here.", the calendar and "Purchase history". No CSV export (owner decision 2026-10-01 against FR-PRG-6; the export story goes via correct-course). No snoozes chart (owner decision 2026-10-01 against the "snoozes chart" in FR-PRG-2: the ring shows each snoozed day and the "snoozes" tile the count; the chart part of the progress story goes via correct-course). |
+| Day detail | Progress ring or calendar chip | One session: rings, snoozes, paid, checks, fallback, outcome. Owner redesign 2026-10-01 (feedback item 25): a one-line title with the short weekday, day and month ("Wed, Sep 23" in the phone's locale); per session a `day-hero` (outcome glyph and label, "{time} · {label}", the key figure large: "{minutes} min" "to get up", or "Stopped after 30 minutes" for missed), three small tiles like Progress ("rings" · "snoozes" · "paid", money neutral, "No charge" when nothing was paid) and a `morning-timeline` of the events in order (rang, snoozed with price, rang again, "I'm up", quiet time ran out, check switched before the first unlock, fallback check, merged alarm, check solved first try or in n tries, stopped after 30 minutes). Two sessions each get their own hero, tiles and timeline. Test and skipped days show the hero only. Logged alarm changes follow as notes. |
 | Purchase history | Progress link | Every charge with date, alarm, snooze number, localized price (FR-PRG-4). |
-| Export CSV | Progress link | Android share sheet with a CSV file (FR-PRG-6). |
-| Settings | Nav | Snooze (base fee, max snoozes, default length), Wake (default grace window, vibrate in grace default, bright wake screen), Appearance (System / Light / Dark), Notifications (weekly summary), Usage stats (FR-SET-6), Reliability checklist, Payments & refunds, Privacy, Terms, Support, Delete all data. |
-| Reliability checklist | Settings, onboarding step 5, `banner-warning` | Permission and device-setting status with fixes (FR-ONB-2/3). |
+| ~~Export CSV~~ | Removed | Owner decision 2026-10-01 (feedback item 23): no CSV export in the app, against PRD FR-PRG-6 (Could). The export story is to be removed via correct-course when its epic comes up. |
+| Settings | Nav | Grouped cards, rows open sub-screens (owner decision 2026-09-27; design preview round 2 layout 2026-09-30). Title "Settings" pinned top-left. Card "Snooze": "Base fee" ›, "Max snoozes per session" ›, "Default snooze length" ›; card "Wake": "Default quiet time" ›, "Vibrate during quiet time" (switch), "Bright wake screen" (switch with its caption); card "Appearance": System / Light / Dark `segmented-control`; a card with "Weekly summary" and "Share anonymous usage stats" (switches); a card with "Reliability checklist" ›. App behaviour only: payments, privacy, "Delete all data", support, terms and about moved to You (owner decision 2026-10-01). Sub-screens: **Base fee** (`stepper`, fee ladder preview, lock note, approximate-price note), **Max snoozes per session** (`stepper` 1 to 5), **Default snooze length** (5 / 9 / 10 / 15 min), **Default quiet time** (15 to 30 s slider). |
+| You | Nav | A personal page with no sign-in (owner decision 2026-10-01; no account or backend, NFR-4), grouped cards: "Money" (Purchase history ›, "How payments & refunds work" ›), "Privacy and your data" ("Privacy policy" ›, "Delete all data" in `error`, opens its dialog), "Help" ("Support" ›, "Terms" ›, "About" with "Version {version}"). The label can later become "Account" with a one-word change. |
+| Reliability checklist | Settings, onboarding step 5, `banner-warning` | Permission and device-setting status with fixes (FR-ONB-2/3). All rows in one `card-group`; "Fix" on "Manufacturer settings" opens its numbered steps as a sub-screen ("Open settings", "I've done this"). |
 | Payments & refunds | Settings | Plain explanation of fees, pending payments and Google refunds (FR-SET-3). |
 | Ringing | Alarm fires (full-screen intent), `notification-ringing` tap | Time, "I'm up", "Snooze · {price}". |
 | Snooze confirm | `button-snooze` tap | Price, next price, nudge, confirm. Includes the unlock step and "already paid" state. |
 | Google Play purchase sheet | Snooze confirm (system UI) | Payment. |
-| Check | "I'm up" | The chosen check(s) with the grace window. |
+| Check | "I'm up" | The chosen check(s) with the grace window (quiet time). |
 | Fallback check picker | `fallback-link` | Pick an accessible fallback check. |
 | Success | Check completed | Streak or plain "You're up", motivation playback. |
 | Snoozed | Purchase granted | "Snoozed. Next ring at {time}." then screen off. |
@@ -100,15 +102,21 @@ All strings live in resources (NFR-10). `{price}`, `{nextPrice}`, `{minutes}`, `
 | Home, zero paid | "Nothing paid this week. Keep it that way." |
 | Home, next alarm < 1 h | "Rings in {minutes} min" |
 | Home, next alarm ≥ 24 h | "Rings in {days} d {hours} h" |
-| Alarm repeat summary | "Every day" · "Once" · otherwise locale short day names (e.g. "Mon, Wed, Fri") |
+| Alarm repeat summary | "Every day" · "Once" · "Weekdays" (Mon to Fri) · "Weekends" (Sat and Sun) · otherwise locale short day names (e.g. "Mon, Wed, Fri") (Weekdays / Weekends: owner decision 2026-09-27) |
+| Editor, repeat quick choices | "Once" · "Weekdays" · "Custom" (owner decision 2026-09-27) |
+| Editor, header | "New alarm" / "Edit alarm" · "Rings in {...}" (the Home countdown strings) |
+| Editor, bottom pill | "Cancel" · "Save" (owner decision 2026-09-27) |
+| Editor, rows (owner decision 2026-09-27) | "Alarm name" · "Sound" · "Vibration" · "Wake-up check" · "Quiet time" · "Snooze" · "Motivation" · "Test alarm" |
+| Editor, time wheel unit labels | "h" · "min" (owner decision 2026-09-27) |
 | Editor, label too long | "Keep the label under 40 characters." |
 | Editor, unsaved changes dialog | Title "Discard changes?" · actions "Discard" / "Keep editing" |
-| Editor, volume ramp switch | "Gradually increase volume" |
+| Editor, volume ramp switch | "Gradually increase volume" (no starting-volume slider, owner decision 2026-09-27: on, the ramp starts at 20% and rises to the set volume over 30 s; off, it starts at the set volume) |
 | Sound picker, source captions | "Built-in" · "System" |
 | Sound picker, preview (TalkBack) | "Play preview" / "Stop preview" |
 | Notification channel | "Alarms" |
 | Check picker, card descriptions | Math "Solve a few quick sums." · Word Unscramble "Unscramble a few words." · Memory Sequence "Repeat a pattern of tiles." · QR/Barcode "Scan a code you placed away from bed." · House Hunt "Photograph a spot far from your bed." |
-| Home FAB (TalkBack) | "Add alarm" |
+| Nav bar "+" (TalkBack) | "Add alarm" (was the Home FAB) |
+| Nav bar tabs (owner decision 2026-10-01) | "Alarms" · "Progress" · "Settings" · "You" (draft); You sections "Money" · "Privacy and your data" · "Help" · "About" · "Version {version}" (drafts) |
 | Home, next alarm | "Rings in {hours} h {minutes} min" |
 | Home, reliability banner | "Alarms may not ring. Fix settings" |
 | Home, missed session | "Your {time} alarm stopped after 30 minutes. Logged as missed." |
@@ -146,7 +154,7 @@ All strings live in resources (NFR-10). `{price}`, `{nextPrice}`, `{minutes}`, `
 | Fallback link | "Can't do this check?" |
 | Fallback check picker, title | "Pick a fallback check" |
 | Phone call | "Paused for your call. Rings again when it ends." |
-| Success, zero snooze | "Up on time. {streak} days in a row." |
+| Success, zero snooze | The streak number, then "days in a row" under it, then the headline "Up on time." (owner decision 2026-09-28: the number is never repeated in a sentence; each line fits one line on 360 dp at 100%) |
 | Success, after snooze | "You're up. That's what counts." |
 | Success, pending not used | "Your pending payment wasn't used. Google refunds it automatically." |
 | Weekly summary (nothing paid) | "{onTime} on-time mornings, nothing paid. Nice." |
@@ -155,7 +163,6 @@ All strings live in resources (NFR-10). `{price}`, `{nextPrice}`, `{minutes}`, `
 | Progress empty | "Your first morning shows up here." |
 | Home empty | "No alarms yet." · "Add your first alarm" |
 | Purchase history empty | "No snoozes paid. Keep it that way." |
-| Export empty | "Nothing to export yet." |
 | Recordings empty | "Record a message for your morning self." |
 | Math check, progress | "Problem {n} of {count}" |
 | Math check, problem (TalkBack) | Spoken form with "plus" / "times", e.g. "47 plus 38" |
@@ -170,11 +177,11 @@ All strings live in resources (NFR-10). `{price}`, `{nextPrice}`, `{minutes}`, `
 | Check picker, All mode order | "Move up" / "Move down" |
 | Check preview, done | "Nice. That's how it works." |
 | Fallback check picker, close (TalkBack) | "Back to check" |
-| Grace window, slider value | "{seconds} seconds" |
-| Grace window, switch (editor and Settings) | "Vibrate in grace window" |
+| Quiet time, row value and slider value | "{seconds} seconds" |
+| Quiet time, switch (editor and Settings) | "Vibrate during quiet time" (owner decision 2026-09-27, was "Vibrate in grace window") |
 | Grace window, countdown (TalkBack) | "{seconds} seconds left" |
 | Success, zero snooze (before streaks) | "Up on time." |
-| Success, zero snooze, streak of 1 | "Up on time. 1 day in a row." |
+| Success, zero snooze, streak of 1 | "1", then "day in a row", then "Up on time." |
 | Success, test session | "Test finished. Your alarm works." |
 | QR/Barcode, no code registered | "Scan a code to use this check." |
 | QR/Barcode registration, detection | "Use this code" / "Scan again" |
@@ -190,7 +197,7 @@ All strings live in resources (NFR-10). `{price}`, `{nextPrice}`, `{minutes}`, `
 | Settings, Snooze section | "Snooze" · "Base fee" · "Max snoozes per session" · "Default snooze length" |
 | Settings, fee ladder preview (also onboarding) | "Snooze 1: {price1} · 2: {price2} · 3: {price3}" |
 | Settings, weakening under lock (today) | "Saved. Takes effect after today's {time} alarm." |
-| Settings, Wake section | "Wake" · "Default grace window" · "Bright wake screen" |
+| Settings, Wake section | "Wake" · "Default quiet time" · "Bright wake screen" (owner decision 2026-09-27, was "Default grace window") |
 | Settings, bright wake screen caption | "Raises screen brightness on alarm screens." |
 | Settings, Appearance section | "Appearance" · "System" / "Light" / "Dark" |
 | Settings, usage stats | "Share anonymous usage stats" |
@@ -214,16 +221,15 @@ All strings live in resources (NFR-10). `{price}`, `{nextPrice}`, `{minutes}`, `
 | Reliability checklist, manufacturer guidance | "Open settings" · "I've done this" (steps in Long-form copy) |
 | Home hero, streak label | "days on time" · "day on time" (1) |
 | Home hero, money line | "{paid} paid this week" |
-| Progress, stat tiles | "Current streak" · "Best streak" · "On time · 7 days" · "On time · 30 days" · "Average time to up" |
+| Progress, stat tiles | "on time" · "to get up" · "snoozes" (owner notes 2026-10-01); streak card "Current streak" · "Best streak" · "Keep it going." (owner redesign 2026-09-30) |
+| Progress, ring (owner redesign 2026-09-30) | Centre "{streak}" · "/ 30" · "day streak"; a dot reads like a calendar day, plus ", today" for today; label chip "{weekday} {day} · {outcome}" (draft) |
+| Progress, Insight card (owner redesign 2026-09-30) | Title "Insight" · one line from the user's data: "You get up fastest on weekdays." / "You get up fastest on weekends." |
 | Progress, average time | "{minutes} min" · "Under 1 min" |
-| Progress, tile without data | "No mornings yet" |
-| Progress, snoozes chart | "Lower is better." · bar value "{n} snoozes" / "1 snooze" |
-| Progress, chart bar (TalkBack) | "Week of {date}, {n} snoozes" / "Week of {date}, 1 snooze" |
-| Progress, money | "Money paid" · "This week" · "This month" · "All time" |
+| Progress, money | "Money paid" · "This month" (the card shows the month total and links to "Purchase history", owner redesign 2026-09-30) |
 | Progress, calendar navigation (TalkBack) | "Previous month" / "Next month" |
 | Progress, calendar day (TalkBack) | "{weekday} {day}, {outcome}" + ", fallback check used" + ", {n} sessions" · empty day "{weekday} {day}, no alarm" |
-| Progress, export link | "Export CSV" |
-| Day detail, flags | "Fallback check used" · "Rang before your first unlock" |
+| Day detail, timeline (owner redesign 2026-10-01; drafts) | "Alarm rang" · "Rang again" · "Snoozed {minutes} min · {price}" · "I'm up" · "Quiet time ran out" · "Check switched to {check}" · "Fallback check: {check}" · "{time} alarm merged into this session" · "{check} solved first try" / "{check} solved in {n} tries" · "Stopped after 30 minutes" · "Rang before your first unlock" |
+| Day detail, tiles (owner redesign 2026-10-01) | "rings" · "snoozes" · "paid" · "No charge" (drafts); hero "to get up" |
 | Day detail, alarm changes | "Your {time} alarm was turned off. Logged." · "Your {time} alarm was deleted. Logged." |
 | Weekly summary, channel | "Weekly summary" |
 | Weekly summary, singular | "1 on-time morning, nothing paid. Nice." · "1 on-time morning, {paid} paid this week." |
@@ -279,7 +285,7 @@ Behavioural rules. Visual specs for every row live in `DESIGN.md > Components` u
 
 | Component | Use | Behavioural rules |
 |---|---|---|
-| `button-wake-primary` | Ringing | Starts the check and the grace window. Always enabled. Never moves between rings. |
+| `button-wake-primary` | Ringing | Starts the check and the grace window. Always enabled. Never moves between rings. On Ringing a gentle pulse (scale 1 to 1.03, 1.2 s) draws the eye (owner decision 2026-09-27); none with reduced motion or while the confirm sheet is open; the touch target never moves. |
 | `button-snooze` | Ringing, Check footer | One component everywhere. Enabled: opens `sheet-snooze-confirm`. `button-snooze-disabled`: not tappable, label states the reason, TalkBack reads "Snooze unavailable, {reason}". Before first unlock it uses the lock icon and "Unlock your phone to snooze"; once the phone is unlocked it becomes "Snooze · {price}" without leaving the screen (FR-ALM-11). Live-updates when connectivity returns or a stranded token clears. |
 | `sheet-snooze-confirm` | Over Ringing or Check | Alarm keeps ringing (FR-RNG-5). **Ignores all input for 500 ms after it opens**, including with animations off. "I'll get up" sits at the bottom where the thumb was; "Pay {price} and snooze" is above it. Neither is pre-selected or focused. Swipe down or Back = "I'll get up" path (closes sheet, no charge). "Pay" → if locked: *unlocking* state ("Unlock to pay {price}") → keyguard → Play sheet; if unlocked: Play sheet directly. If a stranded purchase for that price exists (pre-launch query or `ITEM_ALREADY_OWNED`), the sheet switches to the *already paid* state instead of charging (FR-RNG-10), with "Not now" at the bottom and "Use it" above; the 500 ms input lock applies again on every state change. Tax note shown where prices exclude tax. Outcomes per the Payment outcomes table. |
 | `button-filled` | App screens | Primary action; one per screen. |
@@ -293,29 +299,39 @@ Behavioural rules. Visual specs for every row live in `DESIGN.md > Components` u
 | `viewfinder` | House Hunt, QR, registration | Starts on screen open. If permission is denied or the camera fails to start (CameraX error or no frame within 5 s, FR-PWK-11), shows "Camera isn't available. Pick a fallback check." with `fallback-link` immediately. |
 | `shutter` | House Hunt | Captures and matches on device. Result: "Matched" (success) or "Doesn't match yet. Try the same angle." Each non-match counts as a failed attempt. |
 | `fallback-link` | Check footer | Appears **immediately** if camera permission is denied, the camera is unavailable or fails to start; otherwise after **5 failed attempts** on a camera check. Once per session. Opens the Fallback check picker. |
-| `check-type-card` | Onboarding, Check picker, Fallback check picker | Tap toggles selection (picker) or starts that check (fallback picker). "Try it" opens a no-stakes preview. Camera checks show "Needs the camera. If it can't be used, you'll get a fallback check." |
+| `check-type-card` | Onboarding, Check picker, Fallback check picker | Tap toggles selection (picker) or starts that check (fallback picker). "Try it" opens a no-stakes preview. Camera checks show "Needs the camera. If it can't be used, you'll get a fallback check." In the Check picker (and onboarding) it is a row of the "Checks" `card-group` (owner direction 2026-09-27, design preview round 3); "Try it" lives in Check setup, one tap further. |
 | `card-hero` | Home | Not tappable in v0.2 (Progress is one tap away in nav). Streak number animates only on the morning it grows (success screen, not Home). |
-| `card-alarm` | Home list | Tap → editor. Long-press → menu with Duplicate and Delete (both also in the editor overflow menu for TalkBack). `switch` toggles enabled; turning off within 8 h opens `dialog-confirm`. |
-| `fab` | Home | Adds an alarm → editor with defaults. |
+| `card-alarm` | Home list | Animates in when added and out when removed (owner decision 2026-09-27). Tap → editor. Long-press → menu with Duplicate and Delete (both also in the editor overflow menu for TalkBack). `switch` toggles enabled; turning off within 8 h opens `dialog-confirm`. |
+| ~~`fab`~~ | Removed from Home | Replaced by the nav bar's centre "+" (owner decision 2026-10-01). The production Story 1.8 Alarms route keeps its FAB until Story 1.9 wires the new shell. |
 | `banner-warning` | Home, Settings | Shown when any reliability item fails. Not dismissible; clears itself when the checklist is all OK (re-evaluated on every app foreground). Info variant (info icon, no error colour) for the fallback re-register prompt; dismissible. |
 | `panel-session-in-progress` | Home during a session | Replaces all Home content. "Back to alarm" opens the wake screen. |
 | `note-inline` | Editor, onboarding, Check | Read-only notes: commitment lock, approximate price, Direct Boot notice, phone call pause. |
-| `chip-day` | Editor, onboarding | Toggle. No days selected = one-time alarm at the next occurrence of the time. |
-| `chip-check` | Editor | Shows selected checks with difficulty; tap → Check setup. |
+| `chip-day` | Editor, onboarding | Toggle, shown when "Custom" is chosen (expands with an animation). No days selected = one-time alarm at the next occurrence of the time. "Once" clears the days, "Weekdays" sets Monday to Friday. |
+| `chip-check` | Editor | Shows selected checks with difficulty; tap → Check setup. In the design preview (round 3) the selected checks are the "Your checks" rows of the Wake-up check sub-screen (value and chevron), not chips. |
 | `segmented-control` | Difficulty, check mode, theme | Single select, always one selected. |
 | `stepper` | Base fee, counts | − / + in single steps; long-press repeats. Base fee lowering under lock shows the lock note. |
-| `slider` | Grace window (15 to 30 s, default 20), volume, ramp start level | Value announced on change; steps of 1 s or 5%. |
+| `slider` | Quiet time (15 to 30 s, default 20), volume | Value announced on change; steps of 1 s or 5%. No ramp start level slider (owner decision 2026-09-27). |
 | `switch` | Toggles | Immediate effect; no save needed except inside the editor. |
-| `time-picker` | Editor, onboarding | Keyboard input first for TalkBack; dial optional. |
+| `time-picker` | Editor, onboarding | Scrolling wheels in their own card: hour and minute, plus AM/PM on 12 h phones, with "h" / "min" labels; momentum scrolling that snaps to one value, a light haptic tick and a short quiet bundled tick sound per value (owner decision 2026-09-28; the sound is silent on silent or vibrate, the haptic follows the system haptic setting), centre value selected; no keyboard ever opens. TalkBack reads each wheel as "Hour, 6" / "Minute, 45"; swipe up or down changes it by one. Targets ≥ 48 dp. (owner decision 2026-09-27, replaces keyboard input first) |
 | `top-app-bar` | Pushed screens | Back returns; unsaved editor changes prompt "Discard changes?" |
-| `nav-bar` | App root | Three items; hidden during the session lock. |
-| `progress-dots` | Onboarding | Show step; back allowed; not tappable. |
-| `stat-tile` | Progress | Current / best streak, on-time rate (7 d / 30 d), average minutes from first ring to up. Not tappable. |
-| `bar-chart` | Progress | Snoozes per week, last 8 weeks. Tap a bar for the week's number. TalkBack reads each week as a value. |
-| `outcome-marker` | Calendar, legend, Day detail, history | Always paired with a label (visible in legend and Day detail, spoken in calendar). |
+| `nav-bar` | App root | Four tabs around the centre "+" (new alarm → editor with defaults, from any tab); hidden during the session lock and on pushed screens. The selected tab's icon fills and its colour changes with a short animation, instant with reduced motion. Every screen with the bar pads its content so the last row ends above the capsule. At large font scales only the selected tab shows its label. |
+| `progress-dots` | Onboarding | Show step; back allowed; not tappable. On a small glass capsule at the top (round 3), TalkBack "Step 3 of 8"; the active dot slides between steps. |
+| `progress-ring` | Progress | The last 30 mornings as outcome glyphs around the streak (owner redesign 2026-09-30). Tapping a dot with a session opens Day detail. The dots are read by TalkBack but are not separate buttons (30 × 48 dp does not fit a ring); the calendar's days are the accessible way to Day detail. Static: no animation. |
+| `card-streak` | Progress | Current and best streak on the accent-tinted glass. Not tappable. |
+| `stat-tile` | Progress | On-time rate (30 d), average minutes from first ring to up, snoozes (30 d). Three in a row, 2 + 1 at large font scales. Not tappable. |
+| ~~`bar-chart`~~ | Removed | Owner decision 2026-10-01 (feedback item 24): no snoozes chart on Progress, against FR-PRG-2's "snoozes chart". |
+| `day-hero` | Day detail | Not tappable. The key figure is the time from the first ring to the solved check, read from the timeline, so hero, tiles and timeline always agree. |
+| `morning-timeline` | Day detail | Chronological, read from top to bottom by TalkBack (one node per event: time and text). Draws in top to bottom on entry (the line grows, events fade in one after another); reduced motion shows it at once. |
+| `outcome-marker` | Ring, calendar, Day detail | Meaning carried by shape as well as colour (owner decision 2026-10-01), so no legend: the label is on the tap chip and in Day detail, and spoken by TalkBack ("{date}, {outcome}"). |
+| `chip-day` (label chip) | Progress ring, calendar | A first tap on a day shows "{Tue 23} · {Snoozed}" with a chevron under the ring or calendar; a second tap on the day or a tap on the chip opens Day detail. Pops in (instant with reduced motion). |
 | `calendar-day` | Progress | Tap → Day detail. TalkBack: "Tuesday 14, on time" (or snoozed, missed, test, skipped; "fallback check used" when relevant). Skipped rendering is conditional on PRD Q9. |
 | `checklist-row` | Reliability checklist | "Fix" deep-links to the system setting; status re-checked on return. Camera and microphone rows appear only when needed. |
-| `settings-row` | Settings | Tap → detail or toggle. Rows unavailable during a session. |
+| `settings-row` | Editor, Settings, pickers | Progressive disclosure (owner decision 2026-09-27): title with the current value as a subtitle and a chevron; tap opens the sub-screen that sets it (back arrow returns, the change is kept). A toggle row has a switch instead. Rows unavailable during a session. |
+| `card-group` | Every app screen | Related rows grouped in one glass card with dividers (owner decision 2026-09-27, like the stock Clock apps). Not interactive itself. |
+| `pill-save` | Editor (and later setup screens with a Save) | "Cancel \| Save" in its own bottom area (owner decision 2026-09-28): content scrolls above it, never under it, and the last row is fully visible at the end. Cancel = Back (unsaved changes ask "Discard changes?"). Stays above the keyboard with the focused field visible. Save is disabled while saving. |
+| `header-collapsing` | Home | Continuous and tied to the scroll position, never a snap (owner decision 2026-09-28, Samsung Weather): the title stays pinned and gains its glass chip as content scrolls under it; the hero collapses into the compact "{streak} days on time" chip; alarm cards scroll underneath and fade out as they enter the header zone (no card text readable behind or above the chips); the title shrinks to `title` size so the compact chip stays on its row. Scrolled to the end, the last card is fully above the FAB. Reduced motion: each part switches instantly at the halfway point. The compact chip is not read by TalkBack (the hero card says the same). |
+| `glass-bar` | Bottom pill, nav bar, snooze confirm sheet | Translucent glass over moving content; blurs it on Android 12+, plain translucent below. |
+| `background-gradient` | Every screen | Static; never animates. |
 | `purchase-row` | Purchase history | Read-only. Shows what was charged; stranded purchases read "Not used, refunded automatically by Google". Self-requested refunds are not detectable (PRD §6.3). |
 | `sound-row` | Sound picker | Tap selects; play button previews at alarm volume, stops on leaving. Missing custom file shows "File missing. Default sound will play." |
 | `recorder` | Recordings | Tap to record (mic permission asked on first use), tap to stop, auto-stop at 60 s. Then Play, Re-record, Save, Delete. |
@@ -350,7 +366,7 @@ Behavioural rules. Visual specs for every row live in `DESIGN.md > Components` u
 | Restored after crash, kill or reboot | Wake screens | Same step as before (ringing, check progress, snoozed); snooze count and paid amount kept (FR-SES-1/2). No "restored" message. |
 | Overlapping alarm | Wake screens | Merged silently; noted in Day detail "{time} alarm merged into this session" (FR-SES-7). |
 | Missed (30 min, no interaction) | Wake screens | Alarm stops, session logged Missed (FR-ALM-9); Home shows the missed note next open. |
-| Success, zero snooze | Success | Streak animation once, success haptic, motivation playback if set, brightness restored on "Done". |
+| Success, zero snooze | Success | Celebration once (owner decision 2026-09-28): the number counts up from n−1 to n with a small bounce, a 1.5 s confetti burst, one success haptic; motivation playback if set, brightness restored on "Done". Reduced motion: the final state at once, no confetti (the haptic stays). |
 | Success, after snooze | Success | "You're up. That's what counts." plus "{paid} paid this morning" in `{colors.text-secondary-sunrise}`. No animation. |
 | Snoozed | Snoozed | "Snoozed. Next ring at {time}." for 3 s, then screen off. |
 
@@ -380,14 +396,13 @@ Behavioural rules. Visual specs for every row live in `DESIGN.md > Components` u
 | Fallback 3 times in 7 days | Home | `banner-warning` info variant with "Re-register". |
 | Session active | Home, whole app | `panel-session-in-progress` only. |
 | Weakening under lock | Alarm editor, Settings | `note-inline` "Saved. Takes effect after tomorrow's {time} alarm." |
-| No check selected | Alarm editor | Save blocked, inline error "Pick at least one check." |
+| No check selected | Alarm editor | Save blocked, inline error "Pick at least one check." under the Wake-up check row (value "None") and in its sub-screen. |
 | One-time alarm time already passed today | Alarm editor | Schedules the next day; `note-inline` "Rings tomorrow at {time}." |
 | Custom sound missing | Sound picker, editor | "File missing. Default sound will play." (FR-SND-5). |
 | No recordings / mic denied | Recordings | "Record a message for your morning self." / "Microphone is off. Turn it on in Settings." with "Fix". |
 | Empty | Progress | "Your first morning shows up here." |
 | Test or skipped day | Day detail | Outcome label only; excluded from rates and streaks. |
 | Empty | Purchase history | "No snoozes paid. Keep it that way." |
-| No data | Export CSV | Button disabled with "Nothing to export yet." |
 | All OK | Reliability checklist | Every row "OK"; `button-outlined` "Ring a test alarm" stays. |
 | Session active | Settings | Not reachable (session lock). |
 | Large font (200%) and TalkBack | All | See Accessibility Floor. |
@@ -395,6 +410,7 @@ Behavioural rules. Visual specs for every row live in `DESIGN.md > Components` u
 ## Interaction Primitives
 
 - **Tap to act.** Long-press only on `card-alarm` (Duplicate / Delete), always duplicated in a menu.
+- **Progressive disclosure (owner decision 2026-09-27).** A screen never shows every option: rows show their value and open a sub-screen. The same grouped-card, rows to sub-screen pattern applies to Settings (round 2), onboarding and check setup (round 3).
 - **Back:** on wake screens Back does nothing (Home and Recents still work). In the confirm sheet, Back = "I'll get up" path.
 - **Anti-double-tap:** `sheet-snooze-confirm` ignores input for 500 ms after opening; "I'll get up" sits under the thumb position of the Snooze tap.
 - **Motion** (motion intensity 4/10):
@@ -404,11 +420,18 @@ Behavioural rules. Visual specs for every row live in `DESIGN.md > Components` u
 | Standard transition | 250 ms, Material emphasized easing |
 | Countdown ring | Linear, exact to the second |
 | Memory tiles | 350 ms highlight, 150 ms gap |
-| Success (zero-snooze) | One 600 ms scale + fade of the streak number, plus a short haptic. Nothing else. |
+| Success (zero-snooze) | One 1.5 s celebration, linear: at 20% the number steps from n−1 to n and bounces (scale up to 1.2 and back over 25%); seeded confetti bursts from behind the number, falls and fades out from 70%; one success haptic at the start. Then calm. Compose drawing only, no GIF, no library. |
 | Wrong answer | 200 ms horizontal shake + error haptic |
+| Screens and sub-screens (owner decision 2026-09-27) | Slide in from the end and out the other way, 250 ms emphasized; the outgoing screen moves a quarter width |
+| "Custom" repeat | Day chips expand and collapse |
+| Switches and chips | Animate their state change (Material 3 switch, chip colour fade) |
+| Time wheel | Momentum scroll with snapping; light haptic tick and a quiet tick sound per value |
+| Home header (owner decision 2026-09-28) | Scroll-linked collapse: title chip fades in over 16 dp; hero fades out by 60%, shrinks 10% and lags; the compact streak chip cross-fades in from 50% and rises 8 dp |
+| Alarm cards | Animate in and out when added or removed |
+| "I'm up" pulse (Ringing) | Scale 1 to 1.03 and back, 1.2 s, repeating; drawn only |
 
-- **Reduced motion:** when the animator duration scale is 0, every motion becomes an instant state change; the countdown still counts as numbers.
-- **Haptics:** light tick on each digit or tile tap; success pattern on completion; strong buzz when the alarm returns after grace; a short tick every 5 s during grace (countdown cue that works without sound or sight).
+- **Reduced motion:** when the animator duration scale is 0, every motion becomes an instant state change and the "I'm up" pulse does not run; the Home header switches between its rest and collapsed states at the halfway point instead of following the scroll; the countdown still counts as numbers.
+- **Haptics and sounds:** light tick on each digit or tile tap and on each time-wheel value, plus the bundled wheel tick sound (12 ms, played quietly on the sonification stream, never while the phone is on silent or vibrate; not the system click that "Touch sounds" controls); success pattern on completion; strong buzz when the alarm returns after grace; a short tick every 5 s during grace (countdown cue that works without sound or sight).
 - **Volume keys:** captured only while the wake screen is in the foreground (FR-SES-6). The accessibility shortcut (both volume keys held) always passes through.
 - **Banned:** decorative motion, pre-selected payment buttons, disguised or hidden snooze, confirm-shaming copy, carousels, streak-loss threats, badge counts.
 
@@ -508,7 +531,7 @@ Failure: Play reports a pending payment → "Payment not confirmed yet. If it go
 3. The camera can't start: "Camera isn't available. Pick a fallback check." with "Can't do this check?" available immediately.
 4. She opens the Fallback check picker; Math is first.
 5. TalkBack reads "47 plus 38". She types 85 on the announced number pad and double-taps "Check".
-6. **Climax:** the alarm stops without a single payment or sighted step. Day detail later shows the fallback badge.
+6. **Climax:** the alarm stops without a single payment or sighted step. Day detail later shows "Fallback check: Math" in the morning's timeline.
 
 Failure: with the camera working, after 5 failed scans the link appears. A second fallback in the same session is not offered (once per session). After 3 fallbacks in 7 days, Home suggests re-registering the code.
 
@@ -543,15 +566,15 @@ Failure: he ignores it → the banner stays on Home (not dismissible) until fixe
 
 Failure: she swipes up and enters her PIN on the lock screen; the wake screen stays on top, the button becomes "Snooze · $1", the Math check stays for this ring, and F4 continues.
 
-### F9 — Review progress and export (Marco, Sunday evening)
+### F9 — Review progress (Marco, Sunday evening)
 
 1. The weekly summary notification says "6 on-time mornings, nothing paid. Nice." He taps it.
-2. Progress: streak 12 (best 12), on-time 86% (30 d), average 3 min to up, snoozes chart.
-3. He taps a calendar day with a clock glyph: Day detail shows one snooze, $2, Math, 7 min.
+2. Progress: streak 12 (best 12) on the ring, on-time 86% (30 d), average 3 min to up, 2 snoozes.
+3. He taps a clock dot, then its chip: Day detail shows the morning: rang 7:30, snoozed 9 min · $1, rang again 7:40, "I'm up" 7:41, Math solved first try 7:42, 12 min to get up.
 4. Purchase history lists the $2 charge.
-5. **Climax:** "Export CSV" opens the share sheet and he saves the file.
+5. **Climax:** he sees 12 on the ring and one snooze all week; nothing to fix.
 
-Failure: nothing logged yet → "Nothing to export yet."
+Failure: nothing logged yet → the empty ring with "Your first morning shows up here." (CSV export removed, owner decision 2026-10-01.)
 
 ### F10 — Record a motivation message (Linh, evening)
 

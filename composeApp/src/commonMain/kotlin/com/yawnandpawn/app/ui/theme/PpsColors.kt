@@ -29,8 +29,19 @@ data class PpsColors(
     val inverseSurface: Color,
     val inverseText: Color,
     val inverseAccent: Color,
-    /** Top of the optional ringing-screen gradient (Sunrise only; null in Light and Dark). */
-    val sunriseGradientTop: Color?,
+    /**
+     * Top of the screen background gradient (fades into [bg]): `gradient-top` in Light and Dark, `sunrise-gradient-top` on
+     * wake screens. Accent never sits directly on it (DESIGN.md contrast table).
+     */
+    val gradientTop: Color,
+    /** Translucent glass fill of cards over the background (`glass`). */
+    val glass: Color,
+    /** Denser glass for surfaces over moving content: the bottom pill, the nav bar and sheets (`glass-strong`). */
+    val glassStrong: Color,
+    /** The faint hairline edge of every glass surface (`glass-edge`, decorative). */
+    val glassEdge: Color,
+    /** Accent tint drawn over [glass] for the one highlighted card (the Progress streak card, `glass-accent`). */
+    val glassAccent: Color,
     val isDark: Boolean,
 )
 
@@ -56,7 +67,11 @@ val LightPpsColors: PpsColors =
             inverseSurface = inverseSurface,
             inverseText = inverseText,
             inverseAccent = inverseAccent,
-            sunriseGradientTop = null,
+            gradientTop = gradientTop,
+            glass = glass,
+            glassStrong = glassStrong,
+            glassEdge = glassEdge,
+            glassAccent = glassAccent,
             isDark = false,
         )
     }
@@ -83,7 +98,11 @@ val DarkPpsColors: PpsColors =
             inverseSurface = inverseSurface,
             inverseText = inverseText,
             inverseAccent = inverseAccent,
-            sunriseGradientTop = null,
+            gradientTop = gradientTop,
+            glass = glass,
+            glassStrong = glassStrong,
+            glassEdge = glassEdge,
+            glassAccent = glassAccent,
             isDark = true,
         )
     }
@@ -115,7 +134,11 @@ val SunrisePpsColors: PpsColors =
             inverseSurface = inverseSurface,
             inverseText = inverseText,
             inverseAccent = PpsTokens.Light.inverseAccent,
-            sunriseGradientTop = sunriseGradientTop,
+            gradientTop = sunriseGradientTop,
+            glass = glass,
+            glassStrong = glassStrong,
+            glassEdge = glassEdge,
+            glassAccent = glassAccent,
             isDark = false,
         )
     }

@@ -7,6 +7,23 @@ import kotlinx.datetime.LocalTime
 /** The Settings main screen or one of its sub-screens (progressive disclosure, owner decision 2026-09-27). */
 enum class SettingsPane { Main, BaseFee, MaxSnoozes, SnoozeLength, QuietTime }
 
+/**
+ * The rows of the Settings main screen. A screen shows the rows it is given; production leaves out the rows whose
+ * stories are not built yet, so no row leads nowhere (previews show them all).
+ */
+enum class SettingsRow {
+    BaseFee,
+    MaxSnoozes,
+    DefaultSnoozeLength,
+    DefaultQuietTime,
+    VibrateDuringQuietTime,
+    BrightWakeScreen,
+    Appearance,
+    WeeklySummary,
+    UsageStats,
+    Reliability,
+}
+
 /** A commitment-lock note after a weakening change: it takes effect after the next alarm at [time]. */
 data class WeakeningNote(
     val time: LocalTime,

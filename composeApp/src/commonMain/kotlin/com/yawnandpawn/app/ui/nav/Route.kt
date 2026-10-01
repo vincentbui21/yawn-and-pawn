@@ -8,12 +8,28 @@ import kotlinx.serialization.modules.SerializersModule
 import kotlinx.serialization.modules.polymorphic
 import kotlinx.serialization.modules.subclassesOfSealed
 
-/** Every app-screen destination (AD-11). The wake flow is a separate activity, outside this graph. */
+/**
+ * Every app-screen destination (AD-11). The wake flow is a separate activity, outside this graph. The four tabs of the
+ * nav bar are routes too: [Alarms] is the root, and another tab sits on top of it ([Progress], [Settings] or [You]), so
+ * Back on a tab returns to Alarms and Back on Alarms leaves the app. The editor is pushed over them.
+ */
 @Serializable
 sealed interface Route : NavKey {
-    /** Home: the alarm list, or the empty state when there are no alarms. */
+    /** Home, the Alarms tab: the alarm list, or the empty state when there are no alarms. */
     @Serializable
     data object Alarms : Route
+
+    /** The Progress tab. */
+    @Serializable
+    data object Progress : Route
+
+    /** The Settings tab. */
+    @Serializable
+    data object Settings : Route
+
+    /** The You tab. */
+    @Serializable
+    data object You : Route
 
     /** The alarm editor; [alarmId] is `null` for a new alarm. */
     @Serializable

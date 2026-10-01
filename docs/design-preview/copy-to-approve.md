@@ -157,6 +157,15 @@ Layout choices to look at (no new copy):
 - House Hunt registration uses the Cancel | Save pill (EXPERIENCE.md: "setup screens with a Save").
 - Recording shows a fixed 0:09 take (no real timer or microphone in the preview).
 
+## Story 1.9 (Home in production, 2026-10-01)
+
+"Duplicate", "Delete", the delete dialog ("Delete your {time} alarm? This is logged." · "Delete" / "Keep it"), "Couldn't load your alarms." · "Try again" and "Couldn't open this alarm." are EXPERIENCE.md key strings, used verbatim. Two TalkBack labels are drafts:
+
+| Key | Draft | Screen | Note |
+|---|---|---|---|
+| `alarm_card_options` | Duplicate or delete | Home, `card-alarm` long-press (TalkBack) | Read as "Double-tap and hold to duplicate or delete". Both are also the card's TalkBack actions. |
+| `editor_more_options` | More options | Alarm editor header, overflow button (TalkBack) | The standard Android name for an overflow button. |
+
 ## Not strings, but worth a look
 
 - The Math problem is drawn as digits with "+" or "×" (for example "47 + 38"); TalkBack reads the key string "47 plus 38".

@@ -1,8 +1,6 @@
 package com.yawnandpawn.app.ui
 
 import com.yawnandpawn.app.core.alarm.AlarmField
-import com.yawnandpawn.app.ui.alarms.AlarmRow
-import com.yawnandpawn.app.ui.alarms.AlarmsUiState
 import com.yawnandpawn.app.ui.editor.EditorForm
 import com.yawnandpawn.app.ui.editor.EditorPane
 import com.yawnandpawn.app.ui.editor.EditorUiState
@@ -48,18 +46,9 @@ object EditorSamples {
     /** The Snooze sub-screen of a new alarm: 5 / 9 / 10 / 15 min. */
     val snoozePane = EditorUiState(pane = EditorPane.Snooze)
 
-    val emptyAlarms = AlarmsUiState(isLoading = false)
+    /** Editing a stored alarm: the header has the overflow button (Story 1.9). */
+    val editStored = editAlarm.copy(hasOverflowMenu = true)
 
-    val failedAlarms = AlarmsUiState(isLoading = false, loadFailed = true)
-
-    val someAlarms =
-        AlarmsUiState(
-            isLoading = false,
-            alarms =
-                listOf(
-                    AlarmRow("1", LocalTime(6, 30), setOf(DayOfWeek.MONDAY, DayOfWeek.WEDNESDAY, DayOfWeek.FRIDAY), null),
-                    AlarmRow("2", LocalTime(7, 15), emptySet(), "Stand-up"),
-                    AlarmRow("3", LocalTime(9, 0), DayOfWeek.entries.toSet(), null),
-                ),
-        )
+    /** Delete chosen in the overflow menu. */
+    val editDeleteDialog = editStored.copy(deleteDialogTime = LocalTime(6, 30))
 }

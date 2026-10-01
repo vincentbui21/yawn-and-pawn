@@ -2,6 +2,7 @@ package com.yawnandpawn.app.ui.home
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -31,12 +32,15 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.semantics.CustomAccessibilityAction
 import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.customActions
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import com.yawnandpawn.app.ui.checks.displayName
 import com.yawnandpawn.app.ui.checks.icon
+import com.yawnandpawn.app.ui.components.AppSnackbar
 import com.yawnandpawn.app.ui.components.BannerWarning
 import com.yawnandpawn.app.ui.components.ConfirmDialog
 import com.yawnandpawn.app.ui.components.DismissButton
@@ -44,7 +48,10 @@ import com.yawnandpawn.app.ui.components.LocalNavBarClearance
 import com.yawnandpawn.app.ui.components.NoteInline
 import com.yawnandpawn.app.ui.components.PpsBackground
 import com.yawnandpawn.app.ui.components.PpsFilledButton
+import com.yawnandpawn.app.ui.components.PpsMenu
+import com.yawnandpawn.app.ui.components.PpsMenuItem
 import com.yawnandpawn.app.ui.components.PpsSwitch
+import com.yawnandpawn.app.ui.components.PpsTextButton
 import com.yawnandpawn.app.ui.components.RowIcon
 import com.yawnandpawn.app.ui.components.SessionInProgressPanel
 import com.yawnandpawn.app.ui.components.glass
@@ -56,8 +63,11 @@ import com.yawnandpawn.app.ui.format.formatClockTime
 import com.yawnandpawn.app.ui.format.formatMoney
 import com.yawnandpawn.app.ui.format.repeatSummary
 import com.yawnandpawn.app.ui.resources.Res
+import com.yawnandpawn.app.ui.resources.alarm_card_options
 import com.yawnandpawn.app.ui.resources.alarm_card_summary
 import com.yawnandpawn.app.ui.resources.alarm_card_switch
+import com.yawnandpawn.app.ui.resources.alarm_delete
+import com.yawnandpawn.app.ui.resources.alarm_duplicate
 import com.yawnandpawn.app.ui.resources.alarms_add_alarm
 import com.yawnandpawn.app.ui.resources.alarms_add_first
 import com.yawnandpawn.app.ui.resources.alarms_empty_title
@@ -68,21 +78,26 @@ import com.yawnandpawn.app.ui.resources.disable_under_lock_minutes
 import com.yawnandpawn.app.ui.resources.home_dismiss
 import com.yawnandpawn.app.ui.resources.home_fallback_banner
 import com.yawnandpawn.app.ui.resources.home_fix
+import com.yawnandpawn.app.ui.resources.home_load_failed
 import com.yawnandpawn.app.ui.resources.home_missed_note
+import com.yawnandpawn.app.ui.resources.home_open_failed
 import com.yawnandpawn.app.ui.resources.home_paid_week
 import com.yawnandpawn.app.ui.resources.home_reliability_banner
 import com.yawnandpawn.app.ui.resources.home_reregister
 import com.yawnandpawn.app.ui.resources.home_streak_day
 import com.yawnandpawn.app.ui.resources.home_streak_days
 import com.yawnandpawn.app.ui.resources.home_test_skipped
+import com.yawnandpawn.app.ui.resources.home_try_again
 import com.yawnandpawn.app.ui.resources.home_zero_paid
 import com.yawnandpawn.app.ui.theme.PpsTheme
 import org.jetbrains.compose.resources.stringResource
 
 /**
  * Home (the Alarms tab), stateless: header, the reliability `banner-warning`, the fallback re-register info banner, the
- * missed note, `card-hero` (streak and money), the next-alarm countdown, the `card-alarm` list and the `fab`; or the
- * empty state; or, during a session, only `panel-session-in-progress`.
+ * missed note, `card-hero` (streak and money), the next-alarm countdown and the `card-alarm` list (the nav bar's "+"
+ * adds an alarm); or the empty state; or, during a session, only `panel-session-in-progress`. While the alarms are
+ * read only the header shows; if they cannot be read, "Couldn't load your alarms." with "Try again" (never the empty
+ * state). Long-press on a card (or its TalkBack actions) offers Duplicate and Delete; Delete asks first.
  */
 @Composable
 fun HomeScreen(
@@ -94,20 +109,36 @@ fun HomeScreen(
 ) {
     val spacing = PpsTheme.spacing
     PpsBackground(modifier = modifier) {
-        if (state.sessionInProgress || state.alarms.isEmpty()) {
+        val noList = state.isLoading || state.loadFailed || state.alarms.isEmpty()
+        if (state.sessionInProgress || noList) {
             Column(modifier = Modifier.fillMaxSize().windowInsetsPadding(WindowInsets.statusBars)) {
                 HomeHeader(streakDays = null, collapse = null, modifier = Modifier.padding(bottom = spacing.space3))
-                if (state.sessionInProgress) {
-                    SessionInProgressPanel(onBackToAlarm = { onIntent(HomeIntent.BackToAlarm) })
-                } else {
-                    EmptyHome(state = state, is24Hour = is24Hour, onIntent = onIntent, modifier = Modifier.weight(1f))
+                when {
+                    state.sessionInProgress -> SessionInProgressPanel(onBackToAlarm = { onIntent(HomeIntent.BackToAlarm) })
+                    state.isLoading -> Unit
+                    state.loadFailed -> LoadFailed(onRetry = { onIntent(HomeIntent.RetryLoad) }, modifier = Modifier.weight(1f))
+                    else -> EmptyHome(state = state, is24Hour = is24Hour, onIntent = onIntent, modifier = Modifier.weight(1f))
                 }
             }
         } else {
             HomeList(state = state, is24Hour = is24Hour, onIntent = onIntent, listState = listState)
         }
+        if (state.openFailed) {
+            AppSnackbar(
+                text = stringResource(Res.string.home_open_failed),
+                modifier = Modifier.align(Alignment.BottomCenter).padding(bottom = LocalNavBarClearance.current),
+            )
+        }
     }
     state.disableDialog?.let { dialog -> DisableDialog(dialog = dialog, is24Hour = is24Hour, onIntent = onIntent) }
+    state.deleteDialog?.let { dialog ->
+        DeleteAlarmConfirm(
+            time = dialog.time,
+            is24Hour = is24Hour,
+            onConfirm = { onIntent(HomeIntent.DeleteConfirmed) },
+            onKeep = { onIntent(HomeIntent.DeleteCancelled) },
+        )
+    }
 }
 
 /**
@@ -157,8 +188,7 @@ private fun HomeList(
                     modifier = Modifier.animateItem(),
                     alarm = alarm,
                     is24Hour = is24Hour,
-                    onClick = { onIntent(HomeIntent.EditAlarm(alarm.id)) },
-                    onToggle = { onIntent(HomeIntent.AlarmToggled(alarm.id, it)) },
+                    onIntent = onIntent,
                 )
             }
         }
@@ -265,20 +295,24 @@ private fun HeroCard(
 
 /**
  * `card-alarm`: glass, `rounded.md`; time in `title`, repeat days and label in `caption`, check icons (20 dp,
- * `text-secondary`) and the enable `switch` on the right. The card is one button (tap edits); the switch is its own
- * control ("7:30 AM alarm").
+ * `text-secondary`) and the enable `switch` on the right. The card is one button (tap edits; long-press opens the menu
+ * with Duplicate and Delete, which TalkBack also offers as the card's actions); the switch is its own control
+ * ("7:30 AM alarm").
  */
 @Composable
 private fun AlarmCardView(
     alarm: AlarmCard,
     is24Hour: Boolean,
-    onClick: () -> Unit,
-    onToggle: (Boolean) -> Unit,
+    onIntent: (HomeIntent) -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    val colors = PpsTheme.colors
     val spacing = PpsTheme.spacing
     val time = formatClockTime(alarm.time, is24Hour)
+    var menuOpen by remember { mutableStateOf(false) }
+    val duplicateLabel = stringResource(Res.string.alarm_duplicate)
+    val deleteLabel = stringResource(Res.string.alarm_delete)
+    val onDuplicate = { onIntent(HomeIntent.DuplicateClicked(alarm.id)) }
+    val onDelete = { onIntent(HomeIntent.DeleteClicked(alarm.id)) }
     Row(
         modifier =
             modifier
@@ -291,29 +325,34 @@ private fun AlarmCardView(
             modifier =
                 Modifier
                     .weight(1f)
-                    .clickable(role = Role.Button, onClick = onClick)
+                    .combinedClickable(
+                        role = Role.Button,
+                        onLongClickLabel = stringResource(Res.string.alarm_card_options),
+                        onLongClick = { menuOpen = true },
+                        onClick = { onIntent(HomeIntent.EditAlarm(alarm.id)) },
+                    ).semantics { customActions = cardActions(duplicateLabel, deleteLabel, onDuplicate, onDelete) }
                     .padding(spacing.cardPadding),
             verticalArrangement = Arrangement.spacedBy(spacing.space1),
         ) {
-            Text(text = time, style = PpsTheme.typography.title, color = if (alarm.enabled) colors.text else colors.textSecondary)
-            val repeat = repeatSummary(alarm.repeatDays)
-            Text(
-                text = alarm.label?.let { stringResource(Res.string.alarm_card_summary, repeat, it) } ?: repeat,
-                style = PpsTheme.typography.caption,
-                color = colors.textSecondary,
-            )
-            if (alarm.checks.isNotEmpty()) {
-                Row(horizontalArrangement = Arrangement.spacedBy(spacing.space2)) {
-                    alarm.checks.forEach { check -> RowIcon(icon = check.icon, tint = colors.textSecondary) }
-                }
-            }
+            CardTexts(alarm = alarm, time = time)
         }
         PpsSwitch(
             checked = alarm.enabled,
-            onCheckedChange = onToggle,
+            onCheckedChange = { onIntent(HomeIntent.AlarmToggled(alarm.id, it)) },
             label = stringResource(Res.string.alarm_card_switch, time),
             modifier = Modifier.padding(end = spacing.cardPadding),
         )
+        // Anchored to the card; it adds nothing to the layout (a child of the Row, which has no spacing between children).
+        PpsMenu(expanded = menuOpen, onDismiss = { menuOpen = false }) {
+            PpsMenuItem(label = duplicateLabel, onClick = {
+                menuOpen = false
+                onDuplicate()
+            })
+            PpsMenuItem(label = deleteLabel, onClick = {
+                menuOpen = false
+                onDelete()
+            })
+        }
     }
 }
 
@@ -355,6 +394,37 @@ private fun EmptyHome(
     }
 }
 
+/** Home when the alarms could not be read: "Couldn't load your alarms." with `button-text` "Try again" (resubscribes). */
+@Composable
+private fun LoadFailed(
+    onRetry: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    val spacing = PpsTheme.spacing
+    Column(
+        modifier =
+            modifier.fillMaxWidth().padding(
+                start = spacing.screenMargin,
+                end = spacing.screenMargin,
+                bottom = LocalNavBarClearance.current,
+            ),
+        verticalArrangement = Arrangement.Center,
+        horizontalAlignment = Alignment.CenterHorizontally,
+    ) {
+        Text(
+            text = stringResource(Res.string.home_load_failed),
+            style = PpsTheme.typography.title,
+            color = PpsTheme.colors.text,
+            textAlign = TextAlign.Center,
+        )
+        PpsTextButton(
+            text = stringResource(Res.string.home_try_again),
+            onClick = onRetry,
+            modifier = Modifier.padding(top = spacing.space4),
+        )
+    }
+}
+
 /** `dialog-confirm` for switching an alarm off under the commitment lock; "Keep it on" is the default dismiss. */
 @Composable
 private fun DisableDialog(
@@ -392,3 +462,42 @@ private fun DisableDialog(
 }
 
 private const val HOURS_PER_DAY = 24
+
+/** The card's time in `title`, the repeat summary and label in `caption`, and its check icons. */
+@Composable
+private fun CardTexts(
+    alarm: AlarmCard,
+    time: String,
+) {
+    val colors = PpsTheme.colors
+    Text(text = time, style = PpsTheme.typography.title, color = if (alarm.enabled) colors.text else colors.textSecondary)
+    val repeat = repeatSummary(alarm.repeatDays)
+    Text(
+        text = alarm.label?.let { stringResource(Res.string.alarm_card_summary, repeat, it) } ?: repeat,
+        style = PpsTheme.typography.caption,
+        color = colors.textSecondary,
+    )
+    if (alarm.checks.isNotEmpty()) {
+        Row(horizontalArrangement = Arrangement.spacedBy(PpsTheme.spacing.space2)) {
+            alarm.checks.forEach { check -> RowIcon(icon = check.icon, tint = colors.textSecondary) }
+        }
+    }
+}
+
+/** Duplicate and Delete as TalkBack actions of the card, so they need no long-press. */
+private fun cardActions(
+    duplicateLabel: String,
+    deleteLabel: String,
+    onDuplicate: () -> Unit,
+    onDelete: () -> Unit,
+): List<CustomAccessibilityAction> =
+    listOf(
+        CustomAccessibilityAction(duplicateLabel) {
+            onDuplicate()
+            true
+        },
+        CustomAccessibilityAction(deleteLabel) {
+            onDelete()
+            true
+        },
+    )

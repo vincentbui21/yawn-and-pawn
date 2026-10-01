@@ -3,8 +3,11 @@ package com.yawnandpawn.app.testing
 import com.yawnandpawn.app.core.time.BootCounter
 import com.yawnandpawn.app.core.time.Clock
 import com.yawnandpawn.app.core.time.MonotonicClock
+import com.yawnandpawn.app.core.time.TimeChangeSignal
 import com.yawnandpawn.app.core.time.TimeSnapshot
 import com.yawnandpawn.app.core.time.TimeZoneProvider
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.datetime.TimeZone
 import kotlin.time.Duration
 import kotlin.time.Duration.Companion.milliseconds
@@ -77,6 +80,21 @@ class FakeTimeZoneProvider(
 
     fun set(zone: TimeZone) {
         this.zone = zone
+    }
+}
+
+/** A [TimeChangeSignal] under test control: [emit] stands for a minute tick, a time set or a zone change. */
+class FakeTimeChangeSignal : TimeChangeSignal {
+    private val signal = MutableSharedFlow<Unit>(extraBufferCapacity = 1)
+
+    /** How many collectors are listening right now (the adapter registers its receiver only while this is above 0). */
+    val subscribers: Int
+        get() = signal.subscriptionCount.value
+
+    override fun changes(): Flow<Unit> = signal
+
+    fun emit() {
+        signal.tryEmit(Unit)
     }
 }
 

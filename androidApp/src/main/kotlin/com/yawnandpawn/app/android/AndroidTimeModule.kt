@@ -3,6 +3,7 @@ package com.yawnandpawn.app.android
 import com.yawnandpawn.app.core.time.BootCounter
 import com.yawnandpawn.app.core.time.Clock
 import com.yawnandpawn.app.core.time.MonotonicClock
+import com.yawnandpawn.app.core.time.TimeChangeSignal
 import com.yawnandpawn.app.core.time.TimeZoneProvider
 import org.koin.android.ext.koin.androidContext
 import org.koin.dsl.module
@@ -14,4 +15,5 @@ val androidTimeModule =
         single<MonotonicClock> { AndroidMonotonicClock() }
         single<BootCounter> { AndroidBootCounter(androidContext().contentResolver) }
         single<TimeZoneProvider> { AndroidTimeZoneProvider() }
+        single<TimeChangeSignal> { AndroidTimeChangeSignal(androidContext()) }
     }

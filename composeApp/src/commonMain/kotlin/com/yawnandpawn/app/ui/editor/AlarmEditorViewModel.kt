@@ -11,10 +11,12 @@ import com.yawnandpawn.app.core.alarm.SaveAlarm
 import com.yawnandpawn.app.core.alarm.nextOccurrence
 import com.yawnandpawn.app.core.error.DomainError
 import com.yawnandpawn.app.core.error.Outcome
+import com.yawnandpawn.app.core.error.errorOrNull
 import com.yawnandpawn.app.core.time.Clock
 import com.yawnandpawn.app.core.time.TimeZoneProvider
 import com.yawnandpawn.app.ui.format.Weekdays
 import com.yawnandpawn.app.ui.format.countdownOf
+import com.yawnandpawn.app.ui.home.AlarmActions
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -36,7 +38,9 @@ data class AlarmEditorArgs(
  * The Alarm editor (Story 1.8): loads the alarm with [alarmId] (or starts from the defaults), keeps the form, and
  * saves it through [SaveAlarm] as an enabled alarm. Back with unsaved changes asks "Discard changes?" first; on a
  * sub-screen (Sound, Snooze) Back returns to the main screen. "Rings in ..." and "Rings tomorrow" are computed with
- * `nextOccurrence` from [clock] and [timeZoneProvider] (never the system clock).
+ * `nextOccurrence` from [clock] and [timeZoneProvider] (never the system clock). A stored alarm that cannot be read
+ * closes the editor with [EditorEffect.OpenFailed] (Home shows "Couldn't open this alarm."); an alarm that was read
+ * gets the overflow menu (Story 1.9): Duplicate and Delete through [actions].
  */
 class AlarmEditorViewModel(
     private val alarmId: String?,
@@ -44,6 +48,7 @@ class AlarmEditorViewModel(
     private val saveAlarm: SaveAlarm,
     private val clock: Clock,
     private val timeZoneProvider: TimeZoneProvider,
+    private val actions: AlarmActions,
 ) : ViewModel() {
     private val _state = MutableStateFlow(EditorUiState(isNew = alarmId == null, isLoading = alarmId != null))
     val state: StateFlow<EditorUiState> = _state.asStateFlow()
@@ -131,7 +136,7 @@ class AlarmEditorViewModel(
             }
 
             else -> {
-                Unit
+                onMenuIntent(intent)
             }
         }
     }
@@ -145,13 +150,16 @@ class AlarmEditorViewModel(
                 initialForm = form
                 val custom = form.repeatDays.isNotEmpty() && form.repeatDays != Weekdays
                 _state.update {
-                    it.copy(isLoading = false, form = form, customRepeat = custom).withRings(form, clock.now(), timeZoneProvider.current())
+                    it
+                        .copy(isLoading = false, form = form, customRepeat = custom, hasOverflowMenu = true)
+                        .withRings(form, clock.now(), timeZoneProvider.current())
                 }
             }
 
-            // Deleted meanwhile, or storage unreadable: there is nothing to edit.
+            // Deleted meanwhile, or storage unreadable: there is nothing to edit, and Home says so.
             is Outcome.Failure -> {
-                close()
+                actions.logFailure("open alarm", result.error)
+                _effects.send(EditorEffect.OpenFailed)
             }
         }
     }
@@ -178,7 +186,7 @@ class AlarmEditorViewModel(
         if (current.isLoading || current.isSaving) return
         _state.update { it.copy(isSaving = true) }
         viewModelScope.launch {
-            when (val result = saveAlarm(current.form.toDraft())) {
+            when (val result = saveAlarm(current.form.toDraft(alarmId, stored))) {
                 // Stays saving until the screen leaves, so a quick second tap cannot store the alarm twice.
                 is Outcome.Success -> {
                     close()
@@ -231,24 +239,72 @@ class AlarmEditorViewModel(
         _effects.trySend(EditorEffect.Close)
     }
 
-    private fun EditorForm.toDraft(): AlarmDraft =
-        AlarmDraft(
-            id = alarmId,
-            time = time,
-            repeatDays = repeatDays,
-            label = label,
-            enabled = true,
-            // Fields the editor does not show are made valid here, so the only field error a user can meet is the label.
-            soundRef = stored?.soundRef?.takeUnless { it.isBlank() } ?: Alarm.DEFAULT_SOUND_REF,
-            volumePercent = volumePercent,
-            gradualVolume = gradualVolume,
-            // Not editable (owner decision 2026-09-27): the ramp starts at the fixed 20%, never above the set volume.
-            rampStartPercent = minOf(Alarm.DEFAULT_RAMP_START_PERCENT, volumePercent),
-            vibration = vibration,
-            snoozeLengthMinutes = snoozeLengthMinutes,
-            graceSeconds = (stored?.graceSeconds ?: Alarm.DEFAULT_GRACE_SECONDS).coerceIn(Alarm.GRACE_SECONDS_RANGE),
-        )
+    /**
+     * The overflow menu of a stored alarm. Duplicate copies the stored alarm (not unsaved changes) and opens the copy;
+     * Delete asks with the stored time, then deletes (logged) and closes. While either runs nothing else is accepted.
+     */
+    private fun onMenuIntent(intent: EditorIntent) {
+        val id = alarmId?.takeIf { _state.value.hasOverflowMenu } ?: return
+        when (intent) {
+            EditorIntent.DuplicateClicked -> {
+                _state.update { it.copy(isSaving = true) }
+                viewModelScope.launch {
+                    val result = actions.duplicate(id)
+                    if (result is Outcome.Success) {
+                        _effects.send(EditorEffect.OpenCopy(result.value.id))
+                    } else {
+                        _state.update { it.copy(isSaving = false) }
+                    }
+                }
+            }
+
+            EditorIntent.DeleteClicked -> {
+                _state.update { it.copy(deleteDialogTime = stored?.time ?: it.form.time) }
+            }
+
+            EditorIntent.DeleteCancelled -> {
+                _state.update { it.copy(deleteDialogTime = null) }
+            }
+
+            EditorIntent.DeleteConfirmed -> {
+                // Cleared first, so a second tap on "Delete" cannot delete (and log) twice.
+                if (_state.value.deleteDialogTime == null) return
+                _state.update { it.copy(deleteDialogTime = null, isSaving = true) }
+                viewModelScope.launch {
+                    val result = actions.delete(id)
+                    // Gone already (deleted elsewhere) also leaves nothing to edit.
+                    val gone = result is Outcome.Success || result.errorOrNull() is DomainError.NotFound
+                    if (gone) close() else _state.update { it.copy(isSaving = false) }
+                }
+            }
+
+            else -> {
+                Unit
+            }
+        }
+    }
 }
+
+private fun EditorForm.toDraft(
+    alarmId: String?,
+    stored: Alarm?,
+): AlarmDraft =
+    AlarmDraft(
+        id = alarmId,
+        time = time,
+        repeatDays = repeatDays,
+        label = label,
+        enabled = true,
+        // Fields the editor does not show are made valid here, so the only field error a user can meet is the label.
+        soundRef = stored?.soundRef?.takeUnless { it.isBlank() } ?: Alarm.DEFAULT_SOUND_REF,
+        volumePercent = volumePercent,
+        gradualVolume = gradualVolume,
+        // Not editable (owner decision 2026-09-27): the ramp starts at the fixed 20%, never above the set volume.
+        rampStartPercent = minOf(Alarm.DEFAULT_RAMP_START_PERCENT, volumePercent),
+        vibration = vibration,
+        snoozeLengthMinutes = snoozeLengthMinutes,
+        graceSeconds = (stored?.graceSeconds ?: Alarm.DEFAULT_GRACE_SECONDS).coerceIn(Alarm.GRACE_SECONDS_RANGE),
+    )
 
 /** "Rings in ..." and, for a one-time alarm whose time has passed today, when it rings tomorrow (shifted in a DST gap). */
 private fun EditorUiState.withRings(

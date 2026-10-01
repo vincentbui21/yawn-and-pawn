@@ -91,6 +91,19 @@
     <string name="disable_turn_off">Turn off</string>
     <string name="disable_keep_on">Keep it on</string>
 
+    <!-- Home and editor, Story 1.9. EXPERIENCE.md Key strings (Delete alarm dialog, storage failures) and card-alarm
+         (Duplicate and Delete); the TalkBack labels are drafts in docs/design-preview/copy-to-approve.md. -->
+    <string name="home_load_failed">Couldn't load your alarms.</string>
+    <string name="home_try_again">Try again</string>
+    <string name="home_open_failed">Couldn't open this alarm.</string>
+    <string name="alarm_duplicate">Duplicate</string>
+    <string name="alarm_delete">Delete</string>
+    <string name="alarm_card_options">Duplicate or delete</string>
+    <string name="editor_more_options">More options</string>
+    <string name="delete_alarm_title">Delete your %1$s alarm? This is logged.</string>
+    <string name="delete_alarm_confirm">Delete</string>
+    <string name="delete_alarm_keep">Keep it</string>
+
     <!-- Checks -->
     <string name="check_math">Math</string>
     <string name="check_word">Word Unscramble</string>

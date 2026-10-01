@@ -5,6 +5,7 @@ import androidx.compose.ui.semantics.SemanticsProperties
 import androidx.compose.ui.test.SemanticsMatcher
 import androidx.compose.ui.test.assert
 import androidx.compose.ui.test.assertCountEquals
+import androidx.compose.ui.test.assertIsNotSelected
 import androidx.compose.ui.test.assertIsOff
 import androidx.compose.ui.test.assertIsOn
 import androidx.compose.ui.test.assertIsSelected
@@ -12,7 +13,9 @@ import androidx.compose.ui.test.hasClickAction
 import androidx.compose.ui.test.hasContentDescription
 import androidx.compose.ui.test.hasSetTextAction
 import androidx.compose.ui.test.hasText
+import androidx.compose.ui.test.isEnabled
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
+import androidx.compose.ui.test.longClick
 import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.onRoot
@@ -20,6 +23,7 @@ import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performScrollTo
 import androidx.compose.ui.test.performSemanticsAction
 import androidx.compose.ui.test.performTextReplacement
+import androidx.compose.ui.test.performTouchInput
 import com.github.takahirom.roborazzi.captureRoboImage
 import org.junit.After
 import org.junit.Rule
@@ -31,8 +35,9 @@ import org.robolectric.RobolectricTestRunner
 import org.robolectric.annotation.Config
 import org.robolectric.annotation.GraphicsMode
 import kotlin.test.assertNotNull
+import kotlin.test.assertTrue
 
-/** The real app: Koin, Room `app.db`, Navigation 3 and the Story 1.8 screens together. */
+/** The real app: Koin, Room `app.db`, Navigation 3, the app shell and the Story 1.8 and 1.9 screens together. */
 @RunWith(RobolectricTestRunner::class)
 @GraphicsMode(GraphicsMode.Mode.NATIVE)
 @Config(qualifiers = "w411dp-h891dp-xxhdpi")
@@ -44,6 +49,10 @@ class MainActivityTest {
     fun tearDown() {
         stopKoin()
     }
+
+    private fun tab(label: String) = composeRule.onNode(hasContentDescription(label) and hasClickAction())
+
+    private fun pressBack() = composeRule.activityRule.scenario.onActivity { it.onBackPressedDispatcher.onBackPressed() }
 
     /** Room reads and writes run off the main thread, so wait for their results to reach the screen. */
     private fun waitForText(text: String) {
@@ -59,11 +68,14 @@ class MainActivityTest {
     }
 
     @Test
-    fun `MainActivity opens on the Alarms route with the app name and the empty state`() {
+    fun `MainActivity opens on Home inside the nav capsule with the empty state and no FAB`() {
         composeRule.onNodeWithText("Yawn & Pawn").assertExists()
         waitForText("No alarms yet.")
         composeRule.onNodeWithText("Add your first alarm").assertExists()
-        composeRule.onNodeWithContentDescription("Add alarm").assertExists()
+        // The capsule's "+" is the only "Add alarm": there is no FAB.
+        composeRule.onAllNodes(hasContentDescription("Add alarm")).assertCountEquals(1)
+        tab("Alarms").assertIsSelected()
+        listOf("Progress", "Settings", "You").forEach { tab(it).assertIsNotSelected() }
     }
 
     @Test
@@ -95,9 +107,10 @@ class MainActivityTest {
         composeRule.onNodeWithText("Save").performClick()
 
         waitForGone("New alarm")
-        waitForText("Stand-up")
+        // The card caption joins the repeat summary and the label.
+        waitForText("Mon · Stand-up")
         composeRule.onNodeWithText("No alarms yet.").assertDoesNotExist()
-        composeRule.onNodeWithText("Stand-up").performClick()
+        composeRule.onNodeWithText("Mon · Stand-up").performClick()
 
         waitForText("Edit alarm")
         composeRule.onNodeWithContentDescription("Monday").assertIsOn()
@@ -181,5 +194,167 @@ class MainActivityTest {
         composeRule.onNodeWithContentDescription("Monday").assertIsOn()
         composeRule.onNodeWithText("Cancel").performClick()
         waitForText("Discard changes?")
+    }
+
+    // Story 1.9: the shell, its tabs and Home's card actions on the real database.
+
+    /** Adds a 7:00 AM one-time alarm through the editor and waits for its card. */
+    private fun addDefaultAlarm() {
+        composeRule.onNodeWithContentDescription("Add alarm").performClick()
+        waitForText("New alarm")
+        composeRule.onNodeWithText("Save").performClick()
+        waitForGone("New alarm")
+        waitForText("7:00 AM")
+    }
+
+    @Test
+    fun `Back on Progress, Settings or You returns to Alarms, and Back on Alarms leaves the app`() {
+        waitForText("No alarms yet.")
+        listOf("Progress", "Settings", "You").forEach { label ->
+            tab(label).performClick()
+            tab(label).assertIsSelected()
+            composeRule.onNodeWithText("No alarms yet.").assertDoesNotExist()
+
+            pressBack()
+
+            waitForText("No alarms yet.")
+            tab("Alarms").assertIsSelected()
+        }
+        pressBack()
+        composeRule.activityRule.scenario.onActivity { assertTrue(it.isFinishing) }
+    }
+
+    @Test
+    fun `plus on another tab opens a new alarm, and Save lands on Home with the card and its countdown`() {
+        waitForText("No alarms yet.")
+        tab("Settings").performClick()
+        composeRule.onNodeWithContentDescription("Add alarm").performClick()
+        waitForText("New alarm")
+        // The editor is pushed over the shell: no capsule.
+        composeRule.onAllNodes(hasContentDescription("Add alarm")).assertCountEquals(0)
+
+        composeRule.onNodeWithText("Save").performClick()
+
+        waitForText("7:00 AM")
+        tab("Alarms").assertIsSelected()
+        composeRule.onNode(hasText("Rings in", substring = true)).assertExists()
+    }
+
+    @Test
+    fun `Cancel on a new alarm opened from You lands on Home`() {
+        waitForText("No alarms yet.")
+        tab("You").performClick()
+        composeRule.onNodeWithContentDescription("Add alarm").performClick()
+        waitForText("New alarm")
+
+        composeRule.onNodeWithText("Cancel").performClick()
+
+        waitForText("No alarms yet.")
+        tab("Alarms").assertIsSelected()
+    }
+
+    @Test
+    fun `the unbuilt tabs show their empty or default state with no row that leads nowhere`() {
+        waitForText("No alarms yet.")
+        tab("Progress").performClick()
+        waitForText("Your first morning shows up here.")
+        composeRule.onNodeWithText("Purchase history").assertDoesNotExist()
+
+        tab("Settings").performClick()
+        waitForText("Settings")
+        composeRule.onNodeWithText("Base fee").assertDoesNotExist()
+        composeRule.onNodeWithText("Reliability checklist").assertDoesNotExist()
+
+        tab("You").performClick()
+        waitForText("You")
+        composeRule.onNodeWithText("About").assertDoesNotExist()
+        composeRule.onNodeWithText("Delete all data").assertDoesNotExist()
+    }
+
+    @Test
+    fun `switching a card off stores it and hides the countdown`() {
+        waitForText("No alarms yet.")
+        addDefaultAlarm()
+
+        composeRule.onNodeWithContentDescription("7:00 AM alarm").assertIsOn().performClick()
+
+        composeRule.waitUntil(timeoutMillis = 5_000) {
+            composeRule.onAllNodes(hasText("Rings in", substring = true)).fetchSemanticsNodes().isEmpty()
+        }
+        composeRule.onNodeWithContentDescription("7:00 AM alarm").assertIsOff()
+    }
+
+    @Test
+    fun `long-press Delete asks first, then the card goes`() {
+        waitForText("No alarms yet.")
+        addDefaultAlarm()
+
+        composeRule.onNode(hasText("7:00 AM") and hasClickAction()).performTouchInput { longClick() }
+        composeRule.onNode(hasText("Delete") and hasClickAction()).performClick()
+        waitForText("Delete your 7:00 AM alarm? This is logged.")
+        composeRule.onNodeWithText("Keep it").performClick()
+        composeRule.onNodeWithText("7:00 AM").assertExists()
+
+        composeRule.onNode(hasText("7:00 AM") and hasClickAction()).performTouchInput { longClick() }
+        composeRule.onNode(hasText("Delete") and hasClickAction()).performClick()
+        waitForText("Delete your 7:00 AM alarm? This is logged.")
+        composeRule.onNodeWithText("Delete").performClick()
+
+        waitForText("No alarms yet.")
+    }
+
+    @Test
+    fun `long-press Duplicate opens the copy in the editor, and Home then has both`() {
+        waitForText("No alarms yet.")
+        addDefaultAlarm()
+
+        composeRule.onNode(hasText("7:00 AM") and hasClickAction()).performTouchInput { longClick() }
+        composeRule.onNode(hasText("Duplicate") and hasClickAction()).performClick()
+
+        waitForText("Edit alarm")
+        composeRule.onNodeWithText("Cancel").performClick()
+        waitForGone("Edit alarm")
+        composeRule.waitUntil(timeoutMillis = 5_000) {
+            composeRule.onAllNodes(hasText("7:00 AM") and hasClickAction()).fetchSemanticsNodes().size == 2
+        }
+    }
+
+    @Test
+    fun `the editor's overflow Duplicate opens the copy, and Home then has both`() {
+        waitForText("No alarms yet.")
+        addDefaultAlarm()
+        composeRule.onNode(hasText("7:00 AM") and hasClickAction()).performClick()
+        waitForText("Edit alarm")
+
+        composeRule.onNodeWithContentDescription("More options").performClick()
+        composeRule.onNode(hasText("Duplicate") and hasClickAction()).performClick()
+
+        // The original's editor keeps Save disabled once the copy is stored; the editor on the copy replaces it (one
+        // editor, not two stacked) and has Save enabled again once it has loaded.
+        composeRule.waitUntil(timeoutMillis = 5_000) {
+            composeRule.onAllNodes(hasText("Save") and isEnabled()).fetchSemanticsNodes().size == 1 &&
+                composeRule.onAllNodes(hasText("Edit alarm")).fetchSemanticsNodes().size == 1
+        }
+        composeRule.onNodeWithText("Cancel").performClick()
+        waitForGone("Edit alarm")
+        composeRule.waitUntil(timeoutMillis = 5_000) {
+            composeRule.onAllNodes(hasText("7:00 AM") and hasClickAction()).fetchSemanticsNodes().size == 2
+        }
+    }
+
+    @Test
+    fun `the editor's overflow Delete deletes the alarm and closes the editor`() {
+        waitForText("No alarms yet.")
+        addDefaultAlarm()
+        composeRule.onNode(hasText("7:00 AM") and hasClickAction()).performClick()
+        waitForText("Edit alarm")
+
+        composeRule.onNodeWithContentDescription("More options").performClick()
+        composeRule.onNode(hasText("Delete") and hasClickAction()).performClick()
+        waitForText("Delete your 7:00 AM alarm? This is logged.")
+        composeRule.onNodeWithText("Delete").performClick()
+
+        waitForGone("Edit alarm")
+        waitForText("No alarms yet.")
     }
 }

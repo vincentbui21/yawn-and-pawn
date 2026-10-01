@@ -72,6 +72,10 @@ data class EditorUiState(
      * time, fee ladder, sound list, motivation and "Test alarm". `null` hides them (the Story 1.8 editor).
      */
     val full: FullEditorSections? = null,
+    /** Editing a stored alarm: the header's overflow menu offers Duplicate and Delete (also for TalkBack). */
+    val hasOverflowMenu: Boolean = false,
+    /** Delete was chosen in the overflow menu: "Delete your {time} alarm? This is logged." for the stored time. */
+    val deleteDialogTime: LocalTime? = null,
 ) {
     /** The highlighted repeat quick choice. */
     val repeatChoice: RepeatChoice
@@ -237,6 +241,17 @@ sealed interface EditorIntent {
     ) : EditorIntent
 
     data object TestAlarmClicked : EditorIntent
+
+    /** "Duplicate" in the overflow menu: copies the stored alarm and opens the copy. */
+    data object DuplicateClicked : EditorIntent
+
+    /** "Delete" in the overflow menu: asks first. */
+    data object DeleteClicked : EditorIntent
+
+    data object DeleteConfirmed : EditorIntent
+
+    /** "Keep it", Back or a tap outside the delete dialog. */
+    data object DeleteCancelled : EditorIntent
 }
 
 /** One-shot events for the screen. */
@@ -246,4 +261,12 @@ sealed interface EditorEffect {
 
     /** Show "Couldn't save the alarm. Try again." (the storage error itself is never shown). */
     data object ShowSaveFailed : EditorEffect
+
+    /** The alarm could not be read: leave the editor, and Home shows "Couldn't open this alarm.". */
+    data object OpenFailed : EditorEffect
+
+    /** Replace this editor with one on the copy [alarmId] (after Duplicate). */
+    data class OpenCopy(
+        val alarmId: String,
+    ) : EditorEffect
 }

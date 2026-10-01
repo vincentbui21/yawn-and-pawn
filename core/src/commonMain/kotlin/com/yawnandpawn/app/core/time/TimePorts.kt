@@ -1,5 +1,6 @@
 package com.yawnandpawn.app.core.time
 
+import kotlinx.coroutines.flow.Flow
 import kotlinx.datetime.TimeZone
 
 /**
@@ -23,6 +24,14 @@ fun interface BootCounter {
 /** The phone's current time zone; read it each time, it changes when the user travels or changes settings. */
 fun interface TimeZoneProvider {
     fun current(): TimeZone
+}
+
+/**
+ * Tells screens that show time-dependent text (the Home countdown) to recompute it: emits once a minute while
+ * collected, and whenever the wall clock is set or the time zone changes. The adapter emits nothing until collected.
+ */
+fun interface TimeChangeSignal {
+    fun changes(): Flow<Unit>
 }
 
 /** "Now" as deadline logic needs it: wall time, time since boot and the boot it was read in. */

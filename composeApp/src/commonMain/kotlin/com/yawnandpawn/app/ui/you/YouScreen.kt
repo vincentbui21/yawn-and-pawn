@@ -6,10 +6,11 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import com.yawnandpawn.app.ui.components.AppSnackbar
 import com.yawnandpawn.app.ui.components.ConfirmDialog
-import com.yawnandpawn.app.ui.components.GroupCard
+import com.yawnandpawn.app.ui.components.GroupCardOf
 import com.yawnandpawn.app.ui.components.GroupDivider
 import com.yawnandpawn.app.ui.components.NavRow
 import com.yawnandpawn.app.ui.components.TabScreen
+import com.yawnandpawn.app.ui.components.rowIf
 import com.yawnandpawn.app.ui.resources.Res
 import com.yawnandpawn.app.ui.resources.nav_you
 import com.yawnandpawn.app.ui.resources.purchase_history_title
@@ -62,48 +63,63 @@ sealed interface YouIntent {
 }
 
 /**
+ * The rows of the You tab. A screen shows the rows it is given; production leaves out the rows whose stories are not
+ * built yet, so no row leads nowhere (previews show them all).
+ */
+enum class YouRow { PurchaseHistory, Payments, Privacy, DeleteAll, Support, Terms, About }
+
+/**
  * The You tab (owner decision 2026-10-01, feedback item 26): a personal page with no sign-in (no account, no backend,
  * NFR-4), in grouped `card-group`s: Money (Purchase history, How payments & refunds work), Privacy and your data
  * (Privacy policy, Delete all data with its dialog), Help (Support, Terms, About with the version). These rows moved
- * here from Settings, which keeps only app behaviour.
+ * here from Settings, which keeps only app behaviour. Only the [rows] given show (all by default); a card with none
+ * of its rows is left out.
  */
 @Composable
 fun YouScreen(
     state: YouUiState,
     onIntent: (YouIntent) -> Unit,
     modifier: Modifier = Modifier,
+    rows: Set<YouRow> = YouRow.entries.toSet(),
 ) {
     Box(modifier = modifier.fillMaxSize()) {
         TabScreen(
             title = stringResource(Res.string.nav_you),
             overlay = { if (state.noBrowser) AppSnackbar(text = stringResource(Res.string.settings_no_browser)) },
         ) {
-            GroupCard(title = stringResource(Res.string.you_money)) {
-                NavRow(label = stringResource(Res.string.purchase_history_title), onClick = { onIntent(YouIntent.PurchaseHistoryClicked) })
-                GroupDivider()
-                NavRow(label = stringResource(Res.string.settings_payments), onClick = { onIntent(YouIntent.PaymentsClicked) })
-            }
-            GroupCard(title = stringResource(Res.string.you_privacy_data)) {
-                NavRow(label = stringResource(Res.string.settings_privacy), onClick = { onIntent(YouIntent.PrivacyClicked) })
-                GroupDivider()
-                NavRow(
-                    label = stringResource(Res.string.settings_delete_all),
-                    onClick = { onIntent(YouIntent.DeleteAllClicked) },
-                    titleColor = PpsTheme.colors.error,
-                    chevron = false,
-                )
-            }
-            GroupCard(title = stringResource(Res.string.you_help)) {
-                NavRow(label = stringResource(Res.string.settings_support), onClick = { onIntent(YouIntent.SupportClicked) })
-                GroupDivider()
-                NavRow(label = stringResource(Res.string.settings_terms), onClick = { onIntent(YouIntent.TermsClicked) })
-                GroupDivider()
-                NavRow(
-                    label = stringResource(Res.string.you_about),
-                    value = stringResource(Res.string.you_version, state.appVersion),
-                    onClick = { onIntent(YouIntent.AboutClicked) },
-                )
-            }
+            GroupCardOf(
+                title = stringResource(Res.string.you_money),
+                rows =
+                    listOfNotNull(
+                        rowIf(YouRow.PurchaseHistory in rows) {
+                            NavRow(
+                                label = stringResource(Res.string.purchase_history_title),
+                                onClick = { onIntent(YouIntent.PurchaseHistoryClicked) },
+                            )
+                        },
+                        rowIf(YouRow.Payments in rows) {
+                            NavRow(label = stringResource(Res.string.settings_payments), onClick = { onIntent(YouIntent.PaymentsClicked) })
+                        },
+                    ),
+            )
+            GroupCardOf(
+                title = stringResource(Res.string.you_privacy_data),
+                rows =
+                    listOfNotNull(
+                        rowIf(YouRow.Privacy in rows) {
+                            NavRow(label = stringResource(Res.string.settings_privacy), onClick = { onIntent(YouIntent.PrivacyClicked) })
+                        },
+                        rowIf(YouRow.DeleteAll in rows) {
+                            NavRow(
+                                label = stringResource(Res.string.settings_delete_all),
+                                onClick = { onIntent(YouIntent.DeleteAllClicked) },
+                                titleColor = PpsTheme.colors.error,
+                                chevron = false,
+                            )
+                        },
+                    ),
+            )
+            HelpCard(appVersion = state.appVersion, onIntent = onIntent, rows = rows)
         }
     }
     if (state.showDeleteDialog) {
@@ -117,4 +133,32 @@ fun YouScreen(
             destructive = true,
         )
     }
+}
+
+/** Help: Support, Terms and About with the version. */
+@Composable
+private fun HelpCard(
+    appVersion: String,
+    onIntent: (YouIntent) -> Unit,
+    rows: Set<YouRow>,
+) {
+    GroupCardOf(
+        title = stringResource(Res.string.you_help),
+        rows =
+            listOfNotNull(
+                rowIf(YouRow.Support in rows) {
+                    NavRow(label = stringResource(Res.string.settings_support), onClick = { onIntent(YouIntent.SupportClicked) })
+                },
+                rowIf(YouRow.Terms in rows) {
+                    NavRow(label = stringResource(Res.string.settings_terms), onClick = { onIntent(YouIntent.TermsClicked) })
+                },
+                rowIf(YouRow.About in rows) {
+                    NavRow(
+                        label = stringResource(Res.string.you_about),
+                        value = stringResource(Res.string.you_version, appVersion),
+                        onClick = { onIntent(YouIntent.AboutClicked) },
+                    )
+                },
+            ),
+    )
 }

@@ -83,6 +83,11 @@ class AlarmEditorViewModel(
     }
 
     fun onIntent(intent: EditorIntent) {
+        // Going to the background always stops a preview, even while a save runs.
+        if (intent == EditorIntent.Backgrounded) {
+            sounds.stopPreview()
+            return
+        }
         // While a save runs (and after it succeeded, until the editor closes) nothing else is accepted: an edit would be
         // lost, and Back or Discard would close with the alarm stored anyway.
         if (_state.value.isSaving) return
@@ -104,6 +109,7 @@ class AlarmEditorViewModel(
             }
 
             is EditorIntent.PaneOpened -> {
+                if (intent.pane != EditorPane.Sound) sounds.stopPreview()
                 _state.update { if (it.isLoading) it else it.copy(pane = intent.pane) }
             }
 
@@ -142,10 +148,6 @@ class AlarmEditorViewModel(
 
             is EditorIntent.Sound -> {
                 sounds.onIntent(intent.intent, ::editForm)
-            }
-
-            EditorIntent.Backgrounded -> {
-                sounds.stopPreview()
             }
 
             is EditorIntent.GradualVolumeToggled -> {

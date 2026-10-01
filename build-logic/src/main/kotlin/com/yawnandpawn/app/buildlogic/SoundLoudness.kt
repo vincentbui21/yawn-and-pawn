@@ -3,6 +3,7 @@ package com.yawnandpawn.app.buildlogic
 import java.io.File
 import java.io.IOException
 import java.util.concurrent.TimeUnit
+import kotlin.concurrent.thread
 
 /** What `ffmpeg -af ebur128=peak=sample` reports for one file: integrated loudness (LUFS) and sample peak (dBFS). */
 data class LoudnessMeasurement(
@@ -55,7 +56,7 @@ object Ebur128Summary {
         }
 }
 
-/** The measuring tool could not be started: the message says how to install or configure it. */
+/** The measuring tool could not be started (the message says how to install or configure it) or did not finish. */
 class MeasurerUnavailableException(
     message: String,
     cause: Throwable? = null,
@@ -118,11 +119,25 @@ private fun runMeasurer(
         } catch (e: IOException) {
             throw MeasurerUnavailableException("$unavailable (${e.message})", e)
         }
-    val output = process.inputStream.bufferedReader().readText()
-    // The output is read to its end, so the tool has finished or closed its output; a hung one is stopped.
-    if (!process.waitFor(MEASURE_TIMEOUT_MINUTES, TimeUnit.MINUTES)) process.destroyForcibly()
-    return output
+    // Read on its own thread: reading on this one would block until the tool closes its output, so a hung tool would
+    // never reach the timeout below.
+    val output = StringBuilder()
+    val reader =
+        thread(isDaemon = true, name = "checkSoundLoudness output") {
+            process.inputStream.bufferedReader().useLines { lines -> lines.forEach { synchronized(output) { output.appendLine(it) } } }
+        }
+    if (!process.waitFor(MEASURE_TIMEOUT_MINUTES, TimeUnit.MINUTES)) {
+        process.destroyForcibly()
+        throw MeasurerUnavailableException(
+            "checkSoundLoudness: ${command.first()} did not finish within $MEASURE_TIMEOUT_MINUTES minutes " +
+                "measuring ${command.last()}; it was stopped",
+        )
+    }
+    reader.join(TimeUnit.SECONDS.toMillis(READER_JOIN_SECONDS))
+    return synchronized(output) { output.toString() }
 }
+
+private const val READER_JOIN_SECONDS = 10L
 
 /** The outcome of [SoundLoudnessCheck.check]: a report line per file and every rule a file misses. */
 data class LoudnessReport(

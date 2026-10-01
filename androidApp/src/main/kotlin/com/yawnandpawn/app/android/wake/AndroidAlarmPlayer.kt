@@ -25,7 +25,8 @@ import kotlin.time.Duration.Companion.seconds
  *   of opens at a time (a sound that played 10 s resets the count). When every open failed, the default is tried again
  *   every 5 s while the ring lasts. [resolver] maps the alarm's sound (a library sound or a phone ringtone, Story 1.17);
  *   an unknown sound reference plays the default. Each fallback is logged without the sound reference or its URI.
- *   Sounds prepare asynchronously (`MediaPlayerPlaybackFactory`); a prepare error falls back like a playback error.
+ *   Sounds prepare asynchronously (`MediaPlayerPlaybackFactory`); a prepare error, or a sound not prepared within 5 s
+ *   (a stalled content provider), falls back like a playback error. A new ring stops the Sound preview ([onRingStart]).
  *
  * Every call is idempotent for the same request and thread-safe (one lock; `MediaPlayer` errors arrive on the main
  * thread). [scope] runs the ramp updates. (Many small functions: one verb per session effect plus the locked helpers
@@ -39,6 +40,11 @@ class AndroidAlarmPlayer(
     private val monotonicClock: MonotonicClock,
     private val scope: CoroutineScope,
     private val logger: Logger,
+    /**
+     * Runs at the start of every ring, under the player's lock, once [isRinging] is true: the Sound preview stops (Story
+     * 1.17). It must not call back into the player.
+     */
+    private val onRingStart: () -> Unit = {},
 ) {
     /** What the session asked for; a different request starts the ring over. [rampStart] is null when there is no ramp. */
     private data class Request(
@@ -47,17 +53,29 @@ class AndroidAlarmPlayer(
         val rampStart: Double?,
     )
 
+    /** One open of [sound]: callbacks of an older open (released since) are told apart by identity. */
+    private class Opening(
+        val sound: AlarmSound,
+    ) {
+        var prepared = false
+
+        /** When it was prepared (monotonic); one that played [HEALTHY_PLAY] before failing resets the open count. */
+        var preparedAt = 0L
+    }
+
     private val lock = Any()
     private var request: Request? = null
     private var playback: Playback? = null
+    private var opening: Opening? = null
     private var opens = 0
     private var rampStartedAt = 0L
     private var rampDone = false
     private var rampJob: Job? = null
     private var retryJob: Job? = null
+    private var prepareWatchdog: Job? = null
 
-    /** When the open playback started (monotonic); one that ran [HEALTHY_PLAY] before failing resets the open count. */
-    private var openedAt = 0L
+    @Volatile
+    private var ringOn = false
 
     /** The sound that is open (playing, paused or muted), or null when nothing is. */
     @Volatile
@@ -77,9 +95,12 @@ class AndroidAlarmPlayer(
     var isPaused: Boolean = false
         private set
 
-    /** A ring (or the emergency ring) is on, even between two opens of its sound; the Sound preview keeps out of it. */
+    /**
+     * A ring (or the emergency ring) is on, even between two opens of its sound; the Sound preview keeps out of it. Read
+     * without the player's lock, so the preview can ask while holding its own.
+     */
     val isRinging: Boolean
-        get() = synchronized(lock) { request != null }
+        get() = ringOn
 
     /**
      * Plays [soundRef] at [volumePercent] of the alarm stream, ramping from [rampStartPercent] of it when [gradual], and
@@ -112,9 +133,7 @@ class AndroidAlarmPlayer(
     fun switchToDefault() =
         synchronized(lock) {
             if (request == null || (sound == AlarmSound.Default && playback != null)) return@synchronized
-            playback?.release()
-            playback = null
-            sound = null
+            closeLocked()
             opens = 0
             openLocked(AlarmSound.Default)
         }
@@ -165,6 +184,8 @@ class AndroidAlarmPlayer(
     ) {
         release()
         request = wanted
+        ringOn = true
+        onRingStart()
         volume.setForRing(wanted.volumePercent)
         rampStartedAt = monotonicClock.elapsedMillis()
         rampDone = wanted.rampStart == null
@@ -208,34 +229,74 @@ class AndroidAlarmPlayer(
      * a bad source with several exception types; any of them means "try the next sound".
      */
     @Suppress("TooGenericExceptionCaught")
-    private fun tryOpen(candidate: AlarmSound): AlarmSound? =
-        try {
-            val opened = playbacks.open(candidate) { onPlaybackError(candidate) }
+    private fun tryOpen(candidate: AlarmSound): AlarmSound? {
+        val attempt = Opening(candidate)
+        opening = attempt
+        return try {
+            val opened = playbacks.open(candidate, onPrepared = { onPrepared(attempt) }, onError = { onPlaybackError(attempt) })
             playback = opened
             sound = candidate
-            openedAt = monotonicClock.elapsedMillis()
             applyGainLocked()
             if (!isPaused) opened.start()
+            if (!attempt.prepared) startPrepareWatchdog(attempt)
             null
         } catch (e: Exception) {
-            playback?.release()
-            playback = null
-            sound = null
+            closeLocked()
             logger.log(LogEvent.SoundFellBack("could not open the sound: ${e::class.simpleName}"))
             fallbackAfter(candidate)
         }
+    }
 
-    private fun onPlaybackError(failed: AlarmSound) =
+    private fun onPrepared(attempt: Opening) =
         synchronized(lock) {
-            if (sound != failed || playback == null) return@synchronized
-            logger.log(LogEvent.SoundFellBack("the sound failed while ringing"))
-            // A sound that played for a while counts as working: a long ring gets a fresh set of opens.
-            if (monotonicClock.elapsedMillis() - openedAt >= HEALTHY_PLAY.inWholeMilliseconds) opens = 0
-            playback?.release()
-            playback = null
-            sound = null
-            openLocked(fallbackAfter(failed))
+            if (opening !== attempt) return@synchronized
+            attempt.prepared = true
+            attempt.preparedAt = monotonicClock.elapsedMillis()
+            prepareWatchdog?.cancel()
+            prepareWatchdog = null
         }
+
+    /** A sound that never reports prepared (a stalled content provider) counts as failed after [PREPARE_TIMEOUT]. */
+    private fun startPrepareWatchdog(attempt: Opening) {
+        prepareWatchdog?.cancel()
+        prepareWatchdog =
+            scope.launch {
+                delay(PREPARE_TIMEOUT)
+                synchronized(lock) {
+                    if (opening === attempt && !attempt.prepared && playback != null) {
+                        failLocked(attempt, "the sound did not prepare in time")
+                    }
+                }
+            }
+    }
+
+    private fun onPlaybackError(attempt: Opening) =
+        synchronized(lock) {
+            if (opening === attempt && playback != null) failLocked(attempt, "the sound failed while ringing")
+        }
+
+    private fun failLocked(
+        attempt: Opening,
+        reason: String,
+    ) {
+        logger.log(LogEvent.SoundFellBack(reason))
+        // A sound that played for a while counts as working: a long ring gets a fresh set of opens. Time spent
+        // preparing does not count.
+        val healthy = attempt.prepared && monotonicClock.elapsedMillis() - attempt.preparedAt >= HEALTHY_PLAY.inWholeMilliseconds
+        if (healthy) opens = 0
+        closeLocked()
+        openLocked(fallbackAfter(attempt.sound))
+    }
+
+    /** Releases the open sound (the ring itself goes on). */
+    private fun closeLocked() {
+        prepareWatchdog?.cancel()
+        prepareWatchdog = null
+        playback?.release()
+        playback = null
+        opening = null
+        sound = null
+    }
 
     private fun resumeLocked() {
         isPaused = false
@@ -271,10 +332,9 @@ class AndroidAlarmPlayer(
         rampJob = null
         retryJob?.cancel()
         retryJob = null
-        playback?.release()
-        playback = null
-        sound = null
+        closeLocked()
         request = null
+        ringOn = false
         opens = 0
         isMuted = false
         isPaused = false
@@ -285,6 +345,7 @@ class AndroidAlarmPlayer(
         val RAMP_STEP = 250.milliseconds
         val RETRY_DELAY = 5.seconds
         val HEALTHY_PLAY = 10.seconds
+        val PREPARE_TIMEOUT = 5.seconds
         const val PERCENT = 100.0
         const val MAX_OPENS_PER_RING = 6
         const val EMERGENCY_REF = "emergency:default"

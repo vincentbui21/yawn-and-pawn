@@ -304,7 +304,7 @@ class AndroidAlarmPlayerTest {
     fun `the MediaPlayer adapter prepares asynchronously and plays looping on the alarm usage with sonification content`() {
         val created = recordMediaPlayers()
 
-        val playback = MediaPlayerPlaybackFactory(context).open(AlarmSound.Default) {}
+        val playback = MediaPlayerPlaybackFactory(context).open(AlarmSound.Default, {}, {})
         playback.setGain(0.2f)
         playback.start()
 
@@ -321,11 +321,75 @@ class AndroidAlarmPlayerTest {
     }
 
     @Test
+    fun `the MediaPlayer adapter keeps a pause asked for while preparing and plays on the next start`() {
+        val created = recordMediaPlayers()
+        var preparedCalls = 0
+
+        // At ring start during a call: start, then pause, both before the player is prepared.
+        val playback = MediaPlayerPlaybackFactory(context).open(AlarmSound.Default, { preparedCalls++ }, {})
+        playback.start()
+        playback.pause()
+        prepared()
+
+        val shadow = created.single().shadow()
+        assertEquals(1, preparedCalls)
+        assertEquals(ShadowMediaPlayer.State.PREPARED, shadow.state, "still paused once prepared")
+        playback.start()
+        assertTrue(shadow.isReallyPlaying)
+        playback.release()
+    }
+
+    @Test
+    fun `a sound that never reports prepared is replaced by the default after 5 s`() {
+        playbacks.stalling += chosen
+
+        play(ref = "test:rain")
+        assertEquals(chosen, player.sound)
+        advance(4.seconds)
+        assertEquals(chosen, player.sound, "still waiting")
+        advance(1.seconds)
+
+        assertEquals(AlarmSound.Default, player.sound)
+        assertTrue(checkNotNull(playbacks.current).playing, "never silent")
+        assertTrue(playbacks.opened.first().released)
+        assertEquals(listOf<LogEvent>(LogEvent.SoundFellBack("the sound did not prepare in time")), logger.events)
+        advance(10.seconds)
+        assertEquals(AlarmSound.Default, player.sound, "a prepared sound has no watchdog")
+    }
+
+    @Test
+    fun `time spent preparing does not count as healthy play`() {
+        playbacks.stalling += listOf(AlarmSound.Default, AlarmSound.SystemAlarm)
+
+        play()
+        // Each stalled open fails after 5 s; the default and the phone alarm take turns, without a fresh set of opens.
+        advance(30.seconds)
+
+        assertEquals(6, playbacks.opened.size, "the open budget of one ring, not reset by unprepared time")
+        assertNull(player.sound)
+    }
+
+    @Test
+    fun `a ring start runs the ring-start hook with the ring already on`() {
+        var ringingInHook: Boolean? = null
+        lateinit var hooked: AndroidAlarmPlayer
+        hooked =
+            AndroidAlarmPlayer(playbacks, resolver, volume, clock, CoroutineScope(dispatcher), logger) {
+                ringingInHook = hooked.isRinging
+            }
+
+        hooked.play(Alarm.DEFAULT_SOUND_REF, 80, gradual = false, rampStartPercent = 20)
+
+        assertEquals(true, ringingInHook)
+        hooked.stop(restoreVolume = true)
+    }
+
+    @Test
     fun `the MediaPlayer adapter reports a playback error and never pauses a player that did not start`() {
         val created = recordMediaPlayers()
         var errors = 0
 
-        val playback = MediaPlayerPlaybackFactory(context).open(AlarmSound.Default) { errors++ }
+        val playback = MediaPlayerPlaybackFactory(context).open(AlarmSound.Default, {}) { errors++ }
         prepared()
         val shadow = created.single().shadow()
         playback.pause()
@@ -342,8 +406,8 @@ class AndroidAlarmPlayerTest {
         val created = recordMediaPlayers()
         val factory = MediaPlayerPlaybackFactory(context)
 
-        factory.open(AlarmSound.BuiltIn(R.raw.alarm_chimes)) {}.release()
-        factory.open(AlarmSound.File("content://media/internal/audio/media/7")) {}.release()
+        factory.open(AlarmSound.BuiltIn(R.raw.alarm_chimes), {}, {}).release()
+        factory.open(AlarmSound.File("content://media/internal/audio/media/7"), {}, {}).release()
 
         assertEquals("android.resource://${context.packageName}/${R.raw.alarm_chimes}", created[0].shadow().sourceUri.toString())
         assertEquals("content://media/internal/audio/media/7", created[1].shadow().sourceUri.toString())

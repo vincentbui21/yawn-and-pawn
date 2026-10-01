@@ -10,6 +10,7 @@ import androidx.compose.ui.test.junit4.createEmptyComposeRule
 import androidx.compose.ui.test.onAllNodesWithContentDescription
 import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onNodeWithContentDescription
+import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.onRoot
 import com.github.takahirom.roborazzi.captureRoboImage
 import com.yawnandpawn.app.StopAppRule
@@ -28,6 +29,7 @@ import org.robolectric.RobolectricTestRunner
 import org.robolectric.annotation.Config
 import org.robolectric.annotation.GraphicsMode
 import kotlin.test.assertEquals
+import kotlin.test.assertTrue
 
 /** The Sound sub-screen states of Story 1.17, built with the editor's real section builder. */
 object SoundSamples {
@@ -54,6 +56,9 @@ object SoundSamples {
 
     /** The editor's main screen for that missing choice: the Sound row and its note. */
     val missingOnEditor = missing.copy(pane = EditorPane.Main)
+
+    /** The editor's main screen with Chimes chosen. */
+    val chimesOnEditor = EditorUiState(sound = editorSound("builtin:chimes", system, missing = false, previewing = null))
 }
 
 /**
@@ -84,7 +89,8 @@ class SoundPickerScreenshotTest {
     @Test
     fun `sound list in Light`() =
         capture("sound_list_light", SoundSamples.list, PpsThemeMode.Light) {
-            composeRule.onAllNodesWithText("Built-in").fetchSemanticsNodes().isNotEmpty()
+            assertTrue(composeRule.onAllNodesWithText("Built-in").fetchSemanticsNodes().isNotEmpty(), "the Built-in section")
+            assertTrue(composeRule.onAllNodesWithText("System").fetchSemanticsNodes().isNotEmpty(), "the System section")
             composeRule.onNode(hasText("Sunrise") and isRadio()).assertIsSelected()
             assertEquals(0, composeRule.onAllNodesWithText("Your files").fetchSemanticsNodes().size, "Story 7.4")
             assertEquals(14, composeRule.onAllNodesWithContentDescription("Play preview").fetchSemanticsNodes().size)
@@ -121,7 +127,7 @@ class SoundPickerScreenshotTest {
                 composeRule.onAllNodesWithText("File missing. Default sound will play.", useUnmergedTree = true).fetchSemanticsNodes().size,
             )
             composeRule.onNode(hasText("Helium") and isRadio()).assertIsSelected()
-            composeRule.onAllNodesWithContentDescription("Play preview").fetchSemanticsNodes().size
+            assertEquals(15, composeRule.onAllNodesWithContentDescription("Play preview").fetchSemanticsNodes().size)
             composeRule.onAllNodesWithContentDescription("Play preview")[14].assertIsNotEnabled()
         }
 
@@ -135,13 +141,24 @@ class SoundPickerScreenshotTest {
     @Test
     fun `editor with a missing sound in Light`() =
         capture("alarm_editor_sound_missing_light", SoundSamples.missingOnEditor, PpsThemeMode.Light) {
-            composeRule.onAllNodesWithText("Helium", useUnmergedTree = true).fetchSemanticsNodes().isNotEmpty()
+            assertTrue(composeRule.onAllNodesWithText("Helium", useUnmergedTree = true).fetchSemanticsNodes().isNotEmpty(), "the Sound row")
             composeRule.onAllNodesWithText("File missing. Default sound will play.", useUnmergedTree = true)[0].assertExists()
         }
 
     @Test
     fun `editor with a missing sound in Dark`() =
         capture("alarm_editor_sound_missing_dark", SoundSamples.missingOnEditor, PpsThemeMode.Dark)
+
+    @Test
+    fun `the editor's Sound row names the chosen built-in sound`() =
+        withScreen(
+            PpsThemeMode.Light,
+            content = { AlarmEditorScreen(state = SoundSamples.chimesOnEditor, is24Hour = false, onIntent = {}) },
+        ) {
+            composeRule.onNodeWithText("Chimes", useUnmergedTree = true).assertExists()
+            assertEquals(0, composeRule.onAllNodesWithText("Sunrise", useUnmergedTree = true).fetchSemanticsNodes().size)
+            assertEquals(0, composeRule.onAllNodesWithText("File missing. Default sound will play.").fetchSemanticsNodes().size)
+        }
 
     private fun isRadio(): SemanticsMatcher = SemanticsMatcher.expectValue(SemanticsProperties.Role, Role.RadioButton)
 }

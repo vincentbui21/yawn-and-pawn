@@ -15,14 +15,16 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 
 /**
- * The Sound picker's preview player (FR-SND-1, Story 1.17), called on the main thread: one sound at a time, played once
- * (not looping) on the alarm stream (`USAGE_ALARM`) with the stream at the alarm's volume, so the user hears what the
- * alarm will sound like.
+ * The Sound picker's preview player (FR-SND-1, Story 1.17): one sound at a time, played once (not looping) on the alarm
+ * stream (`USAGE_ALARM`) with the stream at the alarm's volume, so the user hears what the alarm will sound like. It is
+ * thread-safe (its own lock): the UI calls it on the main thread, the alarm player at a ring start.
  *
  * - **Volume:** the same [AlarmVolume] as the ring saves the user's alarm volume and puts it back when the preview ends.
  *   While an alarm rings ([ringing]) a preview never starts and never restores the volume: the ring owns the stream,
- *   keeps the user volume the preview saved, and restores it when the session ends. A crash mid-preview is healed at app
- *   start (`WakeRuntime.restoreVolumeIfIdle`).
+ *   keeps the user volume the preview saved, and restores it when the session ends. A ring that starts stops a playing
+ *   preview (`AndroidAlarmPlayer`'s ring-start hook, bound in `wakeModule`). A crash mid-preview is healed at app start
+ *   (`WakeRuntime.restoreVolumeIfIdle`). [ringing] must not take the alarm player's lock (that would deadlock with the
+ *   ring-start hook).
  * - **Never blocking:** it prepares with `prepareAsync`; a sound that cannot be opened or fails clears [previewing].
  *   Nothing logged names the sound or its URI.
  */
@@ -41,6 +43,7 @@ class AndroidSoundPreview(
 
     // MediaPlayer reports a source it cannot open with several exception types; each means "this preview fails".
     @Suppress("TooGenericExceptionCaught")
+    @Synchronized
     override fun play(
         ref: SoundRef,
         volumePercent: Int,
@@ -80,14 +83,17 @@ class AndroidSoundPreview(
         }
     }
 
+    @Synchronized
     override fun setVolume(volumePercent: Int) {
         if (player != null && !ringing()) volume.setForRing(volumePercent)
     }
 
+    @Synchronized
     override fun stop() {
         if (player != null || playing.value != null) finish()
     }
 
+    @Synchronized
     private fun finish() {
         release()
         playing.value = null

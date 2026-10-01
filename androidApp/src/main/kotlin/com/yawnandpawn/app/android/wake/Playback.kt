@@ -80,11 +80,13 @@ interface Playback {
 fun interface PlaybackFactory {
     /**
      * Opens [sound] to loop on the alarm stream and starts preparing it. Throws when it cannot be opened (for example a
-     * ringtone URI that no longer resolves); [onError] runs (on the main thread) if it fails later, while preparing or
-     * playing. `start` and gains given before it is prepared apply once it is.
+     * ringtone URI that no longer resolves); [onPrepared] runs once it is prepared, [onError] (on the main thread) if it
+     * fails later, while preparing or playing. Either may run before `open` returns. `start` and gains given before it
+     * is prepared apply once it is.
      */
     fun open(
         sound: AlarmSound,
+        onPrepared: () -> Unit,
         onError: () -> Unit,
     ): Playback
 }
@@ -102,6 +104,7 @@ class MediaPlayerPlaybackFactory(
     @Suppress("TooGenericExceptionCaught")
     override fun open(
         sound: AlarmSound,
+        onPrepared: () -> Unit,
         onError: () -> Unit,
     ): Playback {
         val player = MediaPlayer()
@@ -111,7 +114,8 @@ class MediaPlayerPlaybackFactory(
             player.setWakeMode(context, PowerManager.PARTIAL_WAKE_LOCK)
             player.setDataSource(context, soundUri(context, sound))
             player.isLooping = true
-            player.setOnPreparedListener { playback.onPrepared() }
+            // The caller hears of it after the playback's own lock is released (the caller then takes its lock).
+            player.setOnPreparedListener { if (playback.onPrepared()) onPrepared() }
             player.setOnErrorListener { _, _, _ ->
                 onError()
                 true
@@ -141,12 +145,14 @@ private class MediaPlayerPlayback(
     private var started = false
     private var gain: Float? = null
 
+    /** Applies what was asked before it was prepared; false when it was released meanwhile. */
     @Synchronized
-    fun onPrepared() {
-        if (released) return
+    fun onPrepared(): Boolean {
+        if (released) return false
         prepared = true
         gain?.let { player.setVolume(it, it) }
         if (wantsToPlay) startNow()
+        return true
     }
 
     @Synchronized

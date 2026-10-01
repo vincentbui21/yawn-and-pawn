@@ -74,6 +74,8 @@ class SoundLibraryTest {
             val library = AndroidSoundLibrary(ringtones, logger, UnconfinedTestDispatcher(testScheduler))
 
             assertEquals(listOf(argon), library.systemSounds())
+            ringtones.list = { listOf(SoundRef.System("content://media/internal/audio/media/43", " "), argon) }
+            assertEquals(listOf(argon), library.systemSounds(), "a ringtone without a name is left out")
             ringtones.list = { throw SecurityException("content://media/internal/audio/media/42") }
             assertEquals(emptyList(), library.systemSounds())
             assertEquals(listOf<LogEvent>(LogEvent.OperationFailed("list alarm ringtones", "SecurityException")), logger.events)

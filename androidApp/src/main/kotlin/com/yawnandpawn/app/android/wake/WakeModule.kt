@@ -5,6 +5,7 @@ import com.yawnandpawn.app.core.crash.CrashReporter
 import com.yawnandpawn.app.core.session.RandomSeedSource
 import com.yawnandpawn.app.core.session.SeedSource
 import com.yawnandpawn.app.core.session.SessionEngine
+import com.yawnandpawn.app.core.sound.SoundPreview
 import com.yawnandpawn.app.core.time.TimeSnapshot
 import org.koin.android.ext.koin.androidContext
 import org.koin.core.module.Module
@@ -30,7 +31,19 @@ fun wakeModule(): Module =
         single { AlarmVibrator(androidContext()) }
         single { WakeNotifier(androidContext(), get()) }
         single { WakeServiceStarter(androidContext(), get()) }
-        single { AndroidAlarmPlayer(get(), get(), get(), get(), get<WakeScope>(), get()) }
+        single {
+            // A ring stops the Sound preview (Story 1.17); the preview is looked up then, as it depends on this player.
+            val koin = this
+            AndroidAlarmPlayer(
+                get(),
+                get(),
+                get(),
+                get(),
+                get<WakeScope>(),
+                get(),
+                onRingStart = { koin.getOrNull<SoundPreview>()?.stop() },
+            )
+        }
         single {
             WakeRuntime(
                 outputs = WakeOutputs(get(), get(), get(), get(), get(), get()),

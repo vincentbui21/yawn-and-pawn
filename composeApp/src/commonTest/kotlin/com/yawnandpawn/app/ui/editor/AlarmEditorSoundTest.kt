@@ -7,6 +7,7 @@ import androidx.lifecycle.viewmodel.viewModelFactory
 import com.yawnandpawn.app.core.alarm.Alarm
 import com.yawnandpawn.app.core.alarm.RequestCodes
 import com.yawnandpawn.app.core.sound.SoundCatalog
+import com.yawnandpawn.app.core.sound.SoundLibrary
 import com.yawnandpawn.app.core.sound.SoundRef
 import com.yawnandpawn.app.testing.AlarmUseCasesFixture
 import com.yawnandpawn.app.testing.FakeAlarmRepository
@@ -69,17 +70,19 @@ class AlarmEditorSoundTest {
         Dispatchers.resetMain()
     }
 
-    private fun viewModel(alarmId: String? = null) =
-        AlarmEditorViewModel(
-            alarmId = alarmId,
-            repository = repository,
-            saveAlarm = alarms.save,
-            clock = clock,
-            timeZoneProvider = zone,
-            actions = AlarmActions(alarms.setEnabled, alarms.duplicate, alarms.delete, clock, FakeLogger()),
-            soundLibrary = library,
-            soundPreview = preview,
-        )
+    private fun viewModel(
+        alarmId: String? = null,
+        library: SoundLibrary = this.library,
+    ) = AlarmEditorViewModel(
+        alarmId = alarmId,
+        repository = repository,
+        saveAlarm = alarms.save,
+        clock = clock,
+        timeZoneProvider = zone,
+        actions = AlarmActions(alarms.setEnabled, alarms.duplicate, alarms.delete, clock, FakeLogger()),
+        soundLibrary = library,
+        soundPreview = preview,
+    )
 
     private val AlarmEditorViewModel.sound: EditorSound
         get() = assertNotNull(state.value.sound)
@@ -257,6 +260,81 @@ class AlarmEditorSoundTest {
             assertEquals(EditorPane.Sound, viewModel.state.value.pane, "backgrounding keeps the sub-screen")
             viewModel.onIntent(EditorIntent.Backgrounded)
             assertEquals(2, preview.stops, "nothing to stop")
+        }
+
+    @Test
+    fun `opening another pane from the Sound sub-screen stops the preview`() =
+        runTest(dispatcher) {
+            val viewModel = viewModel()
+            advanceUntilIdle()
+            viewModel.onIntent(EditorIntent.PaneOpened(EditorPane.Sound))
+            viewModel.sound(SoundPickerIntent.PreviewToggled("builtin:bell"))
+
+            viewModel.onIntent(EditorIntent.PaneOpened(EditorPane.Snooze))
+
+            assertEquals(1, preview.stops)
+            assertNull(preview.previewing.value)
+        }
+
+    @Test
+    fun `going to the background stops the preview even while a save runs`() =
+        runTest(dispatcher) {
+            val viewModel = viewModel()
+            advanceUntilIdle()
+            viewModel.sound(SoundPickerIntent.PreviewToggled("builtin:bell"))
+            viewModel.onIntent(EditorIntent.SaveClicked)
+            assertTrue(viewModel.state.value.isSaving)
+
+            viewModel.onIntent(EditorIntent.Backgrounded)
+
+            assertEquals(1, preview.stops)
+            assertNull(preview.previewing.value)
+        }
+
+    @Test
+    fun `a listed ringtone that is gone by the time it is chosen is marked missing`() =
+        runTest(dispatcher) {
+            val viewModel = viewModel()
+            advanceUntilIdle()
+            library.missing += oxygen
+
+            viewModel.sound(SoundPickerIntent.Selected(oxygen.encode()))
+            assertFalse(viewModel.sound.missing, "not known yet")
+            advanceUntilIdle()
+
+            assertTrue(viewModel.sound.missing)
+            assertEquals(
+                listOf(oxygen.encode()),
+                viewModel.sound.picker.options
+                    .filter { it.missing }
+                    .map { it.id },
+            )
+        }
+
+    @Test
+    fun `a chosen ringtone that plays but is not an alarm ringtone keeps a selected row`() =
+        runTest(dispatcher) {
+            val notification = SoundRef.System("content://ringtones/ding", "Ding")
+            repository.upsert(anAlarm(id = "a1", time = LocalTime(6, 30)).copy(soundRef = notification.encode()))
+            // The alarm list does not have it, but its file opens.
+            val viewModel =
+                viewModel(
+                    "a1",
+                    object : SoundLibrary {
+                        override suspend fun systemSounds() = listOf(argon, oxygen)
+
+                        override suspend fun isAvailable(ref: SoundRef) = true
+                    },
+                )
+            advanceUntilIdle()
+
+            assertFalse(viewModel.sound.missing)
+            val row =
+                viewModel.sound.picker.options
+                    .single { it.id == notification.encode() }
+            assertFalse(row.missing)
+            assertEquals("Ding", row.name)
+            assertEquals(notification.encode(), viewModel.sound.picker.selectedId)
         }
 
     @Test

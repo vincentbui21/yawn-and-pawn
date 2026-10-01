@@ -31,7 +31,7 @@ class PlatformRingtoneSource(
         return cursor.use {
             buildList {
                 while (it.moveToNext()) {
-                    val title = it.getString(RingtoneManager.TITLE_COLUMN_INDEX).orEmpty()
+                    val title = it.getString(RingtoneManager.TITLE_COLUMN_INDEX)?.trim().orEmpty()
                     val uri = manager.getRingtoneUri(it.position) ?: continue
                     add(SoundRef.System(uri = uri.toString(), title = title))
                 }
@@ -58,7 +58,8 @@ class AndroidSoundLibrary(
     override suspend fun systemSounds(): List<SoundRef.System> =
         withContext(io) {
             try {
-                ringtones.alarmRingtones()
+                // A ringtone without a name would be a blank row: it is left out.
+                ringtones.alarmRingtones().filter { it.title.isNotBlank() }
             } catch (e: Exception) {
                 logger.log(LogEvent.OperationFailed("list alarm ringtones", e::class.simpleName.orEmpty()))
                 emptyList()

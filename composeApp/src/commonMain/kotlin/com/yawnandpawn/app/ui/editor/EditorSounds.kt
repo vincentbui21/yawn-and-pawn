@@ -41,10 +41,14 @@ internal class EditorSounds(
     /** The form was opened (a new alarm, or a stored one loaded): show its sound and check it is still there. */
     fun opened() {
         refresh()
+        checkChosen()
+    }
+
+    /** Checks the chosen sound can still be played; the answer for a sound chosen since then is dropped. */
+    private fun checkChosen() {
         val chosen = state.value.form.soundRef
         scope.launch {
             val available = SoundRef.parse(chosen)?.let { library.isAvailable(it) } ?: false
-            // A choice made meanwhile was picked from the list, so it is there.
             if (state.value.form.soundRef == chosen) {
                 missing = !available
                 refresh()
@@ -65,6 +69,8 @@ internal class EditorSounds(
                 if (intent.id != state.value.form.soundRef) missing = false
                 edit { it.copy(soundRef = intent.id) }
                 refresh()
+                // A listed ringtone can still be gone (deleted since the list was read).
+                checkChosen()
             }
 
             is SoundPickerIntent.PreviewToggled -> {
@@ -106,7 +112,8 @@ internal class EditorSounds(
  * alarm ringtones ([system]) under "System", and no "Your files" yet (Story 7.4).
  *
  * A [missing] choice shows "File missing. Default sound will play.": a ringtone that is still listed gets the missing
- * caption on its row; one that is gone gets a row of its own with its stored title. A built-in this version does not
+ * caption on its row. A chosen ringtone not in the list (gone, or not an alarm ringtone) gets a row of its own with
+ * its stored title. A built-in this version does not
  * have is named as the default sound, which is what rings. A ringtone is matched to the list by its URI, so a renamed
  * ringtone stays selected.
  */
@@ -125,10 +132,11 @@ fun editorSound(
     val selectedId = listed?.encode() ?: soundRef
     val systemRows =
         system.map { SoundOption(id = it.encode(), name = it.title, source = SoundSource.System, missing = missing && it == listed) }
-    val goneRow =
+    // A chosen ringtone that is not in the list (gone, or not an alarm ringtone) still gets its row, so it shows selected.
+    val unlistedRow =
         (chosen as? SoundRef.System)
-            ?.takeIf { missing && listed == null }
-            ?.let { SoundOption(id = soundRef, name = it.title, source = SoundSource.System, missing = true) }
+            ?.takeIf { listed == null }
+            ?.let { SoundOption(id = soundRef, name = it.title, source = SoundSource.System, missing = missing) }
     val builtIn = SoundCatalog.find(chosen) ?: SoundCatalog.default.takeIf { chosen !is SoundRef.System }
     return EditorSound(
         name = (chosen as? SoundRef.System)?.title.orEmpty(),
@@ -136,7 +144,7 @@ fun editorSound(
         missing = missing,
         picker =
             SoundPickerUiState(
-                options = builtIns + systemRows + listOfNotNull(goneRow),
+                options = builtIns + systemRows + listOfNotNull(unlistedRow),
                 selectedId = selectedId,
                 previewingId = previewing,
                 showFiles = false,

@@ -12,6 +12,7 @@ import com.yawnandpawn.app.ui.sound.SoundPickerIntent
 import com.yawnandpawn.app.ui.sound.SoundPickerUiState
 import kotlinx.datetime.DayOfWeek
 import kotlinx.datetime.LocalTime
+import org.jetbrains.compose.resources.StringResource
 
 /** Every field the editor shows, as the user has set it. New alarms start from these defaults (Story 1.7 `Alarm`). */
 data class EditorForm(
@@ -28,6 +29,8 @@ data class EditorForm(
      */
     val rampStartPercent: Int = Alarm.DEFAULT_RAMP_START_PERCENT,
     val vibration: Boolean = true,
+    /** The chosen sound, an encoded `SoundRef` (Story 1.17), saved with the alarm. */
+    val soundRef: String = Alarm.DEFAULT_SOUND_REF,
 ) {
     companion object {
         /** The time a new alarm opens with. */
@@ -70,13 +73,18 @@ data class EditorUiState(
     val ringsIn: Countdown? = null,
     /**
      * The rows of the full editor (EXPERIENCE.md Information Architecture) that later stories wire: wake-up check, quiet
-     * time, fee ladder, sound list, motivation and "Test alarm". `null` hides them (the Story 1.8 editor).
+     * time, fee ladder, motivation and "Test alarm" (the sound list is [sound]). `null` hides them (the Story 1.8 editor).
      */
     val full: FullEditorSections? = null,
     /** Editing a stored alarm: the header's overflow menu offers Duplicate and Delete (also for TalkBack). */
     val hasOverflowMenu: Boolean = false,
     /** Delete was chosen in the overflow menu: "Delete your {time} alarm? This is logged." for the stored time. */
     val deleteDialogTime: LocalTime? = null,
+    /**
+     * The Sound row's value and the Sound sub-screen's list (Story 1.17); `null` shows the default sound's name and no
+     * list (the Story 1.8 editor).
+     */
+    val sound: EditorSound? = null,
 ) {
     /** The highlighted repeat quick choice. */
     val repeatChoice: RepeatChoice
@@ -88,6 +96,17 @@ data class EditorUiState(
                 else -> RepeatChoice.Custom
             }
 }
+
+/** The chosen sound as the editor shows it, and the Sound sub-screen's list. */
+data class EditorSound(
+    /** The chosen sound's name: [nameRes] for a built-in sound, else this (a ringtone's or file's own name). */
+    val name: String = "",
+    val nameRes: StringResource? = null,
+    /** The chosen sound cannot be played: "File missing. Default sound will play." */
+    val missing: Boolean = false,
+    /** Built-in sounds, system ringtones and (Story 7.4) the user's files. */
+    val picker: SoundPickerUiState = SoundPickerUiState(),
+)
 
 /** How the selected checks run: one picked at random each morning, or all of them in order. */
 enum class CheckMode { Random, All }
@@ -129,11 +148,6 @@ data class FullEditorSections(
     val vibrateInGrace: Boolean = true,
     /** The first three snooze prices of the fee ladder, or `null` while prices are not known. */
     val feeLadder: List<Money>? = null,
-    val soundName: String = "",
-    /** The chosen custom file is gone: "File missing. Default sound will play." */
-    val soundMissing: Boolean = false,
-    /** The Sound sub-screen's list: built-in sounds, system ringtones and the user's files. */
-    val sounds: SoundPickerUiState = SoundPickerUiState(),
     /** Names of the recorded motivation messages ("Message 1"). */
     val recordings: List<String> = emptyList(),
     val motivation: MotivationChoice = MotivationChoice.None,
@@ -187,6 +201,9 @@ sealed interface EditorIntent {
     data object BackRequested : EditorIntent
 
     data object DiscardConfirmed : EditorIntent
+
+    /** The editor left the screen (the app went to the background, or another screen covered it): a preview stops. */
+    data object Backgrounded : EditorIntent
 
     data object KeepEditing : EditorIntent
 

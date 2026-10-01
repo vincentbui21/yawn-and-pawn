@@ -9,8 +9,8 @@ import org.koin.dsl.module
 
 /**
  * Koin bindings of :composeApp (AD-13): one ViewModel per screen. The core ports and use cases they take
- * (`AlarmRepository`, the alarm use cases, `Clock`, `TimeZoneProvider`, `TimeChangeSignal`, `Logger`) are bound by
- * :androidApp and :data.
+ * (`AlarmRepository`, the alarm use cases, `Clock`, `TimeZoneProvider`, `TimeChangeSignal`, `Logger`, `SoundLibrary`,
+ * `SoundPreview`) are bound by :androidApp and :data.
  */
 val uiModule =
     module {
@@ -24,6 +24,8 @@ val uiModule =
                 clock = get(),
                 timeZoneProvider = get(),
                 actions = get(),
+                soundLibrary = get(),
+                soundPreview = get(),
             )
         }
     }

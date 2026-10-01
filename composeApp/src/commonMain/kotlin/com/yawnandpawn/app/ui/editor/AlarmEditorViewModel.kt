@@ -12,6 +12,8 @@ import com.yawnandpawn.app.core.alarm.nextOccurrence
 import com.yawnandpawn.app.core.error.DomainError
 import com.yawnandpawn.app.core.error.Outcome
 import com.yawnandpawn.app.core.error.errorOrNull
+import com.yawnandpawn.app.core.sound.SoundLibrary
+import com.yawnandpawn.app.core.sound.SoundPreview
 import com.yawnandpawn.app.core.time.Clock
 import com.yawnandpawn.app.core.time.TimeZoneProvider
 import com.yawnandpawn.app.ui.format.Weekdays
@@ -40,7 +42,9 @@ data class AlarmEditorArgs(
  * sub-screen (Sound, Snooze) Back returns to the main screen. "Rings in ..." and "Rings tomorrow" are computed with
  * `nextOccurrence` from [clock] and [timeZoneProvider] (never the system clock). A stored alarm that cannot be read
  * closes the editor with [EditorEffect.OpenFailed] (Home shows "Couldn't open this alarm."); an alarm that was read
- * gets the overflow menu (Story 1.9): Duplicate and Delete through [actions].
+ * gets the overflow menu (Story 1.9): Duplicate and Delete through [actions]. The Sound sub-screen (Story 1.17) lists
+ * the built-in sounds and the phone's alarm ringtones ([soundLibrary]) and previews one at a time ([soundPreview]); the
+ * preview stops on leaving the sub-screen, on [EditorIntent.Backgrounded] and when the editor closes.
  */
 class AlarmEditorViewModel(
     private val alarmId: String?,
@@ -49,6 +53,8 @@ class AlarmEditorViewModel(
     private val clock: Clock,
     private val timeZoneProvider: TimeZoneProvider,
     private val actions: AlarmActions,
+    private val soundLibrary: SoundLibrary,
+    private val soundPreview: SoundPreview,
 ) : ViewModel() {
     private val _state = MutableStateFlow(EditorUiState(isNew = alarmId == null, isLoading = alarmId != null))
     val state: StateFlow<EditorUiState> = _state.asStateFlow()
@@ -59,18 +65,29 @@ class AlarmEditorViewModel(
     /** The form as it was opened; any difference is an unsaved change. */
     private var initialForm = EditorForm()
 
-    /** The stored alarm being edited: supplies the fields the editor does not show yet (sound, grace window). */
+    /** The stored alarm being edited: supplies the fields the editor does not show yet (grace window). */
     private var stored: Alarm? = null
 
+    /** The Sound row, the Sound sub-screen's list and its preview (Story 1.17). */
+    private val sounds = EditorSounds(soundLibrary, soundPreview, viewModelScope, _state)
+
     init {
+        // A preview never outlives the editor.
+        addCloseable { sounds.stopPreview() }
         if (alarmId == null) {
             _state.update { it.withRings(it.form, clock.now(), timeZoneProvider.current()) }
+            sounds.opened()
         } else {
             viewModelScope.launch { load(alarmId) }
         }
     }
 
     fun onIntent(intent: EditorIntent) {
+        // Going to the background always stops a preview, even while a save runs.
+        if (intent == EditorIntent.Backgrounded) {
+            sounds.stopPreview()
+            return
+        }
         // While a save runs (and after it succeeded, until the editor closes) nothing else is accepted: an edit would be
         // lost, and Back or Discard would close with the alarm stored anyway.
         if (_state.value.isSaving) return
@@ -92,6 +109,7 @@ class AlarmEditorViewModel(
             }
 
             is EditorIntent.PaneOpened -> {
+                if (intent.pane != EditorPane.Sound) sounds.stopPreview()
                 _state.update { if (it.isLoading) it else it.copy(pane = intent.pane) }
             }
 
@@ -125,6 +143,11 @@ class AlarmEditorViewModel(
 
             is EditorIntent.VolumeChanged -> {
                 editForm { it.copy(volumePercent = intent.percent) }
+                sounds.volumeChanged(intent.percent)
+            }
+
+            is EditorIntent.Sound -> {
+                sounds.onIntent(intent.intent, ::editForm)
             }
 
             is EditorIntent.GradualVolumeToggled -> {
@@ -154,6 +177,7 @@ class AlarmEditorViewModel(
                         .copy(isLoading = false, form = form, customRepeat = custom, hasOverflowMenu = true)
                         .withRings(form, clock.now(), timeZoneProvider.current())
                 }
+                sounds.opened()
             }
 
             // Deleted meanwhile, or storage unreadable: there is nothing to edit, and Home says so.
@@ -227,10 +251,23 @@ class AlarmEditorViewModel(
     private fun requestBack() {
         val current = _state.value
         when {
-            current.showDiscardDialog -> _state.update { it.copy(showDiscardDialog = false) }
-            current.pane != EditorPane.Main -> _state.update { it.copy(pane = EditorPane.Main) }
-            !current.isLoading && current.form != initialForm -> _state.update { it.copy(showDiscardDialog = true) }
-            else -> close()
+            current.showDiscardDialog -> {
+                _state.update { it.copy(showDiscardDialog = false) }
+            }
+
+            current.pane != EditorPane.Main -> {
+                // Leaving the Sound sub-screen stops its preview.
+                sounds.stopPreview()
+                _state.update { it.copy(pane = EditorPane.Main) }
+            }
+
+            !current.isLoading && current.form != initialForm -> {
+                _state.update { it.copy(showDiscardDialog = true) }
+            }
+
+            else -> {
+                close()
+            }
         }
     }
 
@@ -296,7 +333,8 @@ private fun EditorForm.toDraft(
         label = label,
         enabled = true,
         // Fields the editor does not show are made valid here, so the only field error a user can meet is the label.
-        soundRef = stored?.soundRef?.takeUnless { it.isBlank() } ?: Alarm.DEFAULT_SOUND_REF,
+        // The chosen sound, kept even when it is missing: the alarm then rings the default (never silent).
+        soundRef = soundRef.ifBlank { Alarm.DEFAULT_SOUND_REF },
         volumePercent = volumePercent,
         gradualVolume = gradualVolume,
         // Not editable (owner decision 2026-09-27): the ramp starts at the fixed 20% of the set volume, at any volume.
@@ -329,6 +367,7 @@ private fun Alarm.toForm(): EditorForm =
         gradualVolume = gradualVolume,
         rampStartPercent = rampStartPercent.coerceIn(Alarm.PERCENT_RANGE),
         vibration = vibration,
+        soundRef = soundRef.ifBlank { Alarm.DEFAULT_SOUND_REF },
     )
 
 private fun <T> Set<T>.toggle(item: T): Set<T> = if (item in this) this - item else this + item

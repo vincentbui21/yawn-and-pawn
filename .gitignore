@@ -42,3 +42,6 @@ kotlin-js-store/
 
 # BMAD run scratch
 _bmad-output/**/.working/
+
+# Python bytecode (tools/sounds)
+__pycache__/

@@ -20,7 +20,7 @@
     <string name="editor_snooze_length">Snooze length</string>
     <string name="editor_snooze_minutes">%1$d min</string>
     <string name="editor_sound">Sound</string>
-    <!-- Placeholder name of the default sound until the sound library (Story 1.17). -->
+    <!-- The default sound's name, shown when the editor has no sound section (same as sound_name_default). -->
     <string name="editor_sound_default">Sunrise</string>
     <string name="editor_volume">Volume</string>
     <string name="editor_gradual_volume">Gradually increase volume</string>
@@ -145,6 +145,19 @@
     <string name="sound_play_preview">Play preview</string>
     <string name="sound_stop_preview">Stop preview</string>
     <string name="sound_file_missing">File missing. Default sound will play.</string>
+    <!-- Built-in sound names (Story 1.17, SoundCatalog order; drafts in docs/design-preview/copy-to-approve.md). -->
+    <string name="sound_name_default">Sunrise</string>
+    <string name="sound_name_classic">Classic</string>
+    <string name="sound_name_digital">Digital</string>
+    <string name="sound_name_rising">Rising</string>
+    <string name="sound_name_chimes">Chimes</string>
+    <string name="sound_name_siren">Siren</string>
+    <string name="sound_name_pulse">Pulse</string>
+    <string name="sound_name_buzzer">Buzzer</string>
+    <string name="sound_name_marimba">Marimba</string>
+    <string name="sound_name_bell">Bell</string>
+    <string name="sound_name_morning">Morning</string>
+    <string name="sound_name_sonar">Sonar</string>
 
     <!-- Ringing -->
     <string name="wake_im_up">I'm up</string>

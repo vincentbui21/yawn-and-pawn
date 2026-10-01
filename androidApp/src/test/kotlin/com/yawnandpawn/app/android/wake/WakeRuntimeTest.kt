@@ -10,6 +10,7 @@ import android.os.Vibrator
 import android.os.VibratorManager
 import androidx.test.core.app.ApplicationProvider
 import com.yawnandpawn.app.StopAppRule
+import com.yawnandpawn.app.android.sound.LibrarySoundResolver
 import com.yawnandpawn.app.core.alarm.AlarmFired
 import com.yawnandpawn.app.core.alarm.RequestCodes
 import com.yawnandpawn.app.core.error.DomainError
@@ -65,7 +66,7 @@ class WakeRuntimeTest {
     private val dispatcher = StandardTestDispatcher()
     private val volume = AlarmVolume(context, logger)
     private val other = AlarmSound.File("content://sounds/other")
-    private val resolver = SoundResolver { ref -> if (ref == "test:other") other else DefaultOnlySoundResolver.resolve(ref) }
+    private val resolver = SoundResolver { ref -> if (ref == "test:other") other else LibrarySoundResolver().resolve(ref) }
     private val player = AndroidAlarmPlayer(playbacks, resolver, volume, FakeMonotonicClock(), CoroutineScope(dispatcher), logger)
     private val vibrator = AlarmVibrator(context)
     private val notifier = WakeNotifier(context, FakeTimeZoneProvider(TimeZone.UTC))

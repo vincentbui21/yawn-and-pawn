@@ -166,8 +166,27 @@ Layout choices to look at (no new copy):
 | `alarm_card_options` | Duplicate or delete | Home, `card-alarm` long-press (TalkBack) | Read as "Double-tap and hold to duplicate or delete". Both are also the card's TalkBack actions. |
 | `editor_more_options` | More options | Alarm editor header, overflow button (TalkBack) | The standard Android name for an overflow button. |
 
+## Story 1.17 (sound library, 2026-10-01)
+
+"Built-in", "System", "Play preview" / "Stop preview" and "File missing. Default sound will play." are EXPERIENCE.md key strings, used verbatim. The names of the 12 bundled alarm sounds are drafts; each describes how the tone sounds (they are generated in the repository, see `docs/sounds/LICENSES.md`). A system ringtone shows the phone's own name for it.
+
+| Key | Draft | Sound |
+|---|---|---|
+| `sound_name_default` | Sunrise | The default: two-note beeps (unchanged from the preview's placeholder) |
+| `sound_name_classic` | Classic | Four quick alarm-clock beeps |
+| `sound_name_digital` | Digital | Three short high digital-watch beeps |
+| `sound_name_rising` | Rising | Upward sweeps |
+| `sound_name_chimes` | Chimes | An up-and-down chime arpeggio |
+| `sound_name_siren` | Siren | A two-tone hi-lo siren |
+| `sound_name_pulse` | Pulse | A fast pulse train |
+| `sound_name_buzzer` | Buzzer | A low buzzer |
+| `sound_name_marimba` | Marimba | A short marimba-like melody |
+| `sound_name_bell` | Bell | A ringing mechanical alarm bell |
+| `sound_name_morning` | Morning | A bright rising tune |
+| `sound_name_sonar` | Sonar | Pings with an echo |
+
 ## Not strings, but worth a look
 
 - The Math problem is drawn as digits with "+" or "×" (for example "47 + 38"); TalkBack reads the key string "47 plus 38".
-- The sound names in the preview ("Birdsong", "Marimba", "Rooster", "Argon", "Oxygen", "morning-mix.mp3") and alarm labels ("Stand-up", "Early shift") are fake data, not app copy. The bundled sound names come with Story 1.17.
+- The sound names in the preview ("Birdsong", "Marimba", "Rooster", "Argon", "Oxygen", "morning-mix.mp3") and alarm labels ("Stand-up", "Early shift") are fake data, not app copy. The bundled sound names arrived with Story 1.17 (above).
 - Prices are fake and use the phone's local currency through the normal price formatting, with a realistic base fee per currency (for example "$1", "€1", "25.000 ₫" or "¥150"; feedback item 5).

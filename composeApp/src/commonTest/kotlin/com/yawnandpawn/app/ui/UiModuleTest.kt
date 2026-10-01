@@ -2,6 +2,8 @@ package com.yawnandpawn.app.ui
 
 import com.yawnandpawn.app.core.alarm.AlarmRepository
 import com.yawnandpawn.app.core.log.Logger
+import com.yawnandpawn.app.core.sound.SoundLibrary
+import com.yawnandpawn.app.core.sound.SoundPreview
 import com.yawnandpawn.app.core.time.Clock
 import com.yawnandpawn.app.core.time.TimeChangeSignal
 import com.yawnandpawn.app.core.time.TimeZoneProvider
@@ -9,6 +11,8 @@ import com.yawnandpawn.app.testing.AlarmUseCasesFixture
 import com.yawnandpawn.app.testing.FakeAlarmRepository
 import com.yawnandpawn.app.testing.FakeClock
 import com.yawnandpawn.app.testing.FakeLogger
+import com.yawnandpawn.app.testing.FakeSoundLibrary
+import com.yawnandpawn.app.testing.FakeSoundPreview
 import com.yawnandpawn.app.testing.FakeTimeChangeSignal
 import com.yawnandpawn.app.testing.FakeTimeZoneProvider
 import com.yawnandpawn.app.testing.anAppVersion
@@ -51,6 +55,8 @@ class UiModuleTest {
                     single<TimeZoneProvider> { FakeTimeZoneProvider() }
                     single<TimeChangeSignal> { FakeTimeChangeSignal() }
                     single<Logger> { FakeLogger() }
+                    single<SoundLibrary> { FakeSoundLibrary() }
+                    single<SoundPreview> { FakeSoundPreview() }
                     single { AlarmUseCasesFixture(repository = get(), clock = get(), timeZoneProvider = get()) }
                     factory { get<AlarmUseCasesFixture>().save }
                     factory { get<AlarmUseCasesFixture>().setEnabled }

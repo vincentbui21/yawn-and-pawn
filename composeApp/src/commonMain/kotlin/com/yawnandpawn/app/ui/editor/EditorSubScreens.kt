@@ -84,7 +84,7 @@ private fun EditorPane.title(): StringResource =
 
 /**
  * Sound: the volume slider and "Gradually increase volume" (owner decision 2026-09-27: no starting-volume slider; the
- * ramp always starts at 20% and rises to the set volume over 30 s), then the sound list with previews (full editor).
+ * ramp always starts at 20% and rises to the set volume over 30 s), then the sound list with previews ([EditorUiState.sound]).
  */
 @Composable
 private fun SoundPane(
@@ -107,9 +107,9 @@ private fun SoundPane(
             onCheckedChange = { onIntent(EditorIntent.GradualVolumeToggled(it)) },
         )
     }
-    state.full?.let { full ->
-        if (full.soundMissing) NoteInline(text = stringResource(Res.string.sound_file_missing))
-        SoundList(state = full.sounds, onIntent = { onIntent(EditorIntent.Sound(it)) })
+    state.sound?.let { sound ->
+        if (sound.missing) NoteInline(text = stringResource(Res.string.sound_file_missing))
+        SoundList(state = sound.picker, onIntent = { onIntent(EditorIntent.Sound(it)) })
     }
 }
 

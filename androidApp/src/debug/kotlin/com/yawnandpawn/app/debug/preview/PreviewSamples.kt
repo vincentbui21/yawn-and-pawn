@@ -6,6 +6,7 @@ import com.yawnandpawn.app.ui.editor.CheckChip
 import com.yawnandpawn.app.ui.editor.CheckMode
 import com.yawnandpawn.app.ui.editor.EditorForm
 import com.yawnandpawn.app.ui.editor.EditorPane
+import com.yawnandpawn.app.ui.editor.EditorSound
 import com.yawnandpawn.app.ui.editor.EditorUiState
 import com.yawnandpawn.app.ui.editor.FullEditorSections
 import com.yawnandpawn.app.ui.editor.MotivationChoice
@@ -135,8 +136,10 @@ object PreviewSamples {
             checkMode = CheckMode.Random,
             qrCodeSaved = true,
             feeLadder = listOf(price(1), price(2), price(3)),
-            soundName = "Sunrise",
         )
+
+    /** The editor's sound section: "Sunrise" chosen from the sample list. */
+    private val editorSound = EditorSound(name = "Sunrise", picker = soundList)
 
     val editorNew =
         EditorUiState(
@@ -144,10 +147,9 @@ object PreviewSamples {
             full =
                 FullEditorSections(
                     feeLadder = listOf(price(1), price(2), price(3)),
-                    soundName = "Sunrise",
-                    sounds = soundList,
                     recordings = recordings,
                 ),
+            sound = editorSound,
         )
 
     val editorEdit =
@@ -159,9 +161,9 @@ object PreviewSamples {
                 fullSections.copy(
                     motivation = MotivationChoice.Recording("Message 1"),
                     motivationTiming = MotivationTiming.AfterImUp,
-                    sounds = soundList,
                     recordings = recordings,
                 ),
+            sound = editorSound,
         )
 
     /** Custom repeat days (Mon, Wed, Fri): the day chips are shown. */
@@ -171,7 +173,7 @@ object PreviewSamples {
     val editorSoundPane = editorEdit.copy(pane = EditorPane.Sound)
 
     val editorSoundPreviewing =
-        editorSoundPane.copy(full = editorSoundPane.full?.copy(sounds = soundList.copy(selectedId = "b2", previewingId = "b2")))
+        editorSoundPane.copy(sound = editorSound.copy(picker = soundList.copy(selectedId = "b2", previewingId = "b2")))
 
     val editorSnoozePane = editorEdit.copy(pane = EditorPane.Snooze)
 
@@ -187,7 +189,7 @@ object PreviewSamples {
 
     val editorWeakening = editorEdit.copy(full = editorEdit.full?.copy(weakeningAppliesAfter = LocalTime(7, 30)))
 
-    val editorSoundMissing = editorEdit.copy(full = editorEdit.full?.copy(soundName = "morning-mix.mp3", soundMissing = true))
+    val editorSoundMissing = editorEdit.copy(sound = editorSound.copy(name = "morning-mix.mp3", missing = true))
 
     val editorTomorrow = editorNew.copy(ringsTomorrowAt = EditorForm.DEFAULT_TIME, ringsIn = Countdown.HoursMinutes(23, 0))
 

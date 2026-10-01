@@ -83,7 +83,7 @@
 - source_spec: `_bmad-output/implementation-artifacts/spec-design-preview-whole-app.md`
   summary: Exempt the time-wheel tick from the Story 1.17 bundled-sound loudness check.
   evidence: `composeApp/src/androidMain/res/raw/wheel_tick.wav` (12 ms, 3.2 kHz, peak -12 dBFS, generated in-repo) is a deliberately quiet UI sound (feedback item 17). The loudness gate (peak >= -3 dBFS, >= -14 LUFS) is not built yet, so there is no exemption list to add it to; Story 1.17 must scope its check to alarm sounds or exempt this file.
-  status: assigned to Story 1.17 by sprint-change-proposal-2026-10-01 (the check measures `res/raw/alarm_*` only and lists `wheel_tick.wav` as exempt).
+  status: assigned to Story 1.17 by sprint-change-proposal-2026-10-01 (the check measures `res/raw/alarm_*` only and lists `wheel_tick.wav` as exempt). Resolved in Story 1.17: `checkSoundLoudness` measures `androidApp/src/main/res/raw/alarm_*` only and prints `wheel_tick.wav` as exempt (not measured).
 - source_spec: `_bmad-output/implementation-artifacts/spec-design-preview-whole-app.md`
   summary: Remove the FR-PRG-6 export story via correct-course.
   evidence: Owner decision 2026-10-01 (docs/design-preview/feedback.md item 23): no "Export CSV" in the app. The design preview removed it from Progress and EXPERIENCE.md (IA row struck through, export strings and state row removed, F9 without export). PRD FR-PRG-6 [Could] and its Epic 6 story (epics.md, Refs FR-PRG-6) still exist; run correct-course when Epic 6 comes up to drop the story and update the PRD.
@@ -140,7 +140,7 @@
   evidence: |
     - A refused foreground-service start for a fresh alarm has no session slot to retry it, and stopSelf after a refused startForeground may crash. Settle with device evidence in Spike S2 / Story 1.20.
     - Android 13+ without POST_NOTIFICATIONS shows no notification or full-screen intent, so nothing stops the ring before the 30-minute limit. Story 1.19 requests the permission and must log or flag the missing permission.
-    - MediaPlayer.prepare() runs on the main thread under the player lock, which is an ANR risk for content URIs. Story 1.17 (sound library, user files) should move it to prepareAsync or off main.
+    - MediaPlayer.prepare() runs on the main thread under the player lock, which is an ANR risk for content URIs. Story 1.17 (sound library, user files) should move it to prepareAsync or off main. Resolved in Story 1.17: `MediaPlayerPlaybackFactory` and the preview player use `prepareAsync`; a prepare error falls back like a playback error.
     - Only the 12 h format is tested for the notification and wake-screen time. Story 1.15 adds the 24 h case. (Resolved in Story 1.15: `WakeNotifierTest` and `WakeActivityTest` cover the 24-hour setting.)
     - The emergency ring arms no backstop slot, so a process death during it is not recovered. Story 2.1 (recover after a kill).
 - source_spec: `_bmad-output/implementation-artifacts/spec-1-15-ringing-screen-over-the-lock-screen-with-i-m-up.md`

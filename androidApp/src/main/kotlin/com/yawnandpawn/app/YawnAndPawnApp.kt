@@ -4,9 +4,11 @@ import android.app.Application
 import com.yawnandpawn.app.android.AndroidAlarmScheduler
 import com.yawnandpawn.app.android.AndroidLogger
 import com.yawnandpawn.app.android.ApplicationScope
-import com.yawnandpawn.app.android.LoggingEffectRunner
 import com.yawnandpawn.app.android.UnavailableBilling
 import com.yawnandpawn.app.android.androidTimeModule
+import com.yawnandpawn.app.android.wake.WakeAlarmFiredHandler
+import com.yawnandpawn.app.android.wake.WakeRuntime
+import com.yawnandpawn.app.android.wake.wakeModule
 import com.yawnandpawn.app.core.alarm.AlarmFiredHandler
 import com.yawnandpawn.app.core.alarm.AlarmScheduler
 import com.yawnandpawn.app.core.alarm.AlarmScheduling
@@ -30,6 +32,7 @@ import com.yawnandpawn.app.core.session.PlaceholderCheckValidator
 import com.yawnandpawn.app.core.session.SessionEngine
 import com.yawnandpawn.app.core.session.SessionRecorder
 import com.yawnandpawn.app.core.session.SessionReducer
+import com.yawnandpawn.app.core.session.SessionState
 import com.yawnandpawn.app.core.session.SnoozeAvailabilityPolicy
 import com.yawnandpawn.app.core.session.TierFeeLadder
 import com.yawnandpawn.app.data.dataModule
@@ -42,7 +45,7 @@ import org.koin.dsl.module
 /** Koin bindings of :androidApp (platform adapters, core wiring). Later stories add their bindings here. */
 val appModule =
     module {
-        includes(androidTimeModule)
+        includes(androidTimeModule, wakeModule())
         single<IdGenerator> { UuidV4IdGenerator() }
         single<Logger> { AndroidLogger() }
         single { ApplicationScope(get()) }
@@ -50,24 +53,25 @@ val appModule =
         // TimeZoneProvider from androidTimeModule.
         // One lock shared by every alarm use case and by AlarmScheduling: it serializes their read-modify-write.
         single { AlarmWriteLock() }
-        // Scheduling (Story 1.10): the only AlarmScheduler, the sync helper and the Epic 1 fire handler (Story 1.14
-        // rebinds the handler to the wake runtime).
+        // Scheduling (Story 1.10): the only AlarmScheduler and the sync helper. A fire re-arms through RearmOnFire,
+        // then rings through the wake service (Story 1.14).
         single<AlarmScheduler> { AndroidAlarmScheduler(androidContext(), get(), get(), get(), get()) }
         single { AlarmScheduling(get(), get(), get(), get(), get(), get()) }
-        single<AlarmFiredHandler> { RearmOnFire(get(), get(), get(), get(), get(), get()) }
+        single { RearmOnFire(get(), get(), get(), get(), get(), get()) }
+        single<AlarmFiredHandler> { WakeAlarmFiredHandler(get(), get<RearmOnFire>(), get()) }
         factory { SaveAlarm(get(), get(), get(), get(), get(), get()) }
         factory { SetAlarmEnabled(get(), get(), get(), get()) }
         factory { DeleteAlarm(get(), get(), get()) }
         factory { DuplicateAlarm(get(), get(), get(), get(), get(), get()) }
         // The wake session (Story 1.12): the Epic 1 policies, the one engine over runtime.db (ActiveSessionStore from
-        // dataModule) and the real time ports. Effects are only logged until the wake runtime (Story 1.14); billing
-        // stays unavailable until Epic 4.
+        // dataModule) and the real time ports. The wake runtime (Story 1.14) carries out its effects; billing stays
+        // unavailable until Epic 4.
         single<SnoozeAvailabilityPolicy> { NoBillingSnoozeAvailability }
         single<CheckValidator> { PlaceholderCheckValidator }
         single<FallbackPolicy> { NoFallbackPolicy }
         single<FeeLadder> { TierFeeLadder }
         single { SessionReducer(get(), get(), get()) }
-        single<EffectRunner> { LoggingEffectRunner(get()) }
+        single<EffectRunner> { get<WakeRuntime>() }
         single<Billing> { UnavailableBilling(get()) }
         // The only writer of session history (Story 1.13, AD-18), over the Room repository from dataModule; the engine
         // drives it itself, so the runner never sees the history effects.
@@ -89,7 +93,12 @@ open class YawnAndPawnApp : Application() {
         val scheduling = koin.get<AlarmScheduling>()
         scope.launch { scheduling.rescheduleAll() }
         // Then the engine takes over a session the last process left in runtime.db (AD-2 rule 2): entry effects only.
+        // With no session left, an alarm volume a crashed session saved is put back.
         val engine = koin.get<SessionEngine>()
-        scope.launch { engine.restore() }
+        val runtime = koin.get<WakeRuntime>()
+        scope.launch {
+            engine.restore()
+            if (engine.state.value == SessionState.Idle) runtime.restoreVolumeIfIdle()
+        }
     }
 }

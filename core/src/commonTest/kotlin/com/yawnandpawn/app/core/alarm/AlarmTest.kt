@@ -81,7 +81,9 @@ class AlarmTest {
             ValidationCase("ramp start 0", valid.copy(rampStartPercent = 0), null),
             ValidationCase("ramp start 100 at volume 100", valid.copy(volumePercent = 100, rampStartPercent = 100), null),
             ValidationCase("ramp start equal to volume", valid.copy(volumePercent = 50, rampStartPercent = 50), null),
-            ValidationCase("ramp start above volume", valid.copy(volumePercent = 50, rampStartPercent = 51), AlarmField.RampStartPercent),
+            // The ramp start is a percentage of the set volume (Story 1.14), so it may exceed the volume figure.
+            ValidationCase("ramp start above volume", valid.copy(volumePercent = 50, rampStartPercent = 51), null),
+            ValidationCase("default ramp start at volume 10", valid.copy(volumePercent = 10, rampStartPercent = 20), null),
             ValidationCase(
                 "no ramp, start above volume",
                 valid.copy(volumePercent = 50, rampStartPercent = 90, gradualVolume = false),

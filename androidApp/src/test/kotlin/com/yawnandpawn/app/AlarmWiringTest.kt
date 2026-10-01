@@ -2,6 +2,7 @@ package com.yawnandpawn.app
 
 import com.yawnandpawn.app.android.AndroidAlarmScheduler
 import com.yawnandpawn.app.android.ApplicationScope
+import com.yawnandpawn.app.android.wake.WakeAlarmFiredHandler
 import com.yawnandpawn.app.core.alarm.AlarmFiredHandler
 import com.yawnandpawn.app.core.alarm.AlarmRepository
 import com.yawnandpawn.app.core.alarm.AlarmScheduler
@@ -53,7 +54,8 @@ class AlarmWiringTest {
 
         assertIs<AndroidAlarmScheduler>(koin.get<AlarmScheduler>())
         assertIs<RoomRequestCodeSequence>(koin.get<RequestCodeSequence>())
-        assertIs<RearmOnFire>(koin.get<AlarmFiredHandler>())
+        assertIs<WakeAlarmFiredHandler>(koin.get<AlarmFiredHandler>(), "a fire re-arms, then rings through the wake service")
+        assertSame(koin.get<RearmOnFire>(), koin.get<RearmOnFire>())
         assertSame(koin.get<AlarmScheduling>(), koin.get<AlarmScheduling>())
         assertSame(koin.get<ApplicationScope>(), koin.get<ApplicationScope>())
     }

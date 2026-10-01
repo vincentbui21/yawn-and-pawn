@@ -1,4 +1,10 @@
 <resources>
     <!-- Launcher label. In-app text comes from Compose Multiplatform resources in :composeApp. -->
     <string name="app_name">Yawn &amp; Pawn</string>
+    <!-- The ringing notification (Story 1.14), verbatim from EXPERIENCE.md > Voice and Tone. -->
+    <string name="notification_channel_alarms">Alarms</string>
+    <!-- The quiet foreground notification while no alarm shows yet (EXPERIENCE.md "Session in progress"). -->
+    <string name="notification_channel_session">Alarm in progress</string>
+    <!-- %1$s is the alarm time, formatted for the phone's 12/24-hour setting. -->
+    <string name="notification_ringing_text">%1$s alarm · Tap to return to your alarm</string>
 </resources>

@@ -73,8 +73,9 @@ sealed interface LogEvent {
     ) : LogEvent
 
     /**
-     * A session effect of type [effectType] reached a runner that only logs it (Epic 1, until the wake runtime of
-     * Story 1.14). [entry] is true for an entry effect, false for a one-shot effect. Only the type name is logged.
+     * A session effect of type [effectType] reached a runner that only logs it: the wake runtime (Story 1.14) logs the
+     * effects whose adapters arrive in later stories (checks UI, billing, motivation, purchase messages). [entry] is true
+     * for an entry effect, false for a one-shot effect. Only the type name is logged.
      */
     data class SessionEffectLogged(
         val effectType: String,
@@ -85,6 +86,28 @@ sealed interface LogEvent {
     data class SessionEventIgnored(
         val eventType: String,
         val sessionId: String?,
+    ) : LogEvent
+
+    /**
+     * The alarm sound asked for could not play, because of [reason] (it could not be opened, failed to prepare or failed
+     * while ringing, or the sound library is not there yet); the default sound plays instead in the same ring, so the
+     * alarm is never silent (FR-SND). The sound reference itself is never logged (it can name a user's file).
+     */
+    data class SoundFellBack(
+        val reason: String,
+    ) : LogEvent
+
+    /**
+     * The session could not start (or the wake flow failed before it did), because of [cause]: the emergency ring plays
+     * the default sound with vibration, the notification and the wake screen until "I'm up" or 30 minutes (NFR-2).
+     */
+    data class EmergencyRingStarted(
+        val cause: String,
+    ) : LogEvent
+
+    /** The emergency ring stopped: [reason] is "I'm up" or the 30-minute limit. */
+    data class EmergencyRingStopped(
+        val reason: String,
     ) : LogEvent
 }
 

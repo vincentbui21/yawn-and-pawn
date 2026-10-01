@@ -1,6 +1,8 @@
 package com.yawnandpawn.app.android
 
+import android.content.ComponentName
 import android.content.Intent
+import com.yawnandpawn.app.android.wake.WakeService
 import com.yawnandpawn.app.core.alarm.AlarmScheduler
 import com.yawnandpawn.app.core.alarm.RequestCodes
 import com.yawnandpawn.app.core.error.Outcome
@@ -17,13 +19,17 @@ import org.junit.After
 import org.junit.Test
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
+import org.robolectric.Shadows.shadowOf
 import org.robolectric.shadows.ShadowLog
 import kotlin.test.assertEquals
 import kotlin.test.assertTrue
 import kotlin.time.Duration.Companion.milliseconds
 import kotlin.time.Instant
 
-/** Story 1.10: a fired system alarm reaches the Epic 1 handler through the real PendingIntent and receiver. */
+/**
+ * Stories 1.10 and 1.14: a fired system alarm reaches the handler through the real PendingIntent and receiver; it
+ * re-arms the schedule and then starts the wake service for an enabled alarm and for the session slot.
+ */
 @RunWith(RobolectricTestRunner::class)
 class AlarmFiredReceiverTest {
     private val berlin = TimeZone.of("Europe/Berlin")
@@ -34,6 +40,9 @@ class AlarmFiredReceiverTest {
     private val app = SchedulingApp(berlin("2027-03-07T20:00"), "Europe/Berlin")
     private val scheduler: AlarmScheduler
         get() = app.koin.get()
+
+    private val startedServices: List<Intent>
+        get() = shadowOf(app.app).allStartedServices
 
     @After
     fun tearDown() {
@@ -62,6 +71,11 @@ class AlarmFiredReceiverTest {
         fire(1000)
 
         assertEquals(mapOf(1000 to berlin("2027-03-09T07:00").toEpochMilliseconds()), app.armed())
+        val started = startedServices.single()
+        assertEquals(ComponentName(app.app, WakeService::class.java), started.component)
+        assertEquals(WakeService.ACTION_ALARM, started.action)
+        assertEquals("weekday", started.getStringExtra(AlarmFiredReceiver.EXTRA_ALARM_ID))
+        assertEquals(berlin("2027-03-08T07:00").toEpochMilliseconds(), started.getLongExtra(AlarmFiredReceiver.EXTRA_SCHEDULED_AT, 0))
         assertEquals(
             true,
             runBlocking {
@@ -81,6 +95,7 @@ class AlarmFiredReceiverTest {
         fire(1000)
 
         assertEquals(emptyMap(), app.armed())
+        assertEquals(listOf(WakeService.ACTION_ALARM), startedServices.map { it.action }, "it was enabled when it fired, so it rings")
         assertEquals(
             false,
             runBlocking {
@@ -101,10 +116,23 @@ class AlarmFiredReceiverTest {
 
         assertEquals(emptyMap(), app.armed())
         assertTrue(ShadowLog.getLogsForTag(AndroidLogger.TAG).any { it.msg.startsWith("FireIgnored kind=Alarm alarmId=gone") })
+        assertEquals(emptyList(), startedServices, "a deleted alarm does not ring")
     }
 
     @Test
-    fun `session-slot and test fires are logged and ignored`() {
+    fun `a fire for a disabled alarm starts no service and is logged`() {
+        runBlocking { app.repository.upsert(anAlarm(id = "off", enabled = false, requestCode = 1000)) }
+        scheduler.schedule("off", 1000, berlin("2027-03-08T07:00").toEpochMilliseconds())
+        ShadowLog.clear()
+
+        fire(1000)
+
+        assertEquals(emptyList(), startedServices, "a disabled alarm does not ring")
+        assertTrue(ShadowLog.getLogsForTag(AndroidLogger.TAG).any { it.msg.startsWith("FireIgnored kind=Alarm alarmId=off") })
+    }
+
+    @Test
+    fun `a session-slot fire starts the wake service with the slot action and a test fire is logged and ignored`() {
         scheduler.scheduleTest(berlin("2027-03-07T20:01").toEpochMilliseconds())
         runBlocking { assertEquals(Outcome.Success(Unit), scheduler.schedule("x", 1000, berlin("2027-03-08T07:00").toEpochMilliseconds())) }
         ShadowLog.clear()
@@ -118,7 +146,7 @@ class AlarmFiredReceiverTest {
         assertEquals(setOf(1000), app.armed().keys)
         val logs = ShadowLog.getLogsForTag(AndroidLogger.TAG).map { it.msg }
         assertTrue(logs.any { it.startsWith("FireIgnored kind=TestAlarm") }, "$logs")
-        assertTrue(logs.any { it.startsWith("FireIgnored kind=SessionSlot") }, "$logs")
+        assertEquals(listOf(WakeService.ACTION_SLOT), startedServices.map { it.action }, "the test alarm rings only from Story 1.18")
     }
 
     @Test

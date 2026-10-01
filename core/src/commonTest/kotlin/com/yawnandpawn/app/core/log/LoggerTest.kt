@@ -29,4 +29,23 @@ class LoggerTest {
         assertEquals("exact alarms not permitted", DomainError.ExactAlarmNotPermitted.diagnostic())
         assertEquals("scheduler failure: limit", DomainError.SchedulerFailure("limit").diagnostic())
     }
+
+    @Test
+    fun `the wake runtime events carry only diagnostic text`() {
+        val received = mutableListOf<LogEvent>()
+        val logger = Logger { received += it }
+
+        logger.log(LogEvent.SoundFellBack("prepare failed"))
+        logger.log(LogEvent.EmergencyRingStarted("commit failed"))
+        logger.log(LogEvent.EmergencyRingStopped("I'm up"))
+
+        assertEquals(
+            listOf(
+                LogEvent.SoundFellBack("prepare failed"),
+                LogEvent.EmergencyRingStarted("commit failed"),
+                LogEvent.EmergencyRingStopped("I'm up"),
+            ),
+            received,
+        )
+    }
 }

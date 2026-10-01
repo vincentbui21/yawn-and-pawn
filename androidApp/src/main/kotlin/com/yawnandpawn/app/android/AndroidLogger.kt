@@ -38,6 +38,18 @@ class AndroidLogger : Logger {
             is LogEvent.SessionEventIgnored -> {
                 Log.i(TAG, "SessionEventIgnored type=${event.eventType} sessionId=${event.sessionId}")
             }
+
+            is LogEvent.SoundFellBack -> {
+                Log.w(TAG, "SoundFellBack reason=${event.reason}")
+            }
+
+            is LogEvent.EmergencyRingStarted -> {
+                Log.w(TAG, "EmergencyRingStarted cause=${event.cause}")
+            }
+
+            is LogEvent.EmergencyRingStopped -> {
+                Log.i(TAG, "EmergencyRingStopped reason=${event.reason}")
+            }
         }
     }
 

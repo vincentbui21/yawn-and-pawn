@@ -16,8 +16,8 @@ data class AlarmFired(
 
 /**
  * Port for what happens when a system alarm fires (AD-4). The alarm receiver hands every fire here and does nothing
- * else. Epic 1's default is [RearmOnFire]; Story 1.14 binds the wake runtime, and Stories 1.12 and 1.18 bind the
- * session slot and the test alarm.
+ * else. [RearmOnFire] keeps the schedule right; since Story 1.14 the app binds a wrapper that runs it and then starts
+ * the wake service for an enabled alarm and for the session slot. Story 1.18 binds the test alarm.
  */
 interface AlarmFiredHandler {
     suspend fun onAlarmFired(fired: AlarmFired)
@@ -28,7 +28,8 @@ interface AlarmFiredHandler {
 }
 
 /**
- * The Epic 1 default [AlarmFiredHandler]: keeps the schedule right after a fire, and rings nothing yet.
+ * The scheduling part of every fire: keeps the schedule right after a fire and rings nothing itself (the app's wake
+ * handler wraps it and starts the ringing).
  * - A repeating alarm is armed at its next occurrence after max(now, scheduledAt).
  * - A one-time alarm is switched off through [SetAlarmEnabled], which cancels its code.
  * - A missing or disabled alarm is logged and ignored, and so are session-slot and test fires.

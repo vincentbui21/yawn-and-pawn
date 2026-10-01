@@ -57,6 +57,15 @@ class ConfigResolverTest {
     }
 
     @Test
+    fun `the ramp start is always the fixed 20 percent, also for an alarm saved with the old clamped value`() {
+        listOf(0, 10, 20, 100).forEach { stored ->
+            val stale = alarm.copy(rampStartPercent = stored)
+            val resolved = ConfigResolver.resolve(stale, GlobalSettings(), testMode = false, scheduledAt = SCHEDULED_AT)
+            assertEquals(Alarm.DEFAULT_RAMP_START_PERCENT, resolved.rampStartPercent, "stored $stored")
+        }
+    }
+
+    @Test
     fun `test mode is carried into the config`() {
         val config = ConfigResolver.resolve(alarm, GlobalSettings(), testMode = true, scheduledAt = SCHEDULED_AT)
         assertEquals(true, config.testMode)

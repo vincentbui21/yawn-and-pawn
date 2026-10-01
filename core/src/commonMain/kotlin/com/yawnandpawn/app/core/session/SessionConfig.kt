@@ -11,7 +11,9 @@ import kotlin.time.Instant
  * @property scheduledAt the occurrence the session rings for.
  * @property testMode a test alarm (FR-ALM-12): it can never charge and history logs it as Test.
  * @property baseFeeTier the base fee B as a `FeeLadder` tier; the price of the first snooze.
- * @property rampStartPercent where "Gradually increase volume" starts, as a percentage of [volumePercent] (a fixed 20).
+ * @property rampStartPercent where "Gradually increase volume" starts, as a percentage of the set [volumePercent] (a fixed
+ * 20: the ramp starts at a fifth of the set volume); any value 0..100 is valid at any volume. The player's gain follows
+ * `rampGain(elapsed, rampStartPercent / 100.0, 30 s)` on top of the alarm stream set to [volumePercent].
  */
 @Serializable
 data class SessionConfig(
@@ -73,7 +75,8 @@ object ConfigResolver {
             vibrateInGrace = globalSettings.vibrateInGrace,
             volumePercent = alarm.volumePercent,
             gradualVolume = alarm.gradualVolume,
-            rampStartPercent = alarm.rampStartPercent,
+            // Fixed (owner decision 2026-09-27); alarms saved before Story 1.14 may hold min(20, volume).
+            rampStartPercent = Alarm.DEFAULT_RAMP_START_PERCENT,
             soundRef = alarm.soundRef,
             vibration = alarm.vibration,
             checkPlan = CheckPlan.placeholder(),

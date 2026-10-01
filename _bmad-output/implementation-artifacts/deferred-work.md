@@ -135,3 +135,11 @@
 - source_spec: `_bmad-output/implementation-artifacts/spec-1-13-record-every-session-in-history.md`
   summary: Never silent when runtime.db cannot be written: if the engine cannot commit a new session (storage broken), the alarm still has to ring.
   evidence: The engine runs no effect without a successful commit (AD-2 write-ahead), so a failing ActiveSessionStore means AlarmFired never produces Ringing; Story 1.13 only unblocks a stuck ended session. Story 1.14 (WakeService) must ring the default sound directly when the dispatch of AlarmFired fails, and log it (NFR-2).
+- source_spec: `_bmad-output/implementation-artifacts/spec-1-14-ring-the-alarm-wakeservice-alarmplayer-and-the-ongoing-notification.md`
+  summary: Story 1.14 follow-ups for later stories.
+  evidence: |
+    - A refused foreground-service start for a fresh alarm has no session slot to retry it, and stopSelf after a refused startForeground may crash. Settle with device evidence in Spike S2 / Story 1.20.
+    - Android 13+ without POST_NOTIFICATIONS shows no notification or full-screen intent, so nothing stops the ring before the 30-minute limit. Story 1.19 requests the permission and must log or flag the missing permission.
+    - MediaPlayer.prepare() runs on the main thread under the player lock, which is an ANR risk for content URIs. Story 1.17 (sound library, user files) should move it to prepareAsync or off main.
+    - Only the 12 h format is tested for the notification and wake-screen time. Story 1.15 adds the 24 h case.
+    - The emergency ring arms no backstop slot, so a process death during it is not recovered. Story 2.1 (recover after a kill).

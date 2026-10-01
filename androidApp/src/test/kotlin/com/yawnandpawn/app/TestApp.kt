@@ -1,6 +1,9 @@
 package com.yawnandpawn.app
 
+import android.app.Application
 import com.yawnandpawn.app.android.ApplicationScope
+import com.yawnandpawn.app.data.dataModule
+import com.yawnandpawn.app.ui.uiModule
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.joinAll
@@ -10,8 +13,11 @@ import kotlinx.coroutines.withTimeoutOrNull
 import org.junit.rules.TestRule
 import org.junit.runner.Description
 import org.junit.runners.model.Statement
+import org.koin.android.ext.koin.androidContext
 import org.koin.core.context.GlobalContext
+import org.koin.core.context.startKoin
 import org.koin.core.context.stopKoin
+import org.koin.core.module.Module
 import kotlin.time.Duration.Companion.seconds
 
 /**
@@ -66,4 +72,21 @@ class StopAppRule : TestRule {
                 }
             }
         }
+}
+
+/**
+ * Replaces the running app's Koin graph with the app's own modules plus [overrides], declared before anything is
+ * created. Overriding a single after the app created it (`loadKoinModules`) would leave that instance cached in the
+ * shared module object, and the next test's app would get it back (a closed database, a stale runtime). The app-start
+ * work (`rescheduleAll`, the session restore) does not run again; a test that needs it calls it.
+ */
+fun restartKoin(
+    app: Application,
+    vararg overrides: Module,
+) {
+    stopApp()
+    startKoin {
+        androidContext(app)
+        modules(listOf(appModule, dataModule, uiModule) + overrides)
+    }
 }

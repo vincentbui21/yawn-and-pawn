@@ -32,6 +32,10 @@ class CopyRulesTest {
         assertTrue(composeFiles.isNotEmpty(), "no strings.xml under $composeResources")
         assertTrue(androidFiles.isNotEmpty(), "no strings.xml under $androidRes")
         assertEquals(2, strings.count { it.key == "app_name" }, "app_name in both resource sets")
+        // The ringing notification's Android strings (Story 1.14) are checked like every other string.
+        listOf("notification_channel_alarms", "notification_ringing_text").forEach { key ->
+            assertTrue(androidFiles.flatMap { CopyRules.read(it) }.any { it.key == key }, "$key in androidApp strings.xml")
+        }
         val violations = strings.flatMap { CopyRules.violations(it) }
         assertTrue(violations.isEmpty(), violations.joinToString("\n"))
     }

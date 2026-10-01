@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!--
+        The DESIGN.md `accent` token (PpsTokens.Light.accent) for the ringing notification's colour. Android resources
+        cannot read the generated Kotlin tokens, so it is copied here; NotificationResourcesTest fails if the two differ.
+    -->
+    <color name="notification_accent">#FFD96F14</color>
+</resources>

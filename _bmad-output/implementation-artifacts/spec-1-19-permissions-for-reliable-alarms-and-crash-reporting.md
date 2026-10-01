@@ -2,7 +2,7 @@
 title: 'Story 1.19: Permissions for reliable alarms and crash reporting'
 type: 'feature'
 created: '2026-10-01'
-status: 'in-review'
+status: 'done'
 baseline_revision: '301cc43b1b251159a09af6284af8fd034e284e48'
 review_loop_iteration: 0
 followup_review_recommended: false
@@ -157,7 +157,22 @@ Nothing asks for the notification permission, and nothing tells the user any of 
 
 ## Review Triage Log
 
-No review pass yet (fast mode). Review is for the PR.
+### Review Triage Log (fast mode)
+
+2026-10-02: two review layers ran (fast mode). The high and medium findings were patched in `fix(1.19): review fixes`.
+
+**Patched:**
+- **Silent-ring risk:** `FirebaseCrashReporter.report` never throws. A failing or missing Crashlytics is logged, so the wake runtime's default-sound fallback still runs.
+- **Blocked Alarms channel:** the probe counts a blocked "Alarms" channel (importance NONE) as notifications off.
+- **Fix never crashes:** it falls back to the app details screen, and logs instead of crashing when nothing handles it or the start is refused (`checkActivities` test).
+- **Stale banner:** Home re-checks on `ON_RESUME` too, because a permission dialog answered over Home only pauses it (HomeRoute lifecycle test). "Fix" re-checks and opens the setting that is off now.
+- **Editor:** it always closes after a saved alarm, even when asking fails (the failure is logged). The permission is remembered as asked only after the launch returns.
+- **MainActivity:** it detaches only its own launcher.
+- **Startup race:** `FirebaseStartup` re-checks the unlock after registering its receiver.
+- **CI with `google-services.json`:** the tests follow `isFirebaseConfigured()`, and the test app never starts a real `FirebaseApp`.
+- **Added tests:** a MainActivity `POST_NOTIFICATIONS` request on API 33 (once, and not after stop), the `reliabilityModule()` binding of the real probe, and `DebugHooksProvider` in the merged debug manifest.
+
+**Rejected:** none.
 
 ## Auto Run Result
 

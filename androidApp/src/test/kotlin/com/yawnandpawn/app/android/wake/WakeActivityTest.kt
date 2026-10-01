@@ -211,7 +211,8 @@ class WakeActivityTest {
 
         // The compose clock drives the recomposition that answers the placeholder step.
         composeRule.waitUntil(timeoutMillis = 10_000) { app.engine.state.value == SessionState.Idle && activity.isFinishing }
-        app.awaitUntil("the runtime stopped the ring") { app.player.sound == null }
+        // The engine publishes Idle before its end effects run: wait for them too.
+        app.awaitUntil("the runtime stopped the ring") { app.player.sound == null && notifications.size() == 0 }
         assertNull(app.player.sound, "no sound")
         assertEquals(0, notifications.size(), "no notification")
         assertEquals(SessionOutcome.OnTime, history.rows.single().outcome)
@@ -260,6 +261,41 @@ class WakeActivityTest {
 
         app.awaitUntil("the session ends") { app.engine.state.value == SessionState.Idle }
         composeRule.waitUntil(timeoutMillis = 5_000) { activity.isFinishing }
+    }
+
+    @Test
+    fun `a placeholder answer whose commit fails is sent again until it is stored`() {
+        val store = CountingStore()
+        val app = WakeApp(store = store)
+        ringing(app)
+        app.dispatch(SessionEvent.ImUpTapped)
+        assertIs<SessionState.Grace>(app.engine.state.value)
+        store.inner.commitFailure = DomainError.StorageFailure("disk full")
+        val callsBefore = store.calls.get()
+
+        val activity = Robolectric.buildActivity(WakeActivity::class.java).setup().get()
+        composeRule.waitUntil(timeoutMillis = 10_000) { store.calls.get() > callsBefore }
+        assertIs<SessionState.Grace>(app.engine.state.value, "the failed answer changed nothing")
+        store.inner.commitFailure = null
+
+        composeRule.waitUntil(timeoutMillis = 10_000) { app.engine.state.value == SessionState.Idle && activity.isFinishing }
+        assertTrue(store.calls.get() > callsBefore + 1, "answered again after the failure")
+    }
+
+    @Test
+    fun `I'm up tapped before the session starts is kept and ends the session once it rings`() {
+        val app = WakeApp()
+        val at = aSessionConfig().scheduledAt
+        app.koin.get<WakeNotifier>().show(at)
+        val activity = Robolectric.buildActivity(WakeActivity::class.java).setup().get()
+
+        imUp().performClick()
+        composeRule.waitForIdle()
+        assertEquals(SessionState.Idle, app.engine.state.value, "no session yet")
+        assertFalse(activity.isFinishing, "it waits for the session")
+        app.dispatch(SessionEvent.AlarmFired("session-1", aSessionConfig(), listOf(1L), beforeFirstUnlock = false))
+
+        composeRule.waitUntil(timeoutMillis = 10_000) { app.engine.state.value == SessionState.Idle && activity.isFinishing }
     }
 
     @Test
@@ -340,7 +376,7 @@ private class CountingAlarmRepository(
 
 /** An [ActiveSessionStore] that counts every call. */
 private class CountingStore(
-    private val inner: FakeActiveSessionStore = FakeActiveSessionStore(),
+    val inner: FakeActiveSessionStore = FakeActiveSessionStore(),
 ) : ActiveSessionStore {
     val calls = AtomicInteger()
 

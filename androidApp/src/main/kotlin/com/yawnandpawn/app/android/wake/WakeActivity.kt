@@ -20,6 +20,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.input.pointer.pointerInput
 import com.yawnandpawn.app.android.ApplicationScope
+import com.yawnandpawn.app.core.error.Outcome
 import com.yawnandpawn.app.core.session.CheckAnswer
 import com.yawnandpawn.app.core.session.SessionEngine
 import com.yawnandpawn.app.core.session.SessionEvent
@@ -27,6 +28,7 @@ import com.yawnandpawn.app.core.session.SessionState
 import com.yawnandpawn.app.core.session.SnoozeAvailabilityPolicy
 import com.yawnandpawn.app.core.time.TimeZoneProvider
 import com.yawnandpawn.app.ui.format.is24HourClock
+import com.yawnandpawn.app.ui.wake.PlaceholderStep
 import com.yawnandpawn.app.ui.wake.RingingScreen
 import com.yawnandpawn.app.ui.wake.RingingUiState
 import com.yawnandpawn.app.ui.wake.WakeIntent
@@ -34,8 +36,11 @@ import com.yawnandpawn.app.ui.wake.WakeSurface
 import com.yawnandpawn.app.ui.wake.alarmOnlyRingingUiState
 import com.yawnandpawn.app.ui.wake.placeholderStepDue
 import com.yawnandpawn.app.ui.wake.ringingUiState
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import org.koin.android.ext.android.inject
+import kotlin.time.Duration
+import kotlin.time.Duration.Companion.seconds
 
 /**
  * The wake screen over the lock screen (AD-5): the approved Ringing screen (`ui/wake/RingingScreen`, Story 1.15).
@@ -50,10 +55,12 @@ import org.koin.android.ext.android.inject
  * session starts (the service posts the ringing notification first), it shows the notification's alarm time and waits.
  *
  * Every dispatch is launched on [ApplicationScope], outside composition and outside any engine effect:
- * - "I'm up" sends `UserInteracted`, then `ImUpTapped`. In the emergency ring it stops the ring instead.
+ * - "I'm up" sends `UserInteracted`, then `ImUpTapped`. In the emergency ring it stops the ring instead. Tapped while
+ *   the screen still waits for the session, it is kept and sent once the session (or an emergency ring) rings.
  * - Any other tap sends `UserInteracted`.
  * - Grace or Loud on the Epic 1 placeholder check step: the screen answers it (`CheckAnswerSubmitted(Placeholder)`), so
- *   "I'm up" alone ends the session. Epic 3 shows the real check here instead.
+ *   "I'm up" alone ends the session; a failed dispatch is retried while the step is due. Epic 3 shows the real check
+ *   here instead.
  *
  * It finishes once a session (or emergency ring) it showed is over: Idle, Completed or Missed, with no emergency ring.
  */
@@ -63,6 +70,9 @@ class WakeActivity : ComponentActivity() {
     private val appScope: ApplicationScope by inject()
     private val timeZones: TimeZoneProvider by inject()
     private val snoozePolicy: SnoozeAvailabilityPolicy by inject()
+
+    /** "I'm up" was tapped before the session existed; replayed once it rings. */
+    private var pendingImUp by mutableStateOf(false)
 
     override fun onCreate(savedInstanceState: Bundle?) {
         enableEdgeToEdge()
@@ -89,11 +99,7 @@ class WakeActivity : ComponentActivity() {
                     finish()
                 }
             }
-            // The Epic 1 check is a placeholder: answered once per session, ring and step (repeats are ignored).
-            val placeholder = if (emergency == null) placeholderStepDue(state) else null
-            LaunchedEffect(placeholder) {
-                if (placeholder != null) send(SessionEvent.CheckAnswerSubmitted(CheckAnswer.Placeholder))
-            }
+            SessionAnswers(state, emergency != null)
             val zone = timeZones.current()
             val session = (state as? SessionState.Active)?.session
             val current =
@@ -107,11 +113,49 @@ class WakeActivity : ComponentActivity() {
         }
     }
 
+    /** What the screen sends by itself for [state]: the placeholder answer, and an "I'm up" kept from before the session. */
+    @Composable
+    private fun SessionAnswers(
+        state: SessionState,
+        emergencyRinging: Boolean,
+    ) {
+        // The Epic 1 check is a placeholder: answered once per session, ring and step (repeats are ignored).
+        val placeholder = if (emergencyRinging) null else placeholderStepDue(state)
+        LaunchedEffect(placeholder) { placeholder?.let(::answerPlaceholder) }
+        // "I'm up" tapped while the screen waited for the session: replayed once the session (or emergency) rings.
+        val ringing = state is SessionState.Ringing
+        LaunchedEffect(pendingImUp, ringing, emergencyRinging) {
+            if (pendingImUp && (ringing || emergencyRinging)) {
+                pendingImUp = false
+                onIntent(WakeIntent.ImUpClicked)
+            }
+        }
+    }
+
     private fun onIntent(intent: WakeIntent) {
         when {
             intent != WakeIntent.ImUpClicked -> interacted()
+
             runtime.emergency.value != null -> runtime.stopEmergency()
+
+            // No session yet (the screen opened just before it): the engine would ignore ImUpTapped, so keep the tap.
+            engine.state.value == SessionState.Idle -> pendingImUp = true
+
             else -> send(SessionEvent.UserInteracted, SessionEvent.ImUpTapped)
+        }
+    }
+
+    /**
+     * Answers the placeholder [step] on [ApplicationScope]. A dispatch that fails (the session could not be committed)
+     * is retried every [PLACEHOLDER_RETRY] while that step is still due: in Loud "I'm up" no longer helps, so a lost
+     * answer would leave the alarm ringing until it is Missed.
+     */
+    private fun answerPlaceholder(step: PlaceholderStep) {
+        appScope.launch {
+            while (placeholderStepDue(engine.state.value) == step) {
+                if (engine.dispatch(SessionEvent.CheckAnswerSubmitted(CheckAnswer.Placeholder)) is Outcome.Success) return@launch
+                delay(PLACEHOLDER_RETRY)
+            }
         }
     }
 
@@ -136,6 +180,9 @@ class WakeActivity : ComponentActivity() {
     }
 
     companion object {
+        /** How often a placeholder answer whose dispatch failed is sent again. */
+        val PLACEHOLDER_RETRY: Duration = 2.seconds
+
         /** The intent of the ringing notification. */
         fun intent(context: Context): Intent =
             Intent(context, WakeActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_NO_USER_ACTION)

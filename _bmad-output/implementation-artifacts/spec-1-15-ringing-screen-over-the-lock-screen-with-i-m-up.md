@@ -171,7 +171,7 @@ deferred: []
 - [x] Every colour pair used is in the `DESIGN.md` contrast table: Sunrise disabled-content / disabled-container 5.63, text / bg, and the accent pairs already in the preview.
 - [x] Touch targets are at least 48 dp, and wake actions at least 64 dp: "I'm up" is at least 72 dp and snooze at least 64 dp (`RingingSemanticsTest`).
 - [x] Works at 200% font scale and with TalkBack: both actions stay on screen, "I'm up" is in the bottom 40%, the clock is read first as the full time and then "I'm up", and snooze reads "Snooze unavailable, {reason}". Outcome glyphs: not applicable on Ringing.
-- [x] Reduced-motion path works: with an animator duration scale of 0, `rememberReducedMotion()` is true (the pulse is off) and frames don't change.
+- [x] Reduced-motion path works. With the test clock paused before composing, the frames of "I'm up" 600 ms apart differ at the default animator scale (the pulse runs) and are identical at scale 0.
 - [x] Copy matches `EXPERIENCE.md > Voice and Tone`. Only existing resources are used ("I'm up", "Snooze unavailable: prices not loaded yet", "Test · no charge", "Snooze · {price}"), and `CopyRulesTest` passes.
 - [x] Every Epic 1 state row in `EXPERIENCE.md > State Patterns` for Ringing is handled: first ring, snooze unavailable, test alarm, phone-call note (mapped), and restored. After-snooze and Direct Boot rows need Epic 2 and Epic 4 data and stay preview-only.
 - [x] "I'm up" is the most prominent wake action: filled accent, 72 dp, first after the clock. Snooze is visible and plain, and is priced when available. See the deferred note on the two-line snooze label.
@@ -202,4 +202,13 @@ deferred: []
 
 **Residual risks:**
 - None of this has run on a device. Story 1.21 checks the timing, the pulse and the lock-screen behaviour on the Oppo A96.
-- Infinite animations don't run under the Compose test clock, so the pulse itself is only checked by the reduced-motion switch.
+
+### 2026-10-01 — Review fixes
+
+- **Placeholder retry:** when the placeholder answer's dispatch fails (the commit fails), it is retried every 2 s while the same step is due, including after Grace becomes Loud. Test: a failing commit that later succeeds.
+- **Early "I'm up":** "I'm up" tapped on the Idle-wait screen is kept and replayed (`UserInteracted` + `ImUpTapped`, or stopping an emergency ring) once the session rings. Test added.
+- **Disabled snooze pixel test:** it now checks the label and icon. The darkest snooze pixel must equal `disabled-content-sunrise`, which is darker than Material's 38% onSurface blend. Before, it compared two theme reads.
+- **Reduced motion:** the test pauses the clock before composing, so the pulse runs. Its frames differ at the default scale (a new control test) and are identical at scale 0.
+- **Load-only test races, fixed in tests:** both showed up in a slow gate run.
+  - The "I'm up" test now also waits for the end effects to remove the notification; the engine publishes Idle before they run.
+  - `AndroidAlarmPlayerTest` waits for the app-start volume restore before it starts.

@@ -2,7 +2,8 @@ package com.yawnandpawn.app.ui
 
 import android.content.Context
 import android.provider.Settings
-import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.lerp
+import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.graphics.toPixelMap
 import androidx.compose.ui.semantics.SemanticsProperties
 import androidx.compose.ui.semantics.getOrNull
@@ -19,9 +20,7 @@ import androidx.compose.ui.unit.DpRect
 import androidx.compose.ui.unit.dp
 import androidx.test.core.app.ApplicationProvider
 import com.yawnandpawn.app.StopAppRule
-import com.yawnandpawn.app.ui.components.rememberReducedMotion
 import com.yawnandpawn.app.ui.format.formatClockTime
-import com.yawnandpawn.app.ui.theme.PpsTheme
 import com.yawnandpawn.app.ui.theme.PpsThemeMode
 import com.yawnandpawn.app.ui.theme.PpsTokens
 import com.yawnandpawn.app.ui.wake.RingingScreen
@@ -35,6 +34,7 @@ import org.robolectric.annotation.Config
 import org.robolectric.annotation.GraphicsMode
 import kotlin.math.abs
 import kotlin.test.assertEquals
+import kotlin.test.assertNotEquals
 import kotlin.test.assertTrue
 
 /**
@@ -132,50 +132,61 @@ class RingingSemanticsTest {
         }
 
     @Test
-    fun `the disabled snooze is filled with the disabled-container-sunrise token, not an alpha`() {
-        var content = Color.Unspecified
-        withScreen(
-            PpsThemeMode.Light,
-            content = {
-                RingingScreen(state = RingingSamples.firstRing, is24Hour = false, onIntent = {})
-                PpsTheme(wake = true) { content = PpsTheme.colors.disabledContent }
-            },
-        ) {
+    fun `the disabled snooze uses the disabled-sunrise token pair, not an alpha`() =
+        ringing {
             val pixels = snooze().captureToImage().toPixelMap()
+            val colors = (0 until pixels.height).flatMap { y -> (0 until pixels.width).map { x -> pixels[x, y] } }.toSet()
+            // Material's disabled look: onSurface (Sunrise text) at 38% over the container. Its darkest glyph pixel would
+            // be this blend, lighter than disabled-content-sunrise; full onSurface would be darker.
+            val materialDisabled = lerp(PpsTokens.Sunrise.disabledContainer, PpsTokens.Sunrise.text, MATERIAL_DISABLED_ALPHA)
+            val darkest = colors.minBy { it.luminance() }
 
             // The vertical padding above the label, mid-width: pure container colour.
             assertEquals(PpsTokens.Sunrise.disabledContainer, pixels[pixels.width / 2, pixels.height / 8])
-            assertEquals(PpsTokens.Sunrise.disabledContent, content)
+            assertEquals(PpsTokens.Sunrise.disabledContent, darkest, "the label and icon are drawn in disabled-content-sunrise")
+            assertTrue(materialDisabled.luminance() > darkest.luminance(), "not Material's alpha-blended onSurface")
         }
+
+    /** The frames of the Ringing screen at the start and [PULSE_HALF_MILLIS] later, with the test clock paused. */
+    private fun ringingFrames(): Pair<List<Int>, List<Int>> {
+        // Paused before composing: the test clock then runs the infinite pulse as the time is advanced, instead of
+        // cancelling it.
+        composeRule.mainClock.autoAdvance = false
+        lateinit var frames: Pair<List<Int>, List<Int>>
+        ringing {
+            composeRule.mainClock.advanceTimeBy(SETTLE_MILLIS)
+            val first =
+                imUp()
+                    .captureToImage()
+                    .toPixelMap()
+                    .buffer
+                    .toList()
+            composeRule.mainClock.advanceTimeBy(PULSE_HALF_MILLIS)
+            frames = first to
+                imUp()
+                    .captureToImage()
+                    .toPixelMap()
+                    .buffer
+                    .toList()
+        }
+        return frames
     }
 
-    /**
-     * The compose test clock never runs infinite animations, so the pulse itself can't be seen moving here: the test
-     * checks that the screen's reduced-motion switch (which turns the pulse off) is on, and that no other transition
-     * changes a frame. The pulse on a real phone is checked in Story 1.21.
-     */
     @Test
-    fun `with the animator duration scale at 0 the pulse is off and the screen does not move`() {
+    fun `with the default animator duration scale I'm up pulses`() {
+        val (first, later) = ringingFrames()
+
+        assertNotEquals(first, later, "the pulse moves I'm up")
+    }
+
+    @Test
+    fun `with the animator duration scale at 0 I'm up does not pulse`() {
         val resolver = ApplicationProvider.getApplicationContext<Context>().contentResolver
         Settings.Global.putFloat(resolver, Settings.Global.ANIMATOR_DURATION_SCALE, 0f)
-        var reduced = false
-        withScreen(
-            PpsThemeMode.Light,
-            content = {
-                reduced = rememberReducedMotion()
-                RingingScreen(state = RingingSamples.firstRing, is24Hour = false, onIntent = {})
-            },
-        ) {
-            composeRule.waitForIdle()
-            assertTrue(reduced, "reduced motion: the I'm up pulse is off")
-            composeRule.mainClock.autoAdvance = false
-            composeRule.mainClock.advanceTimeBy(SETTLE_MILLIS)
-            val first = composeRule.onRoot().captureToImage().toPixelMap()
-            composeRule.mainClock.advanceTimeBy(PULSE_HALF_MILLIS)
-            val later = composeRule.onRoot().captureToImage().toPixelMap()
 
-            assertEquals(first.buffer.toList(), later.buffer.toList(), "no pulse, no transition")
-        }
+        val (first, later) = ringingFrames()
+
+        assertEquals(first, later, "no pulse")
     }
 
     private companion object {
@@ -187,5 +198,8 @@ class RingingSemanticsTest {
 
         /** Lets the first frames (fonts, insets) settle before the first picture. */
         const val SETTLE_MILLIS = 100L
+
+        /** Material 3's disabled content alpha. */
+        const val MATERIAL_DISABLED_ALPHA = 0.38f
     }
 }

@@ -7,15 +7,19 @@ import android.media.MediaPlayer
 import androidx.test.core.app.ApplicationProvider
 import com.yawnandpawn.app.R
 import com.yawnandpawn.app.StopAppRule
+import com.yawnandpawn.app.android.ApplicationScope
+import com.yawnandpawn.app.awaitChildren
 import com.yawnandpawn.app.core.alarm.Alarm
 import com.yawnandpawn.app.core.log.LogEvent
 import com.yawnandpawn.app.testing.FakeLogger
 import com.yawnandpawn.app.testing.FakeMonotonicClock
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.test.StandardTestDispatcher
+import org.junit.Before
 import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
+import org.koin.core.context.GlobalContext
 import org.robolectric.RobolectricTestRunner
 import org.robolectric.shadow.api.Shadow
 import org.robolectric.shadows.ShadowMediaPlayer
@@ -50,6 +54,13 @@ class AndroidAlarmPlayerTest {
     // The ramp loop and the retry run on this dispatcher only when a test advances it.
     private val dispatcher = StandardTestDispatcher()
     private val player = AndroidAlarmPlayer(playbacks, resolver, volume, clock, CoroutineScope(dispatcher), logger)
+
+    /**
+     * The app's own start (restore, then a volume restore when Idle) runs on ApplicationScope; under load it could
+     * otherwise restore the alarm volume in the middle of a test.
+     */
+    @Before
+    fun awaitAppStart() = GlobalContext.get().get<ApplicationScope>().awaitChildren()
 
     private fun advance(duration: kotlin.time.Duration) {
         clock.advanceBy(duration)

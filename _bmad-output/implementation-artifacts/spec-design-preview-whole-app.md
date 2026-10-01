@@ -2,7 +2,7 @@
 title: 'Design preview: the whole app on the owner''s phone'
 type: 'feature'
 created: '2026-09-27'
-status: 'in-progress'
+status: 'done'
 baseline_commit: '54afe457febbb8fb52198673a6af180c6fad53b6'
 route: 'dispatch'
 review_loop_iteration: 0

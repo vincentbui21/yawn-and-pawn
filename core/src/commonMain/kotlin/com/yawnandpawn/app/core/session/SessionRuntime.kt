@@ -55,12 +55,17 @@ fun dueEvents(
  * How long until [dueEvents] has an event for [state] (Story 1.16): the time left to the grace end in Grace, to the
  * interaction deadline in Ringing and Loud; zero once due. Null when no timer runs (no ring, paused by a call, or
  * snoozed), so a caller waits for the next state instead of polling. [Deadline.remaining] compares monotonic time on
- * the same boot, so a wall-clock change never moves it.
+ * the same boot, so a wall-clock change never moves it. A deadline from an earlier boot compares wall time, which can
+ * still move (a network time sync after the reboot), so the wait is then at most one [SessionReducer.HEARTBEAT].
  */
 fun nextTickIn(
     state: SessionState,
     now: TimeSnapshot,
-): Duration? = timerDeadline(state)?.remaining(now)
+): Duration? {
+    val deadline = timerDeadline(state) ?: return null
+    val left = deadline.remaining(now)
+    return if (deadline.bootCount == now.bootCount) left else minOf(left, SessionReducer.HEARTBEAT)
+}
 
 /** The one deadline the session's timer events wait for, shared by [dueEvents] and [nextTickIn]. */
 private fun timerDeadline(state: SessionState): Deadline? {

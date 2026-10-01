@@ -31,10 +31,14 @@ import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.merge
 import kotlinx.coroutines.flow.onStart
 import kotlinx.coroutines.flow.receiveAsFlow
+import kotlinx.coroutines.flow.retryWhen
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import kotlinx.datetime.toLocalDateTime
+import kotlin.time.Duration
+import kotlin.time.Duration.Companion.minutes
+import kotlin.time.Duration.Companion.seconds
 import kotlin.time.Instant
 
 /**
@@ -78,18 +82,20 @@ class HomeViewModel(
 
     private val ticks: Flow<Unit> = merge(timeChanges.changes(), resumes).onStart { emit(Unit) }
 
-    /** The session whose missed note shows, for "Dismiss". */
-    private var shownMissed: String? = null
-
-    /** The Missed session to tell the user about (Story 1.16); a failing read is logged and shows no note. */
+    /**
+     * The Missed session to tell the user about (Story 1.16). A failing read is logged and shows no note, then the read
+     * is tried again after a growing pause (1 s, 2 s, 4 s … at most a minute), so a passing failure does not hide the note
+     * for the rest of the ViewModel's life.
+     */
     private val missed: Flow<SessionHistoryRow?> =
         missedNotes
             .current()
-            .onStart { emit(null) }
-            .catch { cause ->
+            .retryWhen { cause, attempt ->
                 actions.logFailure("load missed note", cause)
                 emit(null)
-            }
+                delay(missedRetryDelay(attempt))
+                true
+            }.onStart { emit(null) }
 
     val state: StateFlow<HomeUiState> =
         combine(stored, ticks, local, missed) { alarms, _, ui, missedRow -> render(alarms, ui, missedRow) }
@@ -139,8 +145,8 @@ class HomeViewModel(
                 resumes.tryEmit(Unit)
             }
 
-            HomeIntent.MissedNoteDismissed -> {
-                dismissMissed()
+            is HomeIntent.MissedNoteDismissed -> {
+                intent.sessionId?.let(::dismissMissed)
             }
 
             // The hero, notices, session panel and commitment-lock dialog arrive with their own stories.
@@ -190,9 +196,11 @@ class HomeViewModel(
         viewModelScope.launch { actions.delete(dialog.alarmId) }
     }
 
-    /** The note hides once the store has the dismissal; a failed write is logged and the note stays. */
-    private fun dismissMissed() {
-        val sessionId = shownMissed ?: return
+    /**
+     * Dismisses exactly the note the user saw ([sessionId], carried by the intent), never a newer one that arrived since.
+     * The note hides once the store has the dismissal; a failed write is logged and the note stays.
+     */
+    private fun dismissMissed(sessionId: String) {
         viewModelScope.launch {
             val dismissed = missedNotes.dismiss(sessionId)
             if (dismissed is Outcome.Failure) actions.logFailure("dismiss missed note", dismissed.error)
@@ -214,12 +222,17 @@ class HomeViewModel(
         ui: LocalState,
         missedRow: SessionHistoryRow?,
     ): HomeUiState {
-        shownMissed = missedRow?.sessionId
         // The note names the alarm's own time ("Your 6:00 AM alarm"), in the zone the phone is in now.
         val missedAlarmAt = missedRow?.scheduledAt?.toLocalDateTime(timeZoneProvider.current())?.time
+        val missedSessionId = missedRow?.sessionId
         return when (stored) {
             StoredAlarms.Failed -> {
-                HomeUiState(loadFailed = true, openFailed = ui.openFailed, missedAlarmAt = missedAlarmAt)
+                HomeUiState(
+                    loadFailed = true,
+                    openFailed = ui.openFailed,
+                    missedAlarmAt = missedAlarmAt,
+                    missedSessionId = missedSessionId,
+                )
             }
 
             is StoredAlarms.Loaded -> {
@@ -231,6 +244,7 @@ class HomeViewModel(
                     deleteDialog = ui.deleteDialog?.takeIf { dialog -> cards.any { it.id == dialog.alarmId } },
                     openFailed = ui.openFailed,
                     missedAlarmAt = missedAlarmAt,
+                    missedSessionId = missedSessionId,
                 )
             }
         }
@@ -251,6 +265,16 @@ class HomeViewModel(
         /** How long "Couldn't open this alarm." shows (`snackbar`). */
         const val SNACKBAR_MILLIS = 4_000L
     }
+}
+
+private val MISSED_RETRY_FIRST: Duration = 1.seconds
+private val MISSED_RETRY_MAX: Duration = 1.minutes
+private const val MISSED_RETRY_MAX_DOUBLINGS = 6L
+
+/** The pause after failed missed-note read [attempt] (0 first): 1 s, doubling, at most a minute. */
+internal fun missedRetryDelay(attempt: Long): Duration {
+    val doublings = attempt.coerceIn(0L, MISSED_RETRY_MAX_DOUBLINGS).toInt()
+    return (MISSED_RETRY_FIRST * (1 shl doublings)).coerceAtMost(MISSED_RETRY_MAX)
 }
 
 /** What the repository gave: the alarms, or a read failure. */

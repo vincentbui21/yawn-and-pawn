@@ -11,8 +11,13 @@ import com.yawnandpawn.app.data.db.AppDatabase
 import com.yawnandpawn.app.data.db.AppDatabaseConstructor
 import com.yawnandpawn.app.testing.DEFAULT_FAKE_INSTANT
 import com.yawnandpawn.app.testing.aSessionHistoryRow
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.test.runTest
+import kotlinx.coroutines.withContext
+import kotlinx.coroutines.withTimeout
 import org.junit.After
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -140,16 +145,18 @@ class RoomSessionHistoryRepositoryTest {
         }
 
     @Test
-    fun `a newer Missed row replaces the latest one`() =
+    fun `an open collection receives a newer Missed row`() =
         runTest {
             val first = aSessionHistoryRow(sessionId = "first").copy(outcome = SessionOutcome.Missed)
             repository.upsert(first)
-            val updates = repository.observeLatestMissed()
-            assertEquals("first", updates.first()?.sessionId)
+            // Room's observer works on its own threads: collect and wait on a real dispatcher.
+            val seen = MutableStateFlow<String?>(null)
+            backgroundScope.launch(Dispatchers.Default) { repository.observeLatestMissed().collect { seen.value = it?.sessionId } }
+            withContext(Dispatchers.Default) { withTimeout(WAIT) { seen.first { it == "first" } } }
 
             repository.upsert(first.copy(sessionId = "second", endedAt = DEFAULT_FAKE_INSTANT + 1.days))
 
-            assertEquals("second", updates.first()?.sessionId)
+            withContext(Dispatchers.Default) { withTimeout(WAIT) { seen.first { it == "second" } } }
         }
 
     @Test
@@ -160,4 +167,8 @@ class RoomSessionHistoryRepositoryTest {
             listOf(repository.upsert(aSessionHistoryRow()), repository.find("s"))
                 .forEach { assertIs<DomainError.StorageFailure>(assertIs<Outcome.Failure<DomainError>>(it).error) }
         }
+
+    private companion object {
+        val WAIT = 10.seconds
+    }
 }

@@ -247,7 +247,10 @@ private fun Notices(
                     text = stringResource(Res.string.home_missed_note, formatClockTime(time, is24Hour)),
                     modifier = Modifier.weight(1f),
                 )
-                DismissButton(label = stringResource(Res.string.home_dismiss), onClick = { onIntent(HomeIntent.MissedNoteDismissed) })
+                DismissButton(
+                    label = stringResource(Res.string.home_dismiss),
+                    onClick = { onIntent(HomeIntent.MissedNoteDismissed(state.missedSessionId)) },
+                )
             }
         }
         if (state.testSkipped) {

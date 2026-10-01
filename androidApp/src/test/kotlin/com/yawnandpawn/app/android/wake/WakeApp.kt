@@ -17,6 +17,7 @@ import com.yawnandpawn.app.core.session.SessionEngine
 import com.yawnandpawn.app.core.session.SessionEvent
 import com.yawnandpawn.app.core.session.SessionState
 import com.yawnandpawn.app.core.time.Clock
+import com.yawnandpawn.app.core.time.MonotonicClock
 import com.yawnandpawn.app.core.time.TimeSnapshot
 import com.yawnandpawn.app.restartKoin
 import com.yawnandpawn.app.testing.FakeCrashReporter
@@ -34,9 +35,9 @@ import kotlin.test.fail
 
 /**
  * The real app's Koin graph, restarted with a [FakeCrashReporter] and optionally a replaced session [store], alarm
- * [repository], service [starter], session [history] repository or wall [clock]; the real `MediaPlayer` adapter plays over
- * Robolectric's media shadow (every source opens). The service's coroutines run on the main looper: [awaitUntil] idles it
- * (and the Room threads) until a condition holds. Tear down with `StopAppRule`.
+ * [repository], service [starter], session [history] repository, wall [clock] or [monotonic] clock; the real
+ * `MediaPlayer` adapter plays over Robolectric's media shadow (every source opens). The service's coroutines run on the
+ * main looper: [awaitUntil] idles it (and the Room threads) until a condition holds. Tear down with `StopAppRule`.
  */
 internal class WakeApp(
     store: ActiveSessionStore? = null,
@@ -44,6 +45,7 @@ internal class WakeApp(
     starter: ((YawnAndPawnApp) -> WakeServiceStarter)? = null,
     history: SessionHistoryRepository? = null,
     clock: Clock? = null,
+    monotonic: MonotonicClock? = null,
 ) {
     val app: YawnAndPawnApp = ApplicationProvider.getApplicationContext()
     val crashReporter = FakeCrashReporter()
@@ -65,6 +67,7 @@ internal class WakeApp(
                 starter?.let { build -> single { build(app) } }
                 history?.let { replaced -> single<SessionHistoryRepository> { replaced } }
                 clock?.let { replaced -> single<Clock> { replaced } }
+                monotonic?.let { replaced -> single<MonotonicClock> { replaced } }
             },
         )
         ShadowLog.clear()

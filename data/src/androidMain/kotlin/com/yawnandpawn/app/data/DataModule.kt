@@ -21,8 +21,8 @@ import org.koin.core.module.dsl.withOptions
 import org.koin.dsl.module
 
 /**
- * Koin bindings of :data (AD-13). Needs the Android `Context` (registered by `androidContext` in the app) and the
- * `Clock` port (from the app's time module).
+ * Koin bindings of :data (AD-13). Needs the Android `Context` (registered by `androidContext` in the app), the
+ * `Clock` port (from the app's time module) and the `Logger` (for the settings DataStore's read errors).
  */
 val dataModule =
     module {
@@ -41,5 +41,5 @@ val dataModule =
         single<ActiveSessionStore> { RoomActiveSessionStore(get(), get()) }
         // The settings DataStore (Story 1.16), device-protected; released when Koin stops, like the databases.
         single { SettingsDataStore(get<Context>()) } withOptions { onClose { it?.close() } }
-        single<MissedNoteDismissals> { DataStoreMissedNoteDismissals(get<SettingsDataStore>().store) }
+        single<MissedNoteDismissals> { DataStoreMissedNoteDismissals(get<SettingsDataStore>().store, get()) }
     }

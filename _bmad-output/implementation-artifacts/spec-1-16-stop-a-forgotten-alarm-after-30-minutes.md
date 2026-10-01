@@ -173,6 +173,18 @@ deferred: []
   - `HomeScreenshotTest` (+3).
 - Preview baselines unchanged.
 
+### 2026-10-02 — Review fixes
+
+- **Slot test:** the slot-fire test now advances only a fake `MonotonicClock` (a new `WakeApp` option), so the service's own timer is still in the future and only the slot path can stop the alarm.
+  - Finding: the `SlotFired` dispatch already runs the due timer events, so the extra `engine.tick()` in `onSlot` is a second safety net. Removing it doesn't fail the test.
+- **Dismissals read retry:** a dismissals read error (`IOException`) is logged ("read missed note dismissals"), reads as nothing dismissed, and the read is retried (1 s, doubling, at most 1 min), so the flow stays alive. Other errors are rethrown. The adapter takes a `Logger`.
+- **History read retry:** a failing history read on Home is logged on every failure and retried with the same backoff. Before, one failure ended the flow.
+- **Dismiss names its session:** `HomeUiState.missedSessionId` carries the session, and `HomeIntent.MissedNoteDismissed(sessionId)` dismisses exactly that one. A newer Missed row that arrives before the tap stays (new test).
+- **Reboot cap:** across a reboot (`bootCount` differs), `nextTickIn` waits at most one 60 s heartbeat, because wall time can still move.
+- **Tests:**
+  - `DataModuleTest`: the second app's dismiss returns Success and reads back the first app's id.
+  - Room and DataStore tests: one open collection receives the new value.
+
 **Residual risks:**
 - On a device, deep sleep can delay the main-thread timer. The 60 s heartbeat slot bounds the lag, but only device testing (Story 1.20/1.21) shows the real stop time.
 - The DataStore file isn't in the backup rules yet (Story 2.12 / 8.x adds it).

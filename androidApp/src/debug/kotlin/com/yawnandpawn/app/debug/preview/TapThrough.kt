@@ -518,7 +518,7 @@ private fun reduceHome(
             home.copy(disableDialog = null)
         }
 
-        HomeIntent.MissedNoteDismissed -> {
+        is HomeIntent.MissedNoteDismissed -> {
             home.copy(missedAlarmAt = null)
         }
 

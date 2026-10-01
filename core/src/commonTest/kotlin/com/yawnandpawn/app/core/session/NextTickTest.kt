@@ -50,11 +50,13 @@ class NextTickTest {
     }
 
     @Test
-    fun `after a reboot the next tick falls back to wall time`() {
+    fun `after a reboot the next tick falls back to wall time, waiting at most a heartbeat as the wall clock may move`() {
         val ringing = firstRing()
         val rebooted = at(10.minutes).copy(elapsedMillis = 5_000, bootCount = T0.bootCount + 1)
 
-        assertEquals(20.minutes, nextTickIn(ringing, rebooted))
+        assertEquals(SessionReducer.HEARTBEAT, nextTickIn(ringing, rebooted))
+        assertEquals(30.seconds, nextTickIn(ringing, at(29.minutes + 30.seconds).copy(elapsedMillis = 5_000, bootCount = T0.bootCount + 1)))
+        assertEquals(Duration.ZERO, nextTickIn(ringing, at(31.minutes).copy(elapsedMillis = 5_000, bootCount = T0.bootCount + 1)))
     }
 
     @Test

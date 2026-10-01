@@ -464,7 +464,7 @@ class HomeViewModelTest {
             record(missedRow("s1"))
             val viewModel = home(FakeAlarmRepository())
 
-            viewModel.onIntent(HomeIntent.MissedNoteDismissed)
+            viewModel.onIntent(HomeIntent.MissedNoteDismissed(viewModel.state.value.missedSessionId))
 
             assertEquals(setOf("s1"), dismissals.current)
             assertNull(viewModel.state.value.missedAlarmAt)
@@ -475,7 +475,7 @@ class HomeViewModelTest {
         runTest(dispatcher) {
             record(missedRow("s1"))
             val viewModel = home(FakeAlarmRepository())
-            viewModel.onIntent(HomeIntent.MissedNoteDismissed)
+            viewModel.onIntent(HomeIntent.MissedNoteDismissed(viewModel.state.value.missedSessionId))
 
             record(missedRow("s2", scheduledAt = Instant.parse("2027-03-04T06:45:00Z")))
 
@@ -489,7 +489,7 @@ class HomeViewModelTest {
             dismissals.dismissFailure = DomainError.StorageFailure("disk full")
             val viewModel = home(FakeAlarmRepository())
 
-            viewModel.onIntent(HomeIntent.MissedNoteDismissed)
+            viewModel.onIntent(HomeIntent.MissedNoteDismissed(viewModel.state.value.missedSessionId))
 
             assertEquals(LocalTime(6, 15), viewModel.state.value.missedAlarmAt)
             assertEquals(listOf<LogEvent>(LogEvent.OperationFailed("dismiss missed note", "storage failure: disk full")), logger.events)
@@ -505,4 +505,43 @@ class HomeViewModelTest {
             assertEquals(1, viewModel.state.value.alarms.size)
             assertEquals(listOf<LogEvent>(LogEvent.OperationFailed("load missed note", "closed")), logger.events)
         }
+
+    @Test
+    fun `after a passing read failure the note comes back on a retry, each failure logged`() =
+        runTest(dispatcher) {
+            record(missedRow("s1"))
+            history.observeFailure = IllegalStateException("closed")
+            val viewModel = home(FakeAlarmRepository())
+            advanceTimeBy(1_500) // the second read (after 1 s) fails too
+            assertNull(viewModel.state.value.missedAlarmAt)
+
+            history.observeFailure = null
+            advanceTimeBy(2_000) // the third read, 2 s later, works
+
+            assertEquals(LocalTime(6, 15), viewModel.state.value.missedAlarmAt)
+            assertEquals(List(2) { LogEvent.OperationFailed("load missed note", "closed") }, logger.events)
+        }
+
+    @Test
+    fun `Dismiss names the note the user saw, so a newer Missed session that arrived meanwhile stays`() =
+        runTest(dispatcher) {
+            record(missedRow("s1"))
+            val viewModel = home(FakeAlarmRepository())
+            val seen = viewModel.state.value.missedSessionId
+            assertEquals("s1", seen)
+            record(missedRow("s2", scheduledAt = Instant.parse("2027-03-04T06:45:00Z")))
+
+            viewModel.onIntent(HomeIntent.MissedNoteDismissed(seen))
+
+            assertEquals(setOf("s1"), dismissals.current)
+            assertEquals("s2", viewModel.state.value.missedSessionId)
+            assertEquals(LocalTime(6, 45), viewModel.state.value.missedAlarmAt)
+        }
+
+    @Test
+    fun `the missed-note retry waits 1 s, then doubles up to a minute`() {
+        val waits = (0L..8L).map { missedRetryDelay(it) }
+
+        assertEquals(listOf(1, 2, 4, 8, 16, 32, 60, 60, 60).map { it.seconds }, waits)
+    }
 }

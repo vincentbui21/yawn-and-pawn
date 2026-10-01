@@ -13,6 +13,7 @@ import com.yawnandpawn.app.core.session.SessionEvent
 import com.yawnandpawn.app.core.session.SessionState
 import com.yawnandpawn.app.testing.FakeActiveSessionStore
 import com.yawnandpawn.app.testing.FakeClock
+import com.yawnandpawn.app.testing.FakeMonotonicClock
 import com.yawnandpawn.app.testing.FakeSessionHistoryRepository
 import com.yawnandpawn.app.testing.anAlarm
 import kotlinx.coroutines.runBlocking
@@ -22,7 +23,6 @@ import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
 import org.robolectric.Shadows.shadowOf
 import org.robolectric.android.controller.ServiceController
-import org.robolectric.shadows.ShadowSystemClock
 import java.time.Duration
 import java.util.concurrent.atomic.AtomicInteger
 import kotlin.test.assertEquals
@@ -162,16 +162,23 @@ class ForgottenAlarmTest {
 
     @Test
     fun `a slot fire after the timer was missed in deep sleep stops the alarm`() {
-        val ring = ring()
-        // Monotonic time moves on while no timer ran (the CPU slept), then the heartbeat slot fires.
-        ShadowSystemClock.advanceBy(Duration.ofMinutes(31))
-        ring.service.withIntent(WakeService.intent(ring.app.app, WakeService.ACTION_SLOT)).startCommand(0, 2)
+        // Deep sleep: time since boot moves on, but the main-thread timer (uptime) does not, so the service's own
+        // 30-minute wait is still in the future. Only the slot's tick can stop the alarm.
+        val monotonic = FakeMonotonicClock(elapsedMillis = START_ELAPSED_MILLIS)
+        val app = WakeApp(history = history, clock = wall, monotonic = monotonic)
+        assertEquals(Outcome.Success(Unit), runBlocking { app.koin.get<AlarmRepository>().upsert(alarm) })
+        val ring = Ring(app, app.ring(AlarmFired(alarm.id, scheduledAt)))
+        app.awaitRinging()
+        monotonic.set(START_ELAPSED_MILLIS + 31.minutes.inWholeMilliseconds)
+
+        ring.service.withIntent(WakeService.intent(app.app, WakeService.ACTION_SLOT)).startCommand(0, 2)
 
         ring.assertStoppedAsMissed()
     }
 
     private companion object {
         const val RETRIES = 3
+        const val START_ELAPSED_MILLIS = 1_000_000L
         const val IDLE_ROUNDS = 20
         const val IDLE_ROUND_MILLIS = 10L
     }

@@ -4,6 +4,7 @@ import android.app.AlarmManager
 import android.os.Looper
 import androidx.test.core.app.ApplicationProvider
 import com.yawnandpawn.app.YawnAndPawnApp
+import com.yawnandpawn.app.android.wake.WakeAlarmFiredHandler
 import com.yawnandpawn.app.awaitChildren
 import com.yawnandpawn.app.core.alarm.AlarmFiredHandler
 import com.yawnandpawn.app.core.alarm.AlarmRepository
@@ -56,7 +57,8 @@ internal class SchedulingApp(
                 single { scope }
                 single<AlarmScheduler> { AndroidAlarmScheduler(androidContext(), get(), get(), get(), get()) }
                 single { AlarmScheduling(get(), get(), get(), get(), get(), get()) }
-                single<AlarmFiredHandler> { RearmOnFire(get(), get(), get(), get(), get(), get()) }
+                single { RearmOnFire(get(), get(), get(), get(), get(), get()) }
+                single<AlarmFiredHandler> { WakeAlarmFiredHandler(get(), get<RearmOnFire>(), get()) }
             },
         )
     }

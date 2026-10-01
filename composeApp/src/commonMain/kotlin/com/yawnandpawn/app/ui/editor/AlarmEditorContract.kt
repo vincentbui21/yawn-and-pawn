@@ -22,8 +22,9 @@ data class EditorForm(
     val volumePercent: Int = Alarm.DEFAULT_VOLUME_PERCENT,
     val gradualVolume: Boolean = true,
     /**
-     * Where the gradual ramp starts. Not editable (owner decision 2026-09-27): with "Gradually increase volume" on, the
-     * ramp always starts at 20% and rises to the set volume over 30 s. Kept so a stored value round-trips.
+     * Where the gradual ramp starts, as a percentage of the set volume (not of the stream). Not editable (owner decision
+     * 2026-09-27): with "Gradually increase volume" on, the ramp always starts at 20% of the set volume and rises to the
+     * set volume over 30 s. The editor saves [Alarm.DEFAULT_RAMP_START_PERCENT].
      */
     val rampStartPercent: Int = Alarm.DEFAULT_RAMP_START_PERCENT,
     val vibration: Boolean = true,

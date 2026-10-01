@@ -121,14 +121,15 @@ dependencies {
     implementation(libs.compose.runtime)
     implementation(libs.compose.ui)
     implementation(libs.koin.android)
-
-    // Debug-only theme showcase (src/debug). Same artifacts :composeApp already puts on the runtime classpath.
-    debugImplementation(libs.compose.foundation)
-    debugImplementation(libs.compose.material3)
-    debugImplementation(libs.compose.components.resources)
+    // The wake screen (Story 1.14) and the debug theme showcase (src/debug). Same artifacts :composeApp already puts on
+    // the runtime classpath.
+    implementation(libs.compose.foundation)
+    implementation(libs.compose.material3)
+    implementation(libs.compose.components.resources)
 
     testImplementation(project(":testing"))
     testImplementation(libs.kotlin.test)
+    testImplementation(libs.kotlinx.coroutines.test)
     testImplementation(libs.junit4)
     testImplementation(libs.robolectric)
     testImplementation(libs.compose.ui.test.junit4)

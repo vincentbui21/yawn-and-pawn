@@ -1,0 +1,309 @@
+package com.yawnandpawn.app.android.wake
+
+import android.content.Context
+import android.media.AudioAttributes
+import android.media.AudioManager
+import android.media.MediaPlayer
+import androidx.test.core.app.ApplicationProvider
+import com.yawnandpawn.app.R
+import com.yawnandpawn.app.StopAppRule
+import com.yawnandpawn.app.core.alarm.Alarm
+import com.yawnandpawn.app.core.log.LogEvent
+import com.yawnandpawn.app.testing.FakeLogger
+import com.yawnandpawn.app.testing.FakeMonotonicClock
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.test.StandardTestDispatcher
+import org.junit.Rule
+import org.junit.Test
+import org.junit.runner.RunWith
+import org.robolectric.RobolectricTestRunner
+import org.robolectric.shadow.api.Shadow
+import org.robolectric.shadows.ShadowMediaPlayer
+import kotlin.math.roundToInt
+import kotlin.test.assertEquals
+import kotlin.test.assertNull
+import kotlin.test.assertTrue
+import kotlin.time.Duration.Companion.seconds
+
+/** Story 1.14: the one alarm player, over a fake playback seam (and the real `MediaPlayer` adapter once). */
+@RunWith(RobolectricTestRunner::class)
+class AndroidAlarmPlayerTest {
+    @get:Rule(order = 0)
+    val stopApp = StopAppRule()
+
+    private val context = ApplicationProvider.getApplicationContext<Context>()
+    private val audio = context.getSystemService(AudioManager::class.java)
+    private val logger = FakeLogger()
+    private val clock = FakeMonotonicClock(elapsedMillis = 1_000)
+    private val playbacks = FakePlaybackFactory()
+    private val volume = AlarmVolume(context, logger)
+    private val chosen = AlarmSound.File("content://sounds/rain")
+    private val resolver =
+        SoundResolver { ref ->
+            when (ref) {
+                Alarm.DEFAULT_SOUND_REF -> AlarmSound.Default
+                "test:rain" -> chosen
+                else -> null
+            }
+        }
+
+    // The ramp loop and the retry run on this dispatcher only when a test advances it.
+    private val dispatcher = StandardTestDispatcher()
+    private val player = AndroidAlarmPlayer(playbacks, resolver, volume, clock, CoroutineScope(dispatcher), logger)
+
+    private fun advance(duration: kotlin.time.Duration) {
+        clock.advanceBy(duration)
+        dispatcher.scheduler.advanceTimeBy(duration)
+        dispatcher.scheduler.runCurrent()
+    }
+
+    private val maxAlarm: Int
+        get() = audio.getStreamMaxVolume(AudioManager.STREAM_ALARM)
+
+    private fun alarmVolume() = audio.getStreamVolume(AudioManager.STREAM_ALARM)
+
+    private fun play(
+        ref: String = Alarm.DEFAULT_SOUND_REF,
+        volumePercent: Int = 80,
+        gradual: Boolean = false,
+    ) = player.play(ref, volumePercent, gradual, rampStartPercent = 20)
+
+    @Test
+    fun `a ring sets the alarm stream to the set volume and stopping at the session end restores the user volume`() {
+        audio.setStreamVolume(AudioManager.STREAM_ALARM, 2, 0)
+
+        play(volumePercent = 50)
+
+        assertEquals((maxAlarm * 0.5).roundToInt(), alarmVolume())
+        assertEquals(2, volume.saved, "the user volume is saved")
+        player.stop(restoreVolume = true)
+        assertEquals(2, alarmVolume())
+        assertNull(volume.saved)
+        assertNull(player.sound)
+    }
+
+    @Test
+    fun `a re-ring keeps the first saved user volume, and a 0 percent alarm still rings at the lowest step`() {
+        audio.setStreamVolume(AudioManager.STREAM_ALARM, 3, 0)
+        play(volumePercent = 100)
+        player.stop(restoreVolume = false)
+
+        play(volumePercent = 0)
+
+        assertTrue(alarmVolume() >= 1, "never silent at 0 percent: ${alarmVolume()}")
+        assertEquals(3, volume.saved)
+        player.stop(restoreVolume = true)
+        assertEquals(3, alarmVolume())
+    }
+
+    @Test
+    fun `with gradual volume the gain is 0_2 at the start, 0_6 at 15 s and 1_0 at 30 s and 45 s`() {
+        play(gradual = true)
+        val playback = checkNotNull(playbacks.current)
+        assertEquals(0.2f, player.gain, 1e-6f)
+        assertEquals(0.2f, playback.gains.first(), 1e-6f, "the first frame already plays at the ramp start")
+
+        listOf(15 to 0.6f, 15 to 1.0f, 15 to 1.0f).forEach { (seconds, expected) ->
+            clock.advanceBy(seconds.seconds)
+            player.updateGain()
+            assertEquals(expected, player.gain, 1e-6f)
+        }
+        assertEquals(1.0f, playback.gains.last(), 1e-6f)
+    }
+
+    @Test
+    fun `without gradual volume the first frame plays at full gain`() {
+        play(gradual = false)
+
+        assertEquals(listOf(1.0f), checkNotNull(playbacks.current).gains)
+        assertTrue(checkNotNull(playbacks.current).playing)
+    }
+
+    @Test
+    fun `the same request again changes nothing and a changed request starts the ring over`() {
+        play()
+        play()
+        assertEquals(1, playbacks.opened.size)
+        assertEquals(1, checkNotNull(playbacks.current).started)
+
+        play(volumePercent = 60)
+
+        assertEquals(2, playbacks.opened.size)
+        assertTrue(playbacks.opened.first().released)
+    }
+
+    @Test
+    fun `mute silences the open sound, unmute returns to full gain, and pause and resume keep the same sound`() {
+        play(gradual = true)
+        val playback = checkNotNull(playbacks.current)
+
+        player.mute()
+        assertEquals(0f, player.gain)
+        player.unmute()
+        assertEquals(1f, player.gain, "the grace window ends at the set volume")
+        player.pause()
+        assertTrue(!playback.playing && player.isPaused)
+        play(gradual = true)
+        assertTrue(playback.playing, "SoundAt again resumes")
+        assertEquals(1, playbacks.opened.size)
+    }
+
+    @Test
+    fun `an unknown sound reference plays the default and the fallback is logged without the reference`() {
+        play(ref = "builtin:rain")
+
+        assertEquals(AlarmSound.Default, player.sound)
+        assertEquals(
+            listOf<LogEvent>(LogEvent.SoundFellBack("unknown sound reference; the sound library arrives in Story 1.17")),
+            logger.events,
+        )
+        assertTrue(logger.events.none { "builtin:rain" in it.toString() })
+    }
+
+    @Test
+    fun `a chosen sound that cannot be opened is replaced by the default in the same ring`() {
+        playbacks.failing += chosen
+
+        play(ref = "test:rain")
+
+        assertEquals(AlarmSound.Default, player.sound)
+        assertTrue(checkNotNull(playbacks.current).playing)
+        assertEquals(listOf<LogEvent>(LogEvent.SoundFellBack("could not open the sound: IOException")), logger.events)
+    }
+
+    @Test
+    fun `a sound that fails while ringing is replaced by the default, and a failing default by the phone alarm sound`() {
+        play(ref = "test:rain")
+        val broken = checkNotNull(playbacks.current)
+
+        broken.failWhilePlaying()
+
+        assertTrue(broken.released)
+        assertEquals(AlarmSound.Default, player.sound)
+        assertTrue(checkNotNull(playbacks.current).playing, "never silent")
+        checkNotNull(playbacks.current).failWhilePlaying()
+        assertEquals(AlarmSound.SystemAlarm, player.sound)
+        assertEquals(
+            List<LogEvent>(2) { LogEvent.SoundFellBack("the sound failed while ringing") },
+            logger.events,
+        )
+    }
+
+    @Test
+    fun `when no sound at all can be opened the failure is logged and the default is tried again after 5 s`() {
+        playbacks.failing += listOf(chosen, AlarmSound.Default, AlarmSound.SystemAlarm)
+
+        play(ref = "test:rain")
+
+        assertNull(player.sound)
+        assertEquals(
+            LogEvent.OperationFailed("play alarm sound", "no sound could be opened; trying the default again"),
+            logger.events.last(),
+        )
+        playbacks.failing.clear()
+        advance(4.seconds)
+        assertNull(player.sound)
+        advance(1.seconds)
+        assertEquals(AlarmSound.Default, player.sound, "never silent for good")
+        assertTrue(checkNotNull(playbacks.current).playing)
+    }
+
+    @Test
+    fun `a long ring whose sound keeps failing mid-ring keeps reopening it`() {
+        play()
+
+        repeat(20) { round ->
+            advance(11.seconds)
+            checkNotNull(playbacks.current).failWhilePlaying()
+            assertTrue(checkNotNull(playbacks.current).playing, "still ringing after failure ${round + 1}")
+        }
+        assertEquals(21, playbacks.opened.size)
+    }
+
+    @Test
+    fun `the ramp loop raises the gain by itself every 250 ms and stops at full gain`() {
+        play(gradual = true)
+        val playback = checkNotNull(playbacks.current)
+
+        advance(15.seconds)
+        assertEquals(0.6f, player.gain, 0.01f, "the loop updated the gain without a manual step")
+        advance(15.seconds)
+        assertEquals(1f, player.gain)
+        val steps = playback.gains.size
+        advance(30.seconds)
+        assertEquals(steps, playback.gains.size, "the loop ended once the ramp was done")
+    }
+
+    @Test
+    fun `restoring the volume at app start skips a ring that already started`() {
+        audio.setStreamVolume(AudioManager.STREAM_ALARM, 2, 0)
+        play(volumePercent = 100)
+
+        player.restoreVolumeIfSilent()
+
+        assertEquals(maxAlarm, alarmVolume(), "the ring keeps its volume")
+        player.stop(restoreVolume = false)
+        player.restoreVolumeIfSilent()
+        assertEquals(2, alarmVolume())
+    }
+
+    @Test
+    fun `after a crash the open sound switches to the default and keeps its mute`() {
+        play(ref = "test:rain")
+        player.mute()
+
+        player.switchToDefault()
+
+        assertEquals(AlarmSound.Default, player.sound)
+        assertTrue(player.isMuted)
+        assertEquals(0f, player.gain)
+        player.switchToDefault()
+        assertEquals(2, playbacks.opened.size, "already the default: nothing reopens")
+    }
+
+    @Test
+    fun `the emergency ring plays the default at full gain`() {
+        player.playDefault(volumePercent = 70)
+
+        assertEquals(AlarmSound.Default, player.sound)
+        assertEquals(1f, player.gain)
+        assertEquals((maxAlarm * 0.7).roundToInt(), alarmVolume())
+    }
+
+    @Test
+    fun `the MediaPlayer adapter plays looping on the alarm usage with sonification content`() {
+        ShadowMediaPlayer.setMediaInfoProvider { ShadowMediaPlayer.MediaInfo(3_000, 0) }
+        var created: MediaPlayer? = null
+        ShadowMediaPlayer.setCreateListener { mediaPlayer, _ -> created = mediaPlayer }
+
+        val playback = MediaPlayerPlaybackFactory(context).open(AlarmSound.Default) {}
+        playback.start()
+
+        val mediaPlayer = checkNotNull(created)
+        val shadow = Shadow.extract<ShadowMediaPlayer>(mediaPlayer)
+        assertEquals(AudioAttributes.USAGE_ALARM, shadow.audioAttributes.usage)
+        assertEquals(AudioAttributes.CONTENT_TYPE_SONIFICATION, shadow.audioAttributes.contentType)
+        assertTrue(mediaPlayer.isLooping)
+        assertTrue(shadow.isReallyPlaying)
+        assertEquals("android.resource://${context.packageName}/${R.raw.alarm_default}", shadow.sourceUri.toString())
+        playback.release()
+    }
+
+    @Test
+    fun `the MediaPlayer adapter reports a playback error and never pauses a player that did not start`() {
+        ShadowMediaPlayer.setMediaInfoProvider { ShadowMediaPlayer.MediaInfo(3_000, 0) }
+        var created: MediaPlayer? = null
+        ShadowMediaPlayer.setCreateListener { mediaPlayer, _ -> created = mediaPlayer }
+        var errors = 0
+
+        val playback = MediaPlayerPlaybackFactory(context).open(AlarmSound.Default) { errors++ }
+        val shadow = Shadow.extract<ShadowMediaPlayer>(checkNotNull(created))
+        playback.pause()
+        assertEquals(ShadowMediaPlayer.State.PREPARED, shadow.state, "a prepared player is not paused into the Error state")
+        playback.start()
+        shadow.invokeErrorListener(MediaPlayer.MEDIA_ERROR_UNKNOWN, 0)
+
+        assertEquals(1, errors)
+        playback.release()
+    }
+}

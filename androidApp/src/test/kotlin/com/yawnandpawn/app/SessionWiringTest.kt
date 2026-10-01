@@ -2,8 +2,10 @@ package com.yawnandpawn.app
 
 import androidx.test.core.app.ApplicationProvider
 import com.yawnandpawn.app.android.ApplicationScope
-import com.yawnandpawn.app.android.LoggingEffectRunner
 import com.yawnandpawn.app.android.UnavailableBilling
+import com.yawnandpawn.app.android.wake.NoOpCrashReporter
+import com.yawnandpawn.app.android.wake.WakeRuntime
+import com.yawnandpawn.app.core.crash.CrashReporter
 import com.yawnandpawn.app.core.history.SessionHistoryRepository
 import com.yawnandpawn.app.core.session.ActiveSessionStore
 import com.yawnandpawn.app.core.session.Billing
@@ -14,6 +16,8 @@ import com.yawnandpawn.app.core.session.FeeLadder
 import com.yawnandpawn.app.core.session.NoBillingSnoozeAvailability
 import com.yawnandpawn.app.core.session.NoFallbackPolicy
 import com.yawnandpawn.app.core.session.PlaceholderCheckValidator
+import com.yawnandpawn.app.core.session.RandomSeedSource
+import com.yawnandpawn.app.core.session.SeedSource
 import com.yawnandpawn.app.core.session.SessionEngine
 import com.yawnandpawn.app.core.session.SessionRecorder
 import com.yawnandpawn.app.core.session.SessionReducer
@@ -32,20 +36,26 @@ import kotlin.test.assertIs
 import kotlin.test.assertNotSame
 import kotlin.test.assertSame
 
-/** Stories 1.12 and 1.13: Koin binds one session engine over runtime.db and session history, with the Epic 1 policies. */
+/**
+ * Stories 1.12 to 1.14: Koin binds one session engine over runtime.db and session history, with the Epic 1 policies, and
+ * the wake runtime as its effect runner.
+ */
 @RunWith(RobolectricTestRunner::class)
 class SessionWiringTest {
     @get:Rule(order = 0)
     val stopApp = StopAppRule()
 
     @Test
-    fun `Koin binds one session engine, its reducer, the Room session store, the history recorder and the Epic 1 runner and billing`() {
+    fun `Koin binds one session engine, its reducer, the Room session store, the history recorder, the wake runtime and Epic 1 billing`() {
         val koin = GlobalContext.get()
 
         assertSame(koin.get<SessionEngine>(), koin.get<SessionEngine>())
         assertSame(koin.get<SessionReducer>(), koin.get<SessionReducer>())
         assertIs<RoomActiveSessionStore>(koin.get<ActiveSessionStore>())
-        assertIs<LoggingEffectRunner>(koin.get<EffectRunner>())
+        assertSame(koin.get<WakeRuntime>(), koin.get<EffectRunner>(), "the wake runtime is the one effect runner")
+        assertSame(koin.get<WakeRuntime>(), koin.get<WakeRuntime>())
+        assertIs<NoOpCrashReporter>(koin.get<CrashReporter>(), "Crashlytics arrives in Story 1.19")
+        assertIs<RandomSeedSource>(koin.get<SeedSource>())
         assertIs<UnavailableBilling>(koin.get<Billing>())
         assertSame(koin.get<SessionRecorder>(), koin.get<SessionRecorder>())
         assertIs<RoomSessionHistoryRepository>(koin.get<SessionHistoryRepository>())

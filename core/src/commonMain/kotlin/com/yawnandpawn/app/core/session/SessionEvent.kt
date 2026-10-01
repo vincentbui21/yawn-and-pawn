@@ -77,9 +77,10 @@ sealed interface SessionEvent {
     sealed interface CallEvent : SessionEvent
 
     /**
-     * A call took the audio mode (ringtone, in-call or in-communication). The call adapter sends it again after
-     * ProcessRestored and when a new ring starts while a call is still on (Stories 2.7 and 1.14), because a restore and a
-     * new ring both start unpaused.
+     * A call took the audio mode (ringtone, in-call or in-communication). Call contract (Story 2.7, hook in Story 1.14):
+     * the call adapter sends it again after every `ProcessRestored` and at every new ring (first ring, re-ring after a
+     * snooze, merged alarm) while a call is still active, because a restore and a new ring both start unpaused. The wake
+     * runtime only pauses on `SoundPaused`; it never detects calls itself.
      */
     data object CallStarted : CallEvent
 

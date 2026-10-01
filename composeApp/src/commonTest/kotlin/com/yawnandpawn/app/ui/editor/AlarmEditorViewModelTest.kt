@@ -310,7 +310,7 @@ class AlarmEditorViewModelTest {
         }
 
     @Test
-    fun `the ramp start is fixed at 20 and never saved above the volume`() =
+    fun `the ramp start is saved as the fixed 20 percent of the set volume, even at a low volume`() =
         runTest(dispatcher) {
             repository.upsert(stored)
             val viewModel = viewModel(stored.id)
@@ -320,7 +320,7 @@ class AlarmEditorViewModelTest {
             viewModel.onIntent(EditorIntent.SaveClicked)
             advanceUntilIdle()
 
-            assertEquals(15, repository.current.single().rampStartPercent, "20, clamped to a 15% volume so it stays valid")
+            assertEquals(20, repository.current.single().rampStartPercent, "20% of the set volume, not clamped to it")
         }
 
     @Test

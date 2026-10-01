@@ -17,9 +17,13 @@ import kotlin.time.Instant
 
 /**
  * Receives every system alarm the app armed (AD-4): a stored alarm, the session slot or the test alarm, told apart by
- * the action. It only hands the fire to the [AlarmFiredHandler] port, inside `goAsync()`, and finishes the pending
- * result in every case. Not exported (only the app's own PendingIntents reach it), `directBootAware`, and it never
- * starts a foreground service or an activity itself.
+ * the action. It hands the fire to the [AlarmFiredHandler] port inside `goAsync()` and finishes the pending result in
+ * every case, also when the handler throws or overruns its budget. Not exported (only the app's own PendingIntents reach
+ * it), `directBootAware`, and it never starts an activity.
+ *
+ * Since Story 1.14 the handler starts the foreground `WakeService` (for an enabled alarm, after re-arming its next
+ * occurrence, and for the session slot). A fire from `setAlarmClock` is exempt from the background limits on starting a
+ * foreground service, so this start is allowed; boot receivers still never start one (AD-4).
  */
 class AlarmFiredReceiver :
     BroadcastReceiver(),

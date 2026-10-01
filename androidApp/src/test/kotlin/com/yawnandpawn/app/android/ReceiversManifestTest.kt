@@ -16,7 +16,7 @@ import kotlin.test.assertEquals
 import kotlin.test.assertFalse
 import kotlin.test.assertTrue
 
-/** AD-4 receivers and permissions in the merged manifest (Story 1.10). */
+/** AD-4 receivers and the permissions in the merged manifest (Stories 1.10 and 1.14). */
 @RunWith(RobolectricTestRunner::class)
 class ReceiversManifestTest {
     private val app = ApplicationProvider.getApplicationContext<YawnAndPawnApp>()
@@ -85,6 +85,20 @@ class ReceiversManifestTest {
             manifest.contains("android:name=\"android.permission.SCHEDULE_EXACT_ALARM\" android:maxSdkVersion=\"32\""),
             "SCHEDULE_EXACT_ALARM must stop at API 32",
         )
+    }
+
+    @Test
+    fun `the manifest requests the wake runtime permissions`() {
+        val requested = requestedPermissions()
+
+        listOf(
+            "android.permission.FOREGROUND_SERVICE",
+            "android.permission.FOREGROUND_SERVICE_MEDIA_PLAYBACK",
+            "android.permission.USE_FULL_SCREEN_INTENT",
+            "android.permission.WAKE_LOCK",
+            "android.permission.VIBRATE",
+            "android.permission.POST_NOTIFICATIONS",
+        ).forEach { assertTrue(requested.contains(it), "$it requested: $requested") }
     }
 
     @Test

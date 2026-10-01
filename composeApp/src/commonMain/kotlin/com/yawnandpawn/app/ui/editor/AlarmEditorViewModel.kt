@@ -299,8 +299,8 @@ private fun EditorForm.toDraft(
         soundRef = stored?.soundRef?.takeUnless { it.isBlank() } ?: Alarm.DEFAULT_SOUND_REF,
         volumePercent = volumePercent,
         gradualVolume = gradualVolume,
-        // Not editable (owner decision 2026-09-27): the ramp starts at the fixed 20%, never above the set volume.
-        rampStartPercent = minOf(Alarm.DEFAULT_RAMP_START_PERCENT, volumePercent),
+        // Not editable (owner decision 2026-09-27): the ramp starts at the fixed 20% of the set volume, at any volume.
+        rampStartPercent = Alarm.DEFAULT_RAMP_START_PERCENT,
         vibration = vibration,
         snoozeLengthMinutes = snoozeLengthMinutes,
         graceSeconds = (stored?.graceSeconds ?: Alarm.DEFAULT_GRACE_SECONDS).coerceIn(Alarm.GRACE_SECONDS_RANGE),

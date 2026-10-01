@@ -1,5 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
-<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools">
 
     <!-- Exact alarms (AD-4, Story 1.10): USE_EXACT_ALARM on API 33+, SCHEDULE_EXACT_ALARM on API 31-32 only. -->
     <uses-permission android:name="android.permission.USE_EXACT_ALARM" />
@@ -8,6 +9,15 @@
         android:maxSdkVersion="32" />
     <!-- Re-arm every alarm after a reboot (SystemEventsReceiver). -->
     <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
+    <!-- The wake runtime (Story 1.14, AD-5): the mediaPlayback foreground service, its ongoing notification with a
+         full-screen intent, the player's wake lock and the alarm vibration. The notification permission request itself
+         is Story 1.19. -->
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MEDIA_PLAYBACK" />
+    <uses-permission android:name="android.permission.USE_FULL_SCREEN_INTENT" />
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+    <uses-permission android:name="android.permission.WAKE_LOCK" />
+    <uses-permission android:name="android.permission.VIBRATE" />
 
     <application
         android:name=".YawnAndPawnApp"
@@ -26,6 +36,26 @@
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
         </activity>
+
+        <!-- The wake screen (AD-5): opened only by the ringing notification's full-screen or content intent, never from
+             the background. Its own task, out of Recents, over the lock screen; Back does nothing. -->
+        <activity
+            android:name=".android.wake.WakeActivity"
+            android:directBootAware="true"
+            android:excludeFromRecents="true"
+            android:exported="false"
+            android:launchMode="singleTask"
+            android:showWhenLocked="true"
+            android:taskAffinity="com.yawnandpawn.app.wake"
+            android:turnScreenOn="true"
+            tools:targetApi="27" />
+
+        <!-- The wake runtime's foreground service. mediaPlayback [ASSUMPTION pending Spike S2 (systemExempted)]. -->
+        <service
+            android:name=".android.wake.WakeService"
+            android:directBootAware="true"
+            android:exported="false"
+            android:foregroundServiceType="mediaPlayback" />
 
         <!-- Every system alarm the app armed fires here; only the app's own PendingIntents reach it. -->
         <receiver

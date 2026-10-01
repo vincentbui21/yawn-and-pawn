@@ -5,6 +5,9 @@ import com.yawnandpawn.app.StopAppRule
 import com.yawnandpawn.app.YawnAndPawnApp
 import com.yawnandpawn.app.awaitChildren
 import com.yawnandpawn.app.core.error.Outcome
+import com.yawnandpawn.app.core.history.SessionHistoryRepository
+import com.yawnandpawn.app.core.history.SessionHistoryRow
+import com.yawnandpawn.app.core.history.SessionOutcome
 import com.yawnandpawn.app.core.session.ActiveSessionStore
 import com.yawnandpawn.app.core.session.PurchaseIntentId
 import com.yawnandpawn.app.core.session.SessionEngine
@@ -61,5 +64,27 @@ class AppStartRestoreTest {
         val expected = entryEffects(restored).map { "SessionEffectLogged type=${it::class.simpleName} entry=true" }
         assertEquals(expected, effectLogs)
         assertTrue(effectLogs.none { "entry=false" in it }, "no one-shot effect ran: $effectLogs")
+    }
+
+    @Test
+    fun `app start finishes a persisted Completed session, its history row is written to app db and the engine goes Idle`() {
+        awaitStartUp()
+        // The last process committed Completed, then died before the history row was written.
+        val session = aSession().copy(interactionDeadline = null)
+        val written = runBlocking { GlobalContext.get().get<ActiveSessionStore>().commit(SessionState.Completed(session)) }
+        assertEquals(Outcome.Success(Unit), written)
+        stopApp()
+
+        app.onCreate()
+        awaitStartUp()
+
+        val koin = GlobalContext.get()
+        assertEquals(SessionState.Idle, koin.get<SessionEngine>().state.value)
+        assertEquals(Outcome.Success(StoredSession.Empty), runBlocking { koin.get<ActiveSessionStore>().load() }, "runtime.db is cleared")
+        val row =
+            assertIs<Outcome.Success<SessionHistoryRow?>>(
+                runBlocking { koin.get<SessionHistoryRepository>().find(session.sessionId) },
+            ).value
+        assertEquals(SessionOutcome.OnTime, row?.outcome)
     }
 }

@@ -2,6 +2,7 @@ package com.yawnandpawn.app.core.session
 
 import com.yawnandpawn.app.core.session.SessionState.Ring
 import com.yawnandpawn.app.core.session.SessionState.Ringing
+import com.yawnandpawn.app.core.time.TimeSnapshot
 
 /**
  * AD-2 check rows from Grace and Loud (the check starts with "I'm up", so Ringing has none). A null result means no
@@ -15,12 +16,14 @@ internal class CheckRules(
     fun onAnswer(
         state: Ring,
         answer: CheckAnswer,
-    ): Transition? = if (state is Ringing) null else answered(state, validator.validate(state.session.checkRun, answer))
+        now: TimeSnapshot,
+    ): Transition? = if (state is Ringing) null else answered(state, validator.validate(state.session.checkRun, answer), now)
 
     /** Grace / Loud + ImageMatchCompleted (matched) counts as a valid answer; no match or a matcher error is a failed attempt. */
     fun onImageMatch(
         state: Ring,
         event: SessionEvent.ImageMatchEvent,
+        now: TimeSnapshot,
     ): Transition? =
         when {
             state is Ringing -> {
@@ -28,7 +31,7 @@ internal class CheckRules(
             }
 
             event is SessionEvent.ImageMatchCompleted && event.matched -> {
-                answered(state, validator.validate(state.session.checkRun, CheckAnswer.ImageMatched))
+                answered(state, validator.validate(state.session.checkRun, CheckAnswer.ImageMatched), now)
             }
 
             else -> {
@@ -51,6 +54,7 @@ internal class CheckRules(
     private fun answered(
         state: Ring,
         result: StepResult,
+        now: TimeSnapshot,
     ): Transition {
         val session = state.session
         val run = session.checkRun
@@ -65,11 +69,10 @@ internal class CheckRules(
 
             StepResult.ValidLast -> {
                 Transition(
-                    SessionState.Completed(session.withoutTimers().copy(checkRun = run.copy(step = run.step + 1))),
+                    SessionState.Completed(session.withoutTimers().copy(checkRun = run.copy(step = run.step + 1), ended = now)),
                     listOf(
                         SessionEffect.StopSound,
                         SessionEffect.CancelSlot,
-                        SessionEffect.RecordOutcome(session.sessionId, SessionEnd.Completed),
                         SessionEffect.PlayMotivation,
                     ),
                 )

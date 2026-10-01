@@ -47,7 +47,7 @@
 - source_spec: `_bmad-output/implementation-artifacts/spec-1-7-store-alarms-in-app-db.md`
   summary: Write a downgrade policy for restoring a newer-schema app.db backup onto an older install.
   evidence: Unverified (medium if it happens). Destructive fallback is forbidden, so a v2 backup restored on v1 fails to open. Arises with Story 1.13 (session_history, schema v2).
-  status: assigned to Story 1.13 by sprint-change-proposal-2026-10-01 (`docs/decisions/db-downgrade.md`).
+  status: assigned to Story 1.13 by sprint-change-proposal-2026-10-01 (`docs/decisions/db-downgrade.md`). Resolved in Story 1.13: the policy is written (a restored `app.db` above the installed schema is skipped and logged); its implementation is carried to Story 2.12 (entry below).
 - source_spec: `_bmad-output/implementation-artifacts/spec-1-7-store-alarms-in-app-db.md`
   summary: Test that app.db opens before first unlock (credential storage locked).
   evidence: Only the device-protected path is asserted. Belongs with the directBootAware receivers and WakeService in Stories 1.10 and 1.14.
@@ -107,7 +107,7 @@
 - source_spec: `_bmad-output/implementation-artifacts/spec-1-10-schedule-alarms-exactly-and-keep-them-across-reboot-and-clock-changes.md`
   summary: Story 1.13: `app.db` is now version 2 (Story 1.10 added `request_code_sequence`), so `session_history` is the v2 to v3 migration.
   evidence: `AppDatabase` is `version = 2` with `MIGRATION_1_2` in `APP_DATABASE_MIGRATIONS` and `data/schemas/.../2.json` exported. Story 1.13 must add `MIGRATION_2_3`, export `3.json`, keep a hand-built v2 file migration test next to the v1 one in `AppDatabaseFactoryTest`, and write `docs/decisions/db-downgrade.md` for v3.
-  status: assigned to Story 1.13.
+  status: resolved in Story 1.13: `AppDatabase` is version 3 with `MIGRATION_2_3`, `3.json` is exported next to `1.json` and `2.json`, and `AppDatabaseFactoryTest` migrates a hand-built v2 file (alarms and mark 1005 kept) and a v1 file through 1 to 2 to 3.
 - source_spec: `_bmad-output/implementation-artifacts/spec-1-11-the-complete-wake-session-state-machine-in-core.md`
   summary: Call adapter contract: re-send CallStarted after ProcessRestored and whenever a new ring starts while a call is still active.
   evidence: The reducer clears the pause on restore and every new ring (after a snooze, a grant during a call, a merge) starts unpaused; Snoozed + CallStarted changes nothing (AD-2). Without the re-send the next ring plays over an ongoing call. Story 2.7 (pause for phone calls) must implement and test it.
@@ -120,7 +120,18 @@
 - source_spec: `_bmad-output/implementation-artifacts/spec-1-11-the-complete-wake-session-state-machine-in-core.md`
   summary: Session persistence details for Story 1.12 and 1.13: a fixed Json configuration (ignoreUnknownKeys, explicit class discriminator) with a compatibility test for older payloads, and one owner of the history write.
   evidence: SessionState is @Serializable with default Json only and no versioning; Completed/Missed emit both a one-shot RecordOutcome and the entry effect HistoryWriteRequested. Story 1.12 (RoomActiveSessionStore) must pin the Json config and test decoding; Story 1.13 must make SessionRecorder the single idempotent writer that dispatches Recorded from one of the two.
-  status: Json half resolved in Story 1.12 (SessionJson: ignoreUnknownKeys, classDiscriminator "type", encodeDefaults; golden v1 fixtures plus an extra-field decode test). The history-write owner stays with Story 1.13.
+  status: Json half resolved in Story 1.12 (SessionJson: ignoreUnknownKeys, classDiscriminator "type", encodeDefaults; golden v1 fixtures plus an extra-field decode test). History half resolved in Story 1.13: `RecordOutcome` is removed, `SessionRecorder` is the only writer, the engine writes on the idempotent `HistoryWriteRequested` entry effect and reduces `Recorded` itself in the same lock.
 - source_spec: `_bmad-output/implementation-artifacts/spec-1-11-the-complete-wake-session-state-machine-in-core.md`
   summary: Epic 4 availability and reuse: the real SnoozeAvailabilityPolicy must price through FeeLadder(baseFeeTier, snoozesGranted + 1) with a reducer-level test, and ReuseAccepted must be validated against the offered product.
   evidence: The Epic 1 reducer accepts any offer the policy returns and any ReuseAccepted outside test mode. Stories 4.7 (snoozeAvailability) and 4.9/4.11 (reconciler, orchestration) own these checks.
+- source_spec: `_bmad-output/implementation-artifacts/spec-1-13-record-every-session-in-history.md`
+  summary: Implement the accepted `app.db` downgrade policy: a restored `app.db` whose `user_version` is above the installed `AppDatabase` version is skipped and logged, keeping the current file, and the user is told.
+  evidence: Policy in `docs/decisions/db-downgrade.md`. With no destructive fallback Room cannot open a newer file, so a restored v4 `app.db` on a v3 install would make every alarm and history read fail. Story 1.13 changes no backup behaviour.
+  status: assigned to Story 2.12 (PpsBackupAgent: check the incoming file's schema version in `onRestoreFile`, show the user a notice when a restore is skipped (owner-approved copy), never set `restoreAnyVersion`, Robolectric test with a hand-built v4 file).
+- source_spec: `_bmad-output/implementation-artifacts/spec-1-13-record-every-session-in-history.md`
+  summary: Merged occurrences never reach history: `SessionEffect.RecordMergedOccurrence` is still only logged by the Epic 1 runner, and nothing writes the merged alarm's occurrence (alarm id, scheduled time, the session it joined).
+  evidence: Story 1.13 made `SessionRecorder` the only history writer for the session row; `RecordMergedOccurrence` goes to the `EffectRunner` (`LoggingEffectRunner`), which logs its type name only. The consumer is the Day detail of Progress (Epic 6), which lists every occurrence of a morning, merged ones included.
+  status: assigned to Story 2.9 (merge an alarm during a session): route the effect to `SessionRecorder` (the only writer, AD-18) with an idempotent `session_merge` row keyed by session id, alarm id and scheduled time, plus its `app.db` migration.
+- source_spec: `_bmad-output/implementation-artifacts/spec-1-13-record-every-session-in-history.md`
+  summary: Never silent when runtime.db cannot be written: if the engine cannot commit a new session (storage broken), the alarm still has to ring.
+  evidence: The engine runs no effect without a successful commit (AD-2 write-ahead), so a failing ActiveSessionStore means AlarmFired never produces Ringing; Story 1.13 only unblocks a stuck ended session. Story 1.14 (WakeService) must ring the default sound directly when the dispatch of AlarmFired fails, and log it (NFR-2).

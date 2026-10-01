@@ -9,7 +9,7 @@ data class Transition(
     val effects: List<SessionEffect>,
 )
 
-/** How a session ended, for its history row. */
+/** How a session ended (Completed or Missed), for its history row. */
 enum class SessionEnd {
     Completed,
     Missed,
@@ -41,16 +41,13 @@ sealed interface SessionEffect {
     /** Cancel the session slot. */
     data object CancelSlot : SessionEffect
 
-    /** Write the session's start (AD-18). */
+    /**
+     * Write the session's start row (AD-18). `SessionEngine` hands it to its `SessionRecorder`, never to the
+     * [EffectRunner]. How the session ended is written by the entry effect [EntryEffect.HistoryWriteRequested].
+     */
     data class RecordSessionStart(
         val sessionId: String,
         val config: SessionConfig,
-    ) : SessionEffect
-
-    /** Write how the session ended. */
-    data class RecordOutcome(
-        val sessionId: String,
-        val end: SessionEnd,
     ) : SessionEffect
 
     /** Log the occurrence of [alarmId] at [scheduledAt] as Merged into [sessionId] (FR-SES-7). */
@@ -210,7 +207,11 @@ sealed interface EntryEffect {
     /** The wake screen is shown. */
     data object WakeUiShown : EntryEffect
 
-    /** The history row of [sessionId] is written (AD-18; the write answers with `Recorded`). */
+    /**
+     * The history row of [sessionId] is written with how it ended (AD-18). The one place the outcome is written:
+     * `SessionEngine` hands it to its `SessionRecorder` (never to the [EffectRunner]), and once the write succeeded it
+     * reduces `Recorded` in the same lock. Idempotent: writing it again leaves the same one row.
+     */
     data class HistoryWriteRequested(
         val sessionId: String,
     ) : EntryEffect

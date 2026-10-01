@@ -2,8 +2,11 @@ package com.yawnandpawn.app.core.session
 
 import com.yawnandpawn.app.core.error.DomainError
 import com.yawnandpawn.app.core.error.Outcome
+import com.yawnandpawn.app.core.history.SessionHistoryRow
+import com.yawnandpawn.app.core.history.SessionOutcome
 import com.yawnandpawn.app.core.log.LogEvent
 import com.yawnandpawn.app.core.time.Deadline
+import com.yawnandpawn.app.core.time.TimeSnapshot
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.test.runCurrent
@@ -14,8 +17,10 @@ import kotlin.test.assertEquals
 import kotlin.test.assertIs
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
+import kotlin.time.Duration.Companion.hours
 import kotlin.time.Duration.Companion.minutes
 import kotlin.time.Duration.Companion.seconds
+import kotlin.time.Instant
 
 /** AD-2 rules 1 and 2: the engine commits every transition before its effects, serially, and restores without replay. */
 class SessionEngineTest {
@@ -23,12 +28,13 @@ class SessionEngineTest {
     private val store = InMemorySessionStore()
     private val runner = RecordingRunner()
     private val logger = EngineLogger()
+    private val history = InMemoryHistory()
     private val reducer = reducer(availability = SnoozeAvailability.Available(OFFER), check = StepResult.ValidLast)
 
     private fun engine(
         effects: EffectRunner = runner,
         sessionReducer: SessionReducer = reducer,
-    ) = SessionEngine(sessionReducer, store, effects, time.clock, time.monotonicClock, time.bootCounter, logger)
+    ) = SessionEngine(sessionReducer, store, effects, SessionRecorder(history), time.clock, time.monotonicClock, time.bootCounter, logger)
 
     private val alarmFired = SessionEvent.AlarmFired(SESSION_ID, testConfig(), SEEDS, beforeFirstUnlock = false)
 
@@ -50,11 +56,13 @@ class SessionEngineTest {
             assertEquals(ringing, store.stored)
             assertEquals(ringing, engine.state.value)
             val transition = reducer.reduce(SessionState.Idle, alarmFired, T0)
-            assertEquals(transition.effects + entryEffects(ringing), runner.ran)
+            assertEquals(runnerEffects(transition) + entryEffects(ringing), runner.ran)
             assertEquals(
-                listOf(SessionEffect.StartWakeRuntime(SESSION_ID), SessionEffect.RecordSessionStart(SESSION_ID, testConfig())),
+                listOf<SessionEffect>(SessionEffect.StartWakeRuntime(SESSION_ID)),
                 runner.oneShot.filter { it !is SessionEffect.ArmSlot },
             )
+            assertTrue(SessionEffect.RecordSessionStart(SESSION_ID, testConfig()) in transition.effects)
+            assertEquals(null, history.rows.getValue(SESSION_ID).outcome, "the recorder wrote the start row, not the runner")
         }
 
     @Test
@@ -98,19 +106,23 @@ class SessionEngineTest {
         }
 
     @Test
-    fun `an interaction deadline that passed is dispatched right after any dispatch and Missed is committed`() =
+    fun `an interaction deadline that passed is dispatched right after any dispatch, and Missed is committed and recorded`() =
         runTest {
             val engine = engine()
             engine.dispatch(alarmFired)
             time.advanceBy(30.minutes)
             runner.ran.clear()
 
-            val missed = assertIs<SessionState.Missed>(engine.dispatch(SessionEvent.SlotFired).state())
+            assertEquals(Outcome.Success(SessionState.Idle), engine.dispatch(SessionEvent.SlotFired))
 
-            assertEquals(listOf("Ringing", "Missed"), store.commits.map { it.kind }, "the heartbeat changes no state")
-            assertEquals(missed, store.stored)
-            val stop = listOf(SessionEffect.StopSound, SessionEffect.CancelSlot, SessionEffect.RecordOutcome(SESSION_ID, SessionEnd.Missed))
-            assertEquals(stop + EntryEffect.HistoryWriteRequested(SESSION_ID), runner.ran.takeLast(4))
+            assertEquals(listOf("Ringing", "Missed", "Idle"), store.commits.map { it.kind }, "the heartbeat changes no state")
+            assertNull(store.row)
+            val stop = listOf(SessionEffect.StopSound, SessionEffect.CancelSlot, SessionEffect.ClearRuntimeSession(SESSION_ID))
+            assertEquals<List<Any>>(stop, runner.ran.takeLast(3))
+            val row = history.rows.getValue(SESSION_ID)
+            assertEquals(SessionOutcome.Missed, row.outcome)
+            assertNull(row.timeToCompleteMs)
+            assertEquals(Instant.fromEpochMilliseconds(time.now.wallMillis), row.endedAt)
         }
 
     @Test
@@ -280,14 +292,23 @@ class SessionEngineTest {
 
             val ringing = assertIs<SessionState.Ringing>(engine.state.value)
             assertEquals(ringing, store.stored)
-            assertEquals(reducer.reduce(SessionState.Idle, alarmFired, T0).effects + entryEffects(ringing), runner.ran)
+            assertEquals(runnerEffects(reducer.reduce(SessionState.Idle, alarmFired, T0)) + entryEffects(ringing), runner.ran)
         }
 
     @Test
     fun `hitting the round limit with events still due is logged`() =
         runTest {
             val alwaysDue =
-                SessionEngine(reducer, store, runner, time.clock, time.monotonicClock, time.bootCounter, logger) { _, _ ->
+                SessionEngine(
+                    reducer,
+                    store,
+                    runner,
+                    SessionRecorder(history),
+                    time.clock,
+                    time.monotonicClock,
+                    time.bootCounter,
+                    logger,
+                ) { _, _ ->
                     listOf(SessionEvent.GraceElapsed)
                 }
 
@@ -379,7 +400,7 @@ class SessionEngineTest {
             val ringing = engine.dispatch(alarmFired).state()
 
             assertEquals(ringing, store.stored)
-            assertEquals(reducer.reduce(SessionState.Idle, alarmFired, T0).effects + entryEffects(ringing), runner.ran)
+            assertEquals(runnerEffects(reducer.reduce(SessionState.Idle, alarmFired, T0)) + entryEffects(ringing), runner.ran)
             assertEquals(
                 listOf<LogEvent>(LogEvent.OperationFailed("run session effect StartWakeRuntime", "IllegalStateException")),
                 logger.events,
@@ -424,12 +445,12 @@ class SessionEngineTest {
             assertEquals(ringing, store.stored, "the UserUnlocked step is committed")
             assertEquals(false, ringing.session.beforeFirstUnlock)
             assertEquals(ringing, engine.state.value)
-            assertTrue(runner.ran.none { it is SessionEffect.RecordOutcome })
+            assertTrue(history.rows.values.none { it.outcome != null }, "nothing was recorded as Missed")
             assertEquals(LogEvent.OperationFailed("commit session state", "storage failure: disk full"), logger.events.last())
         }
 
     @Test
-    fun `a full morning from the alarm to Idle ends with the store empty`() =
+    fun `a full morning from the alarm to Idle writes one history row and ends with the store empty`() =
         runTest {
             val engine = engine()
 
@@ -445,9 +466,8 @@ class SessionEngineTest {
             time.advanceBy(9.minutes)
             assertEquals(2, assertIs<SessionState.Ringing>(engine.dispatch(SessionEvent.SlotFired).state()).session.ringIndex)
             assertIs<SessionState.Grace>(engine.dispatch(SessionEvent.ImUpTapped).state())
-            assertIs<SessionState.Completed>(engine.dispatch(SessionEvent.CheckAnswerSubmitted(CheckAnswer.Placeholder)).state())
-            assertTrue(EntryEffect.HistoryWriteRequested(SESSION_ID) in runner.ran)
-            assertEquals(Outcome.Success(SessionState.Idle), engine.dispatch(SessionEvent.Recorded(SESSION_ID)))
+            time.advanceBy(1.minutes)
+            assertEquals(Outcome.Success(SessionState.Idle), engine.dispatch(SessionEvent.CheckAnswerSubmitted(CheckAnswer.Placeholder)))
 
             assertNull(store.row)
             assertEquals(SessionState.Idle, engine.state.value)
@@ -456,5 +476,31 @@ class SessionEngineTest {
                 listOf("Ringing", "Ringing", "Snoozed", "Ringing", "Grace", "Completed", "Idle"),
                 store.commits.map { it.kind },
             )
+            val firstRing = Instant.fromEpochMilliseconds(T0.wallMillis)
+            assertEquals(
+                SessionHistoryRow(
+                    sessionId = SESSION_ID,
+                    alarmId = "alarm-1",
+                    scheduledAt = SCHEDULED_AT,
+                    firstRingAt = firstRing,
+                    endedAt = firstRing + 10.minutes,
+                    snoozeCount = 1,
+                    checkTypes = listOf("Placeholder"),
+                    timeToCompleteMs = 10.minutes.inWholeMilliseconds,
+                    fallbackUsed = false,
+                    directBoot = false,
+                    outcome = SessionOutcome.Snoozed,
+                ),
+                history.rows.values.single(),
+            )
+            assertEquals(
+                Outcome.Success(SessionState.Idle),
+                engine.dispatch(SessionEvent.Recorded(SESSION_ID)),
+                "a late Recorded is ignored",
+            )
         }
+
+    /** What the runner gets of [transition]'s one-shot effects: everything but the history start, which the recorder writes. */
+    private fun runnerEffects(transition: Transition): List<SessionEffect> =
+        transition.effects.filter { it !is SessionEffect.RecordSessionStart }
 }

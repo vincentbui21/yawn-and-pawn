@@ -22,7 +22,7 @@ internal class RingRules(
         when (event) {
             is SessionEvent.UserEvent -> onUserEvent(state, event, now)
             is SessionEvent.PurchaseEvent -> purchases.onPurchase(state, event, now)
-            is SessionEvent.ImageMatchEvent -> checks.onImageMatch(state, event)
+            is SessionEvent.ImageMatchEvent -> checks.onImageMatch(state, event, now)
             is SessionEvent.CallEvent -> onCall(state, event, now)
             is SessionEvent.TimerEvent -> onTimer(state, event, now)
             SessionEvent.SlotFired -> Transition(state, listOf(heartbeat(now)))
@@ -42,7 +42,7 @@ internal class RingRules(
         val row =
             when (event) {
                 SessionEvent.ImUpTapped -> imUp(reset, now)
-                is SessionEvent.CheckAnswerSubmitted -> checks.onAnswer(reset, event.answer)
+                is SessionEvent.CheckAnswerSubmitted -> checks.onAnswer(reset, event.answer, now)
                 SessionEvent.FallbackRequested -> checks.onFallbackRequested(reset)
                 SessionEvent.SnoozeTapped -> purchases.onSnoozeTapped(reset)
                 is SessionEvent.PayConfirmed -> purchases.onPayConfirmed(reset, event.intentId)
@@ -121,15 +121,18 @@ internal class RingRules(
             }
 
             SessionEvent.NoInteractionTimeout -> {
-                if (state !is Grace && !session.paused && session.interactionDeadline?.isDue(now) == true) missed(session) else null
+                if (state !is Grace && !session.paused && session.interactionDeadline?.isDue(now) == true) missed(session, now) else null
             }
         }
     }
 
-    private fun missed(session: SessionData): Transition =
+    private fun missed(
+        session: SessionData,
+        now: TimeSnapshot,
+    ): Transition =
         Transition(
-            SessionState.Missed(session.withoutTimers()),
-            listOf(SessionEffect.StopSound, SessionEffect.CancelSlot, SessionEffect.RecordOutcome(session.sessionId, SessionEnd.Missed)),
+            SessionState.Missed(session.withoutTimers().copy(ended = now)),
+            listOf(SessionEffect.StopSound, SessionEffect.CancelSlot),
         )
 
     /**

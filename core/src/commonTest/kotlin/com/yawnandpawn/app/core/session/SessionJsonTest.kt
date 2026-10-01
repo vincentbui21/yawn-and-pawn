@@ -67,6 +67,17 @@ class SessionJsonTest {
     }
 
     @Test
+    fun `a version 1 row has no first ring, start boot state or end, and all three round trip`() {
+        val decoded = assertIs<StoredSession.Found>(SessionJson.decode(v1("Completed"))).state
+        val v1Session = assertIs<SessionState.Completed>(decoded).session
+        assertEquals(Triple(null, false, null), Triple(v1Session.firstRing, v1Session.startedBeforeUnlock, v1Session.ended))
+
+        val session = ringSession().copy(firstRing = at(5.seconds), startedBeforeUnlock = true, ended = at(3.minutes))
+        val ringing = SessionState.Ringing(session)
+        assertEquals(StoredSession.Found(ringing), SessionJson.decode(SessionJson.encode(ringing)))
+    }
+
+    @Test
     fun `a version 1 row with extra unknown fields still decodes`() {
         activeStates.forEach { state ->
             val name = state::class.simpleName!!

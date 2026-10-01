@@ -2,6 +2,8 @@ package com.yawnandpawn.app.core.session
 
 import com.yawnandpawn.app.core.error.DomainError
 import com.yawnandpawn.app.core.error.Outcome
+import com.yawnandpawn.app.core.history.SessionHistoryRepository
+import com.yawnandpawn.app.core.history.SessionHistoryRow
 import com.yawnandpawn.app.core.log.LogEvent
 import com.yawnandpawn.app.core.log.Logger
 import com.yawnandpawn.app.core.time.BootCounter
@@ -115,5 +117,26 @@ internal class EngineLogger : Logger {
 
     override fun log(event: LogEvent) {
         events += event
+    }
+}
+
+/** A [SessionHistoryRepository] in memory: one row per session id. Every successful upsert is kept in [upserts]. */
+internal class InMemoryHistory : SessionHistoryRepository {
+    val rows = mutableMapOf<String, SessionHistoryRow>()
+    val upserts = mutableListOf<SessionHistoryRow>()
+
+    var upsertFailure: DomainError? = null
+    var findFailure: DomainError? = null
+
+    override suspend fun upsert(row: SessionHistoryRow): Outcome<Unit, DomainError> {
+        upsertFailure?.let { return Outcome.Failure(it) }
+        rows[row.sessionId] = row
+        upserts += row
+        return Outcome.Success(Unit)
+    }
+
+    override suspend fun find(sessionId: String): Outcome<SessionHistoryRow?, DomainError> {
+        findFailure?.let { return Outcome.Failure(it) }
+        return Outcome.Success(rows[sessionId])
     }
 }

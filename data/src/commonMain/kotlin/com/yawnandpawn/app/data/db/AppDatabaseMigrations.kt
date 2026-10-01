@@ -25,5 +25,24 @@ val MIGRATION_1_2: Migration =
         }
     }
 
+/**
+ * v2 to v3 (Story 1.13): adds the empty `session_history` table (AD-18) and its `scheduled_at` index. Alarms and the
+ * request-code mark are untouched. The SQL matches the exported `3.json`; Room checks it after migrating.
+ */
+val MIGRATION_2_3: Migration =
+    object : Migration(2, 3) {
+        override suspend fun migrate(connection: SQLiteConnection) {
+            connection.execSQL(
+                "CREATE TABLE IF NOT EXISTS `session_history` (`session_id` TEXT NOT NULL, `alarm_id` TEXT NOT NULL, " +
+                    "`scheduled_at` INTEGER NOT NULL, `first_ring_at` INTEGER NOT NULL, `ended_at` INTEGER, " +
+                    "`snooze_count` INTEGER NOT NULL, `check_types` TEXT NOT NULL, `time_to_complete_ms` INTEGER, " +
+                    "`fallback_used` INTEGER NOT NULL, `direct_boot` INTEGER NOT NULL, `outcome` TEXT, PRIMARY KEY(`session_id`))",
+            )
+            connection.execSQL(
+                "CREATE INDEX IF NOT EXISTS `index_session_history_scheduled_at` ON `session_history` (`scheduled_at`)",
+            )
+        }
+    }
+
 /** Every migration of `app.db`, oldest first; `buildAppDatabase` registers them all. */
-val APP_DATABASE_MIGRATIONS: Array<Migration> = arrayOf(MIGRATION_1_2)
+val APP_DATABASE_MIGRATIONS: Array<Migration> = arrayOf(MIGRATION_1_2, MIGRATION_2_3)

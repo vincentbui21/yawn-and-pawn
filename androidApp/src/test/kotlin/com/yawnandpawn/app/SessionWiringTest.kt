@@ -4,6 +4,7 @@ import androidx.test.core.app.ApplicationProvider
 import com.yawnandpawn.app.android.ApplicationScope
 import com.yawnandpawn.app.android.LoggingEffectRunner
 import com.yawnandpawn.app.android.UnavailableBilling
+import com.yawnandpawn.app.core.history.SessionHistoryRepository
 import com.yawnandpawn.app.core.session.ActiveSessionStore
 import com.yawnandpawn.app.core.session.Billing
 import com.yawnandpawn.app.core.session.CheckValidator
@@ -14,10 +15,12 @@ import com.yawnandpawn.app.core.session.NoBillingSnoozeAvailability
 import com.yawnandpawn.app.core.session.NoFallbackPolicy
 import com.yawnandpawn.app.core.session.PlaceholderCheckValidator
 import com.yawnandpawn.app.core.session.SessionEngine
+import com.yawnandpawn.app.core.session.SessionRecorder
 import com.yawnandpawn.app.core.session.SessionReducer
 import com.yawnandpawn.app.core.session.SessionState
 import com.yawnandpawn.app.core.session.SnoozeAvailabilityPolicy
 import com.yawnandpawn.app.core.session.TierFeeLadder
+import com.yawnandpawn.app.data.history.RoomSessionHistoryRepository
 import com.yawnandpawn.app.data.session.RoomActiveSessionStore
 import org.junit.Rule
 import org.junit.Test
@@ -29,14 +32,14 @@ import kotlin.test.assertIs
 import kotlin.test.assertNotSame
 import kotlin.test.assertSame
 
-/** Story 1.12: Koin binds one session engine over runtime.db with the Epic 1 policies, effect runner and billing. */
+/** Stories 1.12 and 1.13: Koin binds one session engine over runtime.db and session history, with the Epic 1 policies. */
 @RunWith(RobolectricTestRunner::class)
 class SessionWiringTest {
     @get:Rule(order = 0)
     val stopApp = StopAppRule()
 
     @Test
-    fun `Koin binds one session engine, its reducer, the Room session store and the Epic 1 runner and billing`() {
+    fun `Koin binds one session engine, its reducer, the Room session store, the history recorder and the Epic 1 runner and billing`() {
         val koin = GlobalContext.get()
 
         assertSame(koin.get<SessionEngine>(), koin.get<SessionEngine>())
@@ -44,6 +47,8 @@ class SessionWiringTest {
         assertIs<RoomActiveSessionStore>(koin.get<ActiveSessionStore>())
         assertIs<LoggingEffectRunner>(koin.get<EffectRunner>())
         assertIs<UnavailableBilling>(koin.get<Billing>())
+        assertSame(koin.get<SessionRecorder>(), koin.get<SessionRecorder>())
+        assertIs<RoomSessionHistoryRepository>(koin.get<SessionHistoryRepository>())
     }
 
     @Test

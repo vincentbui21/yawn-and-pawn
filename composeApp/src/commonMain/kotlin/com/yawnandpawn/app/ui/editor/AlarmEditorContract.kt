@@ -4,6 +4,7 @@ import com.yawnandpawn.app.core.alarm.Alarm
 import com.yawnandpawn.app.core.alarm.AlarmField
 import com.yawnandpawn.app.ui.checks.CheckType
 import com.yawnandpawn.app.ui.checks.Difficulty
+import com.yawnandpawn.app.ui.checks.defaultCount
 import com.yawnandpawn.app.ui.format.Countdown
 import com.yawnandpawn.app.ui.format.Money
 import com.yawnandpawn.app.ui.format.Weekdays
@@ -86,10 +87,11 @@ data class EditorUiState(
 /** How the selected checks run: one picked at random each morning, or all of them in order. */
 enum class CheckMode { Random, All }
 
-/** One selected check and its difficulty. */
+/** One selected check, its difficulty and (Math, Word Unscramble, Memory Sequence) how many problems, words or rounds. */
 data class CheckChip(
     val type: CheckType,
     val difficulty: Difficulty,
+    val count: Int = type.defaultCount,
 )
 
 /** The motivation message the alarm plays: none, a random one of the recordings, or one named recording. */
@@ -112,6 +114,10 @@ data class FullEditorSections(
     val checkMode: CheckMode = CheckMode.Random,
     /** Save was blocked because no check is selected: "Pick at least one check." */
     val noCheckError: Boolean = false,
+    /** A QR/Barcode code is registered (its Check setup row says "Code saved"). */
+    val qrCodeSaved: Boolean = false,
+    /** House Hunt reference photos taken, 0 to 3. */
+    val houseHuntPhotos: Int = 0,
     /** The quiet time ("Quiet time", internally the grace window), 15 to 30 s. */
     val graceSeconds: Int = Alarm.DEFAULT_GRACE_SECONDS,
     /** "Vibrate during quiet time". */
@@ -218,6 +224,17 @@ sealed interface EditorIntent {
 
     /** "Record a message": opens Recordings (design-preview round 3). */
     data object RecordMessageClicked : EditorIntent
+
+    /** A selected check's row in the Wake-up check sub-screen: opens its Check setup (design-preview round 3). */
+    data class CheckSetupClicked(
+        val type: CheckType,
+    ) : EditorIntent
+
+    /** All mode: move a selected check one place up or down in the order the checks run. */
+    data class CheckMoved(
+        val type: CheckType,
+        val up: Boolean,
+    ) : EditorIntent
 
     data object TestAlarmClicked : EditorIntent
 }

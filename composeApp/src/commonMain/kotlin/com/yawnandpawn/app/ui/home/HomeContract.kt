@@ -42,6 +42,8 @@ data class HomeUiState(
     val missedAlarmAt: LocalTime? = null,
     /** Fallback check used 3 times in 7 days: the info banner suggesting to re-register this check. */
     val reregisterCheck: CheckType? = null,
+    /** Onboarding's test alarm was skipped: "Ring a test alarm with your phone locked to check it works." until dismissed. */
+    val testSkipped: Boolean = false,
     /** A session is active: `panel-session-in-progress` replaces everything else. */
     val sessionInProgress: Boolean = false,
     val disableDialog: DisableUnderLock? = null,
@@ -63,6 +65,8 @@ sealed interface HomeIntent {
     data object FixSettings : HomeIntent
 
     data object MissedNoteDismissed : HomeIntent
+
+    data object TestNoteDismissed : HomeIntent
 
     data object ReregisterClicked : HomeIntent
 

@@ -29,6 +29,10 @@ import com.yawnandpawn.app.ui.home.AlarmCard
 import com.yawnandpawn.app.ui.home.HomeIntent
 import com.yawnandpawn.app.ui.home.HomeScreen
 import com.yawnandpawn.app.ui.home.HomeUiState
+import com.yawnandpawn.app.ui.onboarding.OnboardingIntent
+import com.yawnandpawn.app.ui.onboarding.OnboardingScreen
+import com.yawnandpawn.app.ui.onboarding.OnboardingStep
+import com.yawnandpawn.app.ui.onboarding.OnboardingUiState
 import com.yawnandpawn.app.ui.payments.PaymentsIntent
 import com.yawnandpawn.app.ui.payments.PaymentsScreen
 import com.yawnandpawn.app.ui.payments.ProblemWithChargeScreen
@@ -48,8 +52,8 @@ import com.yawnandpawn.app.ui.you.YouIntent
 import com.yawnandpawn.app.ui.you.YouScreen
 import kotlinx.datetime.LocalDate
 
-/** A pushed screen of the tap-through (the shell with its tabs is the root). */
-private sealed interface Pushed {
+/** A pushed screen of the tap-through (the shell with its tabs, or onboarding, is the root). */
+internal sealed interface Pushed {
     data class Editor(
         val alarmId: String?,
     ) : Pushed
@@ -69,10 +73,14 @@ private sealed interface Pushed {
     data object ProblemWithCharge : Pushed
 }
 
-/** The tap-through's fake app state and what each tap does to it. Nothing is stored, scheduled, played or charged. */
-private class TapThroughState(
+/**
+ * The tap-through's fake app state and what each tap does to it. Nothing is stored, scheduled, played or charged.
+ * [start] opens onboarding first, or the editor on its Wake-up check or Motivation sub-screen (round 3).
+ */
+internal class TapThroughState(
     startInSession: Boolean,
     startTab: AppTab,
+    start: FlowStart,
 ) {
     var tab by mutableStateOf(startTab)
     val stack = mutableStateListOf<Pushed>()
@@ -84,11 +92,54 @@ private class TapThroughState(
     var reliability by mutableStateOf(PreviewProgressSamples.reliabilityMissing)
     var you by mutableStateOf(PreviewProgressSamples.you)
 
+    /** Onboarding while it runs (the root instead of the tabs); `null` once it is done. */
+    var onboarding by mutableStateOf<OnboardingUiState?>(null)
+
+    // Check setup, "Try it", QR and House Hunt registration and Recordings change the checks of whoever opened them.
+    val setup =
+        SetupFlowState(
+            push = { stack.add(it) },
+            pop = { pop() },
+            updateChips = { change ->
+                val current = onboarding
+                if (current != null) {
+                    onboarding = current.copy(checks = current.checks.copy(checks = change(current.checks.checks)))
+                } else {
+                    editor = editor.copy(full = editor.full?.let { it.copy(checks = change(it.checks)) })
+                }
+            },
+            onMessages = { numbers -> editor = editor.copy(full = editor.full?.copy(recordings = numbers.map { "Message $it" })) },
+            registered = start != FlowStart.Onboarding,
+        )
+
+    init {
+        when (start) {
+            FlowStart.Tabs -> {
+                Unit
+            }
+
+            FlowStart.Onboarding -> {
+                onboarding = PreviewSetupSamples.onboarding.copy(checks = PreviewSetupSamples.onboarding.checks.copy(qrCodeSaved = false))
+            }
+
+            FlowStart.CheckPicker -> {
+                editor = PreviewSamples.editorEdit.copy(pane = EditorPane.WakeCheck)
+                stack.add(Pushed.Editor(LOCKED_ALARM_ID))
+            }
+
+            FlowStart.Recordings -> {
+                editor = PreviewSamples.editorEdit.copy(pane = EditorPane.Motivation)
+                stack.add(Pushed.Editor(LOCKED_ALARM_ID))
+                stack.add(SetupPushed.Recordings)
+            }
+        }
+    }
+
     private fun pop() {
         if (stack.isNotEmpty()) stack.removeAt(stack.lastIndex)
     }
 
-    private fun openWake(test: Boolean) {
+    fun openWake(test: Boolean) {
         wake.start(test)
         stack.add(Pushed.Wake)
     }
@@ -99,15 +150,20 @@ private class TapThroughState(
      */
     fun back(): Boolean {
         val top = stack.lastOrNull()
-        val settingsPane = top == null && tab == AppTab.Settings && settings.pane != SettingsPane.Main
-        when {
-            settingsPane -> settings = settings.copy(pane = SettingsPane.Main)
-            top == null || top == Pushed.Wake -> return false
-            top is Pushed.Editor -> if (editor.pane != EditorPane.Main) editor = editor.copy(pane = EditorPane.Main) else pop()
-            top == Pushed.Reliability -> onReliability(ReliabilityIntent.Back)
-            else -> pop()
+        return when (top) {
+            null -> {
+                backAtRoot()
+            }
+
+            Pushed.Wake -> {
+                false
+            }
+
+            else -> {
+                backFrom(top)
+                true
+            }
         }
-        return true
     }
 
     fun push(screen: Pushed) {
@@ -166,6 +222,17 @@ private class TapThroughState(
                 openWake(test = true)
             }
 
+            is EditorIntent.CheckSetupClicked -> {
+                editor.full
+                    ?.checks
+                    ?.firstOrNull { it.type == intent.type }
+                    ?.let(setup::openCheckSetup)
+            }
+
+            EditorIntent.RecordMessageClicked -> {
+                setup.openRecordings()
+            }
+
             else -> {
                 editor = reduceEditor(editor, intent)
             }
@@ -175,6 +242,8 @@ private class TapThroughState(
     fun onWakeFinished() {
         home = home.copy(sessionInProgress = false)
         stack.clear()
+        // The test alarm at the end of onboarding: "Done" lands on Home with the new alarm.
+        if (onboarding != null) finishOnboarding(testSkipped = false)
     }
 
     fun onProgress(intent: ProgressIntent) {
@@ -242,7 +311,8 @@ private class TapThroughState(
  * The daily loop, tappable like the finished app with fake state only: bottom navigation, Home, the full editor and its
  * sub-screens (every control responds; Save updates the card), and the wake flow (see [PreviewWakeFlow]).
  * [startInSession] opens Home in the session lock ("Back to alarm" opens Ringing). Back walks back; at the root and on
- * wake screens [onExit] returns to the preview menu. Pushed screens slide in and out.
+ * wake screens [onExit] returns to the preview menu. Pushed screens slide in and out. [start] (round 3) opens onboarding
+ * first, or the editor on its Wake-up check (the Check picker) or Motivation sub-screen with Recordings over it.
  */
 @Composable
 fun TapThrough(
@@ -250,8 +320,9 @@ fun TapThrough(
     onExit: () -> Unit,
     startInSession: Boolean = false,
     startTab: AppTab = AppTab.Alarms,
+    start: FlowStart = FlowStart.Tabs,
 ) {
-    val state = remember { TapThroughState(startInSession, startTab) }
+    val state = remember { TapThroughState(startInSession, startTab, start) }
     BackHandler { if (!state.back()) onExit() }
     // Each screen keeps its saved state (scroll position) while a screen is pushed over it, like the app's nav entries.
     val saved = rememberSaveableStateHolder()
@@ -283,7 +354,11 @@ private fun Screen(
         }
 
         is Pushed.Editor -> {
-            AlarmEditorScreen(state = state.editor, is24Hour = is24Hour, onIntent = { state.onEditor(top.alarmId, it) })
+            AlarmEditorScreen(state = state.editorShown(), is24Hour = is24Hour, onIntent = { state.onEditor(top.alarmId, it) })
+        }
+
+        is SetupPushed -> {
+            SetupScreen(top = top, setup = state.setup)
         }
 
         Pushed.Wake -> {
@@ -317,6 +392,56 @@ private fun Screen(
     }
 }
 
+/**
+ * Back at the root: a Settings sub-screen returns to Settings, onboarding steps back; `false` on the tabs and on
+ * onboarding's first step, which leave the tap-through.
+ */
+private fun TapThroughState.backAtRoot(): Boolean {
+    val step = onboarding?.step
+    return when {
+        step != null && step != OnboardingStep.Mission -> {
+            onOnboarding(OnboardingIntent.Back)
+            true
+        }
+
+        step == null && tab == AppTab.Settings && settings.pane != SettingsPane.Main -> {
+            settings = settings.copy(pane = SettingsPane.Main)
+            true
+        }
+
+        else -> {
+            false
+        }
+    }
+}
+
+/** Back on a pushed screen: an editor sub-screen returns to the editor, the checklist closes its steps, others pop. */
+private fun TapThroughState.backFrom(top: Pushed) {
+    when {
+        top is SetupPushed -> {
+            setup.back(top)
+        }
+
+        top is Pushed.Editor -> {
+            if (editor.pane !=
+                EditorPane.Main
+            ) {
+                editor = editor.copy(pane = EditorPane.Main)
+            } else {
+                stack.removeAt(stack.lastIndex)
+            }
+        }
+
+        top == Pushed.Reliability -> {
+            onReliability(ReliabilityIntent.Back)
+        }
+
+        else -> {
+            stack.removeAt(stack.lastIndex)
+        }
+    }
+}
+
 /** The You tab: its rows push Purchase history and Payments; the rest is local state. */
 private fun TapThroughState.onYou(intent: YouIntent) {
     when (intent) {
@@ -332,6 +457,10 @@ private fun Tabs(
     state: TapThroughState,
     is24Hour: Boolean,
 ) {
+    state.onboarding?.let { onboarding ->
+        OnboardingScreen(state = onboarding.withRegistrations(state.setup), is24Hour = is24Hour, onIntent = state::onOnboarding)
+        return
+    }
     // The session lock hides the nav bar and every tab shows only "Back to alarm".
     val sessionLock = state.home.sessionInProgress
     // A Settings sub-screen is a pushed screen: no nav bar, like the editor's sub-screens.

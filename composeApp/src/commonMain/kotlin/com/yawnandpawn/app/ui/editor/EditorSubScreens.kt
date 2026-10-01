@@ -1,23 +1,17 @@
 package com.yawnandpawn.app.ui.editor
 
-import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import com.yawnandpawn.app.core.alarm.Alarm
-import com.yawnandpawn.app.ui.checks.CheckType
-import com.yawnandpawn.app.ui.checks.Difficulty
-import com.yawnandpawn.app.ui.checks.description
-import com.yawnandpawn.app.ui.checks.displayName
-import com.yawnandpawn.app.ui.checks.icon
-import com.yawnandpawn.app.ui.components.CheckboxRow
+import com.yawnandpawn.app.ui.checkpicker.CheckPickerContent
+import com.yawnandpawn.app.ui.checkpicker.CheckPickerIntent
+import com.yawnandpawn.app.ui.checkpicker.CheckPickerUiState
 import com.yawnandpawn.app.ui.components.GroupCard
 import com.yawnandpawn.app.ui.components.GroupDivider
-import com.yawnandpawn.app.ui.components.InlineError
 import com.yawnandpawn.app.ui.components.NavRow
 import com.yawnandpawn.app.ui.components.NoteInline
 import com.yawnandpawn.app.ui.components.PercentSlider
-import com.yawnandpawn.app.ui.components.PpsSegmentedControl
 import com.yawnandpawn.app.ui.components.RadioRow
 import com.yawnandpawn.app.ui.components.StepSlider
 import com.yawnandpawn.app.ui.components.SubScreen
@@ -26,9 +20,6 @@ import com.yawnandpawn.app.ui.format.formatMoney
 import com.yawnandpawn.app.ui.resources.Res
 import com.yawnandpawn.app.ui.resources.editor_after_im_up
 import com.yawnandpawn.app.ui.resources.editor_back
-import com.yawnandpawn.app.ui.resources.editor_check_mode
-import com.yawnandpawn.app.ui.resources.editor_checks
-import com.yawnandpawn.app.ui.resources.editor_difficulty
 import com.yawnandpawn.app.ui.resources.editor_fee_ladder
 import com.yawnandpawn.app.ui.resources.editor_grace_seconds
 import com.yawnandpawn.app.ui.resources.editor_gradual_volume
@@ -36,10 +27,7 @@ import com.yawnandpawn.app.ui.resources.editor_message
 import com.yawnandpawn.app.ui.resources.editor_message_none
 import com.yawnandpawn.app.ui.resources.editor_message_random
 import com.yawnandpawn.app.ui.resources.editor_mix_into_alarm
-import com.yawnandpawn.app.ui.resources.editor_mode_all
-import com.yawnandpawn.app.ui.resources.editor_mode_random
 import com.yawnandpawn.app.ui.resources.editor_motivation
-import com.yawnandpawn.app.ui.resources.editor_no_check
 import com.yawnandpawn.app.ui.resources.editor_percent
 import com.yawnandpawn.app.ui.resources.editor_quiet_time
 import com.yawnandpawn.app.ui.resources.editor_quiet_time_note
@@ -152,52 +140,40 @@ private fun SnoozePane(
         }
 }
 
-/** Wake-up check: the check types, Random / All (two or more checks) and the difficulty. */
+/**
+ * Wake-up check: the Check picker (design preview round 3; IA: in the editor it is this sub-screen): the check types,
+ * Random / All (two or more checks, with the order in All mode) and each selected check's setup (difficulty and count,
+ * or its code or photos), which opens Check setup.
+ */
 @Composable
 private fun WakeCheckPane(
     full: FullEditorSections,
     onIntent: (EditorIntent) -> Unit,
 ) {
-    val spacing = PpsTheme.spacing
-    GroupCard(title = stringResource(Res.string.editor_checks)) {
-        CheckType.entries.forEachIndexed { index, type ->
-            if (index > 0) GroupDivider()
-            CheckboxRow(
-                label = type.displayName(),
-                subtitle = type.description(),
-                icon = type.icon,
-                checked = full.checks.any { it.type == type },
-                onCheckedChange = { onIntent(EditorIntent.CheckToggled(type, it)) },
-            )
-        }
-    }
-    if (full.noCheckError) {
-        InlineError(text = stringResource(Res.string.editor_no_check), modifier = Modifier.padding(horizontal = spacing.cardPadding))
-    }
-    if (full.checks.size > 1) {
-        GroupCard(title = stringResource(Res.string.editor_check_mode)) {
-            PpsSegmentedControl(
-                options = CheckMode.entries,
-                selected = full.checkMode,
-                label = { mode ->
-                    stringResource(if (mode == CheckMode.Random) Res.string.editor_mode_random else Res.string.editor_mode_all)
-                },
-                onSelect = { onIntent(EditorIntent.CheckModeSelected(it)) },
-                modifier = Modifier.fillMaxWidth().padding(spacing.cardPadding),
-            )
-        }
-    }
-    full.checks.firstOrNull()?.let { first ->
-        GroupCard(title = stringResource(Res.string.editor_difficulty)) {
-            PpsSegmentedControl(
-                options = Difficulty.entries,
-                selected = first.difficulty,
-                label = { it.displayName() },
-                onSelect = { onIntent(EditorIntent.DifficultySelected(it)) },
-                modifier = Modifier.fillMaxWidth().padding(spacing.cardPadding),
-            )
-        }
-    }
+    CheckPickerContent(
+        state =
+            CheckPickerUiState(
+                checks = full.checks,
+                mode = full.checkMode,
+                noCheckError = full.noCheckError,
+                qrCodeSaved = full.qrCodeSaved,
+                houseHuntPhotos = full.houseHuntPhotos,
+            ),
+        onIntent = { intent ->
+            when (intent) {
+                is CheckPickerIntent.Toggled -> onIntent(EditorIntent.CheckToggled(intent.type, intent.selected))
+
+                is CheckPickerIntent.ModeSelected -> onIntent(EditorIntent.CheckModeSelected(intent.mode))
+
+                is CheckPickerIntent.SetupClicked -> onIntent(EditorIntent.CheckSetupClicked(intent.type))
+
+                is CheckPickerIntent.Moved -> onIntent(EditorIntent.CheckMoved(intent.type, intent.up))
+
+                // The camera banner only shows in onboarding and the standalone picker.
+                CheckPickerIntent.FixCamera -> Unit
+            }
+        },
+    )
 }
 
 /** Quiet time (the grace window): 15 to 30 s and "Vibrate during quiet time". */

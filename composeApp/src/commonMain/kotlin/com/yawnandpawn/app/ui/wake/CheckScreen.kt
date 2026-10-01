@@ -11,7 +11,6 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
@@ -21,8 +20,6 @@ import androidx.compose.foundation.layout.sizeIn
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
-import androidx.compose.material3.IconButtonDefaults
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
@@ -46,6 +43,8 @@ import androidx.compose.ui.unit.dp
 import com.yawnandpawn.app.ui.checks.description
 import com.yawnandpawn.app.ui.checks.displayName
 import com.yawnandpawn.app.ui.components.PpsTextButton
+import com.yawnandpawn.app.ui.components.QrGuide
+import com.yawnandpawn.app.ui.components.ViewfinderPlaceholder
 import com.yawnandpawn.app.ui.components.glass
 import com.yawnandpawn.app.ui.resources.Res
 import com.yawnandpawn.app.ui.resources.camera_unavailable
@@ -70,7 +69,6 @@ import com.yawnandpawn.app.ui.resources.qr_torch
 import com.yawnandpawn.app.ui.resources.qr_viewfinder
 import com.yawnandpawn.app.ui.resources.qr_wrong_code
 import com.yawnandpawn.app.ui.resources.symbol_backspace
-import com.yawnandpawn.app.ui.resources.symbol_flashlight_on
 import com.yawnandpawn.app.ui.resources.symbol_house
 import com.yawnandpawn.app.ui.resources.symbol_photo_camera
 import com.yawnandpawn.app.ui.resources.word_clear
@@ -115,13 +113,7 @@ fun CheckScreen(
             ) {
                 GraceHeader(grace = state.grace)
                 state.note?.let { WakeNoteView(note = it) }
-                when (val content = state.content) {
-                    is CheckContent.Math -> MathCheck(content, onIntent)
-                    is CheckContent.WordUnscramble -> WordCheck(content, onIntent)
-                    is CheckContent.MemorySequence -> MemoryCheck(content, onIntent)
-                    is CheckContent.QrBarcode -> QrCheck(content, onIntent)
-                    is CheckContent.HouseHunt -> HouseHuntCheck(content, onIntent)
-                }
+                CheckContentView(content = state.content, onIntent = onIntent)
             }
             Column(
                 modifier = Modifier.fillMaxWidth().padding(top = spacing.space3),
@@ -135,6 +127,24 @@ fun CheckScreen(
                 SnoozeButton(offer = state.snooze, onClick = { onIntent(WakeIntent.SnoozeClicked) })
             }
         }
+    }
+}
+
+/**
+ * The check itself, without the grace header and the footer: the Check screen and the "Try it" preview (Check setup)
+ * share it.
+ */
+@Composable
+internal fun CheckContentView(
+    content: CheckContent,
+    onIntent: (WakeIntent) -> Unit,
+) {
+    when (content) {
+        is CheckContent.Math -> MathCheck(content, onIntent)
+        is CheckContent.WordUnscramble -> WordCheck(content, onIntent)
+        is CheckContent.MemorySequence -> MemoryCheck(content, onIntent)
+        is CheckContent.QrBarcode -> QrCheck(content, onIntent)
+        is CheckContent.HouseHunt -> HouseHuntCheck(content, onIntent)
     }
 }
 
@@ -419,22 +429,9 @@ private fun QrCheck(
             CameraUnavailable()
             return@Column
         }
-        Viewfinder(spoken = stringResource(Res.string.qr_viewfinder)) {
-            Box(
-                modifier =
-                    Modifier
-                        .align(Alignment.Center)
-                        .fillMaxSize(GUIDE_FRACTION)
-                        .aspectRatio(1f)
-                        .border(2.dp, colors.inverseText, PpsTheme.shapes.md),
-            )
-            IconButton(
-                onClick = { onIntent(WakeIntent.TorchToggled) },
-                modifier = Modifier.align(Alignment.TopEnd).padding(PpsTheme.spacing.space2).size(PpsTheme.spacing.targetMin),
-                colors = IconButtonDefaults.iconButtonColors(contentColor = colors.inverseText),
-            ) {
-                Icon(painter = painterResource(Res.drawable.symbol_flashlight_on), contentDescription = stringResource(Res.string.qr_torch))
-            }
+        val torch = stringResource(Res.string.qr_torch)
+        ViewfinderPlaceholder(spoken = stringResource(Res.string.qr_viewfinder)) { viewfinder ->
+            QrGuide(colors = viewfinder, torchLabel = torch, onTorch = { onIntent(WakeIntent.TorchToggled) })
         }
         if (content.wrongCode) {
             Text(
@@ -472,7 +469,7 @@ private fun HouseHuntCheck(
             CameraUnavailable()
             return@Column
         }
-        Viewfinder(spoken = null) {
+        ViewfinderPlaceholder(spoken = null) {
             Box(
                 modifier =
                     Modifier
@@ -516,27 +513,6 @@ private fun HouseHuntCheck(
     }
 }
 
-/**
- * `viewfinder` placeholder: the camera preview area inside a `rounded.md` frame. The design preview has no camera, so
- * the feed is a flat `inverse-surface` fill.
- */
-@Composable
-private fun Viewfinder(
-    spoken: String?,
-    overlay: @Composable androidx.compose.foundation.layout.BoxScope.() -> Unit,
-) {
-    Box(
-        modifier =
-            Modifier
-                .fillMaxWidth()
-                .aspectRatio(VIEWFINDER_RATIO)
-                .clip(PpsTheme.shapes.md)
-                .background(PpsTheme.colors.inverseSurface)
-                .then(if (spoken != null) Modifier.semantics { contentDescription = spoken } else Modifier),
-        content = overlay,
-    )
-}
-
 @Composable
 private fun CameraUnavailable() {
     Text(
@@ -554,6 +530,4 @@ private fun CameraUnavailable() {
 
 private const val GRID = 3
 private const val DASH = 8f
-private const val GUIDE_FRACTION = 0.6f
-private const val VIEWFINDER_RATIO = 4f / 3f
 private val GHOST_SIZE = 72.dp

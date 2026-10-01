@@ -95,6 +95,8 @@ import com.yawnandpawn.app.ui.resources.repeat_weekdays
 import com.yawnandpawn.app.ui.resources.sound_file_missing
 import com.yawnandpawn.app.ui.theme.PpsTheme
 import kotlinx.coroutines.launch
+import kotlinx.datetime.DayOfWeek
+import kotlinx.datetime.LocalTime
 import org.jetbrains.compose.resources.stringResource
 import org.koin.compose.viewmodel.koinViewModel
 import org.koin.core.parameter.parametersOf
@@ -251,71 +253,30 @@ private fun EditorHeader(state: EditorUiState) {
     }
 }
 
-/** The time wheels in their own card and, for a one-time alarm whose time has passed today, "Rings tomorrow at {time}." */
+/** The editor's time card. */
 @Composable
 private fun TimeCard(
     state: EditorUiState,
     is24Hour: Boolean,
     onIntent: (EditorIntent) -> Unit,
-) {
-    val spacing = PpsTheme.spacing
-    GroupCard {
-        Column(
-            modifier = Modifier.fillMaxWidth().padding(horizontal = spacing.space2, vertical = spacing.space3),
-            horizontalAlignment = Alignment.CenterHorizontally,
-        ) {
-            PpsWheelTimePicker(
-                time = state.form.time,
-                is24Hour = is24Hour,
-                onTimeChange = { onIntent(EditorIntent.TimeChanged(it)) },
-            )
-            state.ringsTomorrowAt?.let { ringTime ->
-                NoteInline(
-                    text = stringResource(Res.string.editor_rings_tomorrow, formatClockTime(ringTime, is24Hour)),
-                    modifier = Modifier.padding(top = spacing.space2),
-                )
-            }
-        }
-    }
-}
+) = TimeWheelCard(
+    time = state.form.time,
+    is24Hour = is24Hour,
+    onTimeChange = { onIntent(EditorIntent.TimeChanged(it)) },
+    ringsTomorrowAt = state.ringsTomorrowAt,
+)
 
-/** "Once" · "Weekdays" · "Custom"; Custom expands to the seven day chips. */
+/** The editor's repeat card. */
 @Composable
 private fun RepeatCard(
     state: EditorUiState,
     onIntent: (EditorIntent) -> Unit,
-) {
-    val spacing = PpsTheme.spacing
-    GroupCard(title = stringResource(Res.string.editor_repeat)) {
-        Column(modifier = Modifier.fillMaxWidth().padding(spacing.space3)) {
-            PpsSegmentedControl(
-                options = RepeatChoice.entries,
-                selected = state.repeatChoice,
-                label = { choice ->
-                    stringResource(
-                        when (choice) {
-                            RepeatChoice.Once -> Res.string.repeat_once
-                            RepeatChoice.Weekdays -> Res.string.repeat_weekdays
-                            RepeatChoice.Custom -> Res.string.repeat_custom
-                        },
-                    )
-                },
-                onSelect = { onIntent(EditorIntent.RepeatChosen(it)) },
-            )
-            AnimatedVisibility(
-                visible = state.repeatChoice == RepeatChoice.Custom,
-                enter = expandVertically() + fadeIn(),
-                exit = shrinkVertically() + fadeOut(),
-            ) {
-                DayChipRow(
-                    selectedDays = state.form.repeatDays,
-                    onToggle = { onIntent(EditorIntent.DayToggled(it)) },
-                    modifier = Modifier.padding(top = spacing.space3),
-                )
-            }
-        }
-    }
-}
+) = RepeatChoiceCard(
+    choice = state.repeatChoice,
+    days = state.form.repeatDays,
+    onChoose = { onIntent(EditorIntent.RepeatChosen(it)) },
+    onToggleDay = { onIntent(EditorIntent.DayToggled(it)) },
+)
 
 /** Card 1: alarm name (inline field), Sound (value, opens the Sound sub-screen) and Vibration. */
 @Composable

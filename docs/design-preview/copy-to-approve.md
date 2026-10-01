@@ -120,6 +120,41 @@ Reused: "I'm up" (key string), "{time} alarm merged into this session" and "Rang
 
 The "+" reads "Add alarm" (existing key string, was the Home FAB). The moved rows keep their strings.
 
+## Round 3 (setup flows, 2026-10-01)
+
+Every other round 3 string is an EXPERIENCE.md key string, used verbatim: the mission, "Let's set it up" (F1), the disclosure (three sentences, as on Payments & refunds), "I understand", "Continue", the four onboarding headlines, the analytics choice (split into its question "Share anonymous usage stats?" and "Off unless you turn it on."), "Share" / "No thanks", the test alarm and not-locked lines, the bright wake screen line, the Home test note, "Try it", the camera and TalkBack check notes, "Move up" / "Move down", "Problems" / "Words" / "Rounds", "Nice. That's how it works.", every QR, printable QR, House Hunt and Recordings string. The mission's "Snooze costs money. Waking up is free." is split into its two sentences (one per row of its card).
+
+| Key | Draft | Screen | Note |
+|---|---|---|---|
+| `onboarding_disclosure_title` | How your alarm works | Onboarding step 2, headline | Above the disclosure. |
+| `onboarding_base_fee_title` | Choose your snooze fee | Onboarding step 3, headline | The stepper card keeps its title "Base fee". |
+| `onboarding_test_title` | Test your alarm | Onboarding step 8, headline | Above "Lock your phone. We'll ring in 10 seconds." |
+| `onboarding_skip_test` | Skip for now | Onboarding step 8, text button | Leads to the Home note (FR-ONB-4). |
+| `onboarding_step` | Step {n} of {count} | Progress dots (TalkBack) | "Step 3 of 8". |
+| `check_picker_your_checks` | Your checks | Check picker, title above the selected checks | Their setup as the row value, chevron to Check setup; the order in All mode. |
+| `check_count_problems` / `check_count_problem` | {n} problems / 1 problem | Check picker row value | "Medium · 2 problems". Same pattern for words and rounds. |
+| `check_count_words` / `check_count_word` | {n} words / 1 word | Check picker row value | |
+| `check_count_rounds` / `check_count_round` | {n} rounds / 1 round | Check picker row value | |
+| `qr_your_code` | Your code | QR/Barcode Check setup, row | Opens QR registration. |
+| `qr_code_saved` | Code saved | QR/Barcode row value (Check picker, Check setup) | Without a code the value is the key string "Scan a code to use this check." |
+| `house_hunt_photo_count` / `house_hunt_photo_one` | {n} photos / 1 photo | House Hunt row value | Without photos the value is the key string "Take at least one photo." |
+| `house_hunt_photo` | Photo {n} | House Hunt registration, thumbnail (TalkBack) | Read just before its "Remove". |
+| `recordings_title` | Recordings | Recordings, title | The IA's name for the screen. |
+| `recordings_rerecord` | Re-record | Recordings, after a take | The `recorder` row names Play, Re-record, Save, Delete. |
+| `recordings_time` | {elapsed} / {max} | Recorder time, playing message | "0:09 / 1:00" (DESIGN.md `recorder`). |
+| `recordings_yours` | Your messages | Recordings, title above the saved messages | |
+| `recordings_delete_named` | Delete {name} | Delete button of a saved message (TalkBack) | "Delete Message 2". |
+
+Layout choices to look at (no new copy):
+
+- Onboarding: the dots sit on a small glass capsule at the top (accent fails directly on the Light gradient); the actions have their own bottom area; the analytics choice is two equal outlined buttons, neither pre-selected. The test alarm's first tap in the preview shows the not-locked state (the phone in your hand is not locked); the second rings it.
+- The Check picker is also the editor's Wake-up check sub-screen (IA). Its "Difficulty" control moved into Check setup, one tap further (progressive disclosure); each selected check shows its setup as the row value. In Check setup difficulty is three radio rows, because a segmented control broke "Medium" at 200% font on a 360 dp phone.
+- "Try it" opens the check in Sunrise like a real morning, with no quiet-time ring and no snooze; nothing rings or is paid. Its done check is in `text`, not `success` (which means "on time" only).
+- The printable QR is a light sheet in Dark too, so the code scans. The code in the preview is made up, not a real QR.
+- "Replace your QR code? ..." shows when printing a new code while one is saved.
+- House Hunt registration uses the Cancel | Save pill (EXPERIENCE.md: "setup screens with a Save").
+- Recording shows a fixed 0:09 take (no real timer or microphone in the preview).
+
 ## Not strings, but worth a look
 
 - The Math problem is drawn as digits with "+" or "×" (for example "47 + 38"); TalkBack reads the key string "47 plus 38".

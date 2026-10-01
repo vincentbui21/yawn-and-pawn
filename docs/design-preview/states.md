@@ -118,3 +118,57 @@ adb -s 4d804fdd shell am start -S -n com.yawnandpawn.app/.debug.preview.PreviewA
 | `payments` | Payments & refunds | How payments & refunds work |
 | `payments-problem` | Payments & refunds | Problem with a charge? |
 | `payments-problem-no-browser` | Payments & refunds | Problem with a charge?, no browser |
+
+## Round 3 · Setup flows
+
+| Id | Screen | State |
+|---|---|---|
+| `tap-onboarding` | Tap through | Tap through onboarding: 8 steps, check setup, try it, test alarm, then Home |
+| `tap-checks` | Tap through | Tap through checks: picker, setup, try it, QR and House Hunt registration |
+| `tap-recordings` | Tap through | Tap through recordings: record, save, play, delete |
+| `onboarding-mission` | Onboarding | 1 Mission |
+| `onboarding-disclosure` | Onboarding | 2 Alarm behaviour disclosure |
+| `onboarding-base-fee` | Onboarding | 3 Base fee |
+| `onboarding-base-fee-approximate` | Onboarding | 3 Base fee, prices never loaded |
+| `onboarding-first-alarm` | Onboarding | 4 First alarm |
+| `onboarding-checks` | Onboarding | 5 Checks |
+| `onboarding-checks-none` | Onboarding | 5 Checks, none selected |
+| `onboarding-reliability` | Onboarding | 6 Reliability checklist |
+| `onboarding-analytics` | Onboarding | 7 Analytics choice |
+| `onboarding-test` | Onboarding | 8 Test alarm |
+| `onboarding-test-not-locked` | Onboarding | 8 Test alarm, phone not locked |
+| `home-test-skipped` | Onboarding | Home after skipping the test alarm |
+| `check-picker` | Check picker | Math and QR/Barcode, Random |
+| `check-picker-all` | Check picker | All mode: the order |
+| `check-picker-talkback` | Check picker | Memory Sequence with TalkBack on |
+| `check-picker-camera-unavailable` | Check picker | Camera unavailable |
+| `check-setup-math` | Check setup | Math: difficulty, problems, Try it |
+| `check-setup-memory-talkback` | Check setup | Memory Sequence with TalkBack on |
+| `check-setup-qr` | Check setup | QR/Barcode, code saved |
+| `check-setup-qr-none` | Check setup | QR/Barcode, no code yet |
+| `check-setup-qr-camera-unavailable` | Check setup | QR/Barcode, camera unavailable |
+| `check-setup-house-hunt` | Check setup | House Hunt, two photos |
+| `check-setup-house-hunt-lost` | Check setup | House Hunt, photos not restored |
+| `try-it-math` | Check setup: Try it | Math (Sunrise) |
+| `try-it-word` | Check setup: Try it | Word Unscramble (Sunrise) |
+| `try-it-memory` | Check setup: Try it | Memory Sequence (Sunrise) |
+| `try-it-done` | Check setup: Try it | Solved: Nice. That's how it works. (Sunrise) |
+| `qr-scanning` | QR registration | Scanning |
+| `qr-detected` | QR registration | Code found |
+| `qr-camera-unavailable` | QR registration | Camera unavailable |
+| `qr-printable` | QR registration | Printable QR |
+| `qr-replace-dialog` | QR registration | Printable QR, replace the old code |
+| `house-hunt-empty` | House Hunt registration | No photos yet |
+| `house-hunt-two-photos` | House Hunt registration | Two photos |
+| `house-hunt-matched` | House Hunt registration | Three photos, test match matched |
+| `house-hunt-no-match` | House Hunt registration | Test match, doesn't match yet |
+| `house-hunt-photo-failed` | House Hunt registration | Couldn't use that photo |
+| `house-hunt-need-photo` | House Hunt registration | Save without a photo |
+| `house-hunt-camera-unavailable` | House Hunt registration | Camera unavailable |
+| `recordings-empty` | Recordings | Empty |
+| `recordings-recording` | Recordings | Recording |
+| `recordings-take` | Recordings | A take: play, re-record, save, delete |
+| `recordings-list` | Recordings | Saved messages, one playing |
+| `recordings-mic-denied` | Recordings | Microphone off |
+| `recordings-too-short` | Recordings | Too short |
+| `recordings-delete-dialog` | Recordings | Delete a message |

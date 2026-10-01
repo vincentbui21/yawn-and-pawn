@@ -86,6 +86,10 @@ private fun reduceFull(
             full.copy(checks = full.checks.map { it.copy(difficulty = intent.difficulty) })
         }
 
+        is EditorIntent.CheckMoved -> {
+            full.copy(checks = full.checks.moved(intent.type, intent.up))
+        }
+
         else -> {
             full
         }

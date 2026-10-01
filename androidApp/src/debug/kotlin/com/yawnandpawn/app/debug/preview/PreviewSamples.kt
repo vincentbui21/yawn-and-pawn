@@ -133,6 +133,7 @@ object PreviewSamples {
         FullEditorSections(
             checks = listOf(CheckChip(CheckType.Math, Difficulty.Medium), CheckChip(CheckType.QrBarcode, Difficulty.Easy)),
             checkMode = CheckMode.Random,
+            qrCodeSaved = true,
             feeLadder = listOf(price(1), price(2), price(3)),
             soundName = "Sunrise",
         )

@@ -369,4 +369,92 @@
     <string name="problem_pending_body">A pending payment only charges you if it goes through.</string>
     <string name="problem_open_play">Open Google Play order history</string>
     <string name="problem_email_support">Email support</string>
+
+    <!-- Design preview round 3: setup flows. EXPERIENCE.md key strings verbatim; drafts are listed in docs/design-preview/copy-to-approve.md. -->
+    <!-- Onboarding (FR-ONB-1/5/6). The mission "how it works" line and the analytics choice are split into their sentences, verbatim. -->
+    <string name="onboarding_mission_body">This app makes money only when you snooze. We hope you never pay us.</string>
+    <string name="onboarding_how_snooze">Snooze costs money.</string>
+    <string name="onboarding_how_wake">Waking up is free.</string>
+    <string name="onboarding_start">Let's set it up</string>
+    <string name="onboarding_disclosure_title">How your alarm works</string>
+    <string name="onboarding_understand">I understand</string>
+    <string name="onboarding_base_fee_title">Choose your snooze fee</string>
+    <string name="onboarding_continue">Continue</string>
+    <string name="onboarding_first_alarm_title">When should it ring?</string>
+    <string name="onboarding_checks_title">How will you prove you're up?</string>
+    <string name="onboarding_reliability_title">Make sure it rings</string>
+    <string name="onboarding_analytics_title">Share anonymous usage stats?</string>
+    <string name="onboarding_analytics_body">Off unless you turn it on.</string>
+    <string name="onboarding_share">Share</string>
+    <string name="onboarding_no_thanks">No thanks</string>
+    <string name="onboarding_test_title">Test your alarm</string>
+    <string name="onboarding_test_body">Lock your phone. We'll ring in 10 seconds.</string>
+    <string name="onboarding_bright_wake">Your alarm screen turns bright to help you wake. Change it in Settings.</string>
+    <string name="onboarding_test_not_locked">Your phone wasn't locked. Try again with it locked.</string>
+    <string name="onboarding_skip_test">Skip for now</string>
+    <string name="onboarding_step">Step %1$d of %2$d</string>
+    <string name="home_test_skipped">Ring a test alarm with your phone locked to check it works.</string>
+
+    <!-- Check picker and Check setup -->
+    <string name="check_try_it">Try it</string>
+    <string name="check_needs_camera">Needs the camera. If it can't be used, you'll get a fallback check.</string>
+    <string name="check_memory_talkback">Uses numbered tiles with TalkBack.</string>
+    <string name="check_move_up">Move up</string>
+    <string name="check_move_down">Move down</string>
+    <string name="check_preview_done">Nice. That's how it works.</string>
+    <string name="check_picker_your_checks">Your checks</string>
+    <string name="check_count_problems_label">Problems</string>
+    <string name="check_count_words_label">Words</string>
+    <string name="check_count_rounds_label">Rounds</string>
+    <string name="check_count_problems">%1$d problems</string>
+    <string name="check_count_problem">1 problem</string>
+    <string name="check_count_words">%1$d words</string>
+    <string name="check_count_word">1 word</string>
+    <string name="check_count_rounds">%1$d rounds</string>
+    <string name="check_count_round">1 round</string>
+    <string name="camera_unavailable_setup">Camera isn't available.</string>
+
+    <!-- QR/Barcode registration and the printable QR -->
+    <string name="qr_no_code">Scan a code to use this check.</string>
+    <string name="qr_your_code">Your code</string>
+    <string name="qr_code_saved">Code saved</string>
+    <string name="qr_use_code">Use this code</string>
+    <string name="qr_scan_again">Scan again</string>
+    <string name="qr_printable">Make a printable QR</string>
+    <string name="qr_printable_body">Stick it somewhere far from your bed.</string>
+    <string name="qr_print">Print or save as PDF</string>
+    <string name="qr_pdf_line">Scan this to stop your alarm.</string>
+    <string name="qr_replace_dialog">Replace your QR code? The old one stops working.</string>
+    <string name="qr_replace">Replace</string>
+    <string name="qr_image">QR code for your alarm</string>
+
+    <!-- House Hunt registration -->
+    <string name="house_hunt_photos_title">House Hunt photos</string>
+    <string name="house_hunt_photos_body">Take 1 to 3 photos of one spot far from your bed.</string>
+    <string name="house_hunt_remove">Remove</string>
+    <string name="house_hunt_photo">Photo %1$d</string>
+    <string name="house_hunt_test_match">Test match</string>
+    <string name="house_hunt_photo_failed">Couldn't use that photo. Try again.</string>
+    <string name="house_hunt_need_photo">Take at least one photo.</string>
+    <string name="house_hunt_not_restored">House Hunt photos weren't restored. Retake them.</string>
+    <string name="house_hunt_retake">Retake</string>
+    <string name="house_hunt_photo_count">%1$d photos</string>
+    <string name="house_hunt_photo_one">1 photo</string>
+
+    <!-- Recordings (FR-SND-3) -->
+    <string name="recordings_title">Recordings</string>
+    <string name="recordings_empty">Record a message for your morning self.</string>
+    <string name="recordings_mic_off">Microphone is off. Turn it on in Settings.</string>
+    <string name="recordings_too_short">Too short. Try again.</string>
+    <string name="recordings_start">Start recording</string>
+    <string name="recordings_stop">Stop recording</string>
+    <string name="recordings_play">Play message</string>
+    <string name="recordings_pause">Pause message</string>
+    <string name="recordings_replay">Replay message</string>
+    <string name="recordings_name">Message %1$d</string>
+    <string name="recordings_rerecord">Re-record</string>
+    <string name="recordings_time">%1$s / %2$s</string>
+    <string name="recordings_yours">Your messages</string>
+    <string name="recordings_delete_named">Delete %1$s</string>
+    <string name="recordings_delete_dialog">Delete this message? Alarms using it will play no message.</string>
 </resources>

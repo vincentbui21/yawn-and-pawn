@@ -2,6 +2,15 @@ package com.yawnandpawn.app.ui.checks
 
 import androidx.compose.runtime.Composable
 import com.yawnandpawn.app.ui.resources.Res
+import com.yawnandpawn.app.ui.resources.check_count_problem
+import com.yawnandpawn.app.ui.resources.check_count_problems
+import com.yawnandpawn.app.ui.resources.check_count_problems_label
+import com.yawnandpawn.app.ui.resources.check_count_round
+import com.yawnandpawn.app.ui.resources.check_count_rounds
+import com.yawnandpawn.app.ui.resources.check_count_rounds_label
+import com.yawnandpawn.app.ui.resources.check_count_word
+import com.yawnandpawn.app.ui.resources.check_count_words
+import com.yawnandpawn.app.ui.resources.check_count_words_label
 import com.yawnandpawn.app.ui.resources.check_house_hunt
 import com.yawnandpawn.app.ui.resources.check_house_hunt_description
 import com.yawnandpawn.app.ui.resources.check_math
@@ -21,6 +30,7 @@ import com.yawnandpawn.app.ui.resources.symbol_house
 import com.yawnandpawn.app.ui.resources.symbol_qr_code_scanner
 import com.yawnandpawn.app.ui.resources.symbol_sort_by_alpha
 import org.jetbrains.compose.resources.DrawableResource
+import org.jetbrains.compose.resources.StringResource
 import org.jetbrains.compose.resources.stringResource
 
 /** The five proof-of-wake checks (EXPERIENCE.md glossary), in the order pickers list them. */
@@ -38,6 +48,40 @@ enum class CheckType {
 
 /** Check difficulty (Check setup, `chip-check`). */
 enum class Difficulty { Easy, Medium, Hard }
+
+/** The checks with a difficulty and a count (Math, Word Unscramble, Memory Sequence); the camera checks have neither. */
+val CheckType.hasDifficulty: Boolean get() = !usesCamera
+
+/** How many problems, words or rounds a new check starts with (0 for the camera checks). */
+val CheckType.defaultCount: Int
+    get() =
+        when (this) {
+            CheckType.Math, CheckType.WordUnscramble -> 2
+            CheckType.MemorySequence -> 3
+            CheckType.QrBarcode, CheckType.HouseHunt -> 0
+        }
+
+/** The Check setup count label: Math "Problems", Word Unscramble "Words", Memory Sequence "Rounds" (EXPERIENCE.md). */
+fun CheckType.countLabel(): StringResource? =
+    when (this) {
+        CheckType.Math -> Res.string.check_count_problems_label
+        CheckType.WordUnscramble -> Res.string.check_count_words_label
+        CheckType.MemorySequence -> Res.string.check_count_rounds_label
+        CheckType.QrBarcode, CheckType.HouseHunt -> null
+    }
+
+/** "2 problems", "1 word", "3 rounds"; empty for the camera checks. */
+@Composable
+fun CheckType.countText(count: Int): String {
+    val (one, many) =
+        when (this) {
+            CheckType.Math -> Res.string.check_count_problem to Res.string.check_count_problems
+            CheckType.WordUnscramble -> Res.string.check_count_word to Res.string.check_count_words
+            CheckType.MemorySequence -> Res.string.check_count_round to Res.string.check_count_rounds
+            CheckType.QrBarcode, CheckType.HouseHunt -> return ""
+        }
+    return if (count == 1) stringResource(one) else stringResource(many, count)
+}
 
 /** The check's name, as the glossary spells it ("Word Unscramble", "QR/Barcode"). */
 @Composable

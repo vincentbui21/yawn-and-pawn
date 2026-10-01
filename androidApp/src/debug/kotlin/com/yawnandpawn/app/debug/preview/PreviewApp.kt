@@ -63,6 +63,9 @@ fun PreviewFrame(
     }
 }
 
+/** Where a tap-through starts: the tabs, onboarding, or the editor on its Wake-up check or Motivation sub-screen. */
+enum class FlowStart { Tabs, Onboarding, CheckPicker, Recordings }
+
 /** The tap-through entries at the top of the menu (interactive, fake state). */
 internal enum class Flow(
     val round: Int,
@@ -71,12 +74,26 @@ internal enum class Flow(
     val stateId: String,
     val startTab: AppTab = AppTab.Alarms,
     val startInSession: Boolean = false,
+    val start: FlowStart = FlowStart.Tabs,
 ) {
     App(1, "Tap through the app: tabs, the + for a new alarm, editor, test alarm", "tap-app"),
     Session(1, "Tap through a morning: Back to alarm, Ringing, Check, Success", "tap-morning", startInSession = true),
     Progress(2, "Tap through Progress: ring, chart, calendar, day detail, purchase history", "tap-progress", startTab = AppTab.Progress),
     Settings(2, "Tap through Settings: sub-screens, reliability checklist", "tap-settings", startTab = AppTab.Settings),
     You(2, "Tap through You: purchase history, payments, delete dialog", "tap-you", startTab = AppTab.You),
+    Onboarding(
+        SETUP_ROUND,
+        "Tap through onboarding: 8 steps, check setup, try it, test alarm, then Home",
+        "tap-onboarding",
+        start = FlowStart.Onboarding,
+    ),
+    Checks(
+        SETUP_ROUND,
+        "Tap through checks: picker, setup, try it, QR and House Hunt registration",
+        "tap-checks",
+        start = FlowStart.CheckPicker,
+    ),
+    Recordings(SETUP_ROUND, "Tap through recordings: record, save, play, delete", "tap-recordings", start = FlowStart.Recordings),
 }
 
 /**
@@ -99,7 +116,13 @@ fun PreviewApp(launch: PreviewLaunch = PreviewLaunch()) {
         val flow = Flow.entries.firstOrNull { it.name == openFlow }
         when {
             flow != null -> {
-                TapThrough(is24Hour = is24, onExit = { openFlow = null }, startInSession = flow.startInSession, startTab = flow.startTab)
+                TapThrough(
+                    is24Hour = is24,
+                    onExit = { openFlow = null },
+                    startInSession = flow.startInSession,
+                    startTab = flow.startTab,
+                    start = flow.start,
+                )
             }
 
             item != null -> {
@@ -174,7 +197,6 @@ private fun PreviewMenu(
                     }
                 }
             }
-            if (query.isBlank()) item { MenuHeader(ROUND_HEADINGS.getValue(LATER_ROUND)) }
             item { Column(modifier = Modifier.windowInsetsPadding(WindowInsets.navigationBars)) {} }
         }
     }
@@ -308,7 +330,4 @@ private fun SearchField(
 private const val LARGE_FONT_SCALE = 2f
 
 /** The rounds the menu shows, with their headings. */
-private val ROUNDS = ROUND_HEADINGS.filterKeys { it < LATER_ROUND }.toList()
-
-/** Round 3 has no states yet: the menu only shows its heading. */
-private const val LATER_ROUND = 3
+private val ROUNDS = ROUND_HEADINGS.toList()

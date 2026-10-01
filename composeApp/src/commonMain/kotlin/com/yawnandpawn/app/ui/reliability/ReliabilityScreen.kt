@@ -169,17 +169,27 @@ private fun Checklist(
         backContentDescription = stringResource(Res.string.editor_back),
         onBack = { onIntent(ReliabilityIntent.Back) },
     ) {
-        GroupCard {
-            state.rows.forEachIndexed { index, row ->
-                if (index > 0) GroupDivider()
-                ChecklistRowView(row = row, onFix = { onIntent(ReliabilityIntent.FixClicked(row.item)) })
-            }
-        }
+        ChecklistCard(rows = state.rows, onFix = { onIntent(ReliabilityIntent.FixClicked(it)) })
         PpsOutlinedButton(
             text = stringResource(Res.string.reliability_ring_test),
             onClick = { onIntent(ReliabilityIntent.RingTestAlarm) },
             modifier = Modifier.fillMaxWidth(),
         )
+    }
+}
+
+/** The checklist rows in one `card-group` (the checklist screen and onboarding step 6, "Make sure it rings"). */
+@Composable
+fun ChecklistCard(
+    rows: List<ChecklistRow>,
+    onFix: (ChecklistItem) -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    GroupCard(modifier = modifier) {
+        rows.forEachIndexed { index, row ->
+            if (index > 0) GroupDivider()
+            ChecklistRowView(row = row, onFix = { onFix(row.item) })
+        }
     }
 }
 

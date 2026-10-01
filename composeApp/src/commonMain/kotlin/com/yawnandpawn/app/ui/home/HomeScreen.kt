@@ -74,6 +74,7 @@ import com.yawnandpawn.app.ui.resources.home_reliability_banner
 import com.yawnandpawn.app.ui.resources.home_reregister
 import com.yawnandpawn.app.ui.resources.home_streak_day
 import com.yawnandpawn.app.ui.resources.home_streak_days
+import com.yawnandpawn.app.ui.resources.home_test_skipped
 import com.yawnandpawn.app.ui.resources.home_zero_paid
 import com.yawnandpawn.app.ui.theme.PpsTheme
 import org.jetbrains.compose.resources.stringResource
@@ -217,6 +218,12 @@ private fun Notices(
                     modifier = Modifier.weight(1f),
                 )
                 DismissButton(label = stringResource(Res.string.home_dismiss), onClick = { onIntent(HomeIntent.MissedNoteDismissed) })
+            }
+        }
+        if (state.testSkipped) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                NoteInline(text = stringResource(Res.string.home_test_skipped), modifier = Modifier.weight(1f))
+                DismissButton(label = stringResource(Res.string.home_dismiss), onClick = { onIntent(HomeIntent.TestNoteDismissed) })
             }
         }
     }

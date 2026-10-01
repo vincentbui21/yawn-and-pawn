@@ -29,9 +29,12 @@ data class PreviewLaunch(
     }
 }
 
+/** Round 3, the setup flows (onboarding, checks, registration, recordings). */
+internal const val SETUP_ROUND = 3
+
 /** The heading of each round in the menu (and in states.md). */
 internal val ROUND_HEADINGS: Map<Int, String> =
-    mapOf(1 to "Round 1 · The daily loop", 2 to "Round 2 · Progress and settings", 3 to "Round 3 · Setup flows (later)")
+    mapOf(1 to "Round 1 · The daily loop", 2 to "Round 2 · Progress and settings", SETUP_ROUND to "Round 3 · Setup flows")
 
 /** Does [query] match this item: case-insensitive on its state, its screen, its round or its id. */
 internal fun PreviewItem.matches(query: String): Boolean =

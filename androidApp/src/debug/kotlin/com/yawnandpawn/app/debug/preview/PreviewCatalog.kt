@@ -191,5 +191,5 @@ object PreviewCatalog {
             PreviewItem("snoozed", 1, "Success and Snoozed", "Snoozed", wake = true) { is24 ->
                 SnoozedScreen(state = s.snoozed, is24Hour = is24)
             },
-        ) + PreviewRound2.items
+        ) + PreviewRound2.items + PreviewRound3.items
 }

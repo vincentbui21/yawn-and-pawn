@@ -3,81 +3,21 @@ package com.yawnandpawn.app.core.alarm
 import com.yawnandpawn.app.core.error.DomainError
 import com.yawnandpawn.app.core.error.Outcome
 import com.yawnandpawn.app.core.error.valueOrNull
-import com.yawnandpawn.app.core.id.IdGenerator
-import com.yawnandpawn.app.core.time.Clock
 import kotlinx.coroutines.async
-import kotlinx.coroutines.flow.Flow
-import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.first
-import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.test.runTest
-import kotlinx.coroutines.yield
 import kotlinx.datetime.DayOfWeek
 import kotlinx.datetime.LocalTime
+import kotlinx.datetime.TimeZone
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertIs
 import kotlin.test.assertNotEquals
 import kotlin.test.assertTrue
-import kotlin.time.Duration
 import kotlin.time.Duration.Companion.minutes
 import kotlin.time.Instant
 
-/** Core cannot depend on `:testing` (AD-1), so these tests use small local doubles; `:testing` has the shared fakes. */
 class AlarmUseCasesTest {
-    private class TestClock(
-        var now: Instant,
-    ) : Clock {
-        override fun now(): Instant = now
-
-        fun advanceBy(duration: Duration) {
-            now += duration
-        }
-    }
-
-    private class SequentialIds : IdGenerator {
-        private var next = 1
-
-        override fun newId(): String = "id-${next++}"
-    }
-
-    private class InMemoryAlarms : AlarmRepository {
-        val alarms = MutableStateFlow<Map<String, Alarm>>(emptyMap())
-
-        /** Fails every upsert. */
-        var failure: DomainError.StorageFailure? = null
-
-        /** Fails every listAll. */
-        var listFailure: DomainError.StorageFailure? = null
-        var upserts = 0
-
-        override fun observeAll(): Flow<List<Alarm>> = alarms.map { it.values.sortedWith(AlarmListOrder) }
-
-        override suspend fun listAll(): Outcome<List<Alarm>, DomainError> {
-            // Suspends like a real database read, so concurrent callers can interleave here.
-            yield()
-            listFailure?.let { return Outcome.Failure(it) }
-            return Outcome.Success(alarms.value.values.sortedWith(AlarmListOrder))
-        }
-
-        override suspend fun get(id: String): Outcome<Alarm, DomainError> =
-            alarms.value[id]?.let { Outcome.Success(it) } ?: Outcome.Failure(DomainError.NotFound(id))
-
-        override suspend fun upsert(alarm: Alarm): Outcome<Unit, DomainError> {
-            yield()
-            upserts++
-            failure?.let { return Outcome.Failure(it) }
-            alarms.value += alarm.id to alarm
-            return Outcome.Success(Unit)
-        }
-
-        override suspend fun delete(id: String): Outcome<Unit, DomainError> {
-            if (id !in alarms.value) return Outcome.Failure(DomainError.NotFound(id))
-            alarms.value -= id
-            return Outcome.Success(Unit)
-        }
-    }
-
     // Sub-millisecond part: stored alarms keep whole milliseconds, so the use cases truncate "now".
     private val start = Instant.parse("2027-03-03T06:00:00.123456Z")
     private val startMillis = Instant.parse("2027-03-03T06:00:00.123Z")
@@ -85,10 +25,13 @@ class AlarmUseCasesTest {
     private val ids = SequentialIds()
     private val repository = InMemoryAlarms()
     private val lock = AlarmWriteLock()
-    private val save = SaveAlarm(repository, ids, clock, lock)
-    private val setEnabled = SetAlarmEnabled(repository, clock, lock)
-    private val delete = DeleteAlarm(repository, lock)
-    private val duplicate = DuplicateAlarm(repository, ids, clock, lock)
+    private val sequence = InMemorySequence()
+    private val scheduler = RecordingScheduler()
+    private val scheduling = AlarmScheduling(repository, scheduler, clock, TestZone(TimeZone.UTC), lock, RecordingLogger())
+    private val save = SaveAlarm(repository, ids, clock, lock, sequence, scheduling)
+    private val setEnabled = SetAlarmEnabled(repository, clock, lock, scheduling)
+    private val delete = DeleteAlarm(repository, lock, scheduling)
+    private val duplicate = DuplicateAlarm(repository, ids, clock, lock, sequence, scheduling)
 
     private val draft = AlarmDraft(time = LocalTime(7, 0), repeatDays = setOf(DayOfWeek.MONDAY), label = "Gym")
 
@@ -111,14 +54,28 @@ class AlarmUseCasesTest {
         }
 
     @Test
-    fun `each new alarm gets the next code above the highest in use`() =
+    fun `each new alarm gets the next code from the sequence, and a deleted alarm's code is never reused`() =
         runTest {
             val first = saved()
             val second = saved()
-            delete(first.id)
+            delete(second.id)
             val third = saved()
 
             assertEquals(listOf(1000, 1001, 1002), listOf(first.requestCode, second.requestCode, third.requestCode))
+            assertEquals(1002, sequence.lastUsed)
+        }
+
+    @Test
+    fun `an invalid new alarm burns no code, and a failed store burns the code it was given`() =
+        runTest {
+            save(draft.copy(graceSeconds = 99))
+            assertEquals(RequestCodes.INITIAL_HIGH_WATER_MARK, sequence.lastUsed)
+
+            repository.failure = DomainError.StorageFailure("disk full")
+            save(draft)
+            repository.failure = null
+
+            assertEquals(1001, saved().requestCode)
         }
 
     @Test
@@ -237,11 +194,11 @@ class AlarmUseCasesTest {
         }
 
     @Test
-    fun `a listing failure while allocating a request code is returned by SaveAlarm and DuplicateAlarm`() =
+    fun `a sequence failure while allocating a request code is returned by SaveAlarm and DuplicateAlarm`() =
         runTest {
             val alarm = saved()
             val failure = DomainError.StorageFailure("corrupt")
-            repository.listFailure = failure
+            sequence.failure = failure
 
             assertEquals(Outcome.Failure(failure), save(draft))
             assertEquals(Outcome.Failure(failure), duplicate(alarm.id))

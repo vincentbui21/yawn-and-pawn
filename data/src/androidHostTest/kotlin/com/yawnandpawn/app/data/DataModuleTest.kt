@@ -3,7 +3,9 @@ package com.yawnandpawn.app.data
 import android.content.Context
 import androidx.test.core.app.ApplicationProvider
 import com.yawnandpawn.app.core.alarm.AlarmRepository
+import com.yawnandpawn.app.core.alarm.RequestCodeSequence
 import com.yawnandpawn.app.data.alarm.RoomAlarmRepository
+import com.yawnandpawn.app.data.alarm.RoomRequestCodeSequence
 import com.yawnandpawn.app.data.db.AppDatabase
 import com.yawnandpawn.app.testing.anAppVersion
 import org.junit.Test
@@ -20,12 +22,13 @@ class DataModuleTest {
     private val context = ApplicationProvider.getApplicationContext<Context>()
 
     @Test
-    fun `the data module binds the alarm repository to Room over one app database`() {
+    fun `the data module binds the alarm repository and the request code sequence to Room over one app database`() {
         val app = koinApplication { modules(module { single<Context> { context } }, dataModule) }
         val koin = app.koin
         val database = koin.get<AppDatabase>()
         try {
             assertIs<RoomAlarmRepository>(koin.get<AlarmRepository>())
+            assertIs<RoomRequestCodeSequence>(koin.get<RequestCodeSequence>())
             assertSame(database, koin.get<AppDatabase>())
         } finally {
             database.close()

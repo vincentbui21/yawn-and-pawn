@@ -14,12 +14,11 @@ import androidx.compose.ui.test.performScrollTo
 import androidx.compose.ui.test.performScrollToNode
 import androidx.compose.ui.test.performSemanticsAction
 import androidx.test.core.app.ActivityScenario
+import com.yawnandpawn.app.StopAppRule
 import com.yawnandpawn.app.ui.theme.PpsThemeMode
-import org.junit.After
 import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
-import org.koin.core.context.stopKoin
 import org.robolectric.RobolectricTestRunner
 import org.robolectric.Shadows
 import org.robolectric.annotation.Config
@@ -29,13 +28,11 @@ import java.time.Duration
 @RunWith(RobolectricTestRunner::class)
 @Config(qualifiers = "w411dp-h891dp-mdpi")
 class TapThroughTest {
-    @get:Rule
-    val composeRule = createEmptyComposeRule()
+    @get:Rule(order = 0)
+    val appTeardown = StopAppRule()
 
-    @After
-    fun tearDown() {
-        stopKoin()
-    }
+    @get:Rule(order = 1)
+    val composeRule = createEmptyComposeRule()
 
     private fun tapThrough(
         startInSession: Boolean,

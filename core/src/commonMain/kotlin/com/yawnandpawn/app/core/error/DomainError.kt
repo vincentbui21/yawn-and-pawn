@@ -21,4 +21,18 @@ sealed interface DomainError {
     data class StorageFailure(
         val cause: String,
     ) : DomainError
+
+    /**
+     * The system does not allow exact alarms (API 31-32 with "Alarms & reminders" off), so nothing was armed. There
+     * is never an inexact fallback; the alarm stays stored and Story 1.19 asks for the permission.
+     */
+    data object ExactAlarmNotPermitted : DomainError
+
+    /**
+     * The system refused to arm an alarm for another reason (for example the per-app alarm limit). [cause] is
+     * diagnostic text for logs only.
+     */
+    data class SchedulerFailure(
+        val cause: String,
+    ) : DomainError
 }

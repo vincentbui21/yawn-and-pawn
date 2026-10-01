@@ -45,7 +45,7 @@ development_status:
   1-7-store-alarms-in-app-db: done  # merged PR #5 2026-09-27
   1-8-create-and-edit-an-alarm: done  # merged PR #6 2026-09-27; owner device round-trip check pending
   1-9-alarm-list-on-home-with-the-next-alarm-countdown: done  # PR #9 2026-10-01 (auto-run)
-  1-10-schedule-alarms-exactly-and-keep-them-across-reboot-and-cloc: backlog
+  1-10-schedule-alarms-exactly-and-keep-them-across-reboot-and-cloc: done  # PR #10 2026-10-01 (auto-run)
   1-11-the-complete-wake-session-state-machine-in-core: backlog
   1-12-sessionengine-with-write-ahead-persistence: backlog
   1-13-record-every-session-in-history: backlog

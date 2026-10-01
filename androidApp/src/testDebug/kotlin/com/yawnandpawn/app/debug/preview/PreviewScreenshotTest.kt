@@ -5,12 +5,11 @@ import androidx.compose.ui.test.onRoot
 import com.github.takahirom.roborazzi.ExperimentalRoborazziApi
 import com.github.takahirom.roborazzi.captureRoboImage
 import com.github.takahirom.roborazzi.captureScreenRoboImage
+import com.yawnandpawn.app.StopAppRule
 import com.yawnandpawn.app.screenshotOptions
-import org.junit.After
 import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
-import org.koin.core.context.stopKoin
 import org.robolectric.ParameterizedRobolectricTestRunner
 import org.robolectric.annotation.Config
 import org.robolectric.annotation.GraphicsMode
@@ -41,13 +40,11 @@ private fun capture(
 class PreviewScreenshotTest(
     private val case: PreviewCase,
 ) {
-    @get:Rule
-    val composeRule = createEmptyComposeRule()
+    @get:Rule(order = 0)
+    val appTeardown = StopAppRule()
 
-    @After
-    fun tearDown() {
-        stopKoin()
-    }
+    @get:Rule(order = 1)
+    val composeRule = createEmptyComposeRule()
 
     @Test
     fun `the preview state matches its baseline`() = capture(composeRule, case)
@@ -66,13 +63,11 @@ class PreviewScreenshotTest(
 class PreviewEditorScreenshotTest(
     private val case: PreviewCase,
 ) {
-    @get:Rule
-    val composeRule = createEmptyComposeRule()
+    @get:Rule(order = 0)
+    val appTeardown = StopAppRule()
 
-    @After
-    fun tearDown() {
-        stopKoin()
-    }
+    @get:Rule(order = 1)
+    val composeRule = createEmptyComposeRule()
 
     @Test
     fun `the editor state matches its baseline`() = capture(composeRule, case)
@@ -91,13 +86,11 @@ class PreviewEditorScreenshotTest(
 class PreviewEditorLargeFontScreenshotTest(
     private val case: PreviewCase,
 ) {
-    @get:Rule
-    val composeRule = createEmptyComposeRule()
+    @get:Rule(order = 0)
+    val appTeardown = StopAppRule()
 
-    @After
-    fun tearDown() {
-        stopKoin()
-    }
+    @get:Rule(order = 1)
+    val composeRule = createEmptyComposeRule()
 
     @Test
     fun `the editor state at 200 percent matches its baseline`() = capture(composeRule, case)

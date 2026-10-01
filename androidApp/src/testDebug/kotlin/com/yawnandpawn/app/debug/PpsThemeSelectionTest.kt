@@ -2,13 +2,12 @@ package com.yawnandpawn.app.debug
 
 import androidx.compose.ui.test.junit4.createEmptyComposeRule
 import androidx.compose.ui.test.onNodeWithText
+import com.yawnandpawn.app.StopAppRule
 import com.yawnandpawn.app.ui.theme.PpsColorSet
 import com.yawnandpawn.app.ui.theme.PpsThemeMode
-import org.junit.After
 import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
-import org.koin.core.context.stopKoin
 import org.robolectric.RobolectricTestRunner
 import org.robolectric.annotation.Config
 
@@ -18,13 +17,11 @@ import org.robolectric.annotation.Config
  */
 @RunWith(RobolectricTestRunner::class)
 class PpsThemeSelectionTest {
-    @get:Rule
-    val composeRule = createEmptyComposeRule()
+    @get:Rule(order = 0)
+    val appTeardown = StopAppRule()
 
-    @After
-    fun tearDown() {
-        stopKoin()
-    }
+    @get:Rule(order = 1)
+    val composeRule = createEmptyComposeRule()
 
     private fun assertColorSet(
         expected: PpsColorSet,

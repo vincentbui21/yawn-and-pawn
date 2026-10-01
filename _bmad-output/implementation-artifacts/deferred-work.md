@@ -104,3 +104,7 @@
 - source_spec: `_bmad-output/implementation-artifacts/spec-1-9-alarm-list-on-home-with-the-next-alarm-countdown.md`
   summary: Move the AlarmDeleted log into the core delete use case once a second delete path exists.
   evidence: Story 1.9 logs AlarmDeleted in `ui.home.AlarmActions`, shared by Home and the editor. Epic 4's commitment-lock delete confirmation and Story 5.9 "Delete all data" should decide whether they log per alarm; if so, log inside `DeleteAlarm` so no path can skip it.
+- source_spec: `_bmad-output/implementation-artifacts/spec-1-10-schedule-alarms-exactly-and-keep-them-across-reboot-and-clock-changes.md`
+  summary: Story 1.13: `app.db` is now version 2 (Story 1.10 added `request_code_sequence`), so `session_history` is the v2 to v3 migration.
+  evidence: `AppDatabase` is `version = 2` with `MIGRATION_1_2` in `APP_DATABASE_MIGRATIONS` and `data/schemas/.../2.json` exported. Story 1.13 must add `MIGRATION_2_3`, export `3.json`, keep a hand-built v2 file migration test next to the v1 one in `AppDatabaseFactoryTest`, and write `docs/decisions/db-downgrade.md` for v3.
+  status: assigned to Story 1.13.

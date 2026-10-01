@@ -10,12 +10,11 @@ import androidx.compose.ui.test.performTextInput
 import androidx.test.core.app.ActivityScenario
 import androidx.test.core.app.ApplicationProvider
 import com.github.takahirom.roborazzi.captureRoboImage
+import com.yawnandpawn.app.StopAppRule
 import com.yawnandpawn.app.screenshotOptions
-import org.junit.After
 import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
-import org.koin.core.context.stopKoin
 import org.robolectric.RobolectricTestRunner
 import org.robolectric.annotation.Config
 import org.robolectric.annotation.GraphicsMode
@@ -28,13 +27,11 @@ import kotlin.test.assertTrue
 @GraphicsMode(GraphicsMode.Mode.NATIVE)
 @Config(qualifiers = "w411dp-h891dp-mdpi")
 class PreviewMenuTest {
-    @get:Rule
-    val composeRule = createEmptyComposeRule()
+    @get:Rule(order = 0)
+    val appTeardown = StopAppRule()
 
-    @After
-    fun tearDown() {
-        stopKoin()
-    }
+    @get:Rule(order = 1)
+    val composeRule = createEmptyComposeRule()
 
     private val allIds: List<String> = PreviewCatalog.items.map { it.stateId } + Flow.entries.map { it.stateId }
 

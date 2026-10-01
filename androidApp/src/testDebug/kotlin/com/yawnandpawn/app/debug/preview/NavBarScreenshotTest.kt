@@ -7,16 +7,15 @@ import androidx.compose.ui.test.onRoot
 import androidx.compose.ui.unit.dp
 import androidx.test.core.app.ActivityScenario
 import com.github.takahirom.roborazzi.captureRoboImage
+import com.yawnandpawn.app.StopAppRule
 import com.yawnandpawn.app.screenshotOptions
 import com.yawnandpawn.app.ui.shell.AppShell
 import com.yawnandpawn.app.ui.shell.AppTab
 import com.yawnandpawn.app.ui.theme.PpsThemeMode
 import com.yawnandpawn.app.ui.you.YouScreen
-import org.junit.After
 import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
-import org.koin.core.context.stopKoin
 import org.robolectric.RobolectricTestRunner
 import org.robolectric.annotation.Config
 import org.robolectric.annotation.GraphicsMode
@@ -30,13 +29,11 @@ import kotlin.test.assertTrue
 @GraphicsMode(GraphicsMode.Mode.NATIVE)
 @Config(qualifiers = "w360dp-h780dp-mdpi")
 class NavBarScreenshotTest {
-    @get:Rule
-    val composeRule = createEmptyComposeRule()
+    @get:Rule(order = 0)
+    val appTeardown = StopAppRule()
 
-    @After
-    fun tearDown() {
-        stopKoin()
-    }
+    @get:Rule(order = 1)
+    val composeRule = createEmptyComposeRule()
 
     private fun show(
         tab: AppTab,

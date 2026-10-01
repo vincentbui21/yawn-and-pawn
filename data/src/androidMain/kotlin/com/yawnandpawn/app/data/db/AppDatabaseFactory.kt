@@ -18,7 +18,8 @@ fun appDatabaseFile(context: Context): File = context.createDeviceProtectedStora
  *
  * Journal mode TRUNCATE instead of Room's default WAL: Auto Backup copies only `app.db` (backup rules), and with WAL
  * recent commits could still sit in `app.db-wal` and be missing from the backup. Alarm writes are rare, so WAL's
- * concurrency is not needed. No destructive migration fallback: a missing migration must fail loudly.
+ * concurrency is not needed. Every migration in [APP_DATABASE_MIGRATIONS] is registered; there is no destructive
+ * migration fallback, so a missing migration must fail loudly.
  */
 fun buildAppDatabase(context: Context): AppDatabase {
     val deviceContext = context.createDeviceProtectedStorageContext()
@@ -29,5 +30,6 @@ fun buildAppDatabase(context: Context): AppDatabase {
             factory = { AppDatabaseConstructor.initialize() },
         ).setDriver(AndroidSQLiteDriver())
         .setJournalMode(RoomDatabase.JournalMode.TRUNCATE)
+        .addMigrations(*APP_DATABASE_MIGRATIONS)
         .build()
 }

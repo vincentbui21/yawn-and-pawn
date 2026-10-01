@@ -1,19 +1,27 @@
 package com.yawnandpawn.app
 
+import com.yawnandpawn.app.android.AndroidAlarmScheduler
+import com.yawnandpawn.app.android.ApplicationScope
+import com.yawnandpawn.app.core.alarm.AlarmFiredHandler
 import com.yawnandpawn.app.core.alarm.AlarmRepository
+import com.yawnandpawn.app.core.alarm.AlarmScheduler
+import com.yawnandpawn.app.core.alarm.AlarmScheduling
 import com.yawnandpawn.app.core.alarm.AlarmWriteLock
 import com.yawnandpawn.app.core.alarm.DeleteAlarm
 import com.yawnandpawn.app.core.alarm.DuplicateAlarm
+import com.yawnandpawn.app.core.alarm.RearmOnFire
+import com.yawnandpawn.app.core.alarm.RequestCodeSequence
 import com.yawnandpawn.app.core.alarm.SaveAlarm
 import com.yawnandpawn.app.core.alarm.SetAlarmEnabled
 import com.yawnandpawn.app.core.id.IdGenerator
 import com.yawnandpawn.app.core.id.UuidV4IdGenerator
 import com.yawnandpawn.app.data.alarm.RoomAlarmRepository
+import com.yawnandpawn.app.data.alarm.RoomRequestCodeSequence
+import com.yawnandpawn.app.stopApp
 import org.junit.After
 import org.junit.Test
 import org.junit.runner.RunWith
 import org.koin.core.context.GlobalContext
-import org.koin.core.context.stopKoin
 import org.robolectric.RobolectricTestRunner
 import kotlin.test.assertIs
 import kotlin.test.assertNotNull
@@ -23,7 +31,7 @@ import kotlin.test.assertSame
 class AlarmWiringTest {
     @After
     fun tearDown() {
-        stopKoin()
+        stopApp()
     }
 
     @Test
@@ -37,5 +45,16 @@ class AlarmWiringTest {
         assertNotNull(koin.get<DeleteAlarm>())
         assertNotNull(koin.get<DuplicateAlarm>())
         assertSame(koin.get<AlarmWriteLock>(), koin.get<AlarmWriteLock>())
+    }
+
+    @Test
+    fun `Koin binds the scheduler, the sequence, the sync helper, the fire handler and one application scope`() {
+        val koin = GlobalContext.get()
+
+        assertIs<AndroidAlarmScheduler>(koin.get<AlarmScheduler>())
+        assertIs<RoomRequestCodeSequence>(koin.get<RequestCodeSequence>())
+        assertIs<RearmOnFire>(koin.get<AlarmFiredHandler>())
+        assertSame(koin.get<AlarmScheduling>(), koin.get<AlarmScheduling>())
+        assertSame(koin.get<ApplicationScope>(), koin.get<ApplicationScope>())
     }
 }

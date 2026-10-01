@@ -23,15 +23,11 @@ import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performTouchInput
 import androidx.compose.ui.unit.dp
-import com.yawnandpawn.app.core.alarm.AlarmWriteLock
-import com.yawnandpawn.app.core.alarm.DeleteAlarm
-import com.yawnandpawn.app.core.alarm.DuplicateAlarm
-import com.yawnandpawn.app.core.alarm.SaveAlarm
-import com.yawnandpawn.app.core.alarm.SetAlarmEnabled
+import com.yawnandpawn.app.StopAppRule
 import com.yawnandpawn.app.core.error.DomainError
+import com.yawnandpawn.app.testing.AlarmUseCasesFixture
 import com.yawnandpawn.app.testing.FakeAlarmRepository
 import com.yawnandpawn.app.testing.FakeClock
-import com.yawnandpawn.app.testing.FakeIdGenerator
 import com.yawnandpawn.app.testing.FakeLogger
 import com.yawnandpawn.app.testing.FakeTimeChangeSignal
 import com.yawnandpawn.app.testing.FakeTimeZoneProvider
@@ -52,11 +48,9 @@ import com.yawnandpawn.app.ui.home.HomeViewModel
 import com.yawnandpawn.app.ui.shell.AppShell
 import com.yawnandpawn.app.ui.shell.AppTab
 import com.yawnandpawn.app.ui.theme.PpsThemeMode
-import org.junit.After
 import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
-import org.koin.core.context.stopKoin
 import org.robolectric.RobolectricTestRunner
 import org.robolectric.annotation.Config
 import kotlin.test.assertEquals
@@ -70,13 +64,11 @@ import kotlin.test.assertTrue
 @RunWith(RobolectricTestRunner::class)
 @Config(qualifiers = "w411dp-h1400dp-mdpi")
 class AlarmScreensSemanticsTest {
-    @get:Rule
-    val composeRule = createEmptyComposeRule()
+    @get:Rule(order = 0)
+    val appTeardown = StopAppRule()
 
-    @After
-    fun tearDown() {
-        stopKoin()
-    }
+    @get:Rule(order = 1)
+    val composeRule = createEmptyComposeRule()
 
     private fun editor(
         state: EditorUiState,
@@ -254,7 +246,7 @@ class AlarmScreensSemanticsTest {
             AlarmEditorViewModel(
                 alarmId = null,
                 repository = repository,
-                saveAlarm = SaveAlarm(repository, FakeIdGenerator(), FakeClock(), AlarmWriteLock()),
+                saveAlarm = AlarmUseCasesFixture(repository = repository).save,
                 clock = FakeClock(),
                 timeZoneProvider = FakeTimeZoneProvider(),
                 actions = actions(repository),
@@ -284,15 +276,8 @@ class AlarmScreensSemanticsTest {
     }
 
     private fun actions(repository: FakeAlarmRepository): AlarmActions {
-        val clock = FakeClock()
-        val lock = AlarmWriteLock()
-        return AlarmActions(
-            SetAlarmEnabled(repository, clock, lock),
-            DuplicateAlarm(repository, FakeIdGenerator(), clock, lock),
-            DeleteAlarm(repository, lock),
-            clock,
-            FakeLogger(),
-        )
+        val alarms = AlarmUseCasesFixture(repository = repository)
+        return AlarmActions(alarms.setEnabled, alarms.duplicate, alarms.delete, alarms.clock, FakeLogger())
     }
 
     @Test
@@ -302,7 +287,7 @@ class AlarmScreensSemanticsTest {
             AlarmEditorViewModel(
                 alarmId = "missing",
                 repository = repository,
-                saveAlarm = SaveAlarm(repository, FakeIdGenerator(), FakeClock(), AlarmWriteLock()),
+                saveAlarm = AlarmUseCasesFixture(repository = repository).save,
                 clock = FakeClock(),
                 timeZoneProvider = FakeTimeZoneProvider(),
                 actions = actions(repository),

@@ -32,9 +32,10 @@ data class AlarmDraft(
 )
 
 /**
- * Serializes the read-modify-write of every alarm use case (request-code allocation, get-then-upsert), so two
- * concurrent saves never pick the same code and an edit racing a delete never re-inserts the deleted alarm.
- * One shared instance per app (a Koin `single`), passed to each use case.
+ * Serializes the read-modify-write of every alarm use case (request-code allocation, get-then-upsert, the scheduler
+ * sync after it), so two concurrent saves never pick the same code, an edit racing a delete never re-inserts the
+ * deleted alarm, and the system alarms are changed in the same order as the stored ones.
+ * One shared instance per app (a Koin `single`), passed to each use case and to [AlarmScheduling].
  */
 class AlarmWriteLock {
     private val mutex = Mutex()
@@ -43,15 +44,18 @@ class AlarmWriteLock {
 }
 
 /**
- * Creates or edits an alarm. A new alarm gets a new id, the next request code and `createdAt = updatedAt = now`;
- * an edit keeps id, request code and `createdAt` and sets `updatedAt = now`. The time is truncated to whole
- * minutes, and a blank label is stored as no label. Invalid input is `InvalidAlarm(field)` and nothing is stored.
+ * Creates or edits an alarm. A new alarm gets a new id, the next code from [RequestCodeSequence] and
+ * `createdAt = updatedAt = now`; an edit keeps id, request code and `createdAt` and sets `updatedAt = now`. The time
+ * is truncated to whole minutes, and a blank label is stored as no label. Invalid input is `InvalidAlarm(field)` and
+ * nothing is stored. Once stored, the system alarm follows ([AlarmScheduling.sync]).
  */
 class SaveAlarm(
     private val repository: AlarmRepository,
     private val idGenerator: IdGenerator,
     private val clock: Clock,
     private val lock: AlarmWriteLock,
+    private val requestCodes: RequestCodeSequence,
+    private val scheduling: AlarmScheduling,
 ) {
     suspend operator fun invoke(draft: AlarmDraft): Outcome<Alarm, DomainError> =
         lock.withLock {
@@ -60,17 +64,19 @@ class SaveAlarm(
             val base: Outcome<Alarm, DomainError> =
                 if (id == null) {
                     val template = draft.toAlarm(id = idGenerator.newId(), requestCode = RequestCodes.FIRST_ALARM, createdAt = now)
-                    // Validate before reading the repository, so invalid input never touches storage.
+                    // Validate before allocating a code, so invalid input never touches storage.
                     val invalid = validate(template)
                     if (invalid != null) {
                         Outcome.Failure(DomainError.InvalidAlarm(invalid))
                     } else {
-                        nextRequestCode(repository).map { code -> template.copy(requestCode = code) }
+                        requestCodes.next().map { code -> template.copy(requestCode = code) }
                     }
                 } else {
                     repository.get(id).map { stored -> draft.toAlarm(id, stored.requestCode, stored.createdAt) }
                 }
-            base.flatMap { alarm -> validateAndStore(repository, alarm.copy(updatedAt = now)) }
+            base
+                .flatMap { alarm -> validateAndStore(repository, alarm.copy(updatedAt = now)) }
+                .onSuccess(scheduling::sync)
         }
 
     private fun AlarmDraft.toAlarm(
@@ -98,49 +104,69 @@ class SaveAlarm(
 
 /**
  * Turns an alarm on or off; `updatedAt = now`. `NotFound(id)` when there is no such alarm. Other fields are not
- * re-validated, so a stored alarm with an out-of-range value can still be switched off.
+ * re-validated, so a stored alarm with an out-of-range value can still be switched off. Once stored, the alarm is
+ * armed (on) or cancelled (off).
  */
 class SetAlarmEnabled(
     private val repository: AlarmRepository,
     private val clock: Clock,
     private val lock: AlarmWriteLock,
+    private val scheduling: AlarmScheduling,
 ) {
     suspend operator fun invoke(
         id: String,
         enabled: Boolean,
     ): Outcome<Alarm, DomainError> =
         lock.withLock {
+            repository
+                .get(id)
+                .flatMap { stored ->
+                    val changed = stored.copy(enabled = enabled, updatedAt = clock.nowMillis())
+                    repository.upsert(changed).map { changed }
+                }.onSuccess(scheduling::sync)
+        }
+}
+
+/**
+ * Removes an alarm and then cancels its system alarm. `NotFound(id)` when there is no such alarm, and nothing changes;
+ * a failed delete cancels nothing.
+ */
+class DeleteAlarm(
+    private val repository: AlarmRepository,
+    private val lock: AlarmWriteLock,
+    private val scheduling: AlarmScheduling,
+) {
+    suspend operator fun invoke(id: String): Outcome<Unit, DomainError> =
+        lock.withLock {
             repository.get(id).flatMap { stored ->
-                val changed = stored.copy(enabled = enabled, updatedAt = clock.nowMillis())
-                repository.upsert(changed).map { changed }
+                repository.delete(id).onSuccess { scheduling.cancel(stored.requestCode) }
             }
         }
 }
 
-/** Removes an alarm. `NotFound(id)` when there is no such alarm, and nothing changes. */
-class DeleteAlarm(
-    private val repository: AlarmRepository,
-    private val lock: AlarmWriteLock,
-) {
-    suspend operator fun invoke(id: String): Outcome<Unit, DomainError> = lock.withLock { repository.delete(id) }
-}
-
-/** Copies an alarm with a new id, a new request code and fresh timestamps. `NotFound(id)` when there is no such alarm. */
+/**
+ * Copies an alarm with a new id, a new request code and fresh timestamps; the copy is then armed when it is enabled.
+ * `NotFound(id)` when there is no such alarm.
+ */
 class DuplicateAlarm(
     private val repository: AlarmRepository,
     private val idGenerator: IdGenerator,
     private val clock: Clock,
     private val lock: AlarmWriteLock,
+    private val requestCodes: RequestCodeSequence,
+    private val scheduling: AlarmScheduling,
 ) {
     suspend operator fun invoke(id: String): Outcome<Alarm, DomainError> =
         lock.withLock {
-            repository.get(id).flatMap { stored ->
-                nextRequestCode(repository).flatMap { code ->
-                    val now = clock.nowMillis()
-                    val copy = stored.copy(id = idGenerator.newId(), requestCode = code, createdAt = now, updatedAt = now)
-                    validateAndStore(repository, copy)
-                }
-            }
+            repository
+                .get(id)
+                .flatMap { stored ->
+                    requestCodes.next().flatMap { code ->
+                        val now = clock.nowMillis()
+                        val copy = stored.copy(id = idGenerator.newId(), requestCode = code, createdAt = now, updatedAt = now)
+                        validateAndStore(repository, copy)
+                    }
+                }.onSuccess(scheduling::sync)
         }
 }
 
@@ -152,8 +178,11 @@ private suspend fun validateAndStore(
     return repository.upsert(alarm).map { alarm }
 }
 
-private suspend fun nextRequestCode(repository: AlarmRepository): Outcome<Int, DomainError> =
-    repository.listAll().map { alarms -> RequestCodes.nextAlarmCode(alarms.map { it.requestCode }) }
+/** Runs [action] on the success value and returns this outcome unchanged. */
+private inline fun <T> Outcome<T, DomainError>.onSuccess(action: (T) -> Unit): Outcome<T, DomainError> {
+    if (this is Outcome.Success) action(value)
+    return this
+}
 
 /** Now, truncated to whole milliseconds: the precision `app.db` stores, so a saved alarm equals the stored one. */
 private fun Clock.nowMillis(): Instant = Instant.fromEpochMilliseconds(now().toEpochMilliseconds())

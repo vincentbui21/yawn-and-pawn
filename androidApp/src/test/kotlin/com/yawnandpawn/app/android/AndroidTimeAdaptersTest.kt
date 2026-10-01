@@ -8,12 +8,12 @@ import com.yawnandpawn.app.core.time.BootCounter
 import com.yawnandpawn.app.core.time.Clock
 import com.yawnandpawn.app.core.time.MonotonicClock
 import com.yawnandpawn.app.core.time.TimeZoneProvider
+import com.yawnandpawn.app.stopApp
 import kotlinx.datetime.TimeZone
 import org.junit.After
 import org.junit.Test
 import org.junit.runner.RunWith
 import org.koin.core.context.GlobalContext
-import org.koin.core.context.stopKoin
 import org.robolectric.RobolectricTestRunner
 import kotlin.test.assertEquals
 import kotlin.test.assertIs
@@ -27,7 +27,7 @@ class AndroidTimeAdaptersTest {
 
     @After
     fun tearDown() {
-        stopKoin()
+        stopApp()
     }
 
     @Test

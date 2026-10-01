@@ -1,18 +1,13 @@
 package com.yawnandpawn.app.ui
 
 import com.yawnandpawn.app.core.alarm.AlarmRepository
-import com.yawnandpawn.app.core.alarm.AlarmWriteLock
-import com.yawnandpawn.app.core.alarm.DeleteAlarm
-import com.yawnandpawn.app.core.alarm.DuplicateAlarm
-import com.yawnandpawn.app.core.alarm.SaveAlarm
-import com.yawnandpawn.app.core.alarm.SetAlarmEnabled
 import com.yawnandpawn.app.core.log.Logger
 import com.yawnandpawn.app.core.time.Clock
 import com.yawnandpawn.app.core.time.TimeChangeSignal
 import com.yawnandpawn.app.core.time.TimeZoneProvider
+import com.yawnandpawn.app.testing.AlarmUseCasesFixture
 import com.yawnandpawn.app.testing.FakeAlarmRepository
 import com.yawnandpawn.app.testing.FakeClock
-import com.yawnandpawn.app.testing.FakeIdGenerator
 import com.yawnandpawn.app.testing.FakeLogger
 import com.yawnandpawn.app.testing.FakeTimeChangeSignal
 import com.yawnandpawn.app.testing.FakeTimeZoneProvider
@@ -56,11 +51,11 @@ class UiModuleTest {
                     single<TimeZoneProvider> { FakeTimeZoneProvider() }
                     single<TimeChangeSignal> { FakeTimeChangeSignal() }
                     single<Logger> { FakeLogger() }
-                    single { AlarmWriteLock() }
-                    factory { SaveAlarm(get(), FakeIdGenerator(), get(), get()) }
-                    factory { SetAlarmEnabled(get(), get(), get()) }
-                    factory { DeleteAlarm(get(), get()) }
-                    factory { DuplicateAlarm(get(), FakeIdGenerator(), get(), get()) }
+                    single { AlarmUseCasesFixture(repository = get(), clock = get(), timeZoneProvider = get()) }
+                    factory { get<AlarmUseCasesFixture>().save }
+                    factory { get<AlarmUseCasesFixture>().setEnabled }
+                    factory { get<AlarmUseCasesFixture>().delete }
+                    factory { get<AlarmUseCasesFixture>().duplicate }
                 }
             val koin = koinApplication { modules(ports, uiModule) }.koin
 

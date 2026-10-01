@@ -26,5 +26,7 @@ class LoggerTest {
         )
         assertEquals("not found: a", DomainError.NotFound("a").diagnostic())
         assertEquals("invalid alarm field Label", DomainError.InvalidAlarm(AlarmField.Label).diagnostic())
+        assertEquals("exact alarms not permitted", DomainError.ExactAlarmNotPermitted.diagnostic())
+        assertEquals("scheduler failure: limit", DomainError.SchedulerFailure("limit").diagnostic())
     }
 }

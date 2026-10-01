@@ -3,15 +3,14 @@ package com.yawnandpawn.app.ui.home
 import com.yawnandpawn.app.core.alarm.Alarm
 import com.yawnandpawn.app.core.alarm.AlarmRepository
 import com.yawnandpawn.app.core.alarm.AlarmWriteLock
-import com.yawnandpawn.app.core.alarm.DeleteAlarm
-import com.yawnandpawn.app.core.alarm.DuplicateAlarm
-import com.yawnandpawn.app.core.alarm.SetAlarmEnabled
 import com.yawnandpawn.app.core.error.DomainError
 import com.yawnandpawn.app.core.log.LogEvent
+import com.yawnandpawn.app.testing.AlarmUseCasesFixture
 import com.yawnandpawn.app.testing.FakeAlarmRepository
 import com.yawnandpawn.app.testing.FakeClock
 import com.yawnandpawn.app.testing.FakeIdGenerator
 import com.yawnandpawn.app.testing.FakeLogger
+import com.yawnandpawn.app.testing.FakeRequestCodeSequence
 import com.yawnandpawn.app.testing.FakeTimeChangeSignal
 import com.yawnandpawn.app.testing.FakeTimeZoneProvider
 import com.yawnandpawn.app.testing.anAlarm
@@ -81,14 +80,12 @@ class HomeViewModelTest {
             requestCode = 1000 + n.toInt(),
         )
 
-    private fun actions(repository: AlarmRepository) =
-        AlarmActions(
-            SetAlarmEnabled(repository, clock, lock),
-            DuplicateAlarm(repository, ids, clock, lock),
-            DeleteAlarm(repository, lock),
-            clock,
-            logger,
-        )
+    private fun actions(repository: AlarmRepository): AlarmActions {
+        // The seeded alarms use codes from 1001 up, so the mark starts above them.
+        val alarms =
+            AlarmUseCasesFixture(repository, clock, zone, ids, requestCodes = FakeRequestCodeSequence(lastUsed = 1999), lock = lock)
+        return AlarmActions(alarms.setEnabled, alarms.duplicate, alarms.delete, clock, logger)
+    }
 
     private fun TestScope.home(repository: AlarmRepository): HomeViewModel {
         val viewModel = HomeViewModel(repository, actions(repository), clock, zone, signal)

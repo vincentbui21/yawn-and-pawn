@@ -39,7 +39,6 @@ private fun ComponentGallery(mode: PpsThemeMode) {
             PpsFilledButton(text = "Save", onClick = {})
             PpsFilledButton(text = "Save", onClick = {}, enabled = false)
             PpsTextButton(text = "Keep editing", onClick = {})
-            PpsFab(contentDescription = "Add alarm", onClick = {})
         }
     }
 }

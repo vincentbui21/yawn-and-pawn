@@ -92,3 +92,15 @@
   summary: Drop the "snoozes chart" from FR-PRG-2 via correct-course.
   evidence: Owner decision 2026-10-01 (docs/design-preview/feedback.md item 24): no snoozes bar chart on Progress; the ring of 30 mornings shows each snoozed day and the "snoozes" tile gives the count. The design preview removed the chart, its strings and its preview state, and EXPERIENCE.md / DESIGN.md no longer list `bar-chart`. PRD FR-PRG-2 and the Epic 6 progress story still name a snoozes chart; run correct-course with the Progress epic to update them.
   status: resolved by sprint-change-proposal-2026-10-01 (PRD v0.3, Story 6.9 dropped, Story 6.5 updated).
+- source_spec: `_bmad-output/implementation-artifacts/spec-1-9-alarm-list-on-home-with-the-next-alarm-countdown.md`
+  summary: Owner copy decision: should Home and the editor say something visible when Duplicate, Delete or a switch fails to save?
+  evidence: Story 1.9 follows its I/O matrix: failures are logged, the card stays, the switch reverts, and Duplicate does nothing visible. Storage failures are rare, but a silent Duplicate looks like a broken button. A short message (for example the editor's existing "Couldn't save the alarm. Try again.") needs owner approval. Raise at the Epic 1 review.
+- source_spec: `_bmad-output/implementation-artifacts/spec-1-9-alarm-list-on-home-with-the-next-alarm-countdown.md`
+  summary: Editor overflow "Duplicate" copies the stored alarm and opens the copy, dropping unsaved edits without "Discard changes?".
+  evidence: Implementation decision in Story 1.9 (AlarmEditorViewModel.onMenuIntent). Options: ask "Discard changes?" first, or duplicate the form as edited. Raise at the Epic 1 review.
+- source_spec: `_bmad-output/implementation-artifacts/spec-1-9-alarm-list-on-home-with-the-next-alarm-countdown.md`
+  summary: Keep each tab's saved state (scroll, sub-screen) when switching between Progress, Settings and You.
+  evidence: The back stack is [Alarms] or [Alarms, Tab]; selecting another tab removes the previous non-root tab, so its saveable state is dropped. Harmless in Epic 1 (those tabs are placeholders); revisit when Epic 5 (Settings) or Epic 6 (Progress) gives them content.
+- source_spec: `_bmad-output/implementation-artifacts/spec-1-9-alarm-list-on-home-with-the-next-alarm-countdown.md`
+  summary: Move the AlarmDeleted log into the core delete use case once a second delete path exists.
+  evidence: Story 1.9 logs AlarmDeleted in `ui.home.AlarmActions`, shared by Home and the editor. Epic 4's commitment-lock delete confirmation and Story 5.9 "Delete all data" should decide whether they log per alarm; if so, log inside `DeleteAlarm` so no path can skip it.

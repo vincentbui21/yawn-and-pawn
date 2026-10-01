@@ -2,6 +2,10 @@ package com.yawnandpawn.app.testing
 
 import com.yawnandpawn.app.core.time.Deadline
 import com.yawnandpawn.app.core.time.TimeSnapshot
+import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.test.UnconfinedTestDispatcher
+import kotlinx.coroutines.test.runTest
 import kotlinx.datetime.TimeZone
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -16,6 +20,7 @@ import kotlin.time.Duration.Companion.minutes
 import kotlin.time.Duration.Companion.nanoseconds
 import kotlin.time.Instant
 
+@OptIn(ExperimentalCoroutinesApi::class)
 class TimeFakesTest {
     @Test
     fun `FakeClock starts at the default instant and moves only when told to`() {
@@ -125,4 +130,20 @@ class TimeFakesTest {
         assertTrue(deadline.isDue(time.snapshot()))
         assertEquals(Duration.ZERO, deadline.remaining(time.snapshot()))
     }
+
+    @Test
+    fun `FakeTimeChangeSignal reaches its collectors and counts them`() =
+        runTest {
+            val signal = FakeTimeChangeSignal()
+            var received = 0
+            assertEquals(0, signal.subscribers)
+
+            val job = launch(UnconfinedTestDispatcher(testScheduler)) { signal.changes().collect { received++ } }
+            signal.emit()
+            signal.emit()
+
+            assertEquals(1, signal.subscribers)
+            assertEquals(2, received)
+            job.cancel()
+        }
 }

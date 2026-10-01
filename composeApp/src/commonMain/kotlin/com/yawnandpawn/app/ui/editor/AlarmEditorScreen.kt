@@ -57,6 +57,7 @@ import com.yawnandpawn.app.ui.components.subScreenTransition
 import com.yawnandpawn.app.ui.format.countdownText
 import com.yawnandpawn.app.ui.format.formatClockTime
 import com.yawnandpawn.app.ui.format.is24HourClock
+import com.yawnandpawn.app.ui.home.DeleteAlarmConfirm
 import com.yawnandpawn.app.ui.resources.Res
 import com.yawnandpawn.app.ui.resources.editor_after_im_up
 import com.yawnandpawn.app.ui.resources.editor_alarm_name
@@ -101,11 +102,17 @@ import org.jetbrains.compose.resources.stringResource
 import org.koin.compose.viewmodel.koinViewModel
 import org.koin.core.parameter.parametersOf
 
-/** The Alarm editor route: its ViewModel (scoped to the nav entry), effects, and Back interception. */
+/**
+ * The Alarm editor route: its ViewModel (scoped to the nav entry), effects, and Back interception. [onOpenFailed] runs
+ * when the alarm could not be read (the editor closes and Home says so); [onOpenCopy] replaces this editor with one on
+ * the copy made by Duplicate.
+ */
 @Composable
 fun AlarmEditorRoute(
     alarmId: String?,
     onClose: () -> Unit,
+    onOpenFailed: () -> Unit,
+    onOpenCopy: (String) -> Unit,
     viewModel: AlarmEditorViewModel = koinViewModel { parametersOf(AlarmEditorArgs(alarmId)) },
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
@@ -115,6 +122,10 @@ fun AlarmEditorRoute(
         viewModel.effects.collect { effect ->
             when (effect) {
                 EditorEffect.Close -> onClose()
+
+                EditorEffect.OpenFailed -> onOpenFailed()
+
+                is EditorEffect.OpenCopy -> onOpenCopy(effect.alarmId)
 
                 // Its own coroutine: showSnackbar suspends until the snackbar goes, which must not hold back a Close.
                 EditorEffect.ShowSaveFailed -> launch { snackbarHostState.showSnackbar(saveFailed) }
@@ -183,6 +194,14 @@ fun AlarmEditorScreen(
             destructive = true,
         )
     }
+    state.deleteDialogTime?.let { time ->
+        DeleteAlarmConfirm(
+            time = time,
+            is24Hour = is24Hour,
+            onConfirm = { onIntent(EditorIntent.DeleteConfirmed) },
+            onKeep = { onIntent(EditorIntent.DeleteCancelled) },
+        )
+    }
 }
 
 /** The main editor screen: header, time card, repeat card, the two row cards, notes, "Test alarm" and the pill. */
@@ -209,7 +228,7 @@ private fun EditorMain(
                         .padding(start = spacing.screenMargin, end = spacing.screenMargin, top = spacing.space4, bottom = spacing.space4),
                 verticalArrangement = Arrangement.spacedBy(spacing.space3),
             ) {
-                EditorHeader(state)
+                EditorHeader(state = state, onIntent = onIntent)
                 TimeCard(state = state, is24Hour = is24Hour, onIntent = onIntent)
                 RepeatCard(state = state, onIntent = onIntent)
                 NameSoundCard(state = state, onIntent = onIntent)
@@ -233,22 +252,6 @@ private fun EditorMain(
                 saveEnabled = !state.isSaving,
                 modifier = Modifier.padding(top = spacing.space2),
             )
-        }
-    }
-}
-
-/** "New alarm" / "Edit alarm" in `headline` with "Rings in ..." under it. */
-@Composable
-private fun EditorHeader(state: EditorUiState) {
-    Column(modifier = Modifier.padding(bottom = PpsTheme.spacing.space2)) {
-        Text(
-            text = stringResource(if (state.isNew) Res.string.editor_new_title else Res.string.editor_edit_title),
-            modifier = Modifier.semantics { heading() },
-            style = PpsTheme.typography.headline,
-            color = PpsTheme.colors.text,
-        )
-        state.ringsIn?.let { countdown ->
-            Text(text = countdownText(countdown), style = PpsTheme.typography.body, color = PpsTheme.colors.textSecondary)
         }
     }
 }

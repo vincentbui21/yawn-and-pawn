@@ -2,17 +2,24 @@ package com.yawnandpawn.app.ui
 
 import com.yawnandpawn.app.core.alarm.AlarmRepository
 import com.yawnandpawn.app.core.alarm.AlarmWriteLock
+import com.yawnandpawn.app.core.alarm.DeleteAlarm
+import com.yawnandpawn.app.core.alarm.DuplicateAlarm
 import com.yawnandpawn.app.core.alarm.SaveAlarm
+import com.yawnandpawn.app.core.alarm.SetAlarmEnabled
+import com.yawnandpawn.app.core.log.Logger
 import com.yawnandpawn.app.core.time.Clock
+import com.yawnandpawn.app.core.time.TimeChangeSignal
 import com.yawnandpawn.app.core.time.TimeZoneProvider
 import com.yawnandpawn.app.testing.FakeAlarmRepository
 import com.yawnandpawn.app.testing.FakeClock
 import com.yawnandpawn.app.testing.FakeIdGenerator
+import com.yawnandpawn.app.testing.FakeLogger
+import com.yawnandpawn.app.testing.FakeTimeChangeSignal
 import com.yawnandpawn.app.testing.FakeTimeZoneProvider
 import com.yawnandpawn.app.testing.anAppVersion
-import com.yawnandpawn.app.ui.alarms.AlarmsViewModel
 import com.yawnandpawn.app.ui.editor.AlarmEditorArgs
 import com.yawnandpawn.app.ui.editor.AlarmEditorViewModel
+import com.yawnandpawn.app.ui.home.HomeViewModel
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.test.UnconfinedTestDispatcher
@@ -38,7 +45,7 @@ class UiModuleTest {
 
     @OptIn(ExperimentalCoroutinesApi::class)
     @Test
-    fun `the ui module builds both ViewModels from the core ports`() {
+    fun `the ui module builds the Home and editor ViewModels from the core ports`() {
         Dispatchers.setMain(UnconfinedTestDispatcher())
         try {
             val repository = FakeAlarmRepository()
@@ -47,11 +54,21 @@ class UiModuleTest {
                     single<AlarmRepository> { repository }
                     single<Clock> { FakeClock() }
                     single<TimeZoneProvider> { FakeTimeZoneProvider() }
-                    factory { SaveAlarm(get(), FakeIdGenerator(), get(), AlarmWriteLock()) }
+                    single<TimeChangeSignal> { FakeTimeChangeSignal() }
+                    single<Logger> { FakeLogger() }
+                    single { AlarmWriteLock() }
+                    factory { SaveAlarm(get(), FakeIdGenerator(), get(), get()) }
+                    factory { SetAlarmEnabled(get(), get(), get()) }
+                    factory { DeleteAlarm(get(), get()) }
+                    factory { DuplicateAlarm(get(), FakeIdGenerator(), get(), get()) }
                 }
             val koin = koinApplication { modules(ports, uiModule) }.koin
 
-            assertNotNull(koin.get<AlarmsViewModel>())
+            assertTrue(
+                koin
+                    .get<HomeViewModel>()
+                    .state.value.isLoading,
+            )
             val newEditor = koin.get<AlarmEditorViewModel> { parametersOf(AlarmEditorArgs(alarmId = null)) }
             assertTrue(newEditor.state.value.isNew)
             val editEditor = koin.get<AlarmEditorViewModel> { parametersOf(AlarmEditorArgs(alarmId = "some-id")) }

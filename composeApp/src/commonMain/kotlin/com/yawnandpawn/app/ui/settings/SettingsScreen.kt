@@ -17,6 +17,7 @@ import com.yawnandpawn.app.ui.components.AppSnackbar
 import com.yawnandpawn.app.ui.components.BannerWarning
 import com.yawnandpawn.app.ui.components.ConfirmDialog
 import com.yawnandpawn.app.ui.components.GroupCard
+import com.yawnandpawn.app.ui.components.GroupCardOf
 import com.yawnandpawn.app.ui.components.GroupDivider
 import com.yawnandpawn.app.ui.components.NavRow
 import com.yawnandpawn.app.ui.components.NoteInline
@@ -30,6 +31,7 @@ import com.yawnandpawn.app.ui.components.StepSlider
 import com.yawnandpawn.app.ui.components.SubScreen
 import com.yawnandpawn.app.ui.components.SwitchRow
 import com.yawnandpawn.app.ui.components.TabScreen
+import com.yawnandpawn.app.ui.components.rowIf
 import com.yawnandpawn.app.ui.components.subScreenTransition
 import com.yawnandpawn.app.ui.editor.EditorForm
 import com.yawnandpawn.app.ui.format.formatClockTime
@@ -88,6 +90,7 @@ import org.jetbrains.compose.resources.stringResource
  * Reliability checklist: app behaviour only (owner decision 2026-10-01, feedback item 26: payments, privacy, delete all
  * data, support, terms and about moved to the You tab). The
  * reliability `banner-warning` sits on top while an item fails. During a session only `panel-session-in-progress` shows.
+ * Only the [rows] given show (all by default); a card with none of its rows is left out.
  */
 @Composable
 fun SettingsScreen(
@@ -95,6 +98,7 @@ fun SettingsScreen(
     is24Hour: Boolean,
     onIntent: (SettingsIntent) -> Unit,
     modifier: Modifier = Modifier,
+    rows: Set<SettingsRow> = SettingsRow.entries.toSet(),
 ) {
     if (state.sessionInProgress) {
         PpsBackground(modifier = modifier) {
@@ -112,7 +116,7 @@ fun SettingsScreen(
             label = "settings pane",
         ) { pane ->
             if (pane == SettingsPane.Main) {
-                SettingsMain(state = state, onIntent = onIntent)
+                SettingsMain(state = state, onIntent = onIntent, rows = rows)
             } else {
                 SettingsSubScreen(pane = pane, state = state, is24Hour = is24Hour, onIntent = onIntent)
             }
@@ -124,6 +128,7 @@ fun SettingsScreen(
 private fun SettingsMain(
     state: SettingsUiState,
     onIntent: (SettingsIntent) -> Unit,
+    rows: Set<SettingsRow>,
 ) {
     TabScreen(title = stringResource(Res.string.nav_settings)) {
         if (state.reliabilityProblem) {
@@ -133,47 +138,73 @@ private fun SettingsMain(
                 onAction = { onIntent(SettingsIntent.FixSettings) },
             )
         }
-        GroupCard(title = stringResource(Res.string.settings_snooze)) {
-            NavRow(
-                label = stringResource(Res.string.settings_base_fee),
-                value = formatMoney(state.baseFee),
-                onClick = { onIntent(SettingsIntent.OpenPane(SettingsPane.BaseFee)) },
-            )
-            GroupDivider()
-            NavRow(
-                label = stringResource(Res.string.settings_max_snoozes),
-                value = state.maxSnoozes.toString(),
-                onClick = { onIntent(SettingsIntent.OpenPane(SettingsPane.MaxSnoozes)) },
-            )
-            GroupDivider()
-            NavRow(
-                label = stringResource(Res.string.settings_default_snooze_length),
-                value = stringResource(Res.string.editor_snooze_minutes, state.defaultSnoozeMinutes),
-                onClick = { onIntent(SettingsIntent.OpenPane(SettingsPane.SnoozeLength)) },
-            )
-        }
-        GroupCard(title = stringResource(Res.string.settings_wake)) {
-            NavRow(
-                label = stringResource(Res.string.settings_default_quiet_time),
-                value = stringResource(Res.string.editor_grace_seconds, state.defaultQuietSeconds),
-                onClick = { onIntent(SettingsIntent.OpenPane(SettingsPane.QuietTime)) },
-            )
-            GroupDivider()
-            SwitchRow(
-                label = stringResource(Res.string.editor_vibrate_quiet_time),
-                checked = state.vibrateDuringQuietTime,
-                onCheckedChange = { onIntent(SettingsIntent.VibrateDuringQuietTimeToggled(it)) },
-            )
-            GroupDivider()
-            SwitchRow(
-                label = stringResource(Res.string.settings_bright_wake),
-                subtitle = stringResource(Res.string.settings_bright_wake_caption),
-                checked = state.brightWakeScreen,
-                onCheckedChange = { onIntent(SettingsIntent.BrightWakeScreenToggled(it)) },
-            )
-        }
-        GeneralCards(state = state, onIntent = onIntent)
+        GroupCardOf(
+            title = stringResource(Res.string.settings_snooze),
+            rows =
+                listOfNotNull(
+                    rowIf(SettingsRow.BaseFee in rows) {
+                        NavRow(
+                            label = stringResource(Res.string.settings_base_fee),
+                            value = formatMoney(state.baseFee),
+                            onClick = { onIntent(SettingsIntent.OpenPane(SettingsPane.BaseFee)) },
+                        )
+                    },
+                    rowIf(SettingsRow.MaxSnoozes in rows) {
+                        NavRow(
+                            label = stringResource(Res.string.settings_max_snoozes),
+                            value = state.maxSnoozes.toString(),
+                            onClick = { onIntent(SettingsIntent.OpenPane(SettingsPane.MaxSnoozes)) },
+                        )
+                    },
+                    rowIf(SettingsRow.DefaultSnoozeLength in rows) {
+                        NavRow(
+                            label = stringResource(Res.string.settings_default_snooze_length),
+                            value = stringResource(Res.string.editor_snooze_minutes, state.defaultSnoozeMinutes),
+                            onClick = { onIntent(SettingsIntent.OpenPane(SettingsPane.SnoozeLength)) },
+                        )
+                    },
+                ),
+        )
+        WakeCard(state = state, onIntent = onIntent, rows = rows)
+        GeneralCards(state = state, onIntent = onIntent, rows = rows)
     }
+}
+
+/** Wake: default quiet time, vibrate during quiet time, bright wake screen. */
+@Composable
+private fun WakeCard(
+    state: SettingsUiState,
+    onIntent: (SettingsIntent) -> Unit,
+    rows: Set<SettingsRow>,
+) {
+    GroupCardOf(
+        title = stringResource(Res.string.settings_wake),
+        rows =
+            listOfNotNull(
+                rowIf(SettingsRow.DefaultQuietTime in rows) {
+                    NavRow(
+                        label = stringResource(Res.string.settings_default_quiet_time),
+                        value = stringResource(Res.string.editor_grace_seconds, state.defaultQuietSeconds),
+                        onClick = { onIntent(SettingsIntent.OpenPane(SettingsPane.QuietTime)) },
+                    )
+                },
+                rowIf(SettingsRow.VibrateDuringQuietTime in rows) {
+                    SwitchRow(
+                        label = stringResource(Res.string.editor_vibrate_quiet_time),
+                        checked = state.vibrateDuringQuietTime,
+                        onCheckedChange = { onIntent(SettingsIntent.VibrateDuringQuietTimeToggled(it)) },
+                    )
+                },
+                rowIf(SettingsRow.BrightWakeScreen in rows) {
+                    SwitchRow(
+                        label = stringResource(Res.string.settings_bright_wake),
+                        subtitle = stringResource(Res.string.settings_bright_wake_caption),
+                        checked = state.brightWakeScreen,
+                        onCheckedChange = { onIntent(SettingsIntent.BrightWakeScreenToggled(it)) },
+                    )
+                },
+            ),
+    )
 }
 
 /** Appearance, weekly summary and usage stats, and the Reliability checklist. */
@@ -181,32 +212,53 @@ private fun SettingsMain(
 private fun GeneralCards(
     state: SettingsUiState,
     onIntent: (SettingsIntent) -> Unit,
+    rows: Set<SettingsRow>,
 ) {
-    GroupCard(title = stringResource(Res.string.settings_appearance)) {
-        PpsSegmentedControl(
-            options = PpsThemeMode.entries,
-            selected = state.theme,
-            label = { stringResource(it.label()) },
-            onSelect = { onIntent(SettingsIntent.ThemeSelected(it)) },
-            modifier = Modifier.fillMaxWidth().padding(PpsTheme.spacing.cardPadding),
-        )
-    }
-    GroupCard {
-        SwitchRow(
-            label = stringResource(Res.string.settings_weekly_summary),
-            checked = state.weeklySummary,
-            onCheckedChange = { onIntent(SettingsIntent.WeeklySummaryToggled(it)) },
-        )
-        GroupDivider()
-        SwitchRow(
-            label = stringResource(Res.string.settings_usage_stats),
-            checked = state.usageStats,
-            onCheckedChange = { onIntent(SettingsIntent.UsageStatsToggled(it)) },
-        )
-    }
-    GroupCard {
-        NavRow(label = stringResource(Res.string.settings_reliability), onClick = { onIntent(SettingsIntent.ReliabilityClicked) })
-    }
+    GroupCardOf(
+        title = stringResource(Res.string.settings_appearance),
+        rows =
+            listOfNotNull(
+                rowIf(SettingsRow.Appearance in rows) {
+                    PpsSegmentedControl(
+                        options = PpsThemeMode.entries,
+                        selected = state.theme,
+                        label = { stringResource(it.label()) },
+                        onSelect = { onIntent(SettingsIntent.ThemeSelected(it)) },
+                        modifier = Modifier.fillMaxWidth().padding(PpsTheme.spacing.cardPadding),
+                    )
+                },
+            ),
+    )
+    GroupCardOf(
+        rows =
+            listOfNotNull(
+                rowIf(SettingsRow.WeeklySummary in rows) {
+                    SwitchRow(
+                        label = stringResource(Res.string.settings_weekly_summary),
+                        checked = state.weeklySummary,
+                        onCheckedChange = { onIntent(SettingsIntent.WeeklySummaryToggled(it)) },
+                    )
+                },
+                rowIf(SettingsRow.UsageStats in rows) {
+                    SwitchRow(
+                        label = stringResource(Res.string.settings_usage_stats),
+                        checked = state.usageStats,
+                        onCheckedChange = { onIntent(SettingsIntent.UsageStatsToggled(it)) },
+                    )
+                },
+            ),
+    )
+    GroupCardOf(
+        rows =
+            listOfNotNull(
+                rowIf(SettingsRow.Reliability in rows) {
+                    NavRow(
+                        label = stringResource(Res.string.settings_reliability),
+                        onClick = { onIntent(SettingsIntent.ReliabilityClicked) },
+                    )
+                },
+            ),
+    )
 }
 
 private fun PpsThemeMode.label(): StringResource =

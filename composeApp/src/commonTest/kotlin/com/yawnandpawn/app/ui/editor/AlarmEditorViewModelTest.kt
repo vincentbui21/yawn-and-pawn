@@ -3,14 +3,20 @@ package com.yawnandpawn.app.ui.editor
 import com.yawnandpawn.app.core.alarm.Alarm
 import com.yawnandpawn.app.core.alarm.AlarmField
 import com.yawnandpawn.app.core.alarm.AlarmWriteLock
+import com.yawnandpawn.app.core.alarm.DeleteAlarm
+import com.yawnandpawn.app.core.alarm.DuplicateAlarm
 import com.yawnandpawn.app.core.alarm.RequestCodes
 import com.yawnandpawn.app.core.alarm.SaveAlarm
+import com.yawnandpawn.app.core.alarm.SetAlarmEnabled
 import com.yawnandpawn.app.core.error.DomainError
+import com.yawnandpawn.app.core.log.LogEvent
 import com.yawnandpawn.app.testing.FakeAlarmRepository
 import com.yawnandpawn.app.testing.FakeClock
 import com.yawnandpawn.app.testing.FakeIdGenerator
+import com.yawnandpawn.app.testing.FakeLogger
 import com.yawnandpawn.app.testing.FakeTimeZoneProvider
 import com.yawnandpawn.app.testing.anAlarm
+import com.yawnandpawn.app.ui.home.AlarmActions
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.first
@@ -43,6 +49,9 @@ class AlarmEditorViewModelTest {
     private val clock = FakeClock(Instant.parse("2027-03-03T06:00:00Z"))
     private val zone = FakeTimeZoneProvider(TimeZone.of("Europe/Helsinki"))
     private val repository = FakeAlarmRepository()
+    private val logger = FakeLogger()
+    private val ids = FakeIdGenerator()
+    private val lock = AlarmWriteLock()
 
     @BeforeTest
     fun setUp() {
@@ -58,9 +67,17 @@ class AlarmEditorViewModelTest {
         AlarmEditorViewModel(
             alarmId = alarmId,
             repository = repository,
-            saveAlarm = SaveAlarm(repository, FakeIdGenerator(), clock, AlarmWriteLock()),
+            saveAlarm = SaveAlarm(repository, ids, clock, lock),
             clock = clock,
             timeZoneProvider = zone,
+            actions =
+                AlarmActions(
+                    SetAlarmEnabled(repository, clock, lock),
+                    DuplicateAlarm(repository, ids, clock, lock),
+                    DeleteAlarm(repository, lock),
+                    clock,
+                    logger,
+                ),
         )
 
     private fun TestScope.effectsOf(viewModel: AlarmEditorViewModel): List<EditorEffect> {
@@ -215,11 +232,27 @@ class AlarmEditorViewModelTest {
         }
 
     @Test
-    fun `editing an alarm that no longer exists closes the editor`() =
+    fun `editing an alarm that no longer exists closes the editor so Home can say so, and logs it`() =
         runTest(dispatcher) {
             val viewModel = viewModel("missing")
 
-            assertEquals(EditorEffect.Close, viewModel.effects.first())
+            assertEquals(EditorEffect.OpenFailed, viewModel.effects.first())
+            assertEquals(listOf<LogEvent>(LogEvent.OperationFailed("open alarm", "not found: missing")), logger.events)
+        }
+
+    @Test
+    fun `an alarm that cannot be read closes the editor with OpenFailed and is logged`() =
+        runTest(dispatcher) {
+            repository.upsert(stored)
+            repository.failure = DomainError.StorageFailure("disk I/O error")
+            val viewModel = viewModel(stored.id)
+
+            assertEquals(EditorEffect.OpenFailed, viewModel.effects.first())
+            assertFalse(viewModel.state.value.hasOverflowMenu)
+            assertEquals(
+                listOf<LogEvent>(LogEvent.OperationFailed("open alarm", "storage failure: disk I/O error")),
+                logger.events,
+            )
         }
 
     @Test
@@ -550,5 +583,120 @@ class AlarmEditorViewModelTest {
             viewModel.onIntent(EditorIntent.TimeChanged(LocalTime(3, 30)))
 
             assertEquals(LocalTime(4, 30), viewModel.state.value.ringsTomorrowAt)
+        }
+
+    @Test
+    fun `a new alarm has no overflow menu and ignores its intents`() =
+        runTest(dispatcher) {
+            val viewModel = viewModel()
+            val effects = effectsOf(viewModel)
+
+            viewModel.onIntent(EditorIntent.DuplicateClicked)
+            viewModel.onIntent(EditorIntent.DeleteClicked)
+            advanceUntilIdle()
+
+            assertFalse(viewModel.state.value.hasOverflowMenu)
+            assertNull(viewModel.state.value.deleteDialogTime)
+            assertTrue(effects.isEmpty())
+        }
+
+    @Test
+    fun `Duplicate copies the stored alarm and opens the copy`() =
+        runTest(dispatcher) {
+            repository.upsert(stored)
+            ids.newId() // the stored alarm's id; the copy gets the next one
+            val viewModel = viewModel(stored.id)
+            val effects = effectsOf(viewModel)
+            advanceUntilIdle()
+            assertTrue(viewModel.state.value.hasOverflowMenu)
+
+            viewModel.onIntent(EditorIntent.LabelChanged("Unsaved"))
+            viewModel.onIntent(EditorIntent.DuplicateClicked)
+            advanceUntilIdle()
+
+            val copy = repository.current.single { it.id != stored.id }
+            assertEquals("Gym", copy.label, "the copy is of the stored alarm")
+            assertEquals(listOf<EditorEffect>(EditorEffect.OpenCopy(copy.id)), effects)
+        }
+
+    @Test
+    fun `Delete asks with the stored time, Keep it keeps the alarm, and Delete deletes, logs once and closes`() =
+        runTest(dispatcher) {
+            repository.upsert(stored)
+            val viewModel = viewModel(stored.id)
+            val effects = effectsOf(viewModel)
+            advanceUntilIdle()
+            viewModel.onIntent(EditorIntent.TimeChanged(LocalTime(9, 0)))
+
+            viewModel.onIntent(EditorIntent.DeleteClicked)
+            assertEquals(LocalTime(6, 30), viewModel.state.value.deleteDialogTime)
+            viewModel.onIntent(EditorIntent.DeleteCancelled)
+            assertNull(viewModel.state.value.deleteDialogTime)
+            assertEquals(listOf(stored), repository.current)
+
+            viewModel.onIntent(EditorIntent.DeleteClicked)
+            viewModel.onIntent(EditorIntent.DeleteConfirmed)
+            viewModel.onIntent(EditorIntent.DeleteConfirmed)
+            advanceUntilIdle()
+
+            assertTrue(repository.current.isEmpty())
+            assertEquals(listOf<LogEvent>(LogEvent.AlarmDeleted(stored.id, clock.now())), logger.events)
+            assertEquals(listOf<EditorEffect>(EditorEffect.Close), effects)
+        }
+
+    @Test
+    fun `a failed Duplicate is logged, opens nothing and leaves the editor usable`() =
+        runTest(dispatcher) {
+            repository.upsert(stored)
+            val viewModel = viewModel(stored.id)
+            val effects = effectsOf(viewModel)
+            advanceUntilIdle()
+            repository.failure = DomainError.StorageFailure("disk full")
+
+            viewModel.onIntent(EditorIntent.DuplicateClicked)
+            advanceUntilIdle()
+
+            assertFalse(viewModel.state.value.isSaving)
+            assertTrue(effects.isEmpty())
+            assertEquals(listOf<LogEvent>(LogEvent.OperationFailed("duplicate alarm", "storage failure: disk full")), logger.events)
+
+            viewModel.onIntent(EditorIntent.BackRequested)
+            advanceUntilIdle()
+
+            assertEquals(listOf<EditorEffect>(EditorEffect.Close), effects)
+        }
+
+    @Test
+    fun `Delete of an alarm deleted elsewhere closes the editor`() =
+        runTest(dispatcher) {
+            repository.upsert(stored)
+            val viewModel = viewModel(stored.id)
+            val effects = effectsOf(viewModel)
+            advanceUntilIdle()
+            repository.delete(stored.id)
+
+            viewModel.onIntent(EditorIntent.DeleteClicked)
+            viewModel.onIntent(EditorIntent.DeleteConfirmed)
+            advanceUntilIdle()
+
+            assertEquals(listOf<EditorEffect>(EditorEffect.Close), effects)
+        }
+
+    @Test
+    fun `a failed delete keeps the editor open and logs the error`() =
+        runTest(dispatcher) {
+            repository.upsert(stored)
+            val viewModel = viewModel(stored.id)
+            val effects = effectsOf(viewModel)
+            advanceUntilIdle()
+            repository.failure = DomainError.StorageFailure("disk full")
+
+            viewModel.onIntent(EditorIntent.DeleteClicked)
+            viewModel.onIntent(EditorIntent.DeleteConfirmed)
+            advanceUntilIdle()
+
+            assertFalse(viewModel.state.value.isSaving)
+            assertTrue(effects.isEmpty())
+            assertEquals(listOf<LogEvent>(LogEvent.OperationFailed("delete alarm", "storage failure: disk full")), logger.events)
         }
 }

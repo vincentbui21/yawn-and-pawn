@@ -1,6 +1,7 @@
 package com.yawnandpawn.app
 
 import android.app.Application
+import com.yawnandpawn.app.android.AndroidLogger
 import com.yawnandpawn.app.android.androidTimeModule
 import com.yawnandpawn.app.core.alarm.AlarmWriteLock
 import com.yawnandpawn.app.core.alarm.DeleteAlarm
@@ -9,6 +10,7 @@ import com.yawnandpawn.app.core.alarm.SaveAlarm
 import com.yawnandpawn.app.core.alarm.SetAlarmEnabled
 import com.yawnandpawn.app.core.id.IdGenerator
 import com.yawnandpawn.app.core.id.UuidV4IdGenerator
+import com.yawnandpawn.app.core.log.Logger
 import com.yawnandpawn.app.data.dataModule
 import com.yawnandpawn.app.ui.uiModule
 import org.koin.android.ext.koin.androidContext
@@ -20,6 +22,7 @@ val appModule =
     module {
         includes(androidTimeModule)
         single<IdGenerator> { UuidV4IdGenerator() }
+        single<Logger> { AndroidLogger() }
         // Alarm use cases (Story 1.7); the repository comes from dataModule, Clock from androidTimeModule.
         // One lock shared by every alarm use case: it serializes their read-modify-write.
         single { AlarmWriteLock() }

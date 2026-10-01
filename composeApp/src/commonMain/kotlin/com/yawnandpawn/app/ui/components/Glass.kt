@@ -147,6 +147,31 @@ fun GroupCard(
     }
 }
 
+/**
+ * A [GroupCard] of the [rows] a screen shows, with a [GroupDivider] between two rows; nothing at all (no title, no
+ * card) when no row is shown. For screens that hide the rows whose stories are not built yet.
+ */
+@Composable
+fun GroupCardOf(
+    rows: List<@Composable () -> Unit>,
+    modifier: Modifier = Modifier,
+    title: String? = null,
+) {
+    if (rows.isEmpty()) return
+    GroupCard(modifier = modifier, title = title) {
+        rows.forEachIndexed { index, row ->
+            if (index > 0) GroupDivider()
+            row()
+        }
+    }
+}
+
+/** [row] when [visible], else `null`: a row left out of its [GroupCardOf]. */
+fun rowIf(
+    visible: Boolean,
+    row: @Composable () -> Unit,
+): (@Composable () -> Unit)? = if (visible) row else null
+
 /** A short section title above a card (`label`, `text-secondary`), a heading for TalkBack. */
 @Composable
 fun SectionTitle(

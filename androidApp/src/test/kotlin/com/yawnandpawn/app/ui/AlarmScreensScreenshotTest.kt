@@ -1,14 +1,15 @@
 package com.yawnandpawn.app.ui
 
+import androidx.compose.ui.test.isDialog
 import androidx.compose.ui.test.junit4.createEmptyComposeRule
+import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.onRoot
+import androidx.compose.ui.test.performClick
 import com.github.takahirom.roborazzi.ExperimentalRoborazziApi
 import com.github.takahirom.roborazzi.captureRoboImage
 import com.github.takahirom.roborazzi.captureScreenRoboImage
 import com.yawnandpawn.app.screenshotOptions
-import com.yawnandpawn.app.ui.alarms.AlarmsScreen
-import com.yawnandpawn.app.ui.alarms.AlarmsUiState
 import com.yawnandpawn.app.ui.editor.AlarmEditorScreen
 import com.yawnandpawn.app.ui.editor.EditorPane
 import com.yawnandpawn.app.ui.editor.EditorUiState
@@ -23,8 +24,9 @@ import org.robolectric.annotation.Config
 import org.robolectric.annotation.GraphicsMode
 
 /**
- * Story 1.8 screenshots: the Alarm editor (new alarm, edit alarm, one-time "Rings tomorrow" note, discard dialog)
- * and the Alarms route (empty, interim list), each in Light, Dark and Light at 200% font scale. The screens are
+ * Story 1.8 and 1.9 screenshots of the Alarm editor (new alarm, edit alarm, one-time "Rings tomorrow" note, discard
+ * dialog, and for a stored alarm the overflow button, its menu and the delete dialog), each in Light, Dark and Light at
+ * 200% font scale. Home is in HomeScreenshotTest. The screens are
  * tall enough that the whole scrolling editor is in the picture, so clipping at 200% shows up in the baseline.
  * 12-hour clock (the Robolectric default locale is en-US), so the AM/PM selector is in the picture too.
  */
@@ -46,21 +48,12 @@ class AlarmScreensScreenshotTest {
         mode: PpsThemeMode,
     ) = withScreen(mode, content = { AlarmEditorScreen(state = state, is24Hour = false, onIntent = {}) }) {
         if (state.pane == EditorPane.Main) composeRule.onNodeWithText("Save").assertExists()
-        if (state.showDiscardDialog) {
-            composeRule.onNodeWithText("Discard changes?").assertExists()
+        if (state.showDiscardDialog || state.deleteDialogTime != null) {
+            composeRule.onNode(isDialog()).assertExists()
             capture(name, allWindows = true)
         } else {
             capture(name)
         }
-    }
-
-    private fun alarms(
-        name: String,
-        state: AlarmsUiState,
-        mode: PpsThemeMode,
-    ) = withScreen(mode, content = { AlarmsScreen(state = state, is24Hour = false, onAddAlarm = {}, onEditAlarm = {}) }) {
-        composeRule.onNodeWithText("Yawn & Pawn").assertExists()
-        capture(name)
     }
 
     @OptIn(ExperimentalRoborazziApi::class)
@@ -120,26 +113,6 @@ class AlarmScreensScreenshotTest {
         editor("alarm_editor_discard_light_font200", EditorSamples.discardDialog, PpsThemeMode.Light)
 
     @Test
-    fun `empty Alarms in Light`() = alarms("alarms_empty_light", EditorSamples.emptyAlarms, PpsThemeMode.Light)
-
-    @Test
-    fun `empty Alarms in Dark`() = alarms("alarms_empty_dark", EditorSamples.emptyAlarms, PpsThemeMode.Dark)
-
-    @Test
-    @Config(fontScale = 2.0f)
-    fun `empty Alarms in Light at 200 percent`() = alarms("alarms_empty_light_font200", EditorSamples.emptyAlarms, PpsThemeMode.Light)
-
-    @Test
-    fun `Alarms list in Light`() = alarms("alarms_list_light", EditorSamples.someAlarms, PpsThemeMode.Light)
-
-    @Test
-    fun `Alarms list in Dark`() = alarms("alarms_list_dark", EditorSamples.someAlarms, PpsThemeMode.Dark)
-
-    @Test
-    @Config(fontScale = 2.0f)
-    fun `Alarms list in Light at 200 percent`() = alarms("alarms_list_light_font200", EditorSamples.someAlarms, PpsThemeMode.Light)
-
-    @Test
     fun `label error in Light`() = editor("alarm_editor_label_error_light", EditorSamples.labelError, PpsThemeMode.Light)
 
     @Test
@@ -166,4 +139,41 @@ class AlarmScreensScreenshotTest {
     @Test
     @Config(qualifiers = "+w360dp")
     fun `new alarm in Light on a 360 dp screen`() = editor("alarm_editor_new_light_w360", EditorSamples.editAlarm, PpsThemeMode.Light)
+
+    @Test
+    fun `stored alarm with the overflow button in Light`() =
+        editor("alarm_editor_stored_light", EditorSamples.editStored, PpsThemeMode.Light)
+
+    @Test
+    fun `stored alarm with the overflow button in Dark`() = editor("alarm_editor_stored_dark", EditorSamples.editStored, PpsThemeMode.Dark)
+
+    @Test
+    @Config(qualifiers = "+h2400dp", fontScale = 2.0f)
+    fun `stored alarm with the overflow button in Light at 200 percent`() =
+        editor("alarm_editor_stored_light_font200", EditorSamples.editStored, PpsThemeMode.Light)
+
+    private fun overflowMenu(
+        name: String,
+        mode: PpsThemeMode,
+    ) = withScreen(mode, content = { AlarmEditorScreen(state = EditorSamples.editStored, is24Hour = false, onIntent = {}) }) {
+        composeRule.onNodeWithContentDescription("More options").performClick()
+        composeRule.onNodeWithText("Duplicate").assertExists()
+        capture(name, allWindows = true)
+    }
+
+    @Test
+    fun `overflow menu in Light`() = overflowMenu("alarm_editor_overflow_menu_light", PpsThemeMode.Light)
+
+    @Test
+    fun `overflow menu in Dark`() = overflowMenu("alarm_editor_overflow_menu_dark", PpsThemeMode.Dark)
+
+    @Test
+    @Config(qualifiers = "+h2400dp", fontScale = 2.0f)
+    fun `overflow menu in Light at 200 percent`() = overflowMenu("alarm_editor_overflow_menu_light_font200", PpsThemeMode.Light)
+
+    @Test
+    fun `delete dialog in the editor in Light`() = editor("alarm_editor_delete_light", EditorSamples.editDeleteDialog, PpsThemeMode.Light)
+
+    @Test
+    fun `delete dialog in the editor in Dark`() = editor("alarm_editor_delete_dark", EditorSamples.editDeleteDialog, PpsThemeMode.Dark)
 }

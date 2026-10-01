@@ -54,13 +54,15 @@ import org.jetbrains.compose.resources.stringResource
  * beside the Insight card. No period tabs, no export and no snoozes chart (owner decisions against FR-PRG-6 and
  * FR-PRG-2's chart, 2026-10-01: the ring shows each snoozed day and the "snoozes" tile the count). On entry the cards fade and rise
  * in sequence, the ring sweeps in and the streak counts up; reduced motion shows the final state at once.
- * With nothing logged: the empty ring with its prompt, the calendar and Purchase history.
+ * With nothing logged: the empty ring with its prompt, the calendar and Purchase history. [showPurchaseHistory] false
+ * leaves out the Purchase history links (production until that screen is built).
  */
 @Composable
 fun ProgressScreen(
     state: ProgressUiState,
     onIntent: (ProgressIntent) -> Unit,
     modifier: Modifier = Modifier,
+    showPurchaseHistory: Boolean = true,
 ) {
     val entered = rememberEntered()
     TabScreen(title = null, modifier = modifier) {
@@ -86,10 +88,10 @@ fun ProgressScreen(
             MoneyAndInsight(
                 paid = state.paidThisMonth,
                 insight = state.insight,
-                onIntent = onIntent,
+                onIntent = if (showPurchaseHistory) onIntent else null,
                 modifier = Modifier.entrance(entered, order),
             )
-        } else {
+        } else if (showPurchaseHistory) {
             PpsTextButton(
                 text = stringResource(Res.string.purchase_history_title),
                 onClick = { onIntent(ProgressIntent.PurchaseHistoryClicked) },
@@ -266,7 +268,7 @@ private fun StreakCard(
 private fun MoneyAndInsight(
     paid: Money?,
     insight: Insight?,
-    onIntent: (ProgressIntent) -> Unit,
+    onIntent: ((ProgressIntent) -> Unit)?,
     modifier: Modifier = Modifier,
 ) {
     val spacing = PpsTheme.spacing
@@ -285,26 +287,34 @@ private fun MoneyAndInsight(
     }
 }
 
+/** "Money paid" this month; [onIntent] `null` leaves out its Purchase history link. */
 @Composable
 private fun MoneyCard(
     paid: Money?,
-    onIntent: (ProgressIntent) -> Unit,
+    onIntent: ((ProgressIntent) -> Unit)?,
     modifier: Modifier = Modifier,
 ) {
     val colors = PpsTheme.colors
     Column(
         modifier = modifier.glass(PpsTheme.shapes.md).padding(start = PpsTheme.spacing.cardPadding, top = PpsTheme.spacing.cardPadding),
     ) {
-        Column(modifier = Modifier.padding(end = PpsTheme.spacing.cardPadding).semantics(mergeDescendants = true) { }) {
+        val texts = Modifier.padding(end = PpsTheme.spacing.cardPadding)
+        Column(
+            modifier =
+                (if (onIntent == null) texts.padding(bottom = PpsTheme.spacing.cardPadding) else texts)
+                    .semantics(mergeDescendants = true) { },
+        ) {
             Text(text = stringResource(Res.string.progress_money_title), style = PpsTheme.typography.caption, color = colors.textSecondary)
             paid?.let { Text(text = formatMoney(it), style = PpsTheme.typography.title, color = colors.text) }
             Text(text = stringResource(Res.string.progress_money_month), style = PpsTheme.typography.caption, color = colors.textSecondary)
         }
-        PpsTextButton(
-            text = stringResource(Res.string.purchase_history_title),
-            onClick = { onIntent(ProgressIntent.PurchaseHistoryClicked) },
-            modifier = Modifier.padding(end = PpsTheme.spacing.space1),
-        )
+        if (onIntent != null) {
+            PpsTextButton(
+                text = stringResource(Res.string.purchase_history_title),
+                onClick = { onIntent(ProgressIntent.PurchaseHistoryClicked) },
+                modifier = Modifier.padding(end = PpsTheme.spacing.space1),
+            )
+        }
     }
 }
 

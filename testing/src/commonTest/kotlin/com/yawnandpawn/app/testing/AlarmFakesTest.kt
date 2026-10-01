@@ -2,11 +2,7 @@ package com.yawnandpawn.app.testing
 
 import com.yawnandpawn.app.core.alarm.Alarm
 import com.yawnandpawn.app.core.alarm.AlarmDraft
-import com.yawnandpawn.app.core.alarm.AlarmWriteLock
-import com.yawnandpawn.app.core.alarm.DuplicateAlarm
 import com.yawnandpawn.app.core.alarm.RequestCodes
-import com.yawnandpawn.app.core.alarm.SaveAlarm
-import com.yawnandpawn.app.core.alarm.SetAlarmEnabled
 import com.yawnandpawn.app.core.error.DomainError
 import com.yawnandpawn.app.core.error.Outcome
 import kotlinx.coroutines.flow.first
@@ -112,11 +108,11 @@ class AlarmFakesTest {
             repository.upsert(alarm)
             val failure = DomainError.StorageFailure("disk full")
             repository.failure = failure
-            val clock = FakeClock()
-            val lock = AlarmWriteLock()
 
-            assertEquals(Outcome.Failure(failure), SetAlarmEnabled(repository, clock, lock)(alarm.id, enabled = false))
-            assertEquals(Outcome.Failure(failure), DuplicateAlarm(repository, FakeIdGenerator(), clock, lock)(alarm.id))
+            val fixture = AlarmUseCasesFixture(repository = repository)
+
+            assertEquals(Outcome.Failure(failure), fixture.setEnabled(alarm.id, enabled = false))
+            assertEquals(Outcome.Failure(failure), fixture.duplicate(alarm.id))
         }
 
     @Test
@@ -141,7 +137,7 @@ class AlarmFakesTest {
     fun `the fakes drive the core use cases`() =
         runTest {
             val ids = FakeIdGenerator()
-            val save = SaveAlarm(repository, ids, FakeClock(), AlarmWriteLock())
+            val save = AlarmUseCasesFixture(repository = repository, ids = ids).save
 
             val saved = assertIs<Outcome.Success<Alarm>>(save(AlarmDraft(time = LocalTime(6, 30)))).value
 

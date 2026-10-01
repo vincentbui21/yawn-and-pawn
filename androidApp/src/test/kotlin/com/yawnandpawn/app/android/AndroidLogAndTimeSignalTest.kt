@@ -5,9 +5,11 @@ import android.os.Looper
 import android.util.Log
 import androidx.test.core.app.ApplicationProvider
 import com.yawnandpawn.app.YawnAndPawnApp
+import com.yawnandpawn.app.core.log.FireKind
 import com.yawnandpawn.app.core.log.LogEvent
 import com.yawnandpawn.app.core.log.Logger
 import com.yawnandpawn.app.core.time.TimeChangeSignal
+import com.yawnandpawn.app.stopApp
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.cancel
@@ -16,7 +18,6 @@ import org.junit.After
 import org.junit.Test
 import org.junit.runner.RunWith
 import org.koin.core.context.GlobalContext
-import org.koin.core.context.stopKoin
 import org.robolectric.RobolectricTestRunner
 import org.robolectric.Shadows.shadowOf
 import org.robolectric.shadows.ShadowLog
@@ -30,7 +31,7 @@ class AndroidLogAndTimeSignalTest {
 
     @After
     fun tearDown() {
-        stopKoin()
+        stopApp()
     }
 
     private fun registeredTimeReceivers(): Int =
@@ -56,6 +57,22 @@ class AndroidLogAndTimeSignalTest {
         assertEquals(listOf(Log.INFO, Log.WARN), logs.map { it.type })
         assertEquals("AlarmDeleted alarmId=a1 at=2027-03-03T06:00:00Z", logs[0].msg)
         assertEquals("OperationFailed operation=load alarms cause=storage failure: closed", logs[1].msg)
+    }
+
+    @Test
+    fun `the logger writes ignored fires, reschedule summaries and passed one-time alarms at info level`() {
+        ShadowLog.clear()
+        val logger = AndroidLogger()
+
+        logger.log(LogEvent.FireIgnored(FireKind.Alarm, "a1", "alarm disabled"))
+        logger.log(LogEvent.AlarmsRescheduled(scheduled = 2, disabled = 1, failed = 0))
+        logger.log(LogEvent.OneTimeAlarmPassed("a2", Instant.parse("2027-03-03T06:00:00Z")))
+
+        val logs = ShadowLog.getLogsForTag(AndroidLogger.TAG)
+        assertEquals(listOf(Log.INFO, Log.INFO, Log.INFO), logs.map { it.type })
+        assertEquals("FireIgnored kind=Alarm alarmId=a1 reason=alarm disabled", logs[0].msg)
+        assertEquals("AlarmsRescheduled scheduled=2 disabled=1 failed=0", logs[1].msg)
+        assertEquals("OneTimeAlarmPassed alarmId=a2 missedAt=2027-03-03T06:00:00Z", logs[2].msg)
     }
 
     @Test

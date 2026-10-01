@@ -3,10 +3,10 @@ package com.yawnandpawn.app
 import android.content.Context
 import androidx.test.core.app.ApplicationProvider
 import com.yawnandpawn.app.data.db.AppDatabase
+import com.yawnandpawn.app.stopApp
 import org.junit.After
 import org.junit.Test
 import org.junit.runner.RunWith
-import org.koin.core.context.stopKoin
 import org.robolectric.RobolectricTestRunner
 import org.xmlpull.v1.XmlPullParser
 import java.io.File
@@ -21,7 +21,7 @@ class BackupRulesTest {
     @After
     fun tearDown() {
         // The Robolectric application starts Koin for every test.
-        stopKoin()
+        stopApp()
     }
 
     /** A rule element: the section it sits in (cloud-backup, device-transfer or the root), include/exclude, domain, path. */

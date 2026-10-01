@@ -6,16 +6,12 @@ import androidx.sqlite.driver.AndroidSQLiteDriver
 import androidx.test.core.app.ApplicationProvider
 import com.yawnandpawn.app.core.alarm.Alarm
 import com.yawnandpawn.app.core.alarm.AlarmDraft
-import com.yawnandpawn.app.core.alarm.AlarmWriteLock
-import com.yawnandpawn.app.core.alarm.DuplicateAlarm
-import com.yawnandpawn.app.core.alarm.SaveAlarm
 import com.yawnandpawn.app.core.error.DomainError
 import com.yawnandpawn.app.core.error.Outcome
 import com.yawnandpawn.app.data.db.AppDatabase
 import com.yawnandpawn.app.data.db.AppDatabaseConstructor
+import com.yawnandpawn.app.testing.AlarmUseCasesFixture
 import com.yawnandpawn.app.testing.DEFAULT_FAKE_INSTANT
-import com.yawnandpawn.app.testing.FakeClock
-import com.yawnandpawn.app.testing.FakeIdGenerator
 import com.yawnandpawn.app.testing.anAlarm
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.test.runTest
@@ -192,10 +188,10 @@ class RoomAlarmRepositoryTest {
         runTest {
             val alarm = anAlarm()
             repository.upsert(alarm)
-            val clock = FakeClock()
-            val lock = AlarmWriteLock()
-            val save = SaveAlarm(repository, FakeIdGenerator(), clock, lock)
-            val duplicate = DuplicateAlarm(repository, FakeIdGenerator(), clock, lock)
+            val alarms =
+                AlarmUseCasesFixture(repository = repository, requestCodes = RoomRequestCodeSequence(database.requestCodeSequenceDao()))
+            val save = alarms.save
+            val duplicate = alarms.duplicate
             database.close()
 
             val saved = assertIs<Outcome.Failure<DomainError>>(save(AlarmDraft(time = LocalTime(6, 0))))
@@ -227,7 +223,11 @@ class RoomAlarmRepositoryTest {
     @Test
     fun `the core use cases work end to end over Room`() =
         runTest {
-            val save = SaveAlarm(repository, FakeIdGenerator(), FakeClock(), AlarmWriteLock())
+            val save =
+                AlarmUseCasesFixture(
+                    repository = repository,
+                    requestCodes = RoomRequestCodeSequence(database.requestCodeSequenceDao()),
+                ).save
 
             val first = assertIs<Outcome.Success<Alarm>>(save(AlarmDraft(time = LocalTime(7, 0)))).value
             val second = assertIs<Outcome.Success<Alarm>>(save(AlarmDraft(time = LocalTime(6, 0)))).value

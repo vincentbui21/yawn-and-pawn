@@ -18,6 +18,7 @@ class YawnAndPawnRuleSetProvider : RuleSetProvider {
                 RuleName("NoRawColor") to ::NoRawColor,
                 RuleName("NoRawCornerRadius") to ::NoRawCornerRadius,
                 RuleName("NoRawSp") to ::NoRawSp,
+                RuleName("NoInexactAlarm") to ::NoInexactAlarm,
             ),
         )
 }

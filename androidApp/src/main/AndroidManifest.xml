@@ -1,6 +1,14 @@
 <?xml version="1.0" encoding="utf-8"?>
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
 
+    <!-- Exact alarms (AD-4, Story 1.10): USE_EXACT_ALARM on API 33+, SCHEDULE_EXACT_ALARM on API 31-32 only. -->
+    <uses-permission android:name="android.permission.USE_EXACT_ALARM" />
+    <uses-permission
+        android:name="android.permission.SCHEDULE_EXACT_ALARM"
+        android:maxSdkVersion="32" />
+    <!-- Re-arm every alarm after a reboot (SystemEventsReceiver). -->
+    <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
+
     <application
         android:name=".YawnAndPawnApp"
         android:allowBackup="true"
@@ -18,6 +26,26 @@
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
         </activity>
+
+        <!-- Every system alarm the app armed fires here; only the app's own PendingIntents reach it. -->
+        <receiver
+            android:name=".android.AlarmFiredReceiver"
+            android:directBootAware="true"
+            android:exported="false" />
+
+        <!-- rescheduleAll() on the system events that clear or shift alarms; all protected system broadcasts. -->
+        <receiver
+            android:name=".android.SystemEventsReceiver"
+            android:directBootAware="true"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="android.intent.action.BOOT_COMPLETED" />
+                <action android:name="android.intent.action.TIME_SET" />
+                <action android:name="android.intent.action.TIMEZONE_CHANGED" />
+                <action android:name="android.intent.action.MY_PACKAGE_REPLACED" />
+                <action android:name="android.app.action.SCHEDULE_EXACT_ALARM_PERMISSION_STATE_CHANGED" />
+            </intent-filter>
+        </receiver>
     </application>
 
 </manifest>

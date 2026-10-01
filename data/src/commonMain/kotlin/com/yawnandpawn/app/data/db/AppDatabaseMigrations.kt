@@ -1,0 +1,29 @@
+package com.yawnandpawn.app.data.db
+
+import androidx.room3.migration.Migration
+import androidx.sqlite.SQLiteConnection
+import androidx.sqlite.execSQL
+import com.yawnandpawn.app.core.alarm.RequestCodes
+
+/**
+ * v1 to v2 (Story 1.10): adds `request_code_sequence` and seeds its one row with the highest request code in use, at
+ * least [RequestCodes.INITIAL_HIGH_WATER_MARK], so the next alarm gets a code above every existing one. Every alarm is
+ * kept. The table SQL matches the exported `2.json`; Room checks it after migrating.
+ */
+val MIGRATION_1_2: Migration =
+    object : Migration(1, 2) {
+        override suspend fun migrate(connection: SQLiteConnection) {
+            connection.execSQL(
+                "CREATE TABLE IF NOT EXISTS `request_code_sequence` " +
+                    "(`id` INTEGER NOT NULL, `last_used` INTEGER NOT NULL, PRIMARY KEY(`id`))",
+            )
+            connection.execSQL(
+                "INSERT INTO `request_code_sequence` (`id`, `last_used`) " +
+                    "SELECT 0, MAX(IFNULL(MAX(`request_code`), ${RequestCodes.INITIAL_HIGH_WATER_MARK}), " +
+                    "${RequestCodes.INITIAL_HIGH_WATER_MARK}) FROM `alarm`",
+            )
+        }
+    }
+
+/** Every migration of `app.db`, oldest first; `buildAppDatabase` registers them all. */
+val APP_DATABASE_MIGRATIONS: Array<Migration> = arrayOf(MIGRATION_1_2)

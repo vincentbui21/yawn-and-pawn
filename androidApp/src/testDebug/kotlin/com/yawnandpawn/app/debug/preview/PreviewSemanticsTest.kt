@@ -12,11 +12,10 @@ import androidx.compose.ui.test.junit4.createEmptyComposeRule
 import androidx.compose.ui.test.onRoot
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
-import org.junit.After
+import com.yawnandpawn.app.StopAppRule
 import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
-import org.koin.core.context.stopKoin
 import org.robolectric.ParameterizedRobolectricTestRunner
 import org.robolectric.annotation.Config
 import kotlin.test.assertTrue
@@ -30,13 +29,11 @@ import kotlin.test.assertTrue
 abstract class PreviewSemanticsChecks(
     protected val case: PreviewCase,
 ) {
-    @get:Rule
-    val composeRule = createEmptyComposeRule()
+    @get:Rule(order = 0)
+    val appTeardown = StopAppRule()
 
-    @After
-    fun tearDown() {
-        stopKoin()
-    }
+    @get:Rule(order = 1)
+    val composeRule = createEmptyComposeRule()
 
     private val actionable =
         hasClickAction() or SemanticsMatcher.keyIsDefined(SemanticsActions.SetProgress) or hasSetTextAction()

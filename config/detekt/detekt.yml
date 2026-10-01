@@ -46,6 +46,10 @@ yawn-and-pawn:
     active: true
   NoRawSp:
     active: true
+  # Alarms only through AlarmScheduler and AlarmManager.setAlarmClock(), no inexact fallback (AD-4, Story 1.10).
+  # Active for every module; it only looks at files that import or name android.app.AlarmManager.
+  NoInexactAlarm:
+    active: true
 
 # Test source sets detekt's defaults do not know (androidHostTest, testDebug) are tests too.
 complexity:

@@ -2,18 +2,16 @@ package com.yawnandpawn.app.ui.editor
 
 import com.yawnandpawn.app.core.alarm.Alarm
 import com.yawnandpawn.app.core.alarm.AlarmField
-import com.yawnandpawn.app.core.alarm.AlarmWriteLock
-import com.yawnandpawn.app.core.alarm.DeleteAlarm
-import com.yawnandpawn.app.core.alarm.DuplicateAlarm
 import com.yawnandpawn.app.core.alarm.RequestCodes
-import com.yawnandpawn.app.core.alarm.SaveAlarm
-import com.yawnandpawn.app.core.alarm.SetAlarmEnabled
 import com.yawnandpawn.app.core.error.DomainError
 import com.yawnandpawn.app.core.log.LogEvent
+import com.yawnandpawn.app.testing.AlarmUseCasesFixture
 import com.yawnandpawn.app.testing.FakeAlarmRepository
+import com.yawnandpawn.app.testing.FakeAlarmScheduler
 import com.yawnandpawn.app.testing.FakeClock
 import com.yawnandpawn.app.testing.FakeIdGenerator
 import com.yawnandpawn.app.testing.FakeLogger
+import com.yawnandpawn.app.testing.FakeRequestCodeSequence
 import com.yawnandpawn.app.testing.FakeTimeZoneProvider
 import com.yawnandpawn.app.testing.anAlarm
 import com.yawnandpawn.app.ui.home.AlarmActions
@@ -51,7 +49,18 @@ class AlarmEditorViewModelTest {
     private val repository = FakeAlarmRepository()
     private val logger = FakeLogger()
     private val ids = FakeIdGenerator()
-    private val lock = AlarmWriteLock()
+    private val scheduler = FakeAlarmScheduler()
+
+    // The mark already covers [stored], as the app run that stored it would have left it.
+    private val alarms =
+        AlarmUseCasesFixture(
+            repository = repository,
+            clock = clock,
+            timeZoneProvider = zone,
+            ids = ids,
+            requestCodes = FakeRequestCodeSequence(lastUsed = RequestCodes.FIRST_ALARM),
+            scheduler = scheduler,
+        )
 
     @BeforeTest
     fun setUp() {
@@ -67,17 +76,10 @@ class AlarmEditorViewModelTest {
         AlarmEditorViewModel(
             alarmId = alarmId,
             repository = repository,
-            saveAlarm = SaveAlarm(repository, ids, clock, lock),
+            saveAlarm = alarms.save,
             clock = clock,
             timeZoneProvider = zone,
-            actions =
-                AlarmActions(
-                    SetAlarmEnabled(repository, clock, lock),
-                    DuplicateAlarm(repository, ids, clock, lock),
-                    DeleteAlarm(repository, lock),
-                    clock,
-                    logger,
-                ),
+            actions = AlarmActions(alarms.setEnabled, alarms.duplicate, alarms.delete, clock, logger),
         )
 
     private fun TestScope.effectsOf(viewModel: AlarmEditorViewModel): List<EditorEffect> {
@@ -175,7 +177,12 @@ class AlarmEditorViewModelTest {
             assertFalse(alarm.vibration)
             assertEquals(Alarm.DEFAULT_SOUND_REF, alarm.soundRef)
             assertEquals(Alarm.DEFAULT_GRACE_SECONDS, alarm.graceSeconds)
-            assertEquals(RequestCodes.FIRST_ALARM, alarm.requestCode)
+            assertEquals(RequestCodes.FIRST_ALARM + 1, alarm.requestCode, "the next code above the high-water mark")
+            assertEquals(
+                mapOf(alarm.requestCode to Instant.parse("2027-03-05T04:45:00Z").toEpochMilliseconds()),
+                scheduler.armed,
+                "Friday 06:45 in Helsinki",
+            )
             assertEquals(listOf<EditorEffect>(EditorEffect.Close), effects)
         }
 

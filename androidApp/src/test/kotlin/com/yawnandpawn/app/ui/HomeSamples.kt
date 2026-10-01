@@ -58,4 +58,7 @@ object HomeSamples {
     val deleteDialog = one.copy(deleteDialog = DeleteAlarmDialog("1", LocalTime(6, 30)))
 
     val openFailed = one.copy(openFailed = true)
+
+    /** Story 1.16: the 6:00 alarm stopped after 30 minutes and the user has not dismissed the note yet. */
+    val missedNote = one.copy(missedAlarmAt = LocalTime(6, 0))
 }

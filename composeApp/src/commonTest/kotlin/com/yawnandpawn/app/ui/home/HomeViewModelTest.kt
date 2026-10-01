@@ -4,15 +4,22 @@ import com.yawnandpawn.app.core.alarm.Alarm
 import com.yawnandpawn.app.core.alarm.AlarmRepository
 import com.yawnandpawn.app.core.alarm.AlarmWriteLock
 import com.yawnandpawn.app.core.error.DomainError
+import com.yawnandpawn.app.core.error.Outcome
+import com.yawnandpawn.app.core.history.MissedNotes
+import com.yawnandpawn.app.core.history.SessionHistoryRow
+import com.yawnandpawn.app.core.history.SessionOutcome
 import com.yawnandpawn.app.core.log.LogEvent
 import com.yawnandpawn.app.testing.AlarmUseCasesFixture
 import com.yawnandpawn.app.testing.FakeAlarmRepository
 import com.yawnandpawn.app.testing.FakeClock
 import com.yawnandpawn.app.testing.FakeIdGenerator
 import com.yawnandpawn.app.testing.FakeLogger
+import com.yawnandpawn.app.testing.FakeMissedNoteDismissals
 import com.yawnandpawn.app.testing.FakeRequestCodeSequence
+import com.yawnandpawn.app.testing.FakeSessionHistoryRepository
 import com.yawnandpawn.app.testing.FakeTimeChangeSignal
 import com.yawnandpawn.app.testing.FakeTimeZoneProvider
+import com.yawnandpawn.app.testing.aSessionHistoryRow
 import com.yawnandpawn.app.testing.anAlarm
 import com.yawnandpawn.app.ui.format.Countdown
 import kotlinx.coroutines.Dispatchers
@@ -38,6 +45,7 @@ import kotlin.test.assertEquals
 import kotlin.test.assertFalse
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
+import kotlin.time.Duration.Companion.minutes
 import kotlin.time.Duration.Companion.seconds
 import kotlin.time.Instant
 
@@ -53,6 +61,9 @@ class HomeViewModelTest {
     private val logger = FakeLogger()
     private val ids = FakeIdGenerator()
     private val lock = AlarmWriteLock()
+    private val history = FakeSessionHistoryRepository()
+    private val dismissals = FakeMissedNoteDismissals()
+    private val missedNotes = MissedNotes(history, dismissals)
 
     @BeforeTest
     fun setUp() {
@@ -88,7 +99,7 @@ class HomeViewModelTest {
     }
 
     private fun TestScope.home(repository: AlarmRepository): HomeViewModel {
-        val viewModel = HomeViewModel(repository, actions(repository), clock, zone, signal)
+        val viewModel = HomeViewModel(repository, actions(repository), clock, zone, signal, missedNotes)
         backgroundScope.launch { viewModel.state.collect { } }
         return viewModel
     }
@@ -399,7 +410,7 @@ class HomeViewModelTest {
     fun `the time signal is only listened to while Home is shown`() =
         runTest(dispatcher) {
             assertEquals(0, signal.subscribers)
-            val viewModel = HomeViewModel(FakeAlarmRepository(), actions(FakeAlarmRepository()), clock, zone, signal)
+            val viewModel = HomeViewModel(FakeAlarmRepository(), actions(FakeAlarmRepository()), clock, zone, signal, missedNotes)
             val collector = launch { viewModel.state.collect { } }
             assertEquals(1, signal.subscribers)
 
@@ -407,5 +418,91 @@ class HomeViewModelTest {
             advanceTimeBy(5_001)
 
             assertEquals(0, signal.subscribers)
+        }
+
+    // Story 1.16: the missed note ----------------------------------------------------------------------------------
+
+    private fun missedRow(
+        sessionId: String,
+        scheduledAt: Instant = Instant.parse("2027-03-03T06:15:00Z"),
+        endedAt: Instant = scheduledAt + 30.minutes,
+    ) = aSessionHistoryRow(sessionId = sessionId).copy(
+        scheduledAt = scheduledAt,
+        firstRingAt = scheduledAt,
+        endedAt = endedAt,
+        timeToCompleteMs = null,
+        outcome = SessionOutcome.Missed,
+    )
+
+    private suspend fun record(row: SessionHistoryRow) = assertEquals(Outcome.Success(Unit), history.upsert(row))
+
+    @Test
+    fun `a Missed session shows its alarm time in the note, and none shows without one`() =
+        runTest(dispatcher) {
+            val viewModel = home(FakeAlarmRepository())
+            assertNull(viewModel.state.value.missedAlarmAt)
+
+            record(missedRow("s1"))
+
+            assertEquals(LocalTime(6, 15), viewModel.state.value.missedAlarmAt)
+        }
+
+    @Test
+    fun `the note's time is the alarm time in the phone's zone`() =
+        runTest(dispatcher) {
+            zone.set(TimeZone.of("Europe/Berlin"))
+            record(missedRow("s1"))
+
+            val viewModel = home(FakeAlarmRepository())
+
+            assertEquals(LocalTime(7, 15), viewModel.state.value.missedAlarmAt)
+        }
+
+    @Test
+    fun `Dismiss stores the session id and hides the note`() =
+        runTest(dispatcher) {
+            record(missedRow("s1"))
+            val viewModel = home(FakeAlarmRepository())
+
+            viewModel.onIntent(HomeIntent.MissedNoteDismissed)
+
+            assertEquals(setOf("s1"), dismissals.current)
+            assertNull(viewModel.state.value.missedAlarmAt)
+        }
+
+    @Test
+    fun `a newer Missed session shows again after an older one was dismissed`() =
+        runTest(dispatcher) {
+            record(missedRow("s1"))
+            val viewModel = home(FakeAlarmRepository())
+            viewModel.onIntent(HomeIntent.MissedNoteDismissed)
+
+            record(missedRow("s2", scheduledAt = Instant.parse("2027-03-04T06:45:00Z")))
+
+            assertEquals(LocalTime(6, 45), viewModel.state.value.missedAlarmAt)
+        }
+
+    @Test
+    fun `a dismissal that cannot be stored is logged and the note stays`() =
+        runTest(dispatcher) {
+            record(missedRow("s1"))
+            dismissals.dismissFailure = DomainError.StorageFailure("disk full")
+            val viewModel = home(FakeAlarmRepository())
+
+            viewModel.onIntent(HomeIntent.MissedNoteDismissed)
+
+            assertEquals(LocalTime(6, 15), viewModel.state.value.missedAlarmAt)
+            assertEquals(listOf<LogEvent>(LogEvent.OperationFailed("dismiss missed note", "storage failure: disk full")), logger.events)
+        }
+
+    @Test
+    fun `a history read failure is logged and shows no note, and Home still lists the alarms`() =
+        runTest(dispatcher) {
+            history.observeFailure = IllegalStateException("closed")
+            val viewModel = home(FakeAlarmRepository(listOf(alarm(1, LocalTime(7, 0)))))
+
+            assertNull(viewModel.state.value.missedAlarmAt)
+            assertEquals(1, viewModel.state.value.alarms.size)
+            assertEquals(listOf<LogEvent>(LogEvent.OperationFailed("load missed note", "closed")), logger.events)
         }
 }

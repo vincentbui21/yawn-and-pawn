@@ -27,19 +27,24 @@ import com.yawnandpawn.app.core.session.SeedSource
 import com.yawnandpawn.app.core.session.SessionEngine
 import com.yawnandpawn.app.core.session.SessionEvent
 import com.yawnandpawn.app.core.session.SessionState
+import com.yawnandpawn.app.core.session.nextTickIn
+import com.yawnandpawn.app.core.time.BootCounter
 import com.yawnandpawn.app.core.time.Clock
+import com.yawnandpawn.app.core.time.MonotonicClock
+import com.yawnandpawn.app.core.time.TimeSnapshot
 import kotlinx.coroutines.CoroutineExceptionHandler
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.async
 import kotlinx.coroutines.cancel
-import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.combine
-import kotlinx.coroutines.isActive
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
+import kotlinx.coroutines.withTimeoutOrNull
 import org.koin.core.component.KoinComponent
 import org.koin.core.component.inject
 import kotlin.time.Duration.Companion.seconds
@@ -54,8 +59,9 @@ import kotlin.time.Instant
  * - **Alarm:** while a session rings or is snoozed it dispatches `OverlapAlarmFired`; otherwise it reads the alarm and
  *   dispatches `AlarmFired` with a new session id, the config resolved now (`GlobalSettings` defaults until Epic 5), seeds
  *   from the [SeedSource] and whether the phone is still locked since boot. A deleted alarm rings nothing.
- * - **Slot:** it dispatches `SlotFired`. **Restore:** it loads the stored session (`SessionEngine.restore`).
- * - While a session is active it calls `SessionEngine.tick` once a second (Story 1.16 makes it deadline-based).
+ * - **Slot:** it dispatches `SlotFired`, then ticks. **Restore:** it loads the stored session (`SessionEngine.restore`).
+ * - While a session is active it calls `SessionEngine.tick` when the next deadline (grace end or the 30-minute
+ *   interaction timeout, FR-ALM-9) is due on the monotonic clock (Story 1.16). A forgotten alarm becomes Missed there.
  * - When the state is Idle, Completed or Missed and no emergency ring plays, it stops the sound and vibration, restores
  *   the alarm volume, removes the notification and stops itself: no service is left running (NFR-8).
  * - **Never silent:** if `AlarmFired` cannot be committed (or the alarm cannot be read), or a slot fire, merge or
@@ -77,6 +83,8 @@ class WakeService :
     private val seeds: SeedSource by inject()
     private val crashReporter: CrashReporter by inject()
     private val clock: Clock by inject()
+    private val monotonicClock: MonotonicClock by inject()
+    private val bootCounter: BootCounter by inject()
     private val appScope: ApplicationScope by inject()
     private val logger: Logger by inject()
 
@@ -215,6 +223,9 @@ class WakeService :
         runtime.onSlotFired()
         val slot = engine.dispatch(SessionEvent.SlotFired)
         if (slot is Outcome.Failure) ringIfSilent("slot fire not saved: ${slot.error.diagnostic()}")
+        // The slot wakes the phone at least every heartbeat: a deadline the main-thread timer missed in deep sleep is
+        // handled here.
+        engine.tick()
     }
 
     /** A restore start: the runtime needs the service for a session, so a session that cannot be loaded still rings. */
@@ -267,13 +278,36 @@ class WakeService :
 
     private fun startTicking() {
         if (ticking?.isActive == true) return
-        ticking =
-            scope.launch {
-                while (isActive) {
-                    delay(TICK)
-                    if (engine.state.value.isOngoing()) engine.tick()
+        ticking = scope.launch { tickOnDeadlines() }
+    }
+
+    /**
+     * Ticks the engine when the session's next deadline is due (Story 1.16): [nextTickIn] gives the time left to the grace
+     * end or the 30-minute interaction deadline on the monotonic clock, and the loop waits that long, or until the state
+     * changes, whichever comes first. With no deadline (snoozed, paused by a call) it only waits for the next state, so it
+     * never spins; a tick that changed nothing (its commit failed) is retried after [TICK_RETRY] at the earliest. Neither
+     * the wait nor the service stopping cancels a running tick (it runs on ApplicationScope). In deep sleep the
+     * main-thread timer can lag: the 60 s heartbeat slot wakes the phone and [onSlot] ticks too.
+     */
+    private suspend fun tickOnDeadlines() {
+        var unchangedByTick: SessionState? = null
+        while (true) {
+            val state = engine.state.value
+            val due = nextTickIn(state, TimeSnapshot.of(clock, monotonicClock, bootCounter))
+            val wait = if (due != null && state == unchangedByTick) maxOf(due, TICK_RETRY) else due
+            val changed =
+                if (wait == null) {
+                    engine.state.first { it != state }
+                } else {
+                    withTimeoutOrNull(wait) { engine.state.first { it != state } }
                 }
+            if (changed == null) {
+                // On ApplicationScope: the Missed it may produce stops the service, which cancels this loop, and the tick
+                // must still write history and reach Idle.
+                appScope.async { engine.tick() }.await()
+                unchangedByTick = state.takeIf { engine.state.value == it }
             }
+        }
     }
 
     /** Stops the service, unless a command is running (it calls [watch] when done) or a newer start arrived. */
@@ -307,7 +341,8 @@ class WakeService :
         const val ACTION_SLOT = "com.yawnandpawn.app.action.WAKE_SLOT"
         const val ACTION_RESTORE = "com.yawnandpawn.app.action.WAKE_RESTORE"
 
-        private val TICK = 1.seconds
+        /** The earliest retry of a tick that changed nothing (for example its commit failed). */
+        private val TICK_RETRY = 1.seconds
         private const val MAX_CRASH_RESTARTS = 3
 
         /** The explicit intent for [action]. */

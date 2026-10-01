@@ -4,6 +4,7 @@ import android.content.Context
 import androidx.test.core.app.ApplicationProvider
 import com.yawnandpawn.app.core.alarm.AlarmRepository
 import com.yawnandpawn.app.core.alarm.RequestCodeSequence
+import com.yawnandpawn.app.core.history.MissedNoteDismissals
 import com.yawnandpawn.app.core.history.SessionHistoryRepository
 import com.yawnandpawn.app.core.session.ActiveSessionStore
 import com.yawnandpawn.app.core.time.Clock
@@ -13,8 +14,11 @@ import com.yawnandpawn.app.data.db.AppDatabase
 import com.yawnandpawn.app.data.db.RuntimeDatabase
 import com.yawnandpawn.app.data.history.RoomSessionHistoryRepository
 import com.yawnandpawn.app.data.session.RoomActiveSessionStore
+import com.yawnandpawn.app.data.settings.DataStoreMissedNoteDismissals
+import com.yawnandpawn.app.data.settings.SettingsDataStore
 import com.yawnandpawn.app.testing.FakeClock
 import com.yawnandpawn.app.testing.anAppVersion
+import kotlinx.coroutines.runBlocking
 import org.junit.Test
 import org.junit.runner.RunWith
 import org.koin.dsl.koinApplication
@@ -55,6 +59,23 @@ class DataModuleTest {
         } finally {
             database.close()
             app.close()
+        }
+    }
+
+    @Test
+    fun `the data module binds the missed-note dismissals to one settings DataStore and releases it on close`() {
+        val app = koinApplication { modules(module { single<Context> { context } }, dataModule) }
+        val koin = app.koin
+        assertIs<DataStoreMissedNoteDismissals>(koin.get<MissedNoteDismissals>())
+        assertSame(koin.get<SettingsDataStore>(), koin.get<SettingsDataStore>())
+        app.close()
+
+        // A second app on the same file works once the first one is closed (DataStore refuses two active instances).
+        val again = koinApplication { modules(module { single<Context> { context } }, dataModule) }
+        try {
+            runBlocking { again.koin.get<MissedNoteDismissals>().dismiss("s1") }
+        } finally {
+            again.close()
         }
     }
 

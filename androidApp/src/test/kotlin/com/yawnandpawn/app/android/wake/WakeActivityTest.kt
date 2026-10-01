@@ -219,6 +219,21 @@ class WakeActivityTest {
     }
 
     @Test
+    fun `a forgotten alarm stopped as Missed closes the wake screen`() {
+        val app = WakeApp()
+        ringing(app)
+        val activity = Robolectric.buildActivity(WakeActivity::class.java).setup().get()
+        composeRule.waitForIdle()
+
+        // 30 minutes pass with no interaction, then the wake service's deadline tick runs (Story 1.16).
+        ShadowSystemClock.advanceBy(Duration.ofMinutes(31))
+        val tick = app.koin.get<ApplicationScope>().launch { app.engine.tick() }
+        app.awaitUntil("the tick runs") { tick.isCompleted }
+
+        composeRule.waitUntil(timeoutMillis = 10_000) { app.engine.state.value == SessionState.Idle && activity.isFinishing }
+    }
+
+    @Test
     fun `any other tap dispatches UserInteracted, which resets the interaction deadline`() {
         val app = WakeApp()
         ringing(app)
@@ -397,4 +412,6 @@ private class CountingHistory(
 
     override suspend fun find(sessionId: String): Outcome<SessionHistoryRow?, DomainError> =
         inner.find(sessionId).also { calls.incrementAndGet() }
+
+    override fun observeLatestMissed(): Flow<SessionHistoryRow?> = inner.observeLatestMissed().also { calls.incrementAndGet() }
 }

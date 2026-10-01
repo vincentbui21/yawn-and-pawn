@@ -16,6 +16,7 @@ import com.yawnandpawn.app.core.session.ActiveSessionStore
 import com.yawnandpawn.app.core.session.SessionEngine
 import com.yawnandpawn.app.core.session.SessionEvent
 import com.yawnandpawn.app.core.session.SessionState
+import com.yawnandpawn.app.core.time.Clock
 import com.yawnandpawn.app.core.time.TimeSnapshot
 import com.yawnandpawn.app.restartKoin
 import com.yawnandpawn.app.testing.FakeCrashReporter
@@ -33,7 +34,7 @@ import kotlin.test.fail
 
 /**
  * The real app's Koin graph, restarted with a [FakeCrashReporter] and optionally a replaced session [store], alarm
- * [repository], service [starter] or session [history] repository; the real `MediaPlayer` adapter plays over
+ * [repository], service [starter], session [history] repository or wall [clock]; the real `MediaPlayer` adapter plays over
  * Robolectric's media shadow (every source opens). The service's coroutines run on the main looper: [awaitUntil] idles it
  * (and the Room threads) until a condition holds. Tear down with `StopAppRule`.
  */
@@ -42,6 +43,7 @@ internal class WakeApp(
     repository: AlarmRepository? = null,
     starter: ((YawnAndPawnApp) -> WakeServiceStarter)? = null,
     history: SessionHistoryRepository? = null,
+    clock: Clock? = null,
 ) {
     val app: YawnAndPawnApp = ApplicationProvider.getApplicationContext()
     val crashReporter = FakeCrashReporter()
@@ -62,6 +64,7 @@ internal class WakeApp(
                 repository?.let { replaced -> single<AlarmRepository> { replaced } }
                 starter?.let { build -> single { build(app) } }
                 history?.let { replaced -> single<SessionHistoryRepository> { replaced } }
+                clock?.let { replaced -> single<Clock> { replaced } }
             },
         )
         ShadowLog.clear()

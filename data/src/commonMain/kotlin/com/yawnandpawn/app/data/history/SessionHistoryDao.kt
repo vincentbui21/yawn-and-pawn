@@ -3,6 +3,7 @@ package com.yawnandpawn.app.data.history
 import androidx.room3.Dao
 import androidx.room3.Query
 import androidx.room3.Upsert
+import kotlinx.coroutines.flow.Flow
 
 /** Access to `session_history`. Only `RoomSessionHistoryRepository` uses it (a writer scan test enforces it). */
 @Dao
@@ -19,4 +20,8 @@ abstract class SessionHistoryDao {
 
     @Query("SELECT COUNT(*) FROM session_history")
     abstract suspend fun count(): Int
+
+    /** The row with [outcome] that ended last (Home's missed note, Story 1.16); emits again after every change. */
+    @Query("SELECT * FROM session_history WHERE outcome = :outcome ORDER BY ended_at DESC LIMIT 1")
+    abstract fun observeLatestWithOutcome(outcome: String): Flow<SessionHistoryEntity?>
 }

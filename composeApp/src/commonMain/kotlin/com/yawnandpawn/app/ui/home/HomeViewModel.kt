@@ -8,6 +8,8 @@ import com.yawnandpawn.app.core.alarm.AlarmRepository
 import com.yawnandpawn.app.core.alarm.durationUntil
 import com.yawnandpawn.app.core.alarm.nextOccurrence
 import com.yawnandpawn.app.core.error.Outcome
+import com.yawnandpawn.app.core.history.MissedNotes
+import com.yawnandpawn.app.core.history.SessionHistoryRow
 import com.yawnandpawn.app.core.time.Clock
 import com.yawnandpawn.app.core.time.TimeChangeSignal
 import com.yawnandpawn.app.core.time.TimeZoneProvider
@@ -32,6 +34,7 @@ import kotlinx.coroutines.flow.receiveAsFlow
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import kotlinx.datetime.toLocalDateTime
 import kotlin.time.Instant
 
 /**
@@ -40,7 +43,8 @@ import kotlin.time.Instant
  * [timeZoneProvider]. The countdown is recomputed on every [timeChanges] signal (each minute, a time set, a zone change)
  * and when Home resumes. A switch calls `SetAlarmEnabled` at once and shows the new value until the store confirms it
  * (or reverts on failure); Duplicate opens the copy in the editor; Delete asks first and is logged. Navigation goes out
- * through [effects].
+ * through [effects]. The missed note (Story 1.16) shows the alarm time of the latest Missed session from [missedNotes]
+ * until "Dismiss" stores its dismissal.
  */
 class HomeViewModel(
     repository: AlarmRepository,
@@ -48,6 +52,7 @@ class HomeViewModel(
     private val clock: Clock,
     private val timeZoneProvider: TimeZoneProvider,
     timeChanges: TimeChangeSignal,
+    private val missedNotes: MissedNotes,
 ) : ViewModel() {
     /** Bumped by "Try again" to subscribe to the alarms again. */
     private val loads = MutableStateFlow(0)
@@ -73,8 +78,21 @@ class HomeViewModel(
 
     private val ticks: Flow<Unit> = merge(timeChanges.changes(), resumes).onStart { emit(Unit) }
 
+    /** The session whose missed note shows, for "Dismiss". */
+    private var shownMissed: String? = null
+
+    /** The Missed session to tell the user about (Story 1.16); a failing read is logged and shows no note. */
+    private val missed: Flow<SessionHistoryRow?> =
+        missedNotes
+            .current()
+            .onStart { emit(null) }
+            .catch { cause ->
+                actions.logFailure("load missed note", cause)
+                emit(null)
+            }
+
     val state: StateFlow<HomeUiState> =
-        combine(stored, ticks, local) { alarms, _, ui -> render(alarms, ui) }
+        combine(stored, ticks, local, missed) { alarms, _, ui, missedRow -> render(alarms, ui, missedRow) }
             .stateIn(viewModelScope, SharingStarted.WhileSubscribed(STOP_TIMEOUT_MILLIS), HomeUiState(isLoading = true))
 
     fun onIntent(intent: HomeIntent) {
@@ -119,6 +137,10 @@ class HomeViewModel(
 
             HomeIntent.Resumed -> {
                 resumes.tryEmit(Unit)
+            }
+
+            HomeIntent.MissedNoteDismissed -> {
+                dismissMissed()
             }
 
             // The hero, notices, session panel and commitment-lock dialog arrive with their own stories.
@@ -168,6 +190,15 @@ class HomeViewModel(
         viewModelScope.launch { actions.delete(dialog.alarmId) }
     }
 
+    /** The note hides once the store has the dismissal; a failed write is logged and the note stays. */
+    private fun dismissMissed() {
+        val sessionId = shownMissed ?: return
+        viewModelScope.launch {
+            val dismissed = missedNotes.dismiss(sessionId)
+            if (dismissed is Outcome.Failure) actions.logFailure("dismiss missed note", dismissed.error)
+        }
+    }
+
     private fun showOpenFailed() {
         local.update { it.copy(openFailed = true) }
         snackbarJob?.cancel()
@@ -181,10 +212,14 @@ class HomeViewModel(
     private fun render(
         stored: StoredAlarms,
         ui: LocalState,
-    ): HomeUiState =
-        when (stored) {
+        missedRow: SessionHistoryRow?,
+    ): HomeUiState {
+        shownMissed = missedRow?.sessionId
+        // The note names the alarm's own time ("Your 6:00 AM alarm"), in the zone the phone is in now.
+        val missedAlarmAt = missedRow?.scheduledAt?.toLocalDateTime(timeZoneProvider.current())?.time
+        return when (stored) {
             StoredAlarms.Failed -> {
-                HomeUiState(loadFailed = true, openFailed = ui.openFailed)
+                HomeUiState(loadFailed = true, openFailed = ui.openFailed, missedAlarmAt = missedAlarmAt)
             }
 
             is StoredAlarms.Loaded -> {
@@ -195,9 +230,11 @@ class HomeViewModel(
                     alarms = cards,
                     deleteDialog = ui.deleteDialog?.takeIf { dialog -> cards.any { it.id == dialog.alarmId } },
                     openFailed = ui.openFailed,
+                    missedAlarmAt = missedAlarmAt,
                 )
             }
         }
+    }
 
     /** The countdown to the soonest of [enabled], as the scheduler computes it; `null` when none is enabled. */
     private fun nextAlarm(enabled: List<Alarm>): Countdown? {

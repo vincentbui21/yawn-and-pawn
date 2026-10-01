@@ -124,6 +124,24 @@ androidx.sqlite:sqlite-async-android
 androidx.sqlite:sqlite-framework
 androidx.sqlite:sqlite-framework-android
 
+# Preferences DataStore and Okio (Story 1.16; the architecture keeps settings in device-protected DataStore). Reviewed
+# 2026-10-01: a key-value file in the app's own storage (the DataStore core, its Okio storage, the preferences proto
+# with its shaded protobuf) and Okio's file IO; neither opens a network connection.
+androidx.datastore:datastore
+androidx.datastore:datastore-android
+androidx.datastore:datastore-core
+androidx.datastore:datastore-core-android
+androidx.datastore:datastore-core-okio
+androidx.datastore:datastore-core-okio-jvm
+androidx.datastore:datastore-preferences
+androidx.datastore:datastore-preferences-android
+androidx.datastore:datastore-preferences-core
+androidx.datastore:datastore-preferences-core-android
+androidx.datastore:datastore-preferences-external-protobuf
+androidx.datastore:datastore-preferences-proto
+com.squareup.okio:okio
+com.squareup.okio:okio-jvm
+
 # Navigation 3, lifecycle ViewModel for Compose and Koin for Compose (Story 1.8: Alarms route and Alarm editor).
 # Reviewed 2026-09-27: in-app navigation back stack, per-entry ViewModel stores and Koin's Compose/ViewModel
 # lookups (the JetBrains artifacts redirect to the AndroidX ones on Android); UI state only, no network code.

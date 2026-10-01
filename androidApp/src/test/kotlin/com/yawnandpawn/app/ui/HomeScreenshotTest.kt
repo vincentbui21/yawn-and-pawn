@@ -1,6 +1,7 @@
 package com.yawnandpawn.app.ui
 
 import androidx.compose.ui.test.hasClickAction
+import androidx.compose.ui.test.hasContentDescription
 import androidx.compose.ui.test.hasText
 import androidx.compose.ui.test.isDialog
 import androidx.compose.ui.test.junit4.createEmptyComposeRule
@@ -50,6 +51,11 @@ class HomeScreenshotTest {
         content = { AppShell(selected = AppTab.Alarms, onSelect = {}) { HomeScreen(state = state, is24Hour = false, onIntent = {}) } },
     ) {
         composeRule.onNodeWithText("Yawn & Pawn").assertExists()
+        // Story 1.16: the missed note, verbatim from EXPERIENCE.md (12-hour clock), with its Dismiss action.
+        if (state.missedAlarmAt != null) {
+            composeRule.onNodeWithText("Your 6:00 AM alarm stopped after 30 minutes. Logged as missed.").assertExists()
+            composeRule.onNode(hasContentDescription("Dismiss") and hasClickAction()).assertExists()
+        }
         longPressTime?.let { time ->
             composeRule.onNode(hasText(time) and hasClickAction()).performTouchInput { longClick() }
             composeRule.onNodeWithText("Duplicate").assertExists()
@@ -145,4 +151,14 @@ class HomeScreenshotTest {
 
     @Test
     fun `open failed snackbar in Light`() = home("home_open_failed_light", HomeSamples.openFailed, PpsThemeMode.Light)
+
+    @Test
+    fun `missed note in Light`() = home("home_missed_note_light", HomeSamples.missedNote, PpsThemeMode.Light)
+
+    @Test
+    fun `missed note in Dark`() = home("home_missed_note_dark", HomeSamples.missedNote, PpsThemeMode.Dark)
+
+    @Test
+    @Config(fontScale = 2.0f)
+    fun `missed note in Light at 200 percent`() = home("home_missed_note_light_font200", HomeSamples.missedNote, PpsThemeMode.Light)
 }

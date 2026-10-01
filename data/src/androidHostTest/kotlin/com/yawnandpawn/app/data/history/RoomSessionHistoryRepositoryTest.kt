@@ -11,6 +11,7 @@ import com.yawnandpawn.app.data.db.AppDatabase
 import com.yawnandpawn.app.data.db.AppDatabaseConstructor
 import com.yawnandpawn.app.testing.DEFAULT_FAKE_INSTANT
 import com.yawnandpawn.app.testing.aSessionHistoryRow
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.test.runTest
 import org.junit.After
 import org.junit.Test
@@ -18,6 +19,8 @@ import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
 import kotlin.test.assertEquals
 import kotlin.test.assertIs
+import kotlin.test.assertNull
+import kotlin.time.Duration.Companion.days
 import kotlin.time.Duration.Companion.seconds
 
 @RunWith(RobolectricTestRunner::class)
@@ -120,6 +123,33 @@ class RoomSessionHistoryRepositoryTest {
                 assertIs<DomainError.StorageFailure>(assertIs<Outcome.Failure<DomainError>>(written).error, "$names")
             }
             assertEquals(0, dao.count())
+        }
+
+    @Test
+    fun `the latest Missed row is the one that ended last, other outcomes and running sessions aside`() =
+        runTest {
+            assertNull(repository.observeLatestMissed().first())
+            val older = aSessionHistoryRow(sessionId = "older").copy(outcome = SessionOutcome.Missed, endedAt = DEFAULT_FAKE_INSTANT)
+            val newer = older.copy(sessionId = "newer", endedAt = DEFAULT_FAKE_INSTANT + 1.days)
+            repository.upsert(newer)
+            repository.upsert(older)
+            repository.upsert(aSessionHistoryRow(sessionId = "on-time").copy(endedAt = DEFAULT_FAKE_INSTANT + 2.days))
+            repository.upsert(aSessionHistoryRow(sessionId = "running").copy(endedAt = null, outcome = null))
+
+            assertEquals(newer, repository.observeLatestMissed().first())
+        }
+
+    @Test
+    fun `a newer Missed row replaces the latest one`() =
+        runTest {
+            val first = aSessionHistoryRow(sessionId = "first").copy(outcome = SessionOutcome.Missed)
+            repository.upsert(first)
+            val updates = repository.observeLatestMissed()
+            assertEquals("first", updates.first()?.sessionId)
+
+            repository.upsert(first.copy(sessionId = "second", endedAt = DEFAULT_FAKE_INSTANT + 1.days))
+
+            assertEquals("second", updates.first()?.sessionId)
         }
 
     @Test

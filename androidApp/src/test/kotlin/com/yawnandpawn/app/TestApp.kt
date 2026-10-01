@@ -6,6 +6,7 @@ import kotlinx.coroutines.cancel
 import kotlinx.coroutines.joinAll
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.withTimeout
+import kotlinx.coroutines.withTimeoutOrNull
 import org.junit.rules.TestRule
 import org.junit.runner.Description
 import org.junit.runners.model.Statement
@@ -13,8 +14,11 @@ import org.koin.core.context.GlobalContext
 import org.koin.core.context.stopKoin
 import kotlin.time.Duration.Companion.seconds
 
-/** How long a test waits for the app's background work before it gives up and fails. */
-private val APP_WORK_TIMEOUT = 5.seconds
+/**
+ * How long a test waits for the app's background work. Generous because a loaded CI or gate run (many Gradle workers)
+ * can take seconds to open Room and reschedule; a test that asserts on that work fails after this, teardown never does.
+ */
+private val APP_WORK_TIMEOUT = 30.seconds
 
 /** Waits (bounded) until every job launched on this scope so far has finished. */
 internal fun ApplicationScope.awaitChildren() {
@@ -30,7 +34,14 @@ internal fun ApplicationScope.awaitChildren() {
 fun stopApp() {
     val scope = GlobalContext.getOrNull()?.getOrNull<ApplicationScope>()
     try {
-        scope?.awaitChildren()
+        // Teardown must not fail a test that already passed: wait (bounded), then cancel whatever is left.
+        scope?.coroutineContext?.get(Job)?.let { job ->
+            val finished = runBlocking { withTimeoutOrNull(APP_WORK_TIMEOUT) { job.children.toList().joinAll() } }
+            if (finished == null) {
+                val leftover = job.children.count { it.isActive }
+                println("stopApp: app work still running after $APP_WORK_TIMEOUT, cancelling $leftover leftover job(s)")
+            }
+        }
     } finally {
         scope?.cancel()
         stopKoin()

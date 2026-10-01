@@ -1,13 +1,15 @@
 package com.yawnandpawn.app.core.time
 
+import kotlinx.serialization.Serializable
 import kotlin.time.Duration
 import kotlin.time.Duration.Companion.milliseconds
 
 /**
  * A point in time that survives wall-clock jumps and reboots (AD-3). Within the boot it was created in
  * ([bootCount]) it compares monotonic time only, so a wall-clock change never moves it; after a reboot the
- * monotonic clock restarted, so it falls back to wall time.
+ * monotonic clock restarted, so it falls back to wall time. Serializable so the session state can be persisted (AD-2).
  */
+@Serializable
 data class Deadline(
     val wallMillis: Long,
     val elapsedMillis: Long,
@@ -23,6 +25,16 @@ data class Deadline(
         } else {
             millisUntil(wallMillis, now.wallMillis)
         }
+
+    /**
+     * This deadline moved [duration] later on both clocks, used to leave paused time out (AD-2: time spent in a call
+     * does not count). [duration] must be finite and not negative. Saturates at `Long.MAX_VALUE`.
+     */
+    fun shiftedBy(duration: Duration): Deadline {
+        require(!duration.isNegative() && duration.isFinite()) { "a deadline only moves later by a finite step, was $duration" }
+        val millis = duration.inWholeMilliseconds
+        return Deadline(wallMillis.saturatingPlus(millis), elapsedMillis.saturatingPlus(millis), bootCount)
+    }
 
     companion object {
         /** The deadline [duration] after [now]; [duration] must be finite and not negative. Saturates at `Long.MAX_VALUE`. */

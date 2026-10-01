@@ -108,3 +108,18 @@
   summary: Story 1.13: `app.db` is now version 2 (Story 1.10 added `request_code_sequence`), so `session_history` is the v2 to v3 migration.
   evidence: `AppDatabase` is `version = 2` with `MIGRATION_1_2` in `APP_DATABASE_MIGRATIONS` and `data/schemas/.../2.json` exported. Story 1.13 must add `MIGRATION_2_3`, export `3.json`, keep a hand-built v2 file migration test next to the v1 one in `AppDatabaseFactoryTest`, and write `docs/decisions/db-downgrade.md` for v3.
   status: assigned to Story 1.13.
+- source_spec: `_bmad-output/implementation-artifacts/spec-1-11-the-complete-wake-session-state-machine-in-core.md`
+  summary: Call adapter contract: re-send CallStarted after ProcessRestored and whenever a new ring starts while a call is still active.
+  evidence: The reducer clears the pause on restore and every new ring (after a snooze, a grant during a call, a merge) starts unpaused; Snoozed + CallStarted changes nothing (AD-2). Without the re-send the next ring plays over an ongoing call. Story 2.7 (pause for phone calls) must implement and test it.
+- source_spec: `_bmad-output/implementation-artifacts/spec-1-11-the-complete-wake-session-state-machine-in-core.md`
+  summary: AD-2 has a UserUnlocked row only for Ringing; unlocking during Grace, Loud or Snoozed leaves beforeFirstUnlock set for the whole session.
+  evidence: Normative table (ARCHITECTURE-SPINE.md AD-2) row "Ringing (before first unlock) | UserUnlocked". The user usually unlocks while doing the check (Grace or Loud). Settle with Story 2.3 (ring before first unlock) via correct-course: add rows for Grace, Loud and Snoozed.
+- source_spec: `_bmad-output/implementation-artifacts/spec-1-11-the-complete-wake-session-state-machine-in-core.md`
+  summary: Check-run consistency for real checks: the fallback keeps the old seeds and failedAttempts and emits no StartCheckStep; ValidNext advances without StartCheckStep(step + 1); the fallback policy cannot see a matcher error.
+  evidence: Harmless in Epic 1 (one Placeholder step, fallback never allowed). Story 3.2 (multi-step checks), Story 3.9 (fallback picker: new seeds in FallbackRequested, reset attempts) and Story 7.7 (House Hunt matcher error flag) must settle them.
+- source_spec: `_bmad-output/implementation-artifacts/spec-1-11-the-complete-wake-session-state-machine-in-core.md`
+  summary: Session persistence details for Story 1.12 and 1.13: a fixed Json configuration (ignoreUnknownKeys, explicit class discriminator) with a compatibility test for older payloads, and one owner of the history write.
+  evidence: SessionState is @Serializable with default Json only and no versioning; Completed/Missed emit both a one-shot RecordOutcome and the entry effect HistoryWriteRequested. Story 1.12 (RoomActiveSessionStore) must pin the Json config and test decoding; Story 1.13 must make SessionRecorder the single idempotent writer that dispatches Recorded from one of the two.
+- source_spec: `_bmad-output/implementation-artifacts/spec-1-11-the-complete-wake-session-state-machine-in-core.md`
+  summary: Epic 4 availability and reuse: the real SnoozeAvailabilityPolicy must price through FeeLadder(baseFeeTier, snoozesGranted + 1) with a reducer-level test, and ReuseAccepted must be validated against the offered product.
+  evidence: The Epic 1 reducer accepts any offer the policy returns and any ReuseAccepted outside test mode. Stories 4.7 (snoozeAvailability) and 4.9/4.11 (reconciler, orchestration) own these checks.

@@ -2,6 +2,7 @@ package com.yawnandpawn.app.core.time
 
 import kotlinx.coroutines.flow.Flow
 import kotlinx.datetime.TimeZone
+import kotlinx.serialization.Serializable
 
 /**
  * Wall-clock port (AD-3): the standard `kotlin.time.Clock`. It can jump when the user or the network
@@ -34,7 +35,11 @@ fun interface TimeChangeSignal {
     fun changes(): Flow<Unit>
 }
 
-/** "Now" as deadline logic needs it: wall time, time since boot and the boot it was read in. */
+/**
+ * "Now" as deadline logic needs it: wall time, time since boot and the boot it was read in. Serializable because the
+ * session keeps the moment a call paused it (AD-2).
+ */
+@Serializable
 data class TimeSnapshot(
     val wallMillis: Long,
     val elapsedMillis: Long,

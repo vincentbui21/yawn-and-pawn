@@ -87,6 +87,11 @@ kover {
     }
 }
 
+// core.session has its own 90% rule (core/build.gradle.kts, variant "session"); it runs with this verify task.
+tasks.named("koverVerify") {
+    dependsOn(":core:koverVerifySession")
+}
+
 // ---------------------------------------------------------------------------------------------
 // Definition of done (AD-14): `./gradlew qualityGate`.
 //

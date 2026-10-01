@@ -137,16 +137,16 @@ private fun FullEditorSections.withCheck(
 
 /** The Sound sub-screen's list: selecting sets the editor's sound; the play button toggles a (silent) preview. */
 internal fun EditorUiState.withSound(intent: SoundPickerIntent): EditorUiState {
-    val full = full ?: return this
-    val sounds = full.sounds
+    val sound = sound ?: return this
+    val sounds = sound.picker
     return when (intent) {
         is SoundPickerIntent.Selected -> {
             val name = sounds.options.first { it.id == intent.id }.name
-            copy(full = full.copy(sounds = sounds.copy(selectedId = intent.id), soundName = name, soundMissing = false))
+            copy(sound = sound.copy(picker = sounds.copy(selectedId = intent.id), name = name, missing = false))
         }
 
         is SoundPickerIntent.PreviewToggled -> {
-            copy(full = full.copy(sounds = sounds.copy(previewingId = if (sounds.previewingId == intent.id) null else intent.id)))
+            copy(sound = sound.copy(picker = sounds.copy(previewingId = if (sounds.previewingId == intent.id) null else intent.id)))
         }
 
         SoundPickerIntent.PickFileClicked -> {

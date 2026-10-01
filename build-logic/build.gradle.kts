@@ -16,6 +16,14 @@ dependencies {
 
 tasks.test {
     useJUnit()
+    // The loudness fixture test measures real files with the same tool as checkSoundLoudness (Story 1.17): ffmpeg by
+    // default (CI), or the python measurer where ffmpeg cannot run (set in ~/.gradle/gradle.properties).
+    systemProperty("yawnandpawn.loudnessMeasurer", providers.gradleProperty("yawnandpawn.loudnessMeasurer").getOrElse("ffmpeg"))
+    systemProperty("yawnandpawn.ffmpeg", providers.gradleProperty("yawnandpawn.ffmpeg").getOrElse("ffmpeg"))
+    systemProperty("yawnandpawn.uv", providers.gradleProperty("yawnandpawn.uv").getOrElse("uv"))
+    val measureScript = layout.projectDirectory.file("../tools/sounds/measure_loudness.py")
+    inputs.files(measureScript, layout.projectDirectory.file("../tools/sounds/loudness.py")).withPathSensitivity(PathSensitivity.RELATIVE)
+    systemProperty("yawnandpawn.measureScript", measureScript.asFile.absolutePath)
 }
 
 gradlePlugin {
@@ -27,6 +35,10 @@ gradlePlugin {
         register("allowlists") {
             id = "yawnandpawn.allowlists"
             implementationClass = "com.yawnandpawn.app.buildlogic.AllowlistsPlugin"
+        }
+        register("soundLoudness") {
+            id = "yawnandpawn.sound-loudness"
+            implementationClass = "com.yawnandpawn.app.buildlogic.SoundLoudnessPlugin"
         }
     }
 }

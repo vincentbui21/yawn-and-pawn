@@ -45,10 +45,12 @@ enum class SoundSource { BuiltIn, System, File }
 /** One `sound-row`. */
 data class SoundOption(
     val id: String,
+    /** The row's name: [nameRes] for a built-in sound (a string resource), else this (a ringtone's or file's own name). */
     val name: String,
     val source: SoundSource,
-    /** A custom file that can no longer be read: "File missing. Default sound will play." */
+    /** A chosen sound that can no longer be read: "File missing. Default sound will play." */
     val missing: Boolean = false,
+    val nameRes: StringResource? = null,
 )
 
 /** The sound list of the editor's Sound sub-screen (the IA's Sound picker). */
@@ -57,6 +59,8 @@ data class SoundPickerUiState(
     val selectedId: String? = null,
     /** The sound whose preview is playing, if any. */
     val previewingId: String? = null,
+    /** The "Your files" section with "Pick a file"; hidden until the user's files arrive (Story 7.4). */
+    val showFiles: Boolean = true,
 )
 
 sealed interface SoundPickerIntent {
@@ -85,6 +89,7 @@ fun SoundList(
     Column(modifier = modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(PpsTheme.spacing.space3)) {
         SoundSource.entries.forEach { source ->
             val options = state.options.filter { it.source == source }
+            if (source == SoundSource.File && !state.showFiles) return@forEach
             if (options.isEmpty() && source != SoundSource.File) return@forEach
             GroupCard(title = stringResource(source.sectionTitle()), modifier = Modifier.padding(top = PpsTheme.spacing.space2)) {
                 options.forEachIndexed { index, option ->
@@ -148,7 +153,11 @@ private fun SoundRow(
                 tint = if (selected) colors.accentText else colors.textSecondary,
             )
             Column(modifier = Modifier.padding(horizontal = spacing.space3, vertical = spacing.space2)) {
-                Text(text = option.name, style = PpsTheme.typography.body, color = colors.text)
+                Text(
+                    text = option.nameRes?.let { stringResource(it) } ?: option.name,
+                    style = PpsTheme.typography.body,
+                    color = colors.text,
+                )
                 Text(
                     text = if (option.missing) stringResource(Res.string.sound_file_missing) else stringResource(option.source.caption()),
                     style = PpsTheme.typography.caption,

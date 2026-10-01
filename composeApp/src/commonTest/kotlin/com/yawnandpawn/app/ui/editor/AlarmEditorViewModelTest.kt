@@ -12,6 +12,8 @@ import com.yawnandpawn.app.testing.FakeClock
 import com.yawnandpawn.app.testing.FakeIdGenerator
 import com.yawnandpawn.app.testing.FakeLogger
 import com.yawnandpawn.app.testing.FakeRequestCodeSequence
+import com.yawnandpawn.app.testing.FakeSoundLibrary
+import com.yawnandpawn.app.testing.FakeSoundPreview
 import com.yawnandpawn.app.testing.FakeTimeZoneProvider
 import com.yawnandpawn.app.testing.anAlarm
 import com.yawnandpawn.app.ui.home.AlarmActions
@@ -80,6 +82,8 @@ class AlarmEditorViewModelTest {
             clock = clock,
             timeZoneProvider = zone,
             actions = AlarmActions(alarms.setEnabled, alarms.duplicate, alarms.delete, clock, logger),
+            soundLibrary = FakeSoundLibrary(),
+            soundPreview = FakeSoundPreview(),
         )
 
     private fun TestScope.effectsOf(viewModel: AlarmEditorViewModel): List<EditorEffect> {
@@ -220,6 +224,7 @@ class AlarmEditorViewModelTest {
                     gradualVolume = true,
                     rampStartPercent = 10,
                     vibration = false,
+                    soundRef = "builtin:birds",
                 ),
                 form,
             )

@@ -31,6 +31,8 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.semantics
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.compose.LifecycleEventEffect
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.navigationevent.NavigationEventInfo
 import androidx.navigationevent.compose.NavigationBackHandler
@@ -132,6 +134,8 @@ fun AlarmEditorRoute(
             }
         }
     }
+    // The app going to the background (or another screen covering the editor) stops a Sound preview.
+    LifecycleEventEffect(Lifecycle.Event.ON_STOP) { viewModel.onIntent(EditorIntent.Backgrounded) }
     // Back goes through the ViewModel: a sub-screen returns to the main screen, unsaved changes ask "Discard changes?".
     NavigationBackHandler(state = rememberNavigationEventState(NavigationEventInfo.None), isBackEnabled = true) {
         viewModel.onIntent(EditorIntent.BackRequested)
@@ -148,7 +152,7 @@ fun AlarmEditorRoute(
  * The Alarm editor, stateless (owner decisions 2026-09-27): a header ("New alarm" / "Edit alarm" and "Rings in ..."),
  * the time wheels in their own card, the repeat quick choices, then grouped `card-group`s whose rows show their value
  * and open a sub-screen ([EditorPane]), "Test alarm", and the floating "Cancel | Save" pill. Sub-screens slide in and
- * out. With [EditorUiState.full] it is the full editor (wake-up check, quiet time, motivation, sound list, fee ladder,
+ * out. With [EditorUiState.full] it is the full editor (wake-up check, quiet time, motivation, fee ladder,
  * "Test alarm"); without it, the Story 1.8 fields only.
  *
  * The pill has its own bottom area under the scrolling content and sits above the keyboard (`imePadding`, with the
@@ -288,7 +292,7 @@ private fun NameSoundCard(
     onIntent: (EditorIntent) -> Unit,
 ) {
     val form = state.form
-    val full = state.full
+    val sound = state.sound
     Column(verticalArrangement = Arrangement.spacedBy(PpsTheme.spacing.space2)) {
         GroupCard {
             TextFieldRow(
@@ -300,7 +304,10 @@ private fun NameSoundCard(
             GroupDivider()
             NavRow(
                 label = stringResource(Res.string.editor_sound),
-                value = full?.soundName?.ifEmpty { null } ?: stringResource(Res.string.editor_sound_default),
+                value =
+                    sound?.nameRes?.let { stringResource(it) }
+                        ?: sound?.name?.ifEmpty { null }
+                        ?: stringResource(Res.string.editor_sound_default),
                 onClick = { onIntent(EditorIntent.PaneOpened(EditorPane.Sound)) },
             )
             GroupDivider()
@@ -310,7 +317,7 @@ private fun NameSoundCard(
                 onCheckedChange = { onIntent(EditorIntent.VibrationToggled(it)) },
             )
         }
-        if (full?.soundMissing == true) NoteInline(text = stringResource(Res.string.sound_file_missing))
+        if (sound?.missing == true) NoteInline(text = stringResource(Res.string.sound_file_missing))
     }
 }
 

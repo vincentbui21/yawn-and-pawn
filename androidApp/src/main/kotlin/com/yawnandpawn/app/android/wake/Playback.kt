@@ -6,8 +6,8 @@ import android.media.MediaPlayer
 import android.net.Uri
 import android.os.PowerManager
 import android.provider.Settings
+import androidx.annotation.RawRes
 import com.yawnandpawn.app.R
-import com.yawnandpawn.app.core.alarm.Alarm
 
 /** The audio attributes of every alarm sound and vibration below API 33: the alarm stream, independent of media and ringer. */
 val ALARM_AUDIO_ATTRIBUTES: AudioAttributes =
@@ -25,7 +25,12 @@ sealed interface AlarmSound {
     /** The phone's own default alarm ringtone: the last resort when even the bundled default fails. */
     data object SystemAlarm : AlarmSound
 
-    /** A sound file chosen by the user or from the sound library (Story 1.17). */
+    /** Another bundled sound of the `SoundCatalog` (Story 1.17): the `res/raw` resource [rawRes]. */
+    data class BuiltIn(
+        @param:RawRes val rawRes: Int,
+    ) : AlarmSound
+
+    /** A sound behind a content URI: one of the phone's alarm ringtones (Story 1.17), later the user's files. */
     data class File(
         val uri: String,
     ) : AlarmSound
@@ -33,16 +38,28 @@ sealed interface AlarmSound {
 
 /**
  * Maps an alarm's `soundRef` to the sound to open; `null` when the reference is unknown, and the player then plays
- * [AlarmSound.Default]. The sound library replaces the binding in Story 1.17.
+ * [AlarmSound.Default]. Production binds `LibrarySoundResolver` (the sound library, Story 1.17).
  */
 fun interface SoundResolver {
     fun resolve(soundRef: String): AlarmSound?
 }
 
-/** Story 1.14: only [Alarm.DEFAULT_SOUND_REF] is known; any other reference resolves to nothing (and the default plays). */
-object DefaultOnlySoundResolver : SoundResolver {
-    override fun resolve(soundRef: String): AlarmSound? = AlarmSound.Default.takeIf { soundRef == Alarm.DEFAULT_SOUND_REF }
-}
+/** Where [sound] is read from. */
+fun soundUri(
+    context: Context,
+    sound: AlarmSound,
+): Uri =
+    when (sound) {
+        AlarmSound.Default -> rawUri(context, R.raw.alarm_default)
+        AlarmSound.SystemAlarm -> Settings.System.DEFAULT_ALARM_ALERT_URI
+        is AlarmSound.BuiltIn -> rawUri(context, sound.rawRes)
+        is AlarmSound.File -> Uri.parse(sound.uri)
+    }
+
+private fun rawUri(
+    context: Context,
+    @RawRes rawRes: Int,
+): Uri = Uri.parse("android.resource://${context.packageName}/$rawRes")
 
 /**
  * One opened, looping, prepared sound: the small seam over `MediaPlayer` (Design Notes), so tests can force errors
@@ -62,8 +79,9 @@ interface Playback {
 /** Opens sounds for [AndroidAlarmPlayer]. */
 fun interface PlaybackFactory {
     /**
-     * Opens and prepares [sound] to loop on the alarm stream. Throws when it cannot be opened or prepared; [onError] runs
-     * (on the main thread) if it fails later, while playing.
+     * Opens [sound] to loop on the alarm stream and starts preparing it. Throws when it cannot be opened (for example a
+     * ringtone URI that no longer resolves); [onError] runs (on the main thread) if it fails later, while preparing or
+     * playing. `start` and gains given before it is prepared apply once it is.
      */
     fun open(
         sound: AlarmSound,
@@ -71,7 +89,11 @@ fun interface PlaybackFactory {
     ): Playback
 }
 
-/** [PlaybackFactory] on `MediaPlayer`: `USAGE_ALARM` / sonification, looping, holding a partial wake lock while it plays. */
+/**
+ * [PlaybackFactory] on `MediaPlayer`: `USAGE_ALARM` / sonification, looping, holding a partial wake lock while it plays.
+ * It prepares with `prepareAsync` (Story 1.17): a content URI can be slow to prepare, and the player's caller holds its
+ * lock and may be the main thread. A prepare error arrives through the error listener like a playback error.
+ */
 class MediaPlayerPlaybackFactory(
     private val context: Context,
 ) : PlaybackFactory {
@@ -83,47 +105,77 @@ class MediaPlayerPlaybackFactory(
         onError: () -> Unit,
     ): Playback {
         val player = MediaPlayer()
+        val playback = MediaPlayerPlayback(player)
         try {
             player.setAudioAttributes(ALARM_AUDIO_ATTRIBUTES)
             player.setWakeMode(context, PowerManager.PARTIAL_WAKE_LOCK)
-            player.setDataSource(context, uriOf(sound))
+            player.setDataSource(context, soundUri(context, sound))
             player.isLooping = true
+            player.setOnPreparedListener { playback.onPrepared() }
             player.setOnErrorListener { _, _, _ ->
                 onError()
                 true
             }
-            player.prepare()
+            player.prepareAsync()
         } catch (e: Exception) {
             player.release()
             throw e
         }
-        return MediaPlayerPlayback(player)
+        return playback
     }
-
-    private fun uriOf(sound: AlarmSound): Uri =
-        when (sound) {
-            AlarmSound.Default -> Uri.parse("android.resource://${context.packageName}/${R.raw.alarm_default}")
-            AlarmSound.SystemAlarm -> Settings.System.DEFAULT_ALARM_ALERT_URI
-            is AlarmSound.File -> Uri.parse(sound.uri)
-        }
 }
 
+/**
+ * One `MediaPlayer` that may still be preparing: what the alarm player asked for before it was prepared (start, the
+ * gain) is applied when it is. Its own lock: `onPrepared` arrives on the main thread while the alarm player calls from
+ * its own lock (never the other way round, so the two cannot deadlock).
+ */
 private class MediaPlayerPlayback(
     private val player: MediaPlayer,
 ) : Playback {
+    private var prepared = false
+    private var wantsToPlay = false
+    private var released = false
+
     /** `pause()` on a prepared player that never started puts it into the Error state, so only a started one pauses. */
     private var started = false
+    private var gain: Float? = null
 
+    @Synchronized
+    fun onPrepared() {
+        if (released) return
+        prepared = true
+        gain?.let { player.setVolume(it, it) }
+        if (wantsToPlay) startNow()
+    }
+
+    @Synchronized
     override fun start() {
+        wantsToPlay = true
+        if (prepared && !released) startNow()
+    }
+
+    @Synchronized
+    override fun pause() {
+        wantsToPlay = false
+        if (started && !released) player.pause()
+    }
+
+    @Synchronized
+    override fun setGain(gain: Float) {
+        this.gain = gain
+        if (prepared && !released) player.setVolume(gain, gain)
+    }
+
+    @Synchronized
+    override fun release() {
+        if (released) return
+        released = true
+        player.release()
+    }
+
+    private fun startNow() {
         player.start()
         started = true
     }
-
-    override fun pause() {
-        if (started) player.pause()
-    }
-
-    override fun setGain(gain: Float) = player.setVolume(gain, gain)
-
-    override fun release() = player.release()
 }

@@ -52,6 +52,13 @@ jobs:
       - name: Set up Gradle (with caching)
         uses: gradle/actions/setup-gradle@v6
 
+      # checkSoundLoudness (Story 1.17) measures the bundled alarm sounds with ffmpeg's ebur128 filter.
+      - name: Install ffmpeg
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq ffmpeg
+          ffmpeg -hide_banner -version | head -n 1
+
       - name: Quality gate
         run: |
           set -o pipefail

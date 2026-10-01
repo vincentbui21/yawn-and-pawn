@@ -4,10 +4,13 @@ import android.content.Context
 import android.media.AudioAttributes
 import android.media.AudioManager
 import android.media.MediaPlayer
+import android.net.Uri
+import android.os.Looper
 import androidx.test.core.app.ApplicationProvider
 import com.yawnandpawn.app.R
 import com.yawnandpawn.app.StopAppRule
 import com.yawnandpawn.app.android.ApplicationScope
+import com.yawnandpawn.app.android.sound.LibrarySoundResolver
 import com.yawnandpawn.app.awaitChildren
 import com.yawnandpawn.app.core.alarm.Alarm
 import com.yawnandpawn.app.core.log.LogEvent
@@ -21,8 +24,11 @@ import org.junit.Test
 import org.junit.runner.RunWith
 import org.koin.core.context.GlobalContext
 import org.robolectric.RobolectricTestRunner
+import org.robolectric.Shadows.shadowOf
 import org.robolectric.shadow.api.Shadow
 import org.robolectric.shadows.ShadowMediaPlayer
+import org.robolectric.shadows.util.DataSource
+import java.io.IOException
 import kotlin.math.roundToInt
 import kotlin.test.assertEquals
 import kotlin.test.assertNull
@@ -165,7 +171,7 @@ class AndroidAlarmPlayerTest {
 
         assertEquals(AlarmSound.Default, player.sound)
         assertEquals(
-            listOf<LogEvent>(LogEvent.SoundFellBack("unknown sound reference; the sound library arrives in Story 1.17")),
+            listOf<LogEvent>(LogEvent.SoundFellBack("unknown sound reference")),
             logger.events,
         )
         assertTrue(logger.events.none { "builtin:rain" in it.toString() })
@@ -281,34 +287,47 @@ class AndroidAlarmPlayerTest {
         assertEquals((maxAlarm * 0.7).roundToInt(), alarmVolume())
     }
 
-    @Test
-    fun `the MediaPlayer adapter plays looping on the alarm usage with sonification content`() {
+    /** The MediaPlayers the real adapter created, in order. */
+    private fun recordMediaPlayers(): MutableList<MediaPlayer> {
         ShadowMediaPlayer.setMediaInfoProvider { ShadowMediaPlayer.MediaInfo(3_000, 0) }
-        var created: MediaPlayer? = null
-        ShadowMediaPlayer.setCreateListener { mediaPlayer, _ -> created = mediaPlayer }
+        val created = mutableListOf<MediaPlayer>()
+        ShadowMediaPlayer.setCreateListener { mediaPlayer, _ -> created += mediaPlayer }
+        return created
+    }
+
+    private fun MediaPlayer.shadow(): ShadowMediaPlayer = Shadow.extract(this)
+
+    /** Runs what `prepareAsync` posted to the main looper (the prepared callback). */
+    private fun prepared() = shadowOf(Looper.getMainLooper()).idle()
+
+    @Test
+    fun `the MediaPlayer adapter prepares asynchronously and plays looping on the alarm usage with sonification content`() {
+        val created = recordMediaPlayers()
 
         val playback = MediaPlayerPlaybackFactory(context).open(AlarmSound.Default) {}
+        playback.setGain(0.2f)
         playback.start()
 
-        val mediaPlayer = checkNotNull(created)
-        val shadow = Shadow.extract<ShadowMediaPlayer>(mediaPlayer)
+        val shadow = created.single().shadow()
+        assertEquals(ShadowMediaPlayer.State.PREPARING, shadow.state, "open never blocks on prepare")
+        prepared()
         assertEquals(AudioAttributes.USAGE_ALARM, shadow.audioAttributes.usage)
         assertEquals(AudioAttributes.CONTENT_TYPE_SONIFICATION, shadow.audioAttributes.contentType)
-        assertTrue(mediaPlayer.isLooping)
-        assertTrue(shadow.isReallyPlaying)
+        assertTrue(created.single().isLooping)
+        assertTrue(shadow.isReallyPlaying, "the start asked for before prepared runs once prepared")
+        assertEquals(0.2f, shadow.leftVolume, 1e-6f)
         assertEquals("android.resource://${context.packageName}/${R.raw.alarm_default}", shadow.sourceUri.toString())
         playback.release()
     }
 
     @Test
     fun `the MediaPlayer adapter reports a playback error and never pauses a player that did not start`() {
-        ShadowMediaPlayer.setMediaInfoProvider { ShadowMediaPlayer.MediaInfo(3_000, 0) }
-        var created: MediaPlayer? = null
-        ShadowMediaPlayer.setCreateListener { mediaPlayer, _ -> created = mediaPlayer }
+        val created = recordMediaPlayers()
         var errors = 0
 
         val playback = MediaPlayerPlaybackFactory(context).open(AlarmSound.Default) { errors++ }
-        val shadow = Shadow.extract<ShadowMediaPlayer>(checkNotNull(created))
+        prepared()
+        val shadow = created.single().shadow()
         playback.pause()
         assertEquals(ShadowMediaPlayer.State.PREPARED, shadow.state, "a prepared player is not paused into the Error state")
         playback.start()
@@ -316,5 +335,92 @@ class AndroidAlarmPlayerTest {
 
         assertEquals(1, errors)
         playback.release()
+    }
+
+    @Test
+    fun `a library sound opens its raw resource and a phone ringtone its content uri`() {
+        val created = recordMediaPlayers()
+        val factory = MediaPlayerPlaybackFactory(context)
+
+        factory.open(AlarmSound.BuiltIn(R.raw.alarm_chimes)) {}.release()
+        factory.open(AlarmSound.File("content://media/internal/audio/media/7")) {}.release()
+
+        assertEquals("android.resource://${context.packageName}/${R.raw.alarm_chimes}", created[0].shadow().sourceUri.toString())
+        assertEquals("content://media/internal/audio/media/7", created[1].shadow().sourceUri.toString())
+    }
+
+    private fun realPlayer() =
+        AndroidAlarmPlayer(
+            MediaPlayerPlaybackFactory(context),
+            LibrarySoundResolver(),
+            volume,
+            clock,
+            CoroutineScope(dispatcher),
+            logger,
+        )
+
+    @Test
+    fun `a ringtone uri that no longer resolves rings the default in the same ring`() {
+        val created = recordMediaPlayers()
+        val gone = Uri.parse("content://media/internal/audio/media/404")
+        ShadowMediaPlayer.addException(DataSource.toDataSource(context, gone), IOException("gone"))
+        val player = realPlayer()
+
+        player.play("system:Gone|$gone", volumePercent = 80, gradual = false, rampStartPercent = 20)
+        prepared()
+
+        assertEquals(AlarmSound.Default, player.sound)
+        assertTrue(created.last().shadow().isReallyPlaying, "never silent")
+        assertEquals(listOf<LogEvent>(LogEvent.SoundFellBack("could not open the sound: IOException")), logger.events)
+        assertTrue(logger.events.none { "404" in it.toString() || "Gone" in it.toString() }, "no uri or name in the log")
+        player.stop(restoreVolume = true)
+    }
+
+    @Test
+    fun `a MediaPlayer error mid-ring switches to the default`() {
+        val created = recordMediaPlayers()
+        val player = realPlayer()
+
+        player.play("builtin:chimes", volumePercent = 80, gradual = false, rampStartPercent = 20)
+        prepared()
+        assertEquals(AlarmSound.BuiltIn(R.raw.alarm_chimes), player.sound)
+        assertTrue(created.single().shadow().isReallyPlaying)
+
+        created.single().shadow().invokeErrorListener(MediaPlayer.MEDIA_ERROR_SERVER_DIED, 0)
+        prepared()
+
+        assertEquals(AlarmSound.Default, player.sound)
+        assertTrue(created.last().shadow().isReallyPlaying)
+        assertEquals(listOf<LogEvent>(LogEvent.SoundFellBack("the sound failed while ringing")), logger.events)
+        player.stop(restoreVolume = true)
+    }
+
+    @Test
+    fun `a sound that fails while it prepares asynchronously is replaced by the default`() {
+        val created = recordMediaPlayers()
+        val player = realPlayer()
+
+        player.play("builtin:bell", volumePercent = 80, gradual = false, rampStartPercent = 20)
+        created.single().shadow().invokeErrorListener(MediaPlayer.MEDIA_ERROR_UNKNOWN, MediaPlayer.MEDIA_ERROR_MALFORMED)
+        prepared()
+
+        assertEquals(AlarmSound.Default, player.sound)
+        assertTrue(created.last().shadow().isReallyPlaying)
+        player.stop(restoreVolume = true)
+    }
+
+    @Test
+    fun `the default resource is bundled and always opens`() {
+        context.resources.openRawResourceFd(R.raw.alarm_default).use { assertTrue(it.length > 0) }
+        assertEquals(AlarmSound.Default, LibrarySoundResolver().resolve(Alarm.DEFAULT_SOUND_REF))
+    }
+
+    @Test
+    fun `the player reports a ring as ringing until it stops`() {
+        assertTrue(!player.isRinging)
+        play()
+        assertTrue(player.isRinging)
+        player.stop(restoreVolume = true)
+        assertTrue(!player.isRinging)
     }
 }

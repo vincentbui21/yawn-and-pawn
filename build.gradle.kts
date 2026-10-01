@@ -16,6 +16,7 @@ plugins {
     alias(libs.plugins.spotless)
     id("yawnandpawn.verify-core-dependencies")
     id("yawnandpawn.allowlists")
+    id("yawnandpawn.sound-loudness")
     id("yawnandpawn.design-tokens")
 }
 
@@ -27,6 +28,20 @@ designTokens {
     designFile.set(layout.projectDirectory.file("_bmad-output/planning-artifacts/ux-designs/ux-pay-per-snooze-2026-09-26/DESIGN.md"))
     outputFile.set(layout.projectDirectory.file("composeApp/src/commonMain/kotlin/com/yawnandpawn/app/ui/theme/PpsTokens.kt"))
     packageName.set("com.yawnandpawn.app.ui.theme")
+}
+
+// ---------------------------------------------------------------------------------------------
+// Sound loudness (FR-SND-1, Story 1.17, plugin yawnandpawn.sound-loudness from build-logic):
+// `checkSoundLoudness` (qualityGate) measures every bundled alarm sound with ffmpeg ebur128 and fails, naming
+// the file, below a -3 dBFS sample peak or -14 LUFS integrated loudness. UI sounds are exempt and only listed.
+// ffmpeg: Gradle property yawnandpawn.ffmpeg, or ffmpeg on PATH (CI installs it). Where ffmpeg cannot run,
+// yawnandpawn.loudnessMeasurer=python measures with tools/sounds/measure_loudness.py through uv.
+// ---------------------------------------------------------------------------------------------
+soundLoudness {
+    alarmSounds.from(fileTree("androidApp/src/main/res/raw") { include("alarm_*") })
+    // The time-wheel tick (12 ms, about -12 dBFS) is a deliberately quiet UI sound.
+    exemptSounds.from("composeApp/src/androidMain/res/raw/wheel_tick.wav")
+    pythonScript.set(layout.projectDirectory.file("tools/sounds/measure_loudness.py"))
 }
 
 // ---------------------------------------------------------------------------------------------
@@ -105,8 +120,9 @@ tasks.named("koverVerify") {
 //   - checkTokens: regenerates PpsTokens.kt into build/tokens and fails on any diff with the committed file
 //   - the raw colour / radius / sp detekt rules, ContrastTest and CopyRulesTest run inside detekt and host tests
 //
-// Later stories register their checks here as additional dependencies of `qualityGate`:
-//   - Story 1.17: sound loudness script (peak and integrated loudness of bundled sounds)
+// Sound loudness (Story 1.17): checkSoundLoudness, see the soundLoudness block above.
+//
+// Later stories register their checks here as additional dependencies of `qualityGate`.
 // Add them with `dependsOn(...)` below; never run a check outside the gate.
 // ---------------------------------------------------------------------------------------------
 tasks.register("qualityGate") {
@@ -133,5 +149,6 @@ tasks.register("qualityGate") {
         "verifyCoreDependencies",
         ":androidApp:checkDependencyAllowlist",
         ":androidApp:checkPermissionAllowlist",
+        "checkSoundLoudness",
     )
 }

@@ -29,6 +29,8 @@ import com.yawnandpawn.app.testing.AlarmUseCasesFixture
 import com.yawnandpawn.app.testing.FakeAlarmRepository
 import com.yawnandpawn.app.testing.FakeClock
 import com.yawnandpawn.app.testing.FakeLogger
+import com.yawnandpawn.app.testing.FakeSoundLibrary
+import com.yawnandpawn.app.testing.FakeSoundPreview
 import com.yawnandpawn.app.testing.FakeTimeChangeSignal
 import com.yawnandpawn.app.testing.FakeTimeZoneProvider
 import com.yawnandpawn.app.ui.editor.AlarmEditorRoute
@@ -250,6 +252,8 @@ class AlarmScreensSemanticsTest {
                 clock = FakeClock(),
                 timeZoneProvider = FakeTimeZoneProvider(),
                 actions = actions(repository),
+                soundLibrary = FakeSoundLibrary(),
+                soundPreview = FakeSoundPreview(),
             )
         var closed = false
         withScreen(
@@ -291,6 +295,8 @@ class AlarmScreensSemanticsTest {
                 clock = FakeClock(),
                 timeZoneProvider = FakeTimeZoneProvider(),
                 actions = actions(repository),
+                soundLibrary = FakeSoundLibrary(),
+                soundPreview = FakeSoundPreview(),
             )
         var openFailed = false
         var closed = false

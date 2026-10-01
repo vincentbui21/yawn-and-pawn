@@ -34,7 +34,7 @@ data class Alarm(
     fun toRule(): AlarmRule = AlarmRule(time, repeatDays)
 
     companion object {
-        /** The default built-in sound (the sound library arrives in Story 1.17). */
+        /** The default built-in sound, `SoundCatalog.default` ("Sunrise", Story 1.17); see `SoundRef` for the format. */
         const val DEFAULT_SOUND_REF = "builtin:default"
         const val DEFAULT_VOLUME_PERCENT = 80
         const val DEFAULT_RAMP_START_PERCENT = 20

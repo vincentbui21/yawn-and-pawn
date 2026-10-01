@@ -23,8 +23,9 @@ import kotlin.time.Duration.Companion.seconds
  * - **Never silent:** a sound that cannot be opened, or fails during prepare or while ringing, is replaced in the same
  *   ring: a chosen sound by the bundled default, the default by the phone's alarm ringtone (and back), a bounded number
  *   of opens at a time (a sound that played 10 s resets the count). When every open failed, the default is tried again
- *   every 5 s while the ring lasts. An unknown sound reference plays the default. Each fallback is logged without the
- *   sound reference.
+ *   every 5 s while the ring lasts. [resolver] maps the alarm's sound (a library sound or a phone ringtone, Story 1.17);
+ *   an unknown sound reference plays the default. Each fallback is logged without the sound reference or its URI.
+ *   Sounds prepare asynchronously (`MediaPlayerPlaybackFactory`); a prepare error falls back like a playback error.
  *
  * Every call is idempotent for the same request and thread-safe (one lock; `MediaPlayer` errors arrive on the main
  * thread). [scope] runs the ramp updates. (Many small functions: one verb per session effect plus the locked helpers
@@ -75,6 +76,10 @@ class AndroidAlarmPlayer(
     @Volatile
     var isPaused: Boolean = false
         private set
+
+    /** A ring (or the emergency ring) is on, even between two opens of its sound; the Sound preview keeps out of it. */
+    val isRinging: Boolean
+        get() = synchronized(lock) { request != null }
 
     /**
      * Plays [soundRef] at [volumePercent] of the alarm stream, ramping from [rampStartPercent] of it when [gradual], and
@@ -169,7 +174,7 @@ class AndroidAlarmPlayer(
 
     private fun resolve(soundRef: String): AlarmSound =
         resolver.resolve(soundRef) ?: AlarmSound.Default.also {
-            logger.log(LogEvent.SoundFellBack("unknown sound reference; the sound library arrives in Story 1.17"))
+            logger.log(LogEvent.SoundFellBack("unknown sound reference"))
         }
 
     /**
@@ -288,7 +293,7 @@ class AndroidAlarmPlayer(
         fun fallbackAfter(sound: AlarmSound): AlarmSound =
             when (sound) {
                 AlarmSound.Default -> AlarmSound.SystemAlarm
-                AlarmSound.SystemAlarm, is AlarmSound.File -> AlarmSound.Default
+                AlarmSound.SystemAlarm, is AlarmSound.BuiltIn, is AlarmSound.File -> AlarmSound.Default
             }
     }
 }

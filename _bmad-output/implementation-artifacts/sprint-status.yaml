@@ -29,7 +29,7 @@
 # - Dev moves story to 'review', then runs code-review (fresh context, different LLM recommended)
 # - Retrospective appends its action items to action_items; the status view surfaces open ones
 generated: 09-26-2026 12:36
-last_updated: 09-27-2026 11:53
+last_updated: 10-01-2026 10:09
 project: Yawn & Pawn
 project_key: NOKEY
 tracking_system: file-system
@@ -139,7 +139,7 @@ development_status:
   6-6-calendar-of-morning-outcomes: backlog
   6-7-day-detail-for-each-morning: backlog
   6-8-weekly-summary-notification-on-sunday-evening: backlog
-  6-9-export-history-as-csv: backlog
+  6-9-export-history-as-csv: dropped  # FR-PRG-6 removed, sprint-change-proposal-2026-10-01
   6-10-epic-6-device-verification-checklist: backlog
   epic-6-retrospective: optional
 

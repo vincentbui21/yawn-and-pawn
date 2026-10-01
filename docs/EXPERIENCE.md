@@ -162,6 +162,8 @@ All strings live in resources (NFR-10). `{price}`, `{nextPrice}`, `{minutes}`, `
 | Ringing notification | "{time} alarm · Tap to return to your alarm" |
 | Progress empty | "Your first morning shows up here." |
 | Home empty | "No alarms yet." · "Add your first alarm" |
+| Home, alarm list failed to load | "Couldn't load your alarms." · "Try again" (sprint-change-proposal-2026-10-01) |
+| Alarm editor, alarm failed to open (snackbar) | "Couldn't open this alarm." (sprint-change-proposal-2026-10-01) |
 | Purchase history empty | "No snoozes paid. Keep it that way." |
 | Recordings empty | "Record a message for your morning self." |
 | Math check, progress | "Problem {n} of {count}" |
@@ -329,7 +331,7 @@ Behavioural rules. Visual specs for every row live in `DESIGN.md > Components` u
 | `settings-row` | Editor, Settings, pickers | Progressive disclosure (owner decision 2026-09-27): title with the current value as a subtitle and a chevron; tap opens the sub-screen that sets it (back arrow returns, the change is kept). A toggle row has a switch instead. Rows unavailable during a session. |
 | `card-group` | Every app screen | Related rows grouped in one glass card with dividers (owner decision 2026-09-27, like the stock Clock apps). Not interactive itself. |
 | `pill-save` | Editor (and later setup screens with a Save) | "Cancel \| Save" in its own bottom area (owner decision 2026-09-28): content scrolls above it, never under it, and the last row is fully visible at the end. Cancel = Back (unsaved changes ask "Discard changes?"). Stays above the keyboard with the focused field visible. Save is disabled while saving. |
-| `header-collapsing` | Home | Continuous and tied to the scroll position, never a snap (owner decision 2026-09-28, Samsung Weather): the title stays pinned and gains its glass chip as content scrolls under it; the hero collapses into the compact "{streak} days on time" chip; alarm cards scroll underneath and fade out as they enter the header zone (no card text readable behind or above the chips); the title shrinks to `title` size so the compact chip stays on its row. Scrolled to the end, the last card is fully above the FAB. Reduced motion: each part switches instantly at the halfway point. The compact chip is not read by TalkBack (the hero card says the same). |
+| `header-collapsing` | Home | Continuous and tied to the scroll position, never a snap (owner decision 2026-09-28, Samsung Weather): the title stays pinned and gains its glass chip as content scrolls under it; the hero collapses into the compact "{streak} days on time" chip; alarm cards scroll underneath and fade out as they enter the header zone (no card text readable behind or above the chips); the title shrinks to `title` size so the compact chip stays on its row. Scrolled to the end, the last card is fully above the nav capsule. Reduced motion: each part switches instantly at the halfway point. The compact chip is not read by TalkBack (the hero card says the same). |
 | `glass-bar` | Bottom pill, nav bar, snooze confirm sheet | Translucent glass over moving content; blurs it on Android 12+, plain translucent below. |
 | `background-gradient` | Every screen | Static; never animates. |
 | `purchase-row` | Purchase history | Read-only. Shows what was charged; stranded purchases read "Not used, refunded automatically by Google". Self-requested refunds are not detectable (PRD §6.3). |
@@ -391,6 +393,8 @@ Behavioural rules. Visual specs for every row live in `DESIGN.md > Components` u
 | Offline | All app screens | Everything works except payment (NFR-3). No banner. |
 | Prices never loaded | Onboarding base fee, Settings base fee | USD tiers with `note-inline` "Approximate. Your local price shows when you're online."; onboarding continues. |
 | Empty | Home | "No alarms yet." + `button-filled` "Add your first alarm". |
+| Storage read failure | Home | "Couldn't load your alarms." + `button-text` "Try again" instead of the list (never the empty state). |
+| Storage read failure | Alarm editor | The editor closes; `snackbar` "Couldn't open this alarm." on Home. |
 | Permission or setting missing | Home, Settings | `banner-warning` "Alarms may not ring. Fix settings". |
 | Missed session | Home | `note-inline` "Your {time} alarm stopped after 30 minutes. Logged as missed." until dismissed. |
 | Fallback 3 times in 7 days | Home | `banner-warning` info variant with "Re-register". |

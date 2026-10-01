@@ -1,6 +1,6 @@
 ---
 title: Yawn & Pawn — Product Requirements Document
-version: 0.2 (draft)
+version: 0.3 (draft)
 status: Draft — review findings applied, awaiting owner confirmation of [ASSUMPTION] items
 owner: Kiet Bui
 date: 2026-09-26
@@ -86,7 +86,7 @@ These terms are used with exactly these meanings throughout this PRD and all dow
 | **Check** | The proof-of-wake task that ends a session for free. **Check type** = Memory Sequence, Math, House Hunt, QR/Barcode or Word Unscramble. |
 | **Wake screens** | The ringing screen, the snooze confirm sheet and the check screens. |
 | **Interaction** | Any tap on a wake screen. Resets the 30-minute no-interaction timer (FR-ALM-9). |
-| **Grace window** | The 15–30 s muted period that starts when the user taps "I'm up" (FR-PWK-9). One per ring. |
+| **Grace window** | The 15–30 s muted period that starts when the user taps "I'm up" (FR-PWK-9). One per ring. Shown to users as **Quiet time** (editor row, sub-screen, 'Vibrate during quiet time', Settings 'Default quiet time'). 'Grace window' remains the internal and spec term. |
 | **Fallback check** | The replacement check offered when the configured check can't physically be done (FR-PWK-11). Never called "backup". |
 | **Direct Boot substitution** | Before the first unlock after a reboot, checks and sounds that need normal storage are replaced by Math and the default built-in sound (FR-ALM-11). |
 | **Default sound fallback** | Playing the default built-in sound whenever the chosen sound or recording can't play (FR-SND-5, NFR-2). |
@@ -212,7 +212,7 @@ IDs are stable so stories can reference them; new IDs are added at the end of ea
 
 **Priority tags** (MoSCoW for the launch build): **[Must]** ships at launch · **[Should]** ships at launch unless the build runs late · **[Could]** first to drop.
 
-**Cut line.** Launch needs every [Must]. If the Ralph build runs past its 4-week budget (§13), cut in this order: (1) all [Could]: FR-PRG-6 CSV export, FR-SND-7 "Mix into alarm", FR-ALM-10 skip, FR-PWK-13 printable QR; (2) House Hunt (FR-PWK-6) — dropped immediately if Spike S3 is marginal; (3) FR-PRG-3 calendar view; (4) FR-PRG-5 weekly summary; (5) FR-SND-6 custom audio file; (6) FR-SND-3/FR-SND-4 motivation recordings. Minimum check set at launch: Math, Word Unscramble, Memory Sequence, QR/Barcode.
+**Cut line.** Launch needs every [Must]. If the Ralph build runs past its 4-week budget (§13), cut in this order: (1) all [Could]: FR-SND-7 "Mix into alarm", FR-ALM-10 skip, FR-PWK-13 printable QR; (2) House Hunt (FR-PWK-6) — dropped immediately if Spike S3 is marginal; (3) FR-PRG-3 calendar view; (4) FR-PRG-5 weekly summary; (5) FR-SND-6 custom audio file; (6) FR-SND-3/FR-SND-4 motivation recordings. Minimum check set at launch: Math, Word Unscramble, Memory Sequence, QR/Barcode.
 
 ### 7.1 Alarms (ALM)
 - **FR-ALM-1** [Must] Create, edit, delete, enable/disable multiple alarms.
@@ -220,7 +220,7 @@ IDs are stable so stories can reference them; new IDs are added at the end of ea
 - **FR-ALM-3** [Must] Alarms fire at the exact scheduled time, including in Doze, silent mode and Do Not Disturb (alarm audio stream). Automated check: `AlarmManager.setAlarmClock` is called with trigger time equal to the scheduled epoch ms (fake scheduler). On-device timing (≤ 2 s, NFR-1) is verified in the epic's device-verification checklist.
 - **FR-ALM-4** [Must] When an alarm rings, a full-screen ringing screen appears over the lock screen (locked or screen off). On an unlocked, in-use phone see FR-SES-4.
 - **FR-ALM-5** [Must] Alarms survive reboot, app update, time change, time zone change and DST.
-- **FR-ALM-6** [Must] Per alarm the user chooses **Gradually increase volume** (on by default): when on, volume ramps from a user-set start level to the set level over ≤ 30 s; when off, the alarm starts at the set level. Always on the alarm stream; ring volume ignores the phone's current media/ringer volume.
+- **FR-ALM-6** [Must] Per alarm the user chooses **Gradually increase volume** (on by default): when on, volume ramps from 20% of the set level to the set level over 30 s (fixed, not user-editable; owner decision 2026-09-27); when off, the alarm starts at the set level. Always on the alarm stream; ring volume ignores the phone's current media/ringer volume.
 - **FR-ALM-7** [Must] Home screen shows the next alarm ("Rings in 7 h 12 min").
 - **FR-ALM-8** [Must] "Test alarm" rings the full flow (sound, checks, grace window) **without any payment**; the snooze button shows the price but is disabled with the label "Test · no charge".
 - **FR-ALM-9** [Must] If a **single ring** continues for 30 minutes with no interaction (any tap on a wake screen), the alarm stops and the session is logged as Missed (prevents endless ringing if the phone is left at home). Each interaction restarts the 30-minute timer; each re-ring starts a new timer; snooze time never counts; the timer pauses during a call (FR-SES-8). Timers use monotonic time (`elapsedRealtime`), not the wall clock (reboot handling: §6.4).
@@ -292,12 +292,13 @@ Within the app, every path leads back to the ringing alarm, but the **phone itse
   - Current and best **zero-snooze streak**.
   - On-time rate (7 / 30 days).
   - Average minutes from first ring to up.
-  - Snoozes per week (chart).
+  - Snoozes over the last 30 days (a count; each snoozed morning is marked on the 30-morning ring).
   - **Money paid** this week / month / all-time — framed as a cost to reduce. Totals are computed **per currency** from stored micros (one line per currency if the user has paid in more than one); zero is shown as "Nothing paid", never as a hard-coded "$0".
+  - Layout and motion follow EXPERIENCE.md (ring of the last 30 mornings, stat tiles, streak card, money and insight; no period tabs).
 - **FR-PRG-3** [Should] Calendar view: each day coloured by outcome.
 - **FR-PRG-4** [Must] Purchase history with date, alarm, snooze number and currency-formatted price. Stranded purchases show "Not used, refunded automatically by Google" (or the reused snooze once FR-RNG-10 applies).
 - **FR-PRG-5** [Should] Weekly summary notification (optional, default on; Sunday 19:00 local time [ASSUMPTION — A6]): "3 on-time mornings, nothing paid. Nice."
-- **FR-PRG-6** [Could] Export history as CSV.
+- ~~**FR-PRG-6** [Could] Export history as CSV.~~ Removed (owner decision 2026-10-01).
 
 ### 7.6 Messaging: "we don't want you to pay" (MSG)
 - **FR-MSG-1** [Must] Onboarding explains the mission in one screen: "This app makes money only when you snooze. We hope you never pay us."
@@ -318,11 +319,13 @@ Within the app, every path leads back to the ringing alarm, but the **phone itse
   - Microphone (only when recording).
 - **FR-ONB-3** [Must] The checklist is available later in Settings and flags anything that becomes revoked ("Alarm may not ring: battery optimization turned back on").
 - **FR-ONB-4** [Must] The onboarding test-alarm step asks the user to run a test alarm with the screen locked; it can be skipped only via an explicit "Skip for now", and the checklist item stays unticked until a locked-screen test has completed.
-- **FR-ONB-5** [Must] **Alarm behaviour disclosure and consent:** before the first alarm is saved, one screen states plainly that the alarm keeps ringing until the check is done or a snooze is paid, that the phone stays fully usable (calls, other apps, emergency dialer), and lists the accepted escapes (force-stop, uninstall, powering off, 30 minutes with no interaction). The user must tap "I understand" to continue. Also shown in Settings → "How payments & refunds work".
+- **FR-ONB-5** [Must] **Alarm behaviour disclosure and consent:** before the first alarm is saved, one screen states plainly that the alarm keeps ringing until the check is done or a snooze is paid, that the phone stays fully usable (calls, other apps, emergency dialer), and lists the accepted escapes (force-stop, uninstall, powering off, 30 minutes with no interaction). The user must tap "I understand" to continue. Also shown under You → "How payments & refunds work".
 - **FR-ONB-6** [Must] Ask once whether to share anonymous usage statistics (NFR-15); default **off**; changeable in Settings (FR-SET-6).
 
 ### 7.8 Settings (SET)
-- **FR-SET-1** [Must] Base fee (with commitment lock rules), max snoozes per session, default grace window, default snooze length.
+FR-SET-3, FR-SET-4 and FR-SET-5, together with Purchase history (FR-PRG-4), are reached from the **You** tab, not Settings. Settings keeps app behaviour only: Snooze, Wake, Appearance, Notifications, Usage stats and the Reliability checklist. There is still no account or sign-in (NFR-4).
+
+- **FR-SET-1** [Must] Base fee (with commitment lock rules), max snoozes per session, default grace window (Quiet time), default snooze length.
 - **FR-SET-2** [Must] Reliability checklist (FR-ONB-3).
 - **FR-SET-3** [Must] Privacy policy, terms, support contact, "How payments & refunds work" (including the alarm behaviour disclosure, FR-ONB-5).
 - **FR-SET-4** [Must] Delete all data.
@@ -331,7 +334,7 @@ Within the app, every path leads back to the ringing alarm, but the **phone itse
 
 ## 8. Non-functional requirements
 
-- **NFR-1 Reliability:** alarm starts within 2 s of the scheduled time on the device test matrix (the owner's Samsung Galaxy A57 (One UI) plus Gradle Managed Device emulators (API 26, 31, 34, 36, 37); other makers (Xiaomi, Pixel hardware, budget phones) via optional Firebase Test Lab runs), with screen off, locked, Doze, DND and battery saver. Verified by: Spike S2, E2 device-verification checklist.
+- **NFR-1 Reliability:** alarm starts within 2 s of the scheduled time on the device test matrix (the owner's Oppo A96 (ColorOS, Android 13) plus Gradle Managed Device emulators (API 26, 31, 34, 36, 37); other makers (Xiaomi, Pixel hardware, budget phones) via optional Firebase Test Lab runs), with screen off, locked, Doze, DND and battery saver. Verified by: Spike S2, E2 device-verification checklist.
 - **NFR-2 Never silent:** any failure (sound file, audio focus, crash in the checks) triggers the default sound fallback (FR-SND-5); a crash or kill in the ringing flow is recovered by FR-SES-1/2.
 - **NFR-3 Offline:** everything except payment works offline. Snooze is unavailable offline and says so.
 - **NFR-4 Privacy:** no account and no backend; data, photos and recordings stay on device except as listed in Principle 5; camera images for House Hunt/QR processed on-device and never uploaded.
@@ -510,6 +513,10 @@ Deferred review findings (each with a revisit condition):
 - Full-screen intent & FGS requirements: https://support.google.com/googleplay/android-developer/answer/13392821
 - Target API level (API 36 from Aug 31, 2026): https://support.google.com/googleplay/android-developer/answer/11926878
 - Compose Multiplatform iOS stable: https://blog.jetbrains.com/kotlin/2025/05/compose-multiplatform-1-8-0-released-compose-multiplatform-for-ios-is-stable-and-production-ready/
+
+## Changes in v0.3
+
+- **Design preview decisions (2026-10-01, sprint-change-proposal-2026-10-01):** FR-ALM-6 ramp starts at a fixed 20% of the set level; FR-PRG-2 shows snoozes over the last 30 days instead of a weekly chart, with layout per EXPERIENCE.md; FR-PRG-6 CSV export removed (and taken off the cut line); Glossary notes that the grace window is shown to users as "Quiet time"; §7.8 note that FR-SET-3, FR-SET-4, FR-SET-5 and Purchase history live on the You tab; FR-SET-1 and FR-ONB-5 wording; NFR-1 device matrix is the owner's Oppo A96 (ColorOS, Android 13).
 
 ## Changes in v0.2
 

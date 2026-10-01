@@ -17,7 +17,7 @@ This document provides the complete epic and story breakdown for Yawn & Pawn, de
 
 ### Functional Requirements
 
-PRD IDs are kept exactly as in PRD v0.2 §7 (never renumbered). Priority: [Must] ships at launch · [Should] ships unless the build runs late · [Could] first to drop. Cut order if late (PRD §7): (1) all [Could]; (2) House Hunt FR-PWK-6; (3) FR-PRG-3; (4) FR-PRG-5; (5) FR-SND-6; (6) FR-SND-3/FR-SND-4. Minimum check set at launch: Math, Word Unscramble, Memory Sequence, QR/Barcode.
+PRD IDs are kept exactly as in PRD v0.3 §7 (never renumbered). Priority: [Must] ships at launch · [Should] ships unless the build runs late · [Could] first to drop. Cut order if late (PRD §7): (1) all [Could]; (2) House Hunt FR-PWK-6; (3) FR-PRG-3; (4) FR-PRG-5; (5) FR-SND-6; (6) FR-SND-3/FR-SND-4. Minimum check set at launch: Math, Word Unscramble, Memory Sequence, QR/Barcode.
 
 #### 7.1 Alarms (ALM)
 
@@ -26,7 +26,7 @@ PRD IDs are kept exactly as in PRD v0.2 §7 (never renumbered). Priority: [Must]
 - FR-ALM-3 [Must]: Alarms fire at the exact scheduled time in Doze, silent mode and Do Not Disturb on the alarm audio stream; an automated test asserts `AlarmManager.setAlarmClock` is called with trigger time equal to the scheduled epoch ms (fake scheduler), and on-device timing (≤ 2 s, NFR-1) is covered by the device-verification checklist.
 - FR-ALM-4 [Must]: When an alarm rings, a full-screen ringing screen appears over the lock screen whether the phone is locked or the screen is off (unlocked in-use phone behaviour: FR-SES-4).
 - FR-ALM-5 [Must]: Scheduled alarms survive reboot, app update, time change, time-zone change and DST transitions.
-- FR-ALM-6 [Must]: Per alarm, a "Gradually increase volume" switch (default on): on = ramp from a user-set start level to the set level over ≤ 30 s; off = start at the set level. Always on the alarm stream, independent of the phone's media/ringer volume.
+- FR-ALM-6 [Must]: Per alarm, a "Gradually increase volume" switch (default on): on = ramp from 20% of the set level to the set level over 30 s (fixed, not user-editable; owner decision 2026-09-27); off = start at the set level. Always on the alarm stream, independent of the phone's media/ringer volume.
 - FR-ALM-7 [Must]: Home shows the next alarm as a relative countdown (e.g., "Rings in 7 h 12 min").
 - FR-ALM-8 [Must]: "Test alarm" runs the full flow (sound, checks, grace window) with no payment possible; the Snooze button shows the price but is disabled with the label "Test · no charge".
 - FR-ALM-9 [Must]: If a single ring continues 30 minutes with no interaction (any tap on a wake screen), the alarm stops and the session is logged Missed; each interaction and each re-ring restarts the 30-minute timer, snooze time never counts, the timer pauses during a call, and it uses monotonic time (`elapsedRealtime`).
@@ -91,11 +91,11 @@ Accepted escapes (never prevented): force-stop, uninstall, the 30-minute no-inte
 #### 7.5 Wake-up progress (PRG)
 
 - FR-PRG-1 [Must]: Every session is logged with scheduled time, first ring, end time, snoozes, amount paid (priceAmountMicros + currency per snooze), check types, time to complete, fallback used, Direct Boot flag and outcome (On time / Snoozed / Missed / Skipped / Test; Skipped and Test excluded from rates and streaks).
-- FR-PRG-2 [Must]: The Progress screen shows current and best zero-snooze streak, on-time rate (7/30 days), average minutes from first ring to up, snoozes per week chart, and money paid this week/month/all-time computed per currency from micros (one line per currency; zero shown as "Nothing paid", never "$0").
+- FR-PRG-2 [Must]: The Progress screen shows current and best zero-snooze streak, on-time rate (7/30 days), average minutes from first ring to up, snoozes over the last 30 days (a count; each snoozed morning is marked on the 30-morning ring), and money paid this week/month/all-time computed per currency from micros (one line per currency; zero shown as "Nothing paid", never "$0"); layout and motion follow EXPERIENCE.md (ring of the last 30 mornings, stat tiles, streak card, money and insight; no period tabs).
 - FR-PRG-3 [Should]: A calendar view colours each day by outcome.
 - FR-PRG-4 [Must]: Purchase history lists date, alarm, snooze number and currency-formatted price; stranded purchases show "Not used, refunded automatically by Google" (or the reused snooze after FR-RNG-10).
 - FR-PRG-5 [Should]: An optional weekly summary notification (default on, Sunday 19:00 local [A6]) summarises on-time mornings and amount paid (e.g., "3 on-time mornings, nothing paid. Nice.").
-- FR-PRG-6 [Could]: The user can export history as CSV.
+- ~~FR-PRG-6 [Could]: The user can export history as CSV.~~ Removed (owner decision 2026-10-01, PRD v0.3).
 
 #### 7.6 Messaging: "we don't want you to pay" (MSG)
 
@@ -110,12 +110,14 @@ Accepted escapes (never prevented): force-stop, uninstall, the 30-minute no-inte
 - FR-ONB-2 [Must]: A permissions & settings checklist shows each item with a reason and status tick: notifications; full-screen alarm (verify, deep-link); exact alarms (API 31–32 only); DND allows alarms (via interruption filter/notification policy, warn if blocked); battery optimization exemption (deep-link); OEM auto-start guidance (Xiaomi, Samsung, Huawei, Oppo/Realme, Vivo, OnePlus); camera (only if House Hunt or QR selected); microphone (only when recording).
 - FR-ONB-3 [Must]: The checklist is available later in Settings and flags anything revoked (e.g., "Alarm may not ring: battery optimization turned back on").
 - FR-ONB-4 [Must]: The onboarding test-alarm step asks for a test with the screen locked, skippable only via explicit "Skip for now"; the checklist item stays unticked until a locked-screen test completes.
-- FR-ONB-5 [Must]: Before the first alarm is saved, one screen discloses that the alarm rings until the check is done or a snooze is paid, that the phone stays fully usable, and lists accepted escapes; the user must tap "I understand"; also shown in Settings → "How payments & refunds work".
+- FR-ONB-5 [Must]: Before the first alarm is saved, one screen discloses that the alarm rings until the check is done or a snooze is paid, that the phone stays fully usable, and lists accepted escapes; the user must tap "I understand"; also shown under You → "How payments & refunds work".
 - FR-ONB-6 [Must]: Onboarding asks once whether to share anonymous usage statistics, default off, changeable in Settings.
 
 #### 7.8 Settings (SET)
 
-- FR-SET-1 [Must]: Settings for base fee ($1–$10 in $1 steps, commitment lock rules), max snoozes per session (default 5, min 1), default grace window and default snooze length.
+FR-SET-3, FR-SET-4 and FR-SET-5, together with Purchase history (FR-PRG-4), are reached from the **You** tab, not Settings. Settings keeps app behaviour only: Snooze, Wake, Appearance, Notifications, Usage stats and the Reliability checklist. There is still no account or sign-in (NFR-4).
+
+- FR-SET-1 [Must]: Settings for base fee ($1–$10 in $1 steps, commitment lock rules), max snoozes per session (default 5, min 1), default grace window (Quiet time) and default snooze length.
 - FR-SET-2 [Must]: Settings includes the reliability checklist (FR-ONB-3).
 - FR-SET-3 [Must]: Settings includes privacy policy, terms, support contact and "How payments & refunds work" (including the FR-ONB-5 disclosure).
 - FR-SET-4 [Must]: Settings includes "Delete all data".
@@ -132,7 +134,7 @@ Accepted escapes (never prevented): force-stop, uninstall, the 30-minute no-inte
 
 ### NonFunctional Requirements
 
-- NFR-1 Reliability: Alarm starts within 2 s of scheduled time on the device matrix (the owner's Samsung Galaxy A57 (One UI) plus Gradle Managed Device emulators (API 26, 31, 34, 36, 37); other makers (Xiaomi, Pixel hardware, budget phones) via optional Firebase Test Lab runs) with screen off, locked, Doze, DND and battery saver. Verified by Spike S2 and the alarm-core device-verification checklist.
+- NFR-1 Reliability: Alarm starts within 2 s of scheduled time on the device matrix (the owner's Oppo A96 (ColorOS, Android 13) plus Gradle Managed Device emulators (API 26, 31, 34, 36, 37); other makers (Xiaomi, Pixel hardware, budget phones) via optional Firebase Test Lab runs) with screen off, locked, Doze, DND and battery saver. Verified by Spike S2 and the alarm-core device-verification checklist.
 - NFR-2 Never silent: Any failure (sound file, audio focus, crash in checks) triggers the default sound fallback (FR-SND-5); a crash or kill in the ringing flow is recovered by FR-SES-1/2.
 - NFR-3 Offline: Everything except payment works offline; Snooze is unavailable offline and says so.
 - NFR-4 Privacy: No account and no backend; data, photos and recordings stay on device except Auto Backup (media excluded), Crashlytics and opt-in Analytics; House Hunt/QR camera images processed on-device and never uploaded.
@@ -234,21 +236,23 @@ Accepted escapes (never prevented): force-stop, uninstall, the 30-minute no-inte
 
 #### Human-verify protocol
 
-- Every epic ends with one device-verification checklist story tagged `human-verify`, collecting behaviour that cannot be automated (lock screen, Doze, real billing, camera, OEM behaviour). The owner runs it on the device matrix (the owner's Samsung Galaxy A57 (One UI) plus Gradle Managed Device emulators (API 26, 31, 34, 36, 37); other makers (Xiaomi, Pixel hardware, budget phones) via optional Firebase Test Lab runs) and records pass/fail per item with device, Android version and date in the story file. Automation/Ralph never marks a `human-verify` story done; each failed item becomes a new bug story.
+- Every epic ends with one device-verification checklist story tagged `human-verify`, collecting behaviour that cannot be automated (lock screen, Doze, real billing, camera, OEM behaviour). The owner runs it on the device matrix (the owner's Oppo A96 (ColorOS, Android 13) plus Gradle Managed Device emulators (API 26, 31, 34, 36, 37); other makers (Xiaomi, Pixel hardware, budget phones) via optional Firebase Test Lab runs) and records pass/fail per item with device, Android version and date in the story file. Automation/Ralph never marks a `human-verify` story done; each failed item becomes a new bug story.
 
 ### UX Design Requirements
+
+**Design baseline (sprint-change-proposal-2026-10-01).** From 2026-10-01 the approved design is DESIGN.md / EXPERIENCE.md v0.5 and the design-preview composables in `:composeApp` (`ui.*`). A UI story wires those stateless screens to its ViewModel and real data. It does not redesign them. Where a UX-DR below disagrees with the v0.5 spines, the spines win. A layout change needs the owner (memory: UI review before build).
 
 #### Tokens and theme
 
 - UX-DR1: `tools/tokens` generates `PpsTokens.kt` from DESIGN.md frontmatter with all colour tokens for three sets: Light (no suffix), Dark (`-dark`), Sunrise (`-sunrise`, plus `sunrise-gradient-top`), and typography, rounded and spacing tokens; generated file committed and CI fails on diff (AD-10).
 - UX-DR2: `PpsTheme` wraps one Material 3 `MaterialTheme` with three token sets; Material You dynamic colour is off; app screens follow system light/dark with a Settings override System / Light / Dark; Dark is the primary design target; all wake screens (ringing, snooze confirm, check, fallback check picker, success, snoozed) always use Sunrise; Light, Dark and Sunrise are designed and screenshot-tested together.
 - UX-DR3: Typography: bundle Geist (OFL) with system sans fallback; implement the 8-style ramp exactly: `clock-xl` 88/92 w300, `display` 48/52 w500, `headline` 28/34 w600, `title` 20/26 w600, `button-wake` 20/24 w500 (wake action labels only), `body` 16/24 w400, `label` 14/20 w500, `caption` 12/16 w400; tabular figures (`tnum`) for clocks, countdowns, prices, stats and list times (fallback Geist Mono for `clock-xl` if tnum missing); sentence case everywhere except day chips (M T W T F S S).
-- UX-DR4: Shapes locked to `sm` 8 dp (chips, inputs, letter tiles, snackbars, thumbnails), `md` 16 dp (cards, list items, check tiles, number keys, viewfinder), `lg` 28 dp (sheets, dialogs), `full` (primary/wake buttons, FAB, shutter, segmented control, badges); no other radii; detekt rejects raw radii, raw `Color(0x…)` and raw `sp` outside the theme package.
+- UX-DR4: Shapes locked to `sm` 8 dp (chips, inputs, letter tiles, snackbars, thumbnails), `md` 16 dp (cards, list items, check tiles, number keys, viewfinder), `lg` 28 dp (sheets, dialogs), `full` (primary/wake buttons, the nav capsule and its "+", shutter, segmented control, badges); no other radii; detekt rejects raw radii, raw `Color(0x…)` and raw `sp` outside the theme package.
 - UX-DR5: Spacing on a 4 dp base (`1`–`8` = 4–32 dp), screen margin 20 dp, section gap 24 dp, card padding 16 dp; touch targets `target-min` 48 dp everywhere, `target-wake` 64 dp for every wake action, `target-wake-hero` 72 dp for "I'm up" and the shutter; single-column layouts, one main job per screen.
-- UX-DR6: Elevation flat; surfaces separate by tone (bg → surface → surface-variant); only bottom sheets and dialogs get tonal M3 elevation levels 1–3; no glows or decorative shadows; no pure `#000000`/`#FFFFFF` backgrounds.
+- UX-DR6: Every screen draws the theme gradient (`PpsBackground`); cards are `glass`; bars and sheets over moving content are `glass-strong` with a hairline `glass-edge`, and are blurred only on API 31+; no glows or decorative shadows; no pure `#000000`/`#FFFFFF` backgrounds.
 - UX-DR7: Colour usage rules enforced: one accent (Sunrise orange) for primary actions, selection and countdown ring; accent-coloured text on light backgrounds uses `accent-text`; prices always in `text` colour (never accent, green or red); `success` means on-time only and never money; `error` only for real errors; disabled uses the `disabled-container`/`disabled-content` token pair, not opacity; inverse tokens only for snackbars; accent never placed on `surface-variant-sunrise` (2.89:1) or the sunrise gradient (2.73:1).
 - UX-DR8: The DESIGN.md verified contrast table is the gate: every colour pair used ships with a recorded WCAG ratio (text ≥ 4.5, graphics ≥ 3.0); any new pair is added to the table before it ships.
-- UX-DR9: Optional sunrise gradient (`sunrise-gradient-top` → `bg-sunrise`, solid-to-solid vertical) only on the ringing screen, only in the top 40% (behind label, clock, date); the thumb zone is always flat `bg-sunrise`.
+- UX-DR9: The ringing screen follows DESIGN.md v0.5 as built in the preview's `ui/wake` Ringing composable (Sunrise gradient over the top 40%, flat `bg-sunrise` thumb zone); accent never sits on the gradient.
 - UX-DR10: "Bright wake screen" setting (default on) raises screen brightness to maximum on wake screens, restores it on "Done", respects the system Extra dim setting, and is explained in onboarding ("Your alarm screen turns bright to help you wake. Change it in Settings."); no blue-light health claims.
 - UX-DR11: Icons are Material Symbols Rounded, weight 400, fill 0 (fill 1 for selected nav item and outcome markers).
 
@@ -275,9 +279,9 @@ Accepted escapes (never prevented): force-stop, uninstall, the 30-minute no-inte
 - UX-DR27: `button-text`: tertiary actions ("Test alarm", "Try it", "Fix", links), `accent-text` label, 48 dp target.
 - UX-DR28: `text-field`: Material outlined field, `rounded.sm`, `outline` border, `error` border and supporting text on error; Math answer field uses `display` digits and is read-only (filled only from the number pad); labels use the system keyboard.
 - UX-DR29: `check-type-card`: `surface` card, `rounded.md`, icon + name (`title`) + one line (`body`, `text-secondary`) + "Try it" `button-text`; selected = 2 dp accent border plus check icon; used in onboarding, Check picker and Fallback check picker (Sunrise tokens there); tap toggles selection (picker) or starts that check (fallback picker); camera checks show "Needs the camera. If it can't be used, you'll get a fallback check."; with TalkBack, Memory Sequence shows "Uses numbered tiles with TalkBack."
-- UX-DR30: `card-hero` (Home top): streak number in `display`, `accent-text` (light) / `accent-dark` (dark), "days on time" in `body`, money-paid-this-week line in `text-secondary` (currency-formatted per currency, "Nothing paid this week" when zero, per FR-PRG-2/FR-MSG-2); not tappable; streak number never animates on Home.
-- UX-DR31: `card-alarm`: `surface`, `rounded.md`, time in `title`, repeat days and label in `caption`, 20 dp check icons in `text-secondary`, `switch` on the right; tap → editor; long-press → menu with Duplicate and Delete (also in editor overflow for TalkBack); turning off within 8 h opens `dialog-confirm`.
-- UX-DR32: `fab`: 56 dp, `rounded.full`, accent fill, on-accent "+", bottom-right 20 dp from edges; opens editor with defaults.
+- UX-DR30: `card-hero` sits inside the collapsing Home header: "Yawn & Pawn" is pinned top-left and gets a glass chip once content scrolls under it; the hero collapses into a compact pinned row as the list scrolls, tied to scroll position; reduced motion makes it an instant switch. The hero shows the streak number in `display`, `accent-text` (light) / `accent-dark` (dark), "days on time" in `body`, and the money-paid-this-week line in `text-secondary` (currency-formatted per currency, "Nothing paid this week" when zero, per FR-PRG-2/FR-MSG-2); not tappable; the streak number never counts up on Home.
+- UX-DR31: `card-alarm`: `glass`, `rounded.md`, time in `title`, repeat days and label in `caption` (repeat summaries include "Every day", "Weekdays" (Mon–Fri), "Weekends" (Sat–Sun), "Once" and short day names), 20 dp check icons in `text-secondary`, `switch` on the right; tap → editor; long-press → menu with Duplicate and Delete (also in editor overflow for TalkBack); turning off within 8 h opens `dialog-confirm`.
+- UX-DR32: ~~`fab`~~ Removed (owner decision, sprint-change-proposal-2026-10-01): the raised accent "+" in the centre of the nav capsule ("Add alarm", 56 dp, UX-DR44) creates an alarm from any tab, opening the editor with defaults.
 - UX-DR33: `banner-warning`: `surface-variant` fill, `rounded.md`, leading `error` icon in `error`, message in `body`, `button-text` "Fix"; shown on Home and Settings when any reliability item fails ("Alarms may not ring. Fix settings"); not dismissible; clears itself when checklist is all OK (re-evaluated on every app foreground); info variant (info icon in `text-secondary`, no error colour, dismissible) for the fallback re-register prompt with "Re-register".
 - UX-DR34: `panel-session-in-progress`: replaces all Home content during a session; `surface` card, "Alarm in progress" in `headline`, one `button-filled` "Back to alarm" that opens the wake screen.
 - UX-DR35: `note-inline`: leading `info` icon + `caption` in `text-secondary` (Sunrise tokens on wake screens); read-only; used for commitment-lock notes, approximate prices, Direct Boot notice, call pause, one-time alarm "Rings tomorrow at {time}.", missed-session note.
@@ -285,16 +289,16 @@ Accepted escapes (never prevented): force-stop, uninstall, the 30-minute no-inte
 - UX-DR37: `chip-check`: `rounded.sm`, `surface-variant` fill, `outline` border, check icon + name + difficulty in `label`; tap → Check setup.
 - UX-DR38: `segmented-control`: M3 segmented button, `rounded.full` ends, selected segment accent fill with check icon; single-select, always one selected; used for difficulty, check mode (Random/All) and theme.
 - UX-DR39: `stepper`: value in `display` (tnum for prices) between two 48 dp round −/+ buttons; single steps, long-press repeats; lowering base fee under lock shows the lock note.
-- UX-DR40: `slider`: M3 slider, accent active track, `outline` inactive, value label above thumb; value announced on change; steps of 1 s or 5%; used for grace window (15–30 s, default 20), volume, ramp start level.
+- UX-DR40: `slider`: M3 slider, accent active track, `outline` inactive, value label above thumb; value announced on change; steps of 1 s or 5%; used only for Quiet time (the grace window, 15–30 s, default 20) and volume; there is no control for where the ramp starts (it always starts at 20% of the set volume, FR-ALM-6).
 - UX-DR41: `switch`: M3 switch, accent checked track, `outline` unchecked border; immediate effect except inside the editor (needs Save).
-- UX-DR42: `time-picker`: M3 time input, keyboard-first (TalkBack), dial optional, digits in `display`.
-- UX-DR43: `top-app-bar`: flat on `bg`, title in `headline`, 48 dp back arrow; back with unsaved editor changes prompts "Discard changes?".
-- UX-DR44: `nav-bar`: M3 navigation bar with 3 items (Alarms, Progress, Settings), Material Symbols Rounded, selected icon fill 1 in `accent-text`, labels always shown; hidden during the session lock.
+- UX-DR42: `time-picker`: scrolling wheels (hour, minute, AM/PM on 12 h phones) that snap to each value with a haptic tick and a quiet bundled tick sound per value; digits in `display` with tabular figures; no keyboard entry ever; TalkBack treats each wheel as adjustable and reads it as "Hour, 6".
+- UX-DR43: `top-app-bar`: sub-screens have a 48 dp back arrow and a pinned title in `headline`; screens that save use the `SaveCancelPill` in its own bottom area, above the keyboard and never over content; back with unsaved editor changes prompts "Discard changes?".
+- UX-DR44: `nav-bar`: a floating `glass-strong` capsule with five slots: Alarms · Progress · (+) · Settings · You; Material Symbols Rounded; the selected tab is in accent with a filled icon; the centre "+" is a raised 56 dp accent button ("Add alarm"); tab changes animate (instant with reduced motion); hidden during the session lock and on sub-screens.
 - UX-DR45: `progress-dots` (onboarding): 8 dp dots, 8 dp apart; active accent and 16 dp wide pill, inactive `outline`; back allowed; not tappable.
-- UX-DR46: `stat-tile` (Progress): `surface`, `rounded.md`, number in `display` (`text`), label in `caption`, two per row; shows current/best streak, on-time rate (7 d / 30 d), average minutes to up; not tappable.
-- UX-DR47: `bar-chart`: snoozes per week for the last 8 weeks, bars in `snoozed` with `rounded.sm` top corners, `outline` baseline, `text-secondary` labels, caption "Lower is better."; tap a bar for the week's number; TalkBack reads each week as a value.
-- UX-DR48: `outcome-marker`: 20 dp glyphs: on time = filled `check_circle` (`success`), snoozed = filled `schedule` (`snoozed`), missed = filled `cancel` (`missed`), skipped/test = hollow `radio_button_unchecked` (`outline`), fallback used = `alt_route` badge (`text-secondary`); same glyphs in calendar, legend, Day detail and history; always paired with a label (visible or spoken).
-- UX-DR49: `calendar-day`: 48 dp cell, date in `caption`, `outcome-marker` below, today with 1 dp accent ring; tap → Day detail; TalkBack "Tuesday 14, on time" (+ "fallback check used"); Skipped rendering conditional on Q9.
+- UX-DR46: `stat-tile` (Progress): `glass`, `rounded.md`, number in `display` (`text`), label in `caption`; three small tiles in one row ("on time", "to get up", "snoozes"), 2 + 1 at large font; not tappable; the streaks move to the 30-morning ring and `card-streak`.
+- UX-DR47: ~~`bar-chart`~~ Removed (owner decision, sprint-change-proposal-2026-10-01): there is no snoozes chart; each snoozed morning shows on the 30-morning ring and the count on the "snoozes" `stat-tile` (UX-DR46).
+- UX-DR48: `outcome-marker`: shape plus colour, so it reads without a legend: on time = filled dot (`success`), snoozed = dot with a small clock (`snoozed`), missed = hollow ring (`missed`), skipped/test = small neutral dot (`outline`), today = outlined accent pill; same shapes in the progress ring, calendar and Day detail; fallback used = `alt_route` badge (`text-secondary`) in Day detail; a tap on a day shows a label chip; TalkBack reads "{date}, {outcome}".
+- UX-DR49: `calendar-day`: 48 dp cell, date in `caption`, `outcome-marker` below, today in an outlined accent pill; first tap shows the label chip, second tap (or the chip) opens Day detail (owner decision 2026-10-01); TalkBack "Tuesday 14, on time" (+ "fallback check used"); Skipped rendering conditional on Q9.
 - UX-DR50: `checklist-row`: 64 dp, leading icon, title (`body`), reason (`caption`), trailing `check_circle` in `success` with "OK" or `button-outlined` "Fix"; Fix deep-links to the system setting and status is re-checked on return; camera and microphone rows appear only when needed.
 - UX-DR51: `settings-row`: 56 dp, label left, value (`text-secondary`) or chevron right; tap → detail or toggle; unavailable during a session.
 - UX-DR52: `purchase-row`: 64 dp, date and alarm (`body`), "Snooze {n}" (`caption`), localized price right-aligned in `text` (never accent, green or red); read-only; stranded rows read "Not used, refunded automatically by Google".
@@ -307,8 +311,8 @@ Accepted escapes (never prevented): force-stop, uninstall, the 30-minute no-inte
 
 #### Information architecture and screens
 
-- UX-DR59: Bottom navigation with three items (Alarms/Home, Progress, Settings); all other surfaces are pushed screens or bottom sheets; wake screens are one separate full-screen activity outside navigation shown over the lock screen.
-- UX-DR60: Surfaces to build (per EXPERIENCE.md IA table): Onboarding (8 steps), Alarms (Home), Alarm editor (time, repeat, label, checks + mode, grace window + vibrate in grace, snooze length with fee ladder, sound with volume/ramp/vibration, motivation; bottom bar "Test alarm" + "Save"), Check picker, Check setup (difficulty, count, "Try it"), House Hunt registration (1–3 reference photos, test match), QR registration (scan or printable QR), Sound picker, Recordings, Progress, Day detail, Purchase history, Export CSV, Settings (Snooze, Wake, Appearance, Notifications, Usage stats, Reliability checklist, Payments & refunds, Privacy, Terms, Support, Delete all data), Reliability checklist, Payments & refunds, Ringing, Snooze confirm, Check, Fallback check picker, Success, Snoozed.
+- UX-DR59: Bottom navigation is the floating glass capsule (UX-DR44) with five slots: Alarms/Home · Progress · (+) · Settings · You; the selected tab is in accent with a filled icon; it animates (instant with reduced motion) and is hidden during the session lock and on sub-screens; all other surfaces are pushed screens, editor sub-screens or bottom sheets; wake screens are one separate full-screen activity outside navigation shown over the lock screen.
+- UX-DR60: Surfaces to build (per EXPERIENCE.md IA table): Onboarding (8 steps), Alarms (Home), Alarm editor (grouped cards: time wheel, repeat, name, vibration, and rows that open the sub-screens Sound (volume, ramp switch, sound list), Snooze (length with fee ladder), Wake-up check (checks + mode), Quiet time (slider + "Vibrate during quiet time") and Motivation; "Test alarm" as a text button under the cards; Cancel and Save in the `SaveCancelPill`), Check picker, Check setup (difficulty, count, "Try it"), House Hunt registration (1–3 reference photos, test match), QR registration (scan or printable QR), Sound picker (the editor's Sound sub-screen), Recordings, Progress, Day detail, Purchase history, Settings (Snooze, Wake, Appearance, Notifications, Usage stats, Reliability checklist), You (Purchase history, Payments & refunds, Privacy, Delete all data, Support, Terms, About), Reliability checklist, Payments & refunds, Ringing, Snooze confirm, Check, Fallback check picker, Success, Snoozed.
 - UX-DR61: Session lock UI: while a session is active (including snoozed), the app shows only `panel-session-in-progress`; nav bar hidden; editing, deleting, settings and Delete all data unreachable.
 - UX-DR62: Design-originated scope requiring PRD acknowledgement is implemented as specified: theme override (System/Light/Dark), "Bright wake screen" setting, selectable accessible fallback check picker, unlock step copy.
 
@@ -325,7 +329,7 @@ Accepted escapes (never prevented): force-stop, uninstall, the 30-minute no-inte
 #### Interaction primitives
 
 - UX-DR70: Haptics: light tick on each digit or tile tap; success pattern on completion; strong buzz when the alarm returns after grace; short tick every 5 s during grace; error haptic on wrong answer.
-- UX-DR71: Motion specs: standard transition 250 ms Material emphasized easing; countdown ring linear exact to the second; memory tiles 350 ms highlight + 150 ms gap; zero-snooze success one 600 ms scale + fade of the streak number plus a short haptic, nothing else; wrong answer 200 ms horizontal shake + error haptic.
+- UX-DR71: Motion specs: standard transition 250 ms Material emphasized easing; per `pps-design` rule 11, screen and sub-screen slides, expand and collapse, chip and switch states, cards animating in and out, the collapsing header, the "I'm up" pulse, the wheel tick, the Progress entry and the Day detail timeline drawing in; countdown ring linear exact to the second; memory tiles 350 ms highlight + 150 ms gap; on-time Success counts the streak up from n−1 with a bounce, about 1.5 s of confetti and one success haptic; after-snooze Success has no animation; wrong answer 200 ms horizontal shake + error haptic.
 - UX-DR72: Reduced motion: when animator duration scale is 0, every motion becomes an instant state change; the countdown still counts as numbers; skeleton has no shimmer.
 - UX-DR73: Anti-double-tap guard: the snooze confirm sheet ignores all input for 500 ms after opening and after every state change, including with animations off; "I'll get up" sits under the thumb position of the Snooze tap.
 - UX-DR74: Back behaviour: on wake screens Back does nothing (Home and Recents still work); in the confirm sheet Back = "I'll get up" path (closes, no charge).
@@ -337,27 +341,27 @@ Accepted escapes (never prevented): force-stop, uninstall, the 30-minute no-inte
 
 - UX-DR78: Wake screens never show a loading state and render within 1 s from cached data; implement each wake state: first ring (label, clock, date, I'm up, Snooze · price, volume ramp); ringing after snooze (session line "Snooze {n} of {max} · {paid} paid this morning", next price); snooze unavailable (disabled with reason); test alarm ("Test · no charge", no payment, logged Test only); before first unlock (lock icon label, Math + default sound, `note-inline` "Your phone restarted, so today's check is Math."); locked after first unlock (unlocking state); already paid; grace running (ring counting, muted, vibration only if enabled); grace expired ("Alarm's back on", full volume, progress kept); snooze tapped during grace (mute only until countdown ends); grace expires while sheet open (sheet stays, alarm returns behind it); wrong answer (shake, haptic, cleared, error text in `error-sunrise`); camera denied/failed (fallback link immediately); fallback check (alarm rings, no new grace); phone call (paused, `note-inline` "Paused for your call. Rings again when it ends."); restored after crash/kill/reboot (same step, counts kept, no "restored" message); overlapping alarm (merged silently, Day detail note "{time} alarm merged into this session"); missed (alarm stops, Home note next open); success zero-snooze (streak animation once, success haptic, motivation, brightness restored on Done); success after snooze ("You're up. That's what counts." + "{paid} paid this morning" in `text-secondary-sunrise`, no animation); snoozed ("Snoozed. Next ring at {time}." for 3 s, then screen off).
 - UX-DR79: Payment outcomes (snackbar with wake rules, alarm full volume throughout): unlock cancelled/failed "Phone still locked. No charge." → return, snooze still offered; Play cancelled "Payment cancelled. No charge." → offered; billing error "Payment didn't go through. No charge." → offered; no connection "No connection. No charge." → "Snooze unavailable: offline" until connectivity returns; pending "Payment not confirmed yet. If it goes through before you finish, your snooze starts. Otherwise, finish the check to stop the alarm." → "Snooze unavailable: payment pending" for the session; purchased → Snoozed; already paid "Use it" → Snoozed; "Not now" → disabled "An earlier {price} payment is being refunded". Each outcome is a mapping-table unit test.
-- UX-DR80: App-screen states: loading (skeleton after 300 ms, text after 3 s); offline (everything but payment works, no banner); prices never loaded (USD tiers with "Approximate. Your local price shows when you're online.", onboarding continues); Home empty ("No alarms yet." + "Add your first alarm"); permission/setting missing (banner-warning); missed session note until dismissed; fallback 3× in 7 days (info banner "Fallback check used 3 times this week. Re-register your {checkName}?"); session active (panel only); weakening under lock ("Saved. Takes effect after tomorrow's {time} alarm."); no check selected (Save blocked, "Pick at least one check."); one-time alarm time passed ("Rings tomorrow at {time}."); custom sound missing; no recordings / mic denied ("Record a message for your morning self." / "Microphone is off. Turn it on in Settings." + Fix); Progress empty ("Your first morning shows up here."); test/skipped day (label only, excluded from rates); Purchase history empty ("No snoozes paid. Keep it that way."); Export no data (button disabled, "Nothing to export yet."); checklist all OK (every row OK, "Ring a test alarm" stays); Settings not reachable during a session.
+- UX-DR80: App-screen states: loading (skeleton after 300 ms, text after 3 s); offline (everything but payment works, no banner); prices never loaded (USD tiers with "Approximate. Your local price shows when you're online.", onboarding continues); Home empty ("No alarms yet." + "Add your first alarm"); Home list load failure ("Couldn't load your alarms." + "Try again"); editor load failure (editor closes, snackbar "Couldn't open this alarm."); permission/setting missing (banner-warning); missed session note until dismissed; fallback 3× in 7 days (info banner "Fallback check used 3 times this week. Re-register your {checkName}?"); session active (panel only); weakening under lock ("Saved. Takes effect after tomorrow's {time} alarm."); no check selected (Save blocked, "Pick at least one check."); one-time alarm time passed ("Rings tomorrow at {time}."); custom sound missing; no recordings / mic denied ("Record a message for your morning self." / "Microphone is off. Turn it on in Settings." + Fix); Progress empty ("Your first morning shows up here."); test/skipped day (label only, excluded from rates); Purchase history empty ("No snoozes paid. Keep it that way."); checklist all OK (every row OK, "Ring a test alarm" stays); Settings not reachable during a session.
 - UX-DR81: Skipping the onboarding test alarm shows a Home `note-inline` recommending it (FR-ONB-4).
 
 #### Copy and voice
 
 - UX-DR82: Voice rules applied to every string and notification (FR-MSG-4): headlines ≤ 8 words, paragraphs ≤ 25 words; supportive, never shaming; money stated plainly ("Snooze · {price}"), no "Only $3!"; no em dashes in UI strings (periods, commas or "·"); plain verbs (ban Elevate, Seamless, Unleash, Supercharge); real numbers only; at most one emoji and only in the zero-snooze success message; always say "No charge." when a payment did not happen.
 - UX-DR83: All user-facing strings live in Compose Multiplatform resources (NFR-10); runtime variables (`{price}`, `{nextPrice}`, `{minutes}`, `{time}`, `{seconds}`, `{streak}`, `{reason}`, …) are string arguments; prices always from Play's localized string, never a hard-coded currency symbol.
-- UX-DR84: Implement the EXPERIENCE.md Key strings table verbatim (mission, disclosure + "I understand", analytics choice "Share"/"No thanks", base-fee lock note and offline note, bright wake screen, test alarm "Lock your phone. We'll ring in 10 seconds.", Home next alarm/reliability banner/missed/fallback re-register, session in progress, editor lock/no-check notes, disable/delete dialogs, ringing primary/snooze/session line, snooze-unavailable reasons, stranded, before-first-unlock, test, confirm title/body/nudge/tax/buttons, unlock step, already paid, history stranded, all payment outcome messages, after paid snooze, grace window "Quiet for {seconds}s. Finish before it rings again.", grace ended "Time's up. Alarm's back on until you finish.", Direct Boot notice, camera unavailable, fallback link and picker title, phone call, success variants incl. "Your pending payment wasn't used. Google refunds it automatically.", weekly summaries, ringing notification, empty states). Zero amounts use "Nothing paid" wording (EXPERIENCE.md updated to match PRD FR-PRG-2/FR-MSG-2).
-- UX-DR85: Glossary terms used verbatim in UI and docs: Check, Session, Grace window, Fallback check (never "backup"), Commitment lock, Outcomes (On time · Snoozed · Missed · Skipped · Test), Wake screens.
+- UX-DR84: Implement the EXPERIENCE.md Key strings table verbatim (mission, disclosure + "I understand", analytics choice "Share"/"No thanks", base-fee lock note and offline note, bright wake screen, test alarm "Lock your phone. We'll ring in 10 seconds.", Home next alarm/reliability banner/missed/fallback re-register, session in progress, editor lock/no-check notes, disable/delete dialogs, ringing primary/snooze/session line, snooze-unavailable reasons, stranded, before-first-unlock, test, confirm title/body/nudge/tax/buttons, unlock step, already paid, history stranded, all payment outcome messages, after paid snooze, grace window "Quiet for {seconds}s. Finish before it rings again.", grace ended "Time's up. Alarm's back on until you finish.", Direct Boot notice, camera unavailable, fallback link and picker title, phone call, success variants (on-time Success shows the big number, then "days in a row", then "Up on time.", with no repeated number) incl. "Your pending payment wasn't used. Google refunds it automatically.", weekly summaries, ringing notification, empty states). Zero amounts use "Nothing paid" wording (EXPERIENCE.md updated to match PRD FR-PRG-2/FR-MSG-2).
+- UX-DR85: Glossary terms used verbatim in UI and docs: Check, Session, Grace window (the UI says "Quiet time"; specs may say grace window), Fallback check (never "backup"), Commitment lock, Outcomes (On time · Snoozed · Missed · Skipped · Test), Wake screens.
 
 #### Key flows (acceptance sources)
 
 - UX-DR86: F1 First-run setup and test alarm: mission → disclosure "I understand" → base fee stepper with local prices and ladder preview → time + days → checks (Random) with "Try it" → reliability checklist Fix → usage stats off → locked test alarm rings on Sunrise screen with "Test · no charge" → Success; failure paths: offline base fee approximate note; skipped test → Home note.
-- UX-DR87: F2 On-time morning with grace window: ramp + brightness → "I'm up" (72 dp) → silent with "Quiet for 20s" → check done in window → "Up on time. {streak} days in a row." with single streak scale → Done restores brightness.
+- UX-DR87: F2 On-time morning with grace window: ramp + brightness → "I'm up" (72 dp) → silent with "Quiet for 20s" → check done in window → on-time Success shows the big number, then "days in a row", then "Up on time." (no repeated number), with the count-up of UX-DR71 → Done restores brightness.
 - UX-DR88: F3 Grace expiry: countdown reaches 0 → "Time's up. Alarm's back on until you finish.", strong haptic, full volume, progress kept → completion → "You're up. That's what counts."; snooze during grace keeps mute only until countdown ends.
 - UX-DR89: F4 Paid snooze with rising fee and failed payment: Snooze · price → sheet with 500 ms guard and full copy → Pay → unlocking state → keyguard → Play sheet with alarm at full volume → "Snoozed. Next ring at {time}." screen off → re-ring with session line and next price; failure paths: pending (disabled "payment pending", auto-start if confirmed during check, success note about auto-refund otherwise), unlock cancelled/cancelled/error/offline per outcomes table, late-cleared payment opens already-paid state next time.
 - UX-DR90: F5 Fallback check with TalkBack and revoked camera: TalkBack reads "6:15. I'm up, button." → QR check camera fails → message + link immediately → picker with Math first → spoken problem, announced number pad → alarm stops with no sighted step; Day detail shows fallback badge; failure: link after 5 failed scans, no second fallback per session, re-register prompt after 3 in 7 days.
 - UX-DR91: F6 Commitment lock: lowering base fee under lock shows "Saved. Takes effect after tomorrow's {time} alarm."; toggling alarm off within 8 h shows dialog "Turn off your {time} alarm? It rings in {hours} h. This is logged." with safe default "Keep it on"; confirmed turn-off is logged; strengthening applies immediately.
 - UX-DR92: F7 Reliability warning: revoked battery optimization → non-dismissible Home banner → checklist row reason → Fix deep-link → row turns OK on return and banner clears itself → "Ring a test alarm".
 - UX-DR93: F8 Overnight reboot before first unlock: rings on lock screen, Direct Boot notice, default sound, Snooze disabled with lock icon; after unlock on the lock screen the wake screen stays on top, button becomes "Snooze · {price}", Math stays for the ring.
-- UX-DR94: F9 Review progress and export: weekly summary notification tap → Progress (streak, best, on-time 30 d, average, chart) → calendar day → Day detail (snoozes, paid, check, time) → Purchase history → Export CSV opens the share sheet; empty: "Nothing to export yet."
+- UX-DR94: F9 Review progress: weekly summary notification tap → Progress (30-morning ring with the streak, three stat tiles, `card-streak`, money and Insight) → a ring or calendar day's label chip → Day detail (snoozes, paid, check, timeline) → Purchase history.
 - UX-DR95: F10 Record a motivation message: Recordings → mic permission on first use → record/stop → play back, save, select "After I'm up" → next morning Success plays it; failure: mic denied note with Fix, alarm unaffected.
 
 ### FR Coverage Map
@@ -419,7 +423,7 @@ Accepted escapes (never prevented): force-stop, uninstall, the 30-minute no-inte
 - FR-PRG-3: Epic 6 — Wake-up progress
 - FR-PRG-4: Epic 4 — Pay to snooze
 - FR-PRG-5: Epic 6 — Wake-up progress
-- FR-PRG-6: Epic 6 — Wake-up progress
+- ~~FR-PRG-6~~: Removed (owner decision 2026-10-01, PRD v0.3); no story
 - FR-MSG-1: Epic 5 — First run, settings and trust
 - FR-MSG-2: Epic 6 — Wake-up progress
 - FR-MSG-3: Epic 6 — Wake-up progress
@@ -465,8 +469,8 @@ A new user is guided through mission, alarm-behaviour disclosure and consent, ba
 **Implementation notes:** Extends the Epic 1 permission prompts into the full checklist; Firebase Analytics consent gating (AD-15); privacy policy page on GitHub Pages; closed-test story (12+ testers as license testers, feedback channel).
 
 ### Epic 6: Wake-up progress
-The user sees streaks, on-time rate, average time to get up, snoozes per week, money paid per currency, a calendar, a weekly summary, and a zero-snooze celebration.
-**FRs covered:** FR-PRG-2, 3, 5, 6 · FR-MSG-2, 3
+The user sees streaks, on-time rate, average time to get up, snoozes over the last 30 days, money paid per currency, a calendar, a weekly summary, and a zero-snooze celebration.
+**FRs covered:** FR-PRG-2, 3, 5 · FR-MSG-2, 3
 **Implementation notes:** Pure stats functions over Epic 1 history (AD-18); WorkManager for the weekly summary (AD-17); built while the closed test runs.
 
 ### Epic 7: Make it yours
@@ -724,6 +728,7 @@ As a user,
 I want to set an alarm's time, repeat days, label, snooze length, volume, whether it gradually increases (and from what level) and vibration,
 So that each alarm rings the way I need.
 **Refs:** FR-ALM-1, FR-ALM-2, FR-MSG-4, NFR-9, NFR-10, AD-11, UX-DR25, UX-DR28, UX-DR35, UX-DR36, UX-DR38, UX-DR40, UX-DR41, UX-DR42, UX-DR43, UX-DR55, UX-DR64, UX-DR66, UX-DR67, UX-DR80 · **Priority:** Must · **Verify:** auto
+**Note (2026-10-01):** done in PR #6. The design preview (`spec-design-preview-whole-app.md`) since replaced its editor layout in production: the time wheel, grouped cards with sub-screens, Quiet time, no starting-volume slider and the Cancel | Save pill. The FAB, keyboard time entry and ramp-start slider below are historical.
 
 **Acceptance Criteria:**
 
@@ -761,18 +766,22 @@ So that each alarm rings the way I need.
 As a user,
 I want to see all my alarms, turn them on or off, duplicate or delete them, and see when the next one rings,
 So that I trust what will happen tomorrow morning.
-**Refs:** FR-ALM-1, FR-ALM-7, FR-MSG-4, NFR-9, AD-3, AD-11, UX-DR31, UX-DR32, UX-DR35, UX-DR41, UX-DR55, UX-DR56, UX-DR64, UX-DR66, UX-DR67, UX-DR76, UX-DR80, UX-DR84 · **Priority:** Must · **Verify:** auto
+**Refs:** FR-ALM-1, FR-ALM-7, FR-MSG-4, NFR-9, AD-3, AD-11, UX-DR30, UX-DR31, UX-DR35, UX-DR41, UX-DR55, UX-DR56, UX-DR64, UX-DR66, UX-DR67, UX-DR76, UX-DR80, UX-DR84, UX-DR44, UX-DR59 · **Priority:** Must · **Verify:** auto
 
 **Acceptance Criteria:**
 
 **Given** saved alarms
 **When** Home is shown
-**Then** each alarm is a `card-alarm` (`surface`, `rounded.md`) sorted by time of day, with the time in `title` (tabular figures), repeat days and label in `caption` (repeat summary "Every day", "Once" or locale short day names like "Mon, Wed, Fri" (EXPERIENCE.md Key strings)) and a `switch` on the right
-**And** tapping a card opens the Alarm editor for that alarm, and the `fab` stays bottom-right 20 dp from the edges
+**Then** each alarm is the preview's `card-alarm` (glass) sorted by time of day, with the time in `title` (tabular figures), repeat days and label in `caption` (repeat summary "Every day", "Weekdays", "Weekends", "Once" or locale short day names like "Mon, Wed, Fri" (EXPERIENCE.md Key strings)) and a `switch` on the right
+**And** tapping a card opens the Alarm editor for that alarm
+**And** Home is the Alarms tab of `AppShell`, the floating glass nav capsule (Alarms · Progress · + · Settings · You); "+" opens the editor with defaults; the production FAB is removed
+**And** the Home header collapses on scroll ("Yawn & Pawn" pinned, glass chip under it) with the next-alarm countdown in it (the streak hero joins at Story 6.3); reduced motion makes it instant
+**And** Progress, Settings and You open their existing screens in their empty or default state, with rows whose stories are not done hidden (no dead links)
+**And** alarm cards animate in and out on add and delete
 
 **Given** at least one enabled alarm
 **When** Home is shown
-**Then** above the list it shows "Rings in {hours} h {minutes} min" for the soonest enabled alarm, computed with the Story 1.6 `nextOccurrence`/`durationUntil` functions (the same ones the scheduler uses) and rounded up to the next whole minute
+**Then** the Home header shows "Rings in {hours} h {minutes} min" for the soonest enabled alarm, computed with the Story 1.6 `nextOccurrence`/`durationUntil` functions (the same ones the scheduler uses) and rounded up to the next whole minute
 **And** under one hour it shows "Rings in {minutes} min" and at 24 h or more "Rings in {days} d {hours} h" (EXPERIENCE.md Key strings)
 **And** the countdown refreshes every minute, on resume, and when the time or time zone changes; with no enabled alarms the line is hidden
 **And** unit tests with `FakeClock` cover 7 h 12 min, 59 s → "1 min", exactly 24 h, a DST-gap day and a time-zone change
@@ -786,7 +795,11 @@ So that I trust what will happen tomorrow morning.
 **Then** a menu offers "Duplicate" and "Delete"; Duplicate creates a copy with a new id and `requestCode` and opens it in the editor
 **And** Delete opens `dialog-confirm` "Delete your {time} alarm? This is logged." with "Delete" (in `error` colour) and "Keep it" as the default dismiss; confirming deletes the alarm and writes an `AlarmDeleted(alarmId, at)` entry through the `Logger` port
 
-**Given** the Home screen states (empty, one alarm, many alarms, all disabled)
+**Given** a storage read failure
+**When** Home loads the alarm list, or the editor loads an alarm
+**Then** Home shows "Couldn't load your alarms." with "Try again" instead of the list, and an editor load failure closes the editor with the snackbar "Couldn't open this alarm."
+
+**Given** the Home screen states (empty, one alarm, many alarms, all disabled, load failure)
 **When** Roborazzi and semantic tests run
 **Then** screenshots exist for each state in Light and Dark and at 200% font scale, targets are ≥ 48 dp, and long-press actions are also reachable through the editor menu
 **And** the `pps-design` Done checklist is ticked in the story file, all strings are resources, key strings match EXPERIENCE.md verbatim and `CopyRulesTest` passes (FR-MSG-4)
@@ -805,6 +818,7 @@ So that it rings on time in Doze, silent mode and Do Not Disturb.
 **When** `AndroidAlarmScheduler` schedules an alarm
 **Then** it calls only `AlarmManager.setAlarmClock()` with an `AlarmClockInfo` whose trigger time equals the scheduled epoch millis and whose show intent opens `MainActivity`, and an operation `PendingIntent` (immutable) to `AlarmFiredReceiver` carrying `alarmId` and the scheduled epoch millis, using the alarm's `requestCode`
 **And** the session slot uses one reserved request code and the test alarm another, both distinct from every alarm `requestCode` (unit-tested)
+**And** request codes are never reused: a persisted high-water mark in `app.db` gives each new alarm max(ever used) + 1 (test: delete the highest, create, the new code is higher)
 **And** a Robolectric test with `ShadowAlarmManager` asserts `setAlarmClock` was called with trigger time == `nextOccurrence(...)` epoch ms (FR-ALM-3) and that no `set`, `setExact` or `setAndAllowWhileIdle` call exists (a detekt or lint rule bans them)
 
 **Given** `core.rescheduleAll()`
@@ -822,6 +836,8 @@ So that it rings on time in Doze, silent mode and Do Not Disturb.
 **Given** Robolectric tests for each broadcast
 **When** a boot, time-set, time-zone change or package-replaced broadcast is delivered with `FakeClock` and `FakeTimeZoneProvider` set to the new state
 **Then** each enabled alarm is re-armed at the recomputed wall time, including a DST-gap day and a Berlin → New York zone change
+**And** after a reboot `rescheduleAll()` uses the wall clock as AD-3 says; the reboot-before-network-time case is recorded in `docs/decisions/reboot-clock.md` and carried to Story 2.2, with no extra logic here
+**And** a Robolectric test opens `app.db` with credential storage locked (device-protected context only)
 **And** `./gradlew qualityGate` passes
 
 ### Story 1.11: The complete wake-session state machine in core
@@ -837,7 +853,7 @@ So that no screen or service can disagree about what happens next.
 **When** the model is added
 **Then** `SessionState` is a sealed type with `Idle`, `Ringing`, `Grace`, `Loud`, `Snoozed`, `Completed`, `Missed`, each active state holding `sessionId`, frozen `SessionConfig`, `ringIndex`, `snoozesGranted`, `CheckRun` (plan, seeds, step, failedAttempts, fallbackUsed), `paying: PurchaseIntentId?`, `noGraceThisRing`, `paused`, `beforeFirstUnlock`, `paymentPending` (set by `PurchasePending`, cleared by a later `PurchaseGranted`), `declinedReuseProduct: String?` (set by `ReuseDeclined`), and `Deadline`s for grace end, interaction timeout and snooze end, all `@Serializable` (the display-only `paid` list is added with `Money` in Epic 4)
 **And** `SessionConfig` holds alarmId, label, scheduledAt, testMode, baseFeeTier, maxSnoozes, snoozeLengthMinutes, graceSeconds, vibrateInGrace, volumePercent, gradualVolume, rampStartPercent, soundRef, vibration and check plan, and a pure `ConfigResolver.resolve(alarm, globalSettings, testMode)` produces it (pending changes arrive in Epic 4); `GlobalSettings` defaults are base fee tier 1, max snoozes 5, grace 20 s, snooze 9 min
-**And** events are the AD-2 set: `AlarmFired`, `TestAlarmFired`, `SlotFired`, `ProcessRestored`, `ImUpTapped`, `GraceElapsed`, `CheckAnswerSubmitted`, `FallbackRequested`, `SnoozeTapped`, `PayConfirmed`, `ReuseOffered`, `ReuseAccepted`, `ReuseDeclined`, `PurchaseGranted`, `PurchaseFailed`, `PurchaseCancelled`, `PurchasePending`, `ImageMatchCompleted`, `ImageMatchFailed`, `NoInteractionTimeout`, `UserInteracted`, `CallStarted`, `CallEnded`, `OverlapAlarmFired`, `UserUnlocked`, `Recorded`, plus `UnlockRequested` / `UnlockFailed` and their rows if `docs/spikes/S1.md` (Story 1.5) decided them
+**And** events are the AD-2 set: `AlarmFired`, `TestAlarmFired`, `SlotFired`, `ProcessRestored`, `ImUpTapped`, `GraceElapsed`, `CheckAnswerSubmitted`, `FallbackRequested`, `SnoozeTapped`, `PayConfirmed`, `ReuseOffered`, `ReuseAccepted`, `ReuseDeclined`, `PurchaseGranted`, `PurchaseFailed`, `PurchaseCancelled`, `PurchasePending`, `ImageMatchCompleted`, `ImageMatchFailed`, `NoInteractionTimeout`, `UserInteracted`, `CallStarted`, `CallEnded`, `OverlapAlarmFired`, `UserUnlocked`, `Recorded`; the `UnlockRequested` / `UnlockFailed` events and rows are not added in Epic 1 (if Spike S1, `docs/spikes/S1.md`, finds they are needed, they become a small story at the start of Epic 4, sprint-change-proposal-2026-10-01)
 
 **Given** the pure reducer `reduce(state, event, now): Transition(state, oneShotEffects)` and the idempotent `entryEffects(state)`
 **When** each row of the AD-2 transition table in Architecture Spine v0.3 is exercised (31 rows, including `ReuseDeclined` → same state with `declinedReuseProduct` set and the reuse sheet hidden, `PurchasePending` → same state with `paying = null` and `paymentPending = true`, `ImageMatchCompleted`/`ImageMatchFailed` in Grace or Loud driven by `FakeCheck`, and `SlotFired` in Ringing, Grace or Loud → same state, re-arm slot +60 s)
@@ -888,6 +904,7 @@ So that a crash or kill never loses where my morning was.
 **When** fakes are added
 **Then** `FakeActiveSessionStore`, `FakeEffectRunner` (records effects), `FakeBilling` (`launch(intent)` returns programmable `PurchaseGranted` / `Failed` / `Cancelled` / `Pending`) and `FakePurchaseIntentStore` exist, and an engine test runs a full morning with fakes: `AlarmFired` → `SnoozeTapped` → `PayConfirmed` → `PurchaseGranted` → `SlotFired` at snooze end → `ImUpTapped` → valid last answer → `Completed` → `Recorded` → `Idle` with `active_session` cleared
 **And** Koin in `:androidApp` wires `SessionEngine` with the Room store and the Epic 1 production policies; the production `Billing` binding is `UnavailableBilling` until Epic 4
+**And** Robolectric tests no longer each call `stopKoin()`; a test Application or shared rule starts and stops Koin
 **And** `./gradlew qualityGate` passes
 
 ### Story 1.13: Record every session in history
@@ -903,6 +920,7 @@ So that my progress can be shown later and is never counted twice.
 **When** the history table is added
 **Then** `app.db` migrates from version 1 to 2 adding `session_history` (`session_id` primary key, `alarm_id`, `scheduled_at`, `first_ring_at`, `ended_at` nullable, `snooze_count`, `check_types` (list), `time_to_complete_ms` nullable, `fallback_used`, `direct_boot`, `outcome` nullable: OnTime / Snoozed / Missed / Skipped / Test), with the exported v2 schema and a Room migration test from v1 with existing alarms preserved
 **And** amounts paid per snooze are not stored in this table; they come from purchase records keyed to `session_id` in Epic 4 (AD-7, AD-8)
+**And** `docs/decisions/db-downgrade.md` states the policy for restoring a newer-schema `app.db` on an older install (proposed: the backup agent skips restoring an `app.db` whose version is above the installed schema, and logs it)
 
 **Given** `SessionRecorder` in `:core` (the only writer of session history, via a `SessionHistoryRepository` port with `FakeSessionHistoryRepository`)
 **When** the engine executes "record session start" at `AlarmFired` or `TestAlarmFired`
@@ -934,7 +952,8 @@ So that it wakes me whether the phone is locked, silent or in Do Not Disturb.
 **Given** the "sound playing" entry effect
 **When** `AndroidAlarmPlayer` (the only player, owned by `WakeService`) starts
 **Then** it plays the alarm's sound looping with `AudioAttributes` usage `USAGE_ALARM` (independent of media and ringer volume), sets the alarm stream to the alarm's `volumePercent` at the start of the ring and restores the user's previous alarm-stream volume when the session ends (confirmed by owner)
-**And** when `gradualVolume` is true, player gain ramps linearly from `rampStartPercent` to full over 30 s using a pure `rampGain(elapsed, start, duration)` function in core (unit-tested at 0 s, 15 s, 30 s, 45 s and with start = 100%); when false, the first audible frame is already at the set volume (unit-tested)
+**And** when `gradualVolume` is true, player gain ramps linearly from `rampStartPercent`% of the set volume (fixed 20) to the set volume over 30 s using a pure `rampGain(elapsed, startFraction, duration)` function in core (unit-tested at 0 s, 15 s, 30 s and 45 s); when false, the first audible frame is already at the set volume (unit-tested)
+**And** the `AlarmValidation` rule "ramp start must not exceed volume" and the editor's min(20, volume) are removed
 **And** vibration runs with alarm usage when `vibration` is on and not at all when off
 **And** the default built-in sound is bundled (OGG, licence recorded in `docs/sounds/LICENSES.md`), and when the chosen sound cannot be opened or errors during playback the player switches to it (never silent; full sound-library fallback in Story 1.17)
 
@@ -968,9 +987,10 @@ So that I can stop the alarm half-asleep.
 
 **Given** a session in `Ringing`
 **When** `WakeActivity` renders
-**Then** it uses `PpsTheme(wake = true)` (Sunrise), with the optional `sunrise-gradient-top` → `bg-sunrise` gradient only in the top 40% behind the label, clock (`clock-xl`, tabular figures, capped at 1.3× font scale) and date, and a flat `bg-sunrise` thumb zone
+**Then** it renders the preview's `ui/wake` Ringing composable from `SessionEngine.state` in `PpsTheme(wake = true)` (Sunrise, layout per DESIGN.md v0.5), with the clock in `clock-xl` (tabular figures, capped at 1.3× font scale), and a gentle pulse on "I'm up" that stops with reduced motion
 **And** `button-wake-primary` "I'm up" is full width, 72 dp, `rounded.full`, `accent-sunrise` fill with `on-accent-sunrise` label in `button-wake`, the largest element on screen, always enabled, and in the bottom 40% of the screen
 **And** 16 dp below it the snooze control renders the `SnoozeAvailabilityPolicy` result: `button-snooze-disabled` (64 dp, `disabled-container-sunrise` fill, `disabled-content-sunrise` label, leading `block` icon) reading "Snooze unavailable: prices not loaded yet" in a normal Epic 1 session and "Test · no charge" in a test session, with TalkBack "Snooze unavailable, {reason}"; the enabled "Snooze · {price}" variant renders for `Available(price)` in a preview and screenshot (tapping it arrives in Epic 4)
+**And** the disabled snooze uses the `disabled-container-sunrise` / `disabled-content-sunrise` pair explicitly (not Material alpha)
 **And** the screen has no loading state and renders from the in-memory `SessionEngine.state` (a test asserts no suspend repository call happens before the first frame)
 
 **Given** the ringing screen
@@ -1027,12 +1047,13 @@ So that I wake to a sound that works for me, and never to silence.
 
 **Given** the loudness rule (FR-SND-1)
 **When** `./gradlew checkSoundLoudness` runs (a `qualityGate` dependency)
-**Then** it measures every bundled sound with ffmpeg `ebur128` and fails, naming the file, if the peak is below −3 dBFS or the integrated loudness is below −14 LUFS; if ffmpeg is missing it fails with an install hint, and CI installs ffmpeg
+**Then** it measures every bundled alarm sound (`res/raw/alarm_*`) with ffmpeg `ebur128` and fails, naming the file, if the peak is below −3 dBFS or the integrated loudness is below −14 LUFS; if ffmpeg is missing it fails with an install hint, and CI installs ffmpeg
+**And** UI sounds such as `wheel_tick.wav` are not measured and are listed as exempt in the task
 **And** a fixture test proves a quiet file fails the check and a compliant file passes
 
 **Given** the Alarm editor Sound row
 **When** the user taps it
-**Then** the Sound picker (pushed screen, `top-app-bar`) lists built-in sounds then system ringtones as `sound-row`s (56 dp, radio selection, name in `body`, source caption "Built-in" or "System" (EXPERIENCE.md Key strings), 48 dp preview button)
+**Then** the editor's Sound sub-screen (the preview's `ui/sound`) shows the volume slider and the "Gradually increase volume" switch, then sectioned lists "Built-in" and "System" ("Your files" arrives in Story 7.4), each `sound-row` with radio selection, name in `body` and a 48 dp preview button
 **And** selecting a row and returning updates the editor's Sound row; the choice is saved with the alarm on "Save"
 
 **Given** a `sound-row` preview button
@@ -1043,9 +1064,9 @@ So that I wake to a sound that works for me, and never to silence.
 **Given** a chosen sound that is missing or broken (system ringtone URI no longer resolves, file unreadable, decoder error at prepare or during playback)
 **When** the alarm rings
 **Then** `AlarmPlayer` plays the default built-in sound within the same ring, logs the fallback without file paths, and never leaves the alarm silent (NFR-2)
-**And** the Sound picker and editor show "File missing. Default sound will play." for that choice
+**And** the Sound sub-screen and editor show "File missing. Default sound will play." for that choice
 **And** Robolectric tests cover: missing URI → default; `MediaPlayer` error callback mid-ring → default; default resource always resolves
-**And** Roborazzi screenshots cover the picker (list, selected, missing-file row) in Light and Dark and at 200% font scale
+**And** Roborazzi screenshots cover the Sound sub-screen (list, selected, missing-file row) in Light and Dark and at 200% font scale
 **And** the `pps-design` Done checklist is ticked in the story file, all strings are resources, key strings match EXPERIENCE.md verbatim and `CopyRulesTest` passes (FR-MSG-4)
 **And** `./gradlew qualityGate` passes
 
@@ -1059,8 +1080,8 @@ So that I know it works on my phone before tomorrow morning.
 **Acceptance Criteria:**
 
 **Given** the Alarm editor
-**When** the bottom bar is shown
-**Then** it contains a `button-text` "Test alarm" next to "Save"
+**When** it is shown
+**Then** "Test alarm" is a `button-text` under the editor's cards; Save and Cancel stay in the `SaveCancelPill`
 
 **Given** the user taps "Test alarm"
 **When** no session is active
@@ -1075,7 +1096,8 @@ So that I know it works on my phone before tomorrow morning.
 **When** `adb shell am broadcast -a com.yawnandpawn.app.debug.FIRE --ei seconds N [--es alarmId ID] [--ez test true|false]` is sent
 **Then** `DebugFireReceiver` schedules that alarm (or a synthetic one with defaults) to fire in N seconds through `AlarmScheduler`, as a real or test session
 **And** the receiver lives only in the `debug` source set; a test inspects the merged release manifest and release classes and fails if `DebugFireReceiver` or the `debug.FIRE` action is present
-**And** Roborazzi screenshots cover the editor bottom bar and the test snackbar in Light and Dark and at 200% font scale, and the Sunrise ringing screen in test mode
+**And** the release-content test also fails if any `debug.preview` or `ThemeShowcase` class or activity, or the "Yawn & Pawn Preview" label, is present
+**And** Roborazzi screenshots cover the editor with the Test alarm button and the test snackbar in Light and Dark and at 200% font scale, and the Sunrise ringing screen in test mode
 **And** the `pps-design` Done checklist is ticked in the story file, all strings are resources, key strings match EXPERIENCE.md verbatim and `CopyRulesTest` passes (FR-MSG-4)
 **And** `./gradlew qualityGate` passes
 
@@ -1127,7 +1149,7 @@ So that the foreground-service type and the Epic 2 escape protections are chosen
 **Acceptance Criteria:**
 
 **Given** the Epic 1 debug build from `main` and, for the Epic 2 behaviours, a prototype on branch `spike/s2-reliability` (backup alarm re-armed every 60 s while ringing, notification return path) that is never merged
-**When** the owner tests the device matrix (a Pixel, a Samsung, a Xiaomi and one budget device), recording device, Android version and date per run
+**When** the owner tests the device matrix (the owner's Oppo A96 (ColorOS, Android 13), plus GMD emulators for the API levels in NFR-1; other makers optional via Firebase Test Lab), recording device, Android version and date per run
 **Then** `docs/spikes/S2.md` records for each device: ring latency from scheduled time (target ≤ 2 s, NFR-1) and ringing-screen latency (target ≤ 1 s, NFR-7) measured from screen recordings, with screen off and locked, in Doze (`adb shell dumpsys deviceidle force-idle` and one real overnight run), battery saver on, Do Not Disturb on (default "alarms allowed"), silent mode, and headphones connected
 **And** it records what happens after an overnight reboot before first unlock (expected to fail until Epic 2), after "Stop" in the OEM Task Manager, after swiping the app from Recents, and during an incoming call, with and without the prototype backup alarm
 **And** it records whether tapping the ongoing notification returns to the ringing screen within 1 s without any background activity start (FR-SES-4), and whether a heartbeat `setAlarmClock` every 60 s changes the system next-alarm indicator visibly (Q18)
@@ -1148,13 +1170,13 @@ So that Epic 2 builds on an alarm I know rings.
 
 **Acceptance Criteria:**
 
-**Given** the latest `main` debug build installed on each device of the matrix (Pixel, Samsung, Xiaomi, budget device)
+**Given** the latest `main` debug build installed on each device of the matrix (the owner's Oppo A96 (ColorOS, Android 13), plus GMD emulators for the API levels in NFR-1; other makers optional via Firebase Test Lab)
 **When** the owner runs the checklist
 **Then** for each item the story file records pass/fail, device, Android version and date:
 1. An alarm set 2 minutes ahead rings within 2 s of the scheduled time with the screen off and locked (NFR-1).
 2. The ringing screen is visible within 1 s of the sound starting (NFR-7), measured on a screen recording.
 3. It rings in forced Doze, with battery saver on, with Do Not Disturb on, and with the ringer on silent and media volume at 0, on the alarm stream.
-4. With "Gradually increase volume" on, the volume ramps from the starting volume to the set volume within 30 s; with it off, the alarm starts at the set volume; vibration on and off are respected.
+4. With "Gradually increase volume" on, the volume ramps from 20% of the set volume to the set volume within 30 s; with it off, the alarm starts at the set volume; vibration on and off are respected.
 5. The ringing screen appears over the lock screen when locked and when the screen is off; when the phone is unlocked and in use, the heads-up notification appears and tapping it opens the ringing screen.
 6. "I'm up" stops the sound, removes the notification and closes the screen; Home then shows the next "Rings in …" countdown.
 7. Create, edit, duplicate, disable, enable and delete alarms; repeat days skip unselected days (checked by setting the date manually); a one-time alarm set for a passed time rings tomorrow and shows "Rings tomorrow at {time}."
@@ -1167,6 +1189,11 @@ So that Epic 2 builds on an alarm I know rings.
 14. On API 33+, denying notifications shows "Alarms may not ring. Fix settings" and "Fix" opens the right setting; on API 34+ revoking full-screen intent does the same; on an Android 12 device or emulator revoking exact alarms does the same, and the banner clears on return.
 15. With TalkBack on, the ringing screen focuses the clock first, then "I'm up", and the disabled snooze reads its reason; at 200% font size both actions stay on screen.
 16. All copy seen during the checklist matches EXPERIENCE.md (no em dashes, no filler, "No charge." wording where relevant) (FR-MSG-4).
+17. The time wheel ticks (haptic and quiet sound) and is silent when the phone is on silent.
+18. Save stays above the keyboard and the pill never covers content (checked with uiautomator bounds).
+19. The app draws edge-to-edge with correct status-bar icons in Light, Dark and Sunrise.
+20. The nav capsule works, "+" opens the editor from every tab, and the Home header collapses on scroll.
+21. Predictive back on editor sub-screens looks right (if not, sub-screens become Navigation 3 routes in a bug story).
 
 **Given** any failed item
 **When** the owner records it
@@ -1378,7 +1405,7 @@ So that I can't delete, disable or edit my way out of it, while every other app 
 **Given** `SessionEngine.state` is not `Idle`
 **When** `MainActivity` is shown (and in `Ringing`, `Grace` or `Loud` right after it has forwarded to the wake screen per Story 2.5)
 **Then** the Navigation 3 back stack is replaced by a single `SessionInProgress` route showing `panel-session-in-progress`: a `surface` card, `rounded.md`, "Alarm in progress" in `headline` and one `button-filled` "Back to alarm" (EXPERIENCE.md Key strings) that opens `WakeActivity`
-**And** the `nav-bar`, once it exists (Epics 5 and 6), is hidden, and no other route is reachable: a `SessionLockTest` iterates every `Route` subclass (so routes added later are covered automatically) and asserts that navigating to it while a session is active leaves the `SessionInProgress` route on screen
+**And** the lock covers all five tabs: the nav capsule (Story 1.9) is hidden while the panel shows, and no other route is reachable: a `SessionLockTest` iterates every `Route` subclass (so routes added later are covered automatically) and asserts that navigating to it while a session is active leaves the `SessionInProgress` route on screen
 **And** in `Snoozed` "Back to alarm" opens `WakeActivity` on the current state (the Snoozed wake screen content arrives in Epic 4)
 
 **Given** the Alarm editor or Sound picker is open when an alarm fires
@@ -1586,7 +1613,7 @@ So that I know the only free exits are the ones we accept, and the phone stays u
 
 **Acceptance Criteria:**
 
-**Given** the latest `main` debug build on each device of the matrix (Pixel, Samsung, Xiaomi, budget device) and `docs/spikes/S2.md` for reference
+**Given** the latest `main` debug build on each device of the matrix (the owner's Oppo A96 plus the NFR-1 emulators; other makers optional via Firebase Test Lab) and `docs/spikes/S2.md` for reference
 **When** the owner runs the checklist
 **Then** for each item the story file records pass/fail, device, Android version and date:
 1. OEM Task Manager "Stop" during a ring (Samsung Device care, Xiaomi Security, others where present): the alarm rings again within 60 s on the same step; if the OEM action is a force-stop (the alarm does not return), record it as the accepted force-stop escape.
@@ -1711,10 +1738,10 @@ So that I know the alarm is done and nothing was charged.
 **Given** a session reaches `Completed`
 **When** `WakeActivity` observes it
 **Then** instead of finishing it shows the Success screen (Sunrise tokens), held as UI-only state keyed by `sessionId`, while the engine continues `Recorded` → `Idle`, clears `runtime.db`, removes the notification and stops `WakeService` in the background (test)
-**And** with 0 snoozes in a normal session the headline is "Up on time." `(EXPERIENCE.md Key strings)` (the streak version "Up on time. {streak} days in a row." replaces it when streaks exist in Epic 6)
+**And** with 0 snoozes in a normal session the headline is "Up on time." `(EXPERIENCE.md Key strings)` (when streaks exist in Epic 6 the on-time layout becomes the streak number, then "days in a row", then "Up on time.", with no repeated number, as UX-DR84)
 **And** after one or more snoozes the headline is "You're up. That's what counts." (EXPERIENCE.md Key strings; reachable only with `FakeBilling` until Epic 4, which also adds the "{paid} paid this morning" line)
 **And** in a test session the headline is "Test finished. Your alarm works." `(EXPERIENCE.md Key strings)`
-**And** one full-width 72 dp `button-wake-primary`-style "Done" (EXPERIENCE.md Component Patterns) sits in the thumb zone, the success haptic pattern plays once, and there is no animation (Epic 6 adds the one streak scale)
+**And** one full-width 72 dp `button-wake-primary`-style "Done" (EXPERIENCE.md Component Patterns) sits in the thumb zone, the success haptic pattern plays once, and there is no animation yet (Epic 6 adds the count-up)
 
 **Given** the Success screen
 **When** the user taps "Done", or 60 s pass without a tap (owner-approved default 2026-09-26)
@@ -1727,7 +1754,7 @@ So that I know the alarm is done and nothing was charged.
 **And** the `pps-design` Done checklist is ticked in the story file, all strings are resources, key strings match EXPERIENCE.md verbatim and `CopyRulesTest` passes (FR-MSG-4)
 **And** `./gradlew qualityGate` passes
 
-### Story 3.4: Grace window with the countdown ring
+### Story 3.4: Quiet time (grace window) with the countdown ring
 
 As a user sharing a bedroom,
 I want the alarm to go silent for a few seconds after "I'm up", with a clear countdown,
@@ -1743,7 +1770,7 @@ So that I can do my check without waking anyone, and know exactly when it comes 
 
 **Given** the Alarm editor
 **When** it renders
-**Then** a "Grace window" section (glossary term) shows a `slider` of 15–30 s in 1 s steps (default 20, the existing `graceSeconds`) with the value announced on change as "{seconds} seconds" `(EXPERIENCE.md Key strings)`, and a `switch` "Vibrate in grace window" `(EXPERIENCE.md Key strings)`
+**Then** its "Quiet time" row (the UI name for the grace window) opens the Quiet time sub-screen, which shows a `slider` of 15–30 s in 1 s steps (default 20, the existing `graceSeconds`) with the value announced on change as "{seconds} seconds" `(EXPERIENCE.md Key strings)`, and a `switch` "Vibrate during quiet time"
 **And** both are saved with "Save" and covered by the existing "Discard changes?" check
 
 **Given** a session in `Grace`
@@ -1761,7 +1788,7 @@ So that I can do my check without waking anyone, and know exactly when it comes 
 
 **Given** the new states
 **When** Roborazzi and semantic tests run
-**Then** screenshots exist for grace at 20 s and 5 s, paused, expired and no-grace ring in Sunrise at 100% and 200% font scale, and for the editor section in Light and Dark at 200%
+**Then** screenshots exist for grace at 20 s and 5 s, paused, expired and no-grace ring in Sunrise at 100% and 200% font scale, and for the Quiet time sub-screen in Light and Dark at 200%
 **And** the `pps-design` Done checklist is ticked in the story file, all strings are resources, key strings match EXPERIENCE.md verbatim and `CopyRulesTest` passes (FR-MSG-4)
 **And** `./gradlew qualityGate` passes
 
@@ -1783,23 +1810,23 @@ So that each alarm is exactly as hard as I need it to be.
 
 **Given** the Alarm editor
 **When** it renders
-**Then** a "Checks" section shows one `chip-check` per selected check (icon, name and difficulty, for example "Math · Medium") that opens Check setup, a row that opens the Check picker, and, with two or more checks, a `segmented-control` "Random" / "All" (EXPERIENCE.md Information Architecture)
-**And** in All mode each chip offers "Move up" and "Move down" `(EXPERIENCE.md Key strings)` in its menu and as TalkBack custom actions to set the order
+**Then** its "Wake-up check" row opens the Wake-up check sub-screen (the preview round 3 Check picker): the "Checks" card, "Mode" Random / All with two or more checks, and "Your checks" with each selected check's setup as its value (for example "Medium · 2 problems") and a chevron to Check setup (EXPERIENCE.md Information Architecture)
+**And** in All mode each "Your checks" row offers "Move up" and "Move down" `(EXPERIENCE.md Key strings)` in its menu and as TalkBack custom actions to set the order
 **And** removing the last check blocks "Save" with the inline error "Pick at least one check." (EXPERIENCE.md Key strings)
 **And** `card-alarm` on Home now shows the alarm's check icons (20 dp, `text-secondary`)
 
-**Given** the Check picker (pushed screen, `top-app-bar`)
+**Given** the Check picker (the Wake-up check sub-screen, also used in onboarding)
 **When** it opens
-**Then** it lists one `check-type-card` per type registered in `CheckRegistry` with both a core plugin and a wake composable (only Math at this point; later stories add theirs), each with icon, name from the glossary, one line of description `(EXPERIENCE.md Key strings)` and "Try it" (wired in Story 3.6); selected cards show a 2 dp accent border plus a check icon, and a tap toggles selection
+**Then** it lists one `check-type-card` row per type registered in `CheckRegistry` with both a core plugin and a wake composable (only Math at this point; later stories add theirs), each with icon, name from the glossary, one line of description `(EXPERIENCE.md Key strings)` and "Try it" (wired in Story 3.6); each row has a check box, and a tap toggles selection
 **And** camera check cards show "Needs the camera. If it can't be used, you'll get a fallback check." (EXPERIENCE.md Key strings)
 
 **Given** Check setup for one check
 **When** it opens
-**Then** it shows difficulty as a `segmented-control` Easy / Medium / Hard (hidden for types without difficulty) and count as a `stepper` within the type's range, labelled per type (Math: "Problems" `(EXPERIENCE.md Key strings)`)
+**Then** it shows "Difficulty" Easy / Medium / Hard as radio rows (difficulty lives in Check setup; hidden for types without difficulty) and count as a `stepper` within the type's range, labelled per type (Math: "Problems" `(EXPERIENCE.md Key strings)`)
 
 **Given** the new screens and states
 **When** Roborazzi, semantic and ViewModel tests run
-**Then** screenshots exist for the editor Checks section (one check, several in All mode, none with the error), the picker and Check setup in Light and Dark and at 200% font scale, all targets are ≥ 48 dp, and ViewModel tests cover add, remove, reorder, mode change, validation and discard
+**Then** screenshots exist for the Wake-up check sub-screen (one check, several in All mode, none with the error), the picker and Check setup in Light and Dark and at 200% font scale, all targets are ≥ 48 dp, and ViewModel tests cover add, remove, reorder, mode change, validation and discard
 **And** the `pps-design` Done checklist is ticked in the story file, all strings are resources, key strings match EXPERIENCE.md verbatim and `CopyRulesTest` passes (FR-MSG-4)
 **And** `./gradlew qualityGate` passes
 
@@ -2079,11 +2106,11 @@ So that Epic 4 builds payments on checks I know work at 6 a.m.
 
 **Acceptance Criteria:**
 
-**Given** the latest `main` debug build on each device of the matrix (Pixel, Samsung, Xiaomi, budget device)
+**Given** the latest `main` debug build on each device of the matrix (the owner's Oppo A96 plus the NFR-1 emulators; other makers optional via Firebase Test Lab)
 **When** the owner runs the checklist
 **Then** for each item the story file records pass/fail, device, Android version and date:
 1. Math at Easy, Medium and Hard with counts 1 and 5: problems match the difficulty, the pad is easy to hit half-asleep, and wrong answers shake with a haptic.
-2. Grace window: "I'm up" mutes the alarm, the ring counts 20 s exactly (stopwatch), at 0 a strong haptic and full volume return with progress kept; with "Vibrate in grace window" on the phone vibrates during the window, with it off it is still.
+2. Grace window: "I'm up" mutes the alarm, the ring counts 20 s exactly (stopwatch), at 0 a strong haptic and full volume return with progress kept; with "Vibrate during quiet time" on the phone vibrates during the window, with it off it is still.
 3. A 30 s grace window and a 15 s one both work, and after the window expires no second window starts in the same ring (the new window after a paid snooze is checked in Epic 4).
 4. Word Unscramble at each difficulty: word lengths match; "Shuffle" and "Clear" work; across 30 samples no offensive or obscure words appear (list any to add to the blocklist).
 5. Memory Sequence: sequences of 4, 6 and 8, a 4×4 grid on Hard, highlight timing readable, a wrong tap restarts the round.
@@ -2252,14 +2279,14 @@ So that snoozing costs what I decided it should.
 
 **Given** the app root
 **When** this story lands
-**Then** the `nav-bar` (UX-DR44) shows Alarms, Progress and Settings (created here if no earlier story added it; Progress shows only "Your first morning shows up here." until Epic 6), it is hidden during the session lock (Epic 2), and Settings is a new `Route` with a "Snooze" section (EXPERIENCE.md Key strings)
+**Then** the Settings tab (from the Story 1.9 nav capsule) shows its "Snooze" card (EXPERIENCE.md Key strings), whose "Base fee" and "Max snoozes per session" rows open Settings sub-screens with the `stepper`
 **And** Settings rows are `settings-row`s (56 dp) and are unreachable while a session is active (existing Epic 2 lock, re-asserted by a test)
 
-**Given** the Snooze section
+**Given** the Base fee sub-screen
 **When** it renders with a loaded price cache
-**Then** a "Base fee" `stepper` (EXPERIENCE.md Key strings) shows the Play `formattedPrice` of `snooze_usd_0B` for the current tier B in `display` with tabular figures, the − button is disabled at tier 1 and + at tier 10, long-press repeats, and a ladder preview line shows "Snooze 1: {price1} · 2: {price2} · 3: {price3}" for the first three snoozes (or fewer if max snoozes < 3) (EXPERIENCE.md Key strings)
+**Then** the "Base fee" `stepper` (EXPERIENCE.md Key strings) shows the Play `formattedPrice` of `snooze_usd_0B` for the current tier B in `display` with tabular figures, the − button is disabled at tier 1 and + at tier 10, long-press repeats, and a ladder preview line shows "Snooze 1: {price1} · 2: {price2} · 3: {price3}" for the first three snoozes (or fewer if max snoozes < 3) (EXPERIENCE.md Key strings)
 **And** the `note-inline` "You can raise it anytime. Lowering it waits until after your next alarm." is always shown under the stepper
-**And** a "Max snoozes per session" `stepper` (EXPERIENCE.md Key strings) runs 1–5 (default 5)
+**And** the "Max snoozes per session" sub-screen's `stepper` (EXPERIENCE.md Key strings) runs 1–5 (default 5)
 
 **Given** no cached price for a tier (never online)
 **When** the section renders
@@ -2287,9 +2314,9 @@ So that I know the price before the morning and don't weaken my plan by accident
 
 **Acceptance Criteria:**
 
-**Given** the Alarm editor snooze length `segmented-control`
+**Given** the editor's Snooze sub-screen (snooze length 5 / 9 / 10 / 15 min; the same ladder shows on the Settings Base fee sub-screen, Story 4.5)
 **When** it renders
-**Then** under it a fee ladder line shows "Snooze 1: {price1} · 2: {price2} · 3: {price3}" using the effective base fee (pending changes applied for the alarm's next-but-one occurrence are not shown; the ladder shows what the next morning will charge), the cached Play prices, and up to max snoozes entries, or USD approximations with "Approximate. Your local price shows when you're online." when the cache is empty
+**Then** under the snooze length a fee ladder line shows "Snooze 1: {price1} · 2: {price2} · 3: {price3}" using the effective base fee (pending changes applied for the alarm's next-but-one occurrence are not shown; the ladder shows what the next morning will charge), the cached Play prices, and up to max snoozes entries, or USD approximations with "Approximate. Your local price shows when you're online." when the cache is empty
 
 **Given** an alarm whose next occurrence is inside the lock window
 **When** the user saves a longer grace window or a weaker check plan (Story 4.4 rules)
@@ -2624,9 +2651,9 @@ So that I can check any charge, and see when a payment wasn't used and was refun
 
 **Acceptance Criteria:**
 
-**Given** the Progress placeholder (Story 4.5)
-**When** it renders
-**Then** it shows a `settings-row` "Purchase history" (EXPERIENCE.md Key strings) opening the Purchase history route (`top-app-bar` titled "Purchase history"); Epic 6 keeps this link when it fills Progress
+**Given** the You tab (Story 1.9)
+**When** its "Money" card renders
+**Then** it shows a `settings-row` "Purchase history" (EXPERIENCE.md Key strings) opening the Purchase history route (`top-app-bar` titled "Purchase history"); Epic 6 also links to it from the Progress "Money paid" card
 
 **Given** purchase records
 **When** Purchase history renders
@@ -2656,7 +2683,7 @@ So that I'm never stuck with a charge I don't understand.
 
 **Acceptance Criteria:**
 
-**Given** Purchase history and the Settings Snooze section
+**Given** Purchase history and the You tab's "Money" card
 **When** they render
 **Then** each has a `button-text` / `settings-row` "Problem with a charge?" opening a pushed screen of the same title
 
@@ -2716,7 +2743,7 @@ So that nobody is ever charged without a snooze or snoozes without being charged
 
 A new user is guided through the mission, the alarm behaviour disclosure and consent, the base fee, a first alarm, checks, the full reliability checklist (with Do Not Disturb detection and manufacturer guidance), an anonymous-stats choice and a test alarm on a locked screen. Settings is complete: wake and snooze defaults, "Bright wake screen", theme override, usage stats, reliability checklist, "How payments & refunds work", privacy policy, terms, support and "Delete all data". Firebase Analytics stays off until the user consents (AD-15). The privacy policy, terms and support pages are published on GitHub Pages from `docs/`. **The 14-day closed test starts at the end of this epic.**
 
-This epic builds on Epic 1 (`ReliabilityProbe`, the Story 1.19 `banner-warning`, Crashlytics and the Firebase init-after-unlock rule, `GlobalSettings`/`ConfigResolver`, `PpsTheme(mode)`, the Story 1.18 test alarm, the Story 1.4 Play Console record and license testers), Epic 2 (session lock: Settings and "Delete all data" are unreachable during a session), Epic 3 (check picker, `check-type-card` with "Try it", QR registration, Success screen basic) and Epic 4 (base fee `stepper`, ladder preview, commitment lock, Settings shell and `nav-bar`, `PriceCatalog`, "Problem with a charge?", Purchase history, `BackgroundWork`). It does not redefine them.
+This epic builds on Epic 1 (`ReliabilityProbe`, the Story 1.19 `banner-warning`, Crashlytics and the Firebase init-after-unlock rule, `GlobalSettings`/`ConfigResolver`, `PpsTheme(mode)`, the Story 1.18 test alarm, the Story 1.4 Play Console record and license testers), Epic 2 (session lock: Settings and "Delete all data" are unreachable during a session), Epic 3 (check picker, `check-type-card` with "Try it", QR registration, Success screen basic) and Epic 4 (base fee `stepper`, ladder preview, commitment lock, the Settings Snooze sub-screens, `PriceCatalog`, "Problem with a charge?", Purchase history, `BackgroundWork`). It does not redefine them.
 
 Every UI story carries the two standing acceptance criteria from Epic 1: (1) the `pps-design` Done checklist is copied into the story file with every item ticked; (2) all new user-facing strings live in Compose Multiplatform resources, match `EXPERIENCE.md > Voice and Tone > Key strings` verbatim where a key string exists, and pass `CopyRulesTest` (FR-MSG-4). A string that EXPERIENCE.md does not define is marked `(EXPERIENCE.md Key strings)` in the story and listed for the owner.
 
@@ -2734,9 +2761,9 @@ So that new alarms start the way I like and the app is comfortable to use at nig
 **Then** it holds `defaultGraceSeconds` (15–30, default 20), `defaultVibrateInGrace` (default on, matching Story 3.4), `defaultSnoozeLengthMinutes` (5, 9, 10 or 15, default 9) and `themeMode` (System, Light, Dark; default System), edited only through core use cases `SetDefaultGrace`, `SetDefaultVibrateInGrace`, `SetDefaultSnoozeLength`, `SetThemeMode` that reject out-of-range values with `DomainError.InvalidSetting`
 **And** these defaults apply only to alarms created after the change (the Alarm editor reads them for a new alarm), never alter existing alarms, and are therefore not commitment-locked fields (owner-approved default 2026-09-26)
 
-**Given** Settings (Epic 4 shell)
+**Given** Settings (grouped cards; rows open sub-screens)
 **When** it renders
-**Then** the Snooze section gains "Default snooze length" as a `segmented-control` 5 / 9 / 10 / 15 min; a "Wake" section shows "Default grace window" as a `slider` 15–30 s in 1 s steps with the value announced, and "Vibrate in grace window" as a `switch`; an "Appearance" section shows a `segmented-control` "System" / "Light" / "Dark" (EXPERIENCE.md Key strings)
+**Then** the Snooze card gains a "Default snooze length" row that opens its sub-screen (5 / 9 / 10 / 15 min); a "Wake" card shows "Default quiet time", which opens a sub-screen with a `slider` 15–30 s in 1 s steps with the value announced, and "Vibrate during quiet time" as a `switch`; an "Appearance" card shows a `segmented-control` "System" / "Light" / "Dark" (EXPERIENCE.md Key strings)
 **And** switches and segmented controls apply immediately (no Save)
 
 **Given** the theme override
@@ -2745,7 +2772,7 @@ So that new alarms start the way I like and the app is comfortable to use at nig
 
 **Given** the new Settings sections
 **When** Roborazzi and semantic tests run
-**Then** screenshots exist for the Wake, Snooze and Appearance sections in Light and Dark and at 200% font scale, and for Home rendered under each theme mode, with targets ≥ 48 dp
+**Then** screenshots exist for the Wake, Snooze and Appearance cards and their sub-screens in Light and Dark and at 200% font scale, and for Home rendered under each theme mode, with targets ≥ 48 dp
 **And** ViewModel tests cover bounds, immediate apply and that a new alarm opened in the editor uses the new defaults while an existing alarm keeps its values
 **And** the `pps-design` Done checklist is ticked in the story file, all strings are resources, key strings match EXPERIENCE.md verbatim and `CopyRulesTest` passes (FR-MSG-4)
 **And** `./gradlew qualityGate` passes
@@ -2854,6 +2881,7 @@ So that my phone's battery tools don't kill my alarm.
 **Given** a covered maker
 **When** the user taps "Fix" on the Manufacturer settings row
 **Then** a pushed guidance screen shows 2 to 4 numbered steps for that maker (for example Xiaomi: allow Autostart, set Battery saver to "No restrictions", lock the app in Recents), each step ≤ 25 words [OPEN: Samsung, Huawei, Oppo/Realme, Vivo and OnePlus steps still to write in EXPERIENCE.md Long-form copy; Xiaomi done], sourced from `docs/oem-guidance.md`, which lists per maker the steps, the source (dontkillmyapp.com page and OEM help pages), the Android/skin versions checked and a review date
+**And** Oppo / ColorOS steps are written (EXPERIENCE.md has none yet), since the owner's Oppo A96 is the test phone
 **And** an "Open settings" `button-filled` (EXPERIENCE.md Key strings) tries that maker's known settings components from `OemIntents` in order, launching the first one that `resolveActivity` finds, falling back to app details; it never uses a component that is not resolvable (Robolectric test per maker with and without resolvable components)
 **And** a `button-outlined` "I've done this" (EXPERIENCE.md Key strings) marks the row OK, storing the maker and `Build.FINGERPRINT`
 
@@ -2923,18 +2951,18 @@ So that Play Console, the app and testers link to one honest, up-to-date source.
 **Then** the owner reads every page, confirms it matches the app's behaviour, and records the live URLs and date in the story file (human-verify); automation never marks this story done
 **And** `./gradlew qualityGate` passes
 
-### Story 5.8: "How payments & refunds work", privacy, terms and support in Settings
+### Story 5.8: "How payments & refunds work", privacy, terms and support in the You tab
 
 As a user,
-I want to read how fees, pending payments and refunds work, and reach the privacy policy, terms and support from Settings,
+I want to read how fees, pending payments and refunds work, and reach the privacy policy, terms and support from the You tab,
 So that I trust the app before I ever pay.
 **Refs:** FR-SET-3, FR-ONB-5, FR-SET-5, FR-MSG-4, NFR-5, NFR-9, AD-11, UX-DR51, UX-DR60, UX-DR64, UX-DR66, UX-DR67, UX-DR84 · **Priority:** Must · **Verify:** auto
 
 **Acceptance Criteria:**
 
-**Given** Settings
+**Given** the You tab
 **When** it renders
-**Then** it has rows "How payments & refunds work", "Privacy policy", "Terms" and "Support" (EXPERIENCE.md Key strings); Privacy policy, Terms and Support open `AppLinks` URLs with `ACTION_VIEW` (snackbar "No browser found." when nothing handles it, reusing Story 4.17's string), and Support also offers the support email
+**Then** its cards have the rows "How payments & refunds work", "Privacy policy", "Terms" and "Support" (EXPERIENCE.md Key strings); Privacy policy, Terms and Support open `AppLinks` URLs with `ACTION_VIEW` (snackbar "No browser found." when nothing handles it, reusing Story 4.17's string), and Support also offers the support email
 
 **Given** the Payments & refunds screen
 **When** it renders
@@ -2945,7 +2973,7 @@ So that I trust the app before I ever pay.
 
 **Given** these screens
 **When** Roborazzi and semantic tests run
-**Then** screenshots exist for Settings (full list) and Payments & refunds in Light and Dark and at 200% font scale, headings are TalkBack headings, targets are ≥ 48 dp, and a Robolectric test asserts each link intent
+**Then** screenshots exist for You (full list) and Payments & refunds in Light and Dark and at 200% font scale, headings are TalkBack headings, targets are ≥ 48 dp, and a Robolectric test asserts each link intent
 **And** the `pps-design` Done checklist is ticked in the story file, all strings are resources, key strings match EXPERIENCE.md verbatim and `CopyRulesTest` passes (FR-MSG-4)
 **And** `./gradlew qualityGate` passes
 
@@ -2958,13 +2986,13 @@ So that I can start over or leave without a trace on the phone.
 
 **Acceptance Criteria:**
 
-**Given** Settings
+**Given** the You tab
 **When** the user taps "Delete all data" (EXPERIENCE.md Key strings)
-**Then** a `dialog-confirm` opens with "Delete all data?" and "Alarms, history, purchase records and settings are removed from this phone. This can't be undone." with "Delete" in `error` colour and "Keep it" as the default dismiss (EXPERIENCE.md Key strings)
+**Then** the preview's `dialog-confirm` opens with "Delete all data?" and "Alarms, history, purchase records and settings are removed from this phone. This can't be undone." with "Delete" in `error` colour and "Keep it" as the default dismiss (EXPERIENCE.md Key strings)
 
 **Given** core use case `DeleteAllData`
 **When** it runs while a session is active (including Snoozed)
-**Then** it returns `DomainError.SessionActive` and changes nothing (the Settings row is also unreachable under the Epic 2 session lock; this guard is defence in depth, unit-tested)
+**Then** it returns `DomainError.SessionActive` and changes nothing (the You row is also unreachable under the Epic 2 session lock; this guard is defence in depth, unit-tested)
 
 **Given** no active session and the user confirms
 **When** `DeleteAllData` runs
@@ -2992,6 +3020,7 @@ So that I agree to the rules before I set my first alarm.
 **Given** `onboardingCompleted` false in the settings DataStore (first launch, or after "Delete all data")
 **When** the app opens
 **Then** the Onboarding route shows instead of Home, with `progress-dots` for 8 steps (mission, disclosure, base fee, first alarm, checks, reliability checklist, usage stats, test alarm), Back going to the previous step (and leaving the app from step 1), dots not tappable
+**And** the steps use the design preview round 3 screens (`progress-dots` on a small glass capsule, one job per step, the step's actions in their own bottom area)
 **And** the current step is saved, so a process death resumes at the same step
 **And** a user restored from backup with `onboardingCompleted` true goes straight to Home (the reliability banner covers settings that differ on the new phone)
 
@@ -3027,7 +3056,7 @@ So that I finish setup with an alarm I can trust.
 
 **Given** step 4, first alarm
 **When** it renders
-**Then** it shows the `time-picker` (keyboard first) and `chip-day`s with a headline "When should it ring?" (EXPERIENCE.md Key strings); other alarm fields use the Story 5.1 defaults; a passed one-time time shows "Rings tomorrow at {time}."
+**Then** it shows the editor's shared time wheel (`time-picker`) and the repeat cards Once · Weekdays · Custom (Custom expands to the `chip-day`s) with a headline "When should it ring?" (EXPERIENCE.md Key strings); other alarm fields use the Story 5.1 defaults; a passed one-time time shows "Rings tomorrow at {time}."
 
 **Given** step 5, checks
 **When** it renders
@@ -3037,11 +3066,11 @@ So that I finish setup with an alarm I can trust.
 
 **Given** step 6, reliability checklist
 **When** it renders
-**Then** it embeds the Story 5.4 checklist (rows, Fix deep-links, re-check on return) with headline "Make sure it rings" (EXPERIENCE.md Key strings); the "Test alarm" row is left for step 8 and "Continue" is never blocked by failing rows
+**Then** it embeds the Story 5.4 checklist as the `ChecklistCard` (rows, Fix deep-links, re-check on return) with headline "Make sure it rings" (EXPERIENCE.md Key strings); the "Test alarm" row is left for step 8 and "Continue" is never blocked by failing rows
 
 **Given** step 7, usage stats
 **When** it renders
-**Then** it shows "Share anonymous usage stats? Off unless you turn it on." with two equal buttons "Share" and "No thanks", neither pre-selected or focused
+**Then** it shows "Share anonymous usage stats? Off unless you turn it on." with two equal `button-outlined` "Share" and "No thanks", neither pre-selected or focused
 **And** either tap sets `analyticsAsked` true and consent accordingly (Story 5.6), the question is never asked again, and the Settings toggle reflects the choice
 
 **Given** steps 4 to 7
@@ -3059,7 +3088,7 @@ So that I see with my own eyes it rings over the lock screen, for free.
 
 **Acceptance Criteria:**
 
-**Given** step 8, test alarm
+**Given** step 8, test alarm (the design preview round 3 screen)
 **When** it renders
 **Then** it shows "Lock your phone. We'll ring in 10 seconds." after the user taps `button-filled` "Ring a test alarm", the note "Your alarm screen turns bright to help you wake. Change it in Settings." (when Bright wake screen is on), and a `button-text` "Skip for now"
 **And** "Ring a test alarm" schedules a test through Story 1.18 using the first alarm's settings (check, sound, grace), and the test ring shows "Test · no charge" and can never charge
@@ -3092,7 +3121,7 @@ So that closed testers get an app that sets itself up correctly on their devices
 
 **Acceptance Criteria:**
 
-**Given** the latest `main` debug build freshly installed on each device of the matrix (Pixel, Samsung, Xiaomi, budget device)
+**Given** the latest `main` debug build freshly installed on each device of the matrix (the owner's Oppo A96 plus the NFR-1 emulators; other makers optional via Firebase Test Lab)
 **When** the owner runs the checklist
 **Then** for each item the story file records pass/fail, device, Android version and date:
 1. First launch runs mission → disclosure → base fee → first alarm → checks → checklist → usage stats → test alarm, in that order, and resumes at the same step after swiping the app away.
@@ -3146,7 +3175,7 @@ So that the production-access requirement is met and real-world bugs surface bef
 
 ## Epic 6: Wake-up progress
 
-The user sees how their mornings are going: the current and best zero-snooze streak and this week's money on Home above everything else, a Progress screen with on-time rate (7 and 30 days), average time from first ring to up, snoozes per week and money paid per currency, a calendar that marks each day's outcome with glyph, colour and label, a Day detail for each morning, a Sunday-evening weekly summary, a one-screen zero-snooze celebration, and a CSV export. Every number comes from pure functions in `core.stats` over the Story 1.13 `session_history` table (written only by `SessionRecorder`) and the Epic 4 purchase records (written only by `PurchaseLedger`, `Money` micros plus currency); nothing stores derived stats (AD-18, AD-8). Test and Skipped sessions, and sessions still in progress (null outcome), never count toward rates, streaks or averages. This epic is built while the closed test from Epic 5 runs.
+The user sees how their mornings are going: the current and best zero-snooze streak and this week's money on Home above everything else, a Progress screen with the ring of the last 30 mornings, on-time rate (7 and 30 days), average time from first ring to up, snoozes over the last 30 days and money paid per currency, a calendar that marks each day's outcome with shape, colour and label, a Day detail for each morning, a Sunday-evening weekly summary, and a one-screen zero-snooze celebration. Every number comes from pure functions in `core.stats` over the Story 1.13 `session_history` table (written only by `SessionRecorder`) and the Epic 4 purchase records (written only by `PurchaseLedger`, `Money` micros plus currency); nothing stores derived stats (AD-18, AD-8). Test and Skipped sessions, and sessions still in progress (null outcome), never count toward rates, streaks or averages. This epic is built while the closed test from Epic 5 runs.
 
 Every UI story in this epic carries the two standing acceptance criteria from Epic 1, repeated in the story so the build loop can check them: (1) the `pps-design` Done checklist is copied into the story file with every item ticked; (2) all new user-facing strings live in Compose Multiplatform resources, match `EXPERIENCE.md > Voice and Tone > Key strings` verbatim where a key string exists, and pass `CopyRulesTest` (FR-MSG-4). A string that EXPERIENCE.md does not define is marked `(EXPERIENCE.md Key strings)` and listed for the owner.
 
@@ -3156,7 +3185,7 @@ Stats definitions shared by every story in this epic (owner to confirm; these re
 - **Good day** = a day with at least one counted session where every counted session is OnTime. A day with any Snoozed or Missed session breaks the streak. Days with no counted session (no alarm, or only Test/Skipped) neither extend nor break a streak.
 - **Week** = ISO week, Monday 00:00 to Sunday 24:00 local, so the Sunday 19:00 summary covers the whole week so far. **Month** = local calendar month.
 - **Money paid** = purchase records with status granted, consumed or reused, summed in micros per currency; stranded records are never counted (they are refunded by Google). Self-requested refunds are not detectable (PRD §6.3), so totals show what was charged.
-- **Calendar day outcome** when a day has several sessions = the worst counted outcome (Missed, then Snoozed, then On time); a day with only Test or Skipped sessions shows the hollow ring labelled Skipped if any session was skipped, otherwise Test.
+- **Calendar day outcome** when a day has several sessions = the worst counted outcome (Missed, then Snoozed, then On time); a day with only Test or Skipped sessions shows the small neutral dot labelled Skipped if any session was skipped, otherwise Test.
 
 ### Story 6.1: Streaks, on-time rate and time to up in core.stats
 
@@ -3202,9 +3231,13 @@ So that the numbers I see match my Google Play receipts.
 **Acceptance Criteria:**
 
 **Given** a history
-**When** `snoozesPerWeek(history, today, zone, weeks = 8)` is computed
-**Then** it returns exactly 8 entries, oldest first, one per ISO week ending with the week that contains `today`, each holding the week's Monday and the sum of `snooze_count` over sessions whose day falls in that week, including Snoozed and Missed sessions (paid snoozes before a Missed timeout still happened) and excluding Test, Skipped and null-outcome rows
-**And** weeks without sessions are present with 0, and tests cover a year boundary (ISO week 53 of 2026 into week 1 of 2027) and a Sunday 23:30 session that belongs to the week that started on the previous Monday
+**When** `snoozesLast30Days(history, today, zone)` is computed
+**Then** it returns the sum of `snooze_count` over sessions whose day falls in the last 30 days up to and including `today`, including Snoozed and Missed sessions (paid snoozes before a Missed timeout still happened) and excluding Test, Skipped and null-outcome rows
+**And** no weekly series for a chart is built (the weekly totals for the Sunday summary stay in Story 6.8), and tests cover a session on the 30th day back (counted) and one on the 31st (not counted)
+
+**Given** a history
+**When** `insight(history, today, zone)` is computed
+**Then** it returns one short line based on the user's data for the Progress Insight card (for example "You get up fastest on weekdays." (EXPERIENCE.md Key strings)), or nothing when the data is too thin, in which case the card is hidden
 
 **Given** purchase records from the Epic 4 read port (each with `Money(micros, currency)`, status, `session_id` and purchase time)
 **When** `moneyPaid(records, period, today, zone)` is computed for `ThisWeek`, `ThisMonth` and `AllTime`
@@ -3219,7 +3252,7 @@ So that the numbers I see match my Google Play receipts.
 
 **Given** `SessionHistoryRepository` from Story 1.13 and the Epic 4 purchase-record port
 **When** the `ObserveProgress` use case is added
-**Then** it exposes `Flow<ProgressSnapshot>` holding current and best streak, on-time rate 7 d and 30 d, average time to up, snoozes per week, money this week / month / all time and a `hasHistory` flag, recomputed whenever either table changes and whenever the local date or time zone changes (a `DayTicker` input driven from `Clock` and `TimeZoneProvider`)
+**Then** it exposes `Flow<ProgressSnapshot>` holding current and best streak, on-time rate 7 d and 30 d, average time to up, snoozes over the last 30 days, the insight line, money this week / month / all time and a `hasHistory` flag, recomputed whenever either table changes and whenever the local date or time zone changes (a `DayTicker` input driven from `Clock` and `TimeZoneProvider`)
 **And** a read-only `observeAll(): Flow<List<SessionHistoryEntry>>` is added to `SessionHistoryRepository` (Room implementation plus the `:testing` fake) if Story 1.13 did not provide one; `SessionRecorder` stays the only writer
 **And** Turbine tests with `FakeSessionHistoryRepository`, the Epic 4 purchase-record fake and `FakeClock` assert a new emission after a session row is upserted, after a purchase record is upserted, and when the fake clock crosses local midnight
 **And** a performance test builds 3 years of daily sessions (about 1,100 rows) and asserts a full `ProgressSnapshot` computes in under 50 ms on the JVM
@@ -3237,8 +3270,8 @@ So that the thing I'm working toward is the first thing I see.
 
 **Given** Home with at least one alarm or at least one history row
 **When** it renders
-**Then** `card-hero` is the first element above the reliability `banner-warning`, the next-alarm countdown, notes and the alarm list, and shows the current streak from `ObserveProgress` in `display` with tabular figures (`accent-text` in Light, `accent-dark` in Dark), the label "days on time" in `body` (EXPERIENCE.md Key strings), and the money line in `text-secondary`
-**And** the card is `surface`, `rounded.md`, 16 dp padding, not tappable, and the streak number never animates on Home
+**Then** `card-hero` fills the collapsing Home header from Story 1.9, above the reliability `banner-warning`, notes and the alarm list, and shows the current streak from `ObserveProgress` in `display` with tabular figures (`accent-text` in Light, `accent-dark` in Dark), the label "days on time" in `body` (EXPERIENCE.md Key strings), and the money line in `text-secondary`
+**And** the card is `glass`, `rounded.md`, 16 dp padding, not tappable, collapses into the compact pinned row on scroll (UX-DR30), and the streak number never counts up on Home
 
 **Given** nothing was paid this ISO week
 **When** the money line renders
@@ -3280,13 +3313,13 @@ So that waking on time feels like a win, and a paid morning never feels like a f
 
 **Given** the Success wake screen shown after `Completed` (Story 3.3, with the "after snooze" variant from Story 4.15; extended here)
 **When** the session completed with 0 snoozes and is not a test
-**Then** `streakAfter = currentStreak(snapshot + this session as OnTime, today, zone)` and the headline reads "Up on time. {streak} days in a row." (EXPERIENCE.md Key strings) with `{streak}` = `streakAfter` in tabular figures (EXPERIENCE.md Key strings)
-**And** when `streakAfter > streakBefore` the streak number plays exactly one 600 ms scale + fade and one success haptic, and nothing else moves (UX-DR71); when the streak did not grow (a second on-time session on the same day) the same text shows with no animation and no extra haptic
+**Then** `streakAfter = currentStreak(snapshot + this session as OnTime, today, zone)` and the screen shows `streakAfter` as the big number in tabular figures, then "days in a row", then the headline "Up on time." (EXPERIENCE.md Key strings), with no repeated number
+**And** when `streakAfter > streakBefore` the number counts up from `streakBefore` with a bounce, about 1.5 s of confetti plays and one success haptic fires (UX-DR71); when the streak did not grow (a second on-time session on the same day) the same text shows with no animation and no extra haptic
 **And** the whole animation finishes within 3 s of the screen appearing (FR-MSG-3), is not repeated on recomposition, rotation or return from Recents, and never plays on Home
 
 **Given** the animator duration scale is 0
 **When** the celebration would play
-**Then** the final state appears instantly with no scale or fade, and the success haptic still fires (UX-DR72)
+**Then** the final state appears instantly with no count-up, bounce or confetti, and the success haptic still fires (UX-DR72)
 
 **Given** a session completed after one or more paid snoozes
 **When** Success renders
@@ -3312,48 +3345,44 @@ So that waking on time feels like a win, and a paid morning never feels like a f
 **And** the `pps-design` Done checklist is ticked in the story file, all strings are resources, key strings match EXPERIENCE.md verbatim and `CopyRulesTest` passes (FR-MSG-4)
 **And** `./gradlew qualityGate` passes
 
-### Story 6.5: Progress screen with stat tiles, snoozes chart and money
+### Story 6.5: Progress screen with the 30-morning ring, stat tiles and money
 
 As a user,
-I want one screen that shows my streaks, on-time rate, time to get up, snoozes per week and money paid,
+I want one screen that shows my streaks, on-time rate, time to get up, snoozes and money paid,
 So that I can see whether I'm snoozing less over time.
-**Refs:** FR-PRG-2, FR-PRG-4, FR-MSG-4, NFR-3, NFR-9, NFR-10, AD-8, AD-11, AD-18, UX-DR44, UX-DR46, UX-DR47, UX-DR58, UX-DR59, UX-DR64, UX-DR66, UX-DR67, UX-DR68, UX-DR80, UX-DR84, UX-DR94 · **Priority:** Must · **Verify:** auto
+**Refs:** FR-PRG-2, FR-PRG-4, FR-MSG-4, NFR-3, NFR-9, NFR-10, AD-8, AD-11, AD-18, UX-DR44, UX-DR46, UX-DR48, UX-DR58, UX-DR59, UX-DR64, UX-DR66, UX-DR67, UX-DR68, UX-DR80, UX-DR84, UX-DR94 · **Priority:** Must · **Verify:** auto
 
 **Acceptance Criteria:**
 
-**Given** the `nav-bar`
-**When** the user taps "Progress" (created here if earlier epics left it as a placeholder)
-**Then** the Progress route shows, top to bottom: two rows of `stat-tile`s (current streak and best streak; on-time rate 7 d and 30 d), a full-width `stat-tile` for average time to up, the snoozes `bar-chart`, the money section, and links to Purchase history (the Epic 4 screen, whose entry point moves here) and Export CSV (disabled until Story 6.9)
-**And** the tile labels are "Current streak", "Best streak", "On time · 7 days", "On time · 30 days" and "Average time to up" (EXPERIENCE.md Key strings), numbers are in `display` with tabular figures in `text` colour, percentages are locale-formatted (86% in en-US), average time reads "{minutes} min" or "Under 1 min" (EXPERIENCE.md Key strings)
+**Given** the nav capsule
+**When** the user taps "Progress" (the Story 1.9 tab, filled here)
+**Then** the Progress route shows, top to bottom, with no heading, no period tabs and no chart (EXPERIENCE.md Information Architecture): the `progress-ring` of the last 30 mornings with the streak, "/ 30" and "day streak" in the centre; three small `stat-tile`s in one row (2 + 1 at large font); `card-streak` ("Current streak", "Best streak", "Keep it going."); the calendar (Story 6.6); and the "Money paid" card with the Purchase history link (the Epic 4 screen) beside the Insight card (Story 6.2, hidden when the data is thin)
+**And** tapping a ring dot shows its label chip ("{weekday} {day} · {outcome}"), and tapping again or tapping the chip opens Day detail (Story 6.7)
+**And** on entry the cards fade and rise in sequence, the ring dots sweep in and the streak counts up; with reduced motion the final state shows at once
+**And** the tile labels are "on time", "to get up" and "snoozes" (EXPERIENCE.md Key strings) for the 30-day on-time rate, the average time to up and the snooze count over the last 30 days; numbers are in `display` with tabular figures in `text` colour, percentages are locale-formatted (86% in en-US), average time reads "{minutes} min" or "Under 1 min" (EXPERIENCE.md Key strings)
 **And** a tile whose value is `null` shows "No mornings yet" (EXPERIENCE.md Key strings) in `body` instead of a number, never 0% or 0 min
 
-**Given** the snoozes chart
-**When** it renders `snoozesPerWeek` for the last 8 weeks
-**Then** bars use `snoozed` colour with `rounded.sm` top corners on an `outline` baseline, week labels (Monday's date, locale short format) are `text-secondary`, the caption reads "Lower is better." (DESIGN.md `bar-chart`) (EXPERIENCE.md Key strings), and a week with 0 snoozes shows only the baseline
-**And** each bar's tap area is at least 48 dp wide and the full chart height; when 8 × 48 dp does not fit the screen width, the chart scrolls horizontally with the current week visible when the screen opens
-**And** tapping a bar shows that week's number above it as "{n} snoozes" (EXPERIENCE.md Key strings), and TalkBack reads each bar as "Week of {date}, {n} snoozes" (EXPERIENCE.md Key strings)
-
 **Given** the money section titled "Money paid" (EXPERIENCE.md Key strings)
-**When** it renders `moneyPaid` for this week, this month and all time
-**Then** each period row is labelled "This week", "This month" or "All time" (EXPERIENCE.md Key strings) and shows one line per currency formatted by `MoneyFormatter`, in `text` colour, never accent, green or red
-**And** a period with nothing paid reads "Nothing paid" (FR-PRG-2), never a zero amount or a currency symbol
+**When** it renders `moneyPaid` for this month
+**Then** it is labelled "This month" (EXPERIENCE.md Key strings) and shows one line per currency formatted by `MoneyFormatter`, in `text` colour, never accent, green or red, with the "Purchase history" link
+**And** nothing paid reads "Nothing paid" (FR-PRG-2), never a zero amount or a currency symbol
 
 **Given** no history at all
 **When** Progress opens
-**Then** it shows only "Your first morning shows up here." (EXPERIENCE.md Key strings) and the Purchase history link, with no empty tiles or chart
+**Then** it shows the empty ring with "Your first morning shows up here." (EXPERIENCE.md Key strings), the calendar and the Purchase history link, with no empty tiles
 **And** while the first snapshot loads, `skeleton` blocks appear only after 300 ms, without shimmer when animations are off, and text replaces them after 3 s (UX-DR58)
 
 **Given** a history with only Test and Skipped sessions
 **When** Progress opens
-**Then** streak tiles show 0, rate and average tiles show "No mornings yet", and the chart shows 8 empty weeks (Test and Skipped never count)
+**Then** the streaks show 0, rate and average tiles show "No mornings yet", and the snoozes tile shows 0 (Test and Skipped never count)
 
 **Given** an active session
 **When** the user opens the app
-**Then** Progress is unreachable because `panel-session-in-progress` replaces the app and the `nav-bar` is hidden (UX-DR61)
+**Then** Progress is unreachable because `panel-session-in-progress` replaces the app and the nav capsule is hidden (UX-DR61)
 
 **Given** Roborazzi, semantic and ViewModel tests with fake history and purchase records
 **When** they run
-**Then** screenshots cover empty, Test-only, a typical month (F9: streak 12, best 12, 86% 30 d, 3 min, a chart with varied weeks), two currencies, and a tapped bar, in Light and Dark and at 200% font scale with nothing clipped, all targets ≥ 48 dp and every tile read by TalkBack as "{label}, {value}"
+**Then** screenshots cover empty, Test-only, a typical month (F9: streak 12, best 12, 86% 30 d, 3 min, a ring with varied outcomes), two currencies, and a tapped ring dot with its label chip, in Light and Dark and at 200% font scale with nothing clipped, all targets ≥ 48 dp and every tile read by TalkBack as "{label}, {value}"
 **And** the `pps-design` Done checklist is ticked in the story file, all strings are resources, key strings match EXPERIENCE.md verbatim and `CopyRulesTest` passes (FR-MSG-4)
 **And** `./gradlew qualityGate` passes
 
@@ -3368,13 +3397,13 @@ So that I can spot patterns, like which weekdays I struggle on.
 
 **Given** the Progress screen with at least one history row
 **When** it renders
-**Then** a calendar section below the chart shows the current month as a 7-column grid of 48 dp `calendar-day` cells starting on Monday (matching the ISO week used by the stats), with the month and year as a locale-formatted title and weekday initials above the columns
-**And** each cell shows the date in `caption` and, below it, the `outcome-marker` for `dayOutcome`: filled `check_circle` in `success` (On time), filled `schedule` in `snoozed` (Snoozed), filled `cancel` in `missed` (Missed), hollow `radio_button_unchecked` in `outline` (Skipped or Test), plus a small `alt_route` badge in `text-secondary` when a fallback check was used; days with no session show only the date
-**And** today's cell has a 1 dp accent ring, and future days show only the date and are not tappable
+**Then** a compact calendar card below `card-streak` shows the current month as a 7-column grid of 48 dp `calendar-day` cells starting on Monday (matching the ISO week used by the stats), with the month and year as a locale-formatted title and weekday initials above the columns
+**And** each cell shows the date in `caption` and, below it, the `outcome-marker` shape for `dayOutcome` (UX-DR48): filled dot in `success` (On time), dot with a small clock in `snoozed` (Snoozed), hollow ring in `missed` (Missed), small neutral dot in `outline` (Skipped or Test); a fallback check is said to TalkBack (the `alt_route` badge is shown in Day detail only); days with no session show only the date
+**And** today's date sits in an outlined accent pill, and future days show only the date and are not tappable
 
-**Given** the calendar legend
-**When** it renders below the grid
-**Then** it pairs each glyph with its glossary label "On time", "Snoozed", "Missed", "Skipped", "Test" and "Fallback check used" (EXPERIENCE.md Glossary and Component Patterns) so colour is never the only signal (UX-DR68)
+**Given** a day cell with sessions
+**When** the user taps it
+**Then** its label chip ("{weekday} {day} · {outcome}", glossary outcome words) pops in under the grid (instant with reduced motion), and a second tap on the day or a tap on the chip opens Day detail; there is no legend, because shape plus colour plus the chip label carry the meaning (UX-DR68)
 
 **Given** the calendar
 **When** the user taps the 48 dp "Previous month" or "Next month" icon buttons (EXPERIENCE.md Key strings)
@@ -3395,7 +3424,7 @@ So that I can spot patterns, like which weekdays I struggle on.
 
 **Given** Roborazzi and semantic tests
 **When** they run
-**Then** screenshots cover a month with every outcome, a fallback badge, a multi-session day, today, an empty previous month, and the legend, in Light and Dark and at 200% font scale with no clipped cell, and a test asserts every glyph/colour pair used is in the DESIGN.md verified contrast table
+**Then** screenshots cover a month with every outcome, a fallback badge, a multi-session day, today, an empty previous month, and a label chip, in Light and Dark and at 200% font scale with no clipped cell, and a test asserts every glyph/colour pair used is in the DESIGN.md verified contrast table
 **And** the `pps-design` Done checklist is ticked in the story file, all strings are resources, key strings match EXPERIENCE.md verbatim and `CopyRulesTest` passes (FR-MSG-4)
 **And** `./gradlew qualityGate` passes
 
@@ -3408,31 +3437,31 @@ So that I understand each morning, not just the totals.
 
 **Acceptance Criteria:**
 
-**Given** a calendar day with sessions
-**When** the user taps it
-**Then** the Day detail route opens with a `top-app-bar` titled with the locale-formatted full date and one `surface` `rounded.md` card per session from `sessionsOn`, ordered by scheduled time
+**Given** a ring or calendar day with sessions
+**When** the user opens it from its label chip
+**Then** the Day detail route opens with a one-line title (short weekday, day and month, for example "Wed, Sep 23" in the phone's locale) and, per session from `sessionsOn` ordered by scheduled time, a `day-hero`, three small tiles ("rings" · "snoozes" · "paid", "No charge" when nothing was paid) and a `morning-timeline` of the events in order, which draws in on open (instant with reduced motion)
 
 **Given** a counted session (On time, Snoozed or Missed)
-**When** its card renders
-**Then** it shows the `outcome-marker` with its label, the alarm time and label, first ring time, time up (`ended_at`; not shown for Missed), time to up as "{minutes} min" or "Under 1 min" (Story 6.5 strings), snooze count as "{n} snoozes" (Story 6.5 string), the amount paid per currency via `MoneyFormatter` or "Nothing paid", and the check types by their glossary names
+**When** its hero, tiles and timeline render
+**Then** they show the `outcome-marker` with its label, the alarm time and label, first ring time, time up (`ended_at`; not shown for Missed), time to up as "{minutes} min" or "Under 1 min" (Story 6.5 strings), snooze count as "{n} snoozes" (Story 6.5 string), the amount paid per currency via `MoneyFormatter` or "Nothing paid", and the check types by their glossary names
 **And** when `fallback_used` is true it adds the `alt_route` badge and "Fallback check used"; when `direct_boot` is true it adds "Rang before your first unlock" (EXPERIENCE.md Key strings)
 **And** each occurrence merged into this session (recorded by the Epic 2 merge handling) adds a `note-inline` "{time} alarm merged into this session" (EXPERIENCE.md State Patterns)
 **And** each stranded purchase linked to the session is listed as a `purchase-row`-style line reading "Not used, refunded automatically by Google" (EXPERIENCE.md Key strings), not included in the paid amount
 
 **Given** a Test or Skipped session
-**When** its card renders
-**Then** it shows only the outcome marker, the label "Test" or "Skipped" and the alarm time (EXPERIENCE.md State Patterns: outcome label only)
+**When** it renders
+**Then** it shows the hero only: the outcome marker, the label "Test" or "Skipped" and the alarm time (EXPERIENCE.md State Patterns: outcome label only)
 
 **Given** an alarm the user turned off or deleted inside the commitment-lock window on that day (F6)
 **When** Day detail renders
 **Then** it lists "Your {time} alarm was turned off. Logged." or "Your {time} alarm was deleted. Logged." (EXPERIENCE.md Key strings) from the `commitment_event` rows (Story 4.4 table, written by the Story 4.6 turn-off and delete confirmations), with `{time}` taken from `occurrence_at` and the day from its local date; no new table or migration is added
 
 **Given** Day detail with TalkBack
-**When** focus moves through a card
+**When** focus moves through a session
 **Then** the outcome is read as a word, never as a colour or icon name, and each fact is read as label and value
 
 **Given** a session whose `session_history` row has a null `ended_at` or `time_to_complete_ms` (for example an older row)
-**When** its card renders
+**When** it renders
 **Then** the missing facts are omitted, never shown as 0 or "null" (test)
 
 **Given** Roborazzi, semantic and ViewModel tests
@@ -3485,65 +3514,34 @@ So that I notice my progress without opening the app.
 **And** the `pps-design` Done checklist is ticked in the story file, all strings are resources, key strings match EXPERIENCE.md verbatim and `CopyRulesTest` passes (FR-MSG-4)
 **And** `./gradlew qualityGate` passes
 
-### Story 6.9: Export history as CSV
+### ~~Story 6.9: Export history as CSV~~ (dropped 2026-10-01, FR-PRG-6 removed)
 
-As a user,
-I want to export my wake-up history as a CSV file,
-So that I can keep it or analyse it in a spreadsheet.
-**Refs:** FR-PRG-6, FR-PRG-1, FR-MSG-4, NFR-4, AD-6, AD-8, AD-18, UX-DR80, UX-DR94 · **Priority:** Could · **Verify:** auto
-
-**Acceptance Criteria:**
-
-**Given** `core.stats`
-**When** `historyCsv(history, records, zone)` is generated
-**Then** it returns RFC 4180 text (CRLF line endings, UTF-8 without BOM) with a header row `date,scheduled_time,first_ring,up_at,outcome,snoozes,paid_micros,currency,check_types,minutes_to_up,fallback_used,rang_before_unlock,alarm_label` and one row per session with a non-null outcome, including Test and Skipped rows, oldest first
-**And** times are ISO 8601 local date-times with offset in `zone`, `outcome` uses the glossary words (On time, Snoozed, Missed, Skipped, Test), `check_types` are glossary names joined by ";", and money columns hold the summed micros and ISO currency code of granted, consumed and reused records (a session paid in two currencies gets one row per currency with the other columns repeated; nothing paid leaves both columns empty)
-**And** fields containing a comma, quote, CR or LF are quoted with quotes doubled, and any field starting with `=`, `+`, `-` or `@` is prefixed with a single quote so spreadsheets do not run it as a formula (tests with a label `=HYPERLINK("x")`, a label with a comma and a newline, and a non-ASCII label)
-**And** no purchase token, order id, install id or file path is ever written (test)
-
-**Given** Progress
-**When** the "Export CSV" link (EXPERIENCE.md Key strings) is tapped with at least one exportable session
-**Then** the file `pay-per-snooze-history-{yyyy-MM-dd}.csv` is written to the app cache `exports/` folder (credential-protected, excluded from backup, old exports deleted first), shared through a `FileProvider` with `ACTION_SEND` type `text/csv` and read permission granted only to the chosen target, and the Android share sheet opens
-**And** generation runs off the main thread; with 3 years of daily sessions it completes in under 1 s on the JVM (test)
-
-**Given** no exportable session
-**When** Progress renders
-**Then** the "Export CSV" link is disabled and "Nothing to export yet." (EXPERIENCE.md Key strings) is shown under it
-
-**Given** an active session
-**When** the user opens the app
-**Then** export is unreachable (session lock)
-
-**Given** Robolectric and Roborazzi tests
-**When** they run
-**Then** they assert the share intent's type, URI authority and grant flag, that the file content equals `historyCsv` output, and screenshots cover the enabled and disabled export link in Light and Dark and at 200% font scale
-**And** the `pps-design` Done checklist is ticked in the story file, all strings are resources, key strings match EXPERIENCE.md verbatim and `CopyRulesTest` passes (FR-MSG-4)
-**And** `./gradlew qualityGate` passes
+Dropped by sprint-change-proposal-2026-10-01: the owner decided against an in-app CSV export (design preview feedback item 23), so FR-PRG-6 is removed from PRD v0.3 and this story is not built.
 
 ### Story 6.10: Epic 6 device verification checklist
 
 As the owner,
 I want to confirm on real phones the progress features that tests can't prove,
 So that closed testers and launch users see numbers and notifications they can trust.
-**Refs:** FR-PRG-2, FR-PRG-3, FR-PRG-5, FR-PRG-6, FR-MSG-2, FR-MSG-3, FR-MSG-4, NFR-9, NFR-10, NFR-11 · **Priority:** Must · **Verify:** human-verify
+**Refs:** FR-PRG-2, FR-PRG-3, FR-PRG-5, FR-MSG-2, FR-MSG-3, FR-MSG-4, NFR-9, NFR-10, NFR-11 · **Priority:** Must · **Verify:** human-verify
 
 **Acceptance Criteria:**
 
-**Given** the latest `main` debug build installed on each device of the matrix (Pixel, Samsung, Xiaomi, budget device), using the debug fire-now hook and manual date changes to build a week of history
+**Given** the latest `main` debug build installed on each device of the matrix (the owner's Oppo A96 plus the NFR-1 emulators; other makers optional via Firebase Test Lab), using the debug fire-now hook and manual date changes to build a week of history
 **When** the owner runs the checklist
 **Then** for each item the story file records pass/fail, device, Android version and date:
 1. After three on-time test-free mornings (real, non-test alarms via the debug hook), Home's hero shows "3 days on time" and "Nothing paid this week. Keep it that way." above the reliability banner and the countdown.
-2. A zero-snooze morning shows "Up on time. {streak} days in a row." with one scale of the number and one success haptic, finishing within 3 s; a second on-time alarm the same day shows the text with no animation.
+2. A zero-snooze morning shows the streak number, "days in a row" and "Up on time." with the count-up, bounce, about 1.5 s of confetti and one success haptic, finishing within 3 s; a second on-time alarm the same day shows the text with no animation.
 3. With "Remove animations" on, the celebration appears instantly and the haptic still fires.
-4. A morning with one paid snooze (license tester) shows "You're up. That's what counts." with the amount paid, no animation; Home then shows "{paid} paid this week" with the Play-localized price, and Progress shows it under This week, This month and All time.
+4. A morning with one paid snooze (license tester) shows "You're up. That's what counts." with the amount paid, no animation; Home then shows "{paid} paid this week" with the Play-localized price, and Progress shows it under "Money paid" for this month.
 5. "Done" on Success restores the screen brightness set before the alarm.
-6. Progress matches a hand count from Day detail for current streak, best streak, on-time 7 d and 30 d, average time to up and the 8-week chart; a Test alarm and a skipped occurrence (if Epic 7 skip ships) change none of them.
-7. The calendar shows the correct glyph, colour and label for On time, Snoozed, Missed and Test days, the fallback badge after a fallback check, and TalkBack reads "{weekday} {day}, {outcome}".
-8. Day detail for a snoozed morning lists rings, snoozes, paid amount, check and time to up; a Missed morning shows no time up.
+6. Progress matches a hand count from Day detail for current streak, best streak, on-time 7 d and 30 d, average time to up and the 30-day snoozes count; a Test alarm and a skipped occurrence (if Epic 7 skip ships) change none of them.
+7. The calendar shows the correct shape and colour for On time, Snoozed, Missed and Test days, a first tap shows the label chip and a second opens Day detail, Day detail shows the fallback badge after a fallback check, and TalkBack reads "{weekday} {day}, {outcome}".
+8. Day detail for a snoozed morning lists rings, snoozes, paid amount, check and time to up, and its morning timeline draws in with the events in order; a Missed morning shows no time up.
 9. With the weekly summary on and the device clock set to Sunday 18:58, the notification arrives by 19:15 with the EXPERIENCE.md text, and tapping it opens Progress; with the toggle off, nothing arrives.
 10. After changing the time zone, Home, Progress and the calendar recompute without restarting the app.
-11. "Export CSV" opens the share sheet, and the file saved to Drive or Files opens in Google Sheets with one row per session, readable dates and no formula execution from a label starting with "=".
-12. At 200% font size and with TalkBack on, Home hero, Progress tiles, chart bars and calendar cells are readable and reachable.
+11. The Progress ring shows the last 30 mornings with today in the accent pill; tapping a dot shows its label chip, and tapping again or tapping the chip opens Day detail; the entry animation plays once and is instant with "Remove animations" on.
+12. At 200% font size and with TalkBack on, Home hero, Progress tiles, ring dots and calendar cells are readable and reachable.
 13. All copy seen matches EXPERIENCE.md and the owner-approved assumption strings (no em dashes, no currency symbols in resources, "Nothing paid" for zero) (FR-MSG-4).
 
 **Given** any failed item
@@ -3602,10 +3600,10 @@ So that the right voice greets me each morning.
 
 **Given** the Alarm editor
 **When** it renders
-**Then** a "Motivation" section (EXPERIENCE.md Key strings) appears after Sound with a row "Message" (EXPERIENCE.md Key strings) whose value is "None", the recording's name, or "Random" (EXPERIENCE.md Key strings), and tapping it opens the Recordings screen in selection mode
+**Then** its "Motivation" row (EXPERIENCE.md Key strings) opens the Motivation sub-screen with a row "Message" (EXPERIENCE.md Key strings) whose value is "None", the recording's name, or "Random" (EXPERIENCE.md Key strings), and tapping it opens the Recordings screen in selection mode
 **And** the alarm stores `motivation` = `None` | `Recording(id)` | `Random` (default `None`) in the `alarm` table through the `app.db` migration from version 10 to 11 with exported schema and test, saved only on "Save" like every editor field, and `ConfigResolver` copies it into `SessionConfig`
 
-**Given** the Recordings screen (pushed, `top-app-bar` "Recordings" per the EXPERIENCE.md IA)
+**Given** the Recordings screen (the preview's round 3 `ui/recordings`, title "Recordings" per the EXPERIENCE.md IA)
 **When** there are no recordings
 **Then** it shows "Record a message for your morning self." (EXPERIENCE.md Key strings) above the `recorder`
 
@@ -3679,7 +3677,7 @@ So that I wake to something I chose, with the default sound as a safety net.
 
 **Acceptance Criteria:**
 
-**Given** the Sound picker from Story 1.17
+**Given** the editor's Sound sub-screen from Story 1.17
 **When** it renders
 **Then** after the built-in and system sections it shows a "Your files" section of imported sounds with source caption "Your file" and a `button-outlined` "Pick a file" (EXPERIENCE.md Key strings)
 
@@ -3698,7 +3696,7 @@ So that I wake to something I chose, with the default sound as a safety net.
 **When** it rings
 **Then** `AlarmPlayer` loops the copied file; if the file is missing (for example after a backup restore, since `sounds/` is excluded from backup), unreadable, or errors at prepare or mid-ring, it switches to the default built-in sound within the same ring and logs the fallback without paths (FR-SND-5, NFR-2)
 **And** before the first unlock the Direct Boot substitution plays the default built-in sound instead (credential storage unavailable), and the ring keeps the default sound after unlock
-**And** the Sound picker and editor show "File missing. Default sound will play." (EXPERIENCE.md State Patterns) for a missing file
+**And** the Sound sub-screen and editor show "File missing. Default sound will play." (EXPERIENCE.md State Patterns) for a missing file
 
 **Given** loudness
 **When** a user file is imported
@@ -3981,7 +3979,7 @@ So that the personal touches work and never make an alarm silent.
 
 **Acceptance Criteria:**
 
-**Given** the latest `main` debug build installed on each device of the matrix (Pixel, Samsung, Xiaomi, budget device); items for stories that were cut are marked "cut" instead of pass/fail
+**Given** the latest `main` debug build installed on each device of the matrix (the owner's Oppo A96 plus the NFR-1 emulators; other makers optional via Firebase Test Lab); items for stories that were cut are marked "cut" instead of pass/fail
 **When** the owner runs the checklist
 **Then** for each item the story file records pass/fail, device, Android version and date:
 1. The microphone permission is asked only on the first record tap; a 10 s message records, plays back, re-records and saves; recording stops by itself at 1:00; denying shows "Microphone is off. Turn it on in Settings." and "Fix" opens the right page.
@@ -4048,6 +4046,7 @@ So that the listing shows exactly what users get and can be regenerated after an
 **Given** a debug-only `DemoDataSeeder` (never in release; the release-manifest test from Story 1.18 extended to its class) with three alarms, 8 weeks of history matching F9, and cached USD prices
 **When** `./gradlew captureStoreScreenshots` runs Roborazzi (or the OQ-3 fallback) at 1080 × 1920 px
 **Then** it writes to `docs/store/screenshots/phone/` at least 4 and at most 8 PNGs, in this order: Ringing screen (Sunrise) with "I'm up" and "Snooze · $1"; Snooze confirm sheet; a check screen with the grace countdown; Home with the hero card and alarm list (Dark); Progress (Light); the Reliability checklist
+**And** the screens may be captured from the design-preview deep links with demo data or from the real app, and the store name shown is "Yawn & Pawn"
 **And** the images are the real composables with the committed tokens and strings, with no device frames, no added marketing text over the UI, no fake system notifications, and prices shown exactly as Play formats them in en-US
 
 **Given** the feature graphic and icon
@@ -4213,7 +4212,7 @@ So that nothing that only breaks in release reaches testers or production.
 
 **Acceptance Criteria:**
 
-**Given** the release build from Story 8.7 installed from the internal track (not a debug build) on each device of the matrix (Pixel, Samsung, Xiaomi, budget device), with a license tester account
+**Given** the release build from Story 8.7 installed from the internal track (not a debug build) on each device of the matrix (the owner's Oppo A96 plus the NFR-1 emulators; other makers optional via Firebase Test Lab), with a license tester account
 **When** the owner runs the checklist
 **Then** for each item the story file records pass/fail, device, Android version, versionName and date:
 1. First launch runs onboarding to a locked-screen test alarm that rings with "Test · no charge".

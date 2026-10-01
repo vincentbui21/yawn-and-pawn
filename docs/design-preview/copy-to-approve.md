@@ -1,5 +1,7 @@
 # Design preview: copy to approve
 
+Approved with sprint-change-proposal-2026-10-01 (owner, 2026-10-01).
+
 Strings the design preview needed that EXPERIENCE.md does not define. Each is drafted in voice (short, supportive, no em dash, no hype words), lives in `composeApp/src/commonMain/composeResources/values/strings.xml` like any other string, and passes `CopyRulesTest`. Approve, reword or reject each one; approved strings move into EXPERIENCE.md > Key strings.
 
 Every other string on the preview screens is an EXPERIENCE.md key string, used verbatim.

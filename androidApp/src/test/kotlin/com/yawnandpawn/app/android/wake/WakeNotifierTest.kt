@@ -4,6 +4,7 @@ import android.app.Notification
 import android.app.NotificationManager
 import android.content.ComponentName
 import android.content.Context
+import android.provider.Settings
 import androidx.compose.ui.graphics.toArgb
 import androidx.test.core.app.ApplicationProvider
 import com.yawnandpawn.app.R
@@ -71,6 +72,16 @@ class WakeNotifierTest {
 
         assertEquals("7:00 AM", shadowOf(notification).contentTitle)
         assertEquals("7:00 AM alarm · Tap to return to your alarm", shadowOf(notification).contentText)
+    }
+
+    @Test
+    fun `with the 24-hour setting the title and text use the 24-hour time`() {
+        Settings.System.putString(context.contentResolver, Settings.System.TIME_12_24, "24")
+
+        val notification = notifier.build(sevenAm)
+
+        assertEquals("07:00", shadowOf(notification).contentTitle)
+        assertEquals("07:00 alarm · Tap to return to your alarm", shadowOf(notification).contentText)
     }
 
     @Test

@@ -31,7 +31,7 @@
 - source_spec: `_bmad-output/implementation-artifacts/spec-1-3-generated-design-tokens-and-ppstheme.md`
   summary: Route the DESIGN.md disabled token pair (disabled-container / disabled-content) into every disabled control instead of Material's onSurface-alpha defaults.
   evidence: Material 3 `ColorScheme` has no disabled roles, so stock Button/Switch/TextField disabled states use onSurface at 12%/38% alpha, a colour DESIGN.md doesn't define. The disabled Snooze control (Epic 1 ringing screen, 1.15) must use the token pair explicitly.
-  status: assigned to Story 1.15 by sprint-change-proposal-2026-10-01.
+  status: assigned to Story 1.15 by sprint-change-proposal-2026-10-01. Ringing half resolved in Story 1.15: `SnoozeButton` fills `disabled-container-sunrise` and labels in `disabled-content-sunrise` (no Material alpha), checked by a pixel test in `RingingSemanticsTest`. Other disabled controls stay with their own stories.
 - source_spec: `_bmad-output/implementation-artifacts/spec-1-3-generated-design-tokens-and-ppstheme.md`
   summary: Automatically assert the release build contains no debug-only showcase code or activity.
   evidence: Only a manual inspection was done; moving `ThemeShowcase*` out of `androidApp/src/debug` would ship an exported debug activity with every check green.
@@ -141,5 +141,11 @@
     - A refused foreground-service start for a fresh alarm has no session slot to retry it, and stopSelf after a refused startForeground may crash. Settle with device evidence in Spike S2 / Story 1.20.
     - Android 13+ without POST_NOTIFICATIONS shows no notification or full-screen intent, so nothing stops the ring before the 30-minute limit. Story 1.19 requests the permission and must log or flag the missing permission.
     - MediaPlayer.prepare() runs on the main thread under the player lock, which is an ANR risk for content URIs. Story 1.17 (sound library, user files) should move it to prepareAsync or off main.
-    - Only the 12 h format is tested for the notification and wake-screen time. Story 1.15 adds the 24 h case.
+    - Only the 12 h format is tested for the notification and wake-screen time. Story 1.15 adds the 24 h case. (Resolved in Story 1.15: `WakeNotifierTest` and `WakeActivityTest` cover the 24-hour setting.)
     - The emergency ring arms no backstop slot, so a process death during it is not recovered. Story 2.1 (recover after a kill).
+- source_spec: `_bmad-output/implementation-artifacts/spec-1-15-ringing-screen-over-the-lock-screen-with-i-m-up.md`
+  summary: Story 1.15 follow-ups.
+  evidence: |
+    - The GMD timing test (fire a debug-scheduled alarm, WakeActivity resumed with "I'm up" shown within 1,000 ms of the receiver, NFR-7) is not built. It needs the debug fire-now hook (Story 1.18), the POST_NOTIFICATIONS grant on the emulator (Story 1.19; GrantPermissionRule would add androidx.test:rules), and a locked or screen-off emulator, since an unlocked API 34 device shows the full-screen intent as a heads-up. Assigned to Story 1.21 (with 1.18's hook); device timing is human-verify there anyway.
+    - Design question for the owner (no layout change made): the Epic 1 snooze label "Snooze unavailable: prices not loaded yet" wraps to two lines in `button-wake`, so the disabled snooze is about as tall as "I'm up" at 100% and taller at 200%. "I'm up" stays 72 dp, filled and first, but it is not the tallest action in that state. Options: a shorter reason, or "I'm up" matching the snooze height. Needs owner approval (design baseline); then a small UI story.
+    - The placeholder check is answered by the wake screen while it is shown (Grace or Loud). A user who presses Home right after "I'm up" leaves the session muted, then Loud after the grace window, until they reopen the screen from the notification. This is the Epic 3 check-screen behaviour, and Epic 3 replaces the placeholder.

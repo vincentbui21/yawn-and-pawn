@@ -119,6 +119,16 @@ class HomeScreenshotTest {
     fun `all alarms off in Light at 200 percent`() = home("home_all_off_light_font200", HomeSamples.allDisabled, PpsThemeMode.Light)
 
     @Test
+    fun `reliability banner in Light`() = home("home_reliability_light", HomeSamples.reliability, PpsThemeMode.Light)
+
+    @Test
+    fun `reliability banner in Dark`() = home("home_reliability_dark", HomeSamples.reliability, PpsThemeMode.Dark)
+
+    @Test
+    @Config(fontScale = 2.0f)
+    fun `reliability banner in Light at 200 percent`() = home("home_reliability_light_font200", HomeSamples.reliability, PpsThemeMode.Light)
+
+    @Test
     fun `load failure in Light`() = home("home_load_failed_light", HomeSamples.loadFailed, PpsThemeMode.Light)
 
     @Test

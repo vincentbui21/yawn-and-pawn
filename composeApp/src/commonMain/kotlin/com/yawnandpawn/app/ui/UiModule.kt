@@ -15,7 +15,7 @@ import org.koin.dsl.module
 val uiModule =
     module {
         factory { AlarmActions(get(), get(), get(), get(), get()) }
-        viewModel { HomeViewModel(get(), get(), get(), get(), get(), get()) }
+        viewModel { HomeViewModel(get(), get(), get(), get(), get(), get(), get(), get()) }
         viewModel { params ->
             AlarmEditorViewModel(
                 alarmId = params.get<AlarmEditorArgs>().alarmId,
@@ -26,6 +26,7 @@ val uiModule =
                 actions = get(),
                 soundLibrary = get(),
                 soundPreview = get(),
+                notificationPermission = get(),
             )
         }
     }

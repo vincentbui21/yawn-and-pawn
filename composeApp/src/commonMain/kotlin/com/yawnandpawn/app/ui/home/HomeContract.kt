@@ -120,6 +120,9 @@ sealed interface HomeIntent {
 
     /** Home came back to the foreground: recompute the countdown. */
     data object Resumed : HomeIntent
+
+    /** Home started (`ON_START`, also after returning from a settings screen): check the reliability settings again. */
+    data object Started : HomeIntent
 }
 
 /** One-shot events for the Home route. */

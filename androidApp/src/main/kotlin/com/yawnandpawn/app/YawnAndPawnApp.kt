@@ -6,6 +6,8 @@ import com.yawnandpawn.app.android.AndroidLogger
 import com.yawnandpawn.app.android.ApplicationScope
 import com.yawnandpawn.app.android.UnavailableBilling
 import com.yawnandpawn.app.android.androidTimeModule
+import com.yawnandpawn.app.android.crash.FirebaseStartup
+import com.yawnandpawn.app.android.reliability.reliabilityModule
 import com.yawnandpawn.app.android.sound.soundModule
 import com.yawnandpawn.app.android.wake.WakeAlarmFiredHandler
 import com.yawnandpawn.app.android.wake.WakeRuntime
@@ -42,12 +44,13 @@ import com.yawnandpawn.app.ui.uiModule
 import kotlinx.coroutines.launch
 import org.koin.android.ext.koin.androidContext
 import org.koin.core.context.startKoin
+import org.koin.core.module.Module
 import org.koin.dsl.module
 
 /** Koin bindings of :androidApp (platform adapters, core wiring). Later stories add their bindings here. */
 val appModule =
     module {
-        includes(androidTimeModule, wakeModule(), soundModule())
+        includes(androidTimeModule, wakeModule(), soundModule(), reliabilityModule())
         single<IdGenerator> { UuidV4IdGenerator() }
         single<Logger> { AndroidLogger() }
         single { ApplicationScope(get()) }
@@ -85,13 +88,18 @@ val appModule =
 
 /** The app process: starts Koin, re-arms alarms and restores the session. Open for the Robolectric test application. */
 open class YawnAndPawnApp : Application() {
+    /** Bindings loaded after the app's own (they win); only the Robolectric test application adds any. */
+    protected open val overrideModules: List<Module> = emptyList()
+
     override fun onCreate() {
         super.onCreate()
         val koin =
             startKoin {
                 androidContext(this@YawnAndPawnApp)
-                modules(appModule, dataModule, uiModule)
+                modules(listOf(appModule, dataModule, uiModule) + overrideModules)
             }.koin
+        // Crashlytics (Story 1.19): only with a Firebase configuration, and only once the user has unlocked (AD-15).
+        koin.get<FirebaseStartup>().start()
         val scope = koin.get<ApplicationScope>()
         // App start re-arms every alarm (AD-4); it also covers a backup restore, which restarts the app.
         val scheduling = koin.get<AlarmScheduling>()

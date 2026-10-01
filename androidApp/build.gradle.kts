@@ -8,6 +8,14 @@ plugins {
     alias(libs.plugins.roborazzi)
 }
 
+// Firebase (Story 1.19, AD-15): the google-services and Crashlytics plugins apply only when google-services.json is
+// here (CI writes it from the GOOGLE_SERVICES_JSON_* secrets; it is never committed). Without it the app has no Firebase
+// configuration and binds the no-op crash reporter, and qualityGate still passes.
+if (file("google-services.json").exists()) {
+    apply(plugin = "com.google.gms.google-services")
+    apply(plugin = "com.google.firebase.crashlytics")
+}
+
 // The release workflow passes the tag version (-Pyawnandpawn.versionName=X.Y.Z); local builds use the default.
 val appVersionName = providers.gradleProperty("yawnandpawn.versionName").getOrElse("0.1.0")
 
@@ -126,6 +134,9 @@ dependencies {
     implementation(libs.compose.foundation)
     implementation(libs.compose.material3)
     implementation(libs.compose.components.resources)
+    // Story 1.19: Crashlytics behind the core CrashReporter port; started only after the user unlocks. No Analytics.
+    implementation(platform(libs.firebase.bom))
+    implementation(libs.firebase.crashlytics)
 
     testImplementation(project(":testing"))
     testImplementation(libs.kotlin.test)

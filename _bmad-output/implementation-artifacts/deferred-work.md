@@ -139,7 +139,7 @@
   summary: Story 1.14 follow-ups for later stories.
   evidence: |
     - A refused foreground-service start for a fresh alarm has no session slot to retry it, and stopSelf after a refused startForeground may crash. Settle with device evidence in Spike S2 / Story 1.20.
-    - Android 13+ without POST_NOTIFICATIONS shows no notification or full-screen intent, so nothing stops the ring before the 30-minute limit. Story 1.19 requests the permission and must log or flag the missing permission.
+    - Android 13+ without POST_NOTIFICATIONS shows no notification or full-screen intent, so nothing stops the ring before the 30-minute limit. Story 1.19 requests the permission and must log or flag the missing permission. Resolved in Story 1.19: the editor asks for POST_NOTIFICATIONS once after the first save, and the Home reliability banner flags it (and a revoked full-screen intent on API 34+, or denied exact alarms on API 31-32) on every start, with "Fix" opening the setting.
     - MediaPlayer.prepare() runs on the main thread under the player lock, which is an ANR risk for content URIs. Story 1.17 (sound library, user files) should move it to prepareAsync or off main. Resolved in Story 1.17: `MediaPlayerPlaybackFactory` and the preview player use `prepareAsync`; a prepare error falls back like a playback error.
     - Only the 12 h format is tested for the notification and wake-screen time. Story 1.15 adds the 24 h case. (Resolved in Story 1.15: `WakeNotifierTest` and `WakeActivityTest` cover the 24-hour setting.)
     - The emergency ring arms no backstop slot, so a process death during it is not recovered. Story 2.1 (recover after a kill).

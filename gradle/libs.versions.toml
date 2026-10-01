@@ -29,6 +29,9 @@ mlkit-barcode = "17.3.0"
 mediapipe-tasks-vision = "1.0.0"
 workmanager = "2.11.0"
 firebase-bom = "34.19.0"
+# Firebase Gradle plugins (Story 1.19; verified published on Google Maven 2026-10-01). Applied only with google-services.json.
+google-services = "4.5.0"
+firebase-crashlytics-plugin = "3.0.8"
 turbine = "1.2.1"
 zxing = "3.5.3"
 
@@ -136,3 +139,5 @@ kover = { id = "org.jetbrains.kotlinx.kover", version.ref = "kover" }
 detekt = { id = "dev.detekt", version.ref = "detekt" }
 spotless = { id = "com.diffplug.spotless", version.ref = "spotless" }
 roborazzi = { id = "io.github.takahirom.roborazzi", version.ref = "roborazzi" }
+google-services = { id = "com.google.gms.google-services", version.ref = "google-services" }
+firebase-crashlytics = { id = "com.google.firebase.crashlytics", version.ref = "firebase-crashlytics-plugin" }

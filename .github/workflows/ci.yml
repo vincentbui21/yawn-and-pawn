@@ -59,6 +59,19 @@ jobs:
           sudo apt-get install -y -qq ffmpeg
           ffmpeg -hide_banner -version | head -n 1
 
+      # Story 1.19: the debug Firebase project's config, only when the secret is set (never for forks). Without it the
+      # build uses the no-op crash reporter and the quality gate still passes.
+      - name: Write google-services.json (debug Firebase project)
+        env:
+          GOOGLE_SERVICES_JSON_DEBUG: ${{ secrets.GOOGLE_SERVICES_JSON_DEBUG }}
+        run: |
+          if [ -n "$GOOGLE_SERVICES_JSON_DEBUG" ]; then
+            printf '%s' "$GOOGLE_SERVICES_JSON_DEBUG" > androidApp/google-services.json
+            echo "google-services.json written: Firebase plugins apply."
+          else
+            echo "GOOGLE_SERVICES_JSON_DEBUG is not set: building without Firebase."
+          fi
+
       - name: Quality gate
         run: |
           set -o pipefail

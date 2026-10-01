@@ -13,6 +13,7 @@ import com.yawnandpawn.app.testing.AlarmUseCasesFixture
 import com.yawnandpawn.app.testing.FakeAlarmRepository
 import com.yawnandpawn.app.testing.FakeClock
 import com.yawnandpawn.app.testing.FakeLogger
+import com.yawnandpawn.app.testing.FakeNotificationPermission
 import com.yawnandpawn.app.testing.FakeRequestCodeSequence
 import com.yawnandpawn.app.testing.FakeSoundLibrary
 import com.yawnandpawn.app.testing.FakeSoundPreview
@@ -82,6 +83,7 @@ class AlarmEditorSoundTest {
         actions = AlarmActions(alarms.setEnabled, alarms.duplicate, alarms.delete, clock, FakeLogger()),
         soundLibrary = library,
         soundPreview = preview,
+        notificationPermission = FakeNotificationPermission(),
     )
 
     private val AlarmEditorViewModel.sound: EditorSound

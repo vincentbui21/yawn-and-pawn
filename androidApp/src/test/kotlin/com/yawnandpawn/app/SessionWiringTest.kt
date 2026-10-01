@@ -54,7 +54,7 @@ class SessionWiringTest {
         assertIs<RoomActiveSessionStore>(koin.get<ActiveSessionStore>())
         assertSame(koin.get<WakeRuntime>(), koin.get<EffectRunner>(), "the wake runtime is the one effect runner")
         assertSame(koin.get<WakeRuntime>(), koin.get<WakeRuntime>())
-        assertIs<NoOpCrashReporter>(koin.get<CrashReporter>(), "Crashlytics arrives in Story 1.19")
+        assertIs<NoOpCrashReporter>(koin.get<CrashReporter>(), "no google-services.json in tests: the no-op reporter")
         assertIs<RandomSeedSource>(koin.get<SeedSource>())
         assertIs<UnavailableBilling>(koin.get<Billing>())
         assertSame(koin.get<SessionRecorder>(), koin.get<SessionRecorder>())

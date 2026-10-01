@@ -92,6 +92,25 @@ jobs:
       - name: Set up Gradle (with caching)
         uses: gradle/actions/setup-gradle@v6
 
+      # checkSoundLoudness (Story 1.17) measures the bundled alarm sounds with ffmpeg's ebur128 filter.
+      - name: Install ffmpeg
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq ffmpeg
+
+      # Story 1.19: the production Firebase project's config, only when the secret is set; without it the release
+      # build has no Crashlytics (the no-op reporter).
+      - name: Write google-services.json (production Firebase project)
+        env:
+          GOOGLE_SERVICES_JSON_RELEASE: ${{ secrets.GOOGLE_SERVICES_JSON_RELEASE }}
+        run: |
+          if [ -n "$GOOGLE_SERVICES_JSON_RELEASE" ]; then
+            printf '%s' "$GOOGLE_SERVICES_JSON_RELEASE" > androidApp/google-services.json
+            echo "google-services.json written: Crashlytics is on."
+          else
+            echo "::warning::GOOGLE_SERVICES_JSON_RELEASE is not set: this release has no Crashlytics."
+          fi
+
       - name: Quality gate
         run: ./gradlew qualityGate
 

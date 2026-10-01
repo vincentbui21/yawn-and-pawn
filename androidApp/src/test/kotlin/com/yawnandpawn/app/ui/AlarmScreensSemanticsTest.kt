@@ -31,6 +31,9 @@ import com.yawnandpawn.app.testing.FakeAlarmRepository
 import com.yawnandpawn.app.testing.FakeClock
 import com.yawnandpawn.app.testing.FakeLogger
 import com.yawnandpawn.app.testing.FakeMissedNoteDismissals
+import com.yawnandpawn.app.testing.FakeNotificationPermission
+import com.yawnandpawn.app.testing.FakeReliabilityProbe
+import com.yawnandpawn.app.testing.FakeReliabilitySettings
 import com.yawnandpawn.app.testing.FakeSessionHistoryRepository
 import com.yawnandpawn.app.testing.FakeSoundLibrary
 import com.yawnandpawn.app.testing.FakeSoundPreview
@@ -257,6 +260,7 @@ class AlarmScreensSemanticsTest {
                 actions = actions(repository),
                 soundLibrary = FakeSoundLibrary(),
                 soundPreview = FakeSoundPreview(),
+                notificationPermission = FakeNotificationPermission(),
             )
         var closed = false
         withScreen(
@@ -300,6 +304,7 @@ class AlarmScreensSemanticsTest {
                 actions = actions(repository),
                 soundLibrary = FakeSoundLibrary(),
                 soundPreview = FakeSoundPreview(),
+                notificationPermission = FakeNotificationPermission(),
             )
         var openFailed = false
         var closed = false
@@ -481,7 +486,16 @@ class AlarmScreensSemanticsTest {
         val repository = FakeAlarmRepository()
         val missedNotes = MissedNotes(FakeSessionHistoryRepository(), FakeMissedNoteDismissals())
         val viewModel =
-            HomeViewModel(repository, actions(repository), FakeClock(), FakeTimeZoneProvider(), FakeTimeChangeSignal(), missedNotes)
+            HomeViewModel(
+                repository,
+                actions(repository),
+                FakeClock(),
+                FakeTimeZoneProvider(),
+                FakeTimeChangeSignal(),
+                missedNotes,
+                FakeReliabilityProbe(),
+                FakeReliabilitySettings(),
+            )
         var shown = false
         withScreen(
             PpsThemeMode.Light,

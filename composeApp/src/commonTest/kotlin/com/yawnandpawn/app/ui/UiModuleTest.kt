@@ -3,6 +3,9 @@ package com.yawnandpawn.app.ui
 import com.yawnandpawn.app.core.alarm.AlarmRepository
 import com.yawnandpawn.app.core.history.MissedNotes
 import com.yawnandpawn.app.core.log.Logger
+import com.yawnandpawn.app.core.reliability.NotificationPermission
+import com.yawnandpawn.app.core.reliability.ReliabilityProbe
+import com.yawnandpawn.app.core.reliability.ReliabilitySettings
 import com.yawnandpawn.app.core.sound.SoundLibrary
 import com.yawnandpawn.app.core.sound.SoundPreview
 import com.yawnandpawn.app.core.time.Clock
@@ -13,6 +16,9 @@ import com.yawnandpawn.app.testing.FakeAlarmRepository
 import com.yawnandpawn.app.testing.FakeClock
 import com.yawnandpawn.app.testing.FakeLogger
 import com.yawnandpawn.app.testing.FakeMissedNoteDismissals
+import com.yawnandpawn.app.testing.FakeNotificationPermission
+import com.yawnandpawn.app.testing.FakeReliabilityProbe
+import com.yawnandpawn.app.testing.FakeReliabilitySettings
 import com.yawnandpawn.app.testing.FakeSessionHistoryRepository
 import com.yawnandpawn.app.testing.FakeSoundLibrary
 import com.yawnandpawn.app.testing.FakeSoundPreview
@@ -60,6 +66,9 @@ class UiModuleTest {
                     single<Logger> { FakeLogger() }
                     single<SoundLibrary> { FakeSoundLibrary() }
                     single<SoundPreview> { FakeSoundPreview() }
+                    single<ReliabilityProbe> { FakeReliabilityProbe() }
+                    single<ReliabilitySettings> { FakeReliabilitySettings() }
+                    single<NotificationPermission> { FakeNotificationPermission() }
                     single { AlarmUseCasesFixture(repository = get(), clock = get(), timeZoneProvider = get()) }
                     factory { get<AlarmUseCasesFixture>().save }
                     factory { get<AlarmUseCasesFixture>().setEnabled }

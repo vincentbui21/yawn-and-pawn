@@ -3,6 +3,7 @@ package com.yawnandpawn.app.data
 import android.content.Context
 import com.yawnandpawn.app.core.alarm.AlarmRepository
 import com.yawnandpawn.app.core.alarm.RequestCodeSequence
+import com.yawnandpawn.app.core.history.SessionHistoryRepository
 import com.yawnandpawn.app.core.session.ActiveSessionStore
 import com.yawnandpawn.app.data.alarm.RoomAlarmRepository
 import com.yawnandpawn.app.data.alarm.RoomRequestCodeSequence
@@ -10,6 +11,7 @@ import com.yawnandpawn.app.data.db.AppDatabase
 import com.yawnandpawn.app.data.db.RuntimeDatabase
 import com.yawnandpawn.app.data.db.buildAppDatabase
 import com.yawnandpawn.app.data.db.buildRuntimeDatabase
+import com.yawnandpawn.app.data.history.RoomSessionHistoryRepository
 import com.yawnandpawn.app.data.session.RoomActiveSessionStore
 import org.koin.core.module.dsl.onClose
 import org.koin.core.module.dsl.withOptions
@@ -27,6 +29,9 @@ val dataModule =
         single { get<AppDatabase>().requestCodeSequenceDao() }
         single<AlarmRepository> { RoomAlarmRepository(get()) }
         single<RequestCodeSequence> { RoomRequestCodeSequence(get()) }
+        // session_history (Story 1.13): written only by core's SessionRecorder, wired in the app.
+        single { get<AppDatabase>().sessionHistoryDao() }
+        single<SessionHistoryRepository> { RoomSessionHistoryRepository(get()) }
         // runtime.db (Story 1.12): the write-ahead copy of the active session, not backed up.
         single { buildRuntimeDatabase(get<Context>()) } withOptions { onClose { it?.close() } }
         single { get<RuntimeDatabase>().activeSessionDao() }

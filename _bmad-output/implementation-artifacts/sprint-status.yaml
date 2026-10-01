@@ -48,7 +48,7 @@ development_status:
   1-10-schedule-alarms-exactly-and-keep-them-across-reboot-and-cloc: done  # PR #10 2026-10-01 (auto-run)
   1-11-the-complete-wake-session-state-machine-in-core: done  # PR #11 2026-10-01 (auto-run)
   1-12-sessionengine-with-write-ahead-persistence: done  # PR #12 2026-10-01 (auto-run)
-  1-13-record-every-session-in-history: backlog
+  1-13-record-every-session-in-history: done  # PR #13 2026-10-01 (auto-run)
   1-14-ring-the-alarm-wakeservice-alarmplayer-and-the-ongoing-notif: backlog
   1-15-ringing-screen-over-the-lock-screen-with-i-m-up: backlog
   1-16-stop-a-forgotten-alarm-after-30-minutes: backlog

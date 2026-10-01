@@ -42,9 +42,11 @@ interface ActiveSessionStore {
 
 /**
  * Port that carries out what the session wants (AD-2 rule 4): the wake runtime in Story 1.14, a logging stand-in in
- * Epic 1. [SessionEngine] calls it only after the transition is committed, inside its Mutex, so calls never
- * interleave. The Mutex is not reentrant: a runner must never call `SessionEngine.dispatch` from inside these
- * functions and wait for it; results go back as events dispatched from outside (for example launched on a scope).
+ * Epic 1. It never receives the session history effects (`RecordSessionStart`, `HistoryWriteRequested`): the engine
+ * writes history through its `SessionRecorder` itself. [SessionEngine] calls it only after the transition is
+ * committed, inside its Mutex, so calls never interleave. The Mutex is not reentrant: a runner must never call
+ * `SessionEngine.dispatch` from inside these functions and wait for it; results go back as events dispatched from
+ * outside (for example launched on a scope).
  *
  * On restore the runner gets the entry effects of the restored state, never the one-shot effects of the restore
  * transition or of anything committed before the crash. Timer events found due right after a restore (a grace window

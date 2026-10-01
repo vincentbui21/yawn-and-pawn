@@ -28,6 +28,7 @@ import com.yawnandpawn.app.core.session.NoBillingSnoozeAvailability
 import com.yawnandpawn.app.core.session.NoFallbackPolicy
 import com.yawnandpawn.app.core.session.PlaceholderCheckValidator
 import com.yawnandpawn.app.core.session.SessionEngine
+import com.yawnandpawn.app.core.session.SessionRecorder
 import com.yawnandpawn.app.core.session.SessionReducer
 import com.yawnandpawn.app.core.session.SnoozeAvailabilityPolicy
 import com.yawnandpawn.app.core.session.TierFeeLadder
@@ -68,7 +69,10 @@ val appModule =
         single { SessionReducer(get(), get(), get()) }
         single<EffectRunner> { LoggingEffectRunner(get()) }
         single<Billing> { UnavailableBilling(get()) }
-        single { SessionEngine(get(), get(), get(), get(), get(), get(), get()) }
+        // The only writer of session history (Story 1.13, AD-18), over the Room repository from dataModule; the engine
+        // drives it itself, so the runner never sees the history effects.
+        single { SessionRecorder(get()) }
+        single { SessionEngine(get(), get(), get(), get(), get(), get(), get(), get()) }
     }
 
 /** The app process: starts Koin, re-arms alarms and restores the session. Open for the Robolectric test application. */

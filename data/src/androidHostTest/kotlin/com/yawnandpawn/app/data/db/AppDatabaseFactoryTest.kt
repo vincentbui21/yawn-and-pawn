@@ -13,7 +13,9 @@ import com.yawnandpawn.app.core.alarm.AlarmDraft
 import com.yawnandpawn.app.core.error.Outcome
 import com.yawnandpawn.app.data.alarm.RoomAlarmRepository
 import com.yawnandpawn.app.data.alarm.RoomRequestCodeSequence
+import com.yawnandpawn.app.data.history.RoomSessionHistoryRepository
 import com.yawnandpawn.app.testing.AlarmUseCasesFixture
+import com.yawnandpawn.app.testing.aSessionHistoryRow
 import com.yawnandpawn.app.testing.anAlarm
 import kotlinx.coroutines.test.runTest
 import kotlinx.datetime.LocalTime
@@ -95,11 +97,69 @@ class AppDatabaseFactoryTest {
     }
 
     @Test
+    fun `the exported version 3 schema is committed with the alarm, request code sequence and session history tables`() {
+        assertTrue(schema(3).exists(), "exported schema missing: ${schema(3).absolutePath}")
+        val json = schema(3).readText()
+
+        assertTrue(json.contains("\"version\": 3"), "schema version 3")
+        assertEquals(listOf("alarm", "request_code_sequence", "session_history"), tableNames(json))
+        assertTrue(json.contains("PRIMARY KEY(`session_id`)"), "one row per session")
+        assertTrue(json.contains("CREATE INDEX IF NOT EXISTS `index_session_history_scheduled_at`"), "indexed by date for Progress")
+        assertFalse(json.contains("price") || json.contains("micros"), "no paid amounts in history")
+    }
+
+    @Test
+    fun `migrating a v2 database keeps every alarm and the request code mark and adds an empty session history`() =
+        runTest {
+            val first = anAlarm(id = "a", requestCode = 1000)
+            val second = anAlarm(id = "b", time = LocalTime(8, 0), requestCode = 1003)
+            // Codes up to 1005 were handed out; the alarms holding 1004 and 1005 were deleted.
+            createDatabase(version = 2, alarms = listOf(first, second), requestCodeMark = 1005)
+
+            withDatabase { database ->
+                assertEquals(Outcome.Success(listOf(first, second)), RoomAlarmRepository(database.alarmDao()).listAll())
+                assertEquals(0, database.sessionHistoryDao().count())
+                assertEquals(Outcome.Success(1006), RoomRequestCodeSequence(database.requestCodeSequenceDao()).next())
+                val history = RoomSessionHistoryRepository(database.sessionHistoryDao())
+                val row = aSessionHistoryRow()
+                assertEquals(Outcome.Success(Unit), history.upsert(row))
+                assertEquals(Outcome.Success(row), history.find(row.sessionId))
+            }
+        }
+
+    @Test
+    fun `a v1 database migrates through v2 to v3`() =
+        runTest {
+            val alarm = anAlarm(id = "a", requestCode = 1005)
+            createDatabase(version = 1, alarms = listOf(alarm))
+
+            withDatabase { database ->
+                assertEquals(Outcome.Success(listOf(alarm)), RoomAlarmRepository(database.alarmDao()).listAll())
+                assertEquals(0, database.sessionHistoryDao().count())
+                assertEquals(Outcome.Success(1006), RoomRequestCodeSequence(database.requestCodeSequenceDao()).next())
+            }
+            assertEquals(3, userVersion())
+        }
+
+    @Test
+    fun `a new database is created at version 3 with an empty session history`() =
+        runTest {
+            withDatabase { database -> assertEquals(0, database.sessionHistoryDao().count()) }
+
+            assertEquals(3, userVersion())
+        }
+
+    @Test
+    fun `the migrations cover every version step and nothing is destructive`() {
+        assertEquals(listOf(1 to 2, 2 to 3), APP_DATABASE_MIGRATIONS.map { it.startVersion to it.endVersion })
+    }
+
+    @Test
     fun `migrating a v1 database keeps every alarm and the next code is above the highest in use`() =
         runTest {
             val first = anAlarm(id = "a", requestCode = 1000)
             val second = anAlarm(id = "b", time = LocalTime(8, 0), requestCode = 1005)
-            createVersion1Database(first, second)
+            createDatabase(version = 1, alarms = listOf(first, second))
 
             withDatabase { database ->
                 assertEquals(Outcome.Success(listOf(first, second)), RoomAlarmRepository(database.alarmDao()).listAll())
@@ -113,7 +173,7 @@ class AppDatabaseFactoryTest {
     @Test
     fun `migrating an empty v1 database starts the codes at 1000`() =
         runTest {
-            createVersion1Database()
+            createDatabase(version = 1)
 
             withDatabase { database ->
                 assertEquals(Outcome.Success(1000), RoomRequestCodeSequence(database.requestCodeSequenceDao()).next())
@@ -161,9 +221,29 @@ class AppDatabaseFactoryTest {
     private fun tableNames(json: String): List<String> =
         Regex("\"tableName\": \"([^\"]+)\"").findAll(json).map { it.groupValues[1] }.toList()
 
-    /** Writes a v1 `app.db` at [appDatabaseFile] as Room created it, from the exported `1.json`, holding [alarms]. */
-    private fun createVersion1Database(vararg alarms: Alarm) {
-        val database = JSONObject(schema(1).readText()).getJSONObject("database")
+    /** The `user_version` of the file at [appDatabaseFile]: the schema version Room left it at. */
+    private fun userVersion(): Int {
+        val connection = AndroidSQLiteDriver().open(appDatabaseFile(context).absolutePath)
+        try {
+            return connection.prepare("PRAGMA user_version").use { statement ->
+                statement.step()
+                statement.getInt(0)
+            }
+        } finally {
+            connection.close()
+        }
+    }
+
+    /**
+     * Writes an `app.db` of schema [version] at [appDatabaseFile] as Room created it, from the exported `<version>.json`,
+     * holding [alarms] and, from version 2, the request-code [requestCodeMark] (none: the table stays empty).
+     */
+    private fun createDatabase(
+        version: Int,
+        alarms: List<Alarm> = emptyList(),
+        requestCodeMark: Int? = null,
+    ) {
+        val database = JSONObject(schema(version).readText()).getJSONObject("database")
         val file = appDatabaseFile(context).apply { parentFile?.mkdirs() }
         val connection = AndroidSQLiteDriver().open(file.absolutePath)
         try {
@@ -181,8 +261,10 @@ class AppDatabaseFactoryTest {
             }
             val setup = database.getJSONArray("setupQueries")
             for (i in 0 until setup.length()) connection.execSQL(setup.getString(i))
+            // The alarm table is the same in v1 and v2.
             alarms.forEach { connection.execSQL(it.toVersion1Insert()) }
-            connection.execSQL("PRAGMA user_version = 1")
+            requestCodeMark?.let { connection.execSQL("INSERT INTO request_code_sequence (id, last_used) VALUES (0, $it)") }
+            connection.execSQL("PRAGMA user_version = $version")
         } finally {
             connection.close()
         }

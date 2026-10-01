@@ -5,6 +5,7 @@ import com.yawnandpawn.app.core.time.TimeSnapshot
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 import kotlin.jvm.JvmInline
+import kotlin.time.Instant
 
 /** Id of a persisted `PurchaseIntent` (AD-7), a UUID v4 string chosen outside the reducer. */
 @Serializable
@@ -106,6 +107,11 @@ sealed interface SessionState {
  * @property snoozeEnd when the snooze rings again (Snoozed only).
  * @property pausedAt when a call paused the ring; null when not paused. Time from here to the call's end is added to
  * [graceEnd] and [interactionDeadline], so paused time never counts.
+ * @property firstRing when the first ring started (AD-18 history), set by `AlarmFired` / `TestAlarmFired`. Null in a
+ * session stored before Story 1.13; the recorder then falls back to the stored history row, then to the scheduled time.
+ * @property startedBeforeUnlock the session started before the first unlock after a boot. Unlike [beforeFirstUnlock]
+ * it never changes, so history keeps it after `UserUnlocked`.
+ * @property ended when the session ended (Completed or Missed), set by the reducer on that transition; null before.
  */
 @Serializable
 data class SessionData(
@@ -114,6 +120,9 @@ data class SessionData(
     val ringIndex: Int,
     val snoozesGranted: Int,
     val checkRun: CheckRun,
+    val firstRing: TimeSnapshot? = null,
+    val startedBeforeUnlock: Boolean = false,
+    val ended: TimeSnapshot? = null,
     val paying: PurchaseIntentId? = null,
     val noGraceThisRing: Boolean = false,
     val beforeFirstUnlock: Boolean = false,
@@ -127,4 +136,8 @@ data class SessionData(
     /** A call is in progress (AD-2 `CallStarted` until `CallEnded`). */
     val paused: Boolean
         get() = pausedAt != null
+
+    /** The wall time of [firstRing]; not stored (derived). */
+    val firstRingAt: Instant?
+        get() = firstRing?.let { Instant.fromEpochMilliseconds(it.wallMillis) }
 }

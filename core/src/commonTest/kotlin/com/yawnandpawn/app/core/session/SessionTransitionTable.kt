@@ -116,13 +116,15 @@ private fun nextRing(
         ),
     )
 
-private fun completedFrom(session: SessionData): Transition =
+private fun completedFrom(
+    session: SessionData,
+    now: TimeSnapshot,
+): Transition =
     Transition(
-        Completed(session.noTimers().copy(checkRun = session.checkRun.copy(step = session.checkRun.step + 1))),
+        Completed(session.noTimers().copy(checkRun = session.checkRun.copy(step = session.checkRun.step + 1), ended = now)),
         listOf(
             SessionEffect.StopSound,
             SessionEffect.CancelSlot,
-            SessionEffect.RecordOutcome(SESSION_ID, SessionEnd.Completed),
             SessionEffect.PlayMotivation,
         ),
     )
@@ -152,6 +154,8 @@ internal val ROW_CASES: Map<String, List<RowExample>> =
                         ringIndex = 1,
                         snoozesGranted = 0,
                         checkRun = CheckRun(config.checkPlan, SEEDS),
+                        firstRing = N,
+                        startedBeforeUnlock = locked,
                         beforeFirstUnlock = locked,
                         interactionDeadline = Deadline.after(N, 30.minutes),
                     )
@@ -189,6 +193,7 @@ internal val ROW_CASES: Map<String, List<RowExample>> =
                                         ringIndex = 1,
                                         snoozesGranted = 0,
                                         checkRun = CheckRun(config.checkPlan, SEEDS),
+                                        firstRing = N,
                                         interactionDeadline = Deadline.after(N, 30.minutes),
                                     ),
                                 ),
@@ -308,7 +313,7 @@ internal val ROW_CASES: Map<String, List<RowExample>> =
                     from = from,
                     event = CheckAnswerSubmitted(CheckAnswer.Placeholder),
                     now = N,
-                    expected = completedFrom(from.session),
+                    expected = completedFrom(from.session, N),
                     reducer = reducer(check = StepResult.ValidLast),
                 )
             },
@@ -439,7 +444,7 @@ internal val ROW_CASES: Map<String, List<RowExample>> =
                         from = from,
                         event = SessionEvent.ImageMatchCompleted(matched = true),
                         now = N,
-                        expected = completedFrom(from.session),
+                        expected = completedFrom(from.session, N),
                         reducer = reducer(check = StepResult.ValidLast),
                     ),
                     RowExample(
@@ -473,11 +478,10 @@ internal val ROW_CASES: Map<String, List<RowExample>> =
                     now = at(30.minutes),
                     expected =
                         Transition(
-                            Missed(ringSession().noTimers()),
+                            Missed(ringSession().noTimers().copy(ended = at(30.minutes))),
                             listOf(
                                 SessionEffect.StopSound,
                                 SessionEffect.CancelSlot,
-                                SessionEffect.RecordOutcome(SESSION_ID, SessionEnd.Missed),
                             ),
                         ),
                 )

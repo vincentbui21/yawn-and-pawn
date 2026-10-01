@@ -12,6 +12,16 @@ sealed interface CheckStep {
     data object Placeholder : CheckStep
 }
 
+/**
+ * The stable name of this step's check type, as session history stores it (AD-18). Never derived from class names,
+ * so renaming a class cannot change stored history; a name never contains a comma.
+ */
+val CheckStep.typeName: String
+    get() =
+        when (this) {
+            CheckStep.Placeholder -> "Placeholder"
+        }
+
 /** The steps the user must pass to end the session, in order. */
 @Serializable
 data class CheckPlan(

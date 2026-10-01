@@ -35,7 +35,10 @@ internal fun endedRow(
         null
     }
 
-/** Freezes [config] and creates the `CheckRun`: Ringing(ringIndex = 1) with a fresh 30-minute interaction deadline. */
+/**
+ * Freezes [config] and creates the `CheckRun`: Ringing(ringIndex = 1) with a fresh 30-minute interaction deadline and
+ * the first ring time ([now]) and the boot state for the history row.
+ */
 private fun startSession(
     sessionId: String,
     config: SessionConfig,
@@ -50,6 +53,8 @@ private fun startSession(
             ringIndex = 1,
             snoozesGranted = 0,
             checkRun = CheckRun(plan = config.checkPlan, seeds = seeds),
+            firstRing = now,
+            startedBeforeUnlock = beforeFirstUnlock,
             beforeFirstUnlock = beforeFirstUnlock,
             interactionDeadline = Deadline.after(now, SessionReducer.NO_INTERACTION_TIMEOUT),
         )

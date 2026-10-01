@@ -2,6 +2,7 @@ package com.yawnandpawn.app.testing
 
 import com.yawnandpawn.app.core.error.DomainError
 import com.yawnandpawn.app.core.error.Outcome
+import com.yawnandpawn.app.core.history.SessionOutcome
 import com.yawnandpawn.app.core.session.CheckAnswer
 import com.yawnandpawn.app.core.session.EntryEffect
 import com.yawnandpawn.app.core.session.PurchaseIntent
@@ -10,6 +11,7 @@ import com.yawnandpawn.app.core.session.SessionEffect
 import com.yawnandpawn.app.core.session.SessionEngine
 import com.yawnandpawn.app.core.session.SessionEvent
 import com.yawnandpawn.app.core.session.SessionJson
+import com.yawnandpawn.app.core.session.SessionRecorder
 import com.yawnandpawn.app.core.session.SessionReducer
 import com.yawnandpawn.app.core.session.SessionState
 import com.yawnandpawn.app.core.session.StoredSession
@@ -139,19 +141,31 @@ class SessionEngineFakesTest {
     }
 
     @Test
-    fun `the fakes drive the engine through a full morning, from the alarm to Idle with the store empty`() =
+    fun `the fakes drive the engine through a full morning, from the alarm to Idle with one history row and the store empty`() =
         runTest {
             val time = FakeTime()
             val store = FakeActiveSessionStore()
             val runner = FakeEffectRunner()
             val billing = FakeBilling()
             val intents = FakePurchaseIntentStore()
+            val history = FakeSessionHistoryRepository()
             val reducer = SessionReducer(FakeSnoozeAvailability(), FakeCheck(), FakeFallbackPolicy())
-            val engine = SessionEngine(reducer, store, runner, time.clock, time.monotonicClock, time.bootCounter, FakeLogger())
+            val engine =
+                SessionEngine(
+                    reducer,
+                    store,
+                    runner,
+                    SessionRecorder(history),
+                    time.clock,
+                    time.monotonicClock,
+                    time.bootCounter,
+                    FakeLogger(),
+                )
             val config = aSessionConfig()
             val sessionId = "session-1"
 
             engine.dispatch(SessionEvent.AlarmFired(sessionId, config, listOf(1L), beforeFirstUnlock = false))
+            assertEquals(listOf<SessionOutcome?>(null), history.rows.map { it.outcome }, "the start row")
             engine.dispatch(SessionEvent.SnoozeTapped)
             engine.dispatch(SessionEvent.PayConfirmed(PurchaseIntentId("intent-1")))
 
@@ -166,9 +180,8 @@ class SessionEngineFakesTest {
             time.advanceBy(config.snoozeLengthMinutes.minutes)
             engine.dispatch(SessionEvent.SlotFired)
             engine.dispatch(SessionEvent.ImUpTapped)
-            engine.dispatch(SessionEvent.CheckAnswerSubmitted(CheckAnswer.Placeholder))
-            assertTrue(EntryEffect.HistoryWriteRequested(sessionId) in runner.entry)
-            engine.dispatch(SessionEvent.Recorded(sessionId))
+            time.advanceBy(1.minutes)
+            assertEquals(Outcome.Success(SessionState.Idle), engine.dispatch(SessionEvent.CheckAnswerSubmitted(CheckAnswer.Placeholder)))
 
             assertEquals(
                 listOf("Ringing", "Ringing", "Snoozed", "Ringing", "Grace", "Completed", "Idle"),
@@ -176,7 +189,37 @@ class SessionEngineFakesTest {
             )
             assertNull(store.row)
             assertEquals(SessionState.Idle, engine.state.value)
+            assertEquals(
+                aSessionHistoryRow(sessionId, config.alarmId).copy(
+                    endedAt = DEFAULT_FAKE_INSTANT + 10.minutes,
+                    snoozeCount = 1,
+                    timeToCompleteMs = 10.minutes.inWholeMilliseconds,
+                    outcome = SessionOutcome.Snoozed,
+                ),
+                history.rows.single(),
+            )
+            assertTrue(runner.entry.none { it is EntryEffect.HistoryWriteRequested }, "the engine writes history itself")
             assertEquals(listOf(purchase), intents.saved)
             assertEquals(listOf(purchase), billing.launched)
+        }
+
+    @Test
+    fun `FakeSessionHistoryRepository keeps one row per session, replaces it on upsert and fails on demand`() =
+        runTest {
+            val history = FakeSessionHistoryRepository()
+            val row = aSessionHistoryRow()
+            assertEquals(Outcome.Success(null), history.find(row.sessionId))
+
+            assertEquals(Outcome.Success(Unit), history.upsert(row.copy(outcome = null)))
+            assertEquals(Outcome.Success(Unit), history.upsert(row))
+            assertEquals(listOf(row), history.rows)
+            assertEquals(Outcome.Success(row), history.find(row.sessionId))
+            assertEquals(2, history.upserts.size)
+
+            history.upsertFailure = DomainError.StorageFailure("disk full")
+            assertEquals(Outcome.Failure(DomainError.StorageFailure("disk full")), history.upsert(row.copy(snoozeCount = 3)))
+            assertEquals(listOf(row), history.rows)
+            history.findFailure = DomainError.StorageFailure("locked")
+            assertEquals(Outcome.Failure(DomainError.StorageFailure("locked")), history.find(row.sessionId))
         }
 }

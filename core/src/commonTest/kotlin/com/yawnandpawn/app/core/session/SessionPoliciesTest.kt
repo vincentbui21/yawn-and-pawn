@@ -139,7 +139,8 @@ class SessionPoliciesTest {
         assertIs<SessionState.Grace>(state)
         val done = reducer.reduce(state, SessionEvent.CheckAnswerSubmitted(CheckAnswer.Placeholder), at(2.minutes))
         assertIs<SessionState.Completed>(done.state)
-        assertEquals(SessionEffect.RecordOutcome(SESSION_ID, SessionEnd.Completed), done.effects[2])
+        assertEquals(listOf(SessionEffect.StopSound, SessionEffect.CancelSlot, SessionEffect.PlayMotivation), done.effects)
+        assertEquals(listOf(EntryEffect.HistoryWriteRequested(SESSION_ID)), entryEffects(done.state), "the outcome is written on entry")
         assertEquals(SessionState.Idle, reducer.reduce(done.state, SessionEvent.Recorded(SESSION_ID), at(3.minutes)).state)
     }
 }

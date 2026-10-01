@@ -2,7 +2,7 @@
 title: 'Story 1.15: Ringing screen over the lock screen with "I''m up"'
 type: 'feature'
 created: '2026-10-01'
-status: 'in-review'
+status: 'done'
 baseline_revision: 'da4b52d3025b6155bd3717c2e19dadcaadb71d1a'
 review_loop_iteration: 0
 followup_review_recommended: false
@@ -212,3 +212,19 @@ deferred: []
 - **Load-only test races, fixed in tests:** both showed up in a slow gate run.
   - The "I'm up" test now also waits for the end effects to remove the notification; the engine publishes Idle before they run.
   - `AndroidAlarmPlayerTest` waits for the app-start volume restore before it starts.
+
+## Review Triage Log (fast mode)
+
+### 2026-10-01 — Review pass
+The owner chose fast mode for the rest of the epic: two layers (edge case and verification gap), with only high and medium findings patched.
+- **Patched (medium):**
+  - The placeholder answer is retried when its dispatch fails; without that, the alarm couldn't be stopped until Missed.
+  - An "I'm up" tapped before the session exists is replayed.
+  - The disabled-content colour is now a real pixel assertion.
+  - The reduced-motion test can see the pulse (frames at 0 and 600 ms, with a control).
+- **Also fixed:** two slow-run flakes: the notification wait, and the volume restore at the start of the player tests.
+- **Deferred:** a test for the screen keeping its last look after the session ends (one frame, Story 1.21).
+- **Rejected (low):**
+  - The closing frame dropping the label.
+  - An async repository call not counted in the no-load test.
+  - TalkBack order and the token fill not checked at 200%.

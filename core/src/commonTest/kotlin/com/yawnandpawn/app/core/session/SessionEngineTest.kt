@@ -1,0 +1,460 @@
+package com.yawnandpawn.app.core.session
+
+import com.yawnandpawn.app.core.error.DomainError
+import com.yawnandpawn.app.core.error.Outcome
+import com.yawnandpawn.app.core.log.LogEvent
+import com.yawnandpawn.app.core.time.Deadline
+import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.test.runCurrent
+import kotlinx.coroutines.test.runTest
+import kotlinx.coroutines.yield
+import kotlin.test.Test
+import kotlin.test.assertEquals
+import kotlin.test.assertIs
+import kotlin.test.assertNull
+import kotlin.test.assertTrue
+import kotlin.time.Duration.Companion.minutes
+import kotlin.time.Duration.Companion.seconds
+
+/** AD-2 rules 1 and 2: the engine commits every transition before its effects, serially, and restores without replay. */
+class SessionEngineTest {
+    private val time = EngineTime()
+    private val store = InMemorySessionStore()
+    private val runner = RecordingRunner()
+    private val logger = EngineLogger()
+    private val reducer = reducer(availability = SnoozeAvailability.Available(OFFER), check = StepResult.ValidLast)
+
+    private fun engine(
+        effects: EffectRunner = runner,
+        sessionReducer: SessionReducer = reducer,
+    ) = SessionEngine(sessionReducer, store, effects, time.clock, time.monotonicClock, time.bootCounter, logger)
+
+    private val alarmFired = SessionEvent.AlarmFired(SESSION_ID, testConfig(), SEEDS, beforeFirstUnlock = false)
+
+    private fun Outcome<SessionState, DomainError>.state(): SessionState = assertIs<Outcome.Success<SessionState>>(this).value
+
+    private fun Outcome<SessionState, DomainError>.session(): SessionData = assertIs<SessionState.Active>(state()).session
+
+    @Test
+    fun `a dispatch commits the new state, then runs the one-shot effects in order, then the entry effects`() =
+        runTest {
+            val engine = engine()
+            var effectsAtCommit = -1
+            store.onCommit = { effectsAtCommit = runner.ran.size }
+
+            val ringing = assertIs<SessionState.Ringing>(engine.dispatch(alarmFired).state())
+
+            assertEquals(0, effectsAtCommit, "nothing ran before the commit")
+            assertEquals(listOf<SessionState>(ringing), store.commits)
+            assertEquals(ringing, store.stored)
+            assertEquals(ringing, engine.state.value)
+            val transition = reducer.reduce(SessionState.Idle, alarmFired, T0)
+            assertEquals(transition.effects + entryEffects(ringing), runner.ran)
+            assertEquals(
+                listOf(SessionEffect.StartWakeRuntime(SESSION_ID), SessionEffect.RecordSessionStart(SESSION_ID, testConfig())),
+                runner.oneShot.filter { it !is SessionEffect.ArmSlot },
+            )
+        }
+
+    @Test
+    fun `a failed commit keeps the previous state, runs nothing, logs and returns the failure, and the next dispatch works`() =
+        runTest {
+            val engine = engine()
+            store.commitFailure = DomainError.StorageFailure("disk full")
+
+            assertEquals(Outcome.Failure(DomainError.StorageFailure("disk full")), engine.dispatch(alarmFired))
+
+            assertEquals(SessionState.Idle, engine.state.value)
+            assertEquals(emptyList(), runner.ran)
+            assertNull(store.row)
+            assertEquals(listOf<LogEvent>(LogEvent.OperationFailed("commit session state", "storage failure: disk full")), logger.events)
+
+            store.commitFailure = null
+            assertIs<SessionState.Ringing>(engine.dispatch(alarmFired).state())
+            assertTrue(runner.ran.isNotEmpty())
+        }
+
+    @Test
+    fun `100 concurrent dispatches give a strictly serial transition log`() =
+        runTest {
+            val engine = engine()
+            // Every snapshot differs, so two interleaved transitions from one state would commit different states.
+            time.stepPerRead = 1
+            engine.dispatch(alarmFired)
+            val log = mutableListOf<Pair<SessionState, SessionState>>()
+            store.onCommit = { committed ->
+                log += engine.state.value to committed
+                // Give every other dispatch the chance to interleave here, between commit and publish.
+                yield()
+            }
+
+            coroutineScope { repeat(100) { launch { engine.dispatch(SessionEvent.UserInteracted) } } }
+
+            assertEquals(100, log.size)
+            log.zipWithNext().forEach { (previous, next) -> assertEquals(previous.second, next.first) }
+            assertEquals(100, log.map { it.second }.toSet().size, "every transition moved the deadline")
+            assertEquals(log.last().second, engine.state.value)
+        }
+
+    @Test
+    fun `an interaction deadline that passed is dispatched right after any dispatch and Missed is committed`() =
+        runTest {
+            val engine = engine()
+            engine.dispatch(alarmFired)
+            time.advanceBy(30.minutes)
+            runner.ran.clear()
+
+            val missed = assertIs<SessionState.Missed>(engine.dispatch(SessionEvent.SlotFired).state())
+
+            assertEquals(listOf("Ringing", "Missed"), store.commits.map { it.kind }, "the heartbeat changes no state")
+            assertEquals(missed, store.stored)
+            val stop = listOf(SessionEffect.StopSound, SessionEffect.CancelSlot, SessionEffect.RecordOutcome(SESSION_ID, SessionEnd.Missed))
+            assertEquals(stop + EntryEffect.HistoryWriteRequested(SESSION_ID), runner.ran.takeLast(4))
+        }
+
+    @Test
+    fun `tick dispatches the grace end once it passed and Loud is committed`() =
+        runTest {
+            val engine = engine()
+            engine.dispatch(alarmFired)
+            engine.dispatch(SessionEvent.ImUpTapped)
+            val commits = store.commits.size
+
+            assertIs<SessionState.Grace>(engine.tick().state(), "nothing due yet")
+            assertEquals(commits, store.commits.size, "a tick with nothing due commits nothing")
+
+            time.advanceBy(20.seconds)
+            runner.ran.clear()
+            val loud = assertIs<SessionState.Loud>(engine.tick().state())
+
+            assertEquals(loud, store.stored)
+            assertEquals(listOf(SessionEffect.UnmuteToVolume(80), SessionEffect.StrongHaptic) + entryEffects(loud), runner.ran)
+        }
+
+    @Test
+    fun `a session killed after committing PayConfirmed is restored without billing and with paying cleared`() =
+        runTest {
+            val crashing = RecordingRunner().apply { hangOn = { it is SessionEffect.PersistPurchaseIntent } }
+            val first = engine(effects = crashing)
+            first.dispatch(alarmFired)
+            // The process dies inside the first effect: that dispatch never finishes, and its engine is never used again.
+            backgroundScope.launch { first.dispatch(SessionEvent.PayConfirmed(INTENT)) }
+            runCurrent()
+            assertEquals(INTENT, assertIs<SessionState.Ringing>(store.stored).session.paying, "committed before its effects")
+
+            time.advanceBy(2.minutes)
+            val second = engine()
+            var publishedAtCommit: SessionState? = null
+            store.onCommit = { publishedAtCommit = second.state.value }
+            val restored = second.restore()
+
+            assertEquals(SessionState.Idle, publishedAtCommit, "the pre-crash state is never published before the restore commit")
+
+            val session = restored.session()
+            assertNull(session.paying)
+            assertEquals(session, assertIs<SessionState.Ringing>(store.stored).session, "ProcessRestored committed")
+            assertEquals<List<Any>>(entryEffects(restored.state()), runner.ran, "only entry effects ran")
+            assertTrue((crashing.ran + runner.ran).none { it is SessionEffect.LaunchBilling || it is SessionEffect.PersistPurchaseIntent })
+        }
+
+    @Test
+    fun `a restored ring gets a fresh interaction deadline from the restore`() =
+        runTest {
+            engine().dispatch(alarmFired)
+            time.advanceBy(29.minutes)
+
+            val session = engine(effects = RecordingRunner()).restore().session()
+
+            assertEquals(time.now.elapsedMillis + 30.minutes.inWholeMilliseconds, session.interactionDeadline?.elapsedMillis)
+        }
+
+    @Test
+    fun `restoring an overdue snooze rings again but discards the restore's one-shot effects`() =
+        runTest {
+            store.row = SessionJson.encode(SessionState.Snoozed(snoozedSession()))
+            time.advanceBy(10.minutes)
+            val engine = engine()
+
+            val ringing = assertIs<SessionState.Ringing>(engine.restore().state())
+
+            assertEquals(2, ringing.session.ringIndex)
+            assertEquals(ringing, store.stored)
+            assertEquals<List<Any>>(entryEffects(ringing), runner.ran)
+            assertEquals(ringing, engine.state.value)
+        }
+
+    @Test
+    fun `restoring a Grace whose window ended while the process was dead goes Loud with the grace end effects`() =
+        runTest {
+            val grace = SessionState.Grace(ringSession().copy(graceEnd = Deadline.after(T0, 20.seconds)))
+            store.row = SessionJson.encode(grace)
+            time.advanceBy(30.seconds)
+            val engine = engine()
+
+            val loud = assertIs<SessionState.Loud>(engine.restore().state())
+
+            assertEquals(loud, store.stored)
+            assertEquals(listOf("Grace", "Loud"), store.commits.map { it.kind })
+            val restoredGrace = assertIs<SessionState.Grace>(store.commits.first())
+            val graceEnd = listOf(SessionEffect.UnmuteToVolume(80), SessionEffect.StrongHaptic)
+            assertEquals<List<Any>>(entryEffects(restoredGrace) + graceEnd + entryEffects(loud), runner.ran)
+        }
+
+    @Test
+    fun `restoring with nothing stored stays Idle and runs nothing`() =
+        runTest {
+            val engine = engine()
+
+            assertEquals(Outcome.Success(SessionState.Idle), engine.restore())
+
+            assertEquals(SessionState.Idle, engine.state.value)
+            assertEquals(emptyList(), runner.ran)
+            assertEquals(emptyList(), store.commits)
+            assertEquals(0, store.clears)
+            assertEquals(emptyList(), logger.events)
+        }
+
+    @Test
+    fun `a stored Idle row is cleared and the engine stays Idle`() =
+        runTest {
+            store.row = SessionJson.encode(SessionState.Idle)
+
+            assertEquals(Outcome.Success(SessionState.Idle), engine().restore())
+
+            assertNull(store.row)
+            assertEquals(1, store.clears)
+            assertEquals(emptyList(), runner.ran)
+            assertEquals(emptyList(), store.commits)
+        }
+
+    @Test
+    fun `a dispatch before restore restores the stored session first, keeps its row and applies to it`() =
+        runTest {
+            val persisted = SessionState.Ringing(ringSession())
+            store.row = SessionJson.encode(persisted)
+            time.advanceBy(1.minutes)
+            val engine = engine()
+
+            val grace = assertIs<SessionState.Grace>(engine.dispatch(SessionEvent.ImUpTapped).state())
+
+            assertEquals(SESSION_ID, grace.session.sessionId)
+            assertEquals(grace, store.stored, "the row is kept and holds the event's result")
+            assertEquals(listOf("Ringing", "Grace"), store.commits.map { it.kind }, "ProcessRestored, then the event")
+            assertEquals(time.now.elapsedMillis + 30.minutes.inWholeMilliseconds, grace.session.interactionDeadline?.elapsedMillis)
+            assertEquals(Outcome.Success(grace), engine.restore(), "restore after that does nothing")
+        }
+
+    @Test
+    fun `a failed load fails the dispatch without reducing and the next dispatch loads again`() =
+        runTest {
+            store.row = SessionJson.encode(SessionState.Ringing(ringSession()))
+            store.loadFailure = DomainError.StorageFailure("locked")
+            val engine = engine()
+
+            assertEquals(Outcome.Failure(DomainError.StorageFailure("locked")), engine.dispatch(SessionEvent.UserInteracted))
+            assertEquals(Outcome.Failure(DomainError.StorageFailure("locked")), engine.tick())
+            assertEquals(emptyList(), store.commits)
+            assertEquals(emptyList(), runner.ran)
+            assertEquals(SessionState.Idle, engine.state.value)
+
+            store.loadFailure = null
+            time.advanceBy(1.minutes)
+            val grace = assertIs<SessionState.Grace>(engine.dispatch(SessionEvent.ImUpTapped).state())
+            assertEquals(SESSION_ID, grace.session.sessionId)
+            assertEquals(grace, store.stored)
+        }
+
+    @Test
+    fun `a caller cancelled while effects run still gets every effect run and the state published`() =
+        runTest {
+            runner.hangOn = { it is SessionEffect.ArmSlot }
+            val engine = engine()
+            val caller = launch { engine.dispatch(alarmFired) }
+            runCurrent()
+            assertEquals(listOf<Any>(SessionEffect.StartWakeRuntime(SESSION_ID)), runner.ran)
+
+            caller.cancel()
+            runner.release.complete(Unit)
+            caller.join()
+
+            val ringing = assertIs<SessionState.Ringing>(engine.state.value)
+            assertEquals(ringing, store.stored)
+            assertEquals(reducer.reduce(SessionState.Idle, alarmFired, T0).effects + entryEffects(ringing), runner.ran)
+        }
+
+    @Test
+    fun `hitting the round limit with events still due is logged`() =
+        runTest {
+            val alwaysDue =
+                SessionEngine(reducer, store, runner, time.clock, time.monotonicClock, time.bootCounter, logger) { _, _ ->
+                    listOf(SessionEvent.GraceElapsed)
+                }
+
+            assertEquals(Outcome.Success(SessionState.Idle), alwaysDue.tick())
+
+            assertEquals(SessionEngine.MAX_DUE_ROUNDS, runner.ran.size, "one ignored GraceElapsed per round")
+            assertEquals(LogEvent.OperationFailed("dispatch due events", "round limit reached"), logger.events.last())
+        }
+
+    @Test
+    fun `an undecodable stored session is logged and cleared and the engine stays Idle`() =
+        runTest {
+            store.row = "{\"type\":\"Ringing\",\"session\":{\"label\":\"Work\""
+            val engine = engine()
+
+            assertEquals(Outcome.Success(SessionState.Idle), engine.restore())
+
+            assertNull(store.row)
+            assertEquals(SessionState.Idle, engine.state.value)
+            assertEquals(emptyList(), runner.ran)
+            val logged = assertIs<LogEvent.OperationFailed>(logger.events.single())
+            assertEquals("restore session", logged.operation)
+            assertTrue(logged.cause.startsWith("unreadable session: ") && "Work" !in logged.cause, logged.cause)
+        }
+
+    @Test
+    fun `an unreadable session that cannot be cleared is logged twice and the engine still stays Idle`() =
+        runTest {
+            store.row = "garbage"
+            store.clearFailure = DomainError.StorageFailure("read-only")
+
+            assertEquals(Outcome.Success(SessionState.Idle), engine().restore())
+
+            assertEquals(1, store.clears)
+            assertEquals(
+                LogEvent.OperationFailed("clear stored session", "storage failure: read-only"),
+                logger.events.last(),
+            )
+            assertEquals(2, logger.events.size)
+        }
+
+    @Test
+    fun `a storage failure on load is logged and returned and nothing is cleared`() =
+        runTest {
+            store.row = SessionJson.encode(SessionState.Ringing(ringSession()))
+            store.loadFailure = DomainError.StorageFailure("locked")
+
+            assertEquals(Outcome.Failure(DomainError.StorageFailure("locked")), engine().restore())
+
+            assertEquals(0, store.clears)
+            assertEquals(listOf<LogEvent>(LogEvent.OperationFailed("restore session", "storage failure: locked")), logger.events)
+        }
+
+    @Test
+    fun `when the restore commit fails the loaded session is kept and its entry effects still run`() =
+        runTest {
+            val loaded = SessionState.Loud(ringSession())
+            store.row = SessionJson.encode(loaded)
+            store.commitFailure = DomainError.StorageFailure("disk full")
+            time.advanceBy(1.minutes)
+            val engine = engine()
+
+            assertEquals(Outcome.Failure(DomainError.StorageFailure("disk full")), engine.restore())
+
+            assertEquals(loaded, engine.state.value)
+            assertEquals<List<Any>>(entryEffects(loaded), runner.ran)
+        }
+
+    @Test
+    fun `restore does nothing once the engine holds a session`() =
+        runTest {
+            val engine = engine()
+            val ringing = engine.dispatch(alarmFired).state()
+            runner.ran.clear()
+            val commits = store.commits.size
+
+            assertEquals(Outcome.Success(ringing), engine.restore())
+
+            assertEquals(commits, store.commits.size)
+            assertEquals(emptyList(), runner.ran)
+        }
+
+    @Test
+    fun `a failing effect is logged by type name, the commit stands and later effects still run`() =
+        runTest {
+            runner.throwOn = { it is SessionEffect.StartWakeRuntime }
+            val engine = engine()
+
+            val ringing = engine.dispatch(alarmFired).state()
+
+            assertEquals(ringing, store.stored)
+            assertEquals(reducer.reduce(SessionState.Idle, alarmFired, T0).effects + entryEffects(ringing), runner.ran)
+            assertEquals(
+                listOf<LogEvent>(LogEvent.OperationFailed("run session effect StartWakeRuntime", "IllegalStateException")),
+                logger.events,
+            )
+        }
+
+    @Test
+    fun `an error thrown by an effect is logged by type name and does not escape the dispatch`() =
+        runTest {
+            runner.throwOn = { it is SessionEffect.StartWakeRuntime }
+            runner.failure = { NotImplementedError("not yet") }
+
+            val ringing = engine().dispatch(alarmFired).state()
+
+            assertEquals(ringing, store.stored)
+            assertEquals(LogEvent.OperationFailed("run session effect StartWakeRuntime", "NotImplementedError"), logger.events.single())
+        }
+
+    @Test
+    fun `an ignored event commits nothing and passes the log effect to the runner`() =
+        runTest {
+            val engine = engine()
+            val ringing = engine.dispatch(alarmFired).state()
+            runner.ran.clear()
+
+            assertEquals(Outcome.Success(ringing), engine.dispatch(SessionEvent.GraceElapsed))
+
+            assertEquals(listOf(ringing), store.commits, "only the alarm was committed")
+            assertEquals<List<Any>>(listOf(SessionEffect.LogIgnored("GraceElapsed", SESSION_ID)) + entryEffects(ringing), runner.ran)
+        }
+
+    @Test
+    fun `a due event whose commit fails is logged and the dispatch returns its own committed state`() =
+        runTest {
+            val engine = engine()
+            engine.dispatch(alarmFired.copy(beforeFirstUnlock = true))
+            time.advanceBy(31.minutes)
+            store.onCommit = { store.commitFailure = DomainError.StorageFailure("disk full") }
+
+            val ringing = assertIs<SessionState.Ringing>(engine.dispatch(SessionEvent.UserUnlocked).state())
+
+            assertEquals(ringing, store.stored, "the UserUnlocked step is committed")
+            assertEquals(false, ringing.session.beforeFirstUnlock)
+            assertEquals(ringing, engine.state.value)
+            assertTrue(runner.ran.none { it is SessionEffect.RecordOutcome })
+            assertEquals(LogEvent.OperationFailed("commit session state", "storage failure: disk full"), logger.events.last())
+        }
+
+    @Test
+    fun `a full morning from the alarm to Idle ends with the store empty`() =
+        runTest {
+            val engine = engine()
+
+            assertIs<SessionState.Ringing>(engine.dispatch(alarmFired).state())
+            engine.dispatch(SessionEvent.SnoozeTapped)
+            assertTrue(SessionEffect.ShowSnoozeConfirm(OFFER) in runner.ran)
+            assertEquals(INTENT, engine.dispatch(SessionEvent.PayConfirmed(INTENT)).session().paying)
+            assertTrue(runner.ran.any { it is SessionEffect.LaunchBilling })
+            val grant = SessionEvent.PurchaseGranted(PRODUCT, TOKEN, PurchaseVerdict.Grant, NEW_SEEDS)
+            val snoozed = assertIs<SessionState.Snoozed>(engine.dispatch(grant).state())
+            assertEquals(1, snoozed.session.snoozesGranted)
+
+            time.advanceBy(9.minutes)
+            assertEquals(2, assertIs<SessionState.Ringing>(engine.dispatch(SessionEvent.SlotFired).state()).session.ringIndex)
+            assertIs<SessionState.Grace>(engine.dispatch(SessionEvent.ImUpTapped).state())
+            assertIs<SessionState.Completed>(engine.dispatch(SessionEvent.CheckAnswerSubmitted(CheckAnswer.Placeholder)).state())
+            assertTrue(EntryEffect.HistoryWriteRequested(SESSION_ID) in runner.ran)
+            assertEquals(Outcome.Success(SessionState.Idle), engine.dispatch(SessionEvent.Recorded(SESSION_ID)))
+
+            assertNull(store.row)
+            assertEquals(SessionState.Idle, engine.state.value)
+            assertEquals(SessionEffect.ClearRuntimeSession(SESSION_ID), runner.ran.last())
+            assertEquals(
+                listOf("Ringing", "Ringing", "Snoozed", "Ringing", "Grace", "Completed", "Idle"),
+                store.commits.map { it.kind },
+            )
+        }
+}

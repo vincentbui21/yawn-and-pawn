@@ -23,7 +23,7 @@
 - source_spec: `_bmad-output/implementation-artifacts/spec-1-1-scaffold-the-kmp-project-with-a-quality-gate.md`
   summary: Remove the "every Robolectric test class must call stopKoin()" trap (test Application or shared rule).
   evidence: `YawnAndPawnApp` calls global `startKoin`; a later test class without `@After stopKoin()` makes the next class throw `KoinApplicationAlreadyStartedException`.
-  status: assigned to Story 1.12 by sprint-change-proposal-2026-10-01.
+  status: assigned to Story 1.12 by sprint-change-proposal-2026-10-01. Resolved in Story 1.12: Robolectric uses TestYawnAndPawnApp (robolectric.properties application=), which stops any running Koin before onCreate; StopAppRule / stopApp() tear down; no test calls stopKoin() directly.
 - source_spec: `_bmad-output/implementation-artifacts/spec-1-2-ci-pipeline-and-dependency-and-permission-allowlists.md`
   summary: Verify the release workflow end to end on the first real tag (tag validation, versionName override reaching the AAB, signing, Play upload status draft vs completed).
   evidence: Unverified (medium if wrong). The tag regex and `-Pyawnandpawn.versionName` were only checked by hand locally; settled by the first `vX.Y.Z` push after Story 1.4 creates the Play app record.
@@ -120,6 +120,7 @@
 - source_spec: `_bmad-output/implementation-artifacts/spec-1-11-the-complete-wake-session-state-machine-in-core.md`
   summary: Session persistence details for Story 1.12 and 1.13: a fixed Json configuration (ignoreUnknownKeys, explicit class discriminator) with a compatibility test for older payloads, and one owner of the history write.
   evidence: SessionState is @Serializable with default Json only and no versioning; Completed/Missed emit both a one-shot RecordOutcome and the entry effect HistoryWriteRequested. Story 1.12 (RoomActiveSessionStore) must pin the Json config and test decoding; Story 1.13 must make SessionRecorder the single idempotent writer that dispatches Recorded from one of the two.
+  status: Json half resolved in Story 1.12 (SessionJson: ignoreUnknownKeys, classDiscriminator "type", encodeDefaults; golden v1 fixtures plus an extra-field decode test). The history-write owner stays with Story 1.13.
 - source_spec: `_bmad-output/implementation-artifacts/spec-1-11-the-complete-wake-session-state-machine-in-core.md`
   summary: Epic 4 availability and reuse: the real SnoozeAvailabilityPolicy must price through FeeLadder(baseFeeTier, snoozesGranted + 1) with a reducer-level test, and ReuseAccepted must be validated against the offered product.
   evidence: The Epic 1 reducer accepts any offer the policy returns and any ReuseAccepted outside test mode. Stories 4.7 (snoozeAvailability) and 4.9/4.11 (reconciler, orchestration) own these checks.

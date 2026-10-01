@@ -71,6 +71,21 @@ sealed interface LogEvent {
         val alarmId: String,
         val missedAt: Instant,
     ) : LogEvent
+
+    /**
+     * A session effect of type [effectType] reached a runner that only logs it (Epic 1, until the wake runtime of
+     * Story 1.14). [entry] is true for an entry effect, false for a one-shot effect. Only the type name is logged.
+     */
+    data class SessionEffectLogged(
+        val effectType: String,
+        val entry: Boolean,
+    ) : LogEvent
+
+    /** The session event of type [eventType] had no AD-2 row in session [sessionId] (null when Idle) and was ignored. */
+    data class SessionEventIgnored(
+        val eventType: String,
+        val sessionId: String?,
+    ) : LogEvent
 }
 
 /** Log text for [this] error: the storage cause, the missing id or the rejected field. */

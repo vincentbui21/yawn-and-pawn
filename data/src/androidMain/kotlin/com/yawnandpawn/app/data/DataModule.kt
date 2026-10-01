@@ -3,18 +3,32 @@ package com.yawnandpawn.app.data
 import android.content.Context
 import com.yawnandpawn.app.core.alarm.AlarmRepository
 import com.yawnandpawn.app.core.alarm.RequestCodeSequence
+import com.yawnandpawn.app.core.session.ActiveSessionStore
 import com.yawnandpawn.app.data.alarm.RoomAlarmRepository
 import com.yawnandpawn.app.data.alarm.RoomRequestCodeSequence
 import com.yawnandpawn.app.data.db.AppDatabase
+import com.yawnandpawn.app.data.db.RuntimeDatabase
 import com.yawnandpawn.app.data.db.buildAppDatabase
+import com.yawnandpawn.app.data.db.buildRuntimeDatabase
+import com.yawnandpawn.app.data.session.RoomActiveSessionStore
+import org.koin.core.module.dsl.onClose
+import org.koin.core.module.dsl.withOptions
 import org.koin.dsl.module
 
-/** Koin bindings of :data (AD-13). Needs the Android `Context` (registered by `androidContext` in the app). */
+/**
+ * Koin bindings of :data (AD-13). Needs the Android `Context` (registered by `androidContext` in the app) and the
+ * `Clock` port (from the app's time module).
+ */
 val dataModule =
     module {
-        single { buildAppDatabase(get<Context>()) }
+        // Closed when Koin stops, so a new app instance never opens a file another instance still holds.
+        single { buildAppDatabase(get<Context>()) } withOptions { onClose { it?.close() } }
         single { get<AppDatabase>().alarmDao() }
         single { get<AppDatabase>().requestCodeSequenceDao() }
         single<AlarmRepository> { RoomAlarmRepository(get()) }
         single<RequestCodeSequence> { RoomRequestCodeSequence(get()) }
+        // runtime.db (Story 1.12): the write-ahead copy of the active session, not backed up.
+        single { buildRuntimeDatabase(get<Context>()) } withOptions { onClose { it?.close() } }
+        single { get<RuntimeDatabase>().activeSessionDao() }
+        single<ActiveSessionStore> { RoomActiveSessionStore(get(), get()) }
     }

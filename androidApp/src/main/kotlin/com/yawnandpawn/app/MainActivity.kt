@@ -28,15 +28,13 @@ class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         enableEdgeToEdge()
         super.onCreate(savedInstanceState)
+        // This activity's own launcher: a stopping old instance detaches only its own, never a newer one's.
+        val launch = { requestNotifications.launch(Manifest.permission.POST_NOTIFICATIONS) }
         lifecycle.addObserver(
             object : DefaultLifecycleObserver {
-                override fun onStart(owner: LifecycleOwner) {
-                    notificationPermission.attach { requestNotifications.launch(Manifest.permission.POST_NOTIFICATIONS) }
-                }
+                override fun onStart(owner: LifecycleOwner) = notificationPermission.attach(launch)
 
-                override fun onStop(owner: LifecycleOwner) {
-                    notificationPermission.attach(null)
-                }
+                override fun onStop(owner: LifecycleOwner) = notificationPermission.detach(launch)
             },
         )
         setContent {

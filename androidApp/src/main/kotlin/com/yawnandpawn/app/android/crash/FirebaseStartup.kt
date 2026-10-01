@@ -11,6 +11,7 @@ import com.google.firebase.FirebaseOptions
 import com.google.firebase.crashlytics.FirebaseCrashlytics
 import com.yawnandpawn.app.core.log.LogEvent
 import com.yawnandpawn.app.core.log.Logger
+import java.util.concurrent.atomic.AtomicBoolean
 
 /** The app has a Firebase configuration: the google-services plugin ran with a `google-services.json`. */
 fun isFirebaseConfigured(context: Context): Boolean = FirebaseOptions.fromResource(context) != null
@@ -46,13 +47,14 @@ class FirebaseStartup(
             startNow()
             return
         }
+        val registered = AtomicBoolean(true)
         val receiver =
             object : BroadcastReceiver() {
                 override fun onReceive(
                     receiverContext: Context,
                     intent: Intent,
                 ) {
-                    context.unregisterReceiver(this)
+                    if (registered.getAndSet(false)) context.unregisterReceiver(this)
                     startNow()
                 }
             }
@@ -62,6 +64,11 @@ class FirebaseStartup(
             context.registerReceiver(receiver, filter, Context.RECEIVER_NOT_EXPORTED)
         } else {
             context.registerReceiver(receiver, filter)
+        }
+        // An unlock between the first check and the registration sent its broadcast already: check again.
+        if (unlocked()) {
+            if (registered.getAndSet(false)) context.unregisterReceiver(receiver)
+            startNow()
         }
     }
 

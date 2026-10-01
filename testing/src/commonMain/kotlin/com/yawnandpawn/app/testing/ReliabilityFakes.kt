@@ -28,9 +28,13 @@ class FakeReliabilitySettings : ReliabilitySettings {
     }
 }
 
-/** [NotificationPermission] that needs asking while [needed]; a request clears it, like the real "asked once". */
+/**
+ * [NotificationPermission] that needs asking while [needed]; a request clears it, like the real "asked once". With
+ * [failure] set, a request throws it (the system dialog could not be launched) and stays needed.
+ */
 class FakeNotificationPermission(
     var needed: Boolean = false,
+    var failure: Exception? = null,
 ) : NotificationPermission {
     var requests = 0
         private set
@@ -39,6 +43,7 @@ class FakeNotificationPermission(
 
     override fun request() {
         requests++
+        failure?.let { throw it }
         needed = false
     }
 }

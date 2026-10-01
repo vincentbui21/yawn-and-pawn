@@ -313,6 +313,22 @@ class AlarmEditorViewModelTest {
         }
 
     @Test
+    fun `a request that fails after a successful save still closes the editor and is logged`() =
+        runTest(dispatcher) {
+            permission.needed = true
+            permission.failure = IllegalStateException("no activity to launch from")
+            val viewModel = viewModel()
+            val effects = effectsOf(viewModel)
+
+            viewModel.onIntent(EditorIntent.SaveClicked)
+            advanceUntilIdle()
+
+            assertEquals(listOf<EditorEffect>(EditorEffect.Close), effects)
+            assertEquals(1, repository.current.size)
+            assertEquals(LogEvent.OperationFailed("request notification permission", "no activity to launch from"), logger.events.last())
+        }
+
+    @Test
     fun `a failed save does not ask for notifications`() =
         runTest(dispatcher) {
             permission.needed = true

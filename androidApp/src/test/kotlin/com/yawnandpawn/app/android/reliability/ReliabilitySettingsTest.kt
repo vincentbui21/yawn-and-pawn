@@ -3,9 +3,13 @@ package com.yawnandpawn.app.android.reliability
 import android.Manifest
 import android.app.Application
 import android.content.Intent
+import android.content.pm.ActivityInfo
+import android.content.pm.ResolveInfo
+import android.net.Uri
 import android.provider.Settings
 import androidx.test.core.app.ApplicationProvider
 import com.yawnandpawn.app.StopAppRule
+import com.yawnandpawn.app.core.log.LogEvent
 import com.yawnandpawn.app.core.reliability.ReliabilityItem
 import com.yawnandpawn.app.testing.FakeLogger
 import org.junit.Rule
@@ -15,7 +19,9 @@ import org.robolectric.RobolectricTestRunner
 import org.robolectric.Shadows.shadowOf
 import org.robolectric.annotation.Config
 import kotlin.test.assertEquals
+import kotlin.test.assertFailsWith
 import kotlin.test.assertFalse
+import kotlin.test.assertNull
 import kotlin.test.assertTrue
 
 /** Story 1.19: "Fix" deep links and the once-only notification permission request. */
@@ -55,6 +61,48 @@ class ReliabilitySettingsTest {
         assertEquals(packageUri, settings.intentFor(ReliabilityItem.ExactAlarms).dataString)
         assertEquals(Settings.ACTION_REQUEST_SCHEDULE_EXACT_ALARM, settings.intentFor(ReliabilityItem.ExactAlarms).action)
         assertEquals(Settings.ACTION_APPLICATION_DETAILS_SETTINGS, settings.intentFor(ReliabilityItem.FullScreenIntent).action)
+    }
+
+    @Test
+    @Config(sdk = [34])
+    fun `a phone without the setting's screen opens the app details, and one with neither logs it without crashing`() {
+        shadowOf(app).checkActivities(true)
+        val settings = AndroidReliabilitySettings(app, logger)
+
+        settings.open(ReliabilityItem.FullScreenIntent)
+        assertNull(shadowOf(app).nextStartedActivity, "no screen at all: nothing started")
+        assertEquals(
+            List<LogEvent>(2) { LogEvent.OperationFailed("open reliability setting", "ActivityNotFoundException") },
+            logger.events,
+        )
+
+        val details = Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS, Uri.parse(packageUri))
+        val handler = ResolveInfo().apply { activityInfo = ActivityInfo().apply { packageName = "com.android.settings" } }
+        shadowOf(app.packageManager).addResolveInfoForIntent(details, handler)
+        settings.open(ReliabilityItem.FullScreenIntent)
+
+        val started = shadowOf(app).nextStartedActivity
+        assertEquals(Settings.ACTION_APPLICATION_DETAILS_SETTINGS, started.action)
+        assertEquals(packageUri, started.dataString)
+    }
+
+    @Test
+    @Config(sdk = [33])
+    fun `an old screen stopping keeps the newer screen's launcher, and a launch that throws is asked again`() {
+        val permission = AndroidNotificationPermission(app, logger)
+        val failing: () -> Unit = { throw IllegalStateException("not attached to an activity") }
+        permission.attach(failing)
+        assertFailsWith<IllegalStateException> { permission.request() }
+        assertTrue(permission.shouldRequest(), "not remembered as asked")
+
+        var newer = 0
+        val newLaunch: () -> Unit = { newer++ }
+        permission.attach(newLaunch)
+        permission.detach(failing)
+        permission.request()
+
+        assertEquals(1, newer, "the newer screen still launches")
+        assertFalse(permission.shouldRequest())
     }
 
     @Test

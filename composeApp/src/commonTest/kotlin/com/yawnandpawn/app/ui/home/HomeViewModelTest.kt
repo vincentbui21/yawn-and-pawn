@@ -587,6 +587,33 @@ class HomeViewModelTest {
         }
 
     @Test
+    fun `a resume checks again, as a permission dialog answered over Home only pauses it`() =
+        runTest(dispatcher) {
+            probe.status = ReliabilityStatus.ALL_OK.copy(notificationsAllowed = false)
+            val viewModel = home(FakeAlarmRepository())
+            val checks = probe.checks
+
+            probe.status = ReliabilityStatus.ALL_OK
+            viewModel.onIntent(HomeIntent.Resumed)
+
+            assertFalse(viewModel.state.value.reliabilityProblem)
+            assertEquals(checks + 1, probe.checks)
+        }
+
+    @Test
+    fun `Fix checks again and opens the setting that is off now`() =
+        runTest(dispatcher) {
+            probe.status = ReliabilityStatus.ALL_OK.copy(notificationsAllowed = false)
+            val viewModel = home(FakeAlarmRepository())
+
+            // Notifications were turned on elsewhere; exact alarms went off.
+            probe.status = ReliabilityStatus.ALL_OK.copy(exactAlarmsAllowed = false)
+            viewModel.onIntent(HomeIntent.FixSettings)
+
+            assertEquals(listOf(ReliabilityItem.ExactAlarms), settings.opened)
+        }
+
+    @Test
     fun `the banner also shows when the alarms cannot be read`() =
         runTest(dispatcher) {
             probe.status = ReliabilityStatus.ALL_OK.copy(exactAlarmsAllowed = false)

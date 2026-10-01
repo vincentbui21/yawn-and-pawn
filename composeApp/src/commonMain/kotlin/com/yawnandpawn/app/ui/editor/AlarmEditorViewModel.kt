@@ -216,8 +216,9 @@ class AlarmEditorViewModel(
                 // Stays saving until the screen leaves, so a quick second tap cannot store the alarm twice.
                 is Outcome.Success -> {
                     // The first save of an enabled alarm (every editor save is one) asks for notifications, once
-                    // (Story 1.19); the dialog shows over Home after the editor closes.
-                    if (notificationPermission.shouldRequest()) notificationPermission.request()
+                    // (Story 1.19); the dialog shows over Home after the editor closes. The alarm is saved, so the
+                    // editor closes even when asking fails.
+                    notificationPermission.askOnce(actions)
                     close()
                 }
 
@@ -324,6 +325,16 @@ class AlarmEditorViewModel(
                 Unit
             }
         }
+    }
+}
+
+/** Asks once for notifications; a failure to ask is logged (the Home banner still shows the missing permission). */
+@Suppress("TooGenericExceptionCaught")
+private fun NotificationPermission.askOnce(actions: AlarmActions) {
+    try {
+        if (shouldRequest()) request()
+    } catch (e: Exception) {
+        actions.logFailure("request notification permission", e)
     }
 }
 

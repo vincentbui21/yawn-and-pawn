@@ -6,6 +6,7 @@ import android.content.pm.ApplicationInfo
 import android.content.pm.PackageManager
 import android.os.Looper
 import androidx.test.core.app.ApplicationProvider
+import com.google.firebase.FirebaseApp
 import com.yawnandpawn.app.StopAppRule
 import com.yawnandpawn.app.android.wake.NoOpCrashReporter
 import com.yawnandpawn.app.core.crash.CrashReporter
@@ -95,7 +96,50 @@ class CrashReportingTest {
         startup.start()
 
         assertEquals(0, started)
-        assertFalse(isFirebaseConfigured(context), "no google-services.json in tests")
+        assertFalse(startup.started)
+    }
+
+    @Test
+    fun `an unlock between the first check and the registration still starts Firebase, once`() {
+        var started = 0
+        var checks = 0
+        // Locked at the first check, unlocked by the time the receiver is registered.
+        val startup = FirebaseStartup(context, logger, configured = { true }, unlocked = { checks++ > 0 }, initialize = { started++ })
+
+        startup.start()
+        context.sendBroadcast(Intent(Intent.ACTION_USER_UNLOCKED))
+        shadowOf(Looper.getMainLooper()).idle()
+
+        assertEquals(1, started)
+        assertTrue(startup.started)
+    }
+
+    @Test
+    fun `a report never throws when Crashlytics fails, so the wake fallback still runs`() {
+        val broken =
+            object : CrashSink {
+                override val isReady = true
+
+                override fun recordException(throwable: Throwable) = throw IllegalStateException("Crashlytics not initialized")
+            }
+        val missing =
+            object : CrashSink {
+                override val isReady: Boolean
+                    get() = throw NoClassDefFoundError("com/google/firebase/FirebaseApp")
+
+                override fun recordException(throwable: Throwable) = Unit
+            }
+
+        FirebaseCrashReporter(broken, logger).report(RuntimeException("boom"))
+        FirebaseCrashReporter(missing, logger).report(RuntimeException("boom"))
+
+        assertEquals(
+            listOf<LogEvent>(
+                LogEvent.OperationFailed("report crash", "IllegalStateException"),
+                LogEvent.OperationFailed("report crash", "NoClassDefFoundError"),
+            ),
+            logger.events,
+        )
     }
 
     @Test
@@ -133,8 +177,22 @@ class CrashReportingTest {
     }
 
     @Test
-    fun `the app binds the no-op reporter when it has no Firebase configuration`() {
-        assertIs<NoOpCrashReporter>(GlobalContext.get().get<CrashReporter>())
+    fun `the app binds Crashlytics only with a Firebase configuration, else the no-op reporter`() {
+        val reporter = GlobalContext.get().get<CrashReporter>()
+        if (isFirebaseConfigured(context)) assertIs<FirebaseCrashReporter>(reporter) else assertIs<NoOpCrashReporter>(reporter)
+        assertFalse(FirebaseApp.getApps(context).isNotEmpty(), "tests never initialise a real FirebaseApp")
+    }
+
+    @Test
+    fun `the merged debug manifest declares the debug hooks provider`() {
+        @Suppress("DEPRECATION")
+        val providers =
+            context.packageManager
+                .getPackageInfo(context.packageName, PackageManager.GET_PROVIDERS)
+                .providers
+                .orEmpty()
+
+        assertTrue(providers.any { it.name == "com.yawnandpawn.app.debug.DebugHooksProvider" }, providers.map { it.name }.toString())
     }
 
     @Test

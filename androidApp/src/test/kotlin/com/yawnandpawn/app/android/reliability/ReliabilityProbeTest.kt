@@ -1,19 +1,31 @@
 package com.yawnandpawn.app.android.reliability
 
 import android.app.AlarmManager
+import android.app.NotificationChannel
 import android.app.NotificationManager
 import android.content.Context
 import androidx.test.core.app.ApplicationProvider
 import com.yawnandpawn.app.StopAppRule
+import com.yawnandpawn.app.android.wake.WakeNotifier
+import com.yawnandpawn.app.core.log.Logger
+import com.yawnandpawn.app.core.reliability.NotificationPermission
+import com.yawnandpawn.app.core.reliability.ReliabilityProbe
+import com.yawnandpawn.app.core.reliability.ReliabilitySettings
 import com.yawnandpawn.app.core.reliability.ReliabilityStatus
+import com.yawnandpawn.app.testing.FakeLogger
 import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
+import org.koin.android.ext.koin.androidContext
+import org.koin.dsl.koinApplication
+import org.koin.dsl.module
 import org.robolectric.RobolectricTestRunner
 import org.robolectric.Shadows.shadowOf
 import org.robolectric.annotation.Config
 import org.robolectric.shadows.ShadowAlarmManager
 import kotlin.test.assertEquals
+import kotlin.test.assertIs
+import kotlin.test.assertSame
 
 /** Story 1.19: the reliability probe on API 26, 31, 32, 33, 34 and 36. */
 @RunWith(RobolectricTestRunner::class)
@@ -79,6 +91,41 @@ class ReliabilityProbeTest {
         assertEquals(false, context.getSystemService(AlarmManager::class.java).canScheduleExactAlarms(), "ignored on 33+")
         assertEquals(0, fullScreenAsked, "no full-screen grant to read below 34")
     }
+
+    @Test
+    fun `the app's own module binds the real probe (only the test app swaps it)`() {
+        val koin =
+            koinApplication {
+                androidContext(context)
+                modules(reliabilityModule(), module { single<Logger> { FakeLogger() } })
+            }.koin
+
+        assertIs<AndroidReliabilityProbe>(koin.get<ReliabilityProbe>())
+        assertIs<AndroidReliabilitySettings>(koin.get<ReliabilitySettings>())
+        assertSame(koin.get<AndroidNotificationPermission>(), koin.get<NotificationPermission>())
+        koin.close()
+    }
+
+    @Test
+    @Config(sdk = [33])
+    fun `a blocked Alarms channel counts as notifications off`() {
+        alarmsChannel(NotificationManager.IMPORTANCE_NONE)
+
+        assertEquals(status(notifications = false, fullScreen = true, exact = true), probe.check())
+    }
+
+    @Test
+    @Config(sdk = [33])
+    fun `a lowered Alarms channel still shows, so it counts as on`() {
+        alarmsChannel(NotificationManager.IMPORTANCE_LOW)
+
+        assertEquals(ReliabilityStatus.ALL_OK, probe.check())
+    }
+
+    private fun alarmsChannel(importance: Int) =
+        context
+            .getSystemService(NotificationManager::class.java)
+            .createNotificationChannel(NotificationChannel(WakeNotifier.CHANNEL_ID, "Alarms", importance))
 
     @Test
     @Config(sdk = [34])

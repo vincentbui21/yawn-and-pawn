@@ -1,5 +1,6 @@
 package com.yawnandpawn.app
 
+import android.Manifest
 import androidx.compose.ui.semantics.SemanticsActions
 import androidx.compose.ui.semantics.SemanticsProperties
 import androidx.compose.ui.test.SemanticsMatcher
@@ -24,16 +25,21 @@ import androidx.compose.ui.test.performScrollTo
 import androidx.compose.ui.test.performSemanticsAction
 import androidx.compose.ui.test.performTextReplacement
 import androidx.compose.ui.test.performTouchInput
+import androidx.lifecycle.Lifecycle
 import com.github.takahirom.roborazzi.captureRoboImage
 import com.yawnandpawn.app.StopAppRule
+import com.yawnandpawn.app.core.reliability.NotificationPermission
 import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
 import org.koin.core.context.GlobalContext
 import org.robolectric.RobolectricTestRunner
+import org.robolectric.Shadows.shadowOf
 import org.robolectric.annotation.Config
 import org.robolectric.annotation.GraphicsMode
+import kotlin.test.assertEquals
 import kotlin.test.assertNotNull
+import kotlin.test.assertSame
 import kotlin.test.assertTrue
 
 /** The real app: Koin, Room `app.db`, Navigation 3, the app shell and the Story 1.8 and 1.9 screens together. */
@@ -353,5 +359,28 @@ class MainActivityTest {
 
         waitForGone("Edit alarm")
         waitForText("No alarms yet.")
+    }
+
+    /** Story 1.19: the first save asks for notifications from the screen in front, once, and never once it stopped. */
+    @Test
+    @Config(sdk = [33])
+    fun `the first save asks for POST_NOTIFICATIONS once, and never after the activity stopped`() {
+        waitForText("No alarms yet.")
+        addDefaultAlarm()
+        composeRule.waitForIdle()
+        lateinit var first: Any
+        composeRule.activityRule.scenario.onActivity { activity ->
+            val request = assertNotNull(shadowOf(activity).lastRequestedPermission, "asked after the first save")
+            assertEquals(listOf(Manifest.permission.POST_NOTIFICATIONS), request.requestedPermissions.toList())
+            first = request
+        }
+
+        addDefaultAlarm()
+        composeRule.waitForIdle()
+        composeRule.activityRule.scenario.onActivity { assertSame(first, shadowOf(it).lastRequestedPermission, "asked once") }
+
+        composeRule.activityRule.scenario.moveToState(Lifecycle.State.CREATED)
+        GlobalContext.get().get<NotificationPermission>().request()
+        composeRule.activityRule.scenario.onActivity { assertSame(first, shadowOf(it).lastRequestedPermission, "not once stopped") }
     }
 }

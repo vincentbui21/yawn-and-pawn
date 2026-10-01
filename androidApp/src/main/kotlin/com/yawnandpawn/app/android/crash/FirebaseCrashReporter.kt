@@ -35,11 +35,22 @@ class FirebaseCrashReporter(
     private val sink: CrashSink,
     private val logger: Logger,
 ) : CrashReporter {
+    /**
+     * Never throws: the wake runtime reports before it falls back to the default sound, so a failing Crashlytics (not
+     * on the classpath, half started) must not stop the ring. A failure is logged with its type only.
+     */
+    @Suppress("TooGenericExceptionCaught")
     override fun report(throwable: Throwable) {
-        if (sink.isReady) {
-            sink.recordException(sanitized(throwable))
-        } else {
-            logger.log(LogEvent.OperationFailed("report crash", "Crashlytics not started yet: ${throwable::class.simpleName}"))
+        try {
+            if (sink.isReady) {
+                sink.recordException(sanitized(throwable))
+            } else {
+                logger.log(LogEvent.OperationFailed("report crash", "Crashlytics not started yet: ${throwable::class.simpleName}"))
+            }
+        } catch (e: Exception) {
+            logger.log(LogEvent.OperationFailed("report crash", e::class.simpleName.orEmpty()))
+        } catch (e: LinkageError) {
+            logger.log(LogEvent.OperationFailed("report crash", e::class.simpleName.orEmpty()))
         }
     }
 

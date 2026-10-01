@@ -52,8 +52,8 @@ import kotlin.time.Instant
  * (or reverts on failure); Duplicate opens the copy in the editor; Delete asks first and is logged. Navigation goes out
  * through [effects]. The missed note (Story 1.16) shows the alarm time of the latest Missed session from [missedNotes]
  * until "Dismiss" stores its dismissal. The reliability banner (Story 1.19) shows while [reliability] finds a setting
- * off; it is checked when Home starts (every `ON_START`), and "Fix" opens the first failing setting through
- * [reliabilitySettings].
+ * off; it is checked when Home starts and resumes (a permission dialog only pauses it), and "Fix" checks again and
+ * opens the setting that is off now through [reliabilitySettings].
  */
 class HomeViewModel(
     repository: AlarmRepository,
@@ -148,8 +148,10 @@ class HomeViewModel(
                 showOpenFailed()
             }
 
+            // A permission dialog answered over Home only pauses it, so a resume checks the settings too.
             HomeIntent.Resumed -> {
                 resumes.tryEmit(Unit)
+                checkReliability()
             }
 
             is HomeIntent.MissedNoteDismissed -> {
@@ -158,12 +160,12 @@ class HomeViewModel(
 
             // A setting may have changed while Home was away (the user came back from "Fix").
             HomeIntent.Started -> {
-                local.update { it.copy(reliability = reliability.check()) }
+                checkReliability()
             }
 
+            // The setting that is off now, not when Home last checked.
             HomeIntent.FixSettings -> {
-                local.value.reliability.firstFailing
-                    ?.let(reliabilitySettings::open)
+                checkReliability().firstFailing?.let(reliabilitySettings::open)
             }
 
             // The hero, notices, session panel and commitment-lock dialog arrive with their own stories.
@@ -193,6 +195,9 @@ class HomeViewModel(
             }
         }
     }
+
+    private fun checkReliability(): ReliabilityStatus =
+        reliability.check().also { status -> local.update { it.copy(reliability = status) } }
 
     private fun duplicate(id: String) {
         viewModelScope.launch {

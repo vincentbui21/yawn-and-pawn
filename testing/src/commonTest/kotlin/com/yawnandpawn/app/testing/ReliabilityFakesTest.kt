@@ -4,6 +4,7 @@ import com.yawnandpawn.app.core.reliability.ReliabilityItem
 import com.yawnandpawn.app.core.reliability.ReliabilityStatus
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertFailsWith
 import kotlin.test.assertFalse
 import kotlin.test.assertTrue
 
@@ -28,5 +29,9 @@ class ReliabilityFakesTest {
         permission.request()
         assertFalse(permission.shouldRequest())
         assertEquals(1, permission.requests)
+
+        val failing = FakeNotificationPermission(needed = true, failure = IllegalStateException("no activity"))
+        assertFailsWith<IllegalStateException> { failing.request() }
+        assertTrue(failing.shouldRequest(), "still to ask")
     }
 }

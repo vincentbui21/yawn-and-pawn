@@ -76,6 +76,20 @@ class AndroidLogAndTimeSignalTest {
     }
 
     @Test
+    fun `the logger writes session effects and ignored session events at info level by type name`() {
+        ShadowLog.clear()
+        val logger = AndroidLogger()
+
+        logger.log(LogEvent.SessionEffectLogged("SoundAt", entry = true))
+        logger.log(LogEvent.SessionEventIgnored("ImUpTapped", sessionId = null))
+
+        val logs = ShadowLog.getLogsForTag(AndroidLogger.TAG)
+        assertEquals(listOf(Log.INFO, Log.INFO), logs.map { it.type })
+        assertEquals("SessionEffectLogged type=SoundAt entry=true", logs[0].msg)
+        assertEquals("SessionEventIgnored type=ImUpTapped sessionId=null", logs[1].msg)
+    }
+
+    @Test
     fun `the time signal emits on a minute tick, a time set and a zone change, only while collected`() {
         val signal = AndroidTimeChangeSignal(app)
         val scope = CoroutineScope(Dispatchers.Unconfined)

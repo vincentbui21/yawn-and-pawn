@@ -1,8 +1,12 @@
 <?xml version="1.0" encoding="utf-8"?>
 <!--
     Auto Backup on API 30 and lower (NFR-14). Same content as data_extraction_rules.xml: only app.db in the
-    device-protected database domain; everything not included is excluded. BackupRulesTest checks both.
+    device-protected database domain; everything not included is excluded. runtime.db (the active wake session,
+    Story 1.12) is also excluded explicitly, so a later broader include can never pick it up (AD-6). Lint calls an
+    exclude outside every include redundant (FullBackupContent); it is ignored on that one element on purpose.
+    BackupRulesTest checks both files.
 -->
-<full-backup-content>
+<full-backup-content xmlns:tools="http://schemas.android.com/tools">
     <include domain="device_database" path="app.db" />
+    <exclude domain="device_database" path="runtime.db" tools:ignore="FullBackupContent" />
 </full-backup-content>

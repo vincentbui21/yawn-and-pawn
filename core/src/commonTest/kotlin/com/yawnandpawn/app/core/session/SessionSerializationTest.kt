@@ -1,14 +1,13 @@
 package com.yawnandpawn.app.core.session
 
 import com.yawnandpawn.app.core.time.Deadline
-import kotlinx.serialization.json.Json
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.time.Duration.Companion.minutes
 import kotlin.time.Duration.Companion.seconds
 
 class SessionSerializationTest {
-    private val json = Json
+    private val json = SessionJson.json
 
     /** Every optional field set, so the round trip covers all of them. */
     private val full =

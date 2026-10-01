@@ -3,6 +3,7 @@ package com.yawnandpawn.app
 import android.content.Context
 import androidx.test.core.app.ApplicationProvider
 import com.yawnandpawn.app.data.db.AppDatabase
+import com.yawnandpawn.app.data.db.RuntimeDatabase
 import com.yawnandpawn.app.stopApp
 import org.junit.After
 import org.junit.Test
@@ -13,7 +14,7 @@ import java.io.File
 import kotlin.test.assertEquals
 import kotlin.test.assertTrue
 
-/** NFR-14: Auto Backup includes only app.db in the device-protected domain, on both API ranges. */
+/** NFR-14 and AD-6: Auto Backup includes only app.db in the device-protected domain and excludes runtime.db, on both API ranges. */
 @RunWith(RobolectricTestRunner::class)
 class BackupRulesTest {
     private val context = ApplicationProvider.getApplicationContext<Context>()
@@ -61,32 +62,39 @@ class BackupRulesTest {
     }
 
     private val appDb = AppDatabase.FILE_NAME
+    private val runtimeDb = RuntimeDatabase.FILE_NAME
 
     @Test
-    fun `data extraction rules (API 31+) back up and transfer only app db from device-protected storage`() {
+    fun `data extraction rules (API 31+) back up and transfer only app db and exclude runtime db in every section`() {
         assertEquals(
             listOf(
                 Rule("cloud-backup", "include", "device_database", appDb),
+                Rule("cloud-backup", "exclude", "device_database", runtimeDb),
                 Rule("device-transfer", "include", "device_database", appDb),
+                Rule("device-transfer", "exclude", "device_database", runtimeDb),
             ),
             rules(R.xml.data_extraction_rules),
         )
     }
 
     @Test
-    fun `full backup content (API 30 and lower) backs up only app db from device-protected storage`() {
+    fun `full backup content (API 30 and lower) backs up only app db and excludes runtime db`() {
         assertEquals(
-            listOf(Rule("full-backup-content", "include", "device_database", appDb)),
+            listOf(
+                Rule("full-backup-content", "include", "device_database", appDb),
+                Rule("full-backup-content", "exclude", "device_database", runtimeDb),
+            ),
             rules(R.xml.backup_rules),
         )
     }
 
     @Test
-    fun `both rule files have no excludes, so nothing outside the include is backed up`() {
+    fun `app db is the only include and runtime db is the only exclude, so nothing else is backed up`() {
         val all = rules(R.xml.data_extraction_rules) + rules(R.xml.backup_rules)
 
-        assertEquals(emptyList(), all.filter { it.kind == "exclude" })
-        assertEquals(setOf(appDb), all.map { it.path }.toSet())
+        assertEquals(setOf(appDb), all.filter { it.kind == "include" }.map { it.path }.toSet())
+        assertEquals(setOf(runtimeDb), all.filter { it.kind == "exclude" }.map { it.path }.toSet())
+        assertTrue(all.none { it.kind == "include" && it.path == runtimeDb }, "runtime.db is never included")
     }
 
     @Test

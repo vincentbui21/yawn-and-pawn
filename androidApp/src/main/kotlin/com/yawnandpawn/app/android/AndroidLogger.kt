@@ -30,6 +30,14 @@ class AndroidLogger : Logger {
             is LogEvent.AlarmsRescheduled -> {
                 Log.i(TAG, "AlarmsRescheduled scheduled=${event.scheduled} disabled=${event.disabled} failed=${event.failed}")
             }
+
+            is LogEvent.SessionEffectLogged -> {
+                Log.i(TAG, "SessionEffectLogged type=${event.effectType} entry=${event.entry}")
+            }
+
+            is LogEvent.SessionEventIgnored -> {
+                Log.i(TAG, "SessionEventIgnored type=${event.eventType} sessionId=${event.sessionId}")
+            }
         }
     }
 

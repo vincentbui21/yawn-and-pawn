@@ -2,7 +2,7 @@
 title: 'Story 1.16: Stop a forgotten alarm after 30 minutes'
 type: 'feature'
 created: '2026-10-01'
-status: 'in-review'
+status: 'done'
 baseline_revision: '91c77ef2d14bc458d4472d34e15075e07aa3b8f9'
 review_loop_iteration: 0
 followup_review_recommended: false
@@ -189,3 +189,17 @@ deferred: []
 - On a device, deep sleep can delay the main-thread timer. The 60 s heartbeat slot bounds the lag, but only device testing (Story 1.20/1.21) shows the real stop time.
 - The DataStore file isn't in the backup rules yet (Story 2.12 / 8.x adds it).
 - The dismissed-id set grows by one id per dismissed missed session (tiny).
+
+## Review Triage Log (fast mode)
+
+### 2026-10-02 — Review pass
+Two layers (edge case and verification gap), patching only high and medium findings.
+- **Patched (medium):**
+  - The deep-sleep slot test now advances only a fake monotonic clock.
+  - The DataStore dismissal read survives an IO error (retry with backoff, logged).
+  - The missed-note history read retries instead of completing.
+  - Dismiss names the session it hides.
+  - The wait is capped at the 60 s heartbeat when deadlines use wall time after a reboot.
+- **New tests:** DataStore close and reopen, and live re-emission of history rows and dismissals.
+- **Rejected (low):** ordering by `ended_at` when the wall clock is set back between two Missed sessions.
+- **Noted:** the extra `engine.tick()` in `onSlot` is redundant with `SlotFired`'s due loop, and is kept as a safety net.

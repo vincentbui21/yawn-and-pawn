@@ -2,7 +2,7 @@
 title: 'Story 1.17: Built-in sound library with preview and a never-silent fallback'
 type: 'feature'
 created: '2026-10-01'
-status: 'in-review'
+status: 'done'
 baseline_revision: 'da4b52d3025b6155bd3717c2e19dadcaadb71d1a'
 review_loop_iteration: 0
 followup_review_recommended: true
@@ -172,7 +172,26 @@ deferred: []
 
 ## Review Triage Log
 
-No review pass yet. In fast mode the owner asked for planning and implementation in one run; review is for the PR.
+### Review Triage Log (fast mode)
+
+2026-10-01: two review layers ran (fast mode, high and medium findings patched in `fix(1.17): review fixes`).
+
+**Patched:**
+- **Prepare watchdog:** a sound that never reports prepared (a stalled content provider) now counts as failed after 5 s and falls back, so the ring is never silent. Healthy play is timed from prepared, not from open. Callbacks are matched to their own open.
+- **Ring vs preview:** a ring start stops a playing preview without restoring the user volume. The preview is thread-safe and reads the ring state without the player's lock. A production Koin wiring test covers it.
+- **Editor preview stops:** opening another pane from Sound stops the preview. Backgrounding stops it even while a save runs. An `AlarmEditorRoute` lifecycle test covers `ON_STOP`.
+- **Async adapter:** a test for start, then pause, then prepared.
+- **checkSoundLoudness timeout:** the measurer's output is read on its own thread, so the 5-minute timeout fires and fails with a clear message.
+- **Screenshot tests:** the discarded semantics checks are now real assertions. A main-editor case checks that "Chimes" is shown for `builtin:chimes`.
+- **Picker:**
+  - A selection re-checks availability.
+  - A chosen ringtone that isn't in the `TYPE_ALARM` list keeps its own row.
+  - Ringtones with a blank title are left out.
+
+**Rejected:**
+- The generator-refactor claim. `generate_default_alarm.py` keeps its own BS.1770 copy on purpose: it is the Story 1.14 generator, its file is not regenerated, and the new library generator shares `tools/sounds/loudness.py`.
+
+After the rebase onto main (1.14 squashed, plus Story 1.15), `./gradlew qualityGate` passed with no fix-up needed. Preview baselines are unchanged.
 
 ## Auto Run Result
 

@@ -52,7 +52,7 @@ development_status:
   1-14-ring-the-alarm-wakeservice-alarmplayer-and-the-ongoing-notif: done  # PR #14 2026-10-01 (auto-run)
   1-15-ringing-screen-over-the-lock-screen-with-i-m-up: done  # PR #15 2026-10-01 (auto-run, fast mode)
   1-16-stop-a-forgotten-alarm-after-30-minutes: backlog
-  1-17-built-in-sound-library-with-preview-and-a-never-silent-fallb: backlog
+  1-17-built-in-sound-library-with-preview-and-a-never-silent-fallb: done  # PR (number set on open) 2026-10-01 (auto-run, fast mode)
   1-18-test-alarm-and-debug-fire-now-hook: backlog
   1-19-permissions-for-reliable-alarms-and-crash-reporting: backlog
   1-20-spike-s2-alarm-reliability-on-the-device-matrix: backlog

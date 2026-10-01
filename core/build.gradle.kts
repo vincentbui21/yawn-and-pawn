@@ -29,3 +29,27 @@ kotlin {
         }
     }
 }
+
+// The wake-session package needs its own 90% line coverage (Story 1.11), on top of the root rule for all of :core.
+// `koverVerifySession` runs inside the root `koverVerify` that qualityGate uses.
+kover {
+    currentProject {
+        createVariant("session") {
+            add("jvm")
+        }
+    }
+    reports {
+        variant("session") {
+            filters {
+                includes {
+                    packages("com.yawnandpawn.app.core.session")
+                }
+            }
+            verify {
+                rule("core.session line coverage") {
+                    minBound(90)
+                }
+            }
+        }
+    }
+}

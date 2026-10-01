@@ -111,4 +111,21 @@ class DeadlineTest {
         val oneMillisLater = snapshot.copy(elapsedMillis = 1_001)
         assertEquals(10.minutes - 1.milliseconds, Deadline.after(snapshot, 10.minutes).remaining(oneMillisLater))
     }
+
+    @Test
+    fun `a shifted deadline moves later on both clocks and keeps its boot`() {
+        val deadline = Deadline(wallMillis = 1_000, elapsedMillis = 500, bootCount = 2)
+        assertEquals(Deadline(wallMillis = 601_000, elapsedMillis = 600_500, bootCount = 2), deadline.shiftedBy(10.minutes))
+        assertEquals(deadline, deadline.shiftedBy(Duration.ZERO))
+        val nearEnd = Deadline(wallMillis = Long.MAX_VALUE - 5, elapsedMillis = Long.MAX_VALUE - 5, bootCount = 2)
+        assertEquals(Deadline(Long.MAX_VALUE, Long.MAX_VALUE, 2), nearEnd.shiftedBy(10.milliseconds))
+    }
+
+    @Test
+    fun `a deadline only shifts later by a finite step`() {
+        val deadline = Deadline(wallMillis = 1_000, elapsedMillis = 500, bootCount = 2)
+        listOf((-1).minutes, Duration.INFINITE).forEach { step ->
+            assertFailsWith<IllegalArgumentException>("$step") { deadline.shiftedBy(step) }
+        }
+    }
 }

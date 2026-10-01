@@ -16,7 +16,8 @@ import com.yawnandpawn.app.core.error.Outcome
  * - The service start never depends on the scheduling: it runs in `finally`, so a read or a re-arm that throws or
  *   overruns the receiver's budget (and is cancelled) still rings. Until the read says otherwise the alarm rings.
  * - The session slot: start the service with the slot action.
- * - The test alarm: [schedule] logs it and nothing rings until Story 1.18.
+ * - The test alarm (Story 1.18): start the service with the test action; it rings the pending test config. Nothing is
+ *   re-armed (a test rings once).
  */
 class WakeAlarmFiredHandler(
     private val repository: AlarmRepository,
@@ -41,5 +42,7 @@ class WakeAlarmFiredHandler(
         starter.startSlot()
     }
 
-    override suspend fun onTestAlarmFired() = schedule.onTestAlarmFired()
+    override suspend fun onTestAlarmFired() {
+        starter.startTest()
+    }
 }

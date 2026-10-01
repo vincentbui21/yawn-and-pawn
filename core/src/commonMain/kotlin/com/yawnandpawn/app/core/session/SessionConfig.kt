@@ -1,6 +1,7 @@
 package com.yawnandpawn.app.core.session
 
 import com.yawnandpawn.app.core.alarm.Alarm
+import com.yawnandpawn.app.core.alarm.AlarmDraft
 import kotlinx.serialization.Serializable
 import kotlin.time.Instant
 
@@ -81,4 +82,35 @@ object ConfigResolver {
             vibration = alarm.vibration,
             checkPlan = CheckPlan.placeholder(),
         )
+
+    /**
+     * The config of a test ring (FR-ALM-12, Story 1.18) from the editor's current, possibly unsaved, [draft]: always
+     * `testMode`, the alarm id of the draft (or [TEST_ALARM_ID] for a new alarm), a trimmed label (blank means none)
+     * and the same fixed ramp start and placeholder check as a real ring at [scheduledAt].
+     */
+    fun resolveTest(
+        draft: AlarmDraft,
+        globalSettings: GlobalSettings,
+        scheduledAt: Instant,
+    ): SessionConfig =
+        SessionConfig(
+            alarmId = draft.id ?: TEST_ALARM_ID,
+            label = draft.label?.trim()?.takeIf { it.isNotEmpty() },
+            scheduledAt = scheduledAt,
+            testMode = true,
+            baseFeeTier = globalSettings.baseFeeTier,
+            maxSnoozes = globalSettings.maxSnoozes,
+            snoozeLengthMinutes = draft.snoozeLengthMinutes,
+            graceSeconds = draft.graceSeconds,
+            vibrateInGrace = globalSettings.vibrateInGrace,
+            volumePercent = draft.volumePercent,
+            gradualVolume = draft.gradualVolume,
+            rampStartPercent = Alarm.DEFAULT_RAMP_START_PERCENT,
+            soundRef = draft.soundRef,
+            vibration = draft.vibration,
+            checkPlan = CheckPlan.placeholder(),
+        )
+
+    /** The alarm id of a test ring for an alarm that is not stored yet. */
+    const val TEST_ALARM_ID = "test-alarm"
 }

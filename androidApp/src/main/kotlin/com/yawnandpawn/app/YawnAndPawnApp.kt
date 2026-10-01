@@ -33,6 +33,7 @@ import com.yawnandpawn.app.core.session.FeeLadder
 import com.yawnandpawn.app.core.session.NoBillingSnoozeAvailability
 import com.yawnandpawn.app.core.session.NoFallbackPolicy
 import com.yawnandpawn.app.core.session.PlaceholderCheckValidator
+import com.yawnandpawn.app.core.session.ScheduleTestAlarm
 import com.yawnandpawn.app.core.session.SessionEngine
 import com.yawnandpawn.app.core.session.SessionRecorder
 import com.yawnandpawn.app.core.session.SessionReducer
@@ -68,6 +69,8 @@ val appModule =
         factory { SetAlarmEnabled(get(), get(), get(), get()) }
         factory { DeleteAlarm(get(), get(), get()) }
         factory { DuplicateAlarm(get(), get(), get(), get(), get(), get()) }
+        // "Test alarm" (Story 1.18): the editor's values ring as a test 10 s later, through the test request code.
+        factory { ScheduleTestAlarm(get(), get(), get()) }
         // The wake session (Story 1.12): the Epic 1 policies, the one engine over runtime.db (ActiveSessionStore from
         // dataModule) and the real time ports. The wake runtime (Story 1.14) carries out its effects; billing stays
         // unavailable until Epic 4.

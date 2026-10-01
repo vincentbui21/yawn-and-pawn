@@ -27,6 +27,7 @@ import com.yawnandpawn.app.core.session.SeedSource
 import com.yawnandpawn.app.core.session.SessionEngine
 import com.yawnandpawn.app.core.session.SessionEvent
 import com.yawnandpawn.app.core.session.SessionState
+import com.yawnandpawn.app.core.session.TestAlarmStore
 import com.yawnandpawn.app.core.session.nextTickIn
 import com.yawnandpawn.app.core.time.BootCounter
 import com.yawnandpawn.app.core.time.Clock
@@ -60,6 +61,7 @@ import kotlin.time.Instant
  *   dispatches `AlarmFired` with a new session id, the config resolved now (`GlobalSettings` defaults until Epic 5), seeds
  *   from the [SeedSource] and whether the phone is still locked since boot. A deleted alarm rings nothing.
  * - **Slot:** it dispatches `SlotFired`, then ticks. **Restore:** it loads the stored session (`SessionEngine.restore`).
+ * - **Test:** it takes the pending test config and dispatches `TestAlarmFired` (Story 1.18).
  * - While a session is active it calls `SessionEngine.tick` when the next deadline (grace end or the 30-minute
  *   interaction timeout, FR-ALM-9) is due on the monotonic clock (Story 1.16). A forgotten alarm becomes Missed there.
  * - When the state is Idle, Completed or Missed and no emergency ring plays, it stops the sound and vibration, restores
@@ -81,6 +83,7 @@ class WakeService :
     private val repository: AlarmRepository by inject()
     private val ids: IdGenerator by inject()
     private val seeds: SeedSource by inject()
+    private val testAlarms: TestAlarmStore by inject()
     private val crashReporter: CrashReporter by inject()
     private val clock: Clock by inject()
     private val monotonicClock: MonotonicClock by inject()
@@ -131,6 +134,7 @@ class WakeService :
                 when {
                     fired != null -> onAlarm(fired)
                     intent?.action == ACTION_SLOT -> onSlot()
+                    intent?.action == ACTION_TEST -> onTest()
                     else -> onRestore()
                 }
             }
@@ -217,6 +221,32 @@ class WakeService :
         } else {
             runtime.startEmergency(fired.scheduledAt, Alarm.DEFAULT_VOLUME_PERCENT, "alarm not readable: ${error.diagnostic()}")
         }
+    }
+
+    /**
+     * The test alarm fired (Story 1.18): rings the pending test config (the editor's values, `testMode`) as a new session.
+     * Nothing pending is logged and rings nothing. While a session is active the engine ignores `TestAlarmFired` and logs
+     * it (AD-2); a test never starts the emergency ring.
+     */
+    private suspend fun onTest() {
+        val pending =
+            when (val taken = testAlarms.take()) {
+                is Outcome.Success -> taken.value
+                is Outcome.Failure -> null.also { logger.log(LogEvent.OperationFailed.of("read pending test alarm", taken.error)) }
+            }
+        if (pending == null) {
+            logger.log(LogEvent.FireIgnored(FireKind.TestAlarm, alarmId = null, reason = "no test pending"))
+            return
+        }
+        val event =
+            SessionEvent.TestAlarmFired(
+                sessionId = ids.newId(),
+                config = pending,
+                seeds = seeds.seedsFor(pending.checkPlan),
+                beforeFirstUnlock = !getSystemService(UserManager::class.java).isUserUnlocked,
+            )
+        val started = engine.dispatch(event)
+        if (started is Outcome.Failure) logger.log(LogEvent.OperationFailed.of("start test session", started.error))
     }
 
     private suspend fun onSlot() {
@@ -340,6 +370,7 @@ class WakeService :
         const val ACTION_ALARM = "com.yawnandpawn.app.action.WAKE_ALARM"
         const val ACTION_SLOT = "com.yawnandpawn.app.action.WAKE_SLOT"
         const val ACTION_RESTORE = "com.yawnandpawn.app.action.WAKE_RESTORE"
+        const val ACTION_TEST = "com.yawnandpawn.app.action.WAKE_TEST"
 
         /** The earliest retry of a tick that changed nothing (for example its commit failed). */
         private val TICK_RETRY = 1.seconds

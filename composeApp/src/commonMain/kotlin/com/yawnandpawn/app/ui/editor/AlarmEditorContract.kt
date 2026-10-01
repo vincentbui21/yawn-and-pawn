@@ -280,6 +280,9 @@ sealed interface EditorEffect {
     /** Show "Couldn't save the alarm. Try again." (the storage error itself is never shown). */
     data object ShowSaveFailed : EditorEffect
 
+    /** A test ring is armed: show "Lock your phone. We'll ring in 10 seconds." (Story 1.18). */
+    data object ShowTestScheduled : EditorEffect
+
     /** The alarm could not be read: leave the editor, and Home shows "Couldn't open this alarm.". */
     data object OpenFailed : EditorEffect
 

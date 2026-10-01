@@ -1,5 +1,11 @@
 package com.yawnandpawn.app.ui
 
+import androidx.compose.material3.SnackbarDuration
+import androidx.compose.material3.SnackbarHostState
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.remember
+import androidx.compose.ui.test.hasClickAction
+import androidx.compose.ui.test.hasText
 import androidx.compose.ui.test.isDialog
 import androidx.compose.ui.test.junit4.createEmptyComposeRule
 import androidx.compose.ui.test.onNodeWithContentDescription
@@ -173,4 +179,36 @@ class AlarmScreensScreenshotTest {
 
     @Test
     fun `delete dialog in the editor in Dark`() = editor("alarm_editor_delete_dark", EditorSamples.editDeleteDialog, PpsThemeMode.Dark)
+
+    /** Story 1.18: "Test alarm" under the cards and its snackbar over the editor, above the pill. */
+    private fun testSnackbar(
+        name: String,
+        mode: PpsThemeMode,
+    ) = withScreen(
+        mode,
+        content = {
+            val snackbar = remember { SnackbarHostState() }
+            LaunchedEffect(Unit) { snackbar.showSnackbar(TEST_SNACKBAR, duration = SnackbarDuration.Indefinite) }
+            AlarmEditorScreen(state = EditorSamples.newAlarm, is24Hour = false, onIntent = {}, snackbarHostState = snackbar)
+        },
+    ) {
+        composeRule.onNode(hasText("Test alarm") and hasClickAction()).assertExists()
+        composeRule.onNodeWithText(TEST_SNACKBAR).assertExists()
+        capture(name)
+    }
+
+    @Test
+    fun `test alarm snackbar in Light`() = testSnackbar("alarm_editor_test_snackbar_light", PpsThemeMode.Light)
+
+    @Test
+    fun `test alarm snackbar in Dark`() = testSnackbar("alarm_editor_test_snackbar_dark", PpsThemeMode.Dark)
+
+    @Test
+    @Config(qualifiers = "+h2400dp", fontScale = 2.0f)
+    fun `test alarm snackbar in Light at 200 percent`() = testSnackbar("alarm_editor_test_snackbar_light_font200", PpsThemeMode.Light)
+
+    private companion object {
+        /** EXPERIENCE.md, verbatim. */
+        const val TEST_SNACKBAR = "Lock your phone. We'll ring in 10 seconds."
+    }
 }

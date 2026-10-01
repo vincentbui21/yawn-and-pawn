@@ -28,6 +28,12 @@ object SessionJson {
     /** [state] as stored JSON. */
     fun encode(state: SessionState): String = json.encodeToString(SessionState.serializer(), state)
 
+    /** [config] as stored JSON (the pending test ring, Story 1.18). */
+    fun encodeConfig(config: SessionConfig): String = json.encodeToString(SessionConfig.serializer(), config)
+
+    /** The config stored as [text], or null when it cannot be decoded (decoding never suspends). */
+    fun decodeConfig(text: String): SessionConfig? = runCatching { json.decodeFromString(SessionConfig.serializer(), text) }.getOrNull()
+
     /**
      * The state stored as [text], or [StoredSession.Unreadable] for any failure to decode it, naming only the error
      * type (never the text, which holds the alarm label). Whatever the decoder throws means the row cannot be used;

@@ -89,6 +89,8 @@ fun RingingScreen(
                 WakePrimaryButton(
                     text = stringResource(Res.string.wake_im_up),
                     onClick = { onIntent(WakeIntent.ImUpClicked) },
+                    // Semantics only: TalkBack goes from the clock straight to "I'm up" (EXPERIENCE.md Accessibility Floor).
+                    modifier = Modifier.semantics { traversalIndex = IM_UP_TRAVERSAL_INDEX },
                     pulse = state.sheet == null,
                 )
                 SnoozeButton(offer = state.snooze, onClick = { onIntent(WakeIntent.SnoozeClicked) })
@@ -96,3 +98,6 @@ fun RingingScreen(
         }
     }
 }
+
+/** TalkBack order on Ringing: the clock (traversal index -1) first, then "I'm up", then the rest in reading order. */
+private const val IM_UP_TRAVERSAL_INDEX: Float = -0.5f

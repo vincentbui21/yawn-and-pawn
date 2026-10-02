@@ -305,6 +305,9 @@ class AlarmScreensSemanticsTest {
                 clock = FakeClock(),
                 timeZoneProvider = FakeTimeZoneProvider(),
                 actions = actions(repository),
+                soundLibrary = FakeSoundLibrary(),
+                soundPreview = FakeSoundPreview(),
+                notificationPermission = FakeNotificationPermission(),
                 testAlarm = ScheduleTestAlarm(testScheduler, testAlarms, FakeClock(), FakeLogger()),
             )
         withScreen(

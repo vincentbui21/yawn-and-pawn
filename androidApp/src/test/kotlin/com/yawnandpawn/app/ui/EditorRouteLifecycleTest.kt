@@ -7,13 +7,16 @@ import androidx.lifecycle.LifecycleOwner
 import androidx.lifecycle.LifecycleRegistry
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import com.yawnandpawn.app.StopAppRule
+import com.yawnandpawn.app.core.session.ScheduleTestAlarm
 import com.yawnandpawn.app.testing.AlarmUseCasesFixture
 import com.yawnandpawn.app.testing.FakeAlarmRepository
+import com.yawnandpawn.app.testing.FakeAlarmScheduler
 import com.yawnandpawn.app.testing.FakeClock
 import com.yawnandpawn.app.testing.FakeLogger
 import com.yawnandpawn.app.testing.FakeNotificationPermission
 import com.yawnandpawn.app.testing.FakeSoundLibrary
 import com.yawnandpawn.app.testing.FakeSoundPreview
+import com.yawnandpawn.app.testing.FakeTestAlarmStore
 import com.yawnandpawn.app.testing.FakeTimeZoneProvider
 import com.yawnandpawn.app.ui.editor.AlarmEditorRoute
 import com.yawnandpawn.app.ui.editor.AlarmEditorViewModel
@@ -59,6 +62,7 @@ class EditorRouteLifecycleTest {
                 soundLibrary = FakeSoundLibrary(),
                 soundPreview = preview,
                 notificationPermission = FakeNotificationPermission(),
+                testAlarm = ScheduleTestAlarm(FakeAlarmScheduler(), FakeTestAlarmStore(), FakeClock(), FakeLogger()),
             )
         val owner = TestOwner()
         withScreen(

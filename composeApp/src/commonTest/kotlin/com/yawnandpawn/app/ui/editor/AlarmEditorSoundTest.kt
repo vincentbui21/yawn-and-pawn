@@ -6,17 +6,20 @@ import androidx.lifecycle.viewmodel.initializer
 import androidx.lifecycle.viewmodel.viewModelFactory
 import com.yawnandpawn.app.core.alarm.Alarm
 import com.yawnandpawn.app.core.alarm.RequestCodes
+import com.yawnandpawn.app.core.session.ScheduleTestAlarm
 import com.yawnandpawn.app.core.sound.SoundCatalog
 import com.yawnandpawn.app.core.sound.SoundLibrary
 import com.yawnandpawn.app.core.sound.SoundRef
 import com.yawnandpawn.app.testing.AlarmUseCasesFixture
 import com.yawnandpawn.app.testing.FakeAlarmRepository
+import com.yawnandpawn.app.testing.FakeAlarmScheduler
 import com.yawnandpawn.app.testing.FakeClock
 import com.yawnandpawn.app.testing.FakeLogger
 import com.yawnandpawn.app.testing.FakeNotificationPermission
 import com.yawnandpawn.app.testing.FakeRequestCodeSequence
 import com.yawnandpawn.app.testing.FakeSoundLibrary
 import com.yawnandpawn.app.testing.FakeSoundPreview
+import com.yawnandpawn.app.testing.FakeTestAlarmStore
 import com.yawnandpawn.app.testing.FakeTimeZoneProvider
 import com.yawnandpawn.app.testing.anAlarm
 import com.yawnandpawn.app.ui.home.AlarmActions
@@ -84,6 +87,7 @@ class AlarmEditorSoundTest {
         soundLibrary = library,
         soundPreview = preview,
         notificationPermission = FakeNotificationPermission(),
+        testAlarm = ScheduleTestAlarm(FakeAlarmScheduler(), FakeTestAlarmStore(), clock, FakeLogger()),
     )
 
     private val AlarmEditorViewModel.sound: EditorSound

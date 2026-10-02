@@ -3,10 +3,12 @@ package com.yawnandpawn.app.core.session
 import com.yawnandpawn.app.core.alarm.Alarm
 import com.yawnandpawn.app.core.alarm.AlarmDraft
 import com.yawnandpawn.app.core.alarm.Call
+import com.yawnandpawn.app.core.alarm.RecordingLogger
 import com.yawnandpawn.app.core.alarm.RecordingScheduler
 import com.yawnandpawn.app.core.alarm.TestClock
 import com.yawnandpawn.app.core.error.DomainError
 import com.yawnandpawn.app.core.error.Outcome
+import com.yawnandpawn.app.core.log.LogEvent
 import kotlinx.coroutines.test.runTest
 import kotlinx.datetime.DayOfWeek
 import kotlinx.datetime.LocalTime
@@ -23,7 +25,8 @@ class ScheduleTestAlarmTest {
     private val clock = TestClock(now)
     private val scheduler = RecordingScheduler()
     private val store = InMemoryTestAlarmStore()
-    private val schedule = ScheduleTestAlarm(scheduler, store, clock)
+    private val logger = RecordingLogger()
+    private val schedule = ScheduleTestAlarm(scheduler, store, clock, logger)
 
     private val draft =
         AlarmDraft(
@@ -79,6 +82,20 @@ class ScheduleTestAlarmTest {
         }
 
     @Test
+    fun `a pending config that cannot be taken back after a failed arm is logged`() =
+        runTest {
+            scheduler.failure = DomainError.ExactAlarmNotPermitted
+            store.takeFailure = DomainError.StorageFailure("disk full")
+
+            assertEquals(Outcome.Failure(DomainError.ExactAlarmNotPermitted), schedule(draft))
+
+            assertEquals(
+                listOf<LogEvent>(LogEvent.OperationFailed.of("take back pending test alarm", DomainError.StorageFailure("disk full"))),
+                logger.events,
+            )
+        }
+
+    @Test
     fun `when the config cannot be stored nothing is armed`() =
         runTest {
             store.putFailure = DomainError.StorageFailure("disk full")
@@ -100,6 +117,7 @@ class ScheduleTestAlarmTest {
 internal class InMemoryTestAlarmStore : TestAlarmStore {
     var pending: SessionConfig? = null
     var putFailure: DomainError? = null
+    var takeFailure: DomainError? = null
 
     override suspend fun put(config: SessionConfig): Outcome<Unit, DomainError> {
         putFailure?.let { return Outcome.Failure(it) }
@@ -107,5 +125,8 @@ internal class InMemoryTestAlarmStore : TestAlarmStore {
         return Outcome.Success(Unit)
     }
 
-    override suspend fun take(): Outcome<SessionConfig?, DomainError> = Outcome.Success(pending).also { pending = null }
+    override suspend fun take(): Outcome<SessionConfig?, DomainError> {
+        takeFailure?.let { return Outcome.Failure(it) }
+        return Outcome.Success(pending).also { pending = null }
+    }
 }

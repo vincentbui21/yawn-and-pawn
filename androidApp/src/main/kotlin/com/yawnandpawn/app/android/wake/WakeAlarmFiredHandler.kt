@@ -5,6 +5,8 @@ import com.yawnandpawn.app.core.alarm.AlarmFiredHandler
 import com.yawnandpawn.app.core.alarm.AlarmRepository
 import com.yawnandpawn.app.core.error.DomainError
 import com.yawnandpawn.app.core.error.Outcome
+import com.yawnandpawn.app.core.log.LogEvent
+import com.yawnandpawn.app.core.log.Logger
 
 /**
  * The production [AlarmFiredHandler] (Story 1.14): scheduling first, then the ring.
@@ -23,6 +25,7 @@ class WakeAlarmFiredHandler(
     private val repository: AlarmRepository,
     private val schedule: AlarmFiredHandler,
     private val starter: WakeServiceStarter,
+    private val logger: Logger,
 ) : AlarmFiredHandler {
     override suspend fun onAlarmFired(fired: AlarmFired) {
         var rings = true
@@ -43,6 +46,7 @@ class WakeAlarmFiredHandler(
     }
 
     override suspend fun onTestAlarmFired() {
-        starter.startTest()
+        // No session slot backs a test up: a refused start means this test does not ring.
+        if (!starter.startTest()) logger.log(LogEvent.OperationFailed("start test alarm", "service start refused; the test does not ring"))
     }
 }

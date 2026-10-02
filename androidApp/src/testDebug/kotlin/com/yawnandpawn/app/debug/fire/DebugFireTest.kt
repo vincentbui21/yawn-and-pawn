@@ -12,6 +12,7 @@ import com.yawnandpawn.app.testing.AlarmUseCasesFixture
 import com.yawnandpawn.app.testing.FakeAlarmRepository
 import com.yawnandpawn.app.testing.FakeAlarmScheduler
 import com.yawnandpawn.app.testing.FakeClock
+import com.yawnandpawn.app.testing.FakeLogger
 import com.yawnandpawn.app.testing.FakeTestAlarmStore
 import com.yawnandpawn.app.testing.FakeTimeZoneProvider
 import com.yawnandpawn.app.testing.anAlarm
@@ -42,7 +43,7 @@ class DebugFireTest {
             fixture.repository,
             fixture.save,
             scheduler,
-            ScheduleTestAlarm(scheduler, testAlarms, clock),
+            ScheduleTestAlarm(scheduler, testAlarms, clock, FakeLogger()),
             clock,
             FakeTimeZoneProvider(),
         )

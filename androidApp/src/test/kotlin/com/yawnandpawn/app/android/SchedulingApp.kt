@@ -58,7 +58,7 @@ internal class SchedulingApp(
                 single<AlarmScheduler> { AndroidAlarmScheduler(androidContext(), get(), get(), get(), get()) }
                 single { AlarmScheduling(get(), get(), get(), get(), get(), get()) }
                 single { RearmOnFire(get(), get(), get(), get(), get(), get()) }
-                single<AlarmFiredHandler> { WakeAlarmFiredHandler(get(), get<RearmOnFire>(), get()) }
+                single<AlarmFiredHandler> { WakeAlarmFiredHandler(get(), get<RearmOnFire>(), get(), get()) }
             },
         )
     }

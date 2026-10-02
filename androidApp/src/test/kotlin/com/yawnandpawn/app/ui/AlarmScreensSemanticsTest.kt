@@ -266,7 +266,7 @@ class AlarmScreensSemanticsTest {
                 soundLibrary = FakeSoundLibrary(),
                 soundPreview = FakeSoundPreview(),
                 notificationPermission = FakeNotificationPermission(),
-                testAlarm = ScheduleTestAlarm(FakeAlarmScheduler(), FakeTestAlarmStore(), FakeClock()),
+                testAlarm = ScheduleTestAlarm(FakeAlarmScheduler(), FakeTestAlarmStore(), FakeClock(), FakeLogger()),
             )
         var closed = false
         withScreen(
@@ -305,7 +305,7 @@ class AlarmScreensSemanticsTest {
                 clock = FakeClock(),
                 timeZoneProvider = FakeTimeZoneProvider(),
                 actions = actions(repository),
-                testAlarm = ScheduleTestAlarm(testScheduler, testAlarms, FakeClock()),
+                testAlarm = ScheduleTestAlarm(testScheduler, testAlarms, FakeClock(), FakeLogger()),
             )
         withScreen(
             PpsThemeMode.Light,
@@ -342,7 +342,7 @@ class AlarmScreensSemanticsTest {
                 soundLibrary = FakeSoundLibrary(),
                 soundPreview = FakeSoundPreview(),
                 notificationPermission = FakeNotificationPermission(),
-                testAlarm = ScheduleTestAlarm(FakeAlarmScheduler(), FakeTestAlarmStore(), FakeClock()),
+                testAlarm = ScheduleTestAlarm(FakeAlarmScheduler(), FakeTestAlarmStore(), FakeClock(), FakeLogger()),
             )
         var openFailed = false
         var closed = false

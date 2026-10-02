@@ -1,9 +1,14 @@
 package com.yawnandpawn.app.ui.editor
 
+import androidx.lifecycle.viewModelScope
+import com.yawnandpawn.app.core.alarm.AlarmField
 import com.yawnandpawn.app.core.alarm.RequestCodes
 import com.yawnandpawn.app.core.error.DomainError
+import com.yawnandpawn.app.core.error.Outcome
 import com.yawnandpawn.app.core.log.LogEvent
 import com.yawnandpawn.app.core.session.ScheduleTestAlarm
+import com.yawnandpawn.app.core.session.SessionConfig
+import com.yawnandpawn.app.core.session.TestAlarmStore
 import com.yawnandpawn.app.testing.AlarmUseCasesFixture
 import com.yawnandpawn.app.testing.FakeAlarmRepository
 import com.yawnandpawn.app.testing.FakeAlarmScheduler
@@ -14,8 +19,10 @@ import com.yawnandpawn.app.testing.FakeTestAlarmStore
 import com.yawnandpawn.app.testing.FakeTimeZoneProvider
 import com.yawnandpawn.app.testing.anAlarm
 import com.yawnandpawn.app.ui.home.AlarmActions
+import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.cancel
 import kotlinx.coroutines.flow.toList
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.test.StandardTestDispatcher
@@ -71,7 +78,7 @@ class AlarmEditorTestAlarmTest {
             clock = clock,
             timeZoneProvider = FakeTimeZoneProvider(TimeZone.UTC),
             actions = AlarmActions(alarms.setEnabled, alarms.duplicate, alarms.delete, clock, logger),
-            testAlarm = ScheduleTestAlarm(testAlarmScheduler, testAlarmStore, clock),
+            testAlarm = ScheduleTestAlarm(testAlarmScheduler, testAlarmStore, clock, logger),
         )
 
     private fun TestScope.effectsOf(viewModel: AlarmEditorViewModel): List<EditorEffect> {
@@ -116,6 +123,75 @@ class AlarmEditorTestAlarmTest {
             assertEquals(stored.id, testAlarmStore.pending?.alarmId)
             assertEquals(stored.soundRef, testAlarmStore.pending?.soundRef)
         }
+
+    @Test
+    fun `a second tap while a test is being armed arms nothing more`() =
+        runTest(dispatcher) {
+            val viewModel = viewModel()
+            val effects = effectsOf(viewModel)
+
+            viewModel.onIntent(EditorIntent.TestAlarmClicked)
+            viewModel.onIntent(EditorIntent.TestAlarmClicked)
+            advanceUntilIdle()
+
+            assertEquals(1, testAlarmScheduler.calls.size)
+            assertEquals(listOf<EditorEffect>(EditorEffect.ShowTestScheduled), effects)
+
+            viewModel.onIntent(EditorIntent.TestAlarmClicked)
+            advanceUntilIdle()
+            assertEquals(2, testAlarmScheduler.calls.size, "a later tap arms a new test")
+        }
+
+    @Test
+    fun `an over-long label shows the field error, like Save, and rings no test`() =
+        runTest(dispatcher) {
+            val viewModel = viewModel()
+            viewModel.onIntent(EditorIntent.LabelChanged("x".repeat(41)))
+
+            viewModel.onIntent(EditorIntent.TestAlarmClicked)
+            advanceUntilIdle()
+
+            assertEquals(AlarmField.Label, viewModel.state.value.fieldError)
+            assertTrue(testAlarmScheduler.calls.isEmpty())
+            assertNull(testAlarmStore.pending)
+        }
+
+    @Test
+    fun `closing the editor while the test is being armed still arms it`() =
+        runTest(dispatcher) {
+            val gate = CompletableDeferred<Unit>()
+            val gatedStore = GatedStore(testAlarmStore, gate)
+            val viewModel =
+                AlarmEditorViewModel(
+                    alarmId = null,
+                    repository = repository,
+                    saveAlarm = alarms.save,
+                    clock = clock,
+                    timeZoneProvider = FakeTimeZoneProvider(TimeZone.UTC),
+                    actions = AlarmActions(alarms.setEnabled, alarms.duplicate, alarms.delete, clock, logger),
+                    testAlarm = ScheduleTestAlarm(testAlarmScheduler, gatedStore, clock, logger),
+                )
+            viewModel.onIntent(EditorIntent.TestAlarmClicked)
+            advanceUntilIdle()
+
+            viewModel.viewModelScope.cancel()
+            gate.complete(Unit)
+            advanceUntilIdle()
+
+            assertEquals(setOf(RequestCodes.TEST_ALARM), testAlarmScheduler.armed.keys, "armed after the editor closed")
+            assertTrue(testAlarmStore.pending?.testMode == true)
+        }
+
+    /** A [TestAlarmStore] whose [put] waits for [gate]. */
+    private class GatedStore(
+        private val inner: TestAlarmStore,
+        private val gate: CompletableDeferred<Unit>,
+    ) : TestAlarmStore by inner {
+        override suspend fun put(config: SessionConfig): Outcome<Unit, DomainError> {
+            gate.await()
+            return inner.put(config)
+        }
+    }
 
     @Test
     fun `a test alarm that cannot be armed shows nothing and is logged`() =

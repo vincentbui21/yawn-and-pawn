@@ -21,6 +21,7 @@ import com.yawnandpawn.app.core.log.FireKind
 import com.yawnandpawn.app.core.log.LogEvent
 import com.yawnandpawn.app.core.log.Logger
 import com.yawnandpawn.app.core.log.diagnostic
+import com.yawnandpawn.app.core.session.CheckAnswer
 import com.yawnandpawn.app.core.session.ConfigResolver
 import com.yawnandpawn.app.core.session.GlobalSettings
 import com.yawnandpawn.app.core.session.SeedSource
@@ -177,7 +178,9 @@ class WakeService :
     private suspend fun onAlarm(fired: AlarmFired) {
         pending = fired
         // Load the stored session first, so a fire during a restored session merges into it instead of being ignored.
-        val current = engine.restore().valueOrNull() ?: engine.state.value
+        var current = engine.restore().valueOrNull() ?: engine.state.value
+        // A real alarm never merges into a test (Story 1.18): the test ends (logged Test) and the real session starts.
+        if (current is SessionState.Ring && current.session.config.testMode) current = endTestSession(current)
         if (current is SessionState.Ring || current is SessionState.Snoozed) {
             val merged = engine.dispatch(SessionEvent.OverlapAlarmFired(fired.alarmId, fired.scheduledAt))
             if (merged is Outcome.Failure) ringIfSilent("merge not saved: ${merged.error.diagnostic()}", fired.scheduledAt)
@@ -185,6 +188,18 @@ class WakeService :
             startSession(fired)
         }
         pending = null
+    }
+
+    /**
+     * Ends the ringing test [test] through its normal end path (Epic 1's placeholder check: "I'm up", then the answer),
+     * so it reaches Completed, is recorded as Test and returns to Idle. Returns the state after: Idle, or the test still
+     * ringing when a step could not be saved (the real alarm then merges into it, so it still rings).
+     */
+    private suspend fun endTestSession(test: SessionState.Ring): SessionState {
+        logger.log(LogEvent.OperationFailed("finish test session", "a real alarm rang; the test ends as Test"))
+        if (test is SessionState.Ringing) engine.dispatch(SessionEvent.ImUpTapped)
+        engine.dispatch(SessionEvent.CheckAnswerSubmitted(CheckAnswer.Placeholder))
+        return engine.state.value
     }
 
     private suspend fun startSession(fired: AlarmFired) {
@@ -246,7 +261,12 @@ class WakeService :
                 beforeFirstUnlock = !getSystemService(UserManager::class.java).isUserUnlocked,
             )
         val started = engine.dispatch(event)
-        if (started is Outcome.Failure) logger.log(LogEvent.OperationFailed.of("start test session", started.error))
+        if (started is Outcome.Failure) {
+            logger.log(LogEvent.OperationFailed.of("start test session", started.error))
+            // Not lost: the config goes back, so a later test fire (or "Test alarm" again) still has it.
+            val restored = testAlarms.put(pending)
+            if (restored is Outcome.Failure) logger.log(LogEvent.OperationFailed.of("put back pending test alarm", restored.error))
+        }
     }
 
     private suspend fun onSlot() {

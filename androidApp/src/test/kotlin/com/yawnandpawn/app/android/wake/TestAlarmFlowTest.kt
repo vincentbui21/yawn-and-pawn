@@ -12,16 +12,21 @@ import com.yawnandpawn.app.android.AlarmFiredReceiver
 import com.yawnandpawn.app.android.ApplicationScope
 import com.yawnandpawn.app.awaitChildren
 import com.yawnandpawn.app.core.alarm.AlarmDraft
+import com.yawnandpawn.app.core.alarm.AlarmFired
+import com.yawnandpawn.app.core.alarm.AlarmRepository
 import com.yawnandpawn.app.core.alarm.RequestCodes
+import com.yawnandpawn.app.core.error.DomainError
 import com.yawnandpawn.app.core.error.Outcome
 import com.yawnandpawn.app.core.history.SessionOutcome
 import com.yawnandpawn.app.core.session.ScheduleTestAlarm
 import com.yawnandpawn.app.core.session.SessionEvent
 import com.yawnandpawn.app.core.session.SessionState
+import com.yawnandpawn.app.testing.FakeActiveSessionStore
 import com.yawnandpawn.app.testing.FakeBilling
 import com.yawnandpawn.app.testing.FakeSessionHistoryRepository
 import com.yawnandpawn.app.testing.FakeTestAlarmStore
 import com.yawnandpawn.app.testing.aSessionConfig
+import com.yawnandpawn.app.testing.anAlarm
 import kotlinx.coroutines.runBlocking
 import kotlinx.datetime.LocalTime
 import org.junit.Rule
@@ -37,6 +42,7 @@ import kotlin.test.assertIs
 import kotlin.test.assertNotNull
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
+import kotlin.time.Instant
 
 /**
  * Story 1.18: "Test alarm" end to end. The editor's (unsaved) values are stored as a pending test and the test alarm is
@@ -134,5 +140,59 @@ class TestAlarmFlowTest {
         assertEquals(SessionState.Idle, app.engine.state.value)
         assertTrue(app.mediaPlayers.isEmpty())
         assertTrue(app.logs().any { it.startsWith("FireIgnored kind=TestAlarm alarmId=null reason=no test pending") }, "${app.logs()}")
+    }
+
+    @Test
+    fun `a pending test that cannot be read is logged, rings nothing and stops the service`() {
+        val app = app()
+        testAlarms.takeFailure = DomainError.StorageFailure("disk unreadable")
+
+        val service = app.startService(WakeService.intent(app.app, WakeService.ACTION_TEST)).get()
+        app.awaitUntil("the service stops") { shadowOf(service).isStoppedBySelf }
+
+        assertEquals(SessionState.Idle, app.engine.state.value)
+        assertTrue(app.mediaPlayers.isEmpty(), "nothing rings")
+        assertTrue(app.logs().any { it.startsWith("OperationFailed operation=read pending test alarm") }, "${app.logs()}")
+    }
+
+    @Test
+    fun `a test session that cannot be saved is logged, rings nothing, and its config is put back`() {
+        val broken = FakeActiveSessionStore().apply { commitFailure = DomainError.StorageFailure("disk full") }
+        val app = WakeApp(store = broken, history = history, billing = billing, testAlarms = testAlarms)
+        val config = aSessionConfig(label = "test", testMode = true)
+        testAlarms.pending = config
+
+        val service = app.startService(WakeService.intent(app.app, WakeService.ACTION_TEST)).get()
+        app.awaitUntil("the service stops") { shadowOf(service).isStoppedBySelf }
+
+        assertEquals(SessionState.Idle, app.engine.state.value)
+        assertTrue(app.mediaPlayers.isEmpty(), "nothing rings")
+        assertNull(app.runtime.emergency.value, "a test never starts the emergency ring")
+        assertTrue(app.logs().any { it.startsWith("OperationFailed operation=start test session") }, "${app.logs()}")
+        assertEquals(config, testAlarms.pending, "the config is put back")
+    }
+
+    @Test
+    fun `a real alarm during a test ends the test as Test and rings as a real session`() {
+        val app = app()
+        val alarm = anAlarm(id = "alarm-a", requestCode = 1000)
+        assertEquals(Outcome.Success(Unit), runBlocking { app.koin.get<AlarmRepository>().upsert(alarm) })
+        testAlarms.pending = aSessionConfig(label = "test", testMode = true)
+        val controller = app.startService(WakeService.intent(app.app, WakeService.ACTION_TEST))
+        app.awaitRinging()
+        val test = app.engine.state.value as SessionState.Ringing
+        assertTrue(test.session.config.testMode)
+
+        val scheduledAt = Instant.parse("2027-03-08T06:00:00Z")
+        controller.withIntent(WakeService.alarmIntent(app.app, AlarmFired(alarm.id, scheduledAt))).startCommand(0, 2)
+        app.awaitUntil("the real session rings") {
+            (app.engine.state.value as? SessionState.Ringing)?.session?.config?.testMode == false
+        }
+
+        val real = app.engine.state.value as SessionState.Ringing
+        assertEquals(alarm.id, real.session.config.alarmId)
+        assertEquals(scheduledAt, real.session.config.scheduledAt)
+        assertEquals(SessionOutcome.Test, history.rows.single { it.sessionId == test.session.sessionId }.outcome)
+        assertTrue(app.player.sound != null, "the real alarm rings")
     }
 }

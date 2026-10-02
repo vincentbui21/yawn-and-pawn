@@ -4,6 +4,8 @@ import com.yawnandpawn.app.core.alarm.AlarmDraft
 import com.yawnandpawn.app.core.alarm.AlarmScheduler
 import com.yawnandpawn.app.core.error.DomainError
 import com.yawnandpawn.app.core.error.Outcome
+import com.yawnandpawn.app.core.log.LogEvent
+import com.yawnandpawn.app.core.log.Logger
 import com.yawnandpawn.app.core.time.Clock
 import kotlin.time.Duration
 import kotlin.time.Duration.Companion.seconds
@@ -31,6 +33,7 @@ class ScheduleTestAlarm(
     private val scheduler: AlarmScheduler,
     private val store: TestAlarmStore,
     private val clock: Clock,
+    private val logger: Logger,
 ) {
     suspend operator fun invoke(
         draft: AlarmDraft,
@@ -46,7 +49,9 @@ class ScheduleTestAlarm(
             }
 
             is Outcome.Failure -> {
-                store.take()
+                // A config left behind would ring with the next test fire; the fire takes it, so a failure only logs.
+                val taken = store.take()
+                if (taken is Outcome.Failure) logger.log(LogEvent.OperationFailed.of("take back pending test alarm", taken.error))
                 armed
             }
         }

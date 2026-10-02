@@ -64,13 +64,13 @@ val appModule =
         single<AlarmScheduler> { AndroidAlarmScheduler(androidContext(), get(), get(), get(), get()) }
         single { AlarmScheduling(get(), get(), get(), get(), get(), get()) }
         single { RearmOnFire(get(), get(), get(), get(), get(), get()) }
-        single<AlarmFiredHandler> { WakeAlarmFiredHandler(get(), get<RearmOnFire>(), get()) }
+        single<AlarmFiredHandler> { WakeAlarmFiredHandler(get(), get<RearmOnFire>(), get(), get()) }
         factory { SaveAlarm(get(), get(), get(), get(), get(), get()) }
         factory { SetAlarmEnabled(get(), get(), get(), get()) }
         factory { DeleteAlarm(get(), get(), get()) }
         factory { DuplicateAlarm(get(), get(), get(), get(), get(), get()) }
         // "Test alarm" (Story 1.18): the editor's values ring as a test 10 s later, through the test request code.
-        factory { ScheduleTestAlarm(get(), get(), get()) }
+        factory { ScheduleTestAlarm(get(), get(), get(), get()) }
         // The wake session (Story 1.12): the Epic 1 policies, the one engine over runtime.db (ActiveSessionStore from
         // dataModule) and the real time ports. The wake runtime (Story 1.14) carries out its effects; billing stays
         // unavailable until Epic 4.

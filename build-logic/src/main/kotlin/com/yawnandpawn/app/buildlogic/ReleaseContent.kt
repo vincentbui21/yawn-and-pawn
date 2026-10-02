@@ -103,13 +103,12 @@ abstract class CheckReleaseContentTask : DefaultTask() {
     @TaskAction
     fun check() {
         val classes = classJars.get().flatMap { jarClasses(it.asFile) } + classDirs.get().flatMap { dirClasses(it.asFile) }
-        if (classes.isEmpty()) {
-            throw GradleException("$CHECK_RELEASE_CONTENT gathered no release classes; the variant wiring is broken")
-        }
+        requireGathered("classes", classes.isNotEmpty())
         val resources =
             resourceDirs.files
                 .flatMap { dir -> dir.walkTopDown().filter { it.isFile && it.extension == "xml" }.toList() }
                 .associate { it.path to it.readText() }
+        requireGathered("resources", resources.isNotEmpty())
         val violations = ReleaseContent.violations(manifest.get().asFile.readText(), classes, resources)
         if (violations.isNotEmpty()) {
             throw GradleException(
@@ -118,6 +117,14 @@ abstract class CheckReleaseContentTask : DefaultTask() {
             )
         }
         marker.get().asFile.writeText("ok ${classes.size} classes\n")
+    }
+
+    /** Gathering nothing means the variant wiring is broken, so the check could pass without looking. */
+    private fun requireGathered(
+        what: String,
+        gathered: Boolean,
+    ) {
+        if (!gathered) throw GradleException("$CHECK_RELEASE_CONTENT gathered no release $what; the variant wiring is broken")
     }
 
     private fun jarClasses(jar: File): List<ReleaseClass> =

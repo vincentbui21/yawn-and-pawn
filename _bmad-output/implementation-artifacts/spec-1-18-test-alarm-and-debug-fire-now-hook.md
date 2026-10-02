@@ -181,6 +181,28 @@ deferred: []
 - `AlarmFiredReceiverTest` is updated: a test fire now starts the service.
 - Preview baselines unchanged.
 
+### 2026-10-02 — Review fixes
+
+- **Real alarm during a test:** a real alarm that fires while a test session rings no longer merges into it.
+  - `WakeService.endTestSession` ends the test through its normal end path ("I'm up", then the placeholder answer), so it is recorded as Test and reaches Idle. The real alarm then starts its own session with `AlarmFired`.
+  - If the test can't be ended, the alarm still merges and rings.
+- **Editor "Test alarm":**
+  - An in-flight guard stops a second tap from interleaving with the first.
+  - The scheduling runs in `NonCancellable`, so closing the editor can't cut it off between store and arm.
+  - An over-long label shows the field error, as Save does, and rings no test.
+- **Losses and silent failures:**
+  - `WakeService.onTest` puts the config back when the dispatch fails, and logs a failed put-back.
+  - `ScheduleTestAlarm` (now with a `Logger`) logs a take-back that fails after a failed arm.
+  - `WakeAlarmFiredHandler` (now with a `Logger`) logs a refused `startTest()`. No slot backs a test up.
+- **Release check:**
+  - `checkReleaseContent` also fails when it gathered no resources.
+  - New TestKit `CheckReleaseContentTaskTest` (6): clean passes; a debug class in a dir and in a jar fails; the preview label in a res dir fails; no classes or no resources wired fails.
+- **New tests:**
+  - `TestAlarmFlowTest` (+3): unreadable pending test; unsaveable test session (config put back, no emergency); real alarm during a test.
+  - `AlarmEditorTestAlarmTest` (+3) and `WakeAlarmFiredHandlerTest` (+1).
+  - `ScheduleTestAlarmTest` (+1).
+- **Load-only race fixed:** `WakeRuntimeTest` (Story 1.14) now waits for the app-start volume restore before it starts, as `AndroidAlarmPlayerTest` already does. It failed once in a busy gate run.
+
 **Residual risks:**
 - The debug hook only works while the app process runs, because the receiver is registered at runtime. Open the app first.
 - With the exact-alarm permission off (API 31–32), the test can't be armed. The tap is logged with no message until Story 1.19's checklist explains it.

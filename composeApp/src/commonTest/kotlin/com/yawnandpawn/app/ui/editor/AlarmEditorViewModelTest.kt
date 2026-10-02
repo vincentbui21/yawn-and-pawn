@@ -91,7 +91,7 @@ class AlarmEditorViewModelTest {
             soundLibrary = FakeSoundLibrary(),
             soundPreview = FakeSoundPreview(),
             notificationPermission = permission,
-            testAlarm = ScheduleTestAlarm(testAlarmScheduler, testAlarmStore, clock),
+            testAlarm = ScheduleTestAlarm(testAlarmScheduler, testAlarmStore, clock, logger),
         )
 
     private fun TestScope.effectsOf(viewModel: AlarmEditorViewModel): List<EditorEffect> {

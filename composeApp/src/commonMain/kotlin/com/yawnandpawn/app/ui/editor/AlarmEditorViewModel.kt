@@ -21,6 +21,7 @@ import com.yawnandpawn.app.core.time.TimeZoneProvider
 import com.yawnandpawn.app.ui.format.Weekdays
 import com.yawnandpawn.app.ui.format.countdownOf
 import com.yawnandpawn.app.ui.home.AlarmActions
+import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -29,6 +30,7 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.receiveAsFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import kotlinx.datetime.TimeZone
 import kotlinx.datetime.toLocalDateTime
 import kotlin.time.Instant
@@ -77,6 +79,9 @@ class AlarmEditorViewModel(
 
     /** The Sound row, the Sound sub-screen's list and its preview (Story 1.17). */
     private val sounds = EditorSounds(soundLibrary, soundPreview, viewModelScope, _state)
+
+    /** A "Test alarm" is being armed (Story 1.18). */
+    private var testInFlight = false
 
     init {
         // A preview never outlives the editor.
@@ -250,10 +255,20 @@ class AlarmEditorViewModel(
      */
     private fun scheduleTest() {
         val current = _state.value
-        if (current.isLoading) return
+        // One test at a time: a second tap while one is being armed would interleave the store and the arming.
+        if (current.isLoading || testInFlight) return
+        // The same label rule as Save: an over-long label shows its field error and rings no test.
+        if (isLabelTooLong(current.form.label)) {
+            _state.update { it.copy(fieldError = AlarmField.Label) }
+            return
+        }
+        testInFlight = true
         viewModelScope.launch {
-            when (val result = testAlarm(current.form.toDraft(alarmId, stored))) {
-                is Outcome.Success -> _effects.send(EditorEffect.ShowTestScheduled)
+            // Not cancelled by the editor closing: the config is stored and the alarm armed (or both taken back).
+            val result = withContext(NonCancellable) { testAlarm(current.form.toDraft(alarmId, stored)) }
+            testInFlight = false
+            when (result) {
+                is Outcome.Success -> _effects.trySend(EditorEffect.ShowTestScheduled)
                 is Outcome.Failure -> actions.logFailure("schedule test alarm", result.error)
             }
         }

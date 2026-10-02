@@ -78,7 +78,7 @@ class UiModuleTest {
                     factory { get<AlarmUseCasesFixture>().delete }
                     factory { get<AlarmUseCasesFixture>().duplicate }
                     single { MissedNotes(FakeSessionHistoryRepository(), FakeMissedNoteDismissals()) }
-                    single { ScheduleTestAlarm(FakeAlarmScheduler(), FakeTestAlarmStore(), get()) }
+                    single { ScheduleTestAlarm(FakeAlarmScheduler(), FakeTestAlarmStore(), get(), get()) }
                 }
             val koin = koinApplication { modules(ports, uiModule) }.koin
 

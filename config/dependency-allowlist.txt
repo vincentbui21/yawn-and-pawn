@@ -246,3 +246,33 @@ co.touchlab:stately-concurrent-collections
 co.touchlab:stately-concurrent-collections-jvm
 co.touchlab:stately-strict
 co.touchlab:stately-strict-jvm
+
+# Firebase Crashlytics (Story 1.19, BoM 34.19.0; the only network SDK of Epic 1, AD-15). Reviewed 2026-10-01: Crashlytics,
+# its sessions and installations, the datatransport upload stack, Play services tasks/basement and their Kotlin and
+# annotation dependencies. firebase-sessions also uses DataStore and Okio, listed above for Story 1.16. No Analytics or ads.
+com.google.firebase:firebase-bom
+com.google.firebase:firebase-crashlytics
+com.google.firebase:firebase-annotations
+com.google.firebase:firebase-common
+com.google.firebase:firebase-components
+com.google.firebase:firebase-config-interop
+com.google.firebase:firebase-datatransport
+com.google.firebase:firebase-encoders
+com.google.firebase:firebase-encoders-json
+com.google.firebase:firebase-encoders-proto
+com.google.firebase:firebase-installations
+com.google.firebase:firebase-installations-interop
+com.google.firebase:firebase-measurement-connector
+com.google.firebase:firebase-sessions
+com.google.android.datatransport:transport-api
+com.google.android.datatransport:transport-backend-cct
+com.google.android.datatransport:transport-runtime
+com.google.android.gms:play-services-basement
+com.google.android.gms:play-services-tasks
+org.jetbrains.kotlinx:kotlinx-coroutines-play-services
+com.google.errorprone:error_prone_annotations
+javax.inject:javax.inject
+org.jetbrains.kotlin:kotlin-android-extensions-runtime
+org.jetbrains.kotlin:kotlin-parcelize-runtime
+org.jetbrains.kotlin:kotlin-stdlib-jdk7
+org.jetbrains.kotlin:kotlin-stdlib-jdk8

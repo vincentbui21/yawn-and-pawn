@@ -10,6 +10,9 @@ import com.yawnandpawn.app.core.alarm.nextOccurrence
 import com.yawnandpawn.app.core.error.Outcome
 import com.yawnandpawn.app.core.history.MissedNotes
 import com.yawnandpawn.app.core.history.SessionHistoryRow
+import com.yawnandpawn.app.core.reliability.ReliabilityProbe
+import com.yawnandpawn.app.core.reliability.ReliabilitySettings
+import com.yawnandpawn.app.core.reliability.ReliabilityStatus
 import com.yawnandpawn.app.core.time.Clock
 import com.yawnandpawn.app.core.time.TimeChangeSignal
 import com.yawnandpawn.app.core.time.TimeZoneProvider
@@ -48,7 +51,9 @@ import kotlin.time.Instant
  * and when Home resumes. A switch calls `SetAlarmEnabled` at once and shows the new value until the store confirms it
  * (or reverts on failure); Duplicate opens the copy in the editor; Delete asks first and is logged. Navigation goes out
  * through [effects]. The missed note (Story 1.16) shows the alarm time of the latest Missed session from [missedNotes]
- * until "Dismiss" stores its dismissal.
+ * until "Dismiss" stores its dismissal. The reliability banner (Story 1.19) shows while [reliability] finds a setting
+ * off; it is checked when Home starts and resumes (a permission dialog only pauses it), and "Fix" checks again and
+ * opens the setting that is off now through [reliabilitySettings].
  */
 class HomeViewModel(
     repository: AlarmRepository,
@@ -57,11 +62,13 @@ class HomeViewModel(
     private val timeZoneProvider: TimeZoneProvider,
     timeChanges: TimeChangeSignal,
     private val missedNotes: MissedNotes,
+    private val reliability: ReliabilityProbe,
+    private val reliabilitySettings: ReliabilitySettings,
 ) : ViewModel() {
     /** Bumped by "Try again" to subscribe to the alarms again. */
     private val loads = MutableStateFlow(0)
     private val resumes = MutableSharedFlow<Unit>(extraBufferCapacity = 1)
-    private val local = MutableStateFlow(LocalState())
+    private val local = MutableStateFlow(LocalState(reliability = reliability.check()))
     private val _effects = Channel<HomeEffect>(Channel.BUFFERED)
     val effects: Flow<HomeEffect> = _effects.receiveAsFlow()
     private var snackbarJob: Job? = null
@@ -141,18 +148,32 @@ class HomeViewModel(
                 showOpenFailed()
             }
 
+            // A permission dialog answered over Home only pauses it, so a resume checks the settings too.
             HomeIntent.Resumed -> {
                 resumes.tryEmit(Unit)
+                checkReliability()
             }
 
             is HomeIntent.MissedNoteDismissed -> {
                 intent.sessionId?.let(::dismissMissed)
             }
 
-            // The hero, notices, session panel and commitment-lock dialog arrive with their own stories.
             else -> {
-                Unit
+                onReliabilityIntent(intent)
             }
+        }
+    }
+
+    /** The reliability banner (Story 1.19); other intents (hero, session panel, lock dialog) arrive with their stories. */
+    private fun onReliabilityIntent(intent: HomeIntent) {
+        when (intent) {
+            // A setting may have changed while Home was away (the user came back from "Fix").
+            HomeIntent.Started -> checkReliability()
+
+            // The setting that is off now, not when Home last checked.
+            HomeIntent.FixSettings -> checkReliability().firstFailing?.let(reliabilitySettings::open)
+
+            else -> Unit
         }
     }
 
@@ -176,6 +197,9 @@ class HomeViewModel(
             }
         }
     }
+
+    private fun checkReliability(): ReliabilityStatus =
+        reliability.check().also { status -> local.update { it.copy(reliability = status) } }
 
     private fun duplicate(id: String) {
         viewModelScope.launch {
@@ -232,6 +256,7 @@ class HomeViewModel(
                     openFailed = ui.openFailed,
                     missedAlarmAt = missedAlarmAt,
                     missedSessionId = missedSessionId,
+                    reliabilityProblem = !ui.reliability.allOk,
                 )
             }
 
@@ -245,6 +270,7 @@ class HomeViewModel(
                     openFailed = ui.openFailed,
                     missedAlarmAt = missedAlarmAt,
                     missedSessionId = missedSessionId,
+                    reliabilityProblem = !ui.reliability.allOk,
                 )
             }
         }
@@ -298,6 +324,8 @@ private data class LocalState(
     val toggles: Map<String, PendingToggle> = emptyMap(),
     val deleteDialog: DeleteAlarmDialog? = null,
     val openFailed: Boolean = false,
+    /** What the reliability probe found when Home last started (Story 1.19). */
+    val reliability: ReliabilityStatus = ReliabilityStatus.ALL_OK,
 )
 
 /** Epic 1 cards show no check icons (checks arrive in Epic 3). */

@@ -9,12 +9,16 @@ import com.yawnandpawn.app.core.history.MissedNotes
 import com.yawnandpawn.app.core.history.SessionHistoryRow
 import com.yawnandpawn.app.core.history.SessionOutcome
 import com.yawnandpawn.app.core.log.LogEvent
+import com.yawnandpawn.app.core.reliability.ReliabilityItem
+import com.yawnandpawn.app.core.reliability.ReliabilityStatus
 import com.yawnandpawn.app.testing.AlarmUseCasesFixture
 import com.yawnandpawn.app.testing.FakeAlarmRepository
 import com.yawnandpawn.app.testing.FakeClock
 import com.yawnandpawn.app.testing.FakeIdGenerator
 import com.yawnandpawn.app.testing.FakeLogger
 import com.yawnandpawn.app.testing.FakeMissedNoteDismissals
+import com.yawnandpawn.app.testing.FakeReliabilityProbe
+import com.yawnandpawn.app.testing.FakeReliabilitySettings
 import com.yawnandpawn.app.testing.FakeRequestCodeSequence
 import com.yawnandpawn.app.testing.FakeSessionHistoryRepository
 import com.yawnandpawn.app.testing.FakeTimeChangeSignal
@@ -64,6 +68,8 @@ class HomeViewModelTest {
     private val history = FakeSessionHistoryRepository()
     private val dismissals = FakeMissedNoteDismissals()
     private val missedNotes = MissedNotes(history, dismissals)
+    private val probe = FakeReliabilityProbe()
+    private val settings = FakeReliabilitySettings()
 
     @BeforeTest
     fun setUp() {
@@ -99,7 +105,7 @@ class HomeViewModelTest {
     }
 
     private fun TestScope.home(repository: AlarmRepository): HomeViewModel {
-        val viewModel = HomeViewModel(repository, actions(repository), clock, zone, signal, missedNotes)
+        val viewModel = HomeViewModel(repository, actions(repository), clock, zone, signal, missedNotes, probe, settings)
         backgroundScope.launch { viewModel.state.collect { } }
         return viewModel
     }
@@ -410,7 +416,8 @@ class HomeViewModelTest {
     fun `the time signal is only listened to while Home is shown`() =
         runTest(dispatcher) {
             assertEquals(0, signal.subscribers)
-            val viewModel = HomeViewModel(FakeAlarmRepository(), actions(FakeAlarmRepository()), clock, zone, signal, missedNotes)
+            val viewModel =
+                HomeViewModel(FakeAlarmRepository(), actions(FakeAlarmRepository()), clock, zone, signal, missedNotes, probe, settings)
             val collector = launch { viewModel.state.collect { } }
             assertEquals(1, signal.subscribers)
 
@@ -544,4 +551,77 @@ class HomeViewModelTest {
 
         assertEquals(listOf(1, 2, 4, 8, 16, 32, 60, 60, 60).map { it.seconds }, waits)
     }
+
+    // Story 1.19: the reliability banner.
+
+    @Test
+    fun `no banner while every reliability setting is on`() =
+        runTest(dispatcher) {
+            assertFalse(home(FakeAlarmRepository()).state.value.reliabilityProblem)
+        }
+
+    @Test
+    fun `a setting that is off shows the banner and Fix opens the first failing one`() =
+        runTest(dispatcher) {
+            probe.status = ReliabilityStatus(notificationsAllowed = true, fullScreenIntentAllowed = false, exactAlarmsAllowed = false)
+            val viewModel = home(FakeAlarmRepository())
+
+            assertTrue(viewModel.state.value.reliabilityProblem)
+            viewModel.onIntent(HomeIntent.FixSettings)
+            assertEquals(listOf(ReliabilityItem.FullScreenIntent), settings.opened)
+        }
+
+    @Test
+    fun `the banner is checked again on every start and clears once every setting is on`() =
+        runTest(dispatcher) {
+            probe.status = ReliabilityStatus.ALL_OK.copy(notificationsAllowed = false)
+            val viewModel = home(FakeAlarmRepository())
+            assertTrue(viewModel.state.value.reliabilityProblem)
+
+            probe.status = ReliabilityStatus.ALL_OK
+            viewModel.onIntent(HomeIntent.Started)
+
+            assertFalse(viewModel.state.value.reliabilityProblem)
+            viewModel.onIntent(HomeIntent.FixSettings)
+            assertEquals(emptyList(), settings.opened, "nothing to fix")
+        }
+
+    @Test
+    fun `a resume checks again, as a permission dialog answered over Home only pauses it`() =
+        runTest(dispatcher) {
+            probe.status = ReliabilityStatus.ALL_OK.copy(notificationsAllowed = false)
+            val viewModel = home(FakeAlarmRepository())
+            val checks = probe.checks
+
+            probe.status = ReliabilityStatus.ALL_OK
+            viewModel.onIntent(HomeIntent.Resumed)
+
+            assertFalse(viewModel.state.value.reliabilityProblem)
+            assertEquals(checks + 1, probe.checks)
+        }
+
+    @Test
+    fun `Fix checks again and opens the setting that is off now`() =
+        runTest(dispatcher) {
+            probe.status = ReliabilityStatus.ALL_OK.copy(notificationsAllowed = false)
+            val viewModel = home(FakeAlarmRepository())
+
+            // Notifications were turned on elsewhere; exact alarms went off.
+            probe.status = ReliabilityStatus.ALL_OK.copy(exactAlarmsAllowed = false)
+            viewModel.onIntent(HomeIntent.FixSettings)
+
+            assertEquals(listOf(ReliabilityItem.ExactAlarms), settings.opened)
+        }
+
+    @Test
+    fun `the banner also shows when the alarms cannot be read`() =
+        runTest(dispatcher) {
+            probe.status = ReliabilityStatus.ALL_OK.copy(exactAlarmsAllowed = false)
+            val repository = FakeAlarmRepository().apply { failure = DomainError.StorageFailure("disk I/O error") }
+
+            val state = home(repository).state.value
+
+            assertTrue(state.loadFailed)
+            assertTrue(state.reliabilityProblem)
+        }
 }

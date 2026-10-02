@@ -12,6 +12,7 @@ import com.yawnandpawn.app.core.alarm.nextOccurrence
 import com.yawnandpawn.app.core.error.DomainError
 import com.yawnandpawn.app.core.error.Outcome
 import com.yawnandpawn.app.core.error.errorOrNull
+import com.yawnandpawn.app.core.reliability.NotificationPermission
 import com.yawnandpawn.app.core.sound.SoundLibrary
 import com.yawnandpawn.app.core.sound.SoundPreview
 import com.yawnandpawn.app.core.time.Clock
@@ -55,6 +56,7 @@ class AlarmEditorViewModel(
     private val actions: AlarmActions,
     private val soundLibrary: SoundLibrary,
     private val soundPreview: SoundPreview,
+    private val notificationPermission: NotificationPermission,
 ) : ViewModel() {
     private val _state = MutableStateFlow(EditorUiState(isNew = alarmId == null, isLoading = alarmId != null))
     val state: StateFlow<EditorUiState> = _state.asStateFlow()
@@ -213,6 +215,10 @@ class AlarmEditorViewModel(
             when (val result = saveAlarm(current.form.toDraft(alarmId, stored))) {
                 // Stays saving until the screen leaves, so a quick second tap cannot store the alarm twice.
                 is Outcome.Success -> {
+                    // The first save of an enabled alarm (every editor save is one) asks for notifications, once
+                    // (Story 1.19); the dialog shows over Home after the editor closes. The alarm is saved, so the
+                    // editor closes even when asking fails.
+                    notificationPermission.askOnce(actions)
                     close()
                 }
 
@@ -319,6 +325,16 @@ class AlarmEditorViewModel(
                 Unit
             }
         }
+    }
+}
+
+/** Asks once for notifications; a failure to ask is logged (the Home banner still shows the missing permission). */
+@Suppress("TooGenericExceptionCaught")
+private fun NotificationPermission.askOnce(actions: AlarmActions) {
+    try {
+        if (shouldRequest()) request()
+    } catch (e: Exception) {
+        actions.logFailure("request notification permission", e)
     }
 }
 

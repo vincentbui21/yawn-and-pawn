@@ -61,4 +61,7 @@ object HomeSamples {
 
     /** Story 1.16: the 6:00 alarm stopped after 30 minutes and the user has not dismissed the note yet. */
     val missedNote = one.copy(missedAlarmAt = LocalTime(6, 0))
+
+    /** A reliability setting is off (Story 1.19): "Alarms may not ring. Fix settings" with "Fix". */
+    val reliability = one.copy(reliabilityProblem = true)
 }

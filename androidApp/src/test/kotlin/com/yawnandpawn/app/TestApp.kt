@@ -87,6 +87,6 @@ fun restartKoin(
     stopApp()
     startKoin {
         androidContext(app)
-        modules(listOf(appModule, dataModule, uiModule) + overrides)
+        modules(listOf(appModule, dataModule, uiModule, testAppModule) + overrides)
     }
 }

@@ -11,6 +11,7 @@ import com.yawnandpawn.app.testing.AlarmUseCasesFixture
 import com.yawnandpawn.app.testing.FakeAlarmRepository
 import com.yawnandpawn.app.testing.FakeClock
 import com.yawnandpawn.app.testing.FakeLogger
+import com.yawnandpawn.app.testing.FakeNotificationPermission
 import com.yawnandpawn.app.testing.FakeSoundLibrary
 import com.yawnandpawn.app.testing.FakeSoundPreview
 import com.yawnandpawn.app.testing.FakeTimeZoneProvider
@@ -57,6 +58,7 @@ class EditorRouteLifecycleTest {
                 actions = AlarmActions(alarms.setEnabled, alarms.duplicate, alarms.delete, alarms.clock, FakeLogger()),
                 soundLibrary = FakeSoundLibrary(),
                 soundPreview = preview,
+                notificationPermission = FakeNotificationPermission(),
             )
         val owner = TestOwner()
         withScreen(

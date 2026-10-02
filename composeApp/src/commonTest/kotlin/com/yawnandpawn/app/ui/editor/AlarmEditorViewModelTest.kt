@@ -11,6 +11,7 @@ import com.yawnandpawn.app.testing.FakeAlarmScheduler
 import com.yawnandpawn.app.testing.FakeClock
 import com.yawnandpawn.app.testing.FakeIdGenerator
 import com.yawnandpawn.app.testing.FakeLogger
+import com.yawnandpawn.app.testing.FakeNotificationPermission
 import com.yawnandpawn.app.testing.FakeRequestCodeSequence
 import com.yawnandpawn.app.testing.FakeSoundLibrary
 import com.yawnandpawn.app.testing.FakeSoundPreview
@@ -52,6 +53,7 @@ class AlarmEditorViewModelTest {
     private val logger = FakeLogger()
     private val ids = FakeIdGenerator()
     private val scheduler = FakeAlarmScheduler()
+    private val permission = FakeNotificationPermission()
 
     // The mark already covers [stored], as the app run that stored it would have left it.
     private val alarms =
@@ -84,6 +86,7 @@ class AlarmEditorViewModelTest {
             actions = AlarmActions(alarms.setEnabled, alarms.duplicate, alarms.delete, clock, logger),
             soundLibrary = FakeSoundLibrary(),
             soundPreview = FakeSoundPreview(),
+            notificationPermission = permission,
         )
 
     private fun TestScope.effectsOf(viewModel: AlarmEditorViewModel): List<EditorEffect> {
@@ -293,6 +296,49 @@ class AlarmEditorViewModelTest {
         assertFalse(isLabelTooLong("😀".repeat(40)))
         assertTrue(isLabelTooLong("😀".repeat(41)))
     }
+
+    @Test
+    fun `the first successful save asks for notifications once, and later saves do not`() =
+        runTest(dispatcher) {
+            permission.needed = true
+
+            viewModel().onIntent(EditorIntent.SaveClicked)
+            advanceUntilIdle()
+            assertEquals(1, permission.requests)
+            viewModel().onIntent(EditorIntent.SaveClicked)
+            advanceUntilIdle()
+
+            assertEquals(1, permission.requests, "asked once only")
+            assertEquals(2, repository.current.size)
+        }
+
+    @Test
+    fun `a request that fails after a successful save still closes the editor and is logged`() =
+        runTest(dispatcher) {
+            permission.needed = true
+            permission.failure = IllegalStateException("no activity to launch from")
+            val viewModel = viewModel()
+            val effects = effectsOf(viewModel)
+
+            viewModel.onIntent(EditorIntent.SaveClicked)
+            advanceUntilIdle()
+
+            assertEquals(listOf<EditorEffect>(EditorEffect.Close), effects)
+            assertEquals(1, repository.current.size)
+            assertEquals(LogEvent.OperationFailed("request notification permission", "no activity to launch from"), logger.events.last())
+        }
+
+    @Test
+    fun `a failed save does not ask for notifications`() =
+        runTest(dispatcher) {
+            permission.needed = true
+            repository.failure = DomainError.StorageFailure("disk I/O error")
+
+            viewModel().onIntent(EditorIntent.SaveClicked)
+            advanceUntilIdle()
+
+            assertEquals(0, permission.requests)
+        }
 
     @Test
     fun `a storage failure keeps the editor open and shows the generic error`() =

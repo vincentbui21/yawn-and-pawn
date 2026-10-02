@@ -9,12 +9,16 @@ import android.os.Looper
 import androidx.test.core.app.ApplicationProvider
 import com.yawnandpawn.app.R
 import com.yawnandpawn.app.StopAppRule
+import com.yawnandpawn.app.android.ApplicationScope
 import com.yawnandpawn.app.android.wake.AlarmVolume
+import com.yawnandpawn.app.awaitChildren
 import com.yawnandpawn.app.core.sound.SoundRef
 import com.yawnandpawn.app.testing.FakeLogger
+import org.junit.Before
 import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
+import org.koin.core.context.GlobalContext
 import org.robolectric.RobolectricTestRunner
 import org.robolectric.Shadows.shadowOf
 import org.robolectric.shadow.api.Shadow
@@ -42,6 +46,13 @@ class AndroidSoundPreviewTest {
     private val created = mutableListOf<MediaPlayer>()
     private val preview = AndroidSoundPreview(context, volume, LibrarySoundResolver(), { ringing }, logger)
     private val bell = SoundRef.BuiltIn("bell")
+
+    /**
+     * The app's own start (restore, then a volume restore when Idle) runs on ApplicationScope; under load it could
+     * otherwise restore the saved alarm volume in the middle of a test (as in AndroidAlarmPlayerTest).
+     */
+    @Before
+    fun awaitAppStart() = GlobalContext.get().get<ApplicationScope>().awaitChildren()
 
     init {
         ShadowMediaPlayer.setMediaInfoProvider { ShadowMediaPlayer.MediaInfo(2_000, 0) }

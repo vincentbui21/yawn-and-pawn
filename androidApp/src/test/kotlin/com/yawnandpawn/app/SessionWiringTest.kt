@@ -1,8 +1,11 @@
 package com.yawnandpawn.app
 
+import android.content.Context
 import androidx.test.core.app.ApplicationProvider
 import com.yawnandpawn.app.android.ApplicationScope
 import com.yawnandpawn.app.android.UnavailableBilling
+import com.yawnandpawn.app.android.crash.FirebaseCrashReporter
+import com.yawnandpawn.app.android.crash.isFirebaseConfigured
 import com.yawnandpawn.app.android.wake.NoOpCrashReporter
 import com.yawnandpawn.app.android.wake.WakeRuntime
 import com.yawnandpawn.app.core.crash.CrashReporter
@@ -54,7 +57,13 @@ class SessionWiringTest {
         assertIs<RoomActiveSessionStore>(koin.get<ActiveSessionStore>())
         assertSame(koin.get<WakeRuntime>(), koin.get<EffectRunner>(), "the wake runtime is the one effect runner")
         assertSame(koin.get<WakeRuntime>(), koin.get<WakeRuntime>())
-        assertIs<NoOpCrashReporter>(koin.get<CrashReporter>(), "Crashlytics arrives in Story 1.19")
+        // With a CI google-services.json the app is configured and binds Crashlytics; without it, the no-op reporter.
+        val app = ApplicationProvider.getApplicationContext<Context>()
+        if (isFirebaseConfigured(app)) {
+            assertIs<FirebaseCrashReporter>(koin.get<CrashReporter>())
+        } else {
+            assertIs<NoOpCrashReporter>(koin.get<CrashReporter>())
+        }
         assertIs<RandomSeedSource>(koin.get<SeedSource>())
         assertIs<UnavailableBilling>(koin.get<Billing>())
         assertSame(koin.get<SessionRecorder>(), koin.get<SessionRecorder>())

@@ -19,6 +19,8 @@ FOREGROUND_SERVICE_MEDIA_PLAYBACK
 RECEIVE_BOOT_COMPLETED
 WAKE_LOCK
 VIBRATE
+# Firebase Crashlytics (Story 1.19): a normal permission its upload scheduling needs (network-constrained jobs).
+ACCESS_NETWORK_STATE
 CAMERA
 RECORD_AUDIO
 

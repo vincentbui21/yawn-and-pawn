@@ -12,7 +12,8 @@ import org.koin.compose.viewmodel.koinViewModel
 /**
  * The Alarms tab route: [HomeViewModel] (scoped to the nav entry) feeding [HomeScreen]. [onOpenEditor] opens the editor
  * (`null` for a new alarm). [openFailed] is the editor's result when its alarm could not be read: Home shows "Couldn't
- * open this alarm." and calls [onOpenFailedShown]. The countdown is recomputed whenever Home resumes.
+ * open this alarm." and calls [onOpenFailedShown]. The countdown is recomputed whenever Home resumes, and the
+ * reliability settings are checked again whenever it starts or resumes (Story 1.19).
  */
 @Composable
 fun HomeRoute(
@@ -35,6 +36,7 @@ fun HomeRoute(
             onOpenFailedShown()
         }
     }
+    LifecycleEventEffect(Lifecycle.Event.ON_START) { viewModel.onIntent(HomeIntent.Started) }
     LifecycleEventEffect(Lifecycle.Event.ON_RESUME) { viewModel.onIntent(HomeIntent.Resumed) }
     HomeScreen(state = state, is24Hour = is24HourClock(), onIntent = viewModel::onIntent)
 }

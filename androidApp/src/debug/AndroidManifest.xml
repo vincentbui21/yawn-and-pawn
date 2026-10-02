@@ -1,8 +1,15 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- Debug build only: the theme showcase (Story 1.3) and the design preview. Release builds never contain them. -->
+<!-- Debug build only: the theme showcase (Story 1.3), the design preview and the test-crash hook (Story 1.19).
+     Release builds never contain them. -->
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
 
     <application>
+        <!-- Story 1.19: registers the test-crash broadcast receiver at app start (Crashlytics console check). -->
+        <provider
+            android:name=".debug.DebugHooksProvider"
+            android:authorities="${applicationId}.debughooks"
+            android:exported="false" />
+
         <!-- Exported without an intent filter so `adb shell am start -n` can open it in debug builds. -->
         <activity
             android:name=".debug.ThemeShowcaseActivity"

@@ -89,6 +89,7 @@ import com.yawnandpawn.app.ui.resources.editor_snooze_minutes
 import com.yawnandpawn.app.ui.resources.editor_sound
 import com.yawnandpawn.app.ui.resources.editor_sound_default
 import com.yawnandpawn.app.ui.resources.editor_test_alarm
+import com.yawnandpawn.app.ui.resources.editor_test_scheduled
 import com.yawnandpawn.app.ui.resources.editor_vibration
 import com.yawnandpawn.app.ui.resources.editor_wake_check
 import com.yawnandpawn.app.ui.resources.editor_weakening_under_lock
@@ -120,6 +121,7 @@ fun AlarmEditorRoute(
     val state by viewModel.state.collectAsStateWithLifecycle()
     val snackbarHostState = remember { SnackbarHostState() }
     val saveFailed = stringResource(Res.string.editor_save_failed)
+    val testScheduled = stringResource(Res.string.editor_test_scheduled)
     LaunchedEffect(viewModel) {
         viewModel.effects.collect { effect ->
             when (effect) {
@@ -131,6 +133,8 @@ fun AlarmEditorRoute(
 
                 // Its own coroutine: showSnackbar suspends until the snackbar goes, which must not hold back a Close.
                 EditorEffect.ShowSaveFailed -> launch { snackbarHostState.showSnackbar(saveFailed) }
+
+                EditorEffect.ShowTestScheduled -> launch { snackbarHostState.showSnackbar(testScheduled) }
             }
         }
     }
@@ -152,8 +156,8 @@ fun AlarmEditorRoute(
  * The Alarm editor, stateless (owner decisions 2026-09-27): a header ("New alarm" / "Edit alarm" and "Rings in ..."),
  * the time wheels in their own card, the repeat quick choices, then grouped `card-group`s whose rows show their value
  * and open a sub-screen ([EditorPane]), "Test alarm", and the floating "Cancel | Save" pill. Sub-screens slide in and
- * out. With [EditorUiState.full] it is the full editor (wake-up check, quiet time, motivation, fee ladder,
- * "Test alarm"); without it, the Story 1.8 fields only.
+ * out. With [EditorUiState.full] it is the full editor (wake-up check, quiet time, motivation, fee ladder); without
+ * it, the Story 1.8 fields, the Sound row and "Test alarm" (Story 1.18) only.
  *
  * The pill has its own bottom area under the scrolling content and sits above the keyboard (`imePadding`, with the
  * activity edge-to-edge and `adjustResize`), so Save and the focused name field stay visible while it is typed.
@@ -240,13 +244,12 @@ private fun EditorMain(
                 state.full?.weakeningAppliesAfter?.let { time ->
                     NoteInline(text = stringResource(Res.string.editor_weakening_under_lock, formatClockTime(time, is24Hour)))
                 }
-                if (state.full != null) {
-                    PpsTextButton(
-                        text = stringResource(Res.string.editor_test_alarm),
-                        onClick = { onIntent(EditorIntent.TestAlarmClicked) },
-                        modifier = Modifier.align(Alignment.CenterHorizontally),
-                    )
-                }
+                // Under the cards in every editor (Story 1.18); Save and Cancel stay in the pill.
+                PpsTextButton(
+                    text = stringResource(Res.string.editor_test_alarm),
+                    onClick = { onIntent(EditorIntent.TestAlarmClicked) },
+                    modifier = Modifier.align(Alignment.CenterHorizontally),
+                )
             }
             SaveCancelPill(
                 cancelText = stringResource(Res.string.editor_cancel),

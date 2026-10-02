@@ -13,9 +13,11 @@ import com.yawnandpawn.app.core.alarm.AlarmRepository
 import com.yawnandpawn.app.core.crash.CrashReporter
 import com.yawnandpawn.app.core.history.SessionHistoryRepository
 import com.yawnandpawn.app.core.session.ActiveSessionStore
+import com.yawnandpawn.app.core.session.Billing
 import com.yawnandpawn.app.core.session.SessionEngine
 import com.yawnandpawn.app.core.session.SessionEvent
 import com.yawnandpawn.app.core.session.SessionState
+import com.yawnandpawn.app.core.session.TestAlarmStore
 import com.yawnandpawn.app.core.time.Clock
 import com.yawnandpawn.app.core.time.MonotonicClock
 import com.yawnandpawn.app.core.time.TimeSnapshot
@@ -35,9 +37,10 @@ import kotlin.test.fail
 
 /**
  * The real app's Koin graph, restarted with a [FakeCrashReporter] and optionally a replaced session [store], alarm
- * [repository], service [starter], session [history] repository, wall [clock] or [monotonic] clock; the real
- * `MediaPlayer` adapter plays over Robolectric's media shadow (every source opens). The service's coroutines run on the
- * main looper: [awaitUntil] idles it (and the Room threads) until a condition holds. Tear down with `StopAppRule`.
+ * [repository], service [starter], session [history] repository, wall [clock], [monotonic] clock, pending [testAlarms]
+ * or [billing]; the real `MediaPlayer` adapter plays over Robolectric's media shadow (every source opens). The
+ * service's coroutines run on the main looper: [awaitUntil] idles it (and the Room threads) until a condition holds.
+ * Tear down with `StopAppRule`.
  */
 internal class WakeApp(
     store: ActiveSessionStore? = null,
@@ -46,6 +49,8 @@ internal class WakeApp(
     history: SessionHistoryRepository? = null,
     clock: Clock? = null,
     monotonic: MonotonicClock? = null,
+    testAlarms: TestAlarmStore? = null,
+    billing: Billing? = null,
 ) {
     val app: YawnAndPawnApp = ApplicationProvider.getApplicationContext()
     val crashReporter = FakeCrashReporter()
@@ -68,6 +73,8 @@ internal class WakeApp(
                 history?.let { replaced -> single<SessionHistoryRepository> { replaced } }
                 clock?.let { replaced -> single<Clock> { replaced } }
                 monotonic?.let { replaced -> single<MonotonicClock> { replaced } }
+                testAlarms?.let { replaced -> single<TestAlarmStore> { replaced } }
+                billing?.let { replaced -> single<Billing> { replaced } }
             },
         )
         ShadowLog.clear()

@@ -7,6 +7,7 @@ import com.yawnandpawn.app.StopAppRule
 import com.yawnandpawn.app.core.alarm.AlarmFired
 import com.yawnandpawn.app.core.alarm.AlarmFiredHandler
 import com.yawnandpawn.app.core.error.DomainError
+import com.yawnandpawn.app.core.log.LogEvent
 import com.yawnandpawn.app.testing.FakeAlarmRepository
 import com.yawnandpawn.app.testing.FakeLogger
 import com.yawnandpawn.app.testing.anAlarm
@@ -35,18 +36,23 @@ class WakeAlarmFiredHandlerTest {
     private val fired = AlarmFired("alarm-a", Instant.fromEpochMilliseconds(1_000))
     private val repository = FakeAlarmRepository(listOf(anAlarm(id = "alarm-a")))
 
-    private fun handler(schedule: suspend (AlarmFired) -> Unit) =
-        WakeAlarmFiredHandler(
-            repository,
-            object : AlarmFiredHandler {
-                override suspend fun onAlarmFired(fired: AlarmFired) = schedule(fired)
+    private val logger = FakeLogger()
 
-                override suspend fun onSessionSlotFired() = Unit
+    private fun handler(
+        starter: WakeServiceStarter = this.starter,
+        schedule: suspend (AlarmFired) -> Unit = {},
+    ) = WakeAlarmFiredHandler(
+        repository,
+        object : AlarmFiredHandler {
+            override suspend fun onAlarmFired(fired: AlarmFired) = schedule(fired)
 
-                override suspend fun onTestAlarmFired() = Unit
-            },
-            starter,
-        )
+            override suspend fun onSessionSlotFired() = Unit
+
+            override suspend fun onTestAlarmFired() = Unit
+        },
+        starter,
+        logger,
+    )
 
     private fun startedAlarms() = started.map { it.action to it.getStringExtra("alarmId") }
 
@@ -76,5 +82,19 @@ class WakeAlarmFiredHandlerTest {
         runBlocking { repository.upsert(anAlarm(id = "alarm-a", enabled = false)) }
         runBlocking { handler {}.onAlarmFired(fired) }
         assertEquals(1, started.size)
+    }
+
+    @Test
+    fun `a test fire starts the service with the test action, and a refused start is logged`() {
+        runBlocking { handler().onTestAlarmFired() }
+        assertEquals(listOf(WakeService.ACTION_TEST), started.map { it.action })
+
+        val refusing = WakeServiceStarter(context, FakeLogger()) { throw IllegalStateException("background start not allowed") }
+        runBlocking { handler(starter = refusing).onTestAlarmFired() }
+
+        assertEquals(
+            listOf<LogEvent>(LogEvent.OperationFailed("start test alarm", "service start refused; the test does not ring")),
+            logger.events,
+        )
     }
 }

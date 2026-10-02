@@ -132,7 +132,7 @@ class AlarmFiredReceiverTest {
     }
 
     @Test
-    fun `a session-slot fire starts the wake service with the slot action and a test fire is logged and ignored`() {
+    fun `a session-slot fire and a test fire start the wake service with their actions`() {
         scheduler.scheduleTest(berlin("2027-03-07T20:01").toEpochMilliseconds())
         runBlocking { assertEquals(Outcome.Success(Unit), scheduler.schedule("x", 1000, berlin("2027-03-08T07:00").toEpochMilliseconds())) }
         ShadowLog.clear()
@@ -143,10 +143,9 @@ class AlarmFiredReceiverTest {
         fire(RequestCodes.TEST_ALARM)
         fire(RequestCodes.SESSION_SLOT)
 
-        assertEquals(setOf(1000), app.armed().keys)
-        val logs = ShadowLog.getLogsForTag(AndroidLogger.TAG).map { it.msg }
-        assertTrue(logs.any { it.startsWith("FireIgnored kind=TestAlarm") }, "$logs")
-        assertEquals(listOf(WakeService.ACTION_SLOT), startedServices.map { it.action }, "the test alarm rings only from Story 1.18")
+        assertEquals(setOf(1000), app.armed().keys, "a test fire re-arms nothing")
+        // Story 1.18: the test fire rings the pending test through the service.
+        assertEquals(listOf(WakeService.ACTION_TEST, WakeService.ACTION_SLOT), startedServices.map { it.action })
     }
 
     @Test

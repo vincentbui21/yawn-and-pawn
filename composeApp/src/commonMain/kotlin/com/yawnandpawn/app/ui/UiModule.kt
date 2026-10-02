@@ -27,6 +27,7 @@ val uiModule =
                 soundLibrary = get(),
                 soundPreview = get(),
                 notificationPermission = get(),
+                testAlarm = get(),
             )
         }
     }

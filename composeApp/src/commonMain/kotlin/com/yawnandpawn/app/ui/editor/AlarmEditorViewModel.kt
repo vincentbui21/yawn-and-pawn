@@ -13,6 +13,7 @@ import com.yawnandpawn.app.core.error.DomainError
 import com.yawnandpawn.app.core.error.Outcome
 import com.yawnandpawn.app.core.error.errorOrNull
 import com.yawnandpawn.app.core.reliability.NotificationPermission
+import com.yawnandpawn.app.core.session.ScheduleTestAlarm
 import com.yawnandpawn.app.core.sound.SoundLibrary
 import com.yawnandpawn.app.core.sound.SoundPreview
 import com.yawnandpawn.app.core.time.Clock
@@ -20,6 +21,7 @@ import com.yawnandpawn.app.core.time.TimeZoneProvider
 import com.yawnandpawn.app.ui.format.Weekdays
 import com.yawnandpawn.app.ui.format.countdownOf
 import com.yawnandpawn.app.ui.home.AlarmActions
+import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -28,6 +30,7 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.receiveAsFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import kotlinx.datetime.TimeZone
 import kotlinx.datetime.toLocalDateTime
 import kotlin.time.Instant
@@ -45,8 +48,11 @@ data class AlarmEditorArgs(
  * closes the editor with [EditorEffect.OpenFailed] (Home shows "Couldn't open this alarm."); an alarm that was read
  * gets the overflow menu (Story 1.9): Duplicate and Delete through [actions]. The Sound sub-screen (Story 1.17) lists
  * the built-in sounds and the phone's alarm ringtones ([soundLibrary]) and previews one at a time ([soundPreview]); the
- * preview stops on leaving the sub-screen, on [EditorIntent.Backgrounded] and when the editor closes.
+ * preview stops on leaving the sub-screen, on [EditorIntent.Backgrounded] and when the editor closes. "Test alarm"
+ * (Story 1.18) rings the form as it is now, unsaved changes included, as a test 10 s later through [testAlarm], then
+ * shows its snackbar.
  */
+@Suppress("TooManyFunctions") // One small handler per editor action (save, back, repeat, menu, test).
 class AlarmEditorViewModel(
     private val alarmId: String?,
     private val repository: AlarmRepository,
@@ -57,6 +63,7 @@ class AlarmEditorViewModel(
     private val soundLibrary: SoundLibrary,
     private val soundPreview: SoundPreview,
     private val notificationPermission: NotificationPermission,
+    private val testAlarm: ScheduleTestAlarm,
 ) : ViewModel() {
     private val _state = MutableStateFlow(EditorUiState(isNew = alarmId == null, isLoading = alarmId != null))
     val state: StateFlow<EditorUiState> = _state.asStateFlow()
@@ -72,6 +79,9 @@ class AlarmEditorViewModel(
 
     /** The Sound row, the Sound sub-screen's list and its preview (Story 1.17). */
     private val sounds = EditorSounds(soundLibrary, soundPreview, viewModelScope, _state)
+
+    /** A "Test alarm" is being armed (Story 1.18). */
+    private var testInFlight = false
 
     init {
         // A preview never outlives the editor.
@@ -117,6 +127,10 @@ class AlarmEditorViewModel(
 
             is EditorIntent.RepeatChosen -> {
                 chooseRepeat(intent.choice)
+            }
+
+            EditorIntent.TestAlarmClicked -> {
+                scheduleTest()
             }
 
             else -> {
@@ -231,6 +245,31 @@ class AlarmEditorViewModel(
                         showFailure(result.error)
                     }
                 }
+            }
+        }
+    }
+
+    /**
+     * "Test alarm": the form as it is now (unsaved changes included, built like a save) rings as a test 10 s later,
+     * then "Lock your phone. We'll ring in 10 seconds." shows. A test that cannot be armed is logged and shows nothing.
+     */
+    private fun scheduleTest() {
+        val current = _state.value
+        // One test at a time: a second tap while one is being armed would interleave the store and the arming.
+        if (current.isLoading || testInFlight) return
+        // The same label rule as Save: an over-long label shows its field error and rings no test.
+        if (isLabelTooLong(current.form.label)) {
+            _state.update { it.copy(fieldError = AlarmField.Label) }
+            return
+        }
+        testInFlight = true
+        viewModelScope.launch {
+            // Not cancelled by the editor closing: the config is stored and the alarm armed (or both taken back).
+            val result = withContext(NonCancellable) { testAlarm(current.form.toDraft(alarmId, stored)) }
+            testInFlight = false
+            when (result) {
+                is Outcome.Success -> _effects.trySend(EditorEffect.ShowTestScheduled)
+                is Outcome.Failure -> actions.logFailure("schedule test alarm", result.error)
             }
         }
     }

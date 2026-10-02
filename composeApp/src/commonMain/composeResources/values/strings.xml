@@ -29,6 +29,7 @@
     <string name="editor_save">Save</string>
     <string name="editor_rings_tomorrow">Rings tomorrow at %1$s.</string>
     <string name="editor_save_failed">Couldn't save the alarm. Try again.</string>
+    <string name="editor_test_scheduled">Lock your phone. We'll ring in 10 seconds.</string>
     <string name="editor_discard_title">Discard changes?</string>
     <string name="editor_discard">Discard</string>
     <string name="editor_keep_editing">Keep editing</string>

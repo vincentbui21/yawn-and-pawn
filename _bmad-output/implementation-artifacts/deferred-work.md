@@ -35,7 +35,13 @@
 - source_spec: `_bmad-output/implementation-artifacts/spec-1-3-generated-design-tokens-and-ppstheme.md`
   summary: Automatically assert the release build contains no debug-only showcase code or activity.
   evidence: Only a manual inspection was done; moving `ThemeShowcase*` out of `androidApp/src/debug` would ship an exported debug activity with every check green.
-  status: assigned to Story 1.18 by sprint-change-proposal-2026-10-01.
+  status: assigned to Story 1.18 by sprint-change-proposal-2026-10-01. Resolved in Story 1.18. The build-logic task `checkReleaseContent` (in `qualityGate`) reads the release merged manifest, the release project classes and the release resource directories. It fails on:
+    - any `com/yawnandpawn/app/debug/` class (`debug.preview`, `ThemeShowcase`);
+    - `DebugFireReceiver`, `DebugFireProvider` or the `com.yawnandpawn.app.debug.FIRE` action;
+    - `ThemeShowcase` or `.debug.preview.` components;
+    - `preview_launcher_label` or "Yawn & Pawn Preview".
+
+    The rules have unit tests (`ReleaseContentTest`). Wiring the debug variant into the task by hand made it report 105 items.
 - source_spec: `_bmad-output/implementation-artifacts/spec-1-6-time-ports-deadlines-and-alarm-occurrence-math-in-core.md`
   summary: Decide how deadlines and scheduling behave right after a reboot when the wall clock is wrong until network time syncs.
   evidence: Unverified (medium if it happens). After a reboot `Deadline` compares wall time by design (AD-3); an RTC reset or manual clock change can make a snooze deadline due too early or too late. Natural home: Stories 1.10 (reschedule on boot/time change) and 1.12 (SessionEngine restore).

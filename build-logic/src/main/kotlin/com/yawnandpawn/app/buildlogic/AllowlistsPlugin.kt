@@ -52,6 +52,12 @@ class AllowlistsPlugin : Plugin<Project> {
             allowlist.set(config.file("permission-allowlist.txt"))
             marker.set(app.layout.buildDirectory.file("allowlists/permissions-ok.txt"))
         }
+        // Story 1.18: the release build ships no debug-only code (fire hook, design preview, theme showcase).
+        app.tasks.register(CHECK_RELEASE_CONTENT, CheckReleaseContentTask::class.java) {
+            group = "verification"
+            description = "Fails if the release manifest, classes or resources contain debug-only content."
+            marker.set(app.layout.buildDirectory.file("allowlists/release-content-ok.txt"))
+        }
         // Isolated in AgpAllowlistWiring so AGP classes load only when AGP is applied.
         app.pluginManager.withPlugin("com.android.application") { AgpAllowlistWiring.wire(app) }
     }

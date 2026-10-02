@@ -27,6 +27,12 @@
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
         </activity>
+
+        <!-- Story 1.18: registers the adb fire-now hook (DebugFireReceiver) when the app process starts. -->
+        <provider
+            android:name=".debug.fire.DebugFireProvider"
+            android:authorities="${applicationId}.debug.fire"
+            android:exported="false" />
     </application>
 
 </manifest>

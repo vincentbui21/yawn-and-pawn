@@ -6,6 +6,7 @@ import com.yawnandpawn.app.core.alarm.RequestCodeSequence
 import com.yawnandpawn.app.core.history.MissedNoteDismissals
 import com.yawnandpawn.app.core.history.SessionHistoryRepository
 import com.yawnandpawn.app.core.session.ActiveSessionStore
+import com.yawnandpawn.app.core.session.TestAlarmStore
 import com.yawnandpawn.app.data.alarm.RoomAlarmRepository
 import com.yawnandpawn.app.data.alarm.RoomRequestCodeSequence
 import com.yawnandpawn.app.data.db.AppDatabase
@@ -15,6 +16,7 @@ import com.yawnandpawn.app.data.db.buildRuntimeDatabase
 import com.yawnandpawn.app.data.history.RoomSessionHistoryRepository
 import com.yawnandpawn.app.data.session.RoomActiveSessionStore
 import com.yawnandpawn.app.data.settings.DataStoreMissedNoteDismissals
+import com.yawnandpawn.app.data.settings.DataStoreTestAlarmStore
 import com.yawnandpawn.app.data.settings.SettingsDataStore
 import org.koin.core.module.dsl.onClose
 import org.koin.core.module.dsl.withOptions
@@ -42,4 +44,6 @@ val dataModule =
         // The settings DataStore (Story 1.16), device-protected; released when Koin stops, like the databases.
         single { SettingsDataStore(get<Context>()) } withOptions { onClose { it?.close() } }
         single<MissedNoteDismissals> { DataStoreMissedNoteDismissals(get<SettingsDataStore>().store, get()) }
+        // The pending test ring (Story 1.18), in the same device-protected DataStore.
+        single<TestAlarmStore> { DataStoreTestAlarmStore(get<SettingsDataStore>().store, get()) }
     }

@@ -8,10 +8,10 @@ import com.yawnandpawn.app.core.log.Logger
 
 /**
  * Starts [WakeService] in the foreground. A fire from `setAlarmClock` lets the app start a foreground service from the
- * background for a short while, so [startAlarm] and [startSlot] (called from the alarm receiver) are allowed. A start
- * the platform refuses (`ForegroundServiceStartNotAllowedException`, an `IllegalStateException`, for example a restore
- * at app start from the background) is logged and returns false: the armed session slot (at most 60 s away) fires the
- * receiver, which starts the service again.
+ * background for a short while, so [startAlarm], [startSlot] and [startTest] (called from the alarm receiver) are
+ * allowed. A start the platform refuses (`ForegroundServiceStartNotAllowedException`, an `IllegalStateException`, for
+ * example a restore at app start from the background) is logged and returns false: the armed session slot (at most 60 s
+ * away) fires the receiver, which starts the service again.
  */
 class WakeServiceStarter(
     private val context: Context,
@@ -23,6 +23,9 @@ class WakeServiceStarter(
 
     /** The session slot fired. */
     fun startSlot(): Boolean = start(WakeService.intent(context, WakeService.ACTION_SLOT))
+
+    /** The test alarm fired (Story 1.18): the service rings the pending test. */
+    fun startTest(): Boolean = start(WakeService.intent(context, WakeService.ACTION_TEST))
 
     /** A session (or the emergency ring) needs the service and it is not running. */
     fun startRestore(): Boolean = start(WakeService.intent(context, WakeService.ACTION_RESTORE))

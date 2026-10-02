@@ -21,13 +21,17 @@ import androidx.compose.ui.test.longClick
 import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
+import androidx.compose.ui.test.performScrollTo
 import androidx.compose.ui.test.performTouchInput
 import androidx.compose.ui.unit.dp
 import com.yawnandpawn.app.StopAppRule
+import com.yawnandpawn.app.core.alarm.RequestCodes
 import com.yawnandpawn.app.core.error.DomainError
 import com.yawnandpawn.app.core.history.MissedNotes
+import com.yawnandpawn.app.core.session.ScheduleTestAlarm
 import com.yawnandpawn.app.testing.AlarmUseCasesFixture
 import com.yawnandpawn.app.testing.FakeAlarmRepository
+import com.yawnandpawn.app.testing.FakeAlarmScheduler
 import com.yawnandpawn.app.testing.FakeClock
 import com.yawnandpawn.app.testing.FakeLogger
 import com.yawnandpawn.app.testing.FakeMissedNoteDismissals
@@ -37,6 +41,7 @@ import com.yawnandpawn.app.testing.FakeReliabilitySettings
 import com.yawnandpawn.app.testing.FakeSessionHistoryRepository
 import com.yawnandpawn.app.testing.FakeSoundLibrary
 import com.yawnandpawn.app.testing.FakeSoundPreview
+import com.yawnandpawn.app.testing.FakeTestAlarmStore
 import com.yawnandpawn.app.testing.FakeTimeChangeSignal
 import com.yawnandpawn.app.testing.FakeTimeZoneProvider
 import com.yawnandpawn.app.ui.editor.AlarmEditorRoute
@@ -261,6 +266,7 @@ class AlarmScreensSemanticsTest {
                 soundLibrary = FakeSoundLibrary(),
                 soundPreview = FakeSoundPreview(),
                 notificationPermission = FakeNotificationPermission(),
+                testAlarm = ScheduleTestAlarm(FakeAlarmScheduler(), FakeTestAlarmStore(), FakeClock(), FakeLogger()),
             )
         var closed = false
         withScreen(
@@ -286,6 +292,40 @@ class AlarmScreensSemanticsTest {
         }
     }
 
+    @Test
+    fun `Test alarm arms a test ring and shows the snackbar, and the editor stays open`() {
+        val repository = FakeAlarmRepository()
+        val testScheduler = FakeAlarmScheduler()
+        val testAlarms = FakeTestAlarmStore()
+        val viewModel =
+            AlarmEditorViewModel(
+                alarmId = null,
+                repository = repository,
+                saveAlarm = AlarmUseCasesFixture(repository = repository).save,
+                clock = FakeClock(),
+                timeZoneProvider = FakeTimeZoneProvider(),
+                actions = actions(repository),
+                soundLibrary = FakeSoundLibrary(),
+                soundPreview = FakeSoundPreview(),
+                notificationPermission = FakeNotificationPermission(),
+                testAlarm = ScheduleTestAlarm(testScheduler, testAlarms, FakeClock(), FakeLogger()),
+            )
+        withScreen(
+            PpsThemeMode.Light,
+            content = { AlarmEditorRoute(alarmId = null, onClose = {}, onOpenFailed = {}, onOpenCopy = {}, viewModel = viewModel) },
+        ) {
+            composeRule.onNode(hasText("Test alarm") and hasClickAction()).performScrollTo().performClick()
+
+            composeRule.waitUntil(timeoutMillis = 5_000) {
+                composeRule.onAllNodes(hasText("Lock your phone. We'll ring in 10 seconds.")).fetchSemanticsNodes().isNotEmpty()
+            }
+            composeRule.onNodeWithText("New alarm").assertExists()
+            assertTrue(testAlarms.pending?.testMode == true, "a test config is pending")
+            assertEquals(setOf(RequestCodes.TEST_ALARM), testScheduler.armed.keys)
+            assertTrue(repository.current.isEmpty(), "nothing saved")
+        }
+    }
+
     private fun actions(repository: FakeAlarmRepository): AlarmActions {
         val alarms = AlarmUseCasesFixture(repository = repository)
         return AlarmActions(alarms.setEnabled, alarms.duplicate, alarms.delete, alarms.clock, FakeLogger())
@@ -305,6 +345,7 @@ class AlarmScreensSemanticsTest {
                 soundLibrary = FakeSoundLibrary(),
                 soundPreview = FakeSoundPreview(),
                 notificationPermission = FakeNotificationPermission(),
+                testAlarm = ScheduleTestAlarm(FakeAlarmScheduler(), FakeTestAlarmStore(), FakeClock(), FakeLogger()),
             )
         var openFailed = false
         var closed = false

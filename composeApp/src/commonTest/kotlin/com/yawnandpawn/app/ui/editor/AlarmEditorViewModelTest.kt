@@ -5,6 +5,7 @@ import com.yawnandpawn.app.core.alarm.AlarmField
 import com.yawnandpawn.app.core.alarm.RequestCodes
 import com.yawnandpawn.app.core.error.DomainError
 import com.yawnandpawn.app.core.log.LogEvent
+import com.yawnandpawn.app.core.session.ScheduleTestAlarm
 import com.yawnandpawn.app.testing.AlarmUseCasesFixture
 import com.yawnandpawn.app.testing.FakeAlarmRepository
 import com.yawnandpawn.app.testing.FakeAlarmScheduler
@@ -15,6 +16,7 @@ import com.yawnandpawn.app.testing.FakeNotificationPermission
 import com.yawnandpawn.app.testing.FakeRequestCodeSequence
 import com.yawnandpawn.app.testing.FakeSoundLibrary
 import com.yawnandpawn.app.testing.FakeSoundPreview
+import com.yawnandpawn.app.testing.FakeTestAlarmStore
 import com.yawnandpawn.app.testing.FakeTimeZoneProvider
 import com.yawnandpawn.app.testing.anAlarm
 import com.yawnandpawn.app.ui.home.AlarmActions
@@ -54,6 +56,8 @@ class AlarmEditorViewModelTest {
     private val ids = FakeIdGenerator()
     private val scheduler = FakeAlarmScheduler()
     private val permission = FakeNotificationPermission()
+    private val testAlarmScheduler = FakeAlarmScheduler()
+    private val testAlarmStore = FakeTestAlarmStore()
 
     // The mark already covers [stored], as the app run that stored it would have left it.
     private val alarms =
@@ -87,6 +91,7 @@ class AlarmEditorViewModelTest {
             soundLibrary = FakeSoundLibrary(),
             soundPreview = FakeSoundPreview(),
             notificationPermission = permission,
+            testAlarm = ScheduleTestAlarm(testAlarmScheduler, testAlarmStore, clock, logger),
         )
 
     private fun TestScope.effectsOf(viewModel: AlarmEditorViewModel): List<EditorEffect> {

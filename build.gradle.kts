@@ -153,5 +153,7 @@ tasks.register("qualityGate") {
         ":androidApp:checkDependencyAllowlist",
         ":androidApp:checkPermissionAllowlist",
         "checkSoundLoudness",
+        // Story 1.18: no debug-only code (fire hook, design preview, theme showcase) in the release build.
+        ":androidApp:checkReleaseContent",
     )
 }

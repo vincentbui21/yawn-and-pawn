@@ -2,7 +2,7 @@
 title: 'Story 1.18: Test alarm and debug fire-now hook'
 type: 'feature'
 created: '2026-10-02'
-status: 'in-review'
+status: 'done'
 baseline_revision: '3ccde81cb2fee126ec315ea6c6f82138edf3eb16'
 review_loop_iteration: 0
 followup_review_recommended: false
@@ -207,3 +207,31 @@ deferred: []
 - The debug hook only works while the app process runs, because the receiver is registered at runtime. Open the app first.
 - With the exact-alarm permission off (API 31–32), the test can't be armed. The tap is logged with no message until Story 1.19's checklist explains it.
 - Merge conflicts with the parallel Stories 1.17 and 1.19 are likely in `AlarmEditorViewModel` (a new constructor parameter), the editor screenshot baselines, the debug manifest and `config/`.
+
+## Review Triage Log (fast mode)
+
+2026-10-02: two review layers ran (fast mode). The high and medium findings were patched in `fix(1.18): review fixes`.
+
+**Patched:**
+- **Real alarm during a test:** it no longer merges into the test. The test ends through its normal end path (recorded Test), and the real alarm starts its own session.
+- **Editor "Test alarm":**
+  - An in-flight guard stops quick double taps from interleaving the store and the arm.
+  - `NonCancellable` scheduling, so closing the editor can't cut it off.
+  - An over-long label shows the field error, as Save does.
+- **Lost config and silent failures:**
+  - The pending config goes back when the test session can't be saved.
+  - A failed take-back after a failed arm is logged.
+  - A refused `startTest()` is logged.
+- **Release check:** `checkReleaseContent` also fails when no resources were gathered.
+- **Verification gaps closed:**
+  - TestKit `CheckReleaseContentTaskTest`;
+  - `TestAlarmFlowTest` cases for an unreadable pending test, an unsaveable session and a real alarm during a test;
+  - editor, handler and use-case cases.
+
+**Rejected (low):**
+- A second tap during the 10 s fire window (it replaces the pending test and re-arms, as designed).
+- A debug fire of a one-time alarm (debug only; the fire path disables it as usual).
+- Debug broadcast extra types (debug only; a wrong type falls back to the default).
+- Multiple release variants (the app has one release build type).
+
+**Deferred:** Robolectric tests for `DebugFireProvider.onCreate` and `DebugFireReceiver.onReceive` end to end (debug only; registration and `DebugFire` are tested).

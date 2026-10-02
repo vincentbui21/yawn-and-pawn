@@ -53,7 +53,7 @@ development_status:
   1-15-ringing-screen-over-the-lock-screen-with-i-m-up: done  # PR #15 2026-10-01 (auto-run, fast mode)
   1-16-stop-a-forgotten-alarm-after-30-minutes: done  # PR #17 2026-10-02 (auto-run, fast mode)
   1-17-built-in-sound-library-with-preview-and-a-never-silent-fallb: done  # PR #16 2026-10-01 (auto-run, fast mode)
-  1-18-test-alarm-and-debug-fire-now-hook: backlog
+  1-18-test-alarm-and-debug-fire-now-hook: done  # PR #19 2026-10-02 (auto-run, fast mode)
   1-19-permissions-for-reliable-alarms-and-crash-reporting: done  # PR #18 2026-10-02 (auto-run, fast mode)
   1-20-spike-s2-alarm-reliability-on-the-device-matrix: backlog
   1-21-epic-1-device-verification-checklist: backlog

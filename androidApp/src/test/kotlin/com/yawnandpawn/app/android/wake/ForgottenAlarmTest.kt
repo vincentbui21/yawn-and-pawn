@@ -2,6 +2,7 @@ package com.yawnandpawn.app.android.wake
 
 import android.app.NotificationManager
 import android.os.Looper
+import android.os.SystemClock
 import com.yawnandpawn.app.StopAppRule
 import com.yawnandpawn.app.core.alarm.AlarmFired
 import com.yawnandpawn.app.core.alarm.AlarmRepository
@@ -62,6 +63,16 @@ class ForgottenAlarmTest {
 
     /** Lets [duration] pass on the monotonic clock, running the service's timers as they come due. */
     private fun pass(duration: Duration) = shadowOf(Looper.getMainLooper()).idleFor(duration)
+
+    /**
+     * Waits, in real time only, until the tick loop is back from a tick that changed nothing and has armed its retry
+     * 1 s from now on the main thread's clock. The tick itself runs on ApplicationScope threads, so without this the
+     * next [pass] could start before the retry is armed, and the retry would land later than the test expects.
+     */
+    private fun WakeApp.awaitRetryArmed() =
+        awaitUntil("the tick loop arms its 1 s retry") {
+            shadowOf(Looper.getMainLooper()).nextScheduledTaskTime == Duration.ofMillis(SystemClock.uptimeMillis() + 1_000)
+        }
 
     private fun Ring.assertStillRinging(at: String) {
         app.awaitUntil("the background work settles at $at") { app.engine.state.value is SessionState.Ring }
@@ -140,18 +151,25 @@ class ForgottenAlarmTest {
         store.inner.commitFailure = DomainError.StorageFailure("disk full")
         val before = store.commitAttempts.get()
 
-        pass(Duration.ofSeconds(2))
+        // Exactly to the 30-minute deadline (not past it): the timeout's tick runs on ApplicationScope threads, and the
+        // retry it arms is 1 s after the tick returns. Passing more time here could also cover that retry, depending on
+        // how fast those threads are.
+        pass(Duration.ofSeconds(1))
         app.awaitUntil("the timeout's commit fails") { store.commitAttempts.get() == before + 1 }
+        app.awaitRetryArmed()
         // Without time passing nothing is retried: no busy loop (real time passes while the background threads run).
         repeat(IDLE_ROUNDS) {
             shadowOf(Looper.getMainLooper()).idle()
             Thread.sleep(IDLE_ROUND_MILLIS)
         }
         assertEquals(before + 1, store.commitAttempts.get(), "no retry before a second passes")
-        // Each second brings one retry.
+        // Each second brings one retry, and not a moment sooner.
         (2..RETRIES).forEach { attempt ->
-            pass(Duration.ofSeconds(1))
+            pass(Duration.ofMillis(999))
+            assertEquals(before + attempt - 1, store.commitAttempts.get(), "retry ${attempt - 1} not before a second")
+            pass(Duration.ofMillis(1))
             app.awaitUntil("retry ${attempt - 1}") { store.commitAttempts.get() == before + attempt }
+            app.awaitRetryArmed()
         }
 
         assertIs<SessionState.Ringing>(app.engine.state.value, "still ringing while the timeout cannot be saved")

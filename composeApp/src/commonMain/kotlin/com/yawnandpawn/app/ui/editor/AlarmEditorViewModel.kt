@@ -42,7 +42,7 @@ data class AlarmEditorArgs(
 
 /**
  * The Alarm editor (Story 1.8): loads the alarm with [alarmId] (or starts from the defaults), keeps the form, and
- * saves it through [SaveAlarm] as an enabled alarm. Back with unsaved changes asks "Discard changes?" first; on a
+ * saves it through [SaveAlarm] as an enabled alarm. Back (or Duplicate) with unsaved changes asks "Discard changes?" first; on a
  * sub-screen (Sound, Snooze) Back returns to the main screen. "Rings in ..." and "Rings tomorrow" are computed with
  * `nextOccurrence` from [clock] and [timeZoneProvider] (never the system clock). A stored alarm that cannot be read
  * closes the editor with [EditorEffect.OpenFailed] (Home shows "Couldn't open this alarm."); an alarm that was read
@@ -83,6 +83,9 @@ class AlarmEditorViewModel(
     /** A "Test alarm" is being armed (Story 1.18). */
     private var testInFlight = false
 
+    /** What "Discard" in the open "Discard changes?" dialog does. */
+    private var afterDiscard = AfterDiscard.Close
+
     init {
         // A preview never outlives the editor.
         addCloseable { sounds.stopPreview() }
@@ -113,11 +116,11 @@ class AlarmEditorViewModel(
             }
 
             EditorIntent.DiscardConfirmed -> {
-                close()
+                confirmDiscard()
             }
 
             EditorIntent.KeepEditing -> {
-                _state.update { it.copy(showDiscardDialog = false) }
+                hideDiscardDialog()
             }
 
             is EditorIntent.PaneOpened -> {
@@ -297,7 +300,7 @@ class AlarmEditorViewModel(
         val current = _state.value
         when {
             current.showDiscardDialog -> {
-                _state.update { it.copy(showDiscardDialog = false) }
+                hideDiscardDialog()
             }
 
             current.pane != EditorPane.Main -> {
@@ -306,13 +309,38 @@ class AlarmEditorViewModel(
                 _state.update { it.copy(pane = EditorPane.Main) }
             }
 
-            !current.isLoading && current.form != initialForm -> {
-                _state.update { it.copy(showDiscardDialog = true) }
+            hasUnsavedChanges() -> {
+                askDiscard(AfterDiscard.Close)
             }
 
             else -> {
                 close()
             }
+        }
+    }
+
+    private fun hasUnsavedChanges(): Boolean = _state.value.let { !it.isLoading && it.form != initialForm }
+
+    /** "Discard changes?" before [then]: Back closes the editor, Duplicate copies the stored alarm. */
+    private fun askDiscard(then: AfterDiscard) {
+        afterDiscard = then
+        _state.update { it.copy(showDiscardDialog = true) }
+    }
+
+    private fun hideDiscardDialog() {
+        afterDiscard = AfterDiscard.Close
+        _state.update { it.copy(showDiscardDialog = false) }
+    }
+
+    /** "Discard": does what asked the dialog (Back closes, Duplicate opens the copy of the stored alarm). */
+    private fun confirmDiscard() {
+        // A second tap after the dialog went (or a stale event) does nothing.
+        if (!_state.value.showDiscardDialog) return
+        val then = afterDiscard
+        hideDiscardDialog()
+        when (then) {
+            AfterDiscard.Close -> close()
+            AfterDiscard.Duplicate -> alarmId?.let(::duplicate)
         }
     }
 
@@ -323,21 +351,15 @@ class AlarmEditorViewModel(
 
     /**
      * The overflow menu of a stored alarm. Duplicate copies the stored alarm (not unsaved changes) and opens the copy;
-     * Delete asks with the stored time, then deletes (logged) and closes. While either runs nothing else is accepted.
+     * with unsaved changes it asks "Discard changes?" first (owner decision 2026-10-02). Delete asks with the stored
+     * time, then deletes (logged) and closes. While either runs nothing else is accepted; a failure shows "Couldn't save
+     * the alarm. Try again." (owner decision 2026-10-02).
      */
     private fun onMenuIntent(intent: EditorIntent) {
         val id = alarmId?.takeIf { _state.value.hasOverflowMenu } ?: return
         when (intent) {
             EditorIntent.DuplicateClicked -> {
-                _state.update { it.copy(isSaving = true) }
-                viewModelScope.launch {
-                    val result = actions.duplicate(id)
-                    if (result is Outcome.Success) {
-                        _effects.send(EditorEffect.OpenCopy(result.value.id))
-                    } else {
-                        _state.update { it.copy(isSaving = false) }
-                    }
-                }
+                if (hasUnsavedChanges()) askDiscard(AfterDiscard.Duplicate) else duplicate(id)
             }
 
             EditorIntent.DeleteClicked -> {
@@ -356,7 +378,12 @@ class AlarmEditorViewModel(
                     val result = actions.delete(id)
                     // Gone already (deleted elsewhere) also leaves nothing to edit.
                     val gone = result is Outcome.Success || result.errorOrNull() is DomainError.NotFound
-                    if (gone) close() else _state.update { it.copy(isSaving = false) }
+                    if (gone) {
+                        close()
+                    } else {
+                        _state.update { it.copy(isSaving = false) }
+                        _effects.send(EditorEffect.ShowSaveFailed)
+                    }
                 }
             }
 
@@ -365,7 +392,27 @@ class AlarmEditorViewModel(
             }
         }
     }
+
+    /** Copies the stored alarm [id] and opens the copy. */
+    private fun duplicate(id: String) {
+        _state.update { it.copy(isSaving = true) }
+        viewModelScope.launch {
+            when (val result = actions.duplicate(id)) {
+                is Outcome.Success -> {
+                    _effects.send(EditorEffect.OpenCopy(result.value.id))
+                }
+
+                is Outcome.Failure -> {
+                    _state.update { it.copy(isSaving = false) }
+                    _effects.send(EditorEffect.ShowSaveFailed)
+                }
+            }
+        }
+    }
 }
+
+/** What asked "Discard changes?": Back (close the editor) or the overflow menu's Duplicate (open the copy). */
+private enum class AfterDiscard { Close, Duplicate }
 
 /** Asks once for notifications; a failure to ask is logged (the Home banner still shows the missing permission). */
 @Suppress("TooGenericExceptionCaught")

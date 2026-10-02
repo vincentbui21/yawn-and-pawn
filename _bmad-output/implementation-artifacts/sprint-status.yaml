@@ -39,7 +39,7 @@ development_status:
   1-1-scaffold-the-kmp-project-with-a-quality-gate: done  # merged PR #1 2026-09-26
   1-2-ci-pipeline-and-dependency-and-permission-allowlists: done  # merged PR #2 2026-09-26
   1-3-generated-design-tokens-and-ppstheme: done  # merged PR #3 2026-09-26
-  1-4-google-play-console-setup-owner-task: in-progress  # 2026-09-26: personal dev account created (vincentbui2108@gmail.com, developer name "Yawn & Pawn", $25 paid); identity verification submitted (passport + Helen invoice), awaiting Google; phone verification unlocks after approval. Remaining: app record, payments profile check, internal track upload, license testers (after Story 1.1).
+  1-4-google-play-console-setup-owner-task: done  # 2026-10-02: internal testing release installed from the Play join link on the owner's Oppo A96 (Play App Signing, license tester, upload key)
   1-5-spike-s1-pay-for-a-snooze-over-the-lock-screen: backlog
   1-6-time-ports-deadlines-and-alarm-occurrence-math-in-core: done  # merged PR #4 2026-09-27
   1-7-store-alarms-in-app-db: done  # merged PR #5 2026-09-27

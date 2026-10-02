@@ -163,6 +163,9 @@ class HomeScreenshotTest {
     fun `open failed snackbar in Light`() = home("home_open_failed_light", HomeSamples.openFailed, PpsThemeMode.Light)
 
     @Test
+    fun `save failed snackbar in Light`() = home("home_save_failed_light", HomeSamples.saveFailed, PpsThemeMode.Light)
+
+    @Test
     fun `missed note in Light`() = home("home_missed_note_light", HomeSamples.missedNote, PpsThemeMode.Light)
 
     @Test

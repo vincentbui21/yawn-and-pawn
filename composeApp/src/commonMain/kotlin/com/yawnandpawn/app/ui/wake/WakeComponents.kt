@@ -99,6 +99,7 @@ import com.yawnandpawn.app.ui.resources.wake_reason_payment_pending
 import com.yawnandpawn.app.ui.resources.wake_reason_price_cap
 import com.yawnandpawn.app.ui.resources.wake_reason_prices_not_loaded
 import com.yawnandpawn.app.ui.resources.wake_snooze_price
+import com.yawnandpawn.app.ui.resources.wake_snooze_prices_not_loaded
 import com.yawnandpawn.app.ui.resources.wake_snooze_unavailable
 import com.yawnandpawn.app.ui.resources.wake_snooze_unavailable_talkback
 import com.yawnandpawn.app.ui.resources.wake_stranded_refund
@@ -252,11 +253,21 @@ fun SnoozeButton(
     }
 }
 
+/** The visible label; "prices not loaded yet" alone reads "Prices not loaded yet" on one line (owner decision 2026-10-02). */
 @Composable
 private fun disabledSnoozeLabel(offer: SnoozeOffer): String =
-    when (offer) {
-        is SnoozeOffer.Unavailable -> stringResource(Res.string.wake_snooze_unavailable, reasonText(offer.reason))
-        else -> disabledSnoozeReason(offer)
+    when {
+        offer == SnoozeOffer.Unavailable(SnoozeUnavailableReason.PricesNotLoaded) -> {
+            stringResource(Res.string.wake_snooze_prices_not_loaded)
+        }
+
+        offer is SnoozeOffer.Unavailable -> {
+            stringResource(Res.string.wake_snooze_unavailable, reasonText(offer.reason))
+        }
+
+        else -> {
+            disabledSnoozeReason(offer)
+        }
     }
 
 @Composable

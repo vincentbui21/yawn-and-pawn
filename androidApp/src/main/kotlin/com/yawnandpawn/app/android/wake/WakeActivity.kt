@@ -50,7 +50,7 @@ import kotlin.time.Duration.Companion.seconds
  * on API 26), keeps the screen on, and Back does nothing (Home and Recents still work).
  *
  * It renders from in-memory state only, with no loading state and no repository call: the engine's `state` mapped by
- * [ringingUiState], with the snooze the [SnoozeAvailabilityPolicy] allows ("Snooze unavailable: prices not loaded yet",
+ * [ringingUiState], with the snooze the [SnoozeAvailabilityPolicy] allows ("Prices not loaded yet",
  * or "Test · no charge" for a test session). The emergency ring shows its own alarm time. Opened just before the
  * session starts (the service posts the ringing notification first), it shows the notification's alarm time and waits.
  *

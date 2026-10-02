@@ -44,6 +44,7 @@ import com.yawnandpawn.app.testing.FakeSoundPreview
 import com.yawnandpawn.app.testing.FakeTestAlarmStore
 import com.yawnandpawn.app.testing.FakeTimeChangeSignal
 import com.yawnandpawn.app.testing.FakeTimeZoneProvider
+import com.yawnandpawn.app.testing.anAlarm
 import com.yawnandpawn.app.ui.editor.AlarmEditorRoute
 import com.yawnandpawn.app.ui.editor.AlarmEditorScreen
 import com.yawnandpawn.app.ui.editor.AlarmEditorViewModel
@@ -61,6 +62,7 @@ import com.yawnandpawn.app.ui.home.HomeViewModel
 import com.yawnandpawn.app.ui.shell.AppShell
 import com.yawnandpawn.app.ui.shell.AppTab
 import com.yawnandpawn.app.ui.theme.PpsThemeMode
+import kotlinx.datetime.LocalTime
 import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -494,6 +496,44 @@ class AlarmScreensSemanticsTest {
         home(HomeSamples.openFailed) {
             composeRule.onNodeWithText("Couldn't open this alarm.").assertExists()
         }
+
+    @Test
+    fun `a change that could not be saved leaves Couldn't save on Home`() =
+        home(HomeSamples.saveFailed) {
+            composeRule.onNodeWithText("Couldn't save the alarm. Try again.").assertExists()
+            composeRule.onNodeWithText("Couldn't open this alarm.").assertDoesNotExist()
+        }
+
+    @Test
+    fun `a switch that cannot be saved goes back and Home says Couldn't save`() {
+        val repository = FakeAlarmRepository(listOf(anAlarm(time = LocalTime(6, 30))))
+        val viewModel =
+            HomeViewModel(
+                repository,
+                actions(repository),
+                FakeClock(),
+                FakeTimeZoneProvider(),
+                FakeTimeChangeSignal(),
+                MissedNotes(FakeSessionHistoryRepository(), FakeMissedNoteDismissals()),
+                FakeReliabilityProbe(),
+                FakeReliabilitySettings(),
+            )
+        withScreen(
+            PpsThemeMode.Light,
+            content = { HomeRoute(onOpenEditor = {}, openFailed = false, onOpenFailedShown = {}, viewModel = viewModel) },
+        ) {
+            val switch = composeRule.onNodeWithContentDescription("6:30 AM alarm")
+            switch.assertIsOn()
+            repository.failure = DomainError.StorageFailure("disk full")
+
+            switch.performClick()
+
+            composeRule.waitUntil(timeoutMillis = 5_000) {
+                composeRule.onAllNodes(hasText("Couldn't save the alarm. Try again.")).fetchSemanticsNodes().isNotEmpty()
+            }
+            switch.assertIsOn()
+        }
+    }
 
     @Test
     fun `a stored alarm's editor has a More options button with Duplicate and Delete, a new alarm has none`() {

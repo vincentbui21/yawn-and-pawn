@@ -40,7 +40,6 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import com.yawnandpawn.app.ui.checks.displayName
 import com.yawnandpawn.app.ui.checks.icon
-import com.yawnandpawn.app.ui.components.AppSnackbar
 import com.yawnandpawn.app.ui.components.BannerWarning
 import com.yawnandpawn.app.ui.components.ConfirmDialog
 import com.yawnandpawn.app.ui.components.DismissButton
@@ -80,7 +79,6 @@ import com.yawnandpawn.app.ui.resources.home_fallback_banner
 import com.yawnandpawn.app.ui.resources.home_fix
 import com.yawnandpawn.app.ui.resources.home_load_failed
 import com.yawnandpawn.app.ui.resources.home_missed_note
-import com.yawnandpawn.app.ui.resources.home_open_failed
 import com.yawnandpawn.app.ui.resources.home_paid_week
 import com.yawnandpawn.app.ui.resources.home_reliability_banner
 import com.yawnandpawn.app.ui.resources.home_reregister
@@ -123,12 +121,7 @@ fun HomeScreen(
         } else {
             HomeList(state = state, is24Hour = is24Hour, onIntent = onIntent, listState = listState)
         }
-        if (state.openFailed) {
-            AppSnackbar(
-                text = stringResource(Res.string.home_open_failed),
-                modifier = Modifier.align(Alignment.BottomCenter).padding(bottom = LocalNavBarClearance.current),
-            )
-        }
+        HomeSnackbar(state = state, modifier = Modifier.align(Alignment.BottomCenter).padding(bottom = LocalNavBarClearance.current))
     }
     state.disableDialog?.let { dialog -> DisableDialog(dialog = dialog, is24Hour = is24Hour, onIntent = onIntent) }
     state.deleteDialog?.let { dialog ->

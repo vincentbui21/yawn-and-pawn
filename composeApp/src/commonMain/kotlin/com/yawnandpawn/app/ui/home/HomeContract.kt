@@ -63,6 +63,11 @@ data class HomeUiState(
     val deleteDialog: DeleteAlarmDialog? = null,
     /** The editor closed because its alarm could not be read: the snackbar "Couldn't open this alarm.". */
     val openFailed: Boolean = false,
+    /**
+     * A switch, Duplicate or Delete could not be stored: the snackbar "Couldn't save the alarm. Try again." (owner
+     * decision 2026-10-02; a switch has already gone back to the stored value).
+     */
+    val saveFailed: Boolean = false,
 )
 
 /** Everything the user can do on Home. */

@@ -260,7 +260,7 @@ sealed interface EditorIntent {
 
     data object TestAlarmClicked : EditorIntent
 
-    /** "Duplicate" in the overflow menu: copies the stored alarm and opens the copy. */
+    /** "Duplicate" in the overflow menu: copies the stored alarm and opens the copy (unsaved changes ask "Discard changes?" first). */
     data object DuplicateClicked : EditorIntent
 
     /** "Delete" in the overflow menu: asks first. */

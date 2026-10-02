@@ -3,6 +3,7 @@ package com.yawnandpawn.app.data
 import android.content.Context
 import com.yawnandpawn.app.core.alarm.AlarmRepository
 import com.yawnandpawn.app.core.alarm.RequestCodeSequence
+import com.yawnandpawn.app.core.history.MissedNoteDismissals
 import com.yawnandpawn.app.core.history.SessionHistoryRepository
 import com.yawnandpawn.app.core.session.ActiveSessionStore
 import com.yawnandpawn.app.data.alarm.RoomAlarmRepository
@@ -13,13 +14,15 @@ import com.yawnandpawn.app.data.db.buildAppDatabase
 import com.yawnandpawn.app.data.db.buildRuntimeDatabase
 import com.yawnandpawn.app.data.history.RoomSessionHistoryRepository
 import com.yawnandpawn.app.data.session.RoomActiveSessionStore
+import com.yawnandpawn.app.data.settings.DataStoreMissedNoteDismissals
+import com.yawnandpawn.app.data.settings.SettingsDataStore
 import org.koin.core.module.dsl.onClose
 import org.koin.core.module.dsl.withOptions
 import org.koin.dsl.module
 
 /**
- * Koin bindings of :data (AD-13). Needs the Android `Context` (registered by `androidContext` in the app) and the
- * `Clock` port (from the app's time module).
+ * Koin bindings of :data (AD-13). Needs the Android `Context` (registered by `androidContext` in the app), the
+ * `Clock` port (from the app's time module) and the `Logger` (for the settings DataStore's read errors).
  */
 val dataModule =
     module {
@@ -36,4 +39,7 @@ val dataModule =
         single { buildRuntimeDatabase(get<Context>()) } withOptions { onClose { it?.close() } }
         single { get<RuntimeDatabase>().activeSessionDao() }
         single<ActiveSessionStore> { RoomActiveSessionStore(get(), get()) }
+        // The settings DataStore (Story 1.16), device-protected; released when Koin stops, like the databases.
+        single { SettingsDataStore(get<Context>()) } withOptions { onClose { it?.close() } }
+        single<MissedNoteDismissals> { DataStoreMissedNoteDismissals(get<SettingsDataStore>().store, get()) }
     }

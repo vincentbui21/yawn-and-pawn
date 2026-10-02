@@ -19,6 +19,7 @@ import com.yawnandpawn.app.core.alarm.DuplicateAlarm
 import com.yawnandpawn.app.core.alarm.RearmOnFire
 import com.yawnandpawn.app.core.alarm.SaveAlarm
 import com.yawnandpawn.app.core.alarm.SetAlarmEnabled
+import com.yawnandpawn.app.core.history.MissedNotes
 import com.yawnandpawn.app.core.id.IdGenerator
 import com.yawnandpawn.app.core.id.UuidV4IdGenerator
 import com.yawnandpawn.app.core.log.Logger
@@ -77,6 +78,8 @@ val appModule =
         // The only writer of session history (Story 1.13, AD-18), over the Room repository from dataModule; the engine
         // drives it itself, so the runner never sees the history effects.
         single { SessionRecorder(get()) }
+        // Home's missed note (Story 1.16): the latest Missed history row, unless dismissed (settings DataStore).
+        single { MissedNotes(get(), get()) }
         single { SessionEngine(get(), get(), get(), get(), get(), get(), get(), get()) }
     }
 

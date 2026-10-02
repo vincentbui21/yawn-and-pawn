@@ -4,6 +4,9 @@ import com.yawnandpawn.app.core.error.DomainError
 import com.yawnandpawn.app.core.error.Outcome
 import com.yawnandpawn.app.core.history.SessionHistoryRepository
 import com.yawnandpawn.app.core.history.SessionHistoryRow
+import com.yawnandpawn.app.core.history.SessionOutcome
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.map
 import kotlin.coroutines.cancellation.CancellationException
 
 /**
@@ -17,6 +20,10 @@ class RoomSessionHistoryRepository(
 
     // Row mapping runs inside storage { } too: an unreadable row (an unknown outcome) is a StorageFailure.
     override suspend fun find(sessionId: String): Outcome<SessionHistoryRow?, DomainError> = storage { dao.findById(sessionId)?.toRow() }
+
+    // A read only. An unreadable row (or a failing database) throws into the flow; Home catches it.
+    override fun observeLatestMissed(): Flow<SessionHistoryRow?> =
+        dao.observeLatestWithOutcome(SessionOutcome.Missed.storedName()).map { it?.toRow() }
 
     // Same boundary as RoomAlarmRepository: every storage exception is a StorageFailure, cancellation propagates.
     @Suppress("TooGenericExceptionCaught")

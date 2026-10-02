@@ -11,6 +11,8 @@ import com.yawnandpawn.app.core.time.Clock
 import com.yawnandpawn.app.core.time.MonotonicClock
 import com.yawnandpawn.app.core.time.TimeSnapshot
 import kotlinx.coroutines.CompletableDeferred
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.emptyFlow
 import kotlin.time.Duration
 import kotlin.time.Duration.Companion.milliseconds
 import kotlin.time.Instant
@@ -139,4 +141,7 @@ internal class InMemoryHistory : SessionHistoryRepository {
         findFailure?.let { return Outcome.Failure(it) }
         return Outcome.Success(rows[sessionId])
     }
+
+    // The engine never reads it.
+    override fun observeLatestMissed(): Flow<SessionHistoryRow?> = emptyFlow()
 }

@@ -46,6 +46,8 @@ data class HomeUiState(
     val reliabilityProblem: Boolean = false,
     /** A session stopped after 30 minutes with no interaction: the missed note, until dismissed. */
     val missedAlarmAt: LocalTime? = null,
+    /** The session the missed note is about, so "Dismiss" dismisses exactly that one (null in previews). */
+    val missedSessionId: String? = null,
     /** Fallback check used 3 times in 7 days: the info banner suggesting to re-register this check. */
     val reregisterCheck: CheckType? = null,
     /** Onboarding's test alarm was skipped: "Ring a test alarm with your phone locked to check it works." until dismissed. */
@@ -78,7 +80,10 @@ sealed interface HomeIntent {
 
     data object FixSettings : HomeIntent
 
-    data object MissedNoteDismissed : HomeIntent
+    /** "Dismiss" on the missed note of [sessionId], the session the note showed. */
+    data class MissedNoteDismissed(
+        val sessionId: String?,
+    ) : HomeIntent
 
     data object TestNoteDismissed : HomeIntent
 

@@ -32,6 +32,8 @@ kotlin {
             implementation(project(":core"))
             implementation(libs.koin.core)
             implementation(libs.room3.runtime)
+            // Story 1.16: the settings Preferences DataStore (device-protected), created with createWithPath.
+            implementation(libs.datastore.preferences)
         }
         androidMain.dependencies {
             implementation(libs.sqlite.framework)

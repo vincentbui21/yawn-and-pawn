@@ -10,7 +10,9 @@ import android.os.Vibrator
 import android.os.VibratorManager
 import androidx.test.core.app.ApplicationProvider
 import com.yawnandpawn.app.StopAppRule
+import com.yawnandpawn.app.android.ApplicationScope
 import com.yawnandpawn.app.android.sound.LibrarySoundResolver
+import com.yawnandpawn.app.awaitChildren
 import com.yawnandpawn.app.core.alarm.AlarmFired
 import com.yawnandpawn.app.core.alarm.RequestCodes
 import com.yawnandpawn.app.core.error.DomainError
@@ -35,9 +37,11 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.test.StandardTestDispatcher
 import kotlinx.datetime.TimeZone
+import org.junit.Before
 import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
+import org.koin.core.context.GlobalContext
 import org.robolectric.RobolectricTestRunner
 import org.robolectric.Shadows.shadowOf
 import kotlin.math.roundToInt
@@ -91,6 +95,14 @@ class WakeRuntimeTest {
 
     private val session: SessionData = aSession()
     private val ringing = SessionState.Ringing(session)
+
+    /**
+     * This test's [volume] shares the device-protected "wake_runtime" preferences with the app's own player. The app's
+     * start (session restore, then `restoreVolumeIfIdle` when Idle) runs on ApplicationScope threads; on a slow machine it
+     * could restore and forget the user volume this test's ring saved, so the ring's end then had nothing to restore.
+     */
+    @Before
+    fun awaitAppStart() = GlobalContext.get().get<ApplicationScope>().awaitChildren()
 
     private fun enter(next: SessionState) {
         state = next

@@ -25,10 +25,13 @@ import androidx.compose.ui.test.performTouchInput
 import androidx.compose.ui.unit.dp
 import com.yawnandpawn.app.StopAppRule
 import com.yawnandpawn.app.core.error.DomainError
+import com.yawnandpawn.app.core.history.MissedNotes
 import com.yawnandpawn.app.testing.AlarmUseCasesFixture
 import com.yawnandpawn.app.testing.FakeAlarmRepository
 import com.yawnandpawn.app.testing.FakeClock
 import com.yawnandpawn.app.testing.FakeLogger
+import com.yawnandpawn.app.testing.FakeMissedNoteDismissals
+import com.yawnandpawn.app.testing.FakeSessionHistoryRepository
 import com.yawnandpawn.app.testing.FakeSoundLibrary
 import com.yawnandpawn.app.testing.FakeSoundPreview
 import com.yawnandpawn.app.testing.FakeTimeChangeSignal
@@ -476,7 +479,9 @@ class AlarmScreensSemanticsTest {
     @Test
     fun `an editor open failure passed to the Home route shows the snackbar and is reported as shown`() {
         val repository = FakeAlarmRepository()
-        val viewModel = HomeViewModel(repository, actions(repository), FakeClock(), FakeTimeZoneProvider(), FakeTimeChangeSignal())
+        val missedNotes = MissedNotes(FakeSessionHistoryRepository(), FakeMissedNoteDismissals())
+        val viewModel =
+            HomeViewModel(repository, actions(repository), FakeClock(), FakeTimeZoneProvider(), FakeTimeChangeSignal(), missedNotes)
         var shown = false
         withScreen(
             PpsThemeMode.Light,

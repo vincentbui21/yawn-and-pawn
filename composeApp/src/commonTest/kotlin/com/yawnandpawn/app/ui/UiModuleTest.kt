@@ -1,6 +1,7 @@
 package com.yawnandpawn.app.ui
 
 import com.yawnandpawn.app.core.alarm.AlarmRepository
+import com.yawnandpawn.app.core.history.MissedNotes
 import com.yawnandpawn.app.core.log.Logger
 import com.yawnandpawn.app.core.sound.SoundLibrary
 import com.yawnandpawn.app.core.sound.SoundPreview
@@ -11,6 +12,8 @@ import com.yawnandpawn.app.testing.AlarmUseCasesFixture
 import com.yawnandpawn.app.testing.FakeAlarmRepository
 import com.yawnandpawn.app.testing.FakeClock
 import com.yawnandpawn.app.testing.FakeLogger
+import com.yawnandpawn.app.testing.FakeMissedNoteDismissals
+import com.yawnandpawn.app.testing.FakeSessionHistoryRepository
 import com.yawnandpawn.app.testing.FakeSoundLibrary
 import com.yawnandpawn.app.testing.FakeSoundPreview
 import com.yawnandpawn.app.testing.FakeTimeChangeSignal
@@ -62,6 +65,7 @@ class UiModuleTest {
                     factory { get<AlarmUseCasesFixture>().setEnabled }
                     factory { get<AlarmUseCasesFixture>().delete }
                     factory { get<AlarmUseCasesFixture>().duplicate }
+                    single { MissedNotes(FakeSessionHistoryRepository(), FakeMissedNoteDismissals()) }
                 }
             val koin = koinApplication { modules(ports, uiModule) }.koin
 

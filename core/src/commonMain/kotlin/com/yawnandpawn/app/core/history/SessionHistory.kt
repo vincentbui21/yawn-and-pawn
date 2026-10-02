@@ -2,6 +2,7 @@ package com.yawnandpawn.app.core.history
 
 import com.yawnandpawn.app.core.error.DomainError
 import com.yawnandpawn.app.core.error.Outcome
+import kotlinx.coroutines.flow.Flow
 import kotlin.time.Instant
 
 /** How a session ended, as Progress (Epic 6) shows it. Stored as a stable string by the `app.db` adapter. */
@@ -60,4 +61,10 @@ interface SessionHistoryRepository {
 
     /** The row of [sessionId], or null when there is none. */
     suspend fun find(sessionId: String): Outcome<SessionHistoryRow?, DomainError>
+
+    /**
+     * The [SessionOutcome.Missed] row that ended last, or null; emits again after every change (Home's missed note,
+     * Story 1.16). A read only. A storage failure is thrown into the flow; the collector catches it.
+     */
+    fun observeLatestMissed(): Flow<SessionHistoryRow?>
 }

@@ -5,7 +5,12 @@ import com.yawnandpawn.app.core.error.Outcome
 import com.yawnandpawn.app.core.history.SessionHistoryRepository
 import com.yawnandpawn.app.core.history.SessionHistoryRow
 import com.yawnandpawn.app.core.history.SessionOutcome
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.update
 import kotlin.time.Duration.Companion.minutes
+import kotlin.time.Instant
 
 /**
  * In-memory [SessionHistoryRepository] with the rules of `RoomSessionHistoryRepository`: one row per session id, an
@@ -15,9 +20,13 @@ import kotlin.time.Duration.Companion.minutes
 class FakeSessionHistoryRepository : SessionHistoryRepository {
     private val stored = linkedMapOf<String, SessionHistoryRow>()
     private val written = mutableListOf<SessionHistoryRow>()
+    private val changes = MutableStateFlow(0)
 
     var upsertFailure: DomainError? = null
     var findFailure: DomainError? = null
+
+    /** Set to make [observeLatestMissed] throw it, like a failing database. */
+    var observeFailure: Throwable? = null
 
     /** The stored rows, in the order their sessions were first written. */
     val rows: List<SessionHistoryRow>
@@ -30,6 +39,7 @@ class FakeSessionHistoryRepository : SessionHistoryRepository {
         upsertFailure?.let { return Outcome.Failure(it) }
         stored[row.sessionId] = row
         written += row
+        changes.update { it + 1 }
         return Outcome.Success(Unit)
     }
 
@@ -37,6 +47,13 @@ class FakeSessionHistoryRepository : SessionHistoryRepository {
         findFailure?.let { return Outcome.Failure(it) }
         return Outcome.Success(stored[sessionId])
     }
+
+    /** Like the Room query: the Missed row with the latest end time, again after every upsert. */
+    override fun observeLatestMissed(): Flow<SessionHistoryRow?> =
+        changes.map {
+            observeFailure?.let { throw it }
+            stored.values.filter { it.outcome == SessionOutcome.Missed }.maxByOrNull { it.endedAt ?: Instant.DISTANT_PAST }
+        }
 }
 
 /** Builds a finished [SessionHistoryRow] at [DEFAULT_FAKE_INSTANT]: on time, one placeholder step, 3 minutes to complete. */

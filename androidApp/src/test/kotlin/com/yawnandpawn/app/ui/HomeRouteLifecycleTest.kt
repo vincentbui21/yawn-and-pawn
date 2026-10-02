@@ -8,13 +8,16 @@ import androidx.lifecycle.LifecycleOwner
 import androidx.lifecycle.LifecycleRegistry
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import com.yawnandpawn.app.StopAppRule
+import com.yawnandpawn.app.core.history.MissedNotes
 import com.yawnandpawn.app.core.reliability.ReliabilityStatus
 import com.yawnandpawn.app.testing.AlarmUseCasesFixture
 import com.yawnandpawn.app.testing.FakeAlarmRepository
 import com.yawnandpawn.app.testing.FakeClock
 import com.yawnandpawn.app.testing.FakeLogger
+import com.yawnandpawn.app.testing.FakeMissedNoteDismissals
 import com.yawnandpawn.app.testing.FakeReliabilityProbe
 import com.yawnandpawn.app.testing.FakeReliabilitySettings
+import com.yawnandpawn.app.testing.FakeSessionHistoryRepository
 import com.yawnandpawn.app.testing.FakeTimeChangeSignal
 import com.yawnandpawn.app.testing.FakeTimeZoneProvider
 import com.yawnandpawn.app.ui.home.AlarmActions
@@ -61,6 +64,7 @@ class HomeRouteLifecycleTest {
                 FakeClock(),
                 FakeTimeZoneProvider(),
                 FakeTimeChangeSignal(),
+                MissedNotes(FakeSessionHistoryRepository(), FakeMissedNoteDismissals()),
                 probe,
                 FakeReliabilitySettings(),
             )

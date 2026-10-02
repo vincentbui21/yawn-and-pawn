@@ -158,20 +158,22 @@ class HomeViewModel(
                 intent.sessionId?.let(::dismissMissed)
             }
 
-            // A setting may have changed while Home was away (the user came back from "Fix").
-            HomeIntent.Started -> {
-                checkReliability()
+            else -> {
+                onReliabilityIntent(intent)
             }
+        }
+    }
+
+    /** The reliability banner (Story 1.19); other intents (hero, session panel, lock dialog) arrive with their stories. */
+    private fun onReliabilityIntent(intent: HomeIntent) {
+        when (intent) {
+            // A setting may have changed while Home was away (the user came back from "Fix").
+            HomeIntent.Started -> checkReliability()
 
             // The setting that is off now, not when Home last checked.
-            HomeIntent.FixSettings -> {
-                checkReliability().firstFailing?.let(reliabilitySettings::open)
-            }
+            HomeIntent.FixSettings -> checkReliability().firstFailing?.let(reliabilitySettings::open)
 
-            // The hero, notices, session panel and commitment-lock dialog arrive with their own stories.
-            else -> {
-                Unit
-            }
+            else -> Unit
         }
     }
 

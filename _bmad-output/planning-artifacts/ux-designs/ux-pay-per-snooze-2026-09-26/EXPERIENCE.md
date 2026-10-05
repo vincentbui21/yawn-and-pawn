@@ -109,7 +109,7 @@ All strings live in resources (NFR-10). `{price}`, `{nextPrice}`, `{minutes}`, `
 | Editor, rows (owner decision 2026-09-27) | "Alarm name" · "Sound" · "Vibration" · "Wake-up check" · "Quiet time" · "Snooze" · "Motivation" · "Test alarm" |
 | Editor, time wheel unit labels | "h" · "min" (owner decision 2026-09-27) |
 | Editor, label too long | "Keep the label under 40 characters." |
-| Editor, unsaved changes dialog | Title "Discard changes?" · actions "Discard" / "Keep editing" |
+| Editor, unsaved changes dialog | Title "Discard changes?" · actions "Discard" / "Keep editing". Asked on Back and before the overflow menu's "Duplicate" (owner decision 2026-10-02: "Discard" duplicates the saved alarm and opens the copy; "Keep editing" does nothing) |
 | Editor, volume ramp switch | "Gradually increase volume" (no starting-volume slider, owner decision 2026-09-27: on, the ramp starts at 20% and rises to the set volume over 30 s; off, it starts at the set volume) |
 | Sound picker, source captions | "Built-in" · "System" |
 | Sound picker, preview (TalkBack) | "Play preview" / "Stop preview" |
@@ -129,7 +129,8 @@ All strings live in resources (NFR-10). `{price}`, `{nextPrice}`, `{minutes}`, `
 | Ringing, primary | "I'm up" |
 | Ringing, snooze | "Snooze · {price}" |
 | Ringing, session line | "Snooze {n} of {max} · {paid} paid this morning" |
-| Snooze unavailable | "Snooze unavailable: {reason}" where reason is one of: offline · max snoozes reached · price cap reached · payment pending · prices not loaded yet |
+| Snooze unavailable | "Snooze unavailable: {reason}" where reason is one of: offline · max snoozes reached · price cap reached · payment pending |
+| Snooze unavailable, prices not loaded | "Prices not loaded yet" (one line; owner decision 2026-10-02). TalkBack keeps "Snooze unavailable, prices not loaded yet" |
 | Snooze unavailable, stranded payment | "An earlier {price} payment is being refunded" |
 | Before first unlock (disabled Snooze label) | "Unlock your phone to snooze" |
 | Test alarm snooze | "Test · no charge" |
@@ -164,6 +165,7 @@ All strings live in resources (NFR-10). `{price}`, `{nextPrice}`, `{minutes}`, `
 | Home empty | "No alarms yet." · "Add your first alarm" |
 | Home, alarm list failed to load | "Couldn't load your alarms." · "Try again" (sprint-change-proposal-2026-10-01) |
 | Alarm editor, alarm failed to open (snackbar) | "Couldn't open this alarm." (sprint-change-proposal-2026-10-01) |
+| Home and editor, alarm change not saved (snackbar) | "Couldn't save the alarm. Try again." when Save, Duplicate, Delete or a card's on/off switch cannot be stored; the switch goes back to the stored value (owner decision 2026-10-02) |
 | Purchase history empty | "No snoozes paid. Keep it that way." |
 | Recordings empty | "Record a message for your morning self." |
 | Math check, progress | "Problem {n} of {count}" |

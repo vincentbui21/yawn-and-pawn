@@ -7,7 +7,9 @@ import com.yawnandpawn.app.core.alarm.AlarmListOrder
 import com.yawnandpawn.app.core.alarm.AlarmRepository
 import com.yawnandpawn.app.core.alarm.durationUntil
 import com.yawnandpawn.app.core.alarm.nextOccurrence
+import com.yawnandpawn.app.core.error.DomainError
 import com.yawnandpawn.app.core.error.Outcome
+import com.yawnandpawn.app.core.error.errorOrNull
 import com.yawnandpawn.app.core.history.MissedNotes
 import com.yawnandpawn.app.core.history.SessionHistoryRow
 import com.yawnandpawn.app.core.reliability.ReliabilityProbe
@@ -49,8 +51,9 @@ import kotlin.time.Instant
  * soonest enabled one, computed with the scheduler's `nextOccurrence` and `durationUntil` from [clock] and
  * [timeZoneProvider]. The countdown is recomputed on every [timeChanges] signal (each minute, a time set, a zone change)
  * and when Home resumes. A switch calls `SetAlarmEnabled` at once and shows the new value until the store confirms it
- * (or reverts on failure); Duplicate opens the copy in the editor; Delete asks first and is logged. Navigation goes out
- * through [effects]. The missed note (Story 1.16) shows the alarm time of the latest Missed session from [missedNotes]
+ * (or reverts on failure); Duplicate opens the copy in the editor; Delete asks first and is logged. A switch, Duplicate
+ * or Delete that cannot be stored shows "Couldn't save the alarm. Try again." (owner decision 2026-10-02). Navigation
+ * goes out through [effects]. The missed note (Story 1.16) shows the alarm time of the latest Missed session from [missedNotes]
  * until "Dismiss" stores its dismissal. The reliability banner (Story 1.19) shows while [reliability] finds a setting
  * off; it is checked when Home starts and resumes (a permission dialog only pauses it), and "Fix" checks again and
  * opens the setting that is off now through [reliabilitySettings].
@@ -145,7 +148,7 @@ class HomeViewModel(
             }
 
             HomeIntent.EditorOpenFailed -> {
-                showOpenFailed()
+                showMessage(HomeMessage.OpenFailed)
             }
 
             // A permission dialog answered over Home only pauses it, so a resume checks the settings too.
@@ -185,6 +188,8 @@ class HomeViewModel(
         local.update { it.copy(toggles = it.toggles + (id to PendingToggle(enabled, token))) }
         viewModelScope.launch {
             val result = actions.setEnabled(id, enabled)
+            // A newer toggle of the same alarm decides what the switch (and the snackbar) shows.
+            val ownsSwitch = local.value.toggles[id]?.token == token
             local.update { ui ->
                 // A newer toggle of the same alarm owns the switch now.
                 val pending = ui.toggles[id]?.takeIf { it.token == token } ?: return@update ui
@@ -195,6 +200,7 @@ class HomeViewModel(
                     is Outcome.Failure -> ui.copy(toggles = ui.toggles - id)
                 }
             }
+            if (ownsSwitch && result is Outcome.Failure) showMessage(HomeMessage.SaveFailed)
         }
     }
 
@@ -203,8 +209,10 @@ class HomeViewModel(
 
     private fun duplicate(id: String) {
         viewModelScope.launch {
-            val result = actions.duplicate(id)
-            if (result is Outcome.Success) _effects.send(HomeEffect.OpenEditor(result.value.id))
+            when (val result = actions.duplicate(id)) {
+                is Outcome.Success -> _effects.send(HomeEffect.OpenEditor(result.value.id))
+                is Outcome.Failure -> showMessage(HomeMessage.SaveFailed)
+            }
         }
     }
 
@@ -217,7 +225,11 @@ class HomeViewModel(
         // Cleared first, so a second tap on "Delete" cannot delete (and log) twice.
         val dialog = local.value.deleteDialog ?: return
         local.update { it.copy(deleteDialog = null) }
-        viewModelScope.launch { actions.delete(dialog.alarmId) }
+        viewModelScope.launch {
+            // Gone already (deleted elsewhere) is what the user asked for.
+            val error = actions.delete(dialog.alarmId).errorOrNull()
+            if (error != null && error !is DomainError.NotFound) showMessage(HomeMessage.SaveFailed)
+        }
     }
 
     /**
@@ -231,13 +243,14 @@ class HomeViewModel(
         }
     }
 
-    private fun showOpenFailed() {
-        local.update { it.copy(openFailed = true) }
+    /** Shows the snackbar [message] for [SNACKBAR_MILLIS]; a newer message replaces the one showing. */
+    private fun showMessage(message: HomeMessage) {
+        local.update { it.copy(message = message) }
         snackbarJob?.cancel()
         snackbarJob =
             viewModelScope.launch {
                 delay(SNACKBAR_MILLIS)
-                local.update { it.copy(openFailed = false) }
+                local.update { it.copy(message = null) }
             }
     }
 
@@ -253,7 +266,8 @@ class HomeViewModel(
             StoredAlarms.Failed -> {
                 HomeUiState(
                     loadFailed = true,
-                    openFailed = ui.openFailed,
+                    openFailed = ui.message == HomeMessage.OpenFailed,
+                    saveFailed = ui.message == HomeMessage.SaveFailed,
                     missedAlarmAt = missedAlarmAt,
                     missedSessionId = missedSessionId,
                     reliabilityProblem = !ui.reliability.allOk,
@@ -267,7 +281,8 @@ class HomeViewModel(
                     nextAlarm = nextAlarm(alarms.filterIndexed { index, _ -> cards[index].enabled }),
                     alarms = cards,
                     deleteDialog = ui.deleteDialog?.takeIf { dialog -> cards.any { it.id == dialog.alarmId } },
-                    openFailed = ui.openFailed,
+                    openFailed = ui.message == HomeMessage.OpenFailed,
+                    saveFailed = ui.message == HomeMessage.SaveFailed,
                     missedAlarmAt = missedAlarmAt,
                     missedSessionId = missedSessionId,
                     reliabilityProblem = !ui.reliability.allOk,
@@ -288,7 +303,7 @@ class HomeViewModel(
     private companion object {
         const val STOP_TIMEOUT_MILLIS = 5_000L
 
-        /** How long "Couldn't open this alarm." shows (`snackbar`). */
+        /** How long "Couldn't open this alarm." or "Couldn't save the alarm. Try again." shows (`snackbar`). */
         const val SNACKBAR_MILLIS = 4_000L
     }
 }
@@ -319,11 +334,21 @@ private data class PendingToggle(
     val confirmedAt: Instant? = null,
 )
 
+/** Home's snackbars; one shows at a time. */
+private enum class HomeMessage {
+    /** The editor could not read its alarm: "Couldn't open this alarm.". */
+    OpenFailed,
+
+    /** A switch, Duplicate or Delete could not be stored: "Couldn't save the alarm. Try again.". */
+    SaveFailed,
+}
+
 /** Home state that is not in the store. */
 private data class LocalState(
     val toggles: Map<String, PendingToggle> = emptyMap(),
     val deleteDialog: DeleteAlarmDialog? = null,
-    val openFailed: Boolean = false,
+    /** The snackbar showing, if any. */
+    val message: HomeMessage? = null,
     /** What the reliability probe found when Home last started (Story 1.19). */
     val reliability: ReliabilityStatus = ReliabilityStatus.ALL_OK,
 )

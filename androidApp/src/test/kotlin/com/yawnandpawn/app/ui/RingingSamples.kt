@@ -30,7 +30,7 @@ object RingingSamples {
     private fun epic1(session: SessionData): RingingUiState =
         ringingUiState(session, NoBillingSnoozeAvailability.availability(session), utc)
 
-    /** A normal Epic 1 first ring: "Snooze unavailable: prices not loaded yet". */
+    /** A normal Epic 1 first ring: "Prices not loaded yet" (TalkBack "Snooze unavailable, prices not loaded yet"). */
     val firstRing: RingingUiState = epic1(session())
 
     val firstRingNoLabel: RingingUiState = epic1(session(label = null))

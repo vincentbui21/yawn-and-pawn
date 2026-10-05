@@ -282,7 +282,7 @@ class HomeViewModelTest {
         }
 
     @Test
-    fun `a failed toggle reverts the switch to the stored value and is logged`() =
+    fun `a failed toggle reverts the switch to the stored value, is logged and says Couldn't save`() =
         runTest(dispatcher) {
             val repository = FakeAlarmRepository(listOf(alarm(1, LocalTime(7, 0))))
             val viewModel = home(repository)
@@ -296,6 +296,11 @@ class HomeViewModelTest {
                     .enabled,
             )
             assertEquals(listOf<LogEvent>(LogEvent.OperationFailed("turn alarm off", "storage failure: disk full")), logger.events)
+            // Owner decision 2026-10-02: "Couldn't save the alarm. Try again." for 4 seconds.
+            assertTrue(viewModel.state.value.saveFailed)
+            assertFalse(viewModel.state.value.openFailed)
+            advanceTimeBy(4_001)
+            assertFalse(viewModel.state.value.saveFailed)
         }
 
     @Test
@@ -330,6 +335,42 @@ class HomeViewModelTest {
             assertEquals("Gym", copy.label)
             assertEquals(listOf<HomeEffect>(HomeEffect.OpenEditor(copy.id)), effects)
             assertEquals(2, viewModel.state.value.alarms.size)
+            assertFalse(viewModel.state.value.saveFailed)
+        }
+
+    @Test
+    fun `a failed Duplicate opens nothing, is logged and says Couldn't save`() =
+        runTest(dispatcher) {
+            val repository = FakeAlarmRepository(listOf(alarm(1, LocalTime(7, 0))))
+            val viewModel = home(repository)
+            val effects = effectsOf(viewModel)
+            repository.failure = DomainError.StorageFailure("disk full")
+
+            viewModel.onIntent(HomeIntent.DuplicateClicked(FakeIdGenerator.fakeUuid(1)))
+
+            assertTrue(effects.isEmpty())
+            assertEquals(1, viewModel.state.value.alarms.size)
+            assertEquals(listOf<LogEvent>(LogEvent.OperationFailed("duplicate alarm", "storage failure: disk full")), logger.events)
+            assertTrue(viewModel.state.value.saveFailed)
+        }
+
+    @Test
+    fun `a newer snackbar replaces the one showing and gets its own 4 seconds`() =
+        runTest(dispatcher) {
+            val repository = FakeAlarmRepository(listOf(alarm(1, LocalTime(7, 0))))
+            val viewModel = home(repository)
+            viewModel.onIntent(HomeIntent.EditorOpenFailed)
+            advanceTimeBy(3_000)
+            repository.failure = DomainError.StorageFailure("disk full")
+
+            viewModel.onIntent(HomeIntent.DuplicateClicked(FakeIdGenerator.fakeUuid(1)))
+
+            assertFalse(viewModel.state.value.openFailed)
+            assertTrue(viewModel.state.value.saveFailed)
+            advanceTimeBy(3_999)
+            assertTrue(viewModel.state.value.saveFailed)
+            advanceTimeBy(2)
+            assertFalse(viewModel.state.value.saveFailed)
         }
 
     @Test
@@ -368,7 +409,7 @@ class HomeViewModelTest {
         }
 
     @Test
-    fun `a failed delete keeps the card and logs the error`() =
+    fun `a failed delete keeps the card, logs the error and says Couldn't save`() =
         runTest(dispatcher) {
             val repository = FakeAlarmRepository(listOf(alarm(1, LocalTime(7, 0))))
             val viewModel = home(repository)
@@ -379,6 +420,25 @@ class HomeViewModelTest {
 
             assertEquals(1, viewModel.state.value.alarms.size)
             assertEquals(listOf<LogEvent>(LogEvent.OperationFailed("delete alarm", "storage failure: disk full")), logger.events)
+            assertTrue(viewModel.state.value.saveFailed)
+        }
+
+    @Test
+    fun `deleting an alarm that is already gone shows no message`() =
+        runTest(dispatcher) {
+            val repository = FakeAlarmRepository(listOf(alarm(1, LocalTime(7, 0))))
+            val viewModel = home(repository)
+            viewModel.onIntent(HomeIntent.DeleteClicked(FakeIdGenerator.fakeUuid(1)))
+            // Deleted elsewhere while the dialog was open.
+            repository.delete(FakeIdGenerator.fakeUuid(1))
+
+            viewModel.onIntent(HomeIntent.DeleteConfirmed)
+
+            assertTrue(
+                viewModel.state.value.alarms
+                    .isEmpty(),
+            )
+            assertFalse(viewModel.state.value.saveFailed)
         }
 
     @Test

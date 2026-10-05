@@ -69,8 +69,8 @@ class RingingSemanticsTest {
         fetchSemanticsNode().config.getOrNull(SemanticsProperties.TraversalIndex) ?: 0f
 
     /**
-     * Both wake actions are on screen, "I'm up" (72 dp) in the bottom 40%, snooze (64 dp) 16 dp below it. The snooze
-     * label "Snooze unavailable: prices not loaded yet" wraps to two lines, so its height grows with the font.
+     * Both wake actions are on screen, "I'm up" (72 dp) in the bottom 40%, snooze (64 dp) 16 dp below it. A snooze
+     * label that wraps (at 200%) grows with the font.
      */
     private fun assertThumbZone(snooze: SemanticsNodeInteraction = snooze()) {
         val root = composeRule.onRoot().getBoundsInRoot()
@@ -98,14 +98,23 @@ class RingingSemanticsTest {
     @Test
     fun `with a one-line snooze label I'm up is the tallest action on screen`() =
         ringing(RingingSamples.testAlarm) {
-            val test = composeRule.onNodeWithContentDescription("Snooze unavailable, Test · no charge")
-            assertThumbZone(test)
-            val up = imUp().getBoundsInRoot()
-            assertTrue(up.heightDp > test.getBoundsInRoot().heightDp, "I'm up is taller than snooze")
-            composeRule.onAllNodes(hasClickAction()).fetchSemanticsNodes().forEach { node ->
-                assertTrue(node.boundsInRoot.height <= up.heightDp.value * PIXELS_PER_DP, "no action is taller than I'm up")
-            }
+            assertImUpTallest(composeRule.onNodeWithContentDescription("Snooze unavailable, Test · no charge"))
         }
+
+    @Test
+    @Config(qualifiers = "+w360dp")
+    fun `on a 360 dp screen the Epic 1 label Prices not loaded yet fits one line, so I'm up is the tallest action`() =
+        // Owner decision 2026-10-02: the visible label is "Prices not loaded yet"; TalkBack keeps the full reason.
+        ringing { assertImUpTallest(snooze()) }
+
+    private fun assertImUpTallest(snooze: SemanticsNodeInteraction) {
+        assertThumbZone(snooze)
+        val up = imUp().getBoundsInRoot()
+        assertTrue(up.heightDp > snooze.getBoundsInRoot().heightDp, "I'm up is taller than snooze")
+        composeRule.onAllNodes(hasClickAction()).fetchSemanticsNodes().forEach { node ->
+            assertTrue(node.boundsInRoot.height <= up.heightDp.value * PIXELS_PER_DP, "no action is taller than I'm up")
+        }
+    }
 
     @Test
     fun `TalkBack reads the clock as the full time first, then I'm up, and the snooze with its reason`() =

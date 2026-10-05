@@ -59,6 +59,9 @@ object HomeSamples {
 
     val openFailed = one.copy(openFailed = true)
 
+    /** A switch, Duplicate or Delete could not be stored (owner decision 2026-10-02). */
+    val saveFailed = one.copy(saveFailed = true)
+
     /** Story 1.16: the 6:00 alarm stopped after 30 minutes and the user has not dismissed the note yet. */
     val missedNote = one.copy(missedAlarmAt = LocalTime(6, 0))
 

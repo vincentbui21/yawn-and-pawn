@@ -70,3 +70,7 @@ private fun HomeDeleteLightPreview() =
 @Preview(name = "Home open failed · Light")
 @Composable
 private fun HomeOpenFailedLightPreview() = HomePreview(PpsThemeMode.Light, sampleHome.copy(openFailed = true))
+
+@Preview(name = "Home save failed · Light")
+@Composable
+private fun HomeSaveFailedLightPreview() = HomePreview(PpsThemeMode.Light, sampleHome.copy(saveFailed = true))

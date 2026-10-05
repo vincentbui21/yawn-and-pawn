@@ -13,6 +13,9 @@ import kotlin.time.Duration.Companion.milliseconds
  * [createdElapsedMillis], the elapsed time the deadline was made at: a lower elapsed time always means a reboot, also
  * on a device whose `BOOT_COUNT` is missing (its boot counter then reports the same value every boot). A deadline
  * stored before Story 2.2 has no [createdElapsedMillis] (0), so for it only the boot count decides, as before.
+ * Any negative boot count means "no `BOOT_COUNT`": on such a device an older app version stored a negative identity
+ * derived from the wall clock, and the counter now reports -1. Two negative counts therefore match and only elapsed
+ * time decides, so a session in flight across the update keeps its monotonic deadlines.
  */
 @Serializable
 data class Deadline(
@@ -25,7 +28,7 @@ data class Deadline(
     fun isDue(now: TimeSnapshot): Boolean = remaining(now) == Duration.ZERO
 
     /** [now] is in the boot this deadline was made in, so its monotonic time counts (see the class comment). */
-    fun sameBoot(now: TimeSnapshot): Boolean = now.bootCount == bootCount && now.elapsedMillis >= createdElapsedMillis
+    fun sameBoot(now: TimeSnapshot): Boolean = sameCount(bootCount, now.bootCount) && now.elapsedMillis >= createdElapsedMillis
 
     /** Time left until the deadline; never negative. */
     fun remaining(now: TimeSnapshot): Duration =
@@ -68,7 +71,13 @@ data class Deadline(
         fun sameBoot(
             from: TimeSnapshot,
             to: TimeSnapshot,
-        ): Boolean = from.bootCount == to.bootCount && to.elapsedMillis >= from.elapsedMillis
+        ): Boolean = sameCount(from.bootCount, to.bootCount) && to.elapsedMillis >= from.elapsedMillis
+
+        /** Equal boot counts, or both negative: a device without `BOOT_COUNT` (see the class comment). */
+        private fun sameCount(
+            a: Int,
+            b: Int,
+        ): Boolean = a == b || (a < 0 && b < 0)
 
         /** Compares first, so the subtraction only runs when [target] is ahead and cannot go negative. */
         private fun millisUntil(

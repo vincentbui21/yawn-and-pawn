@@ -90,6 +90,14 @@ deferred: []
 
 ## Review Triage Log
 
+**Review (2 reviewers, fast mode)**, 2026-10-05. Fixed in `fix(2.2): review fixes`:
+- **Untested rule:** the "elapsed went back" rule of `durationBetween` had no session-level test. Added the same-count reboot cases to `SessionRecorderTest` and `SessionTimelineTest`.
+- **History without `BOOT_COUNT`:** a reboot to a higher uptime than the first ring's cannot be detected, so the time to complete would be an elapsed difference across two boots (too small). `SessionRecorder` now uses wall time whenever a boot count is negative (a clock change during one session is rarer than this error). Tested in `SessionRecorderTest`.
+- **Grace restore without `BOOT_COUNT`:** a restored Grace session keeps its grace end, which is read on the new boot's clock and can be up to one grace window late. Refreshing it would make every such restore a full window late, so the code is unchanged and the `deferred-work.md` residual now includes Grace.
+- **Rows from the older version:** on a device without `BOOT_COUNT` the older version stored a negative wall-derived boot identity, so an in-flight session fell back to wall time after the update. `Deadline` now treats any negative boot count as the missing marker (two negative counts match, elapsed time decides). Tested in `DeadlineTest`; the residual (no reboot detection for that one legacy session) is in `deferred-work.md`.
+- **Not changed here:** a restore on `LOCKED_BOOT_COMPLETED` does not set `beforeFirstUnlock`. Story 2.3 (built on top of this branch) handles it.
+- **Verification:** `./gradlew qualityGate` BUILD SUCCESSFUL (11m 53s), Kover gates green; `git status --porcelain androidApp/src/test/screenshots/preview` empty.
+
 ## Auto Run Result
 
 Status: done. This was fast mode: one agent planned and implemented, with no separate review pass. The branch is stacked on Story 2.1 (a73466f).

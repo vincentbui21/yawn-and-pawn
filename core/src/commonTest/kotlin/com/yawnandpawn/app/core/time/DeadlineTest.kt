@@ -84,6 +84,25 @@ class DeadlineTest {
     }
 
     @Test
+    fun `any negative boot count is the missing marker, so a wall-derived identity from an older version still matches`() {
+        // An older version stored a negative identity derived from the wall clock; after the update the counter says -1.
+        val oldRow = Deadline(wallMillis = deadline.wallMillis, elapsedMillis = deadline.elapsedMillis, bootCount = -1_234_567)
+        val afterUpdate =
+            created.copy(
+                wallMillis = created.wallMillis + 3.hours.inWholeMilliseconds,
+                elapsedMillis = created.elapsedMillis + 60_000,
+                bootCount = -1,
+            )
+
+        assertEquals(true, oldRow.sameBoot(afterUpdate))
+        assertEquals(9.minutes, oldRow.remaining(afterUpdate), "monotonic, the 3 h wall change is ignored")
+        assertFalse(oldRow.sameBoot(afterUpdate.copy(bootCount = 7)), "a negative count never matches a real one")
+        assertEquals(true, Deadline.sameBoot(created.copy(bootCount = -9), afterUpdate))
+        assertFalse(Deadline.sameBoot(created.copy(bootCount = -9), afterUpdate.copy(elapsedMillis = 1_000)), "elapsed went back")
+        assertFalse(Deadline.sameBoot(created.copy(bootCount = -9), created))
+    }
+
+    @Test
     fun `two snapshots are of the same boot only with the same count and elapsed time not going back`() {
         assertEquals(true, Deadline.sameBoot(created, later(wall = (-1).hours, elapsed = 1.minutes)))
         assertFalse(Deadline.sameBoot(created, created.copy(elapsedMillis = 1_000)), "elapsed went back: a reboot")

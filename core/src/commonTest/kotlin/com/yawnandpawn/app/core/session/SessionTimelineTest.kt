@@ -110,6 +110,15 @@ class SessionTimelineTest {
     }
 
     @Test
+    fun `a call that spans a reboot with the same boot count is measured in wall time`() {
+        // No BOOT_COUNT: the count stays the same, but the elapsed clock went back below the pause.
+        val inCall = firstRing().after(SessionEvent.CallStarted, at(5.minutes))
+        val rebootedAt15 = TimeSnapshot(T0.wallMillis + 15.minutes.inWholeMilliseconds, elapsedMillis = 5_000, bootCount = T0.bootCount)
+        val afterCall = inCall.after(SessionEvent.CallEnded, rebootedAt15)
+        assertEquals(Deadline.after(T0, 40.minutes), (afterCall as Ringing).session.interactionDeadline)
+    }
+
+    @Test
     fun `a wall clock jump of 2 hours with monotonic time unchanged makes nothing due`() {
         val grace = firstRing().after(SessionEvent.ImUpTapped, at(1.minutes))
         val jumped = at(1.minutes).let { it.copy(wallMillis = it.wallMillis + 2.hours.inWholeMilliseconds) }

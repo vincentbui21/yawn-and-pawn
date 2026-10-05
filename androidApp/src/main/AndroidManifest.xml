@@ -76,6 +76,35 @@
             android:directBootAware="true"
             android:exported="false" />
 
+        <!-- SPIKE S1 (branch spike/s1-billing-lockscreen only, never merged to main): the lock-screen payment
+             prototype, in debug and release. Its own launcher icon "Spike S1" in its own task, also opened by
+             yawnandpawn://spike-s1 (adb shell am start -a android.intent.action.VIEW -d yawnandpawn://spike-s1) and by
+             the "Ring in 15 s" full-screen notification. -->
+        <activity
+            android:name=".android.spike.SpikeS1Activity"
+            android:exported="true"
+            android:label="@string/spike_s1_label"
+            android:launchMode="singleTask"
+            android:showWhenLocked="true"
+            android:taskAffinity="com.yawnandpawn.app.spike"
+            android:turnScreenOn="true"
+            tools:targetApi="27">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <data
+                    android:host="spike-s1"
+                    android:scheme="yawnandpawn" />
+            </intent-filter>
+        </activity>
+        <receiver
+            android:name=".android.spike.SpikeS1AlarmReceiver"
+            android:exported="false" />
+
         <!-- rescheduleAll() on the system events that clear or shift alarms; all protected system broadcasts. -->
         <receiver
             android:name=".android.SystemEventsReceiver"

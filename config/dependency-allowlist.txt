@@ -276,3 +276,13 @@ org.jetbrains.kotlin:kotlin-android-extensions-runtime
 org.jetbrains.kotlin:kotlin-parcelize-runtime
 org.jetbrains.kotlin:kotlin-stdlib-jdk7
 org.jetbrains.kotlin:kotlin-stdlib-jdk8
+
+# SPIKE S1 (branch spike/s1-billing-lockscreen only, never merged to main): Play Billing Library 9.1.0 (Stack table)
+# and what its POM pulls in that Crashlytics did not already: Play services base, and Play services location 19.0.0
+# with its places-placereport dependency (declared by billing-9.1.0.pom; the spike never calls a location API).
+# The real review of these lines happens when Epic 4 adds billing on main.
+com.android.billingclient:billing
+com.android.billingclient:billing-ktx
+com.google.android.gms:play-services-base
+com.google.android.gms:play-services-location
+com.google.android.gms:play-services-places-placereport

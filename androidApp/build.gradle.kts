@@ -1,5 +1,3 @@
-import com.yawnandpawn.app.buildlogic.versionCodeOf
-
 // :androidApp — the Android application: manifest, platform adapters, Koin wiring, screenshot tests.
 // Uses AGP 9 built-in Kotlin (no separate Kotlin Android plugin).
 plugins {
@@ -16,8 +14,11 @@ if (file("google-services.json").exists()) {
     apply(plugin = "com.google.firebase.crashlytics")
 }
 
-// The release workflow passes the tag version (-Pyawnandpawn.versionName=X.Y.Z); local builds use the default.
-val appVersionName = providers.gradleProperty("yawnandpawn.versionName").getOrElse("0.1.0")
+// SPIKE S1 (branch spike/s1-billing-lockscreen only, never merged to main): versionName 0.1.1-spike and versionCode
+// 101, one above the internal-track release 100 / 0.1.0, so the spike bundle can be uploaded to Internal testing. The
+// "-spike" suffix is not major.minor.patch, so versionCodeOf() is not used on this branch.
+val appVersionName = providers.gradleProperty("yawnandpawn.versionName").getOrElse("0.1.1-spike")
+val spikeVersionCode = 101
 
 // Release signing comes only from the environment (GitHub Actions secrets in release.yml, see
 // docs/ci-release.md). With none of the four values the release build stays unsigned; with only
@@ -60,8 +61,8 @@ android {
                 .get()
                 .toInt()
         versionName = appVersionName
-        // major * 10000 + minor * 100 + patch (unit-tested in build-logic and :core AppVersion).
-        versionCode = versionCodeOf(appVersionName)
+        // SPIKE S1: fixed 101. On main: versionCodeOf(appVersionName) = major * 10000 + minor * 100 + patch.
+        versionCode = spikeVersionCode
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
 
@@ -137,6 +138,8 @@ dependencies {
     // Story 1.19: Crashlytics behind the core CrashReporter port; started only after the user unlocks. No Analytics.
     implementation(platform(libs.firebase.bom))
     implementation(libs.firebase.crashlytics)
+    // SPIKE S1 only: Play Billing for the lock-screen payment prototype (android.spike.SpikeS1Activity).
+    implementation(libs.play.billing)
 
     testImplementation(project(":testing"))
     testImplementation(libs.kotlin.test)

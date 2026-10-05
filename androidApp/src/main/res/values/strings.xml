@@ -7,4 +7,6 @@
     <string name="notification_channel_session">Alarm in progress</string>
     <!-- %1$s is the alarm time, formatted for the phone's 12/24-hour setting. -->
     <string name="notification_ringing_text">%1$s alarm · Tap to return to your alarm</string>
+    <!-- SPIKE S1 (branch spike/s1-billing-lockscreen only): launcher label of the throwaway prototype. -->
+    <string name="spike_s1_label">Spike S1</string>
 </resources>

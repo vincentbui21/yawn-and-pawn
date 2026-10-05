@@ -54,6 +54,8 @@ kotlin {
             implementation(project(":testing"))
             implementation(libs.kotlin.test)
             implementation(libs.kotlinx.coroutines.test)
+            // SessionLockTest (Story 2.6) builds a sample of every Route subclass from its serial descriptor.
+            implementation(libs.kotlinx.serialization.json)
         }
     }
 }

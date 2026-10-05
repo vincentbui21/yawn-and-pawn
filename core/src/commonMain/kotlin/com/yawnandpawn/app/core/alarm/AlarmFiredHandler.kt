@@ -38,51 +38,53 @@ interface AlarmFiredHandler {
  * The scheduling part of every fire: keeps the schedule right after a fire and rings nothing itself (the app's wake
  * handler wraps it and starts the ringing).
  * - A repeating alarm is armed at its next occurrence after max(now, scheduledAt).
- * - A one-time alarm is switched off through [SetAlarmEnabled], which cancels its code, and that is logged.
+ * - A one-time alarm is switched off (`updatedAt = now`) and its code cancelled, and that is logged.
  * - A missing or disabled alarm is logged and ignored, and so are session-slot and test fires.
+ *
+ * The fire usually starts a wake session first, so this runs while the app is session-locked: it writes the alarm
+ * itself under [lock] instead of through the user's use cases, which `SessionLockGuard` refuses during a session
+ * (Story 2.6).
  */
 class RearmOnFire(
     private val repository: AlarmRepository,
     private val scheduling: AlarmScheduling,
-    private val setAlarmEnabled: SetAlarmEnabled,
     private val clock: Clock,
     private val lock: AlarmWriteLock,
     private val logger: Logger,
 ) : AlarmFiredHandler {
     override suspend fun onAlarmFired(fired: AlarmFired) {
-        val disableOneTime =
-            lock.withLock {
-                when (val stored = repository.get(fired.alarmId)) {
-                    is Outcome.Failure -> {
-                        ignore(fired.alarmId, stored.error.diagnostic())
-                        false
-                    }
+        lock.withLock {
+            when (val stored = repository.get(fired.alarmId)) {
+                is Outcome.Failure -> {
+                    ignore(fired.alarmId, stored.error.diagnostic())
+                }
 
-                    is Outcome.Success -> {
-                        val alarm = stored.value
-                        when {
-                            !alarm.enabled -> {
-                                ignore(fired.alarmId, "alarm disabled")
-                                false
-                            }
-
-                            alarm.toRule().isOneTime -> {
-                                true
-                            }
-
-                            else -> {
-                                scheduling.syncAfter(alarm, maxOf(clock.now(), fired.scheduledAt))
-                                false
-                            }
-                        }
+                is Outcome.Success -> {
+                    val alarm = stored.value
+                    when {
+                        !alarm.enabled -> ignore(fired.alarmId, "alarm disabled")
+                        alarm.toRule().isOneTime -> switchOff(alarm, fired)
+                        else -> scheduling.syncAfter(alarm, maxOf(clock.now(), fired.scheduledAt))
                     }
                 }
             }
-        // Outside the lock: SetAlarmEnabled takes it itself.
-        if (disableOneTime) {
-            when (val disabled = setAlarmEnabled(fired.alarmId, enabled = false)) {
-                is Outcome.Success -> logger.log(LogEvent.OneTimeAlarmDisabled(fired.alarmId, fired.scheduledAt))
-                is Outcome.Failure -> logger.log(LogEvent.OperationFailed.of("disable fired one-time alarm", disabled.error))
+        }
+    }
+
+    /** Stores the fired one-time [alarm] off and cancels its code ([AlarmScheduling.sync]); called under [lock]. */
+    private suspend fun switchOff(
+        alarm: Alarm,
+        fired: AlarmFired,
+    ) {
+        val off = alarm.copy(enabled = false, updatedAt = clock.nowMillis())
+        when (val stored = repository.upsert(off)) {
+            is Outcome.Success -> {
+                scheduling.sync(off)
+                logger.log(LogEvent.OneTimeAlarmDisabled(fired.alarmId, fired.scheduledAt))
+            }
+
+            is Outcome.Failure -> {
+                logger.log(LogEvent.OperationFailed.of("disable fired one-time alarm", stored.error))
             }
         }
     }

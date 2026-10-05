@@ -3,7 +3,11 @@ package com.yawnandpawn.app.core.alarm
 import com.yawnandpawn.app.core.error.DomainError
 import com.yawnandpawn.app.core.error.Outcome
 import com.yawnandpawn.app.core.error.valueOrNull
+import com.yawnandpawn.app.core.session.SessionLockGuard
+import com.yawnandpawn.app.core.session.SessionState
+import com.yawnandpawn.app.core.session.ringSession
 import kotlinx.coroutines.async
+import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.test.runTest
 import kotlinx.datetime.DayOfWeek
@@ -28,10 +32,12 @@ class AlarmUseCasesTest {
     private val sequence = InMemorySequence()
     private val scheduler = RecordingScheduler()
     private val scheduling = AlarmScheduling(repository, scheduler, clock, TestZone(TimeZone.UTC), lock, RecordingLogger())
-    private val save = SaveAlarm(repository, ids, clock, lock, sequence, scheduling)
-    private val setEnabled = SetAlarmEnabled(repository, clock, lock, scheduling)
-    private val delete = DeleteAlarm(repository, lock, scheduling)
-    private val duplicate = DuplicateAlarm(repository, ids, clock, lock, sequence, scheduling)
+    private val sessionState = MutableStateFlow<SessionState>(SessionState.Idle)
+    private val sessionLock = SessionLockGuard(sessionState)
+    private val save = SaveAlarm(repository, ids, clock, lock, sequence, scheduling, sessionLock)
+    private val setEnabled = SetAlarmEnabled(repository, clock, lock, scheduling, sessionLock)
+    private val delete = DeleteAlarm(repository, lock, scheduling, sessionLock)
+    private val duplicate = DuplicateAlarm(repository, ids, clock, lock, sequence, scheduling, sessionLock)
 
     private val draft = AlarmDraft(time = LocalTime(7, 0), repeatDays = setOf(DayOfWeek.MONDAY), label = "Gym")
 
@@ -388,5 +394,41 @@ class AlarmUseCasesTest {
             val alarm = saved()
 
             assertEquals(alarm, repository.get(alarm.id).valueOrNull())
+        }
+
+    @Test
+    fun `while a session is active every alarm use case returns SessionActive and writes nothing (Story 2-6)`() =
+        runTest {
+            val alarm = saved()
+            val before = stored()
+            val codeBefore = sequence.lastUsed
+            scheduler.calls.clear()
+            val active = ringSession()
+            val states =
+                listOf(
+                    SessionState.Ringing(active),
+                    SessionState.Grace(active),
+                    SessionState.Loud(active),
+                    SessionState.Snoozed(active),
+                    SessionState.Completed(active),
+                    SessionState.Missed(active),
+                )
+
+            states.forEach { state ->
+                sessionState.value = state
+                val locked = Outcome.Failure(DomainError.SessionActive)
+                assertEquals(locked, save(draft), "save in $state")
+                assertEquals(locked, save(AlarmDraft(id = alarm.id, time = LocalTime(8, 0))), "edit in $state")
+                assertEquals(locked, setEnabled(alarm.id, enabled = false), "switch in $state")
+                assertEquals(locked, delete(alarm.id), "delete in $state")
+                assertEquals(locked, duplicate(alarm.id), "duplicate in $state")
+            }
+
+            assertEquals(before, stored(), "nothing stored")
+            assertEquals(codeBefore, sequence.lastUsed, "no request code allocated")
+            assertEquals(emptyList(), scheduler.calls, "nothing armed or cancelled")
+            // Back to Idle: the same calls work again.
+            sessionState.value = SessionState.Idle
+            assertIs<Outcome.Success<Alarm>>(setEnabled(alarm.id, enabled = false))
         }
 }

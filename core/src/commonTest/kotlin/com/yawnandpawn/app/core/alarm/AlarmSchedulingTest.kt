@@ -4,6 +4,10 @@ import com.yawnandpawn.app.core.error.DomainError
 import com.yawnandpawn.app.core.error.Outcome
 import com.yawnandpawn.app.core.log.FireKind
 import com.yawnandpawn.app.core.log.LogEvent
+import com.yawnandpawn.app.core.session.SessionLockGuard
+import com.yawnandpawn.app.core.session.SessionState
+import com.yawnandpawn.app.core.session.ringSession
+import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.test.runTest
 import kotlinx.datetime.DayOfWeek
 import kotlinx.datetime.LocalDateTime
@@ -38,11 +42,13 @@ class AlarmSchedulingTest {
     private val scheduler = RecordingScheduler()
     private val logger = RecordingLogger()
     private val scheduling = AlarmScheduling(repository, scheduler, clock, zone, lock, logger)
-    private val save = SaveAlarm(repository, ids, clock, lock, sequence, scheduling)
-    private val setEnabled = SetAlarmEnabled(repository, clock, lock, scheduling)
-    private val delete = DeleteAlarm(repository, lock, scheduling)
-    private val duplicate = DuplicateAlarm(repository, ids, clock, lock, sequence, scheduling)
-    private val onFire = RearmOnFire(repository, scheduling, setEnabled, clock, lock, logger)
+    private val sessionState = MutableStateFlow<SessionState>(SessionState.Idle)
+    private val sessionLock = SessionLockGuard(sessionState)
+    private val save = SaveAlarm(repository, ids, clock, lock, sequence, scheduling, sessionLock)
+    private val setEnabled = SetAlarmEnabled(repository, clock, lock, scheduling, sessionLock)
+    private val delete = DeleteAlarm(repository, lock, scheduling, sessionLock)
+    private val duplicate = DuplicateAlarm(repository, ids, clock, lock, sequence, scheduling, sessionLock)
+    private val onFire = RearmOnFire(repository, scheduling, clock, lock, logger)
 
     private val sevenAm = AlarmDraft(time = LocalTime(7, 0))
 
@@ -428,6 +434,32 @@ class AlarmSchedulingTest {
             )
             assertEquals(listOf<Call>(Call.Cancel(once.requestCode)), scheduler.calls)
             assertEquals(listOf<LogEvent>(LogEvent.OneTimeAlarmDisabled(once.id, berlin("2027-03-03T07:00"))), logger.events.drop(logged))
+        }
+
+    @Test
+    fun `during a session a fire still switches a one-time alarm off and re-arms a repeating one (Story 2-6)`() =
+        runTest {
+            val once = saved()
+            val weekday = stored(alarm("weekday", 1001, repeatDays = weekdays))
+            scheduler.calls.clear()
+            // The fire started the session before it re-arms: the user's use cases are locked now.
+            sessionState.value = SessionState.Ringing(ringSession())
+            clock.now = berlin("2027-03-03T07:00") + 10.milliseconds
+
+            onFire.onAlarmFired(AlarmFired(once.id, scheduledAt = berlin("2027-03-03T07:00")))
+            onFire.onAlarmFired(AlarmFired(weekday.id, scheduledAt = berlin("2027-03-03T07:00")))
+
+            assertEquals(
+                false,
+                repository.alarms.value
+                    .getValue(once.id)
+                    .enabled,
+            )
+            assertEquals(
+                listOf<Call>(Call.Cancel(once.requestCode), schedule(weekday, berlin("2027-03-04T07:00"))),
+                scheduler.calls,
+            )
+            assertEquals(Outcome.Failure(DomainError.SessionActive), setEnabled(weekday.id, enabled = false), "the user still cannot")
         }
 
     @Test

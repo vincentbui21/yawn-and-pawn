@@ -10,6 +10,7 @@ import com.yawnandpawn.app.android.androidTimeModule
 import com.yawnandpawn.app.android.crash.FirebaseStartup
 import com.yawnandpawn.app.android.reliability.reliabilityModule
 import com.yawnandpawn.app.android.sound.soundModule
+import com.yawnandpawn.app.android.wake.AndroidWakeScreenOpener
 import com.yawnandpawn.app.android.wake.WakeAlarmFiredHandler
 import com.yawnandpawn.app.android.wake.WakeRuntime
 import com.yawnandpawn.app.android.wake.wakeModule
@@ -37,6 +38,7 @@ import com.yawnandpawn.app.core.session.NoFallbackPolicy
 import com.yawnandpawn.app.core.session.PlaceholderCheckValidator
 import com.yawnandpawn.app.core.session.ScheduleTestAlarm
 import com.yawnandpawn.app.core.session.SessionEngine
+import com.yawnandpawn.app.core.session.SessionLockGuard
 import com.yawnandpawn.app.core.session.SessionRecorder
 import com.yawnandpawn.app.core.session.SessionReducer
 import com.yawnandpawn.app.core.session.SessionSlotRearm
@@ -46,6 +48,7 @@ import com.yawnandpawn.app.core.session.StoredSession
 import com.yawnandpawn.app.core.session.TierFeeLadder
 import com.yawnandpawn.app.core.session.UserLockState
 import com.yawnandpawn.app.data.dataModule
+import com.yawnandpawn.app.ui.nav.WakeScreenOpener
 import com.yawnandpawn.app.ui.uiModule
 import kotlinx.coroutines.launch
 import org.koin.android.ext.koin.androidContext
@@ -68,15 +71,15 @@ val appModule =
         // (Story 1.14), then re-arms through RearmOnFire (device test round 1: the ring first).
         single<AlarmScheduler> { AndroidAlarmScheduler(androidContext(), get(), get(), get(), get()) }
         single { AlarmScheduling(get(), get(), get(), get(), get(), get()) }
-        single { RearmOnFire(get(), get(), get(), get(), get(), get()) }
+        single { RearmOnFire(get(), get(), get(), get(), get()) }
         single<AlarmFiredHandler> {
             WakeAlarmFiredHandler(get(), get<RearmOnFire>(), get(), get(), starts = get(), timings = get(), rearm = get())
         }
         // The session slot armed from runtime.db without the engine (Story 2.1): after system events and refused starts.
         single { SessionSlotRearm(get(), get(), get(), get(), get(), get()) }
-        factory { SaveAlarm(get(), get(), get(), get(), get(), get()) }
-        factory { SetAlarmEnabled(get(), get(), get(), get()) }
-        factory { DeleteAlarm(get(), get(), get()) }
+        factory { SaveAlarm(get(), get(), get(), get(), get(), get(), get()) }
+        factory { SetAlarmEnabled(get(), get(), get(), get(), get()) }
+        factory { DeleteAlarm(get(), get(), get(), get()) }
         // "Test alarm" (Story 1.18): the editor's values ring as a test 10 s later, through the test request code.
         factory { ScheduleTestAlarm(get(), get(), get(), get()) }
         // The wake session (Story 1.12): the Epic 1 policies, the one engine over runtime.db (ActiveSessionStore from
@@ -97,6 +100,10 @@ val appModule =
         // Home's missed note (Story 1.16): the latest Missed history row, unless dismissed (settings DataStore).
         single { MissedNotes(get(), get()) }
         single { SessionEngine(get(), get(), get(), get(), get(), get(), get(), get(), userLock = get()) }
+        // The session lock (Story 2.6): the alarm use cases refuse to write while a session is active, and the app shows
+        // only "Alarm in progress", whose "Back to alarm" opens the wake screen.
+        single { SessionLockGuard(get<SessionEngine>().state) }
+        single<WakeScreenOpener> { AndroidWakeScreenOpener(androidContext()) }
     }
 
 /**

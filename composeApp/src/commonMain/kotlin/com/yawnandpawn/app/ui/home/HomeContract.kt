@@ -64,7 +64,7 @@ data class HomeUiState(
     /** The editor closed because its alarm could not be read: the snackbar "Couldn't open this alarm.". */
     val openFailed: Boolean = false,
     /**
-     * A switch, Duplicate or Delete could not be stored: the snackbar "Couldn't save the alarm. Try again." (owner
+     * A switch or Delete could not be stored: the snackbar "Couldn't save the alarm. Try again." (owner
      * decision 2026-10-02; a switch has already gone back to the stored value).
      */
     val saveFailed: Boolean = false,
@@ -102,7 +102,7 @@ sealed interface HomeIntent {
 
     data object DisableCancelled : HomeIntent
 
-    /** "Duplicate" in a card's long-press menu (or its TalkBack action): copies the alarm and opens the copy. */
+    /** "Duplicate" in a card's long-press menu (or its TalkBack action): opens a new alarm prefilled from it (nothing stored). */
     data class DuplicateClicked(
         val id: String,
     ) : HomeIntent
@@ -135,5 +135,10 @@ sealed interface HomeEffect {
     /** Open the editor on the alarm [alarmId], or on a new alarm when `null`. */
     data class OpenEditor(
         val alarmId: String?,
+    ) : HomeEffect
+
+    /** Open the editor on a new, unsaved alarm prefilled from the alarm [sourceId] (Duplicate, owner decision 2026-10-05). */
+    data class OpenDuplicate(
+        val sourceId: String,
     ) : HomeEffect
 }

@@ -9,7 +9,6 @@ import com.yawnandpawn.app.core.alarm.AlarmScheduler
 import com.yawnandpawn.app.core.alarm.AlarmScheduling
 import com.yawnandpawn.app.core.alarm.AlarmWriteLock
 import com.yawnandpawn.app.core.alarm.DeleteAlarm
-import com.yawnandpawn.app.core.alarm.DuplicateAlarm
 import com.yawnandpawn.app.core.alarm.RearmOnFire
 import com.yawnandpawn.app.core.alarm.RequestCodeSequence
 import com.yawnandpawn.app.core.alarm.SaveAlarm
@@ -44,7 +43,6 @@ class AlarmWiringTest {
         assertNotNull(koin.get<SaveAlarm>())
         assertNotNull(koin.get<SetAlarmEnabled>())
         assertNotNull(koin.get<DeleteAlarm>())
-        assertNotNull(koin.get<DuplicateAlarm>())
         assertSame(koin.get<AlarmWriteLock>(), koin.get<AlarmWriteLock>())
     }
 

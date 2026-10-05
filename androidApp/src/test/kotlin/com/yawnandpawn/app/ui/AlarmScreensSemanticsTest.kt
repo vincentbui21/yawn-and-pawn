@@ -330,7 +330,7 @@ class AlarmScreensSemanticsTest {
 
     private fun actions(repository: FakeAlarmRepository): AlarmActions {
         val alarms = AlarmUseCasesFixture(repository = repository)
-        return AlarmActions(alarms.setEnabled, alarms.duplicate, alarms.delete, alarms.clock, FakeLogger())
+        return AlarmActions(alarms.setEnabled, alarms.delete, alarms.clock, FakeLogger())
     }
 
     @Test
@@ -520,7 +520,15 @@ class AlarmScreensSemanticsTest {
             )
         withScreen(
             PpsThemeMode.Light,
-            content = { HomeRoute(onOpenEditor = {}, openFailed = false, onOpenFailedShown = {}, viewModel = viewModel) },
+            content = {
+                HomeRoute(
+                    onOpenEditor = {},
+                    onOpenDuplicate = {},
+                    openFailed = false,
+                    onOpenFailedShown = {},
+                    viewModel = viewModel,
+                )
+            },
         ) {
             val switch = composeRule.onNodeWithContentDescription("6:30 AM alarm")
             switch.assertIsOn()
@@ -580,7 +588,15 @@ class AlarmScreensSemanticsTest {
         var shown = false
         withScreen(
             PpsThemeMode.Light,
-            content = { HomeRoute(onOpenEditor = {}, openFailed = true, onOpenFailedShown = { shown = true }, viewModel = viewModel) },
+            content = {
+                HomeRoute(
+                    onOpenEditor = {},
+                    onOpenDuplicate = {},
+                    openFailed = true,
+                    onOpenFailedShown = { shown = true },
+                    viewModel = viewModel,
+                )
+            },
         ) {
             composeRule.waitUntil(timeoutMillis = 5_000) {
                 composeRule.onAllNodes(hasText("Couldn't open this alarm.")).fetchSemanticsNodes().isNotEmpty()

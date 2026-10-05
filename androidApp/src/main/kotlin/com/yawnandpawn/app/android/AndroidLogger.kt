@@ -50,6 +50,14 @@ class AndroidLogger : Logger {
             is LogEvent.EmergencyRingStopped -> {
                 Log.i(TAG, "EmergencyRingStopped reason=${event.reason}")
             }
+
+            is LogEvent.OneTimeAlarmDisabled -> {
+                Log.i(TAG, "OneTimeAlarmDisabled alarmId=${event.alarmId} scheduledAt=${event.scheduledAt}")
+            }
+
+            is LogEvent.WakeTiming -> {
+                Log.i(TAG, "WakeTiming stage=${event.stage} msSinceScheduled=${event.msSinceScheduled ?: "unknown"}")
+            }
         }
     }
 

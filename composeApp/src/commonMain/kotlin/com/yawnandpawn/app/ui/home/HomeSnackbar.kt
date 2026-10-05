@@ -9,8 +9,8 @@ import com.yawnandpawn.app.ui.resources.home_open_failed
 import org.jetbrains.compose.resources.stringResource
 
 /**
- * Home's `snackbar`, one at a time: "Couldn't open this alarm." or "Couldn't save the alarm. Try again." (a switch,
- * Duplicate or Delete that could not be stored, owner decision 2026-10-02). Nothing when neither is showing.
+ * Home's `snackbar`, one at a time: "Couldn't open this alarm." or "Couldn't save the alarm. Try again." (a switch
+ * or Delete that could not be stored, owner decision 2026-10-02). Nothing when neither is showing.
  */
 @Composable
 internal fun HomeSnackbar(

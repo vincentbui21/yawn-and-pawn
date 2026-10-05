@@ -307,23 +307,33 @@ class MainActivityTest {
     }
 
     @Test
-    fun `long-press Duplicate opens the copy in the editor, and Home then has both`() {
+    fun `long-press Duplicate opens a new unsaved alarm, Cancel leaves no copy, and an unchanged Save adds none`() {
         waitForText("No alarms yet.")
         addDefaultAlarm()
 
+        // Owner decision 2026-10-05: Duplicate stores nothing; the editor opens on a new alarm with the same settings.
         composeRule.onNode(hasText("7:00 AM") and hasClickAction()).performTouchInput { longClick() }
         composeRule.onNode(hasText("Duplicate") and hasClickAction()).performClick()
-
-        waitForText("Edit alarm")
+        waitForText("New alarm")
         composeRule.onNodeWithText("Cancel").performClick()
-        waitForGone("Edit alarm")
-        composeRule.waitUntil(timeoutMillis = 5_000) {
-            composeRule.onAllNodes(hasText("7:00 AM") and hasClickAction()).fetchSemanticsNodes().size == 2
-        }
+        waitForGone("New alarm")
+        assertEquals(1, composeRule.onAllNodes(hasText("7:00 AM") and hasClickAction()).fetchSemanticsNodes().size, "no copy")
+
+        // Saved unchanged, it is identical to the stored alarm, which stays the only one (and on).
+        composeRule.onNode(hasText("7:00 AM") and hasClickAction()).performTouchInput { longClick() }
+        composeRule.onNode(hasText("Duplicate") and hasClickAction()).performClick()
+        waitForText("New alarm")
+        composeRule.waitUntil(
+            timeoutMillis = 5_000,
+        ) { composeRule.onAllNodes(hasText("Save") and isEnabled()).fetchSemanticsNodes().isNotEmpty() }
+        composeRule.onNodeWithText("Save").performClick()
+        waitForGone("New alarm")
+        assertEquals(1, composeRule.onAllNodes(hasText("7:00 AM") and hasClickAction()).fetchSemanticsNodes().size, "merged")
+        composeRule.onNodeWithContentDescription("7:00 AM alarm").assertIsOn()
     }
 
     @Test
-    fun `the editor's overflow Duplicate opens the copy, and Home then has both`() {
+    fun `the editor's overflow Duplicate replaces the editor with a new unsaved alarm, and Cancel leaves no copy`() {
         waitForText("No alarms yet.")
         addDefaultAlarm()
         composeRule.onNode(hasText("7:00 AM") and hasClickAction()).performClick()
@@ -332,17 +342,17 @@ class MainActivityTest {
         composeRule.onNodeWithContentDescription("More options").performClick()
         composeRule.onNode(hasText("Duplicate") and hasClickAction()).performClick()
 
-        // The original's editor keeps Save disabled once the copy is stored; the editor on the copy replaces it (one
-        // editor, not two stacked) and has Save enabled again once it has loaded.
+        // One editor, not two stacked: the new alarm's replaces the original's.
         composeRule.waitUntil(timeoutMillis = 5_000) {
-            composeRule.onAllNodes(hasText("Save") and isEnabled()).fetchSemanticsNodes().size == 1 &&
-                composeRule.onAllNodes(hasText("Edit alarm")).fetchSemanticsNodes().size == 1
+            composeRule.onAllNodes(hasText("New alarm")).fetchSemanticsNodes().size == 1 &&
+                composeRule.onAllNodes(hasText("Edit alarm")).fetchSemanticsNodes().isEmpty()
         }
         composeRule.onNodeWithText("Cancel").performClick()
-        waitForGone("Edit alarm")
+        waitForGone("New alarm")
         composeRule.waitUntil(timeoutMillis = 5_000) {
-            composeRule.onAllNodes(hasText("7:00 AM") and hasClickAction()).fetchSemanticsNodes().size == 2
+            composeRule.onAllNodes(hasText("Rings in", substring = true)).fetchSemanticsNodes().isNotEmpty()
         }
+        assertEquals(1, composeRule.onAllNodes(hasText("7:00 AM") and hasClickAction()).fetchSemanticsNodes().size, "no copy")
     }
 
     @Test

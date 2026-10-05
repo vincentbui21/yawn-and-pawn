@@ -41,13 +41,17 @@ fun MutableList<NavKey>.selectTab(tab: AppTab) {
 }
 
 /**
- * Pushes the editor on [alarmId] (`null`: a new alarm) from any tab. It replaces a tab other than Alarms, so Save or
- * Cancel lands on Home. Ignored while the editor is already on top, so a double tap never stacks two editors.
+ * Pushes the editor on [alarmId] (`null`: a new alarm, prefilled from the stored alarm [copyOf] for Duplicate) from
+ * any tab. It replaces a tab other than Alarms, so Save or Cancel lands on Home. Ignored while the editor is already on
+ * top, so a double tap never stacks two editors.
  */
-fun MutableList<NavKey>.openEditor(alarmId: String?) {
+fun MutableList<NavKey>.openEditor(
+    alarmId: String?,
+    copyOf: String? = null,
+) {
     val top = topTab() ?: return
     if (top != AppTab.Alarms) removeAt(lastIndex)
-    add(Route.AlarmEditor(alarmId))
+    add(Route.AlarmEditor(alarmId, copyOf))
 }
 
 /** Closes [route] if it is on top; a late second close never pops the Alarms root. */
@@ -55,14 +59,14 @@ fun MutableList<NavKey>.close(route: Route) {
     if (size > 1 && lastOrNull() == route) removeAt(lastIndex)
 }
 
-/** Replaces the editor [route] on top with the editor on [alarmId] (after Duplicate). */
+/** Replaces the editor [route] on top with the editor on a new alarm prefilled from the stored alarm [copyOf] (Duplicate). */
 fun MutableList<NavKey>.replaceEditor(
     route: Route.AlarmEditor,
-    alarmId: String,
+    copyOf: String,
 ) {
     if (lastOrNull() != route) return
     removeAt(lastIndex)
-    add(Route.AlarmEditor(alarmId))
+    add(Route.AlarmEditor(alarmId = null, copyOf = copyOf))
 }
 
 /** Back: pops the top (a tab returns to Alarms); on the Alarms root it does nothing, and the system leaves the app. */

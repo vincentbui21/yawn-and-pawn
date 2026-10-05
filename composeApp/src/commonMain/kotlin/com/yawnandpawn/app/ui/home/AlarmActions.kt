@@ -2,7 +2,6 @@ package com.yawnandpawn.app.ui.home
 
 import com.yawnandpawn.app.core.alarm.Alarm
 import com.yawnandpawn.app.core.alarm.DeleteAlarm
-import com.yawnandpawn.app.core.alarm.DuplicateAlarm
 import com.yawnandpawn.app.core.alarm.SetAlarmEnabled
 import com.yawnandpawn.app.core.error.DomainError
 import com.yawnandpawn.app.core.error.Outcome
@@ -17,7 +16,6 @@ import com.yawnandpawn.app.core.time.Clock
  */
 class AlarmActions(
     private val setAlarmEnabled: SetAlarmEnabled,
-    private val duplicateAlarm: DuplicateAlarm,
     private val deleteAlarm: DeleteAlarm,
     private val clock: Clock,
     private val logger: Logger,
@@ -27,9 +25,6 @@ class AlarmActions(
         id: String,
         enabled: Boolean,
     ): Outcome<Alarm, DomainError> = setAlarmEnabled(id, enabled).alsoLogFailure("turn alarm ${if (enabled) "on" else "off"}")
-
-    /** Copies the alarm [id]; the copy is what the editor opens next. */
-    suspend fun duplicate(id: String): Outcome<Alarm, DomainError> = duplicateAlarm(id).alsoLogFailure("duplicate alarm")
 
     /** Deletes the alarm [id] and logs the deletion once it is done. */
     suspend fun delete(id: String): Outcome<Unit, DomainError> {

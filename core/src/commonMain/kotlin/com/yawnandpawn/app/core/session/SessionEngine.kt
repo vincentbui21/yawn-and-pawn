@@ -33,9 +33,10 @@ import kotlin.coroutines.cancellation.CancellationException
  *
  * Session history (AD-18) is the engine's own business, never the runner's: the one-shot
  * [SessionEffect.RecordSessionStart] and the entry effect [EntryEffect.HistoryWriteRequested] go to the
- * [SessionRecorder]. When the end write succeeds, `Recorded` is reduced in the same lock, so the session goes Idle and
- * its `runtime.db` row is cleared by that commit. When it fails, the failure is logged, the state stays Completed or
- * Missed, and the next [dispatch], [tick] or [restore] writes it again.
+ * [SessionRecorder]. The start row is written after the step's other effects and its entry effects, so the first sound
+ * never waits for it (the state is already committed, AD-2). When the end write succeeds, `Recorded` is reduced in the
+ * same lock, so the session goes Idle and its `runtime.db` row is cleared by that commit. When it fails, the failure
+ * is logged, the state stays Completed or Missed, and the next [dispatch], [tick] or [restore] writes it again.
  *
  * Nothing is reduced before the stored session is loaded: [dispatch] and [tick] first run the [restore] step if it has
  * not succeeded yet, and return its failure if the store cannot be read (the next call tries again). Expected failures
@@ -191,21 +192,14 @@ class SessionEngine internal constructor(
                 committed
             } else {
                 current.value = transition.state
-                if (runOneShot) {
-                    transition.effects.forEach { effect ->
-                        guarded(effect) {
-                            if (effect is SessionEffect.RecordSessionStart) {
-                                history.recordStart(
-                                    effect,
-                                    transition.state,
-                                )
-                            } else {
-                                effects.run(effect)
-                            }
-                        }
-                    }
-                }
+                val oneShot = if (runOneShot) transition.effects else emptyList()
+                oneShot.filterNot { it is SessionEffect.RecordSessionStart }.forEach { effect -> guarded(effect) { effects.run(effect) } }
                 applyEntryEffects(transition.state, now)
+                // The start row is written after the effects (device test round 1): the sound never waits for the history
+                // write. It is still inside the lock, so it lands before any end row of this session (recordEnd merges).
+                oneShot.filterIsInstance<SessionEffect.RecordSessionStart>().forEach { effect ->
+                    guarded(effect) { history.recordStart(effect, transition.state) }
+                }
                 Outcome.Success(now)
             }
         }

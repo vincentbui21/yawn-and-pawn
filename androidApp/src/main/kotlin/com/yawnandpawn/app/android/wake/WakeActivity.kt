@@ -21,6 +21,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.input.pointer.pointerInput
 import com.yawnandpawn.app.android.ApplicationScope
 import com.yawnandpawn.app.core.error.Outcome
+import com.yawnandpawn.app.core.log.WakeStage
 import com.yawnandpawn.app.core.session.CheckAnswer
 import com.yawnandpawn.app.core.session.SessionEngine
 import com.yawnandpawn.app.core.session.SessionEvent
@@ -70,11 +71,13 @@ class WakeActivity : ComponentActivity() {
     private val appScope: ApplicationScope by inject()
     private val timeZones: TimeZoneProvider by inject()
     private val snoozePolicy: SnoozeAvailabilityPolicy by inject()
+    private val timings: WakeTimings by inject()
 
     /** "I'm up" was tapped before the session existed; replayed once it rings. */
     private var pendingImUp by mutableStateOf(false)
 
     override fun onCreate(savedInstanceState: Bundle?) {
+        timings.stage(WakeStage.WakeScreenCreated)
         enableEdgeToEdge()
         super.onCreate(savedInstanceState)
         showOverLockScreen()

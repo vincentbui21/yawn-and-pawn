@@ -101,7 +101,7 @@ class HomeViewModelTest {
         // The seeded alarms use codes from 1001 up, so the mark starts above them.
         val alarms =
             AlarmUseCasesFixture(repository, clock, zone, ids, requestCodes = FakeRequestCodeSequence(lastUsed = 1999), lock = lock)
-        return AlarmActions(alarms.setEnabled, alarms.duplicate, alarms.delete, clock, logger)
+        return AlarmActions(alarms.setEnabled, alarms.delete, clock, logger)
     }
 
     private fun TestScope.home(repository: AlarmRepository): HomeViewModel {
@@ -322,36 +322,19 @@ class HomeViewModelTest {
         }
 
     @Test
-    fun `Duplicate stores a copy and opens it in the editor`() =
+    fun `Duplicate stores nothing and opens the editor on a new alarm prefilled from the card`() =
         runTest(dispatcher) {
-            ids.newId() // fakeUuid(1) is taken by the stored alarm
             val repository = FakeAlarmRepository(listOf(alarm(1, LocalTime(7, 0), label = "Gym")))
             val viewModel = home(repository)
             val effects = effectsOf(viewModel)
 
             viewModel.onIntent(HomeIntent.DuplicateClicked(FakeIdGenerator.fakeUuid(1)))
 
-            val copy = repository.current.single { it.id != FakeIdGenerator.fakeUuid(1) }
-            assertEquals("Gym", copy.label)
-            assertEquals(listOf<HomeEffect>(HomeEffect.OpenEditor(copy.id)), effects)
-            assertEquals(2, viewModel.state.value.alarms.size)
-            assertFalse(viewModel.state.value.saveFailed)
-        }
-
-    @Test
-    fun `a failed Duplicate opens nothing, is logged and says Couldn't save`() =
-        runTest(dispatcher) {
-            val repository = FakeAlarmRepository(listOf(alarm(1, LocalTime(7, 0))))
-            val viewModel = home(repository)
-            val effects = effectsOf(viewModel)
-            repository.failure = DomainError.StorageFailure("disk full")
-
-            viewModel.onIntent(HomeIntent.DuplicateClicked(FakeIdGenerator.fakeUuid(1)))
-
-            assertTrue(effects.isEmpty())
+            // Owner decision 2026-10-05: the copy exists only once the editor saves it.
+            assertEquals(listOf<HomeEffect>(HomeEffect.OpenDuplicate(FakeIdGenerator.fakeUuid(1))), effects)
+            assertEquals(1, repository.current.size)
             assertEquals(1, viewModel.state.value.alarms.size)
-            assertEquals(listOf<LogEvent>(LogEvent.OperationFailed("duplicate alarm", "storage failure: disk full")), logger.events)
-            assertTrue(viewModel.state.value.saveFailed)
+            assertFalse(viewModel.state.value.saveFailed)
         }
 
     @Test
@@ -363,7 +346,7 @@ class HomeViewModelTest {
             advanceTimeBy(3_000)
             repository.failure = DomainError.StorageFailure("disk full")
 
-            viewModel.onIntent(HomeIntent.DuplicateClicked(FakeIdGenerator.fakeUuid(1)))
+            viewModel.onIntent(HomeIntent.AlarmToggled(FakeIdGenerator.fakeUuid(1), enabled = false))
 
             assertFalse(viewModel.state.value.openFailed)
             assertTrue(viewModel.state.value.saveFailed)

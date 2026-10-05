@@ -5,6 +5,7 @@ import android.os.Looper
 import androidx.test.core.app.ApplicationProvider
 import com.yawnandpawn.app.YawnAndPawnApp
 import com.yawnandpawn.app.android.wake.WakeAlarmFiredHandler
+import com.yawnandpawn.app.android.wake.WakeServiceStarts
 import com.yawnandpawn.app.awaitChildren
 import com.yawnandpawn.app.core.alarm.AlarmFiredHandler
 import com.yawnandpawn.app.core.alarm.AlarmRepository
@@ -22,6 +23,7 @@ import org.koin.dsl.module
 import org.robolectric.Shadows.shadowOf
 import org.robolectric.shadows.ShadowAlarmManager
 import java.util.TimeZone
+import kotlin.time.Duration
 import kotlin.time.Instant
 
 /**
@@ -58,7 +60,16 @@ internal class SchedulingApp(
                 single<AlarmScheduler> { AndroidAlarmScheduler(androidContext(), get(), get(), get(), get()) }
                 single { AlarmScheduling(get(), get(), get(), get(), get(), get()) }
                 single { RearmOnFire(get(), get(), get(), get(), get(), get()) }
-                single<AlarmFiredHandler> { WakeAlarmFiredHandler(get(), get<RearmOnFire>(), get(), get()) }
+                // No service starts here (the tests read the start requests), so the receiver does not wait for one.
+                single<AlarmFiredHandler> {
+                    WakeAlarmFiredHandler(
+                        get(),
+                        get<RearmOnFire>(),
+                        get(),
+                        get(),
+                        WakeServiceStarts(Duration.ZERO),
+                    )
+                }
             },
         )
     }

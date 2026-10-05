@@ -40,8 +40,9 @@ internal const val HERO_KEY = "hero"
 
 /**
  * How far the Home header has collapsed (owner decision 2026-09-28, Samsung Weather): [hero] 0 at rest to 1 once the
- * `card-hero` has scrolled fully under the pinned header, and [chip] 0 to 1 over the first 16 dp of scrolling (the
- * title's glass chip). Continuous and tied to the scroll position; with reduced motion each is an instant switch.
+ * `card-hero` has scrolled fully under the pinned header (with no hero: once the list scrolled the header's own height),
+ * and [chip] 0 to 1 over the first 16 dp of scrolling (the title's glass chip). Continuous and tied to the scroll
+ * position; with reduced motion each is an instant switch.
  */
 class HeaderCollapse internal constructor(
     private val heroState: State<Float>,
@@ -51,17 +52,29 @@ class HeaderCollapse internal constructor(
     val chip: Float get() = chipState.value
 }
 
+/**
+ * [hasHero]: the list shows `card-hero`, whose scroll drives the title. Without it (always in Epic 1) the title shrinks
+ * over [noHeroDistance] px of scrolling (the header's height), continuously (device test round 1: it used to snap once
+ * the first, often empty, item left the screen).
+ */
 @Composable
-internal fun rememberHeaderCollapse(listState: LazyListState): HeaderCollapse {
+internal fun rememberHeaderCollapse(
+    listState: LazyListState,
+    hasHero: Boolean,
+    noHeroDistance: Float,
+): HeaderCollapse {
     val reduced = rememberReducedMotion()
     val chipDistance = with(LocalDensity.current) { CHIP_FADE_DISTANCE.toPx() }
-    return remember(listState, reduced, chipDistance) {
+    val distance = remember(listState) { ScrollDistance() }
+    val scrolled = { distance.of(listState) }
+    return remember(listState, reduced, chipDistance, hasHero, noHeroDistance) {
         val hero =
             derivedStateOf {
                 val item = listState.layoutInfo.visibleItemsInfo.firstOrNull { it.key == HERO_KEY }
                 val raw =
                     when {
                         item != null -> (-item.offset.toFloat() / item.size.coerceAtLeast(1)).coerceIn(0f, 1f)
+                        !hasHero -> collapseFraction(scrolled(), noHeroDistance)
                         listState.firstVisibleItemIndex >= 1 -> 1f
                         else -> 0f
                     }
@@ -70,16 +83,64 @@ internal fun rememberHeaderCollapse(listState: LazyListState): HeaderCollapse {
         val chip =
             derivedStateOf {
                 val item = listState.layoutInfo.visibleItemsInfo.firstOrNull { it.key == HERO_KEY }
-                val scrolled =
+                val raw =
                     when {
-                        listState.firstVisibleItemIndex == 0 -> listState.firstVisibleItemScrollOffset.toFloat()
-                        item != null -> -item.offset.toFloat()
-                        else -> chipDistance
+                        listState.firstVisibleItemIndex == 0 -> {
+                            collapseFraction(
+                                listState.firstVisibleItemScrollOffset.toFloat(),
+                                chipDistance,
+                            )
+                        }
+
+                        item != null -> {
+                            collapseFraction(-item.offset.toFloat(), chipDistance)
+                        }
+
+                        !hasHero -> {
+                            collapseFraction(scrolled(), chipDistance)
+                        }
+
+                        else -> {
+                            1f
+                        }
                     }
-                val raw = (scrolled / chipDistance).coerceIn(0f, 1f)
                 if (reduced) (if (raw > 0f) 1f else 0f) else raw
             }
         HeaderCollapse(hero, chip)
+    }
+}
+
+/** [scrolled] px over a collapse of [distance] px, from 0 to 1; a distance not known ([scrolled] null) is fully collapsed. */
+internal fun collapseFraction(
+    scrolled: Float?,
+    distance: Float,
+): Float = if (scrolled == null) 1f else (scrolled / distance.coerceAtLeast(1f)).coerceIn(0f, 1f)
+
+/**
+ * How far a lazy list has scrolled from its top, in px. LazyList only reports the first visible item and how far it is
+ * scrolled off, so the content position of each item is remembered while item 0 is laid out with it (at rest the
+ * header zone keeps item 0 laid out for a while); the distance is that position plus the first visible item's scroll.
+ * Null when the first visible item was never laid out with item 0 (a scroll position restored far down).
+ */
+internal class ScrollDistance {
+    private val starts = HashMap<Int, Int>()
+
+    fun of(listState: LazyListState): Float? =
+        of(
+            visible = listState.layoutInfo.visibleItemsInfo.map { it.index to it.offset },
+            firstIndex = listState.firstVisibleItemIndex,
+            firstScrolledOff = listState.firstVisibleItemScrollOffset,
+        )
+
+    /** [visible]: index and offset of each laid-out item; [firstIndex] is scrolled off by [firstScrolledOff] px. */
+    fun of(
+        visible: List<Pair<Int, Int>>,
+        firstIndex: Int,
+        firstScrolledOff: Int,
+    ): Float? {
+        visible.firstOrNull { it.first == 0 }?.let { (_, zero) -> visible.forEach { (index, offset) -> starts[index] = offset - zero } }
+        if (firstIndex == 0) return firstScrolledOff.toFloat()
+        return starts[firstIndex]?.let { (it + firstScrolledOff).toFloat() }
     }
 }
 

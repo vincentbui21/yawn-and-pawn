@@ -87,7 +87,7 @@ class AlarmEditorViewModelTest {
             saveAlarm = alarms.save,
             clock = clock,
             timeZoneProvider = zone,
-            actions = AlarmActions(alarms.setEnabled, alarms.duplicate, alarms.delete, clock, logger),
+            actions = AlarmActions(alarms.setEnabled, alarms.delete, clock, logger),
             soundLibrary = FakeSoundLibrary(),
             soundPreview = FakeSoundPreview(),
             notificationPermission = permission,
@@ -310,7 +310,11 @@ class AlarmEditorViewModelTest {
             viewModel().onIntent(EditorIntent.SaveClicked)
             advanceUntilIdle()
             assertEquals(1, permission.requests)
-            viewModel().onIntent(EditorIntent.SaveClicked)
+            // A different alarm (an identical one would switch the first one on instead of adding a second).
+            viewModel().run {
+                onIntent(EditorIntent.TimeChanged(LocalTime(8, 0)))
+                onIntent(EditorIntent.SaveClicked)
+            }
             advanceUntilIdle()
 
             assertEquals(1, permission.requests, "asked once only")

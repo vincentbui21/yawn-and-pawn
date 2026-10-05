@@ -48,6 +48,10 @@ class AlarmWriteLock {
  * `createdAt = updatedAt = now`; an edit keeps id, request code and `createdAt` and sets `updatedAt = now`. The time
  * is truncated to whole minutes, and a blank label is stored as no label. Invalid input is `InvalidAlarm(field)` and
  * nothing is stored. Once stored, the system alarm follows ([AlarmScheduling.sync]).
+ *
+ * A new alarm whose settings are identical to a stored alarm's ([hasSameSettingsAs]) is not stored a second time: the
+ * stored one is switched on instead (`updatedAt = now`, armed at its next occurrence) and returned, and no request code
+ * is allocated (owner decision 2026-10-05, like Samsung Clock). Any difference stores the new alarm as usual.
  */
 class SaveAlarm(
     private val repository: AlarmRepository,
@@ -69,6 +73,11 @@ class SaveAlarm(
                     if (invalid != null) {
                         Outcome.Failure(DomainError.InvalidAlarm(invalid))
                     } else {
+                        // A new alarm identical to a stored one switches that one on instead (owner decision 2026-10-05).
+                        when (val same = identicalStored(template)) {
+                            is Outcome.Failure -> return@withLock same
+                            is Outcome.Success -> same.value?.let { return@withLock switchOn(it, now) }
+                        }
                         requestCodes.next().map { code -> template.copy(requestCode = code) }
                     }
                 } else {
@@ -78,6 +87,19 @@ class SaveAlarm(
                 .flatMap { alarm -> validateAndStore(repository, alarm.copy(updatedAt = now)) }
                 .onSuccess(scheduling::sync)
         }
+
+    /** The stored alarm that rings exactly like [alarm] ([hasSameSettingsAs]), or null; a failed read is returned. */
+    private suspend fun identicalStored(alarm: Alarm): Outcome<Alarm?, DomainError> =
+        repository.listAll().map { stored -> stored.firstOrNull { it.hasSameSettingsAs(alarm) } }
+
+    /** Switches [alarm] on (`updatedAt = now`) and arms its next occurrence after now (for a one-time alarm, its next date). */
+    private suspend fun switchOn(
+        alarm: Alarm,
+        now: Instant,
+    ): Outcome<Alarm, DomainError> {
+        val on = alarm.copy(enabled = true, updatedAt = now)
+        return repository.upsert(on).map { on }.onSuccess(scheduling::sync)
+    }
 
     private fun AlarmDraft.toAlarm(
         id: String,
@@ -146,7 +168,8 @@ class DeleteAlarm(
 
 /**
  * Copies an alarm with a new id, a new request code and fresh timestamps; the copy is then armed when it is enabled.
- * `NotFound(id)` when there is no such alarm.
+ * `NotFound(id)` when there is no such alarm. Not used by the app since 2026-10-05: Duplicate opens the editor on a new,
+ * unsaved alarm prefilled from the stored one, which [SaveAlarm] stores on Save (owner decision).
  */
 class DuplicateAlarm(
     private val repository: AlarmRepository,

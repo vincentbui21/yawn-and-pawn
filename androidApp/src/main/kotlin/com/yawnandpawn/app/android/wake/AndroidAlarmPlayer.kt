@@ -3,6 +3,7 @@ package com.yawnandpawn.app.android.wake
 import com.yawnandpawn.app.core.alarm.rampGain
 import com.yawnandpawn.app.core.log.LogEvent
 import com.yawnandpawn.app.core.log.Logger
+import com.yawnandpawn.app.core.log.WakeStage
 import com.yawnandpawn.app.core.time.MonotonicClock
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
@@ -40,6 +41,8 @@ class AndroidAlarmPlayer(
     private val monotonicClock: MonotonicClock,
     private val scope: CoroutineScope,
     private val logger: Logger,
+    /** The ring-start timing: a prepared sound (it starts playing then) is logged as `SoundStarted`. */
+    private val timings: WakeTimings = WakeTimings.None,
     /**
      * Runs at the start of every ring, under the player's lock, once [isRinging] is true: the Sound preview stops (Story
      * 1.17). It must not call back into the player.
@@ -254,6 +257,7 @@ class AndroidAlarmPlayer(
             attempt.preparedAt = monotonicClock.elapsedMillis()
             prepareWatchdog?.cancel()
             prepareWatchdog = null
+            if (!isPaused) timings.stage(WakeStage.SoundStarted)
         }
 
     /** A sound that never reports prepared (a stalled content provider) counts as failed after [PREPARE_TIMEOUT]. */

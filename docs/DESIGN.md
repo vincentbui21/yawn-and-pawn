@@ -651,7 +651,7 @@ Computed with a WCAG relative-luminance script (2026-09-26; glass and gradient r
 - **Tabular figures** (`fontFeatureSettings = "tnum"`) for clocks, countdowns, prices and stats so digits do not jump. Verify Geist `tnum` support in E0; if missing, use Geist Mono for `clock-xl` only.
 - **Ramp:** `clock-xl` 88/92 w300 (ringing time) · `display` 48/52 w500 (streak, price in the confirm sheet, alarm time in the editor, countdown seconds) · `headline` 28/34 w600 (screen titles) · `title` 20/26 w600 (card titles, list alarm times) · `button-wake` 20/24 w500 (wake-screen action labels only) · `body` 16/24 w400 · `label` 14/20 w500 (buttons, chips) · `caption` 12/16 w400 (meta).
 - Sentence case everywhere. No all-caps labels except the day chips (M T W T F S S).
-- Font scaling up to 200% reflows, never clips. **Exception:** `clock-xl` scales to at most 1.3× (114 sp) so wake actions stay in the thumb zone; the clock always carries a full-time content description.
+- Font scaling up to 200% reflows, never clips. **Exception:** `clock-xl` scales to at most 1.3× (114 sp) so wake actions stay in the thumb zone, and stays on one line: where the full time ("6:15 AM") does not fit the width (360 dp phones at large font scales) it shrinks to fit, never below `display` (device test round 1, 2026-10-05); the clock always carries a full-time content description.
 
 ## Layout & Spacing
 

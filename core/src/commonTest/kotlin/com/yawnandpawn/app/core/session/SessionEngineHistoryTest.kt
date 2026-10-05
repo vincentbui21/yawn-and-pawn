@@ -83,6 +83,36 @@ class SessionEngineHistoryTest {
         }
 
     @Test
+    fun `the start row is written after the committed step's effects, so the first sound never waits for it`() =
+        runTest {
+            // Each effect with the number of history rows written when it ran.
+            val seen = mutableListOf<Pair<Any, Int>>()
+            val observing =
+                object : EffectRunner {
+                    override suspend fun run(effect: SessionEffect) {
+                        seen += effect to history.rows.size
+                    }
+
+                    override suspend fun apply(effect: EntryEffect) {
+                        seen += effect to history.rows.size
+                    }
+                }
+
+            engine(effects = observing).dispatch(alarmFired)
+
+            assertTrue(seen.any { it.first is EntryEffect.SoundAt }, "the sound effect ran: $seen")
+            assertEquals(listOf(0), seen.map { it.second }.distinct(), "no row was written before any effect ran")
+            assertEquals(listOf("Ringing"), store.commits.map { it.kind }, "the state was committed first (AD-2)")
+            assertEquals(
+                SESSION_ID,
+                history.rows.values
+                    .single()
+                    .sessionId,
+                "the start row is written in the same dispatch",
+            )
+        }
+
+    @Test
     fun `a completed session is recorded on time and goes Idle in the same dispatch, clearing the active session`() =
         runTest {
             val firedAt = SCHEDULED_AT + 5.seconds

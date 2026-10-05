@@ -81,6 +81,7 @@ fun AppNavHost(modifier: Modifier = Modifier) {
                     entry<Route.Alarms>(metadata = TabMetadata) {
                         HomeRoute(
                             onOpenEditor = { id -> backStack.openEditor(id) },
+                            onOpenDuplicate = { id -> backStack.openEditor(alarmId = null, copyOf = id) },
                             openFailed = openFailed,
                             onOpenFailedShown = { openFailed = false },
                         )
@@ -91,6 +92,7 @@ fun AppNavHost(modifier: Modifier = Modifier) {
                     entry<Route.AlarmEditor> { route ->
                         AlarmEditorRoute(
                             alarmId = route.alarmId,
+                            copyOf = route.copyOf,
                             onClose = { backStack.close(route) },
                             onOpenFailed = {
                                 backStack.close(route)

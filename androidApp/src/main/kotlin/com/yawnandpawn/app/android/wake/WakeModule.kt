@@ -9,6 +9,7 @@ import com.yawnandpawn.app.core.session.RandomSeedSource
 import com.yawnandpawn.app.core.session.SeedSource
 import com.yawnandpawn.app.core.session.SessionEngine
 import com.yawnandpawn.app.core.sound.SoundPreview
+import com.yawnandpawn.app.core.time.Clock
 import com.yawnandpawn.app.core.time.TimeSnapshot
 import org.koin.android.ext.koin.androidContext
 import org.koin.core.module.Module
@@ -38,6 +39,9 @@ fun wakeModule(): Module =
         single { AlarmVibrator(androidContext()) }
         single { WakeNotifier(androidContext(), get()) }
         single { WakeServiceStarter(androidContext(), get()) }
+        // Device test round 1: the receiver waits for the service's start, and the ring start is timed in the log.
+        single { WakeServiceStarts() }
+        single { WakeTimings(now = { get<Clock>().now() }, logger = get()) }
         single {
             // A ring stops the Sound preview (Story 1.17); the preview is looked up then, as it depends on this player.
             val koin = this
@@ -48,6 +52,7 @@ fun wakeModule(): Module =
                 get(),
                 get<WakeScope>(),
                 get(),
+                timings = get(),
                 onRingStart = { koin.getOrNull<SoundPreview>()?.stop() },
             )
         }
@@ -59,6 +64,7 @@ fun wakeModule(): Module =
                 logger = get(),
                 now = { TimeSnapshot.of(get(), get(), get()) },
                 session = { get<SessionEngine>().state.value },
+                timings = get(),
             )
         }
     }

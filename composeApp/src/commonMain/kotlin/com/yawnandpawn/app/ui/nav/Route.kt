@@ -31,10 +31,11 @@ sealed interface Route : NavKey {
     @Serializable
     data object You : Route
 
-    /** The alarm editor; [alarmId] is `null` for a new alarm. */
+    /** The alarm editor; [alarmId] is `null` for a new alarm, which [copyOf] prefills from that stored alarm (Duplicate). */
     @Serializable
     data class AlarmEditor(
         val alarmId: String?,
+        val copyOf: String? = null,
     ) : Route
 }
 

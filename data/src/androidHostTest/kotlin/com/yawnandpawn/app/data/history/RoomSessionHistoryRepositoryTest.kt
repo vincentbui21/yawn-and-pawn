@@ -6,6 +6,7 @@ import androidx.sqlite.driver.AndroidSQLiteDriver
 import androidx.test.core.app.ApplicationProvider
 import com.yawnandpawn.app.core.error.DomainError
 import com.yawnandpawn.app.core.error.Outcome
+import com.yawnandpawn.app.core.history.SessionMergeRow
 import com.yawnandpawn.app.core.history.SessionOutcome
 import com.yawnandpawn.app.data.db.AppDatabase
 import com.yawnandpawn.app.data.db.AppDatabaseConstructor
@@ -157,6 +158,30 @@ class RoomSessionHistoryRepositoryTest {
             repository.upsert(first.copy(sessionId = "second", endedAt = DEFAULT_FAKE_INSTANT + 1.days))
 
             withContext(Dispatchers.Default) { withTimeout(WAIT) { seen.first { it == "second" } } }
+        }
+
+    @Test
+    fun `a replayed merge keeps one row with the first merge time`() =
+        runTest {
+            val merge = SessionMergeRow("s", "alarm-b", DEFAULT_FAKE_INSTANT, mergedAt = DEFAULT_FAKE_INSTANT + 5.seconds)
+
+            assertEquals(Outcome.Success(Unit), repository.recordMerge(merge))
+            assertEquals(Outcome.Success(Unit), repository.recordMerge(merge.copy(mergedAt = DEFAULT_FAKE_INSTANT + 40.seconds)))
+
+            assertEquals(Outcome.Success(listOf(merge)), repository.merges("s"))
+        }
+
+    @Test
+    fun `merges read back per session in merge time, then scheduled time, then alarm order`() =
+        runTest {
+            val at = DEFAULT_FAKE_INSTANT
+            val c = SessionMergeRow("s", "alarm-c", at, mergedAt = at + 1.seconds)
+            val b = SessionMergeRow("s", "alarm-b", at, mergedAt = at + 1.seconds)
+            val earlier = SessionMergeRow("s", "alarm-z", at - 60.seconds, mergedAt = at + 1.seconds)
+            val first = SessionMergeRow("s", "alarm-y", at, mergedAt = at)
+            listOf(c, b, earlier, first, c.copy(sessionId = "other")).forEach { repository.recordMerge(it) }
+
+            assertEquals(Outcome.Success(listOf(first, earlier, b, c)), repository.merges("s"))
         }
 
     @Test

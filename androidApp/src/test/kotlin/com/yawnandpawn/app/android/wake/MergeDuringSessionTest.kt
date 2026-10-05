@@ -12,15 +12,18 @@ import com.yawnandpawn.app.core.alarm.AlarmFired
 import com.yawnandpawn.app.core.alarm.AlarmRepository
 import com.yawnandpawn.app.core.alarm.AlarmScheduler
 import com.yawnandpawn.app.core.alarm.RequestCodes
+import com.yawnandpawn.app.core.error.DomainError
 import com.yawnandpawn.app.core.error.Outcome
 import com.yawnandpawn.app.core.session.ActiveSessionStore
 import com.yawnandpawn.app.core.session.SessionEvent
 import com.yawnandpawn.app.core.session.SessionReducer
 import com.yawnandpawn.app.core.session.SessionState
 import com.yawnandpawn.app.core.time.Deadline
+import com.yawnandpawn.app.testing.FakeAlarmRepository
 import com.yawnandpawn.app.testing.FakeBilling
 import com.yawnandpawn.app.testing.aSession
 import com.yawnandpawn.app.testing.anAlarm
+import kotlinx.coroutines.awaitCancellation
 import kotlinx.coroutines.runBlocking
 import kotlinx.datetime.DayOfWeek
 import kotlinx.datetime.LocalTime
@@ -208,5 +211,118 @@ class MergeDuringSessionTest {
 
         assertEquals(emptyList(), app.merges(sessionId))
         assertFalse(app.engine.state.value !is SessionState.Ringing)
+    }
+
+    /** The fire of [alarm] at [at] reaches the running [service] as a new start, as the receiver would send it. */
+    private fun startFor(
+        service: ServiceController<WakeService>,
+        alarm: Alarm,
+        at: Instant,
+    ) = service.withIntent(WakeService.alarmIntent(app.app, AlarmFired(alarm.id, at))).startCommand(0, 2)
+
+    private fun awaitIgnored(
+        app: WakeApp,
+        alarmId: String,
+        reason: String,
+    ) = app.awaitUntil("the fire is ignored: $reason") { app.logs().any { it == "FireIgnored kind=Alarm alarmId=$alarmId reason=$reason" } }
+
+    @Test
+    fun `a repeating alarm switched off before the service handles it is not merged and is logged`() {
+        val service = ringA()
+        val sessionId = (app.engine.state.value as SessionState.Ringing).session.sessionId
+        upsert(alarmB.copy(enabled = false))
+
+        startFor(service, alarmB, scheduledAt + 1.minutes)
+        awaitIgnored(app, alarmB.id, "repeating alarm switched off before it rang")
+
+        assertEquals(emptyList(), app.merges(sessionId))
+        assertIs<SessionState.Ringing>(app.engine.state.value)
+    }
+
+    @Test
+    fun `a one-time alarm that is off by the time the service reads it still merges - RearmOnFire switched it off`() {
+        val service = ringA()
+        val sessionId = (app.engine.state.value as SessionState.Ringing).session.sessionId
+        val oneTime = anAlarm(id = "alarm-c", requestCode = 1002, time = LocalTime(6, 1)).copy(enabled = false)
+        upsert(oneTime)
+
+        startFor(service, oneTime, scheduledAt + 1.minutes)
+
+        assertEquals(oneTime.id, app.awaitMerges(sessionId).single().alarmId)
+    }
+
+    @Test
+    fun `the session's own occurrence fired again is not merged into itself and is logged`() {
+        val service = ringA()
+        val before = app.engine.state.value
+        val sessionId = (before as SessionState.Ringing).session.sessionId
+
+        startFor(service, alarmA, scheduledAt)
+        awaitIgnored(app, alarmA.id, "the session's own occurrence")
+
+        assertEquals(emptyList(), app.merges(sessionId))
+        assertEquals(before, app.engine.state.value)
+    }
+
+    @Test
+    fun `an alarm read that does not answer in time counts as a failure and still merges`() {
+        val hanging = HangingAlarmRepository()
+        val app = WakeApp(repository = hanging)
+        val stored = SessionState.Ringing(aSession())
+        assertEquals(Outcome.Success(Unit), runBlocking { app.koin.get<ActiveSessionStore>().commit(stored) })
+
+        app.ring(AlarmFired(alarmB.id, scheduledAt))
+        app.awaitUntil("the alarm is being read") { hanging.reads > 0 }
+        shadowOf(Looper.getMainLooper()).idleFor(java.time.Duration.ofMillis(WakeService.ALARM_READ_TIMEOUT.inWholeMilliseconds + 1))
+
+        assertEquals(alarmB.id, app.awaitMerges(stored.session.sessionId).single().alarmId)
+    }
+
+    private fun snoozedIn(app: WakeApp): SessionState.Snoozed {
+        val snoozed =
+            SessionState.Snoozed(
+                aSession().copy(interactionDeadline = null, snoozesGranted = 1, snoozeEnd = Deadline.after(app.now(), 9.minutes)),
+            )
+        assertEquals(Outcome.Success(Unit), runBlocking { app.koin.get<ActiveSessionStore>().commit(snoozed) })
+        return snoozed
+    }
+
+    @Test
+    fun `an alarm that cannot be read during a snooze still merges and rings`() {
+        val unreadable = FakeAlarmRepository(listOf(alarmB)).apply { failure = DomainError.StorageFailure("disk I/O error") }
+        val app = WakeApp(repository = unreadable)
+        val snoozed = snoozedIn(app)
+
+        app.ring(AlarmFired(alarmB.id, scheduledAt))
+        app.awaitRinging()
+
+        val ringing = assertIs<SessionState.Ringing>(app.engine.state.value).session
+        assertEquals(snoozed.session.sessionId, ringing.sessionId)
+        assertEquals(snoozed.session.ringIndex + 1, ringing.ringIndex)
+        assertEquals(alarmB.id, app.awaitMerges(snoozed.session.sessionId).single().alarmId)
+    }
+
+    @Test
+    fun `an alarm deleted before the service handles it during a snooze is not merged, the snooze goes on and it is logged`() {
+        val snoozed = snoozedIn(app)
+
+        app.ring(AlarmFired("deleted", scheduledAt))
+        awaitIgnored(app, "deleted", "alarm deleted before it rang")
+
+        assertEquals(emptyList(), app.merges(snoozed.session.sessionId))
+        assertEquals(snoozed.session.sessionId, assertIs<SessionState.Snoozed>(app.engine.state.value).session.sessionId)
+    }
+}
+
+/** An alarm store whose reads never answer (a stuck database); counts them in [reads]. */
+private class HangingAlarmRepository(
+    delegate: AlarmRepository = FakeAlarmRepository(),
+) : AlarmRepository by delegate {
+    @Volatile
+    var reads = 0
+
+    override suspend fun get(id: String): Outcome<Alarm, DomainError> {
+        reads++
+        awaitCancellation()
     }
 }

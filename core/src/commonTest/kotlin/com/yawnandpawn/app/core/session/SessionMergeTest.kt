@@ -79,6 +79,35 @@ class SessionMergeTest {
         }
 
     @Test
+    fun `the merge row is written before the commit, so a process killed right after the commit keeps it`() =
+        runTest {
+            store.commit(SessionState.Snoozed(snoozedSession()))
+            engine.restore()
+            val rowsAtCommit = mutableListOf<Int>()
+            store.onCommit = { rowsAtCommit += history.mergeRows.size }
+
+            assertIs<SessionState.Ringing>(engine.dispatch(alarmB).state())
+
+            assertEquals(1, rowsAtCommit.first(), "the row exists when the merge commits")
+        }
+
+    @Test
+    fun `a merge whose commit fails keeps its row, and the merge dispatched again leaves one row with the first time`() =
+        runTest {
+            store.commit(SessionState.Snoozed(snoozedSession()))
+            engine.restore()
+            store.commitFailure = DomainError.StorageFailure("disk full")
+            assertIs<Outcome.Failure<DomainError>>(engine.dispatch(alarmB))
+            val first = expectedRow()
+            store.commitFailure = null
+            time.advanceBy(30.seconds)
+
+            assertIs<SessionState.Ringing>(engine.dispatch(alarmB).state())
+
+            assertEquals(listOf(first), history.mergeRows.values.toList())
+        }
+
+    @Test
     fun `during a snooze a merge rings now as the next ring with no grace window and no fee, and I'm up goes straight to Loud`() =
         runTest {
             val snoozed = SessionState.Snoozed(snoozedSession())

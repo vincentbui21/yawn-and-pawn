@@ -34,6 +34,6 @@ abstract class SessionHistoryDao {
     @Insert(onConflict = OnConflictStrategy.IGNORE)
     abstract suspend fun insertMerge(merge: SessionMergeEntity)
 
-    @Query("SELECT * FROM session_merge WHERE session_id = :sessionId ORDER BY merged_at, scheduled_at")
+    @Query("SELECT * FROM session_merge WHERE session_id = :sessionId ORDER BY merged_at, scheduled_at, alarm_id")
     abstract suspend fun mergesOf(sessionId: String): List<SessionMergeEntity>
 }

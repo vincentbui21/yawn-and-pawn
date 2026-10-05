@@ -314,7 +314,7 @@ class AppDatabaseFactoryTest {
             "time_to_complete_ms, fallback_used, direct_boot, outcome) VALUES ('$sessionId', '$alarmId', " +
             "${scheduledAt.toEpochMilliseconds()}, ${firstRingAt.toEpochMilliseconds()}, ${endedAt?.toEpochMilliseconds()}, " +
             "$snoozeCount, '${checkTypes.joinToString(",")}', $timeToCompleteMs, ${if (fallbackUsed) 1 else 0}, " +
-            "${if (directBoot) 1 else 0}, '${outcome?.name}')"
+            "${if (directBoot) 1 else 0}, ${outcome?.let { "'${it.name}'" } ?: "NULL"})"
 
     /** A v1 `alarm` row for a one-time, enabled, labelless alarm with gradual volume and vibration on (the builder defaults). */
     private fun Alarm.toVersion1Insert(): String =

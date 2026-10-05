@@ -33,11 +33,12 @@ import kotlin.coroutines.cancellation.CancellationException
  *
  * Session history (AD-18) is the engine's own business, never the runner's: the one-shot
  * [SessionEffect.RecordSessionStart], the one-shot [SessionEffect.RecordMergedOccurrence] (Story 2.9) and the entry effect
- * [EntryEffect.HistoryWriteRequested] go to the
- * [SessionRecorder]. The start row is written after the step's other effects and its entry effects, so the first sound
- * never waits for it (the state is already committed, AD-2). When the end write succeeds, `Recorded` is reduced in the
- * same lock, so the session goes Idle and its `runtime.db` row is cleared by that commit. When it fails, the failure
- * is logged, the state stays Completed or Missed, and the next [dispatch], [tick] or [restore] writes it again.
+ * [EntryEffect.HistoryWriteRequested] go to the [SessionRecorder]. The start row is written after the step's other
+ * effects and its entry effects, so the first sound never waits for it (the state is already committed, AD-2). The
+ * merge row is written before the step's commit, so a kill right after the commit cannot lose it (insert or ignore:
+ * written again, it leaves one row). When the end write succeeds, `Recorded` is reduced in the same lock, so the
+ * session goes Idle and its `runtime.db` row is cleared by that commit. When it fails, the failure is logged, the
+ * state stays Completed or Missed, and the next [dispatch], [tick] or [restore] writes it again.
  *
  * Nothing is reduced before the stored session is loaded: [dispatch] and [tick] first run the [restore] step if it has
  * not succeeded yet, and return its failure if the store cannot be read (the next call tries again). Expected failures
@@ -189,26 +190,24 @@ class SessionEngine internal constructor(
         val now = now()
         // Read with the time ports: a ring that starts or is restored while locked is before the first unlock (Story 2.3).
         val transition = reducer.reduce(from, event, now, userLocked = !userLock.isUserUnlocked())
+        val oneShot = if (runOneShot) transition.effects else emptyList()
         return withContext(NonCancellable) {
+            // The merge row is written before the commit (Story 2.9 review): a kill between the two would otherwise lose
+            // it for good, since a restore runs no one-shot effects. Insert or ignore, so a merge dispatched again after a
+            // failed commit still leaves one row with the first time.
+            oneShot.filterIsInstance<SessionEffect.RecordMergedOccurrence>().forEach { guarded(it) { history.recordMerge(it, now) } }
             val committed = if (transition.state == from) Outcome.Success(Unit) else store.commit(transition.state)
             if (committed is Outcome.Failure) {
                 logger.log(LogEvent.OperationFailed.of(COMMIT, committed.error))
                 committed
             } else {
                 current.value = transition.state
-                val oneShot = if (runOneShot) transition.effects else emptyList()
                 oneShot.filterNot { it.isHistory() }.forEach { effect -> guarded(effect) { effects.run(effect) } }
                 applyEntryEffects(transition.state, now)
-                // The history rows are written after the effects (device test round 1): the sound never waits for them.
+                // The start row is written after the effects (device test round 1): the sound never waits for it.
                 // Still inside the lock, so a start row lands before any end row of this session (recordEnd merges).
-                oneShot.filter { it.isHistory() }.forEach { effect ->
-                    guarded(effect) {
-                        when (effect) {
-                            is SessionEffect.RecordSessionStart -> history.recordStart(effect, transition.state)
-                            is SessionEffect.RecordMergedOccurrence -> history.recordMerge(effect, now)
-                            else -> Unit
-                        }
-                    }
+                oneShot.filterIsInstance<SessionEffect.RecordSessionStart>().forEach { start ->
+                    guarded(start) { history.recordStart(start, transition.state) }
                 }
                 Outcome.Success(now)
             }

@@ -58,9 +58,10 @@ yawn-and-pawn:
       - '**/data/src/**'
       - '**/androidApp/src/**'
     excludes: *testSources
-  # No media session, volume provider or audio rerouting: the volume keys and routing stay the system's (Story 2.8,
-  # FR-SES-6, NFR-13). App UI modules only.
-  NoAudioCaptureOrRouting:
+  # No device hostage (Story 2.11, NFR-13): no lock task, overlay, launcher, keyguard, telephony, media session, volume
+  # provider, audio rerouting, background activity start or Home/Recents/Power key override (includes Story 2.8's
+  # volume-key and routing bans). App UI modules only.
+  NoHostageApis:
     active: true
     includes:
       - '**/androidApp/src/**'

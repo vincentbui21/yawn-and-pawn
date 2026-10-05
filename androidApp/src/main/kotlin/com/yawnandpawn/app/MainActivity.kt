@@ -10,8 +10,8 @@ import androidx.lifecycle.DefaultLifecycleObserver
 import androidx.lifecycle.LifecycleOwner
 import com.yawnandpawn.app.android.ApplicationScope
 import com.yawnandpawn.app.android.reliability.AndroidNotificationPermission
+import com.yawnandpawn.app.android.screen.forwardToWakeScreenWhileResumed
 import com.yawnandpawn.app.android.wake.WakeRuntime
-import com.yawnandpawn.app.android.wake.forwardToWakeScreenWhileResumed
 import com.yawnandpawn.app.core.session.SessionEngine
 import com.yawnandpawn.app.ui.App
 import kotlinx.coroutines.launch

@@ -58,7 +58,7 @@ class NoPrintlnInCoreTest {
                 "NoRawSp",
                 "NoInexactAlarm",
                 "CredentialStorageAccess",
-                "NoAudioCaptureOrRouting",
+                "NoHostageApis",
             ),
             ruleSet.rules.keys.map { it.value },
         )

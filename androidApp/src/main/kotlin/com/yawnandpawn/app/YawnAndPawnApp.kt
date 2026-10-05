@@ -9,8 +9,8 @@ import com.yawnandpawn.app.android.UnavailableBilling
 import com.yawnandpawn.app.android.androidTimeModule
 import com.yawnandpawn.app.android.crash.FirebaseStartup
 import com.yawnandpawn.app.android.reliability.reliabilityModule
+import com.yawnandpawn.app.android.screen.AndroidWakeScreenOpener
 import com.yawnandpawn.app.android.sound.soundModule
-import com.yawnandpawn.app.android.wake.AndroidWakeScreenOpener
 import com.yawnandpawn.app.android.wake.WakeAlarmFiredHandler
 import com.yawnandpawn.app.android.wake.WakeRuntime
 import com.yawnandpawn.app.android.wake.wakeModule

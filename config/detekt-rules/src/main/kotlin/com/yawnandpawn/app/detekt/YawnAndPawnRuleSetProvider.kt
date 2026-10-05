@@ -20,7 +20,7 @@ class YawnAndPawnRuleSetProvider : RuleSetProvider {
                 RuleName("NoRawSp") to ::NoRawSp,
                 RuleName("NoInexactAlarm") to ::NoInexactAlarm,
                 RuleName("CredentialStorageAccess") to ::CredentialStorageAccess,
-                RuleName("NoAudioCaptureOrRouting") to ::NoAudioCaptureOrRouting,
+                RuleName("NoHostageApis") to ::NoHostageApis,
             ),
         )
 }

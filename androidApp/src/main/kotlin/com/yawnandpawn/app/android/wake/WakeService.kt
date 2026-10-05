@@ -12,6 +12,7 @@ import com.yawnandpawn.app.android.alarmFiredOrNull
 import com.yawnandpawn.app.android.putAlarmFired
 import com.yawnandpawn.app.android.putRetrySince
 import com.yawnandpawn.app.android.retrySinceOrNull
+import com.yawnandpawn.app.android.screen.forwardsToWakeScreen
 import com.yawnandpawn.app.core.alarm.Alarm
 import com.yawnandpawn.app.core.alarm.AlarmFired
 import com.yawnandpawn.app.core.alarm.AlarmRepository

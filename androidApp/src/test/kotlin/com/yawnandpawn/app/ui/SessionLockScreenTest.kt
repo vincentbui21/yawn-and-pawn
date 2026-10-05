@@ -20,7 +20,7 @@ import androidx.test.core.app.ApplicationProvider
 import com.yawnandpawn.app.MainActivity
 import com.yawnandpawn.app.StopAppRule
 import com.yawnandpawn.app.android.ApplicationScope
-import com.yawnandpawn.app.android.wake.AndroidWakeScreenOpener
+import com.yawnandpawn.app.android.screen.AndroidWakeScreenOpener
 import com.yawnandpawn.app.android.wake.WakeActivity
 import com.yawnandpawn.app.awaitChildren
 import com.yawnandpawn.app.core.error.DomainError

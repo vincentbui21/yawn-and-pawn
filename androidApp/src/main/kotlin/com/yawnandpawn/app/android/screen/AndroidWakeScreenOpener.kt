@@ -1,6 +1,7 @@
-package com.yawnandpawn.app.android.wake
+package com.yawnandpawn.app.android.screen
 
 import android.content.Context
+import com.yawnandpawn.app.android.wake.WakeActivity
 import com.yawnandpawn.app.core.session.SessionState
 import com.yawnandpawn.app.core.session.inProgress
 import com.yawnandpawn.app.ui.nav.WakeScreenOpener

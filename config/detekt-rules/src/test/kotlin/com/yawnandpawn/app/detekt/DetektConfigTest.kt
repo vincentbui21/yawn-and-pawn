@@ -40,11 +40,11 @@ class DetektConfigTest {
     }
 
     @Test
-    fun `NoAudioCaptureOrRouting is scoped to androidApp and composeApp`() {
-        val rule = (config["yawn-and-pawn"] as Map<*, *>)["NoAudioCaptureOrRouting"] as Map<*, *>
+    fun `NoHostageApis is scoped to androidApp and composeApp`() {
+        val rule = (config["yawn-and-pawn"] as Map<*, *>)["NoHostageApis"] as Map<*, *>
         val includes = (rule["includes"] as List<*>).toSet()
 
         val expected = listOf("composeApp", "androidApp").map { "**/$it/src/**" }
-        assertTrue(includes.containsAll(expected), "NoAudioCaptureOrRouting.includes = $includes")
+        assertTrue(includes.containsAll(expected), "NoHostageApis.includes = $includes")
     }
 }

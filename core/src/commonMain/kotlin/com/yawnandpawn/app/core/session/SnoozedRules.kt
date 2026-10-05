@@ -16,8 +16,10 @@ internal fun snoozedRow(
     state: SessionState.Snoozed,
     event: SessionEvent,
     now: TimeSnapshot,
+    userLocked: Boolean = false,
 ): Transition? {
-    val session = state.session
+    // Every ring that starts from a snooze while the user is locked is before the first unlock (Story 2.3).
+    val session = state.session.lockedIf(userLocked)
     val snoozeEnd = session.snoozeEnd
     val over = snoozeEnd == null || snoozeEnd.isDue(now)
     return when (event) {

@@ -18,6 +18,7 @@ internal class RingRules(
         state: Ring,
         event: SessionEvent,
         now: TimeSnapshot,
+        userLocked: Boolean = false,
     ): Transition? =
         when (event) {
             is SessionEvent.UserEvent -> onUserEvent(state, event, now)
@@ -26,7 +27,7 @@ internal class RingRules(
             is SessionEvent.CallEvent -> onCall(state, event, now)
             is SessionEvent.TimerEvent -> onTimer(state, event, now)
             SessionEvent.SlotFired -> Transition(state, listOf(heartbeat(now)))
-            SessionEvent.ProcessRestored -> restored(state, now)
+            SessionEvent.ProcessRestored -> restored(state, now, userLocked)
             is SessionEvent.OverlapAlarmFired -> Transition(state, mergedEffects(state.session, event))
             SessionEvent.UserUnlocked -> unlocked(state)
             is SessionEvent.AlarmFired, is SessionEvent.TestAlarmFired, is SessionEvent.Recorded -> null
@@ -138,19 +139,23 @@ internal class RingRules(
     /**
      * AD-2 rule 2: a restored ring gets a fresh 30-minute deadline from now and `paying` is cleared; no one-shot effects.
      * The pause is cleared too: a call that ended during the crash or reboot sends no CallEnded, and the call adapter
-     * sends CallStarted again if the call is still on.
+     * sends CallStarted again if the call is still on. Restored while the user is locked ([userLocked], Story 2.3, for
+     * example after `LOCKED_BOOT_COMPLETED`), the ring is marked before the first unlock: Direct Boot substitutions for
+     * this ring and `direct_boot` in history, also for a session that started unlocked.
      */
     private fun restored(
         state: Ring,
         now: TimeSnapshot,
+        userLocked: Boolean,
     ): Transition =
         Transition(
             state.with(
-                state.session.copy(
-                    paying = null,
-                    pausedAt = null,
-                    interactionDeadline = Deadline.after(now, SessionReducer.NO_INTERACTION_TIMEOUT),
-                ),
+                state.session
+                    .copy(
+                        paying = null,
+                        pausedAt = null,
+                        interactionDeadline = Deadline.after(now, SessionReducer.NO_INTERACTION_TIMEOUT),
+                    ).lockedIf(userLocked),
             ),
             emptyList(),
         )

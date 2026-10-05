@@ -52,6 +52,7 @@ class SessionEngine internal constructor(
     private val bootCounter: BootCounter,
     private val logger: Logger,
     private val due: (SessionState, TimeSnapshot) -> List<SessionEvent>,
+    private val userLock: UserLockState = UserLockState.Unlocked,
 ) {
     constructor(
         reducer: SessionReducer,
@@ -62,7 +63,8 @@ class SessionEngine internal constructor(
         monotonicClock: MonotonicClock,
         bootCounter: BootCounter,
         logger: Logger,
-    ) : this(reducer, store, effects, recorder, clock, monotonicClock, bootCounter, logger, ::dueEvents)
+        userLock: UserLockState = UserLockState.Unlocked,
+    ) : this(reducer, store, effects, recorder, clock, monotonicClock, bootCounter, logger, ::dueEvents, userLock)
 
     private val mutex = Mutex()
     private val current = MutableStateFlow<SessionState>(SessionState.Idle)
@@ -184,7 +186,8 @@ class SessionEngine internal constructor(
         from: SessionState = current.value,
     ): Outcome<TimeSnapshot, DomainError> {
         val now = now()
-        val transition = reducer.reduce(from, event, now)
+        // Read with the time ports: a ring that starts or is restored while locked is before the first unlock (Story 2.3).
+        val transition = reducer.reduce(from, event, now, userLocked = !userLock.isUserUnlocked())
         return withContext(NonCancellable) {
             val committed = if (transition.state == from) Outcome.Success(Unit) else store.commit(transition.state)
             if (committed is Outcome.Failure) {

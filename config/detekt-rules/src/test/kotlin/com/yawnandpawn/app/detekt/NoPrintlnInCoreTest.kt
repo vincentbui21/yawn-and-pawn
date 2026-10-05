@@ -50,7 +50,15 @@ class NoPrintlnInCoreTest {
 
         assertEquals("yawn-and-pawn", ruleSet.id.value)
         assertEquals(
-            listOf("NoPrintlnInCore", "NoDirectTimeAccess", "NoRawColor", "NoRawCornerRadius", "NoRawSp", "NoInexactAlarm"),
+            listOf(
+                "NoPrintlnInCore",
+                "NoDirectTimeAccess",
+                "NoRawColor",
+                "NoRawCornerRadius",
+                "NoRawSp",
+                "NoInexactAlarm",
+                "CredentialStorageAccess",
+            ),
             ruleSet.rules.keys.map { it.value },
         )
     }

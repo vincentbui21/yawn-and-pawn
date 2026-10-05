@@ -82,4 +82,12 @@ class RingingScreenshotTest {
     @Test
     @Config(fontScale = 2.0f)
     fun `enabled snooze preview at 200 percent`() = ringing("wake_ringing_snooze_enabled_sunrise_font200", RingingSamples.enabledSnooze)
+
+    // Story 2.3: before the first unlock after a reboot, the approved lock-icon snooze control.
+    @Test
+    fun `before the first unlock`() = ringing("wake_ringing_locked_sunrise", RingingSamples.lockedBeforeUnlock)
+
+    @Test
+    @Config(fontScale = 2.0f)
+    fun `before the first unlock at 200 percent`() = ringing("wake_ringing_locked_sunrise_font200", RingingSamples.lockedBeforeUnlock)
 }

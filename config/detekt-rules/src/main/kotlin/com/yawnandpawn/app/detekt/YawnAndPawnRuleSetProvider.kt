@@ -19,6 +19,7 @@ class YawnAndPawnRuleSetProvider : RuleSetProvider {
                 RuleName("NoRawCornerRadius") to ::NoRawCornerRadius,
                 RuleName("NoRawSp") to ::NoRawSp,
                 RuleName("NoInexactAlarm") to ::NoInexactAlarm,
+                RuleName("CredentialStorageAccess") to ::CredentialStorageAccess,
             ),
         )
 }

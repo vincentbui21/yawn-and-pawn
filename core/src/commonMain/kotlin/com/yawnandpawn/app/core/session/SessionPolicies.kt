@@ -82,13 +82,21 @@ fun interface FallbackPolicy {
 }
 
 /**
- * The Epic 1 production [SnoozeAvailabilityPolicy]: there is no billing yet, so snooze is never offered. A test session
- * says "Test · no charge" ([UnavailableReason.TestMode]); any other session waits for the catalogue.
+ * The Epic 1 production [SnoozeAvailabilityPolicy]: there is no billing yet, so snooze is never offered. The reason, in
+ * this order of precedence (Story 2.3; Epic 4's real policy keeps it): a test session says "Test · no charge"
+ * ([UnavailableReason.TestMode]); while the user has not unlocked since boot ([userLock], read live) "Unlock your phone
+ * to snooze" ([UnavailableReason.BeforeFirstUnlock]); otherwise it waits for the catalogue.
  */
-object NoBillingSnoozeAvailability : SnoozeAvailabilityPolicy {
+class NoBillingSnoozeAvailability(
+    private val userLock: UserLockState = UserLockState.Unlocked,
+) : SnoozeAvailabilityPolicy {
     override fun availability(session: SessionData): SnoozeAvailability =
         SnoozeAvailability.Unavailable(
-            if (session.config.testMode) UnavailableReason.TestMode else UnavailableReason.CatalogueNotLoaded,
+            when {
+                session.config.testMode -> UnavailableReason.TestMode
+                !userLock.isUserUnlocked() -> UnavailableReason.BeforeFirstUnlock
+                else -> UnavailableReason.CatalogueNotLoaded
+            },
         )
 }
 

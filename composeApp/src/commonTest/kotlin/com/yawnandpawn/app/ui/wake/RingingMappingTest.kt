@@ -31,7 +31,7 @@ class RingingMappingTest {
     fun `a first ring shows the alarm time and date in the zone, its label and prices not loaded yet`() {
         val session = aSession()
 
-        val state = ringingUiState(session, NoBillingSnoozeAvailability.availability(session), TimeZone.of("Europe/Berlin"))
+        val state = ringingUiState(session, NoBillingSnoozeAvailability().availability(session), TimeZone.of("Europe/Berlin"))
 
         // 2027-03-03T06:00Z is 07:00 in Berlin (CET).
         assertEquals(LocalTime(7, 0), state.time)
@@ -67,7 +67,7 @@ class RingingMappingTest {
     fun `a test session reads Test no charge`() {
         val session = aSession(config = aSessionConfig(testMode = true))
 
-        assertEquals(SnoozeOffer.TestMode, ringingUiState(session, NoBillingSnoozeAvailability.availability(session), utc).snooze)
+        assertEquals(SnoozeOffer.TestMode, ringingUiState(session, NoBillingSnoozeAvailability().availability(session), utc).snooze)
     }
 
     @Test

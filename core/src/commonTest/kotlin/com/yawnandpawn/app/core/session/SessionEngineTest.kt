@@ -308,9 +308,8 @@ class SessionEngineTest {
                     time.monotonicClock,
                     time.bootCounter,
                     logger,
-                ) { _, _ ->
-                    listOf(SessionEvent.GraceElapsed)
-                }
+                    due = { _, _ -> listOf(SessionEvent.GraceElapsed) },
+                )
 
             assertEquals(Outcome.Success(SessionState.Idle), alwaysDue.tick())
 

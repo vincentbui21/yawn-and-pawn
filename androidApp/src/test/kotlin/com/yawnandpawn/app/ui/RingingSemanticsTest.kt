@@ -172,6 +172,29 @@ class RingingSemanticsTest {
     @Config(qualifiers = "+w360dp", fontScale = 2.0f)
     fun `on a 360 dp screen at 200 percent the 12-hour clock stays on one line`() = ringing { assertClockOnOneLine() }
 
+    private val lockedSnooze = "Snooze unavailable, Unlock your phone to snooze"
+
+    @Test
+    fun `before the first unlock the snooze reads Unlock your phone to snooze, after the clock and I'm up, at 64 dp`() =
+        ringing(RingingSamples.lockedBeforeUnlock) {
+            val snooze = composeRule.onNodeWithContentDescription(lockedSnooze)
+            assertThumbZone(snooze)
+            val clock = composeRule.onNodeWithContentDescription(formatClockTime(LocalTime(6, 15), is24Hour = false))
+            val order = listOf(clock.traversalIndex(), imUp().traversalIndex(), snooze.traversalIndex())
+            assertTrue(order[0] < order[1] && order[1] <= order[2], "clock, I'm up, snooze: $order")
+        }
+
+    @Test
+    @Config(fontScale = 2.0f)
+    fun `before the first unlock at 200 percent both actions stay in the thumb zone`() =
+        ringing(RingingSamples.lockedBeforeUnlock) { assertThumbZone(composeRule.onNodeWithContentDescription(lockedSnooze)) }
+
+    @Test
+    fun `a test alarm before the first unlock still reads Test no charge`() =
+        ringing(RingingSamples.testAlarmLocked) {
+            composeRule.onNodeWithContentDescription("Snooze unavailable, Test · no charge").assertExists()
+        }
+
     @Test
     fun `a test alarm's snooze is read as Snooze unavailable, Test no charge`() =
         ringing(RingingSamples.testAlarm) {

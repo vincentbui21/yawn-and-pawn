@@ -12,8 +12,11 @@ import com.yawnandpawn.app.core.session.SnoozeAvailabilityPolicy
 import com.yawnandpawn.app.core.session.SnoozeOffer
 import com.yawnandpawn.app.core.session.StepResult
 import com.yawnandpawn.app.core.session.UnavailableReason
+import com.yawnandpawn.app.core.session.UserLockState
 import com.yawnandpawn.app.core.session.nextOffer
 import com.yawnandpawn.app.core.session.snoozeProductId
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.MutableStateFlow
 
 /**
  * [FeeLadder] under test control: snooze n at base tier B is `snooze_usd_NN` with NN = [tierOf] (B, n), by default
@@ -93,4 +96,26 @@ class FakeFallbackPolicy(
         calls++
         return decision
     }
+}
+
+/** [UserLockState] under test control (Story 2.3): locked until [unlock] (or [unlocked] set true). */
+class FakeUserLockState(
+    unlocked: Boolean = false,
+) : UserLockState {
+    private val state = MutableStateFlow(unlocked)
+
+    var unlocked: Boolean
+        get() = state.value
+        set(value) {
+            state.value = value
+        }
+
+    /** The user unlocks the phone. */
+    fun unlock() {
+        unlocked = true
+    }
+
+    override fun isUserUnlocked(): Boolean = state.value
+
+    override fun observe(): Flow<Boolean> = state
 }

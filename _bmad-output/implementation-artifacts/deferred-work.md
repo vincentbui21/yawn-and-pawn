@@ -122,6 +122,7 @@
 - source_spec: `_bmad-output/implementation-artifacts/spec-1-11-the-complete-wake-session-state-machine-in-core.md`
   summary: AD-2 has a UserUnlocked row only for Ringing; unlocking during Grace, Loud or Snoozed leaves beforeFirstUnlock set for the whole session.
   evidence: Normative table (ARCHITECTURE-SPINE.md AD-2) row "Ringing (before first unlock) | UserUnlocked". The user usually unlocks while doing the check (Grace or Loud). Settle with Story 2.3 (ring before first unlock) via correct-course: add rows for Grace, Loud and Snoozed.
+  status: settled in Story 2.3 without correct-course, the Story 2.4 way ("init outside the table"); no rows were added. Snooze availability reads the live `UserLockState` (`NoBillingSnoozeAvailability`, precedence TestMode > BeforeFirstUnlock > CatalogueNotLoaded), so an unlock in Grace, Loud or Snoozed lifts "Unlock your phone to snooze" without a transition. The session flag `beforeFirstUnlock` only keeps the Direct Boot sound and check for the current ring. Story 2.4 starts billing (and lifts the substitutions where Epic 3 needs it) from the unlock signal, outside the table.
 - source_spec: `_bmad-output/implementation-artifacts/spec-1-11-the-complete-wake-session-state-machine-in-core.md`
   summary: Check-run consistency for real checks: the fallback keeps the old seeds and failedAttempts and emits no StartCheckStep; ValidNext advances without StartCheckStep(step + 1); the fallback policy cannot see a matcher error.
   evidence: Harmless in Epic 1 (one Placeholder step, fallback never allowed). Story 3.2 (multi-step checks), Story 3.9 (fallback picker: new seeds in FallbackRequested, reset attempts) and Story 7.7 (House Hunt matcher error flag) must settle them.
@@ -207,3 +208,9 @@
     - History's time to complete on such a device is always wall time (review of Story 2.2): a reboot to a higher uptime cannot be detected, and a clock change during one session is rarer than that error.
     - The usual restore runs within a minute of `LOCKED_BOOT_COMPLETED`, so this is rare. `BOOT_COUNT` exists on API 24+, and minSdk is 26.
     - Story 2.13 records whether any device in the matrix lacks `BOOT_COUNT`.
+- source_spec: `_bmad-output/implementation-artifacts/spec-2-3-ring-before-the-first-unlock-after-a-reboot.md`
+  summary: Story 2.3 notes for the rebase onto main and for later stories.
+  evidence: |
+    - The new detekt rule `CredentialStorageAccess` made `AndroidNotificationPermission` move its preferences ("reliability", the "asked once" flag for the notification permission) to device-protected storage. The file is now `shared_prefs/reliability.xml` in the device-protected domain. When this branch is rebased onto main, Story 2.12's `backup_rules.xml`, `data_extraction_rules.xml` and `BackupRulesTest` must cover it (exclude it, or include it as a setting). The flag in the old credential-protected file is not migrated, so a user may be asked for the notification permission once more.
+    - A Snoozed session restored while locked and not yet over is still ignored by `ProcessRestored` (no table change). Its next ring is marked before the first unlock when it starts, because the snooze rows apply the lock state to every new ring.
+    - The Direct Boot note ("Your phone restarted, so today's check is Math.", preview `ringing-locked`) is Epic 3, together with Math as the Direct Boot check. Epic 2 shows only the lock-icon snooze.

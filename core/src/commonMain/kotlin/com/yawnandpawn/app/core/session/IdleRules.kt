@@ -5,18 +5,22 @@ import com.yawnandpawn.app.core.time.TimeSnapshot
 
 // AD-2 rows from Idle, Completed and Missed. A null result means no row matches.
 
-/** Idle + AlarmFired (alarm enabled) and Idle + TestAlarmFired: the first ring. */
+/**
+ * Idle + AlarmFired (alarm enabled) and Idle + TestAlarmFired: the first ring. It is before the first unlock when the
+ * event says so or the user is locked now ([userLocked], Story 2.3).
+ */
 internal fun idleRow(
     event: SessionEvent,
     now: TimeSnapshot,
+    userLocked: Boolean = false,
 ): Transition? =
     when (event) {
         is SessionEvent.AlarmFired -> {
-            event.config?.let { startSession(event.sessionId, it, event.seeds, event.beforeFirstUnlock, now) }
+            event.config?.let { startSession(event.sessionId, it, event.seeds, event.beforeFirstUnlock || userLocked, now) }
         }
 
         is SessionEvent.TestAlarmFired -> {
-            startSession(event.sessionId, event.config.copy(testMode = true), event.seeds, event.beforeFirstUnlock, now)
+            startSession(event.sessionId, event.config.copy(testMode = true), event.seeds, event.beforeFirstUnlock || userLocked, now)
         }
 
         else -> {
@@ -52,7 +56,8 @@ private fun startSession(
             config = config,
             ringIndex = 1,
             snoozesGranted = 0,
-            checkRun = CheckRun(plan = config.checkPlan, seeds = seeds),
+            // Before the first unlock the first check plan has the Direct Boot substitutions (Story 2.3).
+            checkRun = CheckRun(plan = DirectBootSubstitution.apply(config, beforeFirstUnlock).checkPlan, seeds = seeds),
             firstRing = now,
             startedBeforeUnlock = beforeFirstUnlock,
             beforeFirstUnlock = beforeFirstUnlock,

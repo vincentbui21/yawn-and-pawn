@@ -109,7 +109,8 @@ sealed interface SessionState {
  * [graceEnd] and [interactionDeadline], so paused time never counts.
  * @property firstRing when the first ring started (AD-18 history), set by `AlarmFired` / `TestAlarmFired`. Null in a
  * session stored before Story 1.13; the recorder then falls back to the stored history row, then to the scheduled time.
- * @property startedBeforeUnlock the session started before the first unlock after a boot. Unlike [beforeFirstUnlock]
+ * @property startedBeforeUnlock a ring of the session rang before the first unlock after a boot: its first ring, or a
+ * ring started or restored while locked (Story 2.3; history `direct_boot`). Unlike [beforeFirstUnlock]
  * it never changes, so history keeps it after `UserUnlocked`.
  * @property ended when the session ended (Completed or Missed), set by the reducer on that transition; null before.
  */

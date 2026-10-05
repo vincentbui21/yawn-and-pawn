@@ -23,6 +23,7 @@ deferred:
 **Approach:**
 - While the app is **session-locked**, the Navigation 3 back stack is replaced by one `Route.SessionInProgress`. It shows the approved `home-session` screen: the Home header plus `SessionInProgressPanel`, with no nav capsule. "Back to alarm" opens `WakeActivity`.
 - Session-locked (review fix): the stored session is not restored yet (or its load failed), or a ring (Ringing, Grace, Loud), a snooze or the emergency ring is in progress. Completed and Missed only wait for their history row, which may keep failing, so they do not lock.
+- Not restored yet (owner polish, 2026-10-06): while the stored session is not restored and no emergency ring plays, the app shows a neutral empty screen (the app background, no text, no nav capsule) instead of the "Alarm in progress" panel, so a cold start never flashes it. The stack is left as it is. Once restored, the app shows the lock only if a session is in progress, else Home. The guard still refuses writes until restored.
 - The stack returns to `[Alarms]` once unlocked.
 - Behind the UI, one core `SessionLockGuard` makes the alarm use cases return `DomainError.SessionActive` without writing, on the same rule.
 
@@ -67,7 +68,8 @@ deferred:
 | Navigate while locked | Locked; any `Route` subclass pushed, tab selected or editor opened | Top stays `SessionInProgress` (every subclass, enumerated from the serializer) | No error expected |
 | Editor open | `[Alarms, AlarmEditor]` with a preview playing; session starts | Editor gone, no dialog, preview stopped | No error expected |
 | Session ends | Locked, then Idle | `[Alarms]` (Home) | No error expected |
-| Not restored yet | Stored Ringing, engine still Idle | Lock shown, Home never composed; stays locked once restored | No error expected |
+| Not restored yet | Stored Ringing, engine still Idle | Neutral empty screen (no "Alarm in progress", no Home, no nav capsule); the lock once restored | No error expected |
+| Not restored yet, empty store | Nothing stored, engine still Idle | Neutral empty screen, then Home; "Alarm in progress" never shown | No error expected |
 | History write failing | Engine stuck in Completed or Missed | Not locked: Home, alarms editable | Engine retries the write |
 | Cold start in a session | Session restored before the first frame | First frame is the lock; `HomeViewModel` never created | No error expected |
 | Back to alarm | Panel shown (Snoozed) | `WakeActivity` started | No error expected |
@@ -110,6 +112,8 @@ deferred:
 
 ## Spec Change Log
 
+- 2026-10-06 (owner polish, from review, `fix(2.6): no "Alarm in progress" flash while restoring`): on a cold start the "Alarm in progress" panel flashed while the stored session was restored. Until it is restored (and no emergency ring plays) `AppNavHost` now shows a neutral empty screen (`RESTORING_TAG`); then the lock for a session in progress, else Home. `SessionLockGuard` is unchanged and still refuses writes until restored. `SessionLockScreenTest` keeps the load failing until it lets it finish, since `MainActivity` restores on its own (Story 2.1).
+
 ## Review Triage Log
 
 ### Review (2 reviewers, fast mode)
@@ -131,7 +135,7 @@ Deferred: a frame-level test that moving into and out of the lock is instant (ne
 
 - **Not a new screen:** the session route reuses `HomeScreen` in its approved `home-session` state. The header plus panel is exactly what the owner approved; the preview hides the nav bar in that state too.
 - **A derived list and a `SideEffect`:** the shown list follows the lock in the same composition, so the old route never composes for a frame (review fix). The `SideEffect` still mutates the real stack: that clears the editor's ViewModel, which discards the draft and stops the preview, and Back works on the real stack once unlocked.
-- **Locked before the restore:** with Story 2.1 the restore runs from the activities, so "Idle" can mean "not loaded yet". Locking until `restored` can show "Alarm in progress" for the moment the load takes at a cold start; that is preferred over showing editable alarms while a ring may be stored.
+- **Locked before the restore:** with Story 2.1 the restore runs from the activities, so "Idle" can mean "not loaded yet". The guard stays locked until `restored`, which is preferred over editable alarms while a ring may be stored. The UI shows a neutral empty screen for that moment rather than "Alarm in progress" (owner polish), and the lock only once a restored session is in progress.
 
 ## Verification
 

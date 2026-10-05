@@ -12,6 +12,7 @@ import androidx.compose.ui.test.hasText
 import androidx.compose.ui.test.isHeading
 import androidx.compose.ui.test.junit4.createEmptyComposeRule
 import androidx.compose.ui.test.onNodeWithContentDescription
+import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.unit.dp
@@ -43,6 +44,7 @@ import com.yawnandpawn.app.testing.FakeSessionHistoryRepository
 import com.yawnandpawn.app.testing.FakeSoundPreview
 import com.yawnandpawn.app.testing.aSession
 import com.yawnandpawn.app.testing.aSessionConfig
+import com.yawnandpawn.app.ui.nav.RESTORING_TAG
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.runBlocking
 import org.junit.Rule
@@ -83,15 +85,18 @@ class SessionLockScreenTest {
     private val probe = FakeReliabilityProbe()
     private val history = FakeSessionHistoryRepository()
 
+    private val store = FakeActiveSessionStore()
+
     /**
      * Starts the app with the session [stored] at "now" on its time ports (none: Idle) and restores it unless [restore]
-     * is false (the restore that Story 2.1 runs from the activities has not finished yet).
+     * is false. Not restoring also makes every load fail until [finishRestore], so the restore that Story 2.1 runs from
+     * the activities cannot finish meanwhile.
      */
     private fun start(
         restore: Boolean = true,
         stored: ((TimeSnapshot) -> SessionState)? = null,
     ) {
-        val store = FakeActiveSessionStore()
+        if (!restore) store.loadFailure = DomainError.StorageFailure("still loading")
         restartKoin(
             app,
             module {
@@ -112,7 +117,24 @@ class SessionLockScreenTest {
         composeRule.waitForIdle()
     }
 
+    /** The stored session loads now, as the activities' restore would once runtime.db answers. */
+    private fun finishRestore() {
+        store.loadFailure = null
+        runBlocking { engine.restore() }
+        composeRule.waitForIdle()
+    }
+
     private fun startedActivities() = generateSequence { shadowOf(app).nextStartedActivity }.toList()
+
+    /** Not restored yet: only the app background, no "Alarm in progress", no Home, no nav capsule. */
+    private fun assertRestoring() {
+        composeRule.waitForIdle()
+        composeRule.onNodeWithTag(RESTORING_TAG).assertExists()
+        composeRule.onNodeWithText("Alarm in progress").assertDoesNotExist()
+        composeRule.onNodeWithText("Back to alarm").assertDoesNotExist()
+        composeRule.onNodeWithContentDescription("Add alarm").assertDoesNotExist()
+        assertEquals(0, probe.checks, "Home never composed")
+    }
 
     private fun assertLocked() {
         composeRule.waitUntil(timeoutMillis = 5_000) {
@@ -181,35 +203,34 @@ class SessionLockScreenTest {
     }
 
     @Test
-    fun `before the stored session is restored the app shows the lock, not Home, and stays locked on a ring`() {
+    fun `before the stored session is restored the app shows a neutral screen, then the lock once a ring is restored`() {
         start(restore = false) { SessionState.Ringing(aSession()) }
         assertEquals(SessionState.Idle, engine.state.value, "not restored yet")
 
         ActivityScenario.launch(MainActivity::class.java).use {
+            assertRestoring()
+
+            finishRestore()
+
             assertLocked()
             assertEquals(0, probe.checks, "Home never composed")
-
-            runBlocking { engine.restore() }
-            composeRule.waitForIdle()
-
-            assertLocked()
-            assertEquals(0, probe.checks)
         }
     }
 
     @Test
-    fun `before the restore of an empty store the app is locked, then shows Home`() {
+    fun `before the restore of an empty store the app shows a neutral screen, then Home without Alarm in progress`() {
         start(restore = false)
 
         ActivityScenario.launch(MainActivity::class.java).use {
-            assertLocked()
+            assertRestoring()
 
-            runBlocking { engine.restore() }
+            finishRestore()
             composeRule.waitUntil(timeoutMillis = 5_000) {
                 composeRule.onAllNodes(hasContentDescription("Add alarm")).fetchSemanticsNodes().isNotEmpty()
             }
 
             composeRule.onNodeWithText("Alarm in progress").assertDoesNotExist()
+            composeRule.onNodeWithTag(RESTORING_TAG).assertDoesNotExist()
         }
     }
 

@@ -6,6 +6,7 @@ import androidx.compose.animation.EnterTransition
 import androidx.compose.animation.ExitTransition
 import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.SideEffect
@@ -16,6 +17,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.testTag
 import androidx.lifecycle.viewmodel.navigation3.rememberViewModelStoreNavEntryDecorator
 import androidx.navigation3.runtime.NavKey
 import androidx.navigation3.runtime.entryProvider
@@ -44,6 +46,9 @@ import com.yawnandpawn.app.ui.shell.AppTab
 import com.yawnandpawn.app.ui.theme.PpsTheme
 import com.yawnandpawn.app.ui.you.YouScreen
 import com.yawnandpawn.app.ui.you.YouUiState
+import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.merge
 import kotlinx.datetime.LocalDate
 import kotlinx.datetime.toLocalDateTime
 import org.koin.compose.koinInject
@@ -55,15 +60,23 @@ import org.koin.compose.koinInject
  * a tab returns to Alarms, Back on Alarms leaves the app (see TabNavigation.kt). Each entry gets its own saveable state
  * (scroll position) and ViewModel store, so an editor's ViewModel is cleared when the editor leaves the back stack.
  *
- * While the app is session-locked ([SessionLockGuard.isLocked]: not restored yet, or a ring, snooze or emergency ring in
- * progress) only [Route.SessionInProgress] is shown, from the same composition (Story 2.6): Home's approved session
- * state, whose "Back to alarm" opens the wake screen ([WakeScreenOpener]). The stack itself is replaced right after,
- * so the editor leaves without a dialog (its ViewModel, draft and preview with it), and Home returns once unlocked.
+ * While a ring, snooze or emergency ring is in progress ([SessionLockGuard.isLocked]) only [Route.SessionInProgress] is
+ * shown, from the same composition (Story 2.6): Home's approved session state, whose "Back to alarm" opens the wake
+ * screen ([WakeScreenOpener]). The stack itself is replaced right after, so the editor leaves without a dialog (its
+ * ViewModel, draft and preview with it), and Home returns once unlocked. Until the stored session is restored (and no
+ * emergency ring plays) the app shows a neutral empty screen instead, so a cold start never flashes "Alarm in
+ * progress"; the guard still refuses writes then.
  */
 @Composable
 fun AppNavHost(modifier: Modifier = Modifier) {
     val backStack = rememberNavBackStack(RouteSavedStateConfiguration, Route.Alarms)
-    val locked = sessionLocked()
+    val lock = sessionLock()
+    if (lock == SessionLock.Restoring) {
+        // Nothing to show yet: the app background only (no text, no nav capsule); the stack is left as it is.
+        Box(modifier = modifier.fillMaxSize().background(PpsTheme.colors.bg).testTag(RESTORING_TAG))
+        return
+    }
+    val locked = lock == SessionLock.Locked
     SideEffect { backStack.applySessionLock(locked) }
     // What is shown follows the lock in the same composition, so a locked app never composes the route it held (Home
     // or the editor would start their loads and previews); the SideEffect then makes the real stack match.
@@ -137,16 +150,41 @@ private val SessionLockedHome = HomeUiState(sessionInProgress = true)
 /** What a locked app shows: only the session lock. */
 private val LockedStack: List<NavKey> = listOf(Route.SessionInProgress)
 
+/** The test tag of the neutral screen shown while the stored session is restored. */
+const val RESTORING_TAG = "app-restoring"
+
+/** What the app shows for the session lock. */
+private enum class SessionLock {
+    /** Not restored yet and no emergency ring: a neutral empty screen (no "Alarm in progress" flash, no Home). */
+    Restoring,
+
+    /** A ring, a snooze or the emergency ring: only "Alarm in progress". */
+    Locked,
+
+    /** The app as usual. */
+    Unlocked,
+}
+
+private fun SessionLockGuard.lock(): SessionLock =
+    when {
+        !isLocked -> SessionLock.Unlocked
+        !restored.value && !emergency.value -> SessionLock.Restoring
+        else -> SessionLock.Locked
+    }
+
 /**
  * The session lock (Story 2.6, [SessionLockGuard.isLocked]): until the stored session is restored, and while a ring, a
- * snooze or the emergency ring is in progress. Completed and Missed (only the history row pending) do not lock. Read
- * synchronously for the first frame, so a cold start into a session never shows Home first.
+ * snooze or the emergency ring is in progress. Completed and Missed (only the history row pending) do not lock. One
+ * flow over all three inputs, read synchronously for the first frame, so a cold start into a session never shows Home
+ * first and a cold start without one never shows "Alarm in progress".
  */
 @Composable
-private fun sessionLocked(): Boolean {
+private fun sessionLock(): SessionLock {
     val guard = koinInject<SessionLockGuard>()
-    val locked by remember(guard) { guard.locked }.collectAsState(initial = guard.isLocked)
-    return locked
+    val lock by remember(guard) {
+        merge(guard.restored, guard.state, guard.emergency).map { guard.lock() }.distinctUntilChanged()
+    }.collectAsState(initial = guard.lock())
+    return lock
 }
 
 /** The approved `home-session` screen: the Home header and `panel-session-in-progress`, no nav capsule. */

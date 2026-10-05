@@ -135,7 +135,15 @@
 - source_spec: `_bmad-output/implementation-artifacts/spec-1-13-record-every-session-in-history.md`
   summary: Implement the accepted `app.db` downgrade policy: a restored `app.db` whose `user_version` is above the installed `AppDatabase` version is skipped and logged, keeping the current file, and the user is told.
   evidence: Policy in `docs/decisions/db-downgrade.md`. With no destructive fallback Room cannot open a newer file, so a restored v4 `app.db` on a v3 install would make every alarm and history read fail. Story 1.13 changes no backup behaviour.
-  status: assigned to Story 2.12 (PpsBackupAgent: check the incoming file's schema version in `onRestoreFile`, show the user a notice when a restore is skipped (owner-approved copy), never set `restoreAnyVersion`, Robolectric test with a hand-built v4 file).
+  status: assigned to Story 2.12 (PpsBackupAgent: check the incoming file's schema version in `onRestoreFile`, show the user a notice when a restore is skipped (owner-approved copy), never set `restoreAnyVersion`, Robolectric test with a hand-built v4 file). Guard resolved in Story 2.12: `PpsBackupAgent` and `AppDatabaseRestoreGuard` skip and log a newer `app.db` and record it in `SkippedRestoreNotice`; `PpsBackupAgentTest` covers v4, v3, v2 and non-database files. The visible notice is carried in the entry below.
+- source_spec: `_bmad-output/implementation-artifacts/spec-2-12-back-up-alarms-and-history-never-the-session-or-media.md`
+  summary: Owner copy and a home for the skipped-restore notice. Tell the user that their alarms and history were not restored because the backup comes from a newer version of the app, and that installing the latest version brings them back.
+  evidence: |
+    - Story 2.12 stores the flag: `SkippedRestoreNotice.skippedSchema`, device-protected and never backed up.
+    - EXPERIENCE.md has no string for it, so nothing shows it yet.
+    - Needed: an owner-approved string in EXPERIENCE.md Key strings, then a small UI story. For example, an info `banner-warning` on Home, dismissed by clearing the flag.
+    - It is rare. Android itself normally declines a backup from a newer `versionCode`, because `restoreAnyVersion` is false.
+    - Raise at the Epic 2 review.
 - source_spec: `_bmad-output/implementation-artifacts/spec-1-13-record-every-session-in-history.md`
   summary: Merged occurrences never reach history: `SessionEffect.RecordMergedOccurrence` is still only logged by the Epic 1 runner, and nothing writes the merged alarm's occurrence (alarm id, scheduled time, the session it joined).
   evidence: Story 1.13 made `SessionRecorder` the only history writer for the session row; `RecordMergedOccurrence` goes to the `EffectRunner` (`LoggingEffectRunner`), which logs its type name only. The consumer is the Day detail of Progress (Epic 6), which lists every occurrence of a morning, merged ones included.

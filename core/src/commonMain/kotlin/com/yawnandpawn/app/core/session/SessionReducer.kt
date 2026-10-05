@@ -18,15 +18,24 @@ import kotlin.time.Duration.Companion.seconds
  * engine applies entry effects).
  * The rows live in `IdleRules.kt`, [RingRules], [CheckRules], [PurchaseRules] and `SnoozedRules.kt`.
  */
-class SessionReducer(
+class SessionReducer internal constructor(
     private val availabilityPolicy: SnoozeAvailabilityPolicy,
     checkValidator: CheckValidator,
     fallbackPolicy: FallbackPolicy,
+    /** A check plan before the first unlock ([DirectBootSubstitution.lockedPlan]); tests pass one that shows its use. */
+    private val directBootPlan: (CheckPlan) -> CheckPlan,
 ) {
+    constructor(
+        availabilityPolicy: SnoozeAvailabilityPolicy,
+        checkValidator: CheckValidator,
+        fallbackPolicy: FallbackPolicy,
+    ) : this(availabilityPolicy, checkValidator, fallbackPolicy, DirectBootSubstitution::lockedPlan)
+
     private val ringRules =
         RingRules(
-            checks = CheckRules(checkValidator, fallbackPolicy),
+            checks = CheckRules(checkValidator, fallbackPolicy, directBootPlan),
             purchases = PurchaseRules(this::snoozeAvailability),
+            directBootPlan = directBootPlan,
         )
 
     /**
@@ -42,9 +51,9 @@ class SessionReducer(
     ): Transition {
         val row =
             when (state) {
-                SessionState.Idle -> idleRow(event, now, userLocked)
+                SessionState.Idle -> idleRow(event, now, userLocked, directBootPlan)
                 is SessionState.Ring -> ringRules.row(state, event, now, userLocked)
-                is SessionState.Snoozed -> snoozedRow(state, event, now, userLocked)
+                is SessionState.Snoozed -> snoozedRow(state, event, now, userLocked, directBootPlan)
                 is SessionState.Completed, is SessionState.Missed -> endedRow(state, event)
             }
         return row ?: Transition(state, listOf(SessionEffect.LogIgnored.of(event, (state as? SessionState.Active)?.session?.sessionId)))

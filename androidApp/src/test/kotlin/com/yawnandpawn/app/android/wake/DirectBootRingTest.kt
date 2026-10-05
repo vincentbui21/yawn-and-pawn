@@ -3,10 +3,10 @@ package com.yawnandpawn.app.android.wake
 import android.app.AlarmManager
 import android.app.Application
 import android.app.NotificationManager
+import android.app.Service
 import android.content.Context
-import android.content.ContextWrapper
 import android.content.Intent
-import android.content.SharedPreferences
+import android.os.IBinder
 import android.os.Looper
 import android.os.UserManager
 import androidx.test.core.app.ApplicationProvider
@@ -43,6 +43,7 @@ import com.yawnandpawn.app.testing.aSessionConfig
 import com.yawnandpawn.app.testing.anAlarm
 import com.yawnandpawn.app.ui.uiModule
 import kotlinx.coroutines.runBlocking
+import org.junit.After
 import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -53,11 +54,11 @@ import org.koin.dsl.module
 import org.robolectric.Robolectric
 import org.robolectric.RobolectricTestRunner
 import org.robolectric.Shadows.shadowOf
+import org.robolectric.annotation.Config
 import org.robolectric.shadows.ShadowLog
 import org.robolectric.shadows.ShadowMediaPlayer
-import java.io.File
-import java.io.FileOutputStream
 import kotlin.test.assertEquals
+import kotlin.test.assertFailsWith
 import kotlin.test.assertFalse
 import kotlin.test.assertIs
 import kotlin.test.assertNotNull
@@ -67,10 +68,12 @@ import kotlin.time.Duration
 import kotlin.time.Instant
 
 /**
- * Story 2.3: the alarm rings after a reboot before the first unlock. Credential-protected storage is closed then, so the
- * app's context here throws on any access to it; everything must resolve under `createDeviceProtectedStorageContext()`.
+ * Story 2.3: the alarm rings after a reboot before the first unlock. Credential-protected storage is closed then, so
+ * every context here (the Application and its `applicationContext`, each service, the context a receiver gets) throws
+ * on any access to it ([LockedStorageContextImpl]); everything must resolve under `createDeviceProtectedStorageContext()`.
  */
 @RunWith(RobolectricTestRunner::class)
+@Config(shadows = [LockedStorageContextImpl::class])
 class DirectBootRingTest {
     @get:Rule(order = 0)
     val stopAppRule = StopAppRule()
@@ -78,43 +81,55 @@ class DirectBootRingTest {
     private val app = ApplicationProvider.getApplicationContext<Application>()
     private val systemSound = "system:Morning|content://media/internal/audio/media/7"
 
-    /** The app context before the first unlock: credential-protected storage throws, device-protected storage works. */
-    private class LockedStorageContext(
-        base: Context,
-    ) : ContextWrapper(base) {
-        val touched = mutableListOf<String>()
-
-        private fun closed(what: String): Nothing {
-            touched += what
-            throw IllegalStateException("credential-protected storage is locked: $what")
-        }
-
-        override fun getApplicationContext(): Context = this
-
-        override fun getFilesDir(): File = closed("filesDir")
-
-        override fun getCacheDir(): File = closed("cacheDir")
-
-        override fun getDataDir(): File = closed("dataDir")
-
-        override fun getNoBackupFilesDir(): File = closed("noBackupFilesDir")
-
-        override fun getDatabasePath(name: String): File = closed("getDatabasePath($name)")
-
-        override fun getSharedPreferences(
-            name: String,
-            mode: Int,
-        ): SharedPreferences = closed("getSharedPreferences($name)")
-
-        override fun openFileOutput(
-            name: String,
-            mode: Int,
-        ): FileOutputStream = closed("openFileOutput($name)")
-
-        override fun createDeviceProtectedStorageContext(): Context = baseContext.createDeviceProtectedStorageContext()
+    private fun lockUser() {
+        shadowOf(app.getSystemService(UserManager::class.java)).setUserUnlocked(false)
+        LockedStorageContextImpl.locked = true
     }
 
-    private fun lockUser() = shadowOf(app.getSystemService(UserManager::class.java)).setUserUnlocked(false)
+    private fun unlockUser() {
+        shadowOf(app.getSystemService(UserManager::class.java)).setUserUnlocked(true)
+        LockedStorageContextImpl.locked = false
+    }
+
+    @After
+    fun openStorage() = LockedStorageContextImpl.reset()
+
+    @Test
+    fun `while locked every context closes credential-protected storage and the device-protected one stays open`() {
+        lockUser()
+        val service = Robolectric.buildService(PlainService::class.java).create().get()
+        val contexts = listOf(app, app.applicationContext, app.baseContext, service, service.applicationContext)
+        val closed =
+            listOf<Pair<String, (Context) -> Any?>>(
+                "filesDir" to { it.filesDir },
+                "cacheDir" to { it.cacheDir },
+                "codeCacheDir" to { it.codeCacheDir },
+                "noBackupFilesDir" to { it.noBackupFilesDir },
+                "dataDir" to { it.dataDir },
+                "getDir" to { it.getDir("x", Context.MODE_PRIVATE) },
+                "openFileInput" to { it.openFileInput("x") },
+                "openFileOutput" to { it.openFileOutput("x", Context.MODE_PRIVATE) },
+                "getDatabasePath" to { it.getDatabasePath("x.db") },
+                "getSharedPreferences" to { it.getSharedPreferences("x", Context.MODE_PRIVATE) },
+                "deleteDatabase" to { it.deleteDatabase("x.db") },
+                "databaseList" to { it.databaseList() },
+            )
+
+        contexts.forEach { context ->
+            closed.forEach { (what, access) ->
+                assertFailsWith<IllegalStateException>("$what on $context") { access(context) }
+                // A missing file may still fail on the device-protected context, but never as locked storage.
+                val device = runCatching { access(context.createDeviceProtectedStorageContext()) }.exceptionOrNull()
+                assertFalse(device is IllegalStateException, "$what on the device-protected context: $device")
+            }
+        }
+        assertTrue(LockedStorageContextImpl.touched.isNotEmpty())
+    }
+
+    /** A service with no behaviour of its own: its base context is what the guard must close. */
+    class PlainService : Service() {
+        override fun onBind(intent: Intent?): IBinder? = null
+    }
 
     private fun idle() {
         shadowOf(Looper.getMainLooper()).idle()
@@ -139,11 +154,10 @@ class DirectBootRingTest {
         lockUser()
         stopApp()
         ShadowMediaPlayer.setMediaInfoProvider { ShadowMediaPlayer.MediaInfo(3_600_000, 0) }
-        val locked = LockedStorageContext(app)
         val billing = FakeBilling()
         val koin =
             startKoin {
-                androidContext(locked)
+                androidContext(app)
                 modules(
                     listOf(appModule, dataModule, uiModule, testAppModule) +
                         module {
@@ -178,7 +192,7 @@ class DirectBootRingTest {
             awaitUntil("the alarm rings") { engine.state.value is SessionState.Ringing && player.sound != null }
         } catch (e: AssertionError) {
             val logs = ShadowLog.getLogsForTag(AndroidLogger.TAG).map { it.msg }
-            throw AssertionError("${e.message}; state ${engine.state.value}; touched ${locked.touched}; logs $logs", e)
+            throw AssertionError("${e.message}; state ${engine.state.value}; touched ${LockedStorageContextImpl.touched}; logs $logs", e)
         }
 
         val ringing = engine.state.value as SessionState.Ringing
@@ -195,7 +209,7 @@ class DirectBootRingTest {
         )
         assertFalse(firebase.started, "Firebase waits for the unlock")
         assertEquals(emptyList(), billing.launched, "no billing while locked")
-        assertEquals(emptyList<String>(), locked.touched, "no credential-protected storage was touched")
+        assertEquals(emptyList<String>(), LockedStorageContextImpl.touched.toList(), "no credential-protected storage was touched")
     }
 
     @Test
@@ -252,7 +266,7 @@ class DirectBootRingTest {
         idle()
         val locked = scheduler.calls
         scheduler.clearCalls()
-        shadowOf(app.getSystemService(UserManager::class.java)).setUserUnlocked(true)
+        unlockUser()
         app.sendBroadcast(Intent(Intent.ACTION_BOOT_COMPLETED).setPackage(app.packageName))
         idle()
 

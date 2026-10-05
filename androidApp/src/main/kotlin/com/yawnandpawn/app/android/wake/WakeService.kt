@@ -6,7 +6,6 @@ import android.content.Intent
 import android.content.pm.ServiceInfo
 import android.os.Build
 import android.os.IBinder
-import android.os.UserManager
 import com.yawnandpawn.app.android.AlarmFiredReceiver
 import com.yawnandpawn.app.android.ApplicationScope
 import com.yawnandpawn.app.android.alarmFiredOrNull
@@ -27,7 +26,9 @@ import com.yawnandpawn.app.core.log.Logger
 import com.yawnandpawn.app.core.log.WakeStage
 import com.yawnandpawn.app.core.log.diagnostic
 import com.yawnandpawn.app.core.session.CheckAnswer
+import com.yawnandpawn.app.core.session.CheckPlan
 import com.yawnandpawn.app.core.session.ConfigResolver
+import com.yawnandpawn.app.core.session.DirectBootSubstitution
 import com.yawnandpawn.app.core.session.GlobalSettings
 import com.yawnandpawn.app.core.session.SeedSource
 import com.yawnandpawn.app.core.session.SessionEngine
@@ -36,6 +37,7 @@ import com.yawnandpawn.app.core.session.SessionReducer
 import com.yawnandpawn.app.core.session.SessionSlotRearm
 import com.yawnandpawn.app.core.session.SessionState
 import com.yawnandpawn.app.core.session.TestAlarmStore
+import com.yawnandpawn.app.core.session.UserLockState
 import com.yawnandpawn.app.core.session.nextTickIn
 import com.yawnandpawn.app.core.time.BootCounter
 import com.yawnandpawn.app.core.time.Clock
@@ -112,6 +114,7 @@ class WakeService :
     private val starts: WakeServiceStarts by inject()
     private val timings: WakeTimings by inject()
     private val rearm: SessionSlotRearm by inject()
+    private val userLock: UserLockState by inject()
 
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate + CoroutineExceptionHandler { _, e -> onCrash(e) })
     private val commands = Mutex()
@@ -302,12 +305,13 @@ class WakeService :
         alarm: Alarm,
     ) {
         val config = ConfigResolver.resolve(alarm, GlobalSettings(), testMode = false, scheduledAt = fired.scheduledAt)
+        val locked = !userLock.isUserUnlocked()
         val event =
             SessionEvent.AlarmFired(
                 sessionId = ids.newId(),
                 config = config,
-                seeds = seeds.seedsFor(config.checkPlan),
-                beforeFirstUnlock = !getSystemService(UserManager::class.java).isUserUnlocked,
+                seeds = seedsFor(config.checkPlan, locked),
+                beforeFirstUnlock = locked,
             )
         when (val started = engine.dispatch(event)) {
             is Outcome.Failure -> {
@@ -323,6 +327,12 @@ class WakeService :
             }
         }
     }
+
+    /** Seeds for the plan the first ring really runs: before the first unlock, with the Direct Boot substitutions (Story 2.3). */
+    private fun seedsFor(
+        plan: CheckPlan,
+        locked: Boolean,
+    ): List<Long> = seeds.seedsFor(DirectBootSubstitution.plan(plan, locked))
 
     private fun alarmUnreadable(
         fired: AlarmFired,
@@ -352,12 +362,13 @@ class WakeService :
             logger.log(LogEvent.FireIgnored(FireKind.TestAlarm, alarmId = null, reason = "no test pending"))
             return
         }
+        val locked = !userLock.isUserUnlocked()
         val event =
             SessionEvent.TestAlarmFired(
                 sessionId = ids.newId(),
                 config = pending,
-                seeds = seeds.seedsFor(pending.checkPlan),
-                beforeFirstUnlock = !getSystemService(UserManager::class.java).isUserUnlocked,
+                seeds = seedsFor(pending.checkPlan, locked),
+                beforeFirstUnlock = locked,
             )
         val started = engine.dispatch(event)
         if (started is Outcome.Failure) {

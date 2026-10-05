@@ -13,6 +13,7 @@ import kotlin.time.Duration.Companion.seconds
 internal class RingRules(
     private val checks: CheckRules,
     private val purchases: PurchaseRules,
+    private val directBootPlan: (CheckPlan) -> CheckPlan = DirectBootSubstitution::lockedPlan,
 ) {
     fun row(
         state: Ring,
@@ -139,9 +140,10 @@ internal class RingRules(
     /**
      * AD-2 rule 2: a restored ring gets a fresh 30-minute deadline from now and `paying` is cleared; no one-shot effects.
      * The pause is cleared too: a call that ended during the crash or reboot sends no CallEnded, and the call adapter
-     * sends CallStarted again if the call is still on. Restored while the user is locked ([userLocked], Story 2.3, for
-     * example after `LOCKED_BOOT_COMPLETED`), the ring is marked before the first unlock: Direct Boot substitutions for
-     * this ring and `direct_boot` in history, also for a session that started unlocked.
+     * sends CallStarted again if the call is still on. The restored ring is before the first unlock exactly when the user
+     * is locked now ([userLocked], Story 2.3, for example after `LOCKED_BOOT_COMPLETED`): then its check plan gets the
+     * Direct Boot substitutions and history says `direct_boot`, also for a session that started unlocked. Restored
+     * unlocked, the ring plays the chosen sound again; its check plan stays as it is mid-ring.
      */
     private fun restored(
         state: Ring,
@@ -155,7 +157,7 @@ internal class RingRules(
                         paying = null,
                         pausedAt = null,
                         interactionDeadline = Deadline.after(now, SessionReducer.NO_INTERACTION_TIMEOUT),
-                    ).lockedIf(userLocked),
+                    ).newRing(userLocked, directBootPlan),
             ),
             emptyList(),
         )

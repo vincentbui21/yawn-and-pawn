@@ -11,6 +11,7 @@ import com.yawnandpawn.app.core.time.TimeSnapshot
 internal class CheckRules(
     private val validator: CheckValidator,
     private val fallbackPolicy: FallbackPolicy,
+    private val directBootPlan: (CheckPlan) -> CheckPlan = DirectBootSubstitution::lockedPlan,
 ) {
     /** Grace / Loud + CheckAnswerSubmitted: advance, count a wrong answer, or complete on the last step. */
     fun onAnswer(
@@ -39,12 +40,16 @@ internal class CheckRules(
             }
         }
 
-    /** Grace / Loud + FallbackRequested, when the policy allows it and it was not used: the fallback plan replaces the check. */
+    /**
+     * Grace / Loud + FallbackRequested, when the policy allows it and it was not used: the fallback plan replaces the
+     * check, with the Direct Boot substitutions before the first unlock (Story 2.3).
+     */
     fun onFallbackRequested(state: Ring): Transition? {
         val session = state.session
         val decision = fallbackPolicy.fallback(session)
         return if (state !is Ringing && !session.checkRun.fallbackUsed && decision is FallbackDecision.Allowed) {
-            val run = session.checkRun.copy(plan = decision.plan, step = 0, fallbackUsed = true)
+            val plan = if (session.beforeFirstUnlock) directBootPlan(decision.plan) else decision.plan
+            val run = session.checkRun.copy(plan = plan, step = 0, fallbackUsed = true)
             Transition(state.with(session.copy(checkRun = run)), emptyList())
         } else {
             null

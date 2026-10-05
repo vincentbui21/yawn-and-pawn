@@ -33,11 +33,21 @@ internal fun durationBetween(
 }
 
 /**
- * A ring restored while the user is locked (Story 2.3) is before the first unlock: Direct Boot substitutions apply and
- * history records `direct_boot`. Nothing is cleared when unlocked (Story 2.4 handles the unlock).
+ * A new ring of a running session (a restore, or the ring after a snooze; Story 2.3) is before the first unlock exactly
+ * when the user is locked now ([userLocked]), so a ring after the unlock plays the chosen sound again.
+ * `startedBeforeUnlock` only goes from false to true (history `direct_boot`). Locked, [plan] (by default the current
+ * one) gets the Direct Boot substitutions, step for step, so the run's step index and seeds stay valid.
  */
-internal fun SessionData.lockedIf(userLocked: Boolean): SessionData =
-    if (userLocked) copy(beforeFirstUnlock = true, startedBeforeUnlock = true) else this
+internal fun SessionData.newRing(
+    userLocked: Boolean,
+    directBootPlan: (CheckPlan) -> CheckPlan,
+    plan: CheckPlan = checkRun.plan,
+): SessionData =
+    copy(
+        beforeFirstUnlock = userLocked,
+        startedBeforeUnlock = startedBeforeUnlock || userLocked,
+        checkRun = checkRun.copy(plan = if (userLocked) directBootPlan(plan) else plan),
+    )
 
 /** No ring timers left: grace, interaction, snooze and pause cleared. */
 internal fun SessionData.withoutTimers(): SessionData = copy(graceEnd = null, interactionDeadline = null, snoozeEnd = null, pausedAt = null)

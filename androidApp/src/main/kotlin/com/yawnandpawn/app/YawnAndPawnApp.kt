@@ -83,7 +83,7 @@ val appModule =
         // dataModule) and the real time ports. The wake runtime (Story 1.14) carries out its effects; billing stays
         // unavailable until Epic 4.
         // Before the first unlock (Story 2.3): the engine marks the ring, and snooze says "Unlock your phone to snooze".
-        single<UserLockState> { AndroidUserLockState(androidContext()) }
+        single<UserLockState> { AndroidUserLockState(androidContext(), get()) }
         single<SnoozeAvailabilityPolicy> { NoBillingSnoozeAvailability(get()) }
         single<CheckValidator> { PlaceholderCheckValidator }
         single<FallbackPolicy> { NoFallbackPolicy }

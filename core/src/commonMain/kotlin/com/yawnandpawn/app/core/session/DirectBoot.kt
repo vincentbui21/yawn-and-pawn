@@ -45,9 +45,28 @@ object DirectBootSubstitution {
     ): SessionConfig {
         if (!beforeFirstUnlock) return config
         val sound = config.soundRef.takeIf { SoundRef.parse(it) is SoundRef.BuiltIn } ?: Alarm.DEFAULT_SOUND_REF
-        val plan = CheckPlan(config.checkPlan.steps.map { if (it.isDirectBootSafe) it else DIRECT_BOOT_CHECK })
+        val plan = lockedPlan(config.checkPlan)
         return if (sound == config.soundRef && plan == config.checkPlan) config else config.copy(soundRef = sound, checkPlan = plan)
     }
+
+    /**
+     * The check plan a ring runs: with [beforeFirstUnlock] the [lockedPlan], else [plan] unchanged. The wake service
+     * takes the first ring's seeds for it; the reducer applies it to each ring that starts, is restored or follows a
+     * snooze while locked, and to the fallback plan.
+     */
+    fun plan(
+        plan: CheckPlan,
+        beforeFirstUnlock: Boolean,
+    ): CheckPlan = if (beforeFirstUnlock) lockedPlan(plan) else plan
+
+    /**
+     * [plan] before the first unlock: each step that is not Direct Boot safe ([isSafe]) becomes [DIRECT_BOOT_CHECK], one
+     * for one, so a check run's step index and seeds stay valid. Every step is safe until Epic 3, so tests pass [isSafe].
+     */
+    internal fun lockedPlan(
+        plan: CheckPlan,
+        isSafe: (CheckStep) -> Boolean = CheckStep::isDirectBootSafe,
+    ): CheckPlan = if (plan.steps.all(isSafe)) plan else CheckPlan(plan.steps.map { if (isSafe(it)) it else DIRECT_BOOT_CHECK })
 }
 
 /** The step runs before the first unlock: it needs no credential-protected storage or media. */

@@ -4,7 +4,7 @@ type: 'feature'
 created: '2026-10-05'
 status: 'done'
 baseline_revision: 'b3ea320649097c9707bfe691620e3e78bb2f61fc'
-review_loop_iteration: 0
+review_loop_iteration: 1
 followup_review_recommended: false
 context:
   - '{project-root}/_bmad-output/implementation-artifacts/epic-2-context.md'
@@ -131,6 +131,49 @@ So no rows are added.
 
 ## Review Triage Log
 
+### Review (2 reviewers, fast mode)
+
+Fixed (`fix(2.3): review fixes`):
+
+- **Lock read never throws.** `AndroidUserLockState.isUserUnlocked()` runs in every `SessionEngine.step`; a failing system service would have thrown out of dispatch or restore and left the alarm silent. It is now `runCatching { … }.getOrDefault(true)` and logs the first failure once (`OperationFailed("read user lock state", …)`). `WakeService` reads the same port instead of calling `UserManager` itself.
+- **`beforeFirstUnlock` per ring.** Nothing dispatches `UserUnlocked` yet, so the flag stayed set after the unlock and later rings (snooze end, restore) still played the default sound. Each new ring now sets `beforeFirstUnlock = userLocked` (the current lock state); `startedBeforeUnlock` only goes from false to true. The `SessionState` KDoc says so.
+- **Check-plan substitution everywhere a ring starts.** Before, it was applied only in `IdleRules.startSession`. Now `DirectBootSubstitution` also applies to:
+  - a ring restored while locked (`RingRules.restored`, same step, one step for one);
+  - the ring after a snooze while locked (`SnoozedRules`): the session's own plan (the used fallback plan, else the frozen config's) is substituted. After the unlock that ring gets the chosen check back;
+  - the fallback plan in `CheckRules` when `beforeFirstUnlock`.
+  `WakeService` takes the first ring's seeds from the substituted plan (`DirectBootSubstitution.plan(config.checkPlan, locked)`). Substitution is one step for one, so seeds stay valid on a restored or snoozed ring. The reducer gets an internal `directBootPlan` seam because no step is unsafe until Epic 3. Tests pass a marker plan. The public constructor and the transition table are unchanged.
+- **Detekt `CredentialStorageAccess` is stricter:**
+  - `dataStoreFile`, `preferencesDataStoreFile` and `preferencesDataStore` are always reported (they resolve `applicationContext.filesDir`);
+  - it adds `openFileOutput`, `openFileInput`, `getDir`, `getNoBackupFilesDir` / `noBackupFilesDir`, `getCodeCacheDir` / `codeCacheDir`, `deleteDatabase`, `databaseList`, and `Room.databaseBuilder(context, …)` on a context that is not device-protected;
+  - the receiver check removes parentheses and `!!`, and accepts `this.deviceContext` and `ContextCompat.createDeviceProtectedStorageContext(ctx)`;
+  - named arguments, parameters, locals, loop variables and the enclosing class's own properties named `filesDir` / `cacheDir` / … are not reported;
+  - the media exemption matches `….android.media` and its sub-packages only, not `.android.mediaplayer`.
+  No production code was flagged: both Room builders already pass `context = deviceContext`, and the settings DataStore is built from a device-protected `File`. `CredentialStorageAccessTest` has 9 tests.
+- **Locked storage in `DirectBootRingTest` covers every context.** A `ContextImpl` shadow (`LockedStorageContextImpl`) closes credential-protected storage on the Application, `applicationContext`, each service's base and the context receivers get. It covers `getDataDir` and the calls built on it or cached by `ContextImpl`: files, cache, code cache, no-backup, `getDir`, `openFileInput` / `openFileOutput`, database path, list and delete, and shared preferences. A new test proves this on each kind of context, and that the device-protected context stays open. The locked boot, fire and ring path now runs on the real Application with no credential-protected access.
+  - **Residual:** a path built by hand (a hard-coded `/data/data/…` string, or a `File` from a credential path kept from before the lock) is not intercepted. Robolectric's own `getDatabasePath` and `getSharedPreferences` shadows are guarded, but they then resolve under Robolectric's sandbox paths, not real CE/DE directories.
+- **`AndroidUserLockState.observe()` is tested** (`AndroidUserLockStateTest`, 4 tests, API 34):
+  - the receiver is registered with `RECEIVER_NOT_EXPORTED` while collected and unregistered on cancel;
+  - it emits `false`, then `true` on `ACTION_USER_UNLOCKED`;
+  - an unlock that lands just as the receiver registers is not missed (the value is read after registering);
+  - a failing system service says unlocked and is logged once.
+  The pre-API-33 branch is not run (Robolectric is pinned to SDK 34).
+
+Tests added:
+- core `DirectBootTest`: 16 tests, 7 new (restore and snooze after the unlock, the locked plan, and plan substitution on the first ring, restore, snooze and fallback). The transition-table test is unchanged.
+- detekt `CredentialStorageAccessTest`: 4 new tests plus 15 new reported cases.
+- Android: the new `AndroidUserLockStateTest`, and one new `DirectBootRingTest` test.
+
+Verification:
+- `./gradlew qualityGate --continue`: BUILD SUCCESSFUL. The run before it had flagged:
+  - detekt `ReturnCount` and `MaxLineLength` in the rule;
+  - spotless formatting in two test files;
+  - one `RoomAlarmRepositoryTest` timeout ("the test body did not run to completion" after 1 min) on a loaded machine, in `:data`, which this change does not touch. It passed on the rerun.
+- `git status --porcelain androidApp/src/test/screenshots/preview` is empty.
+
+Deferred to Story 2.4:
+
+- The wake screen's "Unlock your phone to snooze" label does not yet update in place when the user unlocks: `WakeActivity` does not observe `UserLockState`, and nothing dispatches `UserUnlocked`. The policy reads the live lock state, so the next render after the unlock is right. Story 2.4 adds the unlock signal (and billing start).
+
 ## Auto Run Result
 
 Status: done. Fast mode: one agent planned and implemented, with no separate review pass. Stacked on Story 2.2 (b3ea320).
@@ -186,5 +229,5 @@ Docs:
 **Residual risks**
 
 - Real locked reboots are human-verify in Story 2.13.
-- The locked-storage test guards only the Koin-routed context; components that use their own `Context` are not guarded.
+- The locked-storage test now guards every `ContextImpl` (see the review triage); paths built by hand are not guarded.
 - The move of the reliability preferences needs Story 2.12's backup rules on the rebase (see `deferred-work.md`).

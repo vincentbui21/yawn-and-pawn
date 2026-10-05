@@ -126,13 +126,106 @@ class DirectBootTest {
         }
 
     @Test
-    fun `restored unlocked, a session keeps its flags as stored`() =
+    fun `a ring restored after the unlock plays the chosen sound again, history still says direct_boot`() =
         runTest {
             lock.state.value = true
-            store.commit(SessionState.Ringing(ringSession()))
+            val config = testConfig().copy(soundRef = systemSound)
+            store.commit(SessionState.Ringing(ringSession(config).copy(beforeFirstUnlock = true, startedBeforeUnlock = true)))
 
-            assertFalse(engine().restore().session().beforeFirstUnlock)
+            val restored = engine().restore().session()
+
+            assertFalse(restored.beforeFirstUnlock)
+            assertTrue(restored.startedBeforeUnlock, "only ever goes from false to true")
+            assertEquals(EntryEffect.SoundAt(systemSound, config.volumePercent), runner.entry.first())
         }
+
+    @Test
+    fun `a snooze that ends after the unlock rings the next ring with the chosen sound`() =
+        runTest {
+            lock.state.value = true
+            val config = testConfig().copy(soundRef = systemSound)
+            val lockedSnooze = snoozedSession().copy(config = config, beforeFirstUnlock = true, startedBeforeUnlock = true)
+            store.commit(SessionState.Snoozed(lockedSnooze))
+            time.reboot(off = 2.hours)
+
+            val next = engine().restore().session()
+
+            assertEquals(2, next.ringIndex)
+            assertFalse(next.beforeFirstUnlock)
+            assertTrue(next.startedBeforeUnlock)
+            assertEquals(EntryEffect.SoundAt(systemSound, config.volumePercent), runner.entry.first { it is EntryEffect.SoundAt })
+        }
+
+    @Test
+    fun `the locked plan swaps each unsafe step one for one and leaves a safe plan as it is`() {
+        val swapped = DirectBootSubstitution.lockedPlan(TWO_STEPS, isSafe = { false })
+
+        assertEquals(CheckPlan(List(2) { DirectBootSubstitution.DIRECT_BOOT_CHECK }), swapped)
+        assertSame(TWO_STEPS, DirectBootSubstitution.lockedPlan(TWO_STEPS))
+        assertSame(TWO_STEPS, DirectBootSubstitution.plan(TWO_STEPS, beforeFirstUnlock = true))
+        assertSame(TWO_STEPS, DirectBootSubstitution.plan(TWO_STEPS, beforeFirstUnlock = false))
+    }
+
+    /** A reducer whose locked plan is [LOCKED]: every step counts as not Direct Boot safe (no such step exists yet). */
+    private val marking =
+        SessionReducer(
+            NoBillingSnoozeAvailability(lock),
+            PlaceholderCheckValidator,
+            StubFallback(FallbackDecision.Allowed(FALLBACK_PLAN)),
+            directBootPlan = { LOCKED },
+        )
+
+    private fun SessionState.plan(): CheckPlan = assertIs<SessionState.Active>(this).session.checkRun.plan
+
+    @Test
+    fun `the first ring runs the locked plan only while locked`() {
+        val locked = marking.reduce(SessionState.Idle, alarmFired(testConfig(checkPlan = TWO_STEPS)), T0, userLocked = true).state
+        val unlocked = marking.reduce(SessionState.Idle, alarmFired(testConfig(checkPlan = TWO_STEPS)), T0, userLocked = false).state
+
+        assertEquals(LOCKED, locked.plan())
+        assertEquals(TWO_STEPS, unlocked.plan())
+    }
+
+    @Test
+    fun `a ring restored while locked runs the locked plan from the same step, restored unlocked it keeps its plan`() {
+        val midCheck = ringSession(testConfig(checkPlan = TWO_STEPS)).let { it.copy(checkRun = it.checkRun.copy(step = 1)) }
+
+        val locked = marking.reduce(SessionState.Loud(midCheck), SessionEvent.ProcessRestored, T0, userLocked = true).state
+        val unlocked = marking.reduce(SessionState.Loud(midCheck), SessionEvent.ProcessRestored, T0, userLocked = false).state
+
+        assertEquals(LOCKED, locked.plan())
+        assertEquals(1, assertIs<SessionState.Loud>(locked).session.checkRun.step)
+        assertEquals(TWO_STEPS, unlocked.plan())
+    }
+
+    @Test
+    fun `the ring after a snooze runs the locked plan while locked and the chosen plan after the unlock`() {
+        val snoozed = snoozedSession().copy(config = testConfig(checkPlan = TWO_STEPS))
+        val wasLocked = snoozed.copy(checkRun = snoozed.checkRun.copy(plan = LOCKED), beforeFirstUnlock = true)
+
+        val locked = marking.reduce(SessionState.Snoozed(snoozed), SessionEvent.SlotFired, at(10.minutes), userLocked = true).state
+        val unlocked = marking.reduce(SessionState.Snoozed(wasLocked), SessionEvent.SlotFired, at(10.minutes), userLocked = false).state
+
+        assertEquals(LOCKED, locked.plan())
+        assertEquals(TWO_STEPS, unlocked.plan(), "the chosen check is back")
+        val fallback = snoozed.copy(checkRun = snoozed.checkRun.copy(plan = FALLBACK_PLAN, fallbackUsed = true))
+        assertEquals(
+            FALLBACK_PLAN,
+            marking.reduce(SessionState.Snoozed(fallback), SessionEvent.SlotFired, at(10.minutes), userLocked = false).state.plan(),
+            "a used fallback stays",
+        )
+    }
+
+    @Test
+    fun `the fallback plan gets the substitutions before the first unlock`() {
+        val grace = checkStates(ringSession()).first()
+
+        val locked = marking.reduce(grace.with(grace.session.copy(beforeFirstUnlock = true)), SessionEvent.FallbackRequested, T0).state
+        val unlocked = marking.reduce(grace, SessionEvent.FallbackRequested, T0).state
+
+        assertEquals(LOCKED, locked.plan())
+        assertEquals(FALLBACK_PLAN, unlocked.plan())
+    }
 
     @Test
     fun `snooze availability - test mode first, then before the first unlock while locked, then prices not loaded`() {
@@ -182,4 +275,9 @@ class DirectBootTest {
             assertTrue(UserLockState.Unlocked.isUserUnlocked())
             assertTrue(UserLockState.Unlocked.observe().first())
         }
+
+    private companion object {
+        /** The locked plan of [marking]: four steps, so it differs from every plan the tests start from. */
+        val LOCKED = CheckPlan(List(4) { CheckStep.Placeholder })
+    }
 }

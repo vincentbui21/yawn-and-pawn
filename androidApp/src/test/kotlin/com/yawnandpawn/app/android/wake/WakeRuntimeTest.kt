@@ -49,7 +49,6 @@ import kotlin.test.assertEquals
 import kotlin.test.assertFalse
 import kotlin.test.assertNotNull
 import kotlin.test.assertNull
-import kotlin.test.assertSame
 import kotlin.test.assertTrue
 import kotlin.time.Duration.Companion.minutes
 import kotlin.time.Instant
@@ -343,18 +342,13 @@ class WakeRuntimeTest {
         val alarmAt = session.config.scheduledAt
 
         val notification = runtime.foregroundNotification(alarmAt)
-        // startForeground posts it under the notification id.
-        notifications.notify(WakeNotifier.NOTIFICATION_ID, notification)
         runtime.foregroundPosted(alarmAt)
         runtime.onServiceStarted()
         enter(ringing)
 
         assertEquals(WakeNotifier.CHANNEL_ID, notification.channelId)
-        assertSame(
-            notification,
-            shadowOf(notifications).getNotification(WakeNotifier.NOTIFICATION_ID),
-            "already shown by startForeground, not posted again",
-        )
+        // The system lists a startForeground post only after a while: WakeUiShown right after it posts nothing more.
+        assertEquals(0, shadowOf(notifications).size(), "already shown by startForeground, not posted again")
     }
 
     @Test
@@ -364,7 +358,9 @@ class WakeRuntimeTest {
         runtime.foregroundPosted(alarmAt)
         runtime.onServiceStarted()
 
+        // The swipe removes it and its delete intent tells the runtime (WakeService.ACTION_REPOST).
         notifications.cancel(WakeNotifier.NOTIFICATION_ID)
+        runtime.notificationSwiped()
         enter(ringing)
 
         assertEquals(1, shadowOf(notifications).size(), "posted again")

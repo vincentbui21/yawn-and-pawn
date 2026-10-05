@@ -2,7 +2,7 @@
 title: 'Story 2.5: Leave the alarm and come back through the notification'
 type: 'feature'
 created: '2026-10-05'
-status: 'in-progress'
+status: 'done'
 baseline_revision: '6b1fc58d74b276c446138e55f900ef5b3774e428'
 review_loop_iteration: 0
 followup_review_recommended: false
@@ -36,8 +36,10 @@ deferred: []
 - **Notification tap:** the content intent and the full-screen intent both open `WakeActivity` (`singleTask`, own `taskAffinity`). Opened again, it renders the current `SessionEngine.state` with no extra state from the intent.
 - **The notification:**
   - It has no actions, ever. Its text stays "{time} alarm · Tap to return to your alarm" (EXPERIENCE.md) in Ringing, Grace and Loud.
-  - Its `deleteIntent` is an immutable `PendingIntent.getService` for `WakeService.ACTION_REPOST`. That start only re-enters the foreground with the ringing notification of the alarm shown, then evaluates the state like any start: it stops the service when nothing rings. It dispatches no session event and is not timed.
-- **Re-posting:** `WakeNotifier.show(alarmAt)` returns early only when that alarm's notification is actually active (`NotificationManager.activeNotifications`). Otherwise it posts again, so every `WakeUiShown` (each committed step, including the heartbeat `SlotFired`) restores a missing notification.
+  - Its `deleteIntent` is an immutable `PendingIntent.getService` for `WakeService.ACTION_REPOST`. That start first marks the notification as no longer posted, then re-enters the foreground with the ringing notification of the alarm shown, then evaluates the state like any start: it stops the service when nothing rings or is snoozed. It is not timed.
+  - In a new process the engine is still Idle when the repost start arrives: it loads the stored session first, as a restore start does. Otherwise it dispatches no session event.
+  - During a snooze (no emergency ring), the notification comes back without its full-screen intent, so it never opens the wake screen with nothing ringing. It is not recorded as shown, so the snooze end's `WakeUiShown` posts the full one.
+- **Re-posting:** `WakeNotifier` keeps its own "posted" flag (`shownFor`), set by `show` and by `startForeground` (`shownByService`), and cleared only by `cancel()` and by the repost start (`forget`). `show(alarmAt)` returns early while the flag holds that alarm. It never reads `NotificationManager.activeNotifications`, which lists a post only after a while, so a ring start never posts (and alerts) twice. After a swipe, the next `WakeUiShown` (each committed step, including the heartbeat `SlotFired`) restores the notification even when the repost start could not enter the foreground.
 - **Launcher forwarding:** `MainActivity`, while RESUMED, starts `WakeActivity.intent()` as soon as the session is in `Ring` (Ringing, Grace or Loud) or an emergency ring plays. That happens at resume, or when a ring starts while the app is in front. It forwards at most once per resume.
   - In `Snoozed`, Idle, Completed or Missed it never forwards. The Snoozed screen comes in Story 2.6.
   - The decision is a pure function, `forwardsToWakeScreen(state, emergency)`.
@@ -56,9 +58,14 @@ deferred: []
 | Back | Back pressed on `WakeActivity` | Not finishing, state unchanged | No error expected |
 | Notification tapped | Ringing; content intent sent 3 times | Each targets `WakeActivity` (singleTask, own affinity); the screen shows the current state | No error expected |
 | Swiped away | Ringing; notification cancelled, `deleteIntent` sent | `WakeService` started with `ACTION_REPOST`; the notification is back; player still playing | Session ended meanwhile: quiet start, then the service stops |
-| Missing at heartbeat | Ringing; notification cancelled, `SlotFired` | Notification posted again | No error expected |
+| Swiped, new process | Stored Ringing session; engine Idle; `ACTION_REPOST` start | Session restored and ringing; ringing notification back | No error expected |
+| Swiped in Snoozed | Snoozed; notification cancelled, `deleteIntent` sent | Notification back without a full-screen intent; no `WakeActivity` start; snooze goes on | No error expected |
+| Missing at heartbeat | Ringing; swiped, the repost start never entered the foreground; `SlotFired` | Notification posted again | No error expected |
+| Right after `startForeground` | Ring start; `WakeUiShown` before the post is listed as active | Posted once | No error expected |
 | No actions | Any ringing notification | `actions` empty; delete intent present | No error expected |
 | Launcher in Ringing | Ringing; `MainActivity` resumed | `WakeActivity` started once | No error expected |
+| Launcher in emergency | Idle; emergency ring plays; `MainActivity` resumed | `WakeActivity` started | No error expected |
+| Ring while app open | Idle; `MainActivity` resumed; then the alarm rings | `WakeActivity` started once | No error expected |
 | Launcher in Snoozed / Idle | Snoozed or Idle | No `WakeActivity` start | No error expected |
 
 </intent-contract>
@@ -93,8 +100,22 @@ deferred: []
 ## Spec Change Log
 
 - 2026-10-05 (implementation): `WakeRuntimeTest` "the foreground notification is the one entry effects would post" assumed `startForeground` without posting anything. Now that `show` checks the active notifications, the test posts the notification as `startForeground` does, and asserts that the same instance stays posted. A new test covers re-posting after a swipe. KEEP: `show` never re-posts a notification that is still active.
+- 2026-10-05 (review): the KEEP above is replaced. `activeNotifications` updates only after a while, so reading it right after `startForeground` posted twice. `show` now trusts the notifier's own flag, which only `cancel()` and the repost start clear. The `WakeRuntimeTest` foreground test is back to its original form (posted by `startForeground` and not yet listed: `WakeUiShown` posts nothing). The swipe test calls `notificationSwiped()` as the repost start does. KEEP: `show` never posts twice for one alarm unless the delete intent said the notification is gone.
 
 ## Review Triage Log
+
+### Review (2 reviewers, fast mode)
+
+2026-10-05: two review layers ran (fast mode). Every finding was patched in `fix(2.5): review fixes`. Nothing is deferred.
+
+**Patched:**
+- **Double post at ring start:** `WakeNotifier.show` read `activeNotifications`, which lists a `startForeground` post only after a while, so a ring start could post (and alert) twice. It now keeps its own flag, cleared only by `cancel()` and the repost start (`WakeRuntime.notificationSwiped` → `WakeNotifier.forget`). `setOnlyAlertOnce` was not added: it could also mute the quiet-to-ringing replacement (same id) that must show the full-screen intent.
+- **Repost into a new process:** `ACTION_REPOST` restores the stored session first when the engine is Idle (and no emergency ring plays), as a restore start does, so it no longer sees Idle and stops a ring that is still on.
+- **Swipe during a snooze:** the repost start enters the foreground without the full-screen intent unless the alarm rings (`forwardsToWakeScreen`), so it never opens the wake screen during a snooze. That notification is not recorded as shown, so the snooze end posts the full one.
+- **GMD test:** it no longer matches the shade by English text. It reads the text of the app's own posted notification (package and id), which comes from the localized resource.
+- **Added tests (`LeaveAndReturnTest`):** a repost into a new process with a stored Ringing session; a swipe during a snooze; a delete intent after the session ended (quiet start, the service stops, no notification left); opening the app during an emergency ring; a ring that starts while the app is open (exactly one `WakeActivity` start). The heartbeat test now forgets the notification as the repost start does. `WakeRuntimeTest` covers `WakeUiShown` right after `startForeground` (posted once).
+
+**Rejected:** none.
 
 ## Verification
 
@@ -109,13 +130,13 @@ deferred: []
 - **Leaving changes nothing:** the sound, vibration, foreground service and notification all go on. Back is still a no-op once the screen is in front again.
 - **The ringing notification:**
   - It has no actions, and its tap and full-screen intent open the one `singleTask` wake screen on the current state.
-  - Its new `deleteIntent` restarts `WakeService` with `ACTION_REPOST`, which only re-enters the foreground with the ringing notification.
-  - `WakeNotifier.show` now posts again when the notification is no longer active, so the next `WakeUiShown` (each step, the heartbeat included) restores it.
+  - Its new `deleteIntent` restarts `WakeService` with `ACTION_REPOST`, which re-enters the foreground with the ringing notification (restoring the stored session first in a new process; no full-screen intent during a snooze).
+  - The repost start also clears the notifier's "posted" flag, so the next `WakeUiShown` (each step, the heartbeat included) restores it if that start failed. (Review fix: `show` no longer reads `activeNotifications`.)
 - **Opening the app during a ring:** `MainActivity` hands over to `WakeActivity` while resumed and the alarm rings (Ringing, Grace, Loud or emergency), once per resume. It never does in Snoozed, Idle, Completed or Missed.
 
 **Files changed:**
 - `android/wake/WakeNotifier.kt`, `WakeService.kt`, new `WakeScreenForwarding.kt`, and `MainActivity.kt`.
-- Tests: `LeaveAndReturnTest` (6 tests), `WakeScreenForwardingTest`, and `WakeRuntimeTest` (1 adjusted, 1 added).
+- Tests: `LeaveAndReturnTest` (11 tests after the review), `WakeScreenForwardingTest`, and `WakeRuntimeTest` (1 added).
 - `androidTest/ReturnThroughNotificationTest` (GMD).
 - `libs.versions.toml` and `androidApp/build.gradle.kts`: UiAutomator 2.3.0, androidTest only. The allowlist checks only the app's runtime classpaths, so it is unchanged.
 

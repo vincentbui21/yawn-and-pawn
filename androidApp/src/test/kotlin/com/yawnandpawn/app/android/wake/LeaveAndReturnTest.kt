@@ -11,8 +11,12 @@ import com.yawnandpawn.app.StopAppRule
 import com.yawnandpawn.app.core.alarm.AlarmFired
 import com.yawnandpawn.app.core.alarm.AlarmRepository
 import com.yawnandpawn.app.core.error.Outcome
+import com.yawnandpawn.app.core.session.ActiveSessionStore
+import com.yawnandpawn.app.core.session.CheckAnswer
 import com.yawnandpawn.app.core.session.SessionEvent
 import com.yawnandpawn.app.core.session.SessionState
+import com.yawnandpawn.app.core.time.Deadline
+import com.yawnandpawn.app.testing.aSession
 import com.yawnandpawn.app.testing.anAlarm
 import kotlinx.coroutines.runBlocking
 import org.junit.Rule
@@ -26,10 +30,12 @@ import org.robolectric.annotation.Config
 import org.robolectric.annotation.GraphicsMode
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
+import kotlin.test.assertIs
 import kotlin.test.assertNotNull
 import kotlin.test.assertNull
 import kotlin.test.assertSame
 import kotlin.test.assertTrue
+import kotlin.time.Duration.Companion.minutes
 import kotlin.time.Instant
 
 /**
@@ -50,6 +56,8 @@ class LeaveAndReturnTest {
 
     private val alarm = anAlarm(id = "alarm-a", requestCode = 1000)
     private val fired = AlarmFired(alarm.id, Instant.parse("2027-03-08T06:00:00Z"))
+
+    private fun store(app: WakeApp): ActiveSessionStore = app.koin.get()
 
     private fun manager(app: WakeApp) = app.app.getSystemService(NotificationManager::class.java)
 
@@ -141,11 +149,80 @@ class LeaveAndReturnTest {
     }
 
     @Test
-    fun `a notification still missing is posted again at the next heartbeat`() {
+    fun `a delete intent that starts a new process restores the ringing session and brings the notification back`() {
+        val app = WakeApp()
+        val stored = SessionState.Ringing(aSession())
+        assertEquals(Outcome.Success(Unit), runBlocking { store(app).commit(stored) })
+
+        // A new process: the engine is still Idle when the repost start arrives.
+        val service = app.startService(WakeService.repostIntent(app.app))
+        app.awaitRinging()
+
+        assertEquals(stored.session.sessionId, assertIs<SessionState.Ringing>(app.engine.state.value).session.sessionId)
+        val back = assertNotNull(posted(app), "the notification is back")
+        assertEquals(WakeNotifier.CHANNEL_ID, back.channelId)
+        assertNotNull(back.fullScreenIntent)
+        assertFalse(shadowOf(service.get()).isStoppedBySelf, "the service keeps running")
+        assertTrue(app.lastMediaPlayer().isReallyPlaying)
+    }
+
+    @Test
+    fun `a notification swiped during a snooze comes back without its full-screen intent`() {
+        val app = WakeApp()
+        val snoozed =
+            SessionState.Snoozed(
+                aSession().copy(interactionDeadline = null, snoozeEnd = Deadline.after(app.now(), 9.minutes), snoozesGranted = 1),
+            )
+        assertEquals(Outcome.Success(Unit), runBlocking { store(app).commit(snoozed) })
+        val service = app.startService(WakeService.intent(app.app, WakeService.ACTION_RESTORE))
+        app.awaitUntil("the snooze is restored") { app.engine.state.value is SessionState.Snoozed }
+        // The ringing notification of the ring before the snooze is still up.
+        app.koin.get<WakeNotifier>().show(snoozed.session.config.scheduledAt)
+        val notification = assertNotNull(posted(app))
+        startedActivities(app)
+
+        manager(app).cancel(WakeNotifier.NOTIFICATION_ID)
+        notification.deleteIntent.send()
+        service.withIntent(assertNotNull(shadowOf(app.app).nextStartedService)).startCommand(0, 2)
+        app.awaitUntil("the main looper settles") { true }
+
+        val back = shadowOf(service.get()).lastForegroundNotification
+        assertNull(back.fullScreenIntent, "nothing opens the wake screen during a snooze")
+        assertEquals(ComponentName(app.app, WakeActivity::class.java), shadowOf(back.contentIntent).savedIntent.component)
+        assertEquals(snoozed.session.sessionId, assertIs<SessionState.Snoozed>(app.engine.state.value).session.sessionId)
+        assertFalse(shadowOf(service.get()).isStoppedBySelf, "the snooze goes on")
+        assertEquals(emptyList(), startedActivities(app).filter(::isWakeScreen))
+    }
+
+    @Test
+    fun `a delete intent that arrives after the session ended starts quietly and stops the service`() {
+        val app = WakeApp()
+        val service = ring(app)
+        val notification = assertNotNull(posted(app))
+        app.dispatch(SessionEvent.ImUpTapped, SessionEvent.CheckAnswerSubmitted(CheckAnswer.Placeholder))
+        app.awaitUntil("the session ends") { app.engine.state.value == SessionState.Idle && shadowOf(service.get()).isStoppedBySelf }
+
+        notification.deleteIntent.send()
+        val repost = generateSequence { shadowOf(app.app).nextStartedService }.last()
+        assertEquals(WakeService.ACTION_REPOST, repost.action)
+        val late = app.startService(repost)
+        app.awaitUntil("the late start stops") { shadowOf(late.get()).isStoppedBySelf }
+
+        // Its foreground notification was the quiet one (nothing was shown any more), removed again by the stop.
+        assertNull(app.runtime.shownAlarmAt(), "no ringing notification was posted")
+        assertNull(posted(app), "no notification is left")
+        assertEquals(SessionState.Idle, app.engine.state.value)
+        assertNull(app.player.sound)
+    }
+
+    @Test
+    fun `a swiped notification its repost start could not bring back is posted again at the next heartbeat`() {
         val app = WakeApp()
         ring(app)
 
+        // The swipe's repost start forgets the notification first; here it never reaches the foreground.
         manager(app).cancel(WakeNotifier.NOTIFICATION_ID)
+        app.runtime.notificationSwiped()
         app.dispatch(SessionEvent.SlotFired)
 
         val back = assertNotNull(posted(app), "the wake UI entry effect posts it again")
@@ -172,6 +249,36 @@ class LeaveAndReturnTest {
         // Back in front later (Recents, the launcher): it hands over again.
         main.pause().resume()
         app.awaitUntil("the app opens the wake screen again") { startedActivities(app).isNotEmpty() }
+    }
+
+    @Test
+    fun `opening the app during an emergency ring hands over to the wake screen`() {
+        val app = WakeApp()
+        app.runtime.startEmergency(fired.scheduledAt, volumePercent = 80, cause = "test")
+        assertEquals(SessionState.Idle, app.engine.state.value)
+        startedActivities(app)
+
+        Robolectric.buildActivity(MainActivity::class.java).setup()
+
+        app.awaitUntil("the app opens the wake screen") { startedActivities(app).any(::isWakeScreen) }
+    }
+
+    @Test
+    fun `a ring that starts while the app is open hands over to the wake screen`() {
+        val app = WakeApp()
+        Robolectric.buildActivity(MainActivity::class.java).setup()
+        app.awaitUntil("the main looper settles") { true }
+        assertEquals(emptyList(), startedActivities(app).filter(::isWakeScreen))
+
+        ring(app)
+        var forwarded: List<Intent> = emptyList()
+        app.awaitUntil("the app opens the wake screen") {
+            forwarded = forwarded + startedActivities(app).filter(::isWakeScreen)
+            forwarded.isNotEmpty()
+        }
+        app.awaitUntil("the main looper settles") { true }
+
+        assertEquals(1, (forwarded + startedActivities(app).filter(::isWakeScreen)).size, "exactly one wake screen start")
     }
 
     @Test

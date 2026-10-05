@@ -1,6 +1,8 @@
 package com.yawnandpawn.app
 
 import android.app.Activity
+import android.app.Notification
+import android.app.NotificationManager
 import android.os.Build
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
@@ -10,6 +12,7 @@ import androidx.test.uiautomator.By
 import androidx.test.uiautomator.UiDevice
 import androidx.test.uiautomator.Until
 import com.yawnandpawn.app.android.wake.WakeActivity
+import com.yawnandpawn.app.android.wake.WakeNotifier
 import com.yawnandpawn.app.core.session.CheckAnswer
 import com.yawnandpawn.app.core.session.SessionEngine
 import com.yawnandpawn.app.core.session.SessionEvent
@@ -74,7 +77,7 @@ class ReturnThroughNotificationTest {
             assertTrue("the alarm keeps ringing after Home", engine.state.value is SessionState.Ring)
 
             device.openNotification()
-            val notification = device.wait(Until.findObject(By.textContains(NOTIFICATION_TEXT)), STEP_TIMEOUT_MS)
+            val notification = device.wait(Until.findObject(By.text(ringingText())), STEP_TIMEOUT_MS)
             checkNotNull(notification) { "the ringing notification is in the shade (tap ${tap + 1})" }
             val tappedAt = clock.elapsedMillis()
             notification.click()
@@ -95,6 +98,20 @@ class ReturnThroughNotificationTest {
         return found
     }
 
+    /**
+     * The text of the app's own ringing notification as posted (the localized string from resources, with its time),
+     * so the shade is matched in any language and never on another app's notification.
+     */
+    private fun ringingText(): String {
+        val posted =
+            instrumentation.targetContext
+                .getSystemService(NotificationManager::class.java)
+                .activeNotifications
+                .firstOrNull { it.packageName == packageName && it.id == WakeNotifier.NOTIFICATION_ID }
+        val text = posted?.notification?.extras?.getCharSequence(Notification.EXTRA_TEXT)
+        return checkNotNull(text) { "the app's ringing notification is posted" }.toString()
+    }
+
     private fun resumedWakeScreens() = wakeScreens(Stage.RESUMED)
 
     private fun liveWakeScreens() =
@@ -113,7 +130,6 @@ class ReturnThroughNotificationTest {
     }
 
     private companion object {
-        const val NOTIFICATION_TEXT = "Tap to return to your alarm"
         const val TAPS = 3
         const val RETURN_LIMIT_MS = 1_000L
         const val RING_TIMEOUT_MS = 30_000L

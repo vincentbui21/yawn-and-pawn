@@ -27,13 +27,22 @@ class WakeNotifier(
 ) {
     private val manager: NotificationManager = context.getSystemService(NotificationManager::class.java)
 
-    /** The alarm time the posted notification shows; null when none is posted. */
+    /**
+     * The alarm time the posted notification shows; null when none is posted. Kept here, never read back from the
+     * active notifications (the system lists a post only after a while): only [cancel] and [forget] clear it.
+     */
     @Volatile
     var shownFor: Instant? = null
         private set
 
-    /** The notification for a ring of the alarm scheduled at [alarmAt]. Creates the channel first. */
-    fun build(alarmAt: Instant): Notification {
+    /**
+     * The notification for a ring of the alarm scheduled at [alarmAt]. Creates the channel first. Without [fullScreen]
+     * it has no full-screen intent (a swiped notification posted again during a snooze, Story 2.5).
+     */
+    fun build(
+        alarmAt: Instant,
+        fullScreen: Boolean = true,
+    ): Notification {
         ensureChannel()
         val time = formatClockTime(alarmAt.toLocalDateTime(timeZones.current()).time, DateFormat.is24HourFormat(context))
         val openWakeScreen =
@@ -63,9 +72,9 @@ class WakeNotifier(
             .setVisibility(Notification.VISIBILITY_PUBLIC)
             .setShowWhen(false)
             .setContentIntent(openWakeScreen)
-            .setFullScreenIntent(openWakeScreen, true)
             .setDeleteIntent(postAgain)
             .apply {
+                if (fullScreen) setFullScreenIntent(openWakeScreen, true)
                 if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) setForegroundServiceBehavior(Notification.FOREGROUND_SERVICE_IMMEDIATE)
             }.build()
     }
@@ -94,12 +103,12 @@ class WakeNotifier(
     }
 
     /**
-     * Posts (or updates) the notification for [alarmAt]; nothing when it already shows that time. A notification the
-     * user swiped away (Android 14+) is posted again, so every `WakeUiShown` (each session step, the heartbeat included)
-     * restores it (Story 2.5).
+     * Posts (or updates) the notification for [alarmAt]; nothing when it already shows that time, so a step never posts
+     * (and alerts) twice. After a swipe ([forget]) it is posted again, so the next `WakeUiShown` (each session step, the
+     * heartbeat included) restores it (Story 2.5).
      */
     fun show(alarmAt: Instant) {
-        if (shownFor == alarmAt && isPosted()) return
+        if (shownFor == alarmAt) return
         manager.notify(NOTIFICATION_ID, build(alarmAt))
         shownFor = alarmAt
     }
@@ -109,13 +118,16 @@ class WakeNotifier(
         shownFor = alarmAt
     }
 
+    /** The user swiped the notification away (its delete intent, Story 2.5): it is no longer posted. */
+    fun forget() {
+        shownFor = null
+    }
+
     /** Removes the notification. */
     fun cancel() {
         manager.cancel(NOTIFICATION_ID)
         shownFor = null
     }
-
-    private fun isPosted(): Boolean = manager.activeNotifications.any { it.id == NOTIFICATION_ID }
 
     private fun ensureChannel() {
         if (manager.getNotificationChannel(CHANNEL_ID) != null) return

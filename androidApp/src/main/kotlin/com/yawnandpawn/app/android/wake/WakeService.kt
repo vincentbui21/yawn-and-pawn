@@ -67,7 +67,8 @@ import kotlin.time.Instant
  * - **Slot:** it dispatches `SlotFired`, then ticks. **Restore:** it loads the stored session (`SessionEngine.restore`).
  * - **Test:** it takes the pending test config and dispatches `TestAlarmFired` (Story 1.18).
  * - **Repost** (the ringing notification's delete intent, Story 2.5): entering the foreground posts the notification
- *   again; nothing is dispatched.
+ *   again, without its full-screen intent unless the alarm rings (a snooze never opens the wake screen). An Idle engine
+ *   (a new process) loads the stored session first, as a restore does; otherwise nothing is dispatched.
  * - While a session is active it calls `SessionEngine.tick` when the next deadline (grace end or the 30-minute
  *   interaction timeout, FR-ALM-9) is due on the monotonic clock (Story 1.16). A forgotten alarm becomes Missed there.
  * - When the state is Idle, Completed or Missed and no emergency ring plays, it stops the sound and vibration, restores
@@ -136,7 +137,8 @@ class WakeService :
         if (timed) timings.stage(WakeStage.StartCommand)
         // An alarm start shows its ringing notification at once; a slot or restore start shows the ringing one only when
         // it is already up, else the quiet one (no full-screen intent) until a ringing state posts its own.
-        val inForeground = enterForeground(fired?.scheduledAt ?: runtime.shownAlarmAt())
+        val repost = intent?.action == ACTION_REPOST
+        val inForeground = enterForegroundFor(fired, repost)
         if (timed && inForeground) timings.stage(WakeStage.InForeground)
         // The alarm receiver that asked for this start may finish its broadcast now (WakeServiceStarts).
         intent?.takeIf { it.hasExtra(EXTRA_START_TOKEN) }?.let { starts.onStartCommandReached(it.getLongExtra(EXTRA_START_TOKEN, 0)) }
@@ -156,7 +158,7 @@ class WakeService :
                     intent?.action == ACTION_TEST -> onTest()
 
                     // The ringing notification was swiped away: entering the foreground above posted it again.
-                    intent?.action == ACTION_REPOST -> Unit
+                    repost -> onRepost()
 
                     else -> onRestore()
                 }
@@ -173,17 +175,37 @@ class WakeService :
         super.onDestroy()
     }
 
+    /**
+     * Enters the foreground for an alarm start ([fired]) with its ringing notification, else with the one already shown
+     * (or the quiet one). A [repost] start (the notification was swiped, Story 2.5) posts it again; during a snooze it
+     * has no full-screen intent, which would open the wake screen with nothing ringing.
+     */
+    private fun enterForegroundFor(
+        fired: AlarmFired?,
+        repost: Boolean,
+    ): Boolean {
+        if (!repost) return enterForeground(fired?.scheduledAt ?: runtime.shownAlarmAt())
+        val shown = runtime.shownAlarmAt()
+        // The next WakeUiShown posts it again, even if this start cannot enter the foreground.
+        runtime.notificationSwiped()
+        return enterForeground(shown, fullScreen = forwardsToWakeScreen(engine.state.value, runtime.emergency.value))
+    }
+
     // startForeground throws ForegroundServiceStartNotAllowedException (an IllegalStateException) or SecurityException
     // when the platform refuses; the armed slot brings the ring back.
-    private fun enterForeground(alarmAt: Instant?): Boolean =
+    private fun enterForeground(
+        alarmAt: Instant?,
+        fullScreen: Boolean = true,
+    ): Boolean =
         try {
-            val notification = runtime.foregroundNotification(alarmAt)
+            val notification = runtime.foregroundNotification(alarmAt, fullScreen)
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
                 startForeground(WakeNotifier.NOTIFICATION_ID, notification, ServiceInfo.FOREGROUND_SERVICE_TYPE_MEDIA_PLAYBACK)
             } else {
                 startForeground(WakeNotifier.NOTIFICATION_ID, notification)
             }
-            runtime.foregroundPosted(alarmAt)
+            // One without its full-screen intent is not the ringing one: the next WakeUiShown replaces it.
+            if (fullScreen) runtime.foregroundPosted(alarmAt)
             true
         } catch (e: IllegalStateException) {
             refused(e)
@@ -298,6 +320,14 @@ class WakeService :
         // The slot wakes the phone at least every heartbeat: a deadline the main-thread timer missed in deep sleep is
         // handled here.
         engine.tick()
+    }
+
+    /**
+     * A repost start (Story 2.5): in a new process the engine is still Idle, so the stored session is loaded first, as
+     * a restore does; [watch] then keeps the service only while a session or an emergency ring goes on.
+     */
+    private suspend fun onRepost() {
+        if (engine.state.value == SessionState.Idle && runtime.emergency.value == null) onRestore()
     }
 
     /** A restore start: the runtime needs the service for a session, so a session that cannot be loaded still rings. */

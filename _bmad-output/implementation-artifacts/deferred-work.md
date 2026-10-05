@@ -157,3 +157,23 @@
     - The GMD timing test (fire a debug-scheduled alarm, WakeActivity resumed with "I'm up" shown within 1,000 ms of the receiver, NFR-7) is not built. It needs the debug fire-now hook (Story 1.18), the POST_NOTIFICATIONS grant on the emulator (Story 1.19; GrantPermissionRule would add androidx.test:rules), and a locked or screen-off emulator, since an unlocked API 34 device shows the full-screen intent as a heads-up. Assigned to Story 1.21 (with 1.18's hook); device timing is human-verify there anyway.
     - Design question for the owner (no layout change made): the Epic 1 snooze label "Snooze unavailable: prices not loaded yet" wraps to two lines in `button-wake`, so the disabled snooze is about as tall as "I'm up" at 100% and taller at 200%. "I'm up" stays 72 dp, filled and first, but it is not the tallest action in that state. Options: a shorter reason, or "I'm up" matching the snooze height. Needs owner approval (design baseline); then a small UI story. Resolved by owner decision 2026-10-02: the visible label is "Prices not loaded yet" (one line at 360 dp, 100%), TalkBack keeps "Snooze unavailable, prices not loaded yet"; EXPERIENCE.md Key strings and the Story 1.15 baselines updated, and `RingingSemanticsTest` checks "I'm up" is the tallest action in that state.
     - The placeholder check is answered by the wake screen while it is shown (Grace or Loud). A user who presses Home right after "I'm up" leaves the session muted, then Loud after the grace window, until they reopen the screen from the notification. This is the Epic 3 check-screen behaviour, and Epic 3 replaces the placeholder.
+- source_spec: `docs/spikes/S1.md`
+  summary: Payment over the lock screen needs an unlock step: add `UnlockRequested` / `UnlockFailed` (an Unlocking sub-state) to AD-2 and the reducer, with the transition rows in docs/spikes/S1.md, and update FR-RNG-3 text that assumes paying over the keyguard.
+  evidence: Spike S1 run V1s: the Play sheet never shows over a keyguard; with a PIN, requestDismissKeyguard → onDismissSucceeded → launchBillingFlow worked 5/5 (L1–L5), cancel gives onDismissCancelled (V2). Owner chose option B (price first, then PIN) on 2026-10-05.
+  status: assigned to a bmad-correct-course pass before Epic 4 (Stories 4.11 orchestration and 4.13 confirm sheet).
+- source_spec: `docs/spikes/S1.md`
+  summary: The volume keys can turn the alarm stream down while the Play purchase sheet is on top; the wake runtime cannot intercept them then.
+  evidence: Spike S1 runs U1 and L1: alarm stream went 16/16 → 1/16 from key presses with the sheet open, sound still playing.
+  status: assigned to Story 2.8 (volume keys) to decide: re-assert the alarm-stream volume while a purchase is in flight, or accept it; Epic 4 orchestration must keep the sound running under the sheet.
+- source_spec: `docs/spikes/S1.md`
+  summary: Billing results can arrive very late: offline, the Play sheet shows an error and only reports a result when the user closes it (no timeout); declines arrive as BILLING_UNAVAILABLE; consume can fail transiently with SERVICE_UNAVAILABLE.
+  evidence: Spike S1 runs N1u (USER_CANCELED after 200 s), N2u (NETWORK_ERROR), C1u (BILLING_UNAVAILABLE), L5 (consume SERVICE_UNAVAILABLE, retry OK).
+  status: assigned to Stories 4.10 (consume with retry), 4.11 (orchestration must not block the session on a billing result; map codes) and 4.14 (outcome messages).
+- source_spec: `docs/spikes/S1.md`
+  summary: Play shows the EU "Review and agree" (right of withdrawal) screen before every purchase on a Finnish account, so each paid snooze needs one extra tap; the first purchase also asks about purchase authentication.
+  evidence: Spike S1, every run on 2026-10-05.
+  status: assigned to Story 4.13 (confirm sheet copy and timing) and 4.18 (licence-tester verification).
+- source_spec: `docs/spikes/S1.md`
+  summary: Re-check the Spike S1 lock-screen findings on a Pixel and a Samsung device, and the slow-card anomaly (a completed slow-card purchase was missing from queryPurchasesAsync about 5 minutes later).
+  evidence: Spike S1 ran on the Oppo A96 only; V1s purchase gone by 20:11:36.
+  status: assigned to Story 4.18.

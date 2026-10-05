@@ -2,7 +2,7 @@
 title: 'Story 2.12: Back up alarms and history, never the session or media'
 type: 'feature'
 created: '2026-10-05'
-status: 'in-progress'
+status: done
 baseline_revision: '4bd25ee4d0cfbcb25e77c90cfcce0094d66ef317'
 review_loop_iteration: 0
 followup_review_recommended: false

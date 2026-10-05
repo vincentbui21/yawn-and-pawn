@@ -226,3 +226,9 @@
   summary: With the screen turned off by the power button while the alarm rings, the wake screen is paused, so the volume keys lower the alarm stream directly. The gap is accepted: FR-SES-6 forbids re-applying the volume continuously, so only the next ring start or the grace end sets it again.
   evidence: Story 2.8 review (2026-10-06): `VolumeKeyGate` swallows keys only while `WakeActivity` is resumed with window focus; the activity is paused with the screen off.
   status: assigned to Story 2.13 (device check on the Oppo A96): confirm what the volume keys do with the screen off during a ring, and that the accessibility shortcut and headphone routing behave.
+- source_spec: `_bmad-output/implementation-artifacts/spec-2-11-no-hostage-guard-the-phone-stays-usable.md`
+  summary: Story 2.11 device check of the no-hostage guard, and the wake-screen opener seen from background code.
+  evidence: |
+    - The GMD test `PhoneStaysUsableTest` was removed in review: the CI managed device is an ATD API 34 image (likely without the Settings and Dialer apps), and main no longer has the UiAutomator dependency (removed with Story 2.5's notification-shade test). The host evidence is `NoHostageBackgroundTest` (5 heartbeat minutes in the background: no activity start, the alarm playing) and `WakeStatusTest`.
+    - The Koin-injected `WakeScreenOpener` (`AndroidWakeScreenOpener` in `android.screen`) could be called from background code, and `NoHostageApis` would not see it, since its start sits in `android.screen`. Low risk: its only caller is the "Back to alarm" tap.
+  status: assigned to Story 2.13 (phone checklist): while the alarm rings, press Home, then open Settings, then the dialer (no call), each for 10 s; the wake screen never comes back on its own and the alarm keeps playing throughout. The `WakeScreenOpener` point is noted for Story 2.13 or a later detekt rule (low).

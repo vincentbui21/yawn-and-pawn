@@ -107,6 +107,10 @@ class AndroidAlarmPlayer(
     val isRinging: Boolean
         get() = ringOn
 
+    /** The open sound has prepared (so it plays unless paused or muted); false while preparing or with nothing open. */
+    val isPrepared: Boolean
+        get() = synchronized(lock) { playback != null && opening?.prepared == true }
+
     /**
      * Plays [soundRef] at [volumePercent] of the alarm stream, ramping from [rampStartPercent] of it when [gradual], and
      * unmuted and unpaused. The same request again only unmutes and resumes; another one starts the ring over.

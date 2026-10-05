@@ -18,9 +18,11 @@ data class VariantManifest(
  * always fail:
  * - a hostage permission ([hostageRequests], or any `MANAGE_DEVICE_POLICY_*`);
  * - a component or the application protected by `BIND_ACCESSIBILITY_SERVICE` or `BIND_DEVICE_ADMIN`;
- * - an intent filter with `CATEGORY_HOME` (posing as the launcher);
+ * - an `<intent-filter>` with `CATEGORY_HOME` or `CATEGORY_SECONDARY_HOME` (posing as the launcher; a `<queries>`
+ *   intent only looks the launcher up and passes);
  * - any `android:lockTaskMode` other than `normal`;
- * - `android:stopWithTask="true"` on `WakeService` (swiping the app away must never end the ring's service).
+ * - any `android:stopWithTask` on `WakeService` but `"false"`, resource references included (swiping the app away
+ *   must never end the ring's service).
  *
  * Pure functions; the Gradle task only gathers the input.
  */
@@ -30,10 +32,10 @@ object PermissionAllowlist {
     private const val SCHEDULE_EXACT_ALARM = "android.permission.SCHEDULE_EXACT_ALARM"
     private const val EXACT_ALARM_MAX_SDK = "32"
     private const val MANAGE_DEVICE_POLICY_PREFIX = "android.permission.MANAGE_DEVICE_POLICY_"
-    private const val CATEGORY_HOME = "android.intent.category.HOME"
     private const val LOCK_TASK_DEFAULT = "normal"
     private const val WAKE_SERVICE = "WakeService"
 
+    private val launcherCategories = setOf("android.intent.category.HOME", "android.intent.category.SECONDARY_HOME")
     private val permissionTags = setOf("uses-permission", "uses-permission-sdk-23", "uses-permission-sdk-m")
     private val componentTags = setOf("activity", "activity-alias", "service", "receiver", "provider")
     private val hostagePermissions =
@@ -125,17 +127,22 @@ object PermissionAllowlist {
         if (element.hasAttributeNS(ANDROID_NS, "lockTaskMode") && lockTaskMode != LOCK_TASK_DEFAULT) {
             violations += "$variant: $tag '$name' sets android:lockTaskMode=\"$lockTaskMode\" (device hostage, AD-5)"
         }
-        if (tag == "category" && name == CATEGORY_HOME) {
+        // Only an <intent-filter> poses as the launcher; a <queries><intent> merely looks it up.
+        val inIntentFilter = (element.parentNode as? Element)?.tagName == "intent-filter"
+        if (tag == "category" && name in launcherCategories && inIntentFilter) {
             val owner =
                 generateSequence(element.parentNode as? Element) { it.parentNode as? Element }
                     .firstOrNull { it.tagName in componentTags }
             val ownerTag = owner?.tagName ?: "intent-filter"
             val ownerName = owner?.androidAttribute("name").orEmpty()
-            violations += "$variant: $ownerTag '$ownerName' declares CATEGORY_HOME (posing as the launcher, NFR-13)"
+            val category = "CATEGORY_" + name.substringAfterLast('.')
+            violations += "$variant: $ownerTag '$ownerName' declares $category (posing as the launcher, NFR-13)"
         }
-        val stopsWithTask = element.androidAttribute("stopWithTask") == "true"
+        // Anything but a literal "false" (true, or a resource reference that may resolve to true) can end the ring.
+        val stopWithTask = element.androidAttribute("stopWithTask")
+        val stopsWithTask = stopWithTask.isNotEmpty() && stopWithTask != "false"
         if (tag == "service" && stopsWithTask && name.substringAfterLast('.') == WAKE_SERVICE) {
-            violations += "$variant: service '$name' sets android:stopWithTask=\"true\" " +
+            violations += "$variant: service '$name' sets android:stopWithTask=\"$stopWithTask\" " +
                 "(a swipe from Recents must never end the ring, NFR-13)"
         }
         return violations

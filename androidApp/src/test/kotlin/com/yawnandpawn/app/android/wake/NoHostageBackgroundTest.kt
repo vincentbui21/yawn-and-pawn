@@ -1,11 +1,13 @@
 package com.yawnandpawn.app.android.wake
 
+import android.app.AlarmManager
 import android.content.Intent
 import android.os.Looper
 import androidx.compose.ui.test.junit4.createEmptyComposeRule
 import com.yawnandpawn.app.StopAppRule
 import com.yawnandpawn.app.core.alarm.AlarmFired
 import com.yawnandpawn.app.core.alarm.AlarmRepository
+import com.yawnandpawn.app.core.alarm.RequestCodes
 import com.yawnandpawn.app.core.error.Outcome
 import com.yawnandpawn.app.core.session.SessionState
 import com.yawnandpawn.app.debug.WakeStatus
@@ -19,9 +21,11 @@ import org.robolectric.RobolectricTestRunner
 import org.robolectric.Shadows.shadowOf
 import org.robolectric.annotation.Config
 import org.robolectric.annotation.GraphicsMode
+import org.robolectric.shadows.ShadowAlarmManager
 import java.time.Duration
 import kotlin.test.assertEquals
 import kotlin.test.assertIs
+import kotlin.test.assertNotNull
 import kotlin.test.assertTrue
 import kotlin.time.Instant
 
@@ -43,6 +47,12 @@ class NoHostageBackgroundTest {
 
     private fun startedActivities(app: WakeApp): List<Intent> = generateSequence { shadowOf(app.app).nextStartedActivity }.toList()
 
+    /** The session slot's scheduled system alarm, or null when none is armed. */
+    private fun slotAlarm(app: WakeApp): ShadowAlarmManager.ScheduledAlarm? =
+        shadowOf(app.app.getSystemService(AlarmManager::class.java)).scheduledAlarms.firstOrNull {
+            shadowOf(it.operation).requestCode == RequestCodes.SESSION_SLOT
+        }
+
     @Test
     fun `5 minutes of heartbeats with the wake screen stopped start no activity and the alarm keeps playing`() {
         val app = WakeApp()
@@ -59,13 +69,18 @@ class NoHostageBackgroundTest {
 
         repeat(HEARTBEATS) { beat ->
             shadowOf(Looper.getMainLooper()).idleFor(Duration.ofMinutes(1))
+            val armed = slotAlarm(app)
+            assertNotNull(armed, "the heartbeat slot is armed before minute ${beat + 1}")
             // The heartbeat slot fires through the alarm receiver into the running wake service.
             service.withIntent(WakeService.intent(app.app, WakeService.ACTION_SLOT)).startCommand(0, beat + 2)
-            app.awaitUntil("heartbeat ${beat + 1} is handled") { true }
+            // Handled: SlotFired re-arms the slot one heartbeat on (a new scheduled alarm replaces the fired one).
+            app.awaitUntil("heartbeat ${beat + 1} re-arms the slot") { slotAlarm(app).let { it != null && it !== armed } }
 
             assertEquals(emptyList(), startedActivities(app).map { it.component }, "no activity start at minute ${beat + 1}")
             assertTrue(app.lastMediaPlayer().isReallyPlaying, "the alarm plays at minute ${beat + 1}")
         }
+        shadowOf(Looper.getMainLooper()).idle()
+        assertEquals(emptyList(), startedActivities(app).map { it.component }, "no activity start after the heartbeats")
         assertIs<SessionState.Ringing>(app.engine.state.value)
         assertTrue(WakeStatus.isPlaying(), "the debug status reports the alarm playing")
     }

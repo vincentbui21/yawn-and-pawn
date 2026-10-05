@@ -213,6 +213,36 @@ class PermissionAllowlistTest {
     }
 
     @Test
+    fun `an intent filter with CATEGORY_SECONDARY_HOME fails too (Story 2-11)`() {
+        val xml =
+            manifest(
+                body = "",
+                application =
+                    """<activity android:name=".Second" android:exported="true"><intent-filter>""" +
+                        """<action android:name="android.intent.action.MAIN" />""" +
+                        """<category android:name="android.intent.category.SECONDARY_HOME" />""" +
+                        """</intent-filter></activity>""",
+            )
+
+        assertEquals(
+            listOf("debug: activity '.Second' declares CATEGORY_SECONDARY_HOME (posing as the launcher, NFR-13)"),
+            verify(xml),
+        )
+    }
+
+    @Test
+    fun `looking the launcher up in queries passes (Story 2-11)`() {
+        val xml =
+            manifest(
+                body =
+                    """<queries><intent><action android:name="android.intent.action.MAIN" />""" +
+                        """<category android:name="android.intent.category.HOME" /></intent></queries>""",
+            )
+
+        assertEquals(emptyList(), verify(xml))
+    }
+
+    @Test
     fun `any lock-task mode but the default fails, and normal passes (Story 2-11)`() {
         val modes = listOf("never", "if_whitelisted", "always")
 
@@ -244,6 +274,25 @@ class PermissionAllowlistTest {
         )
         assertEquals(emptyList(), verify(other))
         assertEquals(emptyList(), verify(wakeDefault))
+    }
+
+    @Test
+    fun `stopWithTask on the wake service fails for a resource reference and passes only for false (Story 2-11)`() {
+        fun wake(value: String) =
+            manifest(
+                body = "",
+                application = """<service android:name=".android.wake.WakeService" android:stopWithTask="$value" />""",
+            )
+
+        assertEquals(
+            listOf(
+                "debug: service '.android.wake.WakeService' sets android:stopWithTask=\"@bool/stop\" " +
+                    "(a swipe from Recents must never end the ring, NFR-13)",
+            ),
+            verify(wake("@bool/stop")),
+        )
+        assertEquals(1, verify(wake("TRUE")).size)
+        assertEquals(emptyList(), verify(wake("false")))
     }
 
     @Test

@@ -153,5 +153,4 @@ dependencies {
     androidTestImplementation(libs.androidx.test.ext.junit)
     androidTestImplementation(libs.compose.ui.test.junit4)
     // Story 2.5: the notification-shade return test on the managed device.
-    androidTestImplementation(libs.androidx.test.uiautomator)
 }

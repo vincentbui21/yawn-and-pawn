@@ -90,7 +90,7 @@ deferred: []
 - Tests:
   - `android/wake/LeaveAndReturnTest.kt` -- every matrix row;
   - `WakeScreenForwardingTest` -- the pure decision for every state;
-  - `androidTest/.../ReturnThroughNotificationTest.kt` -- GMD: debug fire, Home, open the shade, tap the notification, `WakeActivity` resumed within 1,000 ms, and three taps leave one instance.
+  - ~~`androidTest/.../ReturnThroughNotificationTest.kt` -- GMD~~ Removed after CI (2026-10-06): the CI managed device is an ATD image, which has no notification shade ("the ringing notification is in the shade (tap 1)" failed). The tap-from-the-shade timing (back within 1,000 ms, one wake screen after three taps) moves to the Story 2.13 device checklist; Robolectric `LeaveAndReturnTest` covers the behaviour.
 - `gradle/libs.versions.toml`, `androidApp/build.gradle.kts` -- `androidx.test.uiautomator` for androidTest only. Update `config/dependency-allowlist.txt` if the check covers androidTest.
 
 **Acceptance Criteria:**
@@ -137,7 +137,7 @@ deferred: []
 **Files changed:**
 - `android/wake/WakeNotifier.kt`, `WakeService.kt`, new `WakeScreenForwarding.kt`, and `MainActivity.kt`.
 - Tests: `LeaveAndReturnTest` (11 tests after the review), `WakeScreenForwardingTest`, and `WakeRuntimeTest` (1 added).
-- `androidTest/ReturnThroughNotificationTest` (GMD).
+- ~~`androidTest/ReturnThroughNotificationTest` (GMD)~~ removed: no notification shade on the CI ATD image; moved to Story 2.13.
 - `libs.versions.toml` and `androidApp/build.gradle.kts`: UiAutomator 2.3.0, androidTest only. The allowlist checks only the app's runtime classpaths, so it is unchanged.
 
 **Verification:**

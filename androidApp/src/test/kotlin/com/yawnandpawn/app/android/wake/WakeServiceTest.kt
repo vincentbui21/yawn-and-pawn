@@ -31,6 +31,7 @@ import com.yawnandpawn.app.testing.FakeActiveSessionStore
 import com.yawnandpawn.app.testing.FakeAlarmRepository
 import com.yawnandpawn.app.testing.aSession
 import com.yawnandpawn.app.testing.anAlarm
+import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.runBlocking
 import kotlinx.datetime.DayOfWeek
@@ -625,13 +626,26 @@ class WakeServiceTest {
 
     @Test
     fun `a slot start with no ringing notification up posts the quiet one without a full-screen intent`() {
-        val app = WakeApp()
+        // The orphan slot shuts the service down once its session load returns, and Robolectric clears the foreground
+        // notification on that stop. The load waits for the test, so the notification is read before it, whenever the
+        // store answers (with Room it could answer inside the looper idle after startCommand: flaky on fast CI runners).
+        val loadAllowed = CompletableDeferred<Unit>()
+        val empty = FakeActiveSessionStore()
+        val gated =
+            object : ActiveSessionStore by empty {
+                override suspend fun load(): Outcome<StoredSession, DomainError> {
+                    loadAllowed.await()
+                    return empty.load()
+                }
+            }
+        val app = WakeApp(store = gated)
 
         val service = app.startService(WakeService.intent(app.app, WakeService.ACTION_SLOT)).get()
 
-        val notification = shadowOf(service).lastForegroundNotification
+        val notification = assertNotNull(shadowOf(service).lastForegroundNotification, "in the foreground")
         assertEquals(WakeNotifier.QUIET_CHANNEL_ID, notification.channelId)
         assertNull(notification.fullScreenIntent)
+        loadAllowed.complete(Unit)
         app.awaitUntil("the service stops") { shadowOf(service).isStoppedBySelf }
         assertEquals(1, shadowOf(service).stopSelfResultId, "it stops its own latest start")
     }

@@ -61,7 +61,7 @@ development_status:
 
   epic-2: in-progress
   2-1-keep-the-backup-alarm-armed-and-recover-after-a-kill: done  # PR 2026-10-05 (Epic 2 auto-run, fast mode)
-  2-2-session-deadlines-survive-clock-changes-and-reboots: backlog
+  2-2-session-deadlines-survive-clock-changes-and-reboots: done  # PR #25 stack 2026-10-06 (Epic 2 auto-run, fast mode)
   2-3-ring-before-the-first-unlock-after-a-reboot: backlog
   2-4-unlocking-during-a-ring-makes-snooze-available-in-place: backlog
   2-5-leave-the-alarm-and-come-back-through-the-notification: done  # PR 2026-10-05 (Epic 2 auto-run, fast mode)

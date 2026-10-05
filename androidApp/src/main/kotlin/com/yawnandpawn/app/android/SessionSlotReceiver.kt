@@ -10,6 +10,7 @@ import com.yawnandpawn.app.core.log.LogEvent
 import com.yawnandpawn.app.core.log.Logger
 import org.koin.core.component.KoinComponent
 import org.koin.core.component.get
+import kotlin.time.Instant
 
 /**
  * Receives the session slot (AD-4, Story 2.1): the backup alarm that brings a session back after a kill. It hands the
@@ -31,17 +32,23 @@ class SessionSlotReceiver :
             return
         }
         val alarm = intent.alarmFiredOrNull()
+        val retrySince = intent.retrySinceOrNull()
         val handler = get<AlarmFiredHandler>()
-        runWithinBudget(get(), logger, "handle session slot fire") { handler.onSessionSlotFired(alarm) }
+        runWithinBudget(get(), logger, "handle session slot fire") { handler.onSessionSlotFired(alarm, retrySince) }
     }
 
     companion object {
         const val ACTION_SESSION_SLOT = "com.yawnandpawn.app.action.SESSION_SLOT_FIRED"
 
-        /** The slot's operation intent, carrying [alarm] (or no alarm) in its extras. */
+        /** The slot's operation intent, carrying [alarm] (or no alarm) and [retrySince] (or none) in its extras. */
         fun intent(
             context: Context,
             alarm: AlarmFired? = null,
-        ): Intent = Intent(context, SessionSlotReceiver::class.java).setAction(ACTION_SESSION_SLOT).putAlarmFired(alarm)
+            retrySince: Instant? = null,
+        ): Intent =
+            Intent(context, SessionSlotReceiver::class.java)
+                .setAction(ACTION_SESSION_SLOT)
+                .putAlarmFired(alarm)
+                .putRetrySince(retrySince)
     }
 }

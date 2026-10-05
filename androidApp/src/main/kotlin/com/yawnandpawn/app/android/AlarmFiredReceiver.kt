@@ -16,9 +16,10 @@ import kotlin.time.Instant
 
 /**
  * Receives the stored alarms and the test alarm the app armed (AD-4), told apart by the action; the session slot has
- * its own [SessionSlotReceiver] (Story 2.1). It hands the fire to the [AlarmFiredHandler] port inside `goAsync()` and
- * finishes the pending result in every case, also when the handler throws or overruns its budget. Not exported (only
- * the app's own PendingIntents reach it), `directBootAware`, and it never starts an activity.
+ * its own [SessionSlotReceiver] (Story 2.1), and a slot an older version armed here still reaches the handler as a slot
+ * fire. It hands the fire to the [AlarmFiredHandler] port inside `goAsync()` and finishes the pending result in every
+ * case, also when the handler throws or overruns its budget. Not exported (only the app's own PendingIntents reach it),
+ * `directBootAware`, and it never starts an activity.
  *
  * Since Story 1.14 the handler starts the foreground `WakeService` (for an enabled alarm, before re-arming its next
  * occurrence, and for the test alarm), and since device test round 1 it returns only once the service took the start
@@ -35,6 +36,9 @@ class AlarmFiredReceiver :
         ) : Fire
 
         data object TestAlarm : Fire
+
+        /** A session slot armed by a version before Story 2.1, still delivered here after an update. */
+        data object LegacySessionSlot : Fire
     }
 
     override fun onReceive(
@@ -46,6 +50,7 @@ class AlarmFiredReceiver :
             when (intent.action) {
                 ACTION_ALARM -> intent.alarmFiredOrNull()?.let { Fire.Alarm(it) }
                 ACTION_TEST_ALARM -> Fire.TestAlarm
+                ACTION_LEGACY_SESSION_SLOT -> Fire.LegacySessionSlot
                 else -> null
             }
         if (fire == null) {
@@ -58,6 +63,7 @@ class AlarmFiredReceiver :
             when (fire) {
                 is Fire.Alarm -> handler.onAlarmFired(fire.fired)
                 Fire.TestAlarm -> handler.onTestAlarmFired()
+                Fire.LegacySessionSlot -> handler.onSessionSlotFired(alarm = null)
             }
         }
     }
@@ -72,6 +78,7 @@ class AlarmFiredReceiver :
             when (fire) {
                 is Fire.Alarm -> fire.fired.scheduledAt
                 Fire.TestAlarm -> intent.takeIf { it.hasExtra(EXTRA_SCHEDULED_AT) }?.let { scheduledAtOf(it) }
+                Fire.LegacySessionSlot -> return
             }
         scheduledAt?.let(timings::fired)
         timings.stage(WakeStage.ReceiverReceived)
@@ -80,6 +87,13 @@ class AlarmFiredReceiver :
     companion object {
         const val ACTION_ALARM = "com.yawnandpawn.app.action.ALARM_FIRED"
         const val ACTION_TEST_ALARM = "com.yawnandpawn.app.action.TEST_ALARM_FIRED"
+
+        /**
+         * The session slot's action before Story 2.1, when it fired here: a slot armed by the previous version is
+         * forwarded to [AlarmFiredHandler.onSessionSlotFired], and the app update cancels it
+         * (`AndroidAlarmScheduler.cancelLegacySessionSlot`).
+         */
+        const val ACTION_LEGACY_SESSION_SLOT = "com.yawnandpawn.app.action.SESSION_SLOT_FIRED"
         const val EXTRA_ALARM_ID = "alarmId"
         const val EXTRA_SCHEDULED_AT = "scheduledAt"
 

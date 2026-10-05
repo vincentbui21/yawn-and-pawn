@@ -28,6 +28,9 @@ class SessionSlotRearmTest {
     private val heartbeat = Deadline.after(T0, SessionReducer.HEARTBEAT)
     private val immediately = Deadline.after(T0, 1.seconds)
 
+    /** T0 as an instant: the first refusal of a payload-less retry. */
+    private val now = Instant.fromEpochMilliseconds(T0.wallMillis)
+
     private suspend fun stored(state: SessionState) = store.commit(state)
 
     /** An alarm scheduled [ago] before now. */
@@ -119,7 +122,9 @@ class SessionSlotRearmTest {
             stored(SessionState.Snoozed(snoozedSession()))
             assertEquals(heartbeat, rearm.afterRefusedStart(fired), "snoozed: the alarm merges at the next slot")
 
-            assertEquals(listOf<Call>(Call.Slot(heartbeat, fired), Call.Slot(heartbeat, fired)), scheduler.calls)
+            // The retry window counts from the alarm's scheduled time, and the slot carries it.
+            val since = fired.scheduledAt
+            assertEquals(listOf<Call>(Call.Slot(heartbeat, fired, since), Call.Slot(heartbeat, fired, since)), scheduler.calls)
             assertEquals(
                 LogEvent.SessionSlotRearmed(SessionSlotRearm.REFUSED_START, 60_000, sessionId = null, alarmId = "alarm-b"),
                 logger.events.first(),
@@ -135,7 +140,7 @@ class SessionSlotRearmTest {
             stored(SessionState.Loud(session))
             assertEquals(heartbeat, rearm.afterRefusedStart(stale))
 
-            assertEquals(listOf<Call>(Call.Slot(heartbeat)), scheduler.calls)
+            assertEquals(listOf<Call>(Call.Slot(heartbeat, retrySince = now)), scheduler.calls)
         }
 
     @Test
@@ -170,6 +175,82 @@ class SessionSlotRearmTest {
             assertEquals(heartbeat, rearm.afterRefusedStart(null))
 
             assertTrue(logger.events.first() is LogEvent.OperationFailed)
-            assertEquals(listOf<Call>(Call.Slot(heartbeat)), scheduler.calls)
+            assertEquals(listOf<Call>(Call.Slot(heartbeat, retrySince = now)), scheduler.calls)
+        }
+
+    @Test
+    fun `a refused slot or restore start re-arms a stored Ringing session and arms nothing for a Missed one or an unreadable row`() =
+        runTest {
+            stored(SessionState.Ringing(session))
+            assertEquals(heartbeat, rearm.afterRefusedStart(null), "ringing")
+            stored(SessionState.Missed(session.noTimers()))
+            assertNull(rearm.afterRefusedStart(null), "missed")
+            store.row = "{not json"
+            assertNull(rearm.afterRefusedStart(null), "unreadable row")
+
+            assertEquals(listOf<Call>(Call.Slot(heartbeat, retrySince = now)), scheduler.calls)
+        }
+
+    @Test
+    fun `a refused start whose slot cannot be armed is logged and returns nothing`() =
+        runTest {
+            scheduler.failure = DomainError.ExactAlarmNotPermitted
+
+            assertNull(rearm.afterRefusedStart(alarm(ago = 1.minutes)))
+
+            assertEquals(listOf<LogEvent>(LogEvent.OperationFailed("arm session slot", "exact alarms not permitted")), logger.events)
+        }
+
+    @Test
+    fun `a payload-less re-arm keeps the alarm the armed slot still carries`() =
+        runTest {
+            val carried = alarm(ago = 1.minutes)
+            scheduler.slotAlarm = carried
+            stored(SessionState.Ringing(session))
+
+            assertEquals(immediately, rearm.afterSystemEvent(), "ringing")
+            stored(SessionState.Snoozed(snoozedSession()))
+            assertEquals(immediately, rearm.afterSystemEvent(), "snoozed: the carried alarm comes at once, not at the snooze end")
+            assertEquals(heartbeat, rearm.afterRefusedStart(null), "refused restore")
+
+            assertEquals(
+                listOf<Call>(
+                    Call.Slot(immediately, carried),
+                    Call.Slot(immediately, carried),
+                    Call.Slot(heartbeat, carried, carried.scheduledAt),
+                ),
+                scheduler.calls,
+            )
+        }
+
+    @Test
+    fun `a carried alarm 30 minutes past is not kept`() =
+        runTest {
+            scheduler.slotAlarm = alarm(ago = 30.minutes)
+            stored(SessionState.Ringing(session))
+
+            rearm.afterSystemEvent()
+            rearm.afterRefusedStart(null)
+
+            assertEquals(listOf<Call>(Call.Slot(immediately), Call.Slot(heartbeat, retrySince = now)), scheduler.calls)
+        }
+
+    @Test
+    fun `retries stop, logged, once starts have been refused for 30 minutes`() =
+        runTest {
+            stored(SessionState.Ringing(session))
+            val firstRefusal = Instant.fromEpochMilliseconds(T0.wallMillis - 29.minutes.inWholeMilliseconds)
+            assertEquals(heartbeat, rearm.afterRefusedStart(null, firstRefusal), "still within the window")
+            assertEquals(
+                listOf<Call>(Call.Slot(heartbeat, retrySince = firstRefusal)),
+                scheduler.calls,
+                "the slot carries the first refusal",
+            )
+
+            time.advanceBy(1.minutes)
+            assertNull(rearm.afterRefusedStart(null, firstRefusal))
+
+            assertEquals(1, scheduler.calls.size, "nothing armed any more")
+            assertEquals(LogEvent.OperationFailed("re-arm session slot", "starts refused for 30m; giving up"), logger.events.last())
         }
 }

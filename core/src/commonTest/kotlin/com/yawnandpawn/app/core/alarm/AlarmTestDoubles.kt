@@ -113,6 +113,7 @@ internal sealed interface Call {
     data class Slot(
         val deadline: Deadline,
         val alarm: AlarmFired? = null,
+        val retrySince: Instant? = null,
     ) : Call
 
     data object CancelSlot : Call
@@ -146,7 +147,13 @@ internal class RecordingScheduler : AlarmScheduler {
     override fun armSessionSlot(
         deadline: Deadline,
         alarm: AlarmFired?,
-    ) = record(Call.Slot(deadline, alarm))
+        retrySince: Instant?,
+    ) = record(Call.Slot(deadline, alarm, retrySince))
+
+    /** What [sessionSlotAlarm] answers: the alarm the armed slot carries (set by the test). */
+    var slotAlarm: AlarmFired? = null
+
+    override fun sessionSlotAlarm(): AlarmFired? = slotAlarm
 
     override fun cancelSessionSlot() = record(Call.CancelSlot)
 

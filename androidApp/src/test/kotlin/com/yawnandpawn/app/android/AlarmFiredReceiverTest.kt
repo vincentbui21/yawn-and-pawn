@@ -22,6 +22,7 @@ import org.robolectric.RobolectricTestRunner
 import org.robolectric.Shadows.shadowOf
 import org.robolectric.shadows.ShadowLog
 import kotlin.test.assertEquals
+import kotlin.test.assertNull
 import kotlin.test.assertTrue
 import kotlin.time.Duration.Companion.milliseconds
 import kotlin.time.Instant
@@ -146,6 +147,17 @@ class AlarmFiredReceiverTest {
         assertEquals(setOf(1000), app.armed().keys, "a test fire re-arms nothing")
         // Story 1.18: the test fire rings the pending test through the service.
         assertEquals(listOf(WakeService.ACTION_TEST, WakeService.ACTION_SLOT), startedServices.map { it.action })
+    }
+
+    @Test
+    fun `a session slot armed by an older version still starts the wake service as a slot fire`() {
+        app.armLegacySessionSlot(berlin("2027-03-07T20:01").toEpochMilliseconds())
+
+        fire(RequestCodes.SESSION_SLOT)
+
+        val started = startedServices.single()
+        assertEquals(WakeService.ACTION_SLOT, started.action)
+        assertNull(started.getStringExtra(AlarmFiredReceiver.EXTRA_ALARM_ID), "it carried no alarm")
     }
 
     @Test

@@ -5,6 +5,7 @@ import android.content.Intent
 import com.yawnandpawn.app.core.alarm.AlarmFired
 import com.yawnandpawn.app.core.log.LogEvent
 import com.yawnandpawn.app.core.log.Logger
+import kotlin.time.Instant
 
 /**
  * Starts [WakeService] in the foreground. A fire from `setAlarmClock` lets the app start a foreground service from the
@@ -25,11 +26,12 @@ class WakeServiceStarter(
         token: Long,
     ): Boolean = start(WakeService.alarmIntent(context, fired).withToken(token))
 
-    /** The session slot fired, standing also for [alarm] when it carried one (Story 2.1). */
+    /** The session slot fired, standing also for [alarm] when it carried one (Story 2.1), retried since [retrySince]. */
     fun startSlot(
         token: Long,
         alarm: AlarmFired? = null,
-    ): Boolean = start(WakeService.slotIntent(context, alarm).withToken(token))
+        retrySince: Instant? = null,
+    ): Boolean = start(WakeService.slotIntent(context, alarm, retrySince).withToken(token))
 
     /** The test alarm fired (Story 1.18): the service rings the pending test. */
     fun startTest(token: Long): Boolean = start(WakeService.intent(context, WakeService.ACTION_TEST).withToken(token))

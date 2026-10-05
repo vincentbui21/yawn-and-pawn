@@ -18,6 +18,7 @@ import com.yawnandpawn.app.core.time.Clock
 import com.yawnandpawn.app.core.time.Deadline
 import com.yawnandpawn.app.core.time.MonotonicClock
 import com.yawnandpawn.app.core.time.TimeSnapshot
+import kotlin.time.Instant
 
 /**
  * [AlarmScheduler] on `AlarmManager.setAlarmClock()` only (AD-4): exact, allowed in Doze, shown as the next alarm in
@@ -32,6 +33,7 @@ import com.yawnandpawn.app.core.time.TimeSnapshot
  * - On API 31-32 without the exact-alarm permission (and whenever `setAlarmClock` throws `SecurityException`) it returns
  *   `ExactAlarmNotPermitted` and logs it. On API 33+ `USE_EXACT_ALARM` is granted at install.
  */
+@Suppress("TooManyFunctions") // One per port call, plus the wall-time conversion and the arm and cancel helpers.
 class AndroidAlarmScheduler(
     private val context: Context,
     private val clock: Clock,
@@ -52,12 +54,31 @@ class AndroidAlarmScheduler(
 
     override fun cancel(requestCode: Int): Outcome<Unit, DomainError> = cancel(operationFor(context, requestCode), requestCode)
 
+    /** The alarm the slot this process armed last carries, and the slot's wall trigger time (Story 2.1 review). */
+    @Volatile
+    private var carried: Pair<AlarmFired, Long>? = null
+
     override fun armSessionSlot(
         deadline: Deadline,
         alarm: AlarmFired?,
-    ): Outcome<Unit, DomainError> = arm(SessionSlotReceiver.intent(context, alarm), RequestCodes.SESSION_SLOT, wallMillisOf(deadline))
+        retrySince: Instant?,
+    ): Outcome<Unit, DomainError> {
+        val triggerAt = wallMillisOf(deadline)
+        val armed = arm(SessionSlotReceiver.intent(context, alarm, retrySince), RequestCodes.SESSION_SLOT, triggerAt)
+        if (armed is Outcome.Success) carried = alarm?.let { it to triggerAt }
+        return armed
+    }
 
-    override fun cancelSessionSlot(): Outcome<Unit, DomainError> = cancel(SessionSlotReceiver.intent(context), RequestCodes.SESSION_SLOT)
+    /**
+     * Known only for a slot this process armed (the extras of a PendingIntent cannot be read back), and only until its
+     * trigger time: after that it has fired and its alarm went to the slot's fire.
+     */
+    override fun sessionSlotAlarm(): AlarmFired? = carried?.takeIf { (_, at) -> clock.now().toEpochMilliseconds() < at }?.first
+
+    override fun cancelSessionSlot(): Outcome<Unit, DomainError> {
+        carried = null
+        return cancel(SessionSlotReceiver.intent(context), RequestCodes.SESSION_SLOT)
+    }
 
     override fun scheduleTest(triggerAtWallMillis: Long): Outcome<Unit, DomainError> {
         val intent = firedIntent(context, AlarmFiredReceiver.ACTION_TEST_ALARM, triggerAtWallMillis, alarmId = null)
@@ -134,11 +155,23 @@ class AndroidAlarmScheduler(
         return Outcome.Failure(DomainError.ExactAlarmNotPermitted)
     }
 
-    private companion object {
-        const val IMMUTABLE_UPDATE = PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT
+    companion object {
+        private const val IMMUTABLE_UPDATE = PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT
+
+        /**
+         * Cancels a session slot armed by a version before Story 2.1 (to [AlarmFiredReceiver] with the old slot action),
+         * which [cancelSessionSlot] no longer matches. The app update broadcast calls it (Story 2.1 review).
+         */
+        fun cancelLegacySessionSlot(context: Context) {
+            val legacy = AlarmFiredReceiver.intent(context, AlarmFiredReceiver.ACTION_LEGACY_SESSION_SLOT)
+            val flags = PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_NO_CREATE
+            val operation = PendingIntent.getBroadcast(context, RequestCodes.SESSION_SLOT, legacy, flags) ?: return
+            context.getSystemService(AlarmManager::class.java).cancel(operation)
+            operation.cancel()
+        }
 
         /** The [AlarmFiredReceiver] operation for a stored alarm or the test alarm, with its extras. */
-        fun firedIntent(
+        private fun firedIntent(
             context: Context,
             action: String,
             triggerAtWallMillis: Long,
@@ -150,7 +183,7 @@ class AndroidAlarmScheduler(
                 .putExtra(AlarmFiredReceiver.EXTRA_SCHEDULED_AT, triggerAtWallMillis)
 
         /** The operation armed under [requestCode], without extras (they do not count when PendingIntents are compared). */
-        fun operationFor(
+        private fun operationFor(
             context: Context,
             requestCode: Int,
         ): Intent =

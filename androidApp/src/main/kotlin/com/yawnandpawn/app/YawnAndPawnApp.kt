@@ -20,7 +20,7 @@ import com.yawnandpawn.app.core.alarm.DeleteAlarm
 import com.yawnandpawn.app.core.alarm.RearmOnFire
 import com.yawnandpawn.app.core.alarm.SaveAlarm
 import com.yawnandpawn.app.core.alarm.SetAlarmEnabled
-import com.yawnandpawn.app.core.error.Outcome
+import com.yawnandpawn.app.core.error.valueOrNull
 import com.yawnandpawn.app.core.history.MissedNotes
 import com.yawnandpawn.app.core.id.IdGenerator
 import com.yawnandpawn.app.core.id.UuidV4IdGenerator
@@ -39,6 +39,7 @@ import com.yawnandpawn.app.core.session.SessionEngine
 import com.yawnandpawn.app.core.session.SessionRecorder
 import com.yawnandpawn.app.core.session.SessionReducer
 import com.yawnandpawn.app.core.session.SessionSlotRearm
+import com.yawnandpawn.app.core.session.SessionState
 import com.yawnandpawn.app.core.session.SnoozeAvailabilityPolicy
 import com.yawnandpawn.app.core.session.StoredSession
 import com.yawnandpawn.app.core.session.TierFeeLadder
@@ -116,12 +117,16 @@ open class YawnAndPawnApp : Application() {
         // App start re-arms every alarm (AD-4); it also covers a backup restore, which restarts the app.
         val scheduling = koin.get<AlarmScheduling>()
         scope.launch { scheduling.rescheduleAll() }
-        // With no session left in runtime.db, an alarm volume a crashed session saved is put back (AD-5). Only a read: the
-        // session itself is restored by WakeService, MainActivity or WakeActivity (Story 2.1).
+        // With no session left in runtime.db (nothing, an unreadable row or a stored Idle), an alarm volume a crashed session
+        // saved is put back (AD-5). Only a read: the session itself is restored by WakeService, MainActivity or
+        // WakeActivity (Story 2.1).
         val store = koin.get<ActiveSessionStore>()
         val runtime = koin.get<WakeRuntime>()
         scope.launch {
-            if (store.load() == Outcome.Success(StoredSession.Empty)) runtime.restoreVolumeIfIdle()
+            if (store.load().valueOrNull()?.holdsNoSession() == true) runtime.restoreVolumeIfIdle()
         }
     }
+
+    private fun StoredSession.holdsNoSession(): Boolean =
+        this == StoredSession.Empty || this is StoredSession.Unreadable || this == StoredSession.Found(SessionState.Idle)
 }

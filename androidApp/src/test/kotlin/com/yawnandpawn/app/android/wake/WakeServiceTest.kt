@@ -25,6 +25,7 @@ import com.yawnandpawn.app.core.session.CheckAnswer
 import com.yawnandpawn.app.core.session.SessionEvent
 import com.yawnandpawn.app.core.session.SessionJson
 import com.yawnandpawn.app.core.session.SessionState
+import com.yawnandpawn.app.core.session.StoredSession
 import com.yawnandpawn.app.core.time.Deadline
 import com.yawnandpawn.app.testing.FakeActiveSessionStore
 import com.yawnandpawn.app.testing.FakeAlarmRepository
@@ -39,6 +40,8 @@ import org.junit.runner.RunWith
 import org.koin.core.context.GlobalContext
 import org.robolectric.RobolectricTestRunner
 import org.robolectric.Shadows.shadowOf
+import org.robolectric.shadows.ShadowAlarmManager
+import java.util.concurrent.atomic.AtomicBoolean
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
 import kotlin.test.assertIs
@@ -495,6 +498,129 @@ class WakeServiceTest {
         app.awaitRinging()
 
         assertTrue((app.engine.state.value as SessionState.Ringing).session.beforeFirstUnlock)
+    }
+
+    private fun slot(app: WakeApp): ShadowAlarmManager.ScheduledAlarm? =
+        shadowOf(app.app.getSystemService(AlarmManager::class.java)).scheduledAlarms.singleOrNull {
+            shadowOf(it.operation).requestCode == RequestCodes.SESSION_SLOT
+        }
+
+    /** The armed slot fired: the system no longer holds it. */
+    private fun slotFired(app: WakeApp) {
+        app.app.getSystemService(AlarmManager::class.java).cancel(assertNotNull(slot(app)?.operation, "a slot is armed"))
+        assertNull(slot(app))
+    }
+
+    /** The slot is armed about one heartbeat from now and carries alarm A. */
+    private fun assertSlotCarriesAlarmA(app: WakeApp) {
+        val armed = assertNotNull(slot(app), "the slot is armed")
+        assertEquals(alarmA.id, shadowOf(armed.operation).savedIntent.getStringExtra(AlarmFiredReceiver.EXTRA_ALARM_ID))
+        val inMillis = armed.triggerAtTime - System.currentTimeMillis()
+        assertTrue(inMillis in 50_000..60_000, "one heartbeat ahead: $inMillis ms")
+    }
+
+    /** Rings alarm A into the emergency ring ([broken] store), then delivers its backup slot (carrying A) after it fired. */
+    private fun backupSlotFire(broken: FakeActiveSessionStore): WakeApp {
+        val app = WakeApp(store = broken)
+        upsert(alarmA)
+        val controller = app.ring(fired)
+        app.awaitUntil("the emergency ring") { app.runtime.emergency.value != null }
+        slotFired(app)
+
+        controller.withIntent(WakeService.slotIntent(app.app, fired)).startCommand(0, 2)
+        app.awaitUntil("the backup slot is armed again") { slot(app) != null }
+        return app
+    }
+
+    @Test
+    fun `a slot fire while the emergency ring plays arms its backup slot again, carrying the alarm`() {
+        val app = backupSlotFire(FakeActiveSessionStore().apply { commitFailure = DomainError.StorageFailure("disk full") })
+
+        assertSlotCarriesAlarmA(app)
+        assertNotNull(app.runtime.emergency.value, "it rings on")
+    }
+
+    @Test
+    fun `a slot fire while the emergency ring plays and the session cannot be loaded still arms its backup slot`() {
+        val app = backupSlotFire(FakeActiveSessionStore().apply { loadFailure = DomainError.StorageFailure("disk I/O error") })
+
+        assertSlotCarriesAlarmA(app)
+    }
+
+    @Test
+    fun `a slot fire with no alarm whose session cannot be loaded rings the emergency default`() {
+        val broken = FakeActiveSessionStore().apply { loadFailure = DomainError.StorageFailure("disk I/O error") }
+        val app = WakeApp(store = broken)
+
+        app.startService(WakeService.intent(app.app, WakeService.ACTION_SLOT))
+        app.awaitUntil("the emergency ring") { app.runtime.emergency.value != null }
+
+        assertTrue(app.logs().any { it.startsWith("EmergencyRingStarted cause=session not loaded") }, "${app.logs()}")
+        assertNotNull(slot(app), "with its backup slot")
+    }
+
+    @Test
+    fun `a slot carrying an alarm into a broken store rings the emergency default with a backup slot carrying the alarm`() {
+        val broken = FakeActiveSessionStore().apply { commitFailure = DomainError.StorageFailure("disk full") }
+        val app = WakeApp(store = broken)
+        upsert(alarmA)
+
+        app.startService(WakeService.slotIntent(app.app, fired))
+        app.awaitUntil("the emergency ring") { app.runtime.emergency.value != null }
+
+        assertEquals(EmergencyRing(scheduledAt, alarmA.volumePercent), app.runtime.emergency.value)
+        assertSlotCarriesAlarmA(app)
+    }
+
+    @Test
+    fun `a slot carrying an alarm 30 minutes or more past ignores it, logged, and shuts down`() {
+        val app = WakeApp()
+        upsert(alarmA)
+        val stale = AlarmFired(alarmA.id, Instant.fromEpochMilliseconds(System.currentTimeMillis()) - 31.minutes)
+
+        val service = app.startService(WakeService.slotIntent(app.app, stale)).get()
+        app.awaitUntil("the service stops") { shadowOf(service).isStoppedBySelf }
+
+        assertEquals(SessionState.Idle, app.engine.state.value)
+        assertTrue(app.mediaPlayers.isEmpty(), "nothing rings")
+        assertTrue(app.logs().any { it == "FireIgnored kind=SessionSlot alarmId=alarm-a reason=alarm 30m or more past" }, "${app.logs()}")
+    }
+
+    @Test
+    fun `an alarm whose first session load fails merges into the ringing session the next load finds`() {
+        val stored = SessionState.Ringing(aSession())
+        val inner = FakeActiveSessionStore().apply { row = SessionJson.encode(stored) }
+        val failNextLoad = AtomicBoolean(false)
+        val flaky =
+            object : ActiveSessionStore by inner {
+                override suspend fun load(): Outcome<StoredSession, DomainError> =
+                    if (failNextLoad.getAndSet(false)) Outcome.Failure(DomainError.StorageFailure("locked")) else inner.load()
+            }
+        val app = WakeApp(store = flaky)
+        app.koin.get<ApplicationScope>().awaitChildren()
+        upsert(alarmA)
+
+        failNextLoad.compareAndSet(false, true)
+        app.ring(fired)
+        app.awaitUntil("the merge is handled") { app.logs().any { it.startsWith("SessionEffectLogged type=RecordMergedOccurrence") } }
+
+        assertEquals(stored.session.sessionId, assertIs<SessionState.Ringing>(app.engine.state.value).session.sessionId)
+        assertEquals(1, app.mediaPlayers.size, "one player")
+    }
+
+    @Test
+    fun `a refused alarm start through the receiver arms the session slot one heartbeat ahead carrying the alarm`() {
+        val app =
+            WakeApp(
+                starter = { context ->
+                    WakeServiceStarter(context, GlobalContext.get().get()) { throw ForegroundServiceStartNotAllowedException("background") }
+                },
+            )
+
+        fireThroughReceiver(app)
+
+        assertSlotCarriesAlarmA(app)
+        assertNull(shadowOf(app.app).nextStartedService, "no service started")
     }
 
     @Test

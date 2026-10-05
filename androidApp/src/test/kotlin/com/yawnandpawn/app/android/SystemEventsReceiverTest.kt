@@ -3,8 +3,16 @@ package com.yawnandpawn.app.android
 import android.content.Intent
 import com.yawnandpawn.app.core.alarm.AlarmDraft
 import com.yawnandpawn.app.core.alarm.AlarmScheduler
+import com.yawnandpawn.app.core.alarm.RequestCodes
 import com.yawnandpawn.app.core.alarm.SaveAlarm
+import com.yawnandpawn.app.core.error.DomainError
 import com.yawnandpawn.app.core.error.Outcome
+import com.yawnandpawn.app.core.session.ActiveSessionStore
+import com.yawnandpawn.app.core.session.SessionSlotRearm
+import com.yawnandpawn.app.core.session.SessionState
+import com.yawnandpawn.app.core.session.StoredSession
+import com.yawnandpawn.app.testing.FakeActiveSessionStore
+import com.yawnandpawn.app.testing.aSession
 import com.yawnandpawn.app.testing.anAlarm
 import kotlinx.coroutines.runBlocking
 import kotlinx.datetime.DayOfWeek
@@ -15,9 +23,14 @@ import kotlinx.datetime.toInstant
 import org.junit.After
 import org.junit.Test
 import org.junit.runner.RunWith
+import org.koin.core.context.loadKoinModules
+import org.koin.dsl.module
 import org.robolectric.RobolectricTestRunner
+import org.robolectric.Shadows.shadowOf
+import org.robolectric.shadows.ShadowLog
 import kotlin.test.assertEquals
 import kotlin.test.assertIs
+import kotlin.test.assertTrue
 import kotlin.time.Instant
 
 /** Story 1.10: every enabled alarm re-armed and every disabled code cancelled on each reschedule broadcast. */
@@ -128,6 +141,78 @@ class SystemEventsReceiverTest {
         broadcast("android.app.action.SCHEDULE_EXACT_ALARM_PERMISSION_STATE_CHANGED")
 
         assertEquals(expectedTwoEnabled, app.armed())
+    }
+
+    /** Binds [store] as runtime.db for the slot re-arm (Story 2.1 review tests). */
+    private fun bindSessionStore(store: ActiveSessionStore) =
+        loadKoinModules(
+            module {
+                single<ActiveSessionStore> { store }
+                single { SessionSlotRearm(get(), get(), get(), get(), get(), get()) }
+            },
+        )
+
+    private fun slots() = app.alarmManager.scheduledAlarms.filter { shadowOf(it.operation).requestCode == RequestCodes.SESSION_SLOT }
+
+    private fun logs() = ShadowLog.getLogsForTag(AndroidLogger.TAG).map { it.msg }
+
+    @Test
+    fun `the alarms are re-armed before the session slot is read, so a slow runtime db cannot leave them unarmed`() {
+        storeTwoEnabledAndOneDisabled()
+        var armedWhenSlotRead: Map<Int, Long>? = null
+        val stored = FakeActiveSessionStore()
+        bindSessionStore(
+            object : ActiveSessionStore by stored {
+                override suspend fun load(): Outcome<StoredSession, DomainError> {
+                    armedWhenSlotRead = app.armed()
+                    return stored.load()
+                }
+            },
+        )
+
+        broadcast(Intent.ACTION_BOOT_COMPLETED)
+
+        assertEquals(expectedTwoEnabled, armedWhenSlotRead)
+    }
+
+    @Test
+    fun `a session store that cannot be read is logged, arms no slot and the alarms are still re-armed`() {
+        storeTwoEnabledAndOneDisabled()
+        bindSessionStore(FakeActiveSessionStore().apply { loadFailure = DomainError.StorageFailure("disk I/O error") })
+        ShadowLog.clear()
+
+        broadcast(Intent.ACTION_BOOT_COMPLETED)
+
+        assertEquals(expectedTwoEnabled, app.armed())
+        assertEquals(emptyList(), slots())
+        assertTrue(logs().any { it.startsWith("OperationFailed operation=read session for slot") }, "${logs()}")
+    }
+
+    @Test
+    fun `a time change, a zone change and an app update arm the slot at once for a stored ringing session`() {
+        val ringing = FakeActiveSessionStore()
+        bindSessionStore(ringing)
+        assertEquals(Outcome.Success(Unit), runBlocking { ringing.commit(SessionState.Ringing(aSession())) })
+
+        listOf(Intent.ACTION_TIME_CHANGED, Intent.ACTION_TIMEZONE_CHANGED, Intent.ACTION_MY_PACKAGE_REPLACED).forEach { action ->
+            app.clearArmed()
+
+            broadcast(action)
+
+            val slot = slots().singleOrNull()
+            assertEquals(app.clock.now().toEpochMilliseconds() + 1_000, slot?.triggerAtTime, action)
+        }
+        assertEquals(emptyList(), shadowOf(app.app).allStartedServices, "no service from a system event")
+    }
+
+    @Test
+    fun `an app update cancels the session slot the previous version armed to the alarm receiver`() {
+        val operation = app.armLegacySessionSlot(berlin("2027-03-03T06:01").toEpochMilliseconds())
+
+        broadcast(Intent.ACTION_MY_PACKAGE_REPLACED)
+
+        assertEquals(emptyList(), slots(), "nothing stored, so no new slot either")
+        assertTrue(shadowOf(operation).isCanceled)
     }
 
     @Test

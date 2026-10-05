@@ -133,7 +133,7 @@ class WakeRuntime(
 
     private fun applyEffect(effect: EntryEffect) {
         when (effect) {
-            is EntryEffect.SoundAt -> ring { playFor(effect) }.also { timings.stage(WakeStage.SoundRequested) }
+            is EntryEffect.SoundAt -> playSound(effect)
 
             EntryEffect.SoundPaused -> ring { player.pause() }
 
@@ -203,16 +203,24 @@ class WakeRuntime(
 
     /**
      * The session ended (`ClearRuntimeSession`, or [WakeService] saw Idle, Completed or Missed): no sound, no vibration,
-     * the user's alarm volume back, no notification, no slot. Idempotent.
+     * the user's alarm volume back, no notification, no slot. Idempotent. A slot that carries another alarm (a refused
+     * start, [AlarmScheduler.sessionSlotAlarm]) is armed again one heartbeat from now with it (Story 2.1 review), so
+     * that alarm still rings.
      */
     fun endSession() {
         player.stop(restoreVolume = true)
         vibrator.stop()
         notifier.cancel()
+        val now = now()
+        val foreign = outputs.scheduler.sessionSlotAlarm()?.takeIf { it != emergencyAlarm && it.isFresh(now) }
         // Always (Story 2.1): a slot armed by an earlier process, or outside the engine, is not in armedSlot.
         cancelSlot()
+        foreign?.let { armSlot(Deadline.after(now, SessionReducer.HEARTBEAT), it) }
         timings.sessionEnded()
     }
+
+    private fun AlarmFired.isFresh(now: TimeSnapshot): Boolean =
+        now.wallMillis - scheduledAt.toEpochMilliseconds() < SessionReducer.NO_INTERACTION_TIMEOUT.inWholeMilliseconds
 
     /** At app start with no session: a volume a crashed session left saved is put back (AD-5), unless a ring started. */
     fun restoreVolumeIfIdle() {
@@ -352,15 +360,26 @@ class WakeRuntime(
         if (EntryEffect.Vibrating !in entryEffects(session())) vibrator.stop()
     }
 
+    private fun playSound(effect: EntryEffect.SoundAt) {
+        // A sound starts when nothing plays, or when it replaces the emergency ring (review); read before ring() clears it.
+        val starts = player.sound == null || emergency.value != null
+        ring { playFor(effect, starts) }
+        timings.stage(WakeStage.SoundRequested)
+    }
+
     /**
      * Plays the session's sound. A restored ring (Story 2.1, UX-DR78) plays at the set volume with no ramp: nothing plays
      * yet and no one-shot effect of this step started a new ring (`ProcessRestored` runs entry effects only). A sound
      * already open keeps the ramp setting it started with, so the same request stays the same and never restarts the ring.
+     * The emergency default sound is not the session's: a session sound that replaces it [starts] too.
      */
-    private fun playFor(effect: EntryEffect.SoundAt) {
+    private fun playFor(
+        effect: EntryEffect.SoundAt,
+        starts: Boolean,
+    ) {
         val ring = ringConfig()
         // Decided only when a sound starts: a heartbeat (ArmSlot on SlotFired) while it plays must not change the request.
-        if (player.sound == null) restoredRing = !newRing
+        if (starts) restoredRing = !newRing
         player.play(effect.soundRef, effect.volumePercent, ring.gradual && !restoredRing, ring.rampStart)
     }
 

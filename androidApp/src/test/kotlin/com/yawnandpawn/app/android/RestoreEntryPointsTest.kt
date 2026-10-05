@@ -26,6 +26,8 @@ import com.yawnandpawn.app.core.session.SessionEngine
 import com.yawnandpawn.app.core.session.SessionState
 import com.yawnandpawn.app.core.session.StoredSession
 import com.yawnandpawn.app.core.time.Deadline
+import com.yawnandpawn.app.data.session.ActiveSessionDao
+import com.yawnandpawn.app.data.session.ActiveSessionEntity
 import com.yawnandpawn.app.stopApp
 import com.yawnandpawn.app.testing.aSession
 import kotlinx.coroutines.runBlocking
@@ -198,6 +200,24 @@ class RestoreEntryPointsTest {
 
         assertEquals(2, audio.getStreamVolume(AudioManager.STREAM_ALARM))
         assertNull(AlarmVolume(app, AndroidLogger()).saved)
+    }
+
+    @Test
+    fun `app start with an unreadable session row also puts back the user alarm volume, and leaves the row to a restore`() {
+        awaitWork()
+        val audio = app.getSystemService(AudioManager::class.java)
+        audio.setStreamVolume(AudioManager.STREAM_ALARM, 2, 0)
+        AlarmVolume(app, AndroidLogger()).setForRing(100)
+        runBlocking { koin().get<ActiveSessionDao>().replace(ActiveSessionEntity("s", "{not json", updatedAt = 0)) }
+        stopApp()
+
+        app.onCreate()
+        awaitWork()
+
+        assertEquals(2, audio.getStreamVolume(AudioManager.STREAM_ALARM))
+        assertNull(AlarmVolume(app, AndroidLogger()).saved)
+        val stored = assertIs<Outcome.Success<StoredSession>>(runBlocking { koin().get<ActiveSessionStore>().load() }).value
+        assertIs<StoredSession.Unreadable>(stored, "only read: nothing restored or cleared")
     }
 
     @Test

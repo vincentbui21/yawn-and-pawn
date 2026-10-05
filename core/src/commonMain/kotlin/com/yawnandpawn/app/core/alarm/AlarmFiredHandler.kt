@@ -22,8 +22,14 @@ data class AlarmFired(
 interface AlarmFiredHandler {
     suspend fun onAlarmFired(fired: AlarmFired)
 
-    /** The session slot fired; [alarm] is the alarm it also stands for ([AlarmScheduler.armSessionSlot]), if any. */
-    suspend fun onSessionSlotFired(alarm: AlarmFired?)
+    /**
+     * The session slot fired; [alarm] is the alarm it also stands for ([AlarmScheduler.armSessionSlot]), if any, and
+     * [retrySince] when the wake-service starts it retries were first refused, if they were.
+     */
+    suspend fun onSessionSlotFired(
+        alarm: AlarmFired?,
+        retrySince: Instant? = null,
+    )
 
     suspend fun onTestAlarmFired()
 }
@@ -81,7 +87,10 @@ class RearmOnFire(
         }
     }
 
-    override suspend fun onSessionSlotFired(alarm: AlarmFired?) {
+    override suspend fun onSessionSlotFired(
+        alarm: AlarmFired?,
+        retrySince: Instant?,
+    ) {
         logger.log(LogEvent.FireIgnored(FireKind.SessionSlot, alarmId = null, reason = NOT_BOUND))
     }
 

@@ -5,13 +5,17 @@ import android.content.Intent
 import androidx.test.core.app.ApplicationProvider
 import com.yawnandpawn.app.StopAppRule
 import com.yawnandpawn.app.android.AlarmFiredReceiver
+import com.yawnandpawn.app.core.alarm.Alarm
 import com.yawnandpawn.app.core.alarm.AlarmFired
 import com.yawnandpawn.app.core.alarm.AlarmFiredHandler
+import com.yawnandpawn.app.core.alarm.AlarmRepository
 import com.yawnandpawn.app.core.error.DomainError
+import com.yawnandpawn.app.core.error.Outcome
 import com.yawnandpawn.app.core.log.LogEvent
 import com.yawnandpawn.app.core.log.WakeStage
 import com.yawnandpawn.app.core.session.SessionReducer
 import com.yawnandpawn.app.core.session.SessionSlotRearm
+import com.yawnandpawn.app.core.session.SessionState
 import com.yawnandpawn.app.core.time.Deadline
 import com.yawnandpawn.app.testing.FakeActiveSessionStore
 import com.yawnandpawn.app.testing.FakeAlarmRepository
@@ -20,6 +24,7 @@ import com.yawnandpawn.app.testing.FakeClock
 import com.yawnandpawn.app.testing.FakeLogger
 import com.yawnandpawn.app.testing.FakeTime
 import com.yawnandpawn.app.testing.SchedulerCall
+import com.yawnandpawn.app.testing.aSession
 import com.yawnandpawn.app.testing.anAlarm
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.async
@@ -95,7 +100,10 @@ class WakeAlarmFiredHandlerTest {
         object : AlarmFiredHandler {
             override suspend fun onAlarmFired(fired: AlarmFired) = schedule(fired)
 
-            override suspend fun onSessionSlotFired(alarm: AlarmFired?) = Unit
+            override suspend fun onSessionSlotFired(
+                alarm: AlarmFired?,
+                retrySince: Instant?,
+            ) = Unit
 
             override suspend fun onTestAlarmFired() = Unit
         },
@@ -112,7 +120,7 @@ class WakeAlarmFiredHandlerTest {
         runBlocking { handler(starter = refusing).onAlarmFired(fired) }
 
         val heartbeat = Deadline.after(time.snapshot(), SessionReducer.HEARTBEAT)
-        assertEquals(listOf<SchedulerCall>(SchedulerCall.ArmSessionSlot(heartbeat, fired)), slotScheduler.calls)
+        assertEquals(listOf<SchedulerCall>(SchedulerCall.ArmSessionSlot(heartbeat, fired, fired.scheduledAt)), slotScheduler.calls)
         assertEquals(listOf("re-arm"), steps)
     }
 
@@ -126,7 +134,9 @@ class WakeAlarmFiredHandlerTest {
         runBlocking { handler(starter = refusing).onSessionSlotFired(fired) }
 
         assertEquals(
-            listOf<SchedulerCall>(SchedulerCall.ArmSessionSlot(Deadline.after(time.snapshot(), SessionReducer.HEARTBEAT), fired)),
+            listOf<SchedulerCall>(
+                SchedulerCall.ArmSessionSlot(Deadline.after(time.snapshot(), SessionReducer.HEARTBEAT), fired, fired.scheduledAt),
+            ),
             slotScheduler.calls,
         )
     }
@@ -250,6 +260,72 @@ class WakeAlarmFiredHandlerTest {
         assertFailsWith<UnsupportedOperationException> { runBlocking { handler(starter = broken).onAlarmFired(fired) } }
 
         assertEquals(listOf("re-arm"), steps, "the next occurrence is armed anyway")
+        assertEquals(fired, (slotScheduler.calls.single() as SchedulerCall.ArmSessionSlot).alarm, "and the session slot carries it")
+    }
+
+    @Test
+    fun `a read that throws, with a refused start, still arms the session slot carrying the alarm`() {
+        val exploding =
+            WakeAlarmFiredHandler(
+                object : AlarmRepository by repository {
+                    override suspend fun get(id: String): Outcome<Alarm, DomainError> = throw IllegalStateException("database exploded")
+                },
+                RecordingOnly,
+                refusing,
+                logger,
+                starts,
+                rearm = rearm,
+            )
+
+        assertFailsWith<IllegalStateException> { runBlocking { exploding.onAlarmFired(fired) } }
+
+        assertEquals(fired, (slotScheduler.calls.single() as SchedulerCall.ArmSessionSlot).alarm)
+    }
+
+    @Test
+    fun `a read that overruns the receiver budget, with a refused start, still arms the session slot`() {
+        val slow =
+            WakeAlarmFiredHandler(
+                object : AlarmRepository by repository {
+                    override suspend fun get(id: String): Outcome<Alarm, DomainError> = awaitCancellation()
+                },
+                RecordingOnly,
+                refusing,
+                logger,
+                starts,
+                rearm = rearm,
+            )
+
+        assertNull(runBlocking { withTimeoutOrNull(50.milliseconds) { slow.onAlarmFired(fired) } }, "timed out")
+
+        assertEquals(fired, (slotScheduler.calls.single() as SchedulerCall.ArmSessionSlot).alarm, "re-armed although cancelled")
+    }
+
+    /** A scheduling part that does nothing. */
+    private object RecordingOnly : AlarmFiredHandler {
+        override suspend fun onAlarmFired(fired: AlarmFired) = Unit
+
+        override suspend fun onSessionSlotFired(
+            alarm: AlarmFired?,
+            retrySince: Instant?,
+        ) = Unit
+
+        override suspend fun onTestAlarmFired() = Unit
+    }
+
+    @Test
+    fun `a refused slot start passes on since when its starts are refused`() {
+        val since = fired.scheduledAt - 10.minutes
+
+        runBlocking { handler(starter = refusing).onSessionSlotFired(null, since) }
+        assertEquals(emptyList(), slotScheduler.calls, "nothing stored: nothing to retry")
+
+        runBlocking { sessionStore.commit(SessionState.Ringing(aSession())) }
+        runBlocking { handler(starter = refusing).onSessionSlotFired(null, since) }
+        assertEquals(since, (slotScheduler.calls.single() as SchedulerCall.ArmSessionSlot).retrySince)
+
+        runBlocking { handler().onSessionSlotFired(null, since) }
+        assertEquals(since.toEpochMilliseconds(), started.last().getLongExtra("retrySince", 0), "the service start carries it too")
     }
 
     @Test

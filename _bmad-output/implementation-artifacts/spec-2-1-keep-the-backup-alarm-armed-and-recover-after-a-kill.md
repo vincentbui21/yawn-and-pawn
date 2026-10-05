@@ -36,15 +36,15 @@ deferred: []
   - **Session active:** `SlotFired`, then `tick`.
   - **Emergency ring playing, no session:** the backup slot is re-armed.
   - **Otherwise (orphan):** it logs `FireIgnored(SessionSlot, "no session stored")` and cancels the slot, then the service shuts down (notification removed, stopped).
-- **Heartbeat entry effect.** `HeartbeatSlotArmed` arms `now + 60 s` when this process has no armed slot, or when its armed slot is already due (a fire this process never handled). `WakeRuntime.endSession()` always cancels the slot.
+- **Heartbeat entry effect.** `HeartbeatSlotArmed` arms `now + 60 s` when this process has no armed slot, or when its armed slot is already due (a fire this process never handled). `WakeRuntime.endSession()` always cancels the slot; a fresh alarm of another refused start that the slot carried is armed again one heartbeat later (review).
 - **Emergency ring backstop.** `startEmergency` with no active session arms the slot `now + 60 s` carrying the alarm it rings for (when known). A live slot fire during it re-arms the slot. A session taking over drops the payload, because its own heartbeat re-arms. After a kill, the payload alarm rings again through `onAlarm`. That gives a real session, or the emergency ring again if storage is still broken. A restored emergency gets a fresh 30-minute limit.
 - **Refused starts.** `SessionSlotRearm.afterRefusedStart(alarm)` re-arms the slot one heartbeat from now in these cases:
   - `WakeServiceStarter` refuses an alarm or slot start (in `WakeAlarmFiredHandler`);
   - `startForeground` is refused in `WakeService` for an alarm, slot or restore start.
 
-  The payload is kept only while the alarm is less than 30 min past its scheduled time. With no payload, it re-arms for a stored Ring state, and for a Snoozed state at its snooze end (or a heartbeat if that is due). Otherwise it arms nothing. Test starts are never retried.
+  The payload is kept only while the alarm is less than 30 min past its scheduled time. With no payload, it re-arms for a stored Ring state, and for a Snoozed state at its snooze end (or a heartbeat if that is due). Otherwise it arms nothing. Test starts are never retried. Review: a payload-less re-arm keeps the alarm the armed slot still carries, and the retries stop (logged) 30 min after the first refusal (`retrySince` rides on the slot).
 - **Non-alarm broadcasts.** `SystemEventsReceiver` runs `rescheduleAll()`, then `SessionSlotRearm.afterSystemEvent()`. It arms `now + 1 s` for Ringing, Grace or Loud, and the snooze end for Snoozed. It arms nothing for Idle or ended states, and logs a store failure. It never touches the engine and never starts a service.
-- **Restore entry points.** `MainActivity.onCreate` and `WakeActivity.onCreate` launch `engine.restore()` on `ApplicationScope`. `YawnAndPawnApp.onCreate` no longer restores. It puts back a saved user alarm volume only when `runtime.db` holds nothing (`StoredSession.Empty`).
+- **Restore entry points.** `MainActivity.onCreate` and `WakeActivity.onCreate` launch `engine.restore()` on `ApplicationScope`. `YawnAndPawnApp.onCreate` no longer restores. It puts back a saved user alarm volume only when `runtime.db` holds no session (`StoredSession.Empty`, an unreadable row or a stored Idle; review).
 - **Swipe from Recents.** `WakeService.onTaskRemoved` keeps the session, player and notification. `stopWithTask` is never set.
 - **No ramp on a restored ring.** A sound entry effect with nothing playing and no new-ring one-shot in the same step (`StartWakeRuntime` or `ArmSlot`) is a restore. It plays at the set volume with no ramp, and later steps of that ring keep the same request.
 - Core stays pure, with no Android types. The Kover gates (core ≥ 90 %, core.session ≥ 90 %) stay green. The never-silent rules from 1.14 and 1.18 stay as they are.
@@ -116,6 +116,31 @@ What stays for Spike S2 and Story 2.13: whether `stopSelf` after a refused `star
 ## Spec Change Log
 
 ## Review Triage Log
+
+### Review (2 reviewers, fast mode), 2026-10-05
+
+Patched (14):
+1. `WakeService.onSlot`: the emergency ring is checked before a failed restore, so a slot fire while it plays always re-arms its backup slot (also with an unreadable store).
+2. Payload-less re-arms keep the alarm the armed slot still carries: new port `AlarmScheduler.sessionSlotAlarm()` (the Android adapter knows the slot this process armed, until its trigger time). `SessionSlotRearm.afterSystemEvent` and `afterRefusedStart(null)` (which also covers the refused-restore retry in `WakeService`) arm with it.
+3. Refused-start retries are capped: the slot carries `retrySince` (extra `retrySince`, through `SessionSlotReceiver`, `onSessionSlotFired`, `startSlot` and the `ACTION_SLOT` intent). `afterRefusedStart` gives up, logged, 30 minutes after the first refusal (or the alarm's scheduled time).
+4. `WakeRuntime.endSession` re-arms a foreign carried alarm (not the emergency ring's own, less than 30 min past) one heartbeat later after cancelling.
+5. `WakeService.onSlot` ignores, logged, a payload alarm 30 minutes or more past.
+6. `WakeService`: when the restore failed but the load inside `dispatch(AlarmFired)` finds a ringing or snoozed session, the alarm is routed again (merged, or a test ended first).
+7. `WakeAlarmFiredHandler`: the refused-start re-arm runs in the start's `finally`, under `NonCancellable`, so a read that throws or overruns still re-arms.
+8. `WakeRuntime`: a session sound that replaces the emergency default sound counts as a sound start (restored: no ramp; new: ramp), so no stale no-ramp flag.
+9. Legacy slot: `AlarmFiredReceiver` forwards the pre-2.1 slot action to `onSessionSlotFired(null)`, and `MY_PACKAGE_REPLACED` cancels that PendingIntent (`AndroidAlarmScheduler.cancelLegacySessionSlot`).
+10. `SystemEventsReceiver`: `rescheduleAll()` runs first, then the slot re-arm.
+11. `YawnAndPawnApp`: the saved alarm volume is also put back for an unreadable row or a stored Idle (still only a read).
+12. `WakeAlarmFiredHandler.rearm` is required; a `WakeApp` test proves the production wiring (refused start through the receiver arms the slot carrying the alarm).
+13. `SessionSlotRearmTest`: refused start with stored Ringing, Missed and Unreadable rows, arm failure, carried payload kept or dropped when stale, retry cap.
+14. Matrix row "slot with payload, store broken": `WakeServiceTest` delivers a payload slot into a broken store (emergency ring plus a backup slot carrying the alarm).
+
+Verification: `./gradlew qualityGate` BUILD SUCCESSFUL (16m 4s, 2026-10-05); `git status --porcelain androidApp/src/test/screenshots/preview` empty.
+
+Deferred (in `deferred-work.md`, Story 2.1 entry):
+- A host test for a refused `startForeground` retry: Robolectric cannot make `startForeground` throw (Spike S2 / Story 2.13).
+- Settling a stored Completed or Missed session without a foreground service until the UI opens (low; Story 2.3 / 2.13).
+- The carried alarm is known only in the process that armed the slot; a payload-less re-arm in a new process can still replace it (rare; Story 2.13).
 
 ## Auto Run Result
 

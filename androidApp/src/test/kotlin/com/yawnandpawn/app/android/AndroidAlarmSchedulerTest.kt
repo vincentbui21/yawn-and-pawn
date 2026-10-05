@@ -165,6 +165,52 @@ class AndroidAlarmSchedulerTest {
     }
 
     @Test
+    fun `the slot tells the alarm it carries until its trigger time, and none after a payload-less arming or a cancel`() {
+        val alarm = AlarmFired("alarm-b", Instant.fromEpochMilliseconds(trigger))
+
+        scheduler.armSessionSlot(Deadline.after(time.snapshot(), 60.seconds), alarm)
+        assertEquals(alarm, scheduler.sessionSlotAlarm())
+        time.advanceBy(60.seconds)
+        assertNull(scheduler.sessionSlotAlarm(), "the slot fired: its alarm went with the fire")
+
+        scheduler.armSessionSlot(Deadline.after(time.snapshot(), 60.seconds), alarm)
+        scheduler.armSessionSlot(Deadline.after(time.snapshot(), 60.seconds))
+        assertNull(scheduler.sessionSlotAlarm(), "replaced by a slot that carries none")
+
+        scheduler.armSessionSlot(Deadline.after(time.snapshot(), 60.seconds), alarm)
+        scheduler.cancelSessionSlot()
+        assertNull(scheduler.sessionSlotAlarm())
+    }
+
+    @Test
+    fun `the slot carries since when its starts are refused, and a re-arming without it drops it`() {
+        val since = Instant.fromEpochMilliseconds(trigger)
+
+        scheduler.armSessionSlot(Deadline.after(time.snapshot(), 60.seconds), retrySince = since)
+        assertEquals(since, shadowOf(only().operation).savedIntent.retrySinceOrNull())
+
+        scheduler.armSessionSlot(Deadline.after(time.snapshot(), 60.seconds))
+        assertNull(shadowOf(only().operation).savedIntent.retrySinceOrNull())
+    }
+
+    @Test
+    fun `the legacy slot an older version armed to the alarm receiver is cancelled, and the new slot stays`() {
+        val legacy = AlarmFiredReceiver.intent(app, AlarmFiredReceiver.ACTION_LEGACY_SESSION_SLOT)
+        val flags = PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT
+        val operation = PendingIntent.getBroadcast(app, RequestCodes.SESSION_SLOT, legacy, flags)
+        app.getSystemService(AlarmManager::class.java).setAlarmClock(AlarmManager.AlarmClockInfo(trigger, null), operation)
+        scheduler.armSessionSlot(Deadline.after(time.snapshot(), 60.seconds))
+        assertEquals(2, alarmManager.scheduledAlarms.size)
+
+        AndroidAlarmScheduler.cancelLegacySessionSlot(app)
+        AndroidAlarmScheduler.cancelLegacySessionSlot(app)
+
+        val left = shadowOf(only().operation).savedIntent
+        assertEquals(ComponentName(app, SessionSlotReceiver::class.java), left.component)
+        assertTrue(shadowOf(operation).isCanceled)
+    }
+
+    @Test
     fun `a slot deadline from this boot is armed at now plus the monotonic time left, even after a wall-clock jump`() {
         val deadline = Deadline.after(time.snapshot(), 9.minutes)
         time.advanceBy(1.minutes)

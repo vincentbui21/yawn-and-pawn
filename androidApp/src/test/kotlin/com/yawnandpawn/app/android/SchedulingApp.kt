@@ -1,6 +1,7 @@
 package com.yawnandpawn.app.android
 
 import android.app.AlarmManager
+import android.app.PendingIntent
 import android.os.Looper
 import androidx.test.core.app.ApplicationProvider
 import com.yawnandpawn.app.YawnAndPawnApp
@@ -12,6 +13,7 @@ import com.yawnandpawn.app.core.alarm.AlarmRepository
 import com.yawnandpawn.app.core.alarm.AlarmScheduler
 import com.yawnandpawn.app.core.alarm.AlarmScheduling
 import com.yawnandpawn.app.core.alarm.RearmOnFire
+import com.yawnandpawn.app.core.alarm.RequestCodes
 import com.yawnandpawn.app.core.time.Clock
 import com.yawnandpawn.app.stopApp
 import com.yawnandpawn.app.testing.FakeClock
@@ -68,6 +70,7 @@ internal class SchedulingApp(
                         get(),
                         get(),
                         WakeServiceStarts(Duration.ZERO),
+                        rearm = get(),
                     )
                 }
             },
@@ -87,6 +90,20 @@ internal class SchedulingApp(
 
     /** The armed alarm clocks as request code to trigger time. */
     fun armed(): Map<Int, Long> = alarmManager.scheduledAlarms.associate { shadowOf(it.operation).requestCode to it.triggerAtTime }
+
+    /** Arms the session slot as a version before Story 2.1 did: to the alarm receiver with the old slot action. */
+    fun armLegacySessionSlot(triggerAtWallMillis: Long): PendingIntent {
+        val legacy = AlarmFiredReceiver.intent(app, AlarmFiredReceiver.ACTION_LEGACY_SESSION_SLOT)
+        val operation = PendingIntent.getBroadcast(app, RequestCodes.SESSION_SLOT, legacy, PendingIntent.FLAG_IMMUTABLE)
+        app.getSystemService(AlarmManager::class.java).setAlarmClock(AlarmManager.AlarmClockInfo(triggerAtWallMillis, null), operation)
+        return operation
+    }
+
+    /** Removes every armed alarm from the system, as if each had fired. */
+    fun clearArmed() {
+        val manager = app.getSystemService(AlarmManager::class.java)
+        alarmManager.scheduledAlarms.toList().forEach { alarm -> alarm.operation?.let { manager.cancel(it) } }
+    }
 
     fun close() {
         TimeZone.setDefault(originalZone)

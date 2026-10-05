@@ -26,15 +26,15 @@ class SystemEventsReceiver :
         intent: Intent,
     ) {
         if (intent.action !in ACTIONS) return
+        // After an update, a slot the previous version armed to AlarmFiredReceiver is cancelled (Story 2.1 review).
+        if (intent.action == Intent.ACTION_MY_PACKAGE_REPLACED) AndroidAlarmScheduler.cancelLegacySessionSlot(context)
         val scheduling = get<AlarmScheduling>()
         val rearm = get<SessionSlotRearm>()
         runWithinBudget(get(), get(), "reschedule alarms") {
-            // The session slot first: a ringing session comes back at once, whatever the alarms' re-arm takes.
-            try {
-                rearm.afterSystemEvent()
-            } finally {
-                scheduling.rescheduleAll()
-            }
+            // The alarms first (review): a slow store open at boot that overruns the budget in the slot re-arm must not
+            // leave every alarm unarmed. Then the session slot.
+            scheduling.rescheduleAll()
+            rearm.afterSystemEvent()
         }
     }
 

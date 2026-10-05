@@ -51,6 +51,7 @@ import kotlin.test.assertNotNull
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
 import kotlin.time.Duration.Companion.minutes
+import kotlin.time.Duration.Companion.seconds
 import kotlin.time.Instant
 
 /** Story 1.14: the wake runtime carries out the session's effects with the real adapters over a fake playback. */
@@ -327,11 +328,37 @@ class WakeRuntimeTest {
     fun `a session that starts during an emergency ring takes it over`() {
         runtime.startEmergency(Instant.fromEpochMilliseconds(0), volumePercent = 60, cause = "commit failed")
 
+        run(SessionEffect.StartWakeRuntime(session.sessionId))
         enter(ringing)
 
         assertNull(runtime.emergency.value)
         assertEquals(AlarmSound.Default, player.sound)
         assertEquals(0.2f, player.gain, 1e-6f, "the session's own ramp")
+    }
+
+    @Test
+    fun `a restored session that takes over the emergency ring plays with no ramp`() {
+        runtime.startEmergency(Instant.fromEpochMilliseconds(0), volumePercent = 60, cause = "session not loaded")
+
+        // ProcessRestored: entry effects only, while the emergency default sound plays.
+        enter(ringing)
+
+        assertNull(runtime.emergency.value)
+        assertEquals(1f, player.gain, 1e-6f, "no ramp on a restored ring")
+    }
+
+    @Test
+    fun `a new session after a restored ring and an emergency ring ramps again`() {
+        enter(ringing)
+        assertEquals(1f, player.gain, 1e-6f, "restored")
+        state = SessionState.Idle
+        runtime.endSession()
+        runtime.startEmergency(Instant.fromEpochMilliseconds(0), volumePercent = 60, cause = "commit failed")
+
+        run(SessionEffect.StartWakeRuntime(session.sessionId))
+        enter(ringing)
+
+        assertEquals(0.2f, player.gain, 1e-6f, "the restored flag of the earlier ring is not kept")
     }
 
     @Test
@@ -491,6 +518,29 @@ class WakeRuntimeTest {
 
     @Test
     fun `the session end cancels the slot even when this process armed none`() {
+        runtime.endSession()
+
+        assertEquals(listOf<SchedulerCall>(SchedulerCall.CancelSessionSlot), scheduler.calls)
+    }
+
+    @Test
+    fun `the session end keeps a slot that carries another alarm, armed again one heartbeat from now`() {
+        val refused = AlarmFired("alarm-b", Instant.fromEpochMilliseconds(now.wallMillis - 60_000))
+        scheduler.armSessionSlot(Deadline.after(now, 20.seconds), refused)
+        scheduler.clearCalls()
+
+        runtime.endSession()
+
+        val again = SchedulerCall.ArmSessionSlot(Deadline.after(now, SessionReducer.HEARTBEAT), refused)
+        assertEquals(listOf(SchedulerCall.CancelSessionSlot, again), scheduler.calls)
+    }
+
+    @Test
+    fun `the session end drops a carried alarm 30 minutes past`() {
+        val stale = AlarmFired("alarm-b", Instant.fromEpochMilliseconds(now.wallMillis - 30 * 60_000))
+        scheduler.armSessionSlot(Deadline.after(now, 20.seconds), stale)
+        scheduler.clearCalls()
+
         runtime.endSession()
 
         assertEquals(listOf<SchedulerCall>(SchedulerCall.CancelSessionSlot), scheduler.calls)

@@ -1,0 +1,613 @@
+--------- beginning of main
+10-05 19:42:53.304 I/SpikeS1 (19312): t=751682980 | activity: device=OPPO CPH2333 android=13 sdk=33 build=CPH2333_11_F.79 app=v0.1.1-spike (101)
+10-05 19:42:53.314 I/SpikeS1 (19312): t=751682989 | activity: onCreate fromAlarm=false keyguardLocked=false deviceLocked=false version=v0.1.1-spike (101)
+10-05 19:42:53.318 I/SpikeS1 (19312): t=751682993 | billing: startConnection (state before: DISCONNECTED)
+10-05 19:42:53.330 I/SpikeS1 (19312): t=751683006 | activity: onResume keyguardLocked=false deviceLocked=false
+10-05 19:42:53.611 I/SpikeS1 (19312): t=751683287 | sound: STARTED usage=ALARM looping alarmVolume=16/16 (user volume was 3)
+10-05 19:42:53.649 I/SpikeS1 (19312): t=751683325 | activity: windowFocus=true keyguardLocked=false deviceLocked=false
+10-05 19:42:53.720 I/SpikeS1 (19312): t=751683395 | billing: onBillingSetupFinished code=OK(0) debug=''
+10-05 19:42:53.721 I/SpikeS1 (19312): t=751683396 | billing: queryProductDetailsAsync spike_s1_test
+10-05 19:42:53.895 I/SpikeS1 (19312): t=751683570 | billing: onProductDetailsResponse code=OK(0) debug='' loaded=1 unfetched=[]
+10-05 19:42:53.895 I/SpikeS1 (19312): t=751683570 |   offer id=null option=buy €0.59 590000 EUR token…LvAg==
+10-05 19:43:03.616 I/SpikeS1 (19312): t=751693292 | sound monitor: playing=true alarmVolume=16/16 purchaseInFlight=false
+10-05 19:43:13.619 I/SpikeS1 (19312): t=751703294 | sound monitor: playing=true alarmVolume=16/16 purchaseInFlight=false
+10-05 19:43:22.618 I/SpikeS1 (19312): t=751712294 | activity: windowFocus=false keyguardLocked=false deviceLocked=false
+10-05 19:43:23.624 I/SpikeS1 (19312): t=751713299 | sound monitor: playing=true alarmVolume=16/16 purchaseInFlight=false
+10-05 19:43:25.817 I/SpikeS1 (19312): t=751715493 | activity: windowFocus=true keyguardLocked=false deviceLocked=false
+10-05 19:43:33.631 I/SpikeS1 (19312): t=751723306 | sound monitor: playing=true alarmVolume=16/16 purchaseInFlight=false
+10-05 19:43:36.877 I/SpikeS1 (19312): t=751726552 | activity: onPause keyguardLocked=false deviceLocked=false
+10-05 19:43:36.878 I/SpikeS1 (19312): t=751726553 | activity: onNewIntent fromAlarm=false keyguardLocked=false deviceLocked=false
+10-05 19:43:36.878 I/SpikeS1 (19312): t=751726554 | activity: onResume keyguardLocked=false deviceLocked=false
+10-05 19:43:43.641 I/SpikeS1 (19312): t=751733316 | sound monitor: playing=true alarmVolume=16/16 purchaseInFlight=false
+10-05 19:43:53.647 I/SpikeS1 (19312): t=751743322 | sound monitor: playing=true alarmVolume=16/16 purchaseInFlight=false
+10-05 19:44:03.654 I/SpikeS1 (19312): t=751753329 | sound monitor: playing=true alarmVolume=16/16 purchaseInFlight=false
+10-05 19:44:07.279 I/SpikeS1 (19312): t=751756954 | button: Pay
+10-05 19:44:07.284 I/SpikeS1 (19312): t=751756959 +5ms | ==== #1/PAY/unlocked tapped: keyguardLocked=false deviceLocked=false network=validated sound=true alarmVolume=16/16 billing=CONNECTED
+10-05 19:44:07.284 I/SpikeS1 (19312): t=751756959 +5ms | #1/PAY/unlocked obfuscatedProfileId(new random UUID)=535000c3-8359-493a-83bc-3cae774352a7
+10-05 19:44:07.287 I/SpikeS1 (19312): t=751756962 +8ms | obfuscatedAccountId (new install id)=44f08496-3e82-4a4c-9284-88134981c425
+10-05 19:44:07.287 I/SpikeS1 (19312): t=751756962 +8ms | billing: launchBillingFlow pay=#1/PAY/unlocked obfuscatedProfileId=535000c3-8359-493a-83bc-3cae774352a7 obfuscatedAccountId=44f08496-3e82-4a4c-9284-88134981c425
+10-05 19:44:07.332 I/SpikeS1 (19312): t=751757007 +53ms | billing: launchBillingFlow returned code=OK(0) debug=''
+10-05 19:44:07.361 I/SpikeS1 (19312): t=751757036 +82ms | activity: onPause keyguardLocked=false deviceLocked=false
+10-05 19:44:07.454 I/SpikeS1 (19312): t=751757129 +175ms | activity: windowFocus=false keyguardLocked=false deviceLocked=false
+10-05 19:44:09.363 I/SpikeS1 (19312): t=751759038 +2084ms | sound monitor: playing=true alarmVolume=16/16 purchaseInFlight=true
+10-05 19:44:11.370 I/SpikeS1 (19312): t=751761045 +4091ms | sound monitor: playing=true alarmVolume=16/16 purchaseInFlight=true
+10-05 19:44:13.377 I/SpikeS1 (19312): t=751763053 +6099ms | sound monitor: playing=true alarmVolume=16/16 purchaseInFlight=true
+10-05 19:44:15.383 I/SpikeS1 (19312): t=751765058 +8104ms | sound monitor: playing=true alarmVolume=16/16 purchaseInFlight=true
+10-05 19:44:17.391 I/SpikeS1 (19312): t=751767067 +10113ms | sound monitor: playing=true alarmVolume=16/16 purchaseInFlight=true
+10-05 19:44:19.398 I/SpikeS1 (19312): t=751769073 +12119ms | sound monitor: playing=true alarmVolume=16/16 purchaseInFlight=true
+10-05 19:44:21.408 I/SpikeS1 (19312): t=751771083 +14129ms | sound monitor: playing=true alarmVolume=16/16 purchaseInFlight=true
+10-05 19:44:23.414 I/SpikeS1 (19312): t=751773089 +16135ms | sound monitor: playing=true alarmVolume=16/16 purchaseInFlight=true
+10-05 19:44:25.419 I/SpikeS1 (19312): t=751775095 +18141ms | sound monitor: playing=true alarmVolume=16/16 purchaseInFlight=true
+10-05 19:44:27.425 I/SpikeS1 (19312): t=751777101 +20147ms | sound monitor: playing=true alarmVolume=16/16 purchaseInFlight=true
+10-05 19:44:29.431 I/SpikeS1 (19312): t=751779106 +22152ms | sound monitor: playing=true alarmVolume=16/16 purchaseInFlight=true
+10-05 19:44:31.437 I/SpikeS1 (19312): t=751781112 +24158ms | sound monitor: playing=true alarmVolume=16/16 purchaseInFlight=true
+10-05 19:44:33.440 I/SpikeS1 (19312): t=751783116 +26162ms | sound monitor: playing=true alarmVolume=16/16 purchaseInFlight=true
+10-05 19:44:35.444 I/SpikeS1 (19312): t=751785119 +28165ms | sound monitor: playing=true alarmVolume=16/16 purchaseInFlight=true
+10-05 19:44:37.452 I/SpikeS1 (19312): t=751787127 +30173ms | sound monitor: playing=true alarmVolume=16/16 purchaseInFlight=true
+10-05 19:44:39.458 I/SpikeS1 (19312): t=751789133 +32179ms | sound monitor: playing=true alarmVolume=16/16 purchaseInFlight=true
+10-05 19:44:41.467 I/SpikeS1 (19312): t=751791142 +34188ms | sound monitor: playing=true alarmVolume=16/16 purchaseInFlight=true
+10-05 19:44:43.471 I/SpikeS1 (19312): t=751793146 +36192ms | sound monitor: playing=true alarmVolume=16/16 purchaseInFlight=true
+10-05 19:44:45.476 I/SpikeS1 (19312): t=751795151 +38197ms | sound monitor: playing=true alarmVolume=16/16 purchaseInFlight=true
+10-05 19:44:47.480 I/SpikeS1 (19312): t=751797156 +40202ms | sound monitor: playing=true alarmVolume=16/16 purchaseInFlight=true
+10-05 19:44:49.487 I/SpikeS1 (19312): t=751799162 +42208ms | sound monitor: playing=true alarmVolume=16/16 purchaseInFlight=true
+10-05 19:44:51.492 I/SpikeS1 (19312): t=751801167 +44213ms | sound monitor: playing=true alarmVolume=16/16 purchaseInFlight=true
+10-05 19:44:53.498 I/SpikeS1 (19312): t=751803173 +46219ms | sound monitor: playing=true alarmVolume=16/16 purchaseInFlight=true
+10-05 19:44:55.502 I/SpikeS1 (19312): t=751805178 +48224ms | sound monitor: playing=true alarmVolume=16/16 purchaseInFlight=true
+10-05 19:44:57.511 I/SpikeS1 (19312): t=751807186 +50232ms | sound monitor: playing=true alarmVolume=16/16 purchaseInFlight=true
+10-05 19:44:59.515 I/SpikeS1 (19312): t=751809190 +52236ms | sound monitor: playing=true alarmVolume=16/16 purchaseInFlight=true
+10-05 19:45:01.520 I/SpikeS1 (19312): t=751811195 +54241ms | sound monitor: playing=true alarmVolume=16/16 purchaseInFlight=true
+10-05 19:45:03.530 I/SpikeS1 (19312): t=751813205 +56251ms | sound monitor: playing=true alarmVolume=16/16 purchaseInFlight=true
+10-05 19:45:05.536 I/SpikeS1 (19312): t=751815211 +58257ms | sound monitor: playing=true alarmVolume=16/16 purchaseInFlight=true
+10-05 19:45:07.541 I/SpikeS1 (19312): t=751817217 +60263ms | sound monitor: playing=true alarmVolume=16/16 purchaseInFlight=true
+10-05 19:45:09.546 I/SpikeS1 (19312): t=751819222 +62268ms | sound monitor: playing=true alarmVolume=16/16 purchaseInFlight=true
+10-05 19:45:11.555 I/SpikeS1 (19312): t=751821230 +64276ms | sound monitor: playing=true alarmVolume=16/16 purchaseInFlight=true
+10-05 19:45:13.560 I/SpikeS1 (19312): t=751823236 +66282ms | sound monitor: playing=true alarmVolume=16/16 purchaseInFlight=true
+10-05 19:45:15.566 I/SpikeS1 (19312): t=751825241 +68287ms | sound monitor: playing=true alarmVolume=16/16 purchaseInFlight=true
+10-05 19:45:17.575 I/SpikeS1 (19312): t=751827250 +70296ms | sound monitor: playing=true alarmVolume=16/16 purchaseInFlight=true
+10-05 19:45:19.581 I/SpikeS1 (19312): t=751829256 +72302ms | sound monitor: playing=true alarmVolume=1/16 purchaseInFlight=true
+10-05 19:45:21.586 I/SpikeS1 (19312): t=751831261 +74307ms | sound monitor: playing=true alarmVolume=1/16 purchaseInFlight=true
+10-05 19:45:23.590 I/SpikeS1 (19312): t=751833265 +76311ms | sound monitor: playing=true alarmVolume=1/16 purchaseInFlight=true
+10-05 19:45:25.596 I/SpikeS1 (19312): t=751835272 +78318ms | sound monitor: playing=true alarmVolume=1/16 purchaseInFlight=true
+10-05 19:45:27.600 I/SpikeS1 (19312): t=751837276 +80322ms | sound monitor: playing=true alarmVolume=1/16 purchaseInFlight=true
+10-05 19:45:29.605 I/SpikeS1 (19312): t=751839280 +82326ms | sound monitor: playing=true alarmVolume=1/16 purchaseInFlight=true
+10-05 19:45:31.609 I/SpikeS1 (19312): t=751841284 +84330ms | sound monitor: playing=true alarmVolume=1/16 purchaseInFlight=true
+10-05 19:45:33.614 I/SpikeS1 (19312): t=751843289 +86335ms | sound monitor: playing=true alarmVolume=1/16 purchaseInFlight=true
+10-05 19:45:33.758 I/SpikeS1 (19312): t=751843434 +86480ms | onPurchasesUpdated code=OK(0) debug='' subResponse=0 purchases=1 forPay=#1/PAY/unlocked
+10-05 19:45:33.759 I/SpikeS1 (19312): t=751843434 +86480ms |   update state=PURCHASED products=[spike_s1_test] orderId=GPA.3368-3147-6786-81060 obfuscatedProfileId=535000c3-8359-493a-83bc-3cae774352a7 obfuscatedAccountId=44f08496-3e82-4a4c-9284-88134981c425 acknowledged=false quantity=1 purchaseTime=1791218683311 token…ZLbN_w
+10-05 19:45:33.759 I/SpikeS1 (19312): t=751843434 +86480ms | RESULT pay=#1/PAY/unlocked code=OK states=[PURCHASED] payToResultMs=86480
+10-05 19:45:33.823 I/SpikeS1 (19312): t=751843499 +86545ms | activity: onResume keyguardLocked=false deviceLocked=false
+10-05 19:45:33.843 I/SpikeS1 (19312): t=751843518 +86564ms | activity: windowFocus=true keyguardLocked=false deviceLocked=false
+10-05 19:45:43.827 I/SpikeS1 (19312): t=751853503 +96549ms | sound monitor: playing=true alarmVolume=1/16 purchaseInFlight=false
+10-05 19:45:46.107 I/SpikeS1 (19312): t=751855783 +98829ms | button: Pay
+10-05 19:45:46.110 I/SpikeS1 (19312): t=751855785 +2ms | ==== #2/PAY/unlocked tapped: keyguardLocked=false deviceLocked=false network=validated sound=true alarmVolume=1/16 billing=CONNECTED
+10-05 19:45:46.110 I/SpikeS1 (19312): t=751855785 +2ms | #2/PAY/unlocked obfuscatedProfileId(new random UUID)=0dc420f0-5428-4205-b5ab-f6883bd55b33
+10-05 19:45:46.110 I/SpikeS1 (19312): t=751855786 +3ms | billing: launchBillingFlow pay=#2/PAY/unlocked obfuscatedProfileId=0dc420f0-5428-4205-b5ab-f6883bd55b33 obfuscatedAccountId=44f08496-3e82-4a4c-9284-88134981c425
+10-05 19:45:46.129 I/SpikeS1 (19312): t=751855804 +21ms | billing: launchBillingFlow returned code=OK(0) debug=''
+10-05 19:45:46.169 I/SpikeS1 (19312): t=751855845 +62ms | activity: onPause keyguardLocked=false deviceLocked=false
+10-05 19:45:46.275 I/SpikeS1 (19312): t=751855950 +167ms | activity: windowFocus=false keyguardLocked=false deviceLocked=false
+10-05 19:45:48.167 I/SpikeS1 (19312): t=751857842 +2059ms | sound monitor: playing=true alarmVolume=1/16 purchaseInFlight=true
+10-05 19:45:48.685 I/SpikeS1 (19312): t=751858360 +2577ms | onPurchasesUpdated code=ITEM_ALREADY_OWNED(7) debug='' subResponse=0 purchases=null forPay=#2/PAY/unlocked
+10-05 19:45:48.685 I/SpikeS1 (19312): t=751858360 +2577ms | RESULT pay=#2/PAY/unlocked code=ITEM_ALREADY_OWNED states=[-] payToResultMs=2577
+10-05 19:45:48.745 I/SpikeS1 (19312): t=751858420 +2637ms | activity: onResume keyguardLocked=false deviceLocked=false
+10-05 19:45:48.754 I/SpikeS1 (19312): t=751858429 +2646ms | activity: windowFocus=true keyguardLocked=false deviceLocked=false
+10-05 19:45:52.746 I/SpikeS1 (19312): t=751862421 +6638ms | button: Start sound
+10-05 19:45:52.767 I/SpikeS1 (19312): t=751862442 +6659ms | sound: start ignored, already playing=true
+10-05 19:45:58.751 I/SpikeS1 (19312): t=751868426 +12643ms | sound monitor: playing=true alarmVolume=1/16 purchaseInFlight=false
+10-05 19:46:08.760 I/SpikeS1 (19312): t=751878435 +22652ms | sound monitor: playing=true alarmVolume=1/16 purchaseInFlight=false
+10-05 19:46:15.883 I/SpikeS1 (19312): t=751885558 +29775ms | button: Stop sound
+10-05 19:46:15.938 I/SpikeS1 (19312): t=751885614 +29831ms | sound: STOPPED, alarm volume restored to 3/16
+10-05 19:46:18.370 I/SpikeS1 (19312): t=751888045 +32262ms | button: Query purchases
+10-05 19:46:18.370 I/SpikeS1 (19312): t=751888045 +32262ms | billing: queryPurchasesAsync INAPP
+10-05 19:46:18.376 I/SpikeS1 (19312): t=751888051 +32268ms | billing: onQueryPurchasesResponse code=OK(0) debug='' count=1
+10-05 19:46:18.376 I/SpikeS1 (19312): t=751888051 +32268ms |   owned state=PURCHASED products=[spike_s1_test] orderId=GPA.3368-3147-6786-81060 obfuscatedProfileId=535000c3-8359-493a-83bc-3cae774352a7 obfuscatedAccountId=44f08496-3e82-4a4c-9284-88134981c425 acknowledged=false quantity=1 purchaseTime=1791218683311 token…ZLbN_w
+10-05 19:46:22.808 I/SpikeS1 (19312): t=751892483 +36700ms | button: Consume all
+10-05 19:46:22.808 I/SpikeS1 (19312): t=751892483 +36700ms | billing: queryPurchasesAsync INAPP
+10-05 19:46:22.811 I/SpikeS1 (19312): t=751892486 +36703ms | billing: onQueryPurchasesResponse code=OK(0) debug='' count=1
+10-05 19:46:22.811 I/SpikeS1 (19312): t=751892487 +36704ms |   owned state=PURCHASED products=[spike_s1_test] orderId=GPA.3368-3147-6786-81060 obfuscatedProfileId=535000c3-8359-493a-83bc-3cae774352a7 obfuscatedAccountId=44f08496-3e82-4a4c-9284-88134981c425 acknowledged=false quantity=1 purchaseTime=1791218683311 token…ZLbN_w
+10-05 19:46:22.811 I/SpikeS1 (19312): t=751892487 +36704ms | billing: consumeAsync token…ZLbN_w
+10-05 19:46:23.624 I/SpikeS1 (19312): t=751893299 +37516ms | billing: onConsumeResponse code=OK(0) debug='' token…ZLbN_w
+10-05 19:47:32.175 I/SpikeS1 (19312): t=751961850 +106067ms | button: Pay
+10-05 19:47:32.179 I/SpikeS1 (19312): t=751961854 +4ms | ==== #3/PAY/unlocked tapped: keyguardLocked=false deviceLocked=false network=validated sound=false alarmVolume=3/16 billing=CONNECTED
+10-05 19:47:32.179 I/SpikeS1 (19312): t=751961854 +4ms | #3/PAY/unlocked obfuscatedProfileId(new random UUID)=b0c69644-f88f-456c-8252-15a2026edde4
+10-05 19:47:32.179 I/SpikeS1 (19312): t=751961854 +4ms | billing: launchBillingFlow pay=#3/PAY/unlocked obfuscatedProfileId=b0c69644-f88f-456c-8252-15a2026edde4 obfuscatedAccountId=44f08496-3e82-4a4c-9284-88134981c425
+10-05 19:47:32.210 I/SpikeS1 (19312): t=751961886 +36ms | billing: launchBillingFlow returned code=OK(0) debug=''
+10-05 19:47:32.255 I/SpikeS1 (19312): t=751961930 +80ms | activity: onPause keyguardLocked=false deviceLocked=false
+10-05 19:47:32.335 I/SpikeS1 (19312): t=751962010 +160ms | activity: windowFocus=false keyguardLocked=false deviceLocked=false
+10-05 19:49:27.881 I/SpikeS1 (19312): t=752077556 +115706ms | onPurchasesUpdated code=OK(0) debug='' subResponse=0 purchases=1 forPay=#3/PAY/unlocked
+10-05 19:49:27.881 I/SpikeS1 (19312): t=752077556 +115706ms |   update state=PURCHASED products=[spike_s1_test] orderId=GPA.3379-6064-0169-75044 obfuscatedProfileId=b0c69644-f88f-456c-8252-15a2026edde4 obfuscatedAccountId=44f08496-3e82-4a4c-9284-88134981c425 acknowledged=false quantity=1 purchaseTime=1791218966553 token…DetfiQ
+10-05 19:49:27.881 I/SpikeS1 (19312): t=752077556 +115706ms | RESULT pay=#3/PAY/unlocked code=OK states=[PURCHASED] payToResultMs=115706
+10-05 19:49:27.951 I/SpikeS1 (19312): t=752077627 +115777ms | activity: onResume keyguardLocked=false deviceLocked=false
+10-05 19:49:27.966 I/SpikeS1 (19312): t=752077641 +115791ms | activity: windowFocus=true keyguardLocked=false deviceLocked=false
+10-05 19:50:17.484 I/SpikeS1 (19312): t=752127159 +165309ms | button: Query purchases
+10-05 19:50:17.484 I/SpikeS1 (19312): t=752127159 +165309ms | billing: queryPurchasesAsync INAPP
+10-05 19:50:17.494 I/SpikeS1 (19312): t=752127170 +165320ms | billing: onQueryPurchasesResponse code=OK(0) debug='' count=1
+10-05 19:50:17.495 I/SpikeS1 (19312): t=752127170 +165320ms |   owned state=PURCHASED products=[spike_s1_test] orderId=GPA.3379-6064-0169-75044 obfuscatedProfileId=b0c69644-f88f-456c-8252-15a2026edde4 obfuscatedAccountId=44f08496-3e82-4a4c-9284-88134981c425 acknowledged=false quantity=1 purchaseTime=1791218966553 token…DetfiQ
+10-05 19:50:24.339 I/SpikeS1 (19312): t=752134015 +172165ms | button: Consume all
+10-05 19:50:24.340 I/SpikeS1 (19312): t=752134015 +172165ms | billing: queryPurchasesAsync INAPP
+10-05 19:50:24.346 I/SpikeS1 (19312): t=752134021 +172171ms | billing: onQueryPurchasesResponse code=OK(0) debug='' count=1
+10-05 19:50:24.346 I/SpikeS1 (19312): t=752134021 +172171ms |   owned state=PURCHASED products=[spike_s1_test] orderId=GPA.3379-6064-0169-75044 obfuscatedProfileId=b0c69644-f88f-456c-8252-15a2026edde4 obfuscatedAccountId=44f08496-3e82-4a4c-9284-88134981c425 acknowledged=false quantity=1 purchaseTime=1791218966553 token…DetfiQ
+10-05 19:50:24.346 I/SpikeS1 (19312): t=752134022 +172172ms | billing: consumeAsync token…DetfiQ
+10-05 19:50:24.971 I/SpikeS1 (19312): t=752134647 +172797ms | billing: onConsumeResponse code=OK(0) debug='' token…DetfiQ
+10-05 19:50:37.931 I/SpikeS1 (19312): t=752147606 +185756ms | button: Pay
+10-05 19:50:37.935 I/SpikeS1 (19312): t=752147610 +4ms | ==== #4/PAY/unlocked tapped: keyguardLocked=false deviceLocked=false network=validated sound=false alarmVolume=3/16 billing=CONNECTED
+10-05 19:50:37.935 I/SpikeS1 (19312): t=752147610 +4ms | #4/PAY/unlocked obfuscatedProfileId(new random UUID)=5dc7e5b7-bd79-4fbc-abdb-c020a2fbd836
+10-05 19:50:37.935 I/SpikeS1 (19312): t=752147611 +5ms | billing: launchBillingFlow pay=#4/PAY/unlocked obfuscatedProfileId=5dc7e5b7-bd79-4fbc-abdb-c020a2fbd836 obfuscatedAccountId=44f08496-3e82-4a4c-9284-88134981c425
+10-05 19:50:37.965 I/SpikeS1 (19312): t=752147641 +35ms | billing: launchBillingFlow returned code=OK(0) debug=''
+10-05 19:50:38.012 I/SpikeS1 (19312): t=752147687 +81ms | activity: onPause keyguardLocked=false deviceLocked=false
+10-05 19:50:38.113 I/SpikeS1 (19312): t=752147788 +182ms | activity: windowFocus=false keyguardLocked=false deviceLocked=false
+10-05 19:50:54.939 I/SpikeS1 (19312): t=752164614 +17008ms | onPurchasesUpdated code=OK(0) debug='' subResponse=0 purchases=1 forPay=#4/PAY/unlocked
+10-05 19:50:54.939 I/SpikeS1 (19312): t=752164614 +17008ms |   update state=PURCHASED products=[spike_s1_test] orderId=GPA.3392-4361-8176-63158 obfuscatedProfileId=5dc7e5b7-bd79-4fbc-abdb-c020a2fbd836 obfuscatedAccountId=44f08496-3e82-4a4c-9284-88134981c425 acknowledged=false quantity=1 purchaseTime=1791219053568 token…46Ypkw
+10-05 19:50:54.939 I/SpikeS1 (19312): t=752164614 +17008ms | RESULT pay=#4/PAY/unlocked code=OK states=[PURCHASED] payToResultMs=17008
+10-05 19:50:55.001 I/SpikeS1 (19312): t=752164676 +17070ms | activity: onResume keyguardLocked=false deviceLocked=false
+10-05 19:50:55.018 I/SpikeS1 (19312): t=752164693 +17087ms | activity: windowFocus=true keyguardLocked=false deviceLocked=false
+10-05 19:51:04.045 I/SpikeS1 (19312): t=752173720 +26114ms | button: Query purchases
+10-05 19:51:04.045 I/SpikeS1 (19312): t=752173721 +26115ms | billing: queryPurchasesAsync INAPP
+10-05 19:51:04.053 I/SpikeS1 (19312): t=752173728 +26122ms | billing: onQueryPurchasesResponse code=OK(0) debug='' count=1
+10-05 19:51:04.053 I/SpikeS1 (19312): t=752173729 +26123ms |   owned state=PURCHASED products=[spike_s1_test] orderId=GPA.3392-4361-8176-63158 obfuscatedProfileId=5dc7e5b7-bd79-4fbc-abdb-c020a2fbd836 obfuscatedAccountId=44f08496-3e82-4a4c-9284-88134981c425 acknowledged=false quantity=1 purchaseTime=1791219053568 token…46Ypkw
+10-05 19:51:10.366 I/SpikeS1 (19312): t=752180041 +32435ms | button: Consume all
+10-05 19:51:10.366 I/SpikeS1 (19312): t=752180041 +32435ms | billing: queryPurchasesAsync INAPP
+10-05 19:51:10.370 I/SpikeS1 (19312): t=752180045 +32439ms | billing: onQueryPurchasesResponse code=OK(0) debug='' count=1
+10-05 19:51:10.370 I/SpikeS1 (19312): t=752180045 +32439ms |   owned state=PURCHASED products=[spike_s1_test] orderId=GPA.3392-4361-8176-63158 obfuscatedProfileId=5dc7e5b7-bd79-4fbc-abdb-c020a2fbd836 obfuscatedAccountId=44f08496-3e82-4a4c-9284-88134981c425 acknowledged=false quantity=1 purchaseTime=1791219053568 token…46Ypkw
+10-05 19:51:10.370 I/SpikeS1 (19312): t=752180045 +32439ms | billing: consumeAsync token…46Ypkw
+10-05 19:51:10.946 I/SpikeS1 (19312): t=752180621 +33015ms | billing: onConsumeResponse code=OK(0) debug='' token…46Ypkw
+10-05 19:51:17.892 I/SpikeS1 (19312): t=752187567 +39961ms | button: Pay
+10-05 19:51:17.895 I/SpikeS1 (19312): t=752187570 +3ms | ==== #5/PAY/unlocked tapped: keyguardLocked=false deviceLocked=false network=validated sound=false alarmVolume=3/16 billing=CONNECTED
+10-05 19:51:17.895 I/SpikeS1 (19312): t=752187571 +4ms | #5/PAY/unlocked obfuscatedProfileId(new random UUID)=bbdbdc98-9f1c-410d-a9cf-5b5701c9cae0
+10-05 19:51:17.896 I/SpikeS1 (19312): t=752187571 +4ms | billing: launchBillingFlow pay=#5/PAY/unlocked obfuscatedProfileId=bbdbdc98-9f1c-410d-a9cf-5b5701c9cae0 obfuscatedAccountId=44f08496-3e82-4a4c-9284-88134981c425
+10-05 19:51:17.924 I/SpikeS1 (19312): t=752187600 +33ms | billing: launchBillingFlow returned code=OK(0) debug=''
+10-05 19:51:17.976 I/SpikeS1 (19312): t=752187651 +84ms | activity: onPause keyguardLocked=false deviceLocked=false
+10-05 19:51:18.077 I/SpikeS1 (19312): t=752187752 +185ms | activity: windowFocus=false keyguardLocked=false deviceLocked=false
+10-05 19:51:34.960 I/SpikeS1 (19312): t=752204636 +17069ms | onPurchasesUpdated code=OK(0) debug='' subResponse=0 purchases=1 forPay=#5/PAY/unlocked
+10-05 19:51:34.961 I/SpikeS1 (19312): t=752204636 +17069ms |   update state=PURCHASED products=[spike_s1_test] orderId=GPA.3364-2988-9164-42433 obfuscatedProfileId=bbdbdc98-9f1c-410d-a9cf-5b5701c9cae0 obfuscatedAccountId=44f08496-3e82-4a4c-9284-88134981c425 acknowledged=false quantity=1 purchaseTime=1791219093489 token…DCWu4w
+10-05 19:51:34.961 I/SpikeS1 (19312): t=752204636 +17069ms | RESULT pay=#5/PAY/unlocked code=OK states=[PURCHASED] payToResultMs=17069
+10-05 19:51:35.030 I/SpikeS1 (19312): t=752204706 +17139ms | activity: onResume keyguardLocked=false deviceLocked=false
+10-05 19:51:35.043 I/SpikeS1 (19312): t=752204718 +17151ms | activity: windowFocus=true keyguardLocked=false deviceLocked=false
+10-05 19:51:43.367 I/SpikeS1 (19312): t=752213042 +25475ms | button: Query purchases
+10-05 19:51:43.367 I/SpikeS1 (19312): t=752213042 +25475ms | billing: queryPurchasesAsync INAPP
+10-05 19:51:43.374 I/SpikeS1 (19312): t=752213050 +25483ms | billing: onQueryPurchasesResponse code=OK(0) debug='' count=1
+10-05 19:51:43.375 I/SpikeS1 (19312): t=752213050 +25483ms |   owned state=PURCHASED products=[spike_s1_test] orderId=GPA.3364-2988-9164-42433 obfuscatedProfileId=bbdbdc98-9f1c-410d-a9cf-5b5701c9cae0 obfuscatedAccountId=44f08496-3e82-4a4c-9284-88134981c425 acknowledged=false quantity=1 purchaseTime=1791219093489 token…DCWu4w
+10-05 19:51:49.537 I/SpikeS1 (19312): t=752219212 +31645ms | button: Consume all
+10-05 19:51:49.537 I/SpikeS1 (19312): t=752219212 +31645ms | billing: queryPurchasesAsync INAPP
+10-05 19:51:49.543 I/SpikeS1 (19312): t=752219218 +31651ms | billing: onQueryPurchasesResponse code=OK(0) debug='' count=1
+10-05 19:51:49.543 I/SpikeS1 (19312): t=752219218 +31651ms |   owned state=PURCHASED products=[spike_s1_test] orderId=GPA.3364-2988-9164-42433 obfuscatedProfileId=bbdbdc98-9f1c-410d-a9cf-5b5701c9cae0 obfuscatedAccountId=44f08496-3e82-4a4c-9284-88134981c425 acknowledged=false quantity=1 purchaseTime=1791219093489 token…DCWu4w
+10-05 19:51:49.543 I/SpikeS1 (19312): t=752219219 +31652ms | billing: consumeAsync token…DCWu4w
+10-05 19:51:50.355 I/SpikeS1 (19312): t=752220030 +32463ms | billing: onConsumeResponse code=OK(0) debug='' token…DCWu4w
+10-05 19:51:56.963 I/SpikeS1 (19312): t=752226638 +39071ms | button: Pay
+10-05 19:51:56.968 I/SpikeS1 (19312): t=752226644 +6ms | ==== #6/PAY/unlocked tapped: keyguardLocked=false deviceLocked=false network=validated sound=false alarmVolume=3/16 billing=CONNECTED
+10-05 19:51:56.968 I/SpikeS1 (19312): t=752226644 +6ms | #6/PAY/unlocked obfuscatedProfileId(new random UUID)=0daac2a9-4409-4353-ac1d-db4836659445
+10-05 19:51:56.969 I/SpikeS1 (19312): t=752226644 +6ms | billing: launchBillingFlow pay=#6/PAY/unlocked obfuscatedProfileId=0daac2a9-4409-4353-ac1d-db4836659445 obfuscatedAccountId=44f08496-3e82-4a4c-9284-88134981c425
+10-05 19:51:57.004 I/SpikeS1 (19312): t=752226679 +41ms | billing: launchBillingFlow returned code=OK(0) debug=''
+10-05 19:51:57.052 I/SpikeS1 (19312): t=752226727 +89ms | activity: onPause keyguardLocked=false deviceLocked=false
+10-05 19:51:57.160 I/SpikeS1 (19312): t=752226835 +197ms | activity: windowFocus=false keyguardLocked=false deviceLocked=false
+10-05 19:52:14.000 I/SpikeS1 (19312): t=752243676 +17038ms | onPurchasesUpdated code=OK(0) debug='' subResponse=0 purchases=1 forPay=#6/PAY/unlocked
+10-05 19:52:14.001 I/SpikeS1 (19312): t=752243676 +17038ms |   update state=PURCHASED products=[spike_s1_test] orderId=GPA.3300-7955-1215-91585 obfuscatedProfileId=0daac2a9-4409-4353-ac1d-db4836659445 obfuscatedAccountId=44f08496-3e82-4a4c-9284-88134981c425 acknowledged=false quantity=1 purchaseTime=1791219132610 token…Dm66Yg
+10-05 19:52:14.001 I/SpikeS1 (19312): t=752243676 +17038ms | RESULT pay=#6/PAY/unlocked code=OK states=[PURCHASED] payToResultMs=17038
+10-05 19:52:14.053 I/SpikeS1 (19312): t=752243728 +17090ms | activity: onResume keyguardLocked=false deviceLocked=false
+10-05 19:52:14.064 I/SpikeS1 (19312): t=752243739 +17101ms | activity: windowFocus=true keyguardLocked=false deviceLocked=false
+10-05 19:52:22.506 I/SpikeS1 (19312): t=752252181 +25543ms | button: Query purchases
+10-05 19:52:22.506 I/SpikeS1 (19312): t=752252181 +25543ms | billing: queryPurchasesAsync INAPP
+10-05 19:52:22.516 I/SpikeS1 (19312): t=752252192 +25554ms | billing: onQueryPurchasesResponse code=OK(0) debug='' count=1
+10-05 19:52:22.517 I/SpikeS1 (19312): t=752252192 +25554ms |   owned state=PURCHASED products=[spike_s1_test] orderId=GPA.3300-7955-1215-91585 obfuscatedProfileId=0daac2a9-4409-4353-ac1d-db4836659445 obfuscatedAccountId=44f08496-3e82-4a4c-9284-88134981c425 acknowledged=false quantity=1 purchaseTime=1791219132610 token…Dm66Yg
+10-05 19:52:28.926 I/SpikeS1 (19312): t=752258601 +31963ms | button: Consume all
+10-05 19:52:28.926 I/SpikeS1 (19312): t=752258601 +31963ms | billing: queryPurchasesAsync INAPP
+10-05 19:52:28.933 I/SpikeS1 (19312): t=752258608 +31970ms | billing: onQueryPurchasesResponse code=OK(0) debug='' count=1
+10-05 19:52:28.933 I/SpikeS1 (19312): t=752258609 +31971ms |   owned state=PURCHASED products=[spike_s1_test] orderId=GPA.3300-7955-1215-91585 obfuscatedProfileId=0daac2a9-4409-4353-ac1d-db4836659445 obfuscatedAccountId=44f08496-3e82-4a4c-9284-88134981c425 acknowledged=false quantity=1 purchaseTime=1791219132610 token…Dm66Yg
+10-05 19:52:28.934 I/SpikeS1 (19312): t=752258609 +31971ms | billing: consumeAsync token…Dm66Yg
+10-05 19:52:29.803 I/SpikeS1 (19312): t=752259478 +32840ms | billing: onConsumeResponse code=OK(0) debug='' token…Dm66Yg
+10-05 19:52:46.813 I/SpikeS1 (19312): t=752276488 +49850ms | button: Pay
+10-05 19:52:46.819 I/SpikeS1 (19312): t=752276494 +6ms | ==== #7/PAY/unlocked tapped: keyguardLocked=false deviceLocked=false network=validated sound=false alarmVolume=3/16 billing=CONNECTED
+10-05 19:52:46.819 I/SpikeS1 (19312): t=752276494 +6ms | #7/PAY/unlocked obfuscatedProfileId(new random UUID)=26bf56a2-6f2a-4259-bd30-7ae4d1b40809
+10-05 19:52:46.819 I/SpikeS1 (19312): t=752276494 +6ms | billing: launchBillingFlow pay=#7/PAY/unlocked obfuscatedProfileId=26bf56a2-6f2a-4259-bd30-7ae4d1b40809 obfuscatedAccountId=44f08496-3e82-4a4c-9284-88134981c425
+10-05 19:52:46.855 I/SpikeS1 (19312): t=752276530 +42ms | billing: launchBillingFlow returned code=OK(0) debug=''
+10-05 19:52:46.908 I/SpikeS1 (19312): t=752276584 +96ms | activity: onPause keyguardLocked=false deviceLocked=false
+10-05 19:52:46.987 I/SpikeS1 (19312): t=752276663 +175ms | activity: windowFocus=false keyguardLocked=false deviceLocked=false
+10-05 19:53:46.079 I/SpikeS1 (19312): t=752335754 +59266ms | onPurchasesUpdated code=BILLING_UNAVAILABLE(3) debug='' subResponse=0 purchases=null forPay=#7/PAY/unlocked
+10-05 19:53:46.079 I/SpikeS1 (19312): t=752335754 +59266ms | RESULT pay=#7/PAY/unlocked code=BILLING_UNAVAILABLE states=[-] payToResultMs=59266
+10-05 19:53:46.145 I/SpikeS1 (19312): t=752335820 +59332ms | activity: onResume keyguardLocked=false deviceLocked=false
+10-05 19:53:46.155 I/SpikeS1 (19312): t=752335830 +59342ms | activity: windowFocus=true keyguardLocked=false deviceLocked=false
+10-05 19:54:15.362 I/SpikeS1 (19312): t=752365037 +88549ms | button: Pay
+10-05 19:54:15.367 I/SpikeS1 (19312): t=752365043 +6ms | ==== #8/PAY/unlocked tapped: keyguardLocked=false deviceLocked=false network=validated sound=false alarmVolume=3/16 billing=CONNECTED
+10-05 19:54:15.367 I/SpikeS1 (19312): t=752365043 +6ms | #8/PAY/unlocked obfuscatedProfileId(new random UUID)=6c9b6fbb-d7fe-4514-af1a-5232b7ae6557
+10-05 19:54:15.368 I/SpikeS1 (19312): t=752365043 +6ms | billing: launchBillingFlow pay=#8/PAY/unlocked obfuscatedProfileId=6c9b6fbb-d7fe-4514-af1a-5232b7ae6557 obfuscatedAccountId=44f08496-3e82-4a4c-9284-88134981c425
+10-05 19:54:15.393 I/SpikeS1 (19312): t=752365068 +31ms | billing: launchBillingFlow returned code=OK(0) debug=''
+10-05 19:54:15.444 I/SpikeS1 (19312): t=752365119 +82ms | activity: onPause keyguardLocked=false deviceLocked=false
+10-05 19:54:15.566 I/SpikeS1 (19312): t=752365241 +204ms | activity: windowFocus=false keyguardLocked=false deviceLocked=false
+10-05 19:54:56.129 I/SpikeS1 (19312): t=752405804 +40767ms | onPurchasesUpdated code=OK(0) debug='' subResponse=0 purchases=1 forPay=#8/PAY/unlocked
+10-05 19:54:56.129 I/SpikeS1 (19312): t=752405804 +40767ms |   update state=PENDING products=[spike_s1_test] orderId=null obfuscatedProfileId=6c9b6fbb-d7fe-4514-af1a-5232b7ae6557 obfuscatedAccountId=44f08496-3e82-4a4c-9284-88134981c425 acknowledged=false quantity=1 purchaseTime=1791219294845 token…8-dKmg
+10-05 19:54:56.129 I/SpikeS1 (19312): t=752405804 +40767ms | RESULT pay=#8/PAY/unlocked code=OK states=[PENDING] payToResultMs=40767
+10-05 19:54:56.204 I/SpikeS1 (19312): t=752405880 +40843ms | activity: onResume keyguardLocked=false deviceLocked=false
+10-05 19:54:56.216 I/SpikeS1 (19312): t=752405891 +40854ms | activity: windowFocus=true keyguardLocked=false deviceLocked=false
+10-05 19:55:57.178 I/SpikeS1 (19312): t=752466853 +101816ms | onPurchasesUpdated code=OK(0) debug='' subResponse=0 purchases=1 forPay=none (a later update, e.g. pending completed)
+10-05 19:55:57.178 I/SpikeS1 (19312): t=752466854 +101817ms |   update state=PURCHASED products=[spike_s1_test] orderId=GPA.3315-1534-3678-67802 obfuscatedProfileId=6c9b6fbb-d7fe-4514-af1a-5232b7ae6557 obfuscatedAccountId=44f08496-3e82-4a4c-9284-88134981c425 acknowledged=false quantity=1 purchaseTime=1791219294845 token…8-dKmg
+10-05 19:56:37.984 I/SpikeS1 (19312): t=752507659 +142622ms | button: Query purchases
+10-05 19:56:37.984 I/SpikeS1 (19312): t=752507659 +142622ms | billing: queryPurchasesAsync INAPP
+10-05 19:56:37.991 I/SpikeS1 (19312): t=752507667 +142630ms | billing: onQueryPurchasesResponse code=OK(0) debug='' count=1
+10-05 19:56:37.992 I/SpikeS1 (19312): t=752507667 +142630ms |   owned state=PURCHASED products=[spike_s1_test] orderId=GPA.3315-1534-3678-67802 obfuscatedProfileId=6c9b6fbb-d7fe-4514-af1a-5232b7ae6557 obfuscatedAccountId=44f08496-3e82-4a4c-9284-88134981c425 acknowledged=false quantity=1 purchaseTime=1791219294845 token…8-dKmg
+10-05 19:56:44.824 I/SpikeS1 (19312): t=752514499 +149462ms | button: Consume all
+10-05 19:56:44.824 I/SpikeS1 (19312): t=752514499 +149462ms | billing: queryPurchasesAsync INAPP
+10-05 19:56:44.831 I/SpikeS1 (19312): t=752514506 +149469ms | billing: onQueryPurchasesResponse code=OK(0) debug='' count=1
+10-05 19:56:44.831 I/SpikeS1 (19312): t=752514506 +149469ms |   owned state=PURCHASED products=[spike_s1_test] orderId=GPA.3315-1534-3678-67802 obfuscatedProfileId=6c9b6fbb-d7fe-4514-af1a-5232b7ae6557 obfuscatedAccountId=44f08496-3e82-4a4c-9284-88134981c425 acknowledged=false quantity=1 purchaseTime=1791219294845 token…8-dKmg
+10-05 19:56:44.831 I/SpikeS1 (19312): t=752514506 +149469ms | billing: consumeAsync token…8-dKmg
+10-05 19:56:45.493 I/SpikeS1 (19312): t=752515168 +150131ms | billing: onConsumeResponse code=OK(0) debug='' token…8-dKmg
+10-05 19:57:03.960 I/SpikeS1 (19312): t=752533635 +168598ms | button: Pay
+10-05 19:57:03.964 I/SpikeS1 (19312): t=752533639 +4ms | ==== #9/PAY/unlocked tapped: keyguardLocked=false deviceLocked=false network=NONE sound=false alarmVolume=3/16 billing=CONNECTED
+10-05 19:57:03.964 I/SpikeS1 (19312): t=752533639 +4ms | #9/PAY/unlocked obfuscatedProfileId(new random UUID)=ac880814-474b-49d2-b59a-15f846c2b357
+10-05 19:57:03.964 I/SpikeS1 (19312): t=752533639 +4ms | billing: launchBillingFlow pay=#9/PAY/unlocked obfuscatedProfileId=ac880814-474b-49d2-b59a-15f846c2b357 obfuscatedAccountId=44f08496-3e82-4a4c-9284-88134981c425
+10-05 19:57:04.004 I/SpikeS1 (19312): t=752533679 +44ms | billing: launchBillingFlow returned code=OK(0) debug=''
+10-05 19:57:04.047 I/SpikeS1 (19312): t=752533722 +87ms | activity: onPause keyguardLocked=false deviceLocked=false
+10-05 19:57:04.151 I/SpikeS1 (19312): t=752533826 +191ms | activity: windowFocus=false keyguardLocked=false deviceLocked=false
+10-05 20:00:24.549 I/SpikeS1 (19312): t=752734224 +200589ms | onPurchasesUpdated code=USER_CANCELED(1) debug='' subResponse=0 purchases=null forPay=#9/PAY/unlocked
+10-05 20:00:24.549 I/SpikeS1 (19312): t=752734224 +200589ms | RESULT pay=#9/PAY/unlocked code=USER_CANCELED states=[-] payToResultMs=200589
+10-05 20:00:24.597 I/SpikeS1 (19312): t=752734272 +200637ms | activity: onResume keyguardLocked=false deviceLocked=false
+10-05 20:00:24.611 I/SpikeS1 (19312): t=752734286 +200651ms | activity: windowFocus=true keyguardLocked=false deviceLocked=false
+10-05 20:00:48.138 I/SpikeS1 (19312): t=752757814 +224179ms | button: Pay
+10-05 20:00:48.141 I/SpikeS1 (19312): t=752757816 +2ms | ==== #10/PAY/unlocked tapped: keyguardLocked=false deviceLocked=false network=validated sound=false alarmVolume=3/16 billing=CONNECTED
+10-05 20:00:48.141 I/SpikeS1 (19312): t=752757816 +2ms | #10/PAY/unlocked obfuscatedProfileId(new random UUID)=c23105dc-6a21-428a-8bd8-8271eb4b1d61
+10-05 20:00:48.141 I/SpikeS1 (19312): t=752757817 +3ms | billing: launchBillingFlow pay=#10/PAY/unlocked obfuscatedProfileId=c23105dc-6a21-428a-8bd8-8271eb4b1d61 obfuscatedAccountId=44f08496-3e82-4a4c-9284-88134981c425
+10-05 20:00:48.163 I/SpikeS1 (19312): t=752757838 +24ms | billing: launchBillingFlow returned code=OK(0) debug=''
+10-05 20:00:48.208 I/SpikeS1 (19312): t=752757883 +69ms | activity: onPause keyguardLocked=false deviceLocked=false
+10-05 20:00:48.327 I/SpikeS1 (19312): t=752758002 +188ms | activity: windowFocus=false keyguardLocked=false deviceLocked=false
+10-05 20:02:14.602 I/SpikeS1 (19312): t=752844277 +86463ms | onPurchasesUpdated code=NETWORK_ERROR(12) debug='' subResponse=0 purchases=null forPay=#10/PAY/unlocked
+10-05 20:02:14.602 I/SpikeS1 (19312): t=752844277 +86463ms | RESULT pay=#10/PAY/unlocked code=NETWORK_ERROR states=[-] payToResultMs=86463
+10-05 20:02:14.654 I/SpikeS1 (19312): t=752844329 +86515ms | activity: onResume keyguardLocked=false deviceLocked=false
+10-05 20:02:14.684 I/SpikeS1 (19312): t=752844359 +86545ms | activity: windowFocus=true keyguardLocked=false deviceLocked=false
+10-05 20:02:45.154 I/SpikeS1 (19312): t=752874829 +117015ms | button: Query purchases
+10-05 20:02:45.154 I/SpikeS1 (19312): t=752874830 +117016ms | billing: queryPurchasesAsync INAPP
+10-05 20:02:45.160 I/SpikeS1 (19312): t=752874835 +117021ms | billing: onQueryPurchasesResponse code=OK(0) debug='' count=0
+10-05 20:02:57.217 I/SpikeS1 (19312): t=752886892 +129078ms | activity: onPause keyguardLocked=false deviceLocked=false
+10-05 20:02:57.401 I/SpikeS1 (19312): t=752887077 +129263ms | activity: windowFocus=false keyguardLocked=true deviceLocked=false
+10-05 20:02:57.420 I/SpikeS1 (19312): t=752887095 +129281ms | activity: onStop keyguardLocked=true deviceLocked=false
+10-05 20:03:00.241 I/SpikeS1 (19312): t=752889917 +132103ms | activity: onResume keyguardLocked=true deviceLocked=false
+10-05 20:03:00.544 I/SpikeS1 (19312): t=752890220 +132406ms | activity: windowFocus=true keyguardLocked=true deviceLocked=false
+10-05 20:03:15.407 I/SpikeS1 (19312): t=752905083 +147269ms | button: Pay without unlock
+10-05 20:03:15.412 I/SpikeS1 (19312): t=752905087 +4ms | ==== #11/PAY_WITHOUT_UNLOCK/locked tapped: keyguardLocked=true deviceLocked=false network=validated sound=false alarmVolume=3/16 billing=CONNECTED
+10-05 20:03:15.412 I/SpikeS1 (19312): t=752905087 +4ms | #11/PAY_WITHOUT_UNLOCK/locked obfuscatedProfileId(new random UUID)=c2ff61e2-77b6-4f27-90a8-8175aebc83f0
+10-05 20:03:15.412 I/SpikeS1 (19312): t=752905088 +5ms | billing: launchBillingFlow pay=#11/PAY_WITHOUT_UNLOCK/locked obfuscatedProfileId=c2ff61e2-77b6-4f27-90a8-8175aebc83f0 obfuscatedAccountId=44f08496-3e82-4a4c-9284-88134981c425
+10-05 20:03:15.442 I/SpikeS1 (19312): t=752905117 +34ms | billing: launchBillingFlow returned code=OK(0) debug=''
+10-05 20:03:15.490 I/SpikeS1 (19312): t=752905166 +83ms | activity: onPause keyguardLocked=true deviceLocked=false
+10-05 20:03:15.593 I/SpikeS1 (19312): t=752905268 +185ms | activity: windowFocus=false keyguardLocked=true deviceLocked=false
+10-05 20:03:15.961 I/SpikeS1 (19312): t=752905636 +553ms | activity: onStop keyguardLocked=true deviceLocked=false
+10-05 20:05:13.569 I/SpikeS1 (19312): t=753023244 +118161ms | onPurchasesUpdated code=OK(0) debug='' subResponse=0 purchases=1 forPay=#11/PAY_WITHOUT_UNLOCK/locked
+10-05 20:05:13.569 I/SpikeS1 (19312): t=753023244 +118161ms |   update state=PENDING products=[spike_s1_test] orderId=null obfuscatedProfileId=c2ff61e2-77b6-4f27-90a8-8175aebc83f0 obfuscatedAccountId=44f08496-3e82-4a4c-9284-88134981c425 acknowledged=false quantity=1 purchaseTime=1791219912190 token…QUHRVg
+10-05 20:05:13.569 I/SpikeS1 (19312): t=753023244 +118161ms | RESULT pay=#11/PAY_WITHOUT_UNLOCK/locked code=OK states=[PENDING] payToResultMs=118161
+10-05 20:05:13.670 I/SpikeS1 (19312): t=753023345 +118262ms | activity: onResume keyguardLocked=false deviceLocked=false
+10-05 20:05:13.686 I/SpikeS1 (19312): t=753023361 +118278ms | activity: windowFocus=true keyguardLocked=false deviceLocked=false
+10-05 20:06:14.312 I/SpikeS1 (19312): t=753083988 +178905ms | onPurchasesUpdated code=OK(0) debug='' subResponse=0 purchases=1 forPay=none (a later update, e.g. pending completed)
+10-05 20:06:14.313 I/SpikeS1 (19312): t=753083988 +178905ms |   update state=PURCHASED products=[spike_s1_test] orderId=GPA.3389-0040-6808-54988 obfuscatedProfileId=c2ff61e2-77b6-4f27-90a8-8175aebc83f0 obfuscatedAccountId=44f08496-3e82-4a4c-9284-88134981c425 acknowledged=false quantity=1 purchaseTime=1791219912190 token…QUHRVg
+10-05 20:11:36.451 I/SpikeS1 (19312): t=753406127 +501044ms | button: Query purchases
+10-05 20:11:36.451 I/SpikeS1 (19312): t=753406127 +501044ms | billing: queryPurchasesAsync INAPP
+10-05 20:11:36.462 I/SpikeS1 (19312): t=753406137 +501054ms | billing: onQueryPurchasesResponse code=OK(0) debug='' count=0
+10-05 20:11:42.797 I/SpikeS1 (19312): t=753412472 +507389ms | button: Consume all
+10-05 20:11:42.797 I/SpikeS1 (19312): t=753412472 +507389ms | billing: queryPurchasesAsync INAPP
+10-05 20:11:42.802 I/SpikeS1 (19312): t=753412477 +507394ms | billing: onQueryPurchasesResponse code=OK(0) debug='' count=0
+10-05 20:11:42.802 I/SpikeS1 (19312): t=753412477 +507394ms | billing: nothing to consume
+10-05 20:11:47.647 I/SpikeS1 (19312): t=753417322 +512239ms | activity: onPause keyguardLocked=false deviceLocked=false
+10-05 20:11:47.737 I/SpikeS1 (19312): t=753417412 +512329ms | activity: windowFocus=false keyguardLocked=true deviceLocked=false
+10-05 20:11:47.753 I/SpikeS1 (19312): t=753417428 +512345ms | activity: onStop keyguardLocked=true deviceLocked=false
+10-05 20:11:50.563 I/SpikeS1 (19312): t=753420238 +515155ms | activity: onResume keyguardLocked=true deviceLocked=false
+10-05 20:11:50.767 I/SpikeS1 (19312): t=753420442 +515359ms | activity: windowFocus=true keyguardLocked=true deviceLocked=false
+10-05 20:12:11.137 I/SpikeS1 (19312): t=753440812 +535729ms | button: Pay
+10-05 20:12:11.143 I/SpikeS1 (19312): t=753440818 +6ms | ==== #12/PAY/locked tapped: keyguardLocked=true deviceLocked=false network=validated sound=false alarmVolume=3/16 billing=CONNECTED
+10-05 20:12:11.143 I/SpikeS1 (19312): t=753440818 +6ms | #12/PAY/locked obfuscatedProfileId(new random UUID)=6548b950-7af2-4526-a2cd-a3b3108d48e5
+10-05 20:12:11.143 I/SpikeS1 (19312): t=753440818 +6ms | #12/PAY/locked requestDismissKeyguard
+10-05 20:12:11.299 I/SpikeS1 (19312): t=753440975 +163ms | #12/PAY/locked onDismissSucceeded keyguardLocked=false deviceLocked=false
+10-05 20:12:11.300 I/SpikeS1 (19312): t=753440975 +163ms | billing: launchBillingFlow pay=#12/PAY/locked obfuscatedProfileId=6548b950-7af2-4526-a2cd-a3b3108d48e5 obfuscatedAccountId=44f08496-3e82-4a4c-9284-88134981c425
+10-05 20:12:11.340 I/SpikeS1 (19312): t=753441015 +203ms | billing: launchBillingFlow returned code=OK(0) debug=''
+10-05 20:12:11.375 I/SpikeS1 (19312): t=753441050 +238ms | activity: onPause keyguardLocked=false deviceLocked=false
+10-05 20:12:11.483 I/SpikeS1 (19312): t=753441158 +346ms | activity: windowFocus=false keyguardLocked=false deviceLocked=false
+10-05 20:13:08.109 I/SpikeS1 (19312): t=753497784 +56972ms | onPurchasesUpdated code=OK(0) debug='' subResponse=0 purchases=1 forPay=#12/PAY/locked
+10-05 20:13:08.109 I/SpikeS1 (19312): t=753497784 +56972ms |   update state=PURCHASED products=[spike_s1_test] orderId=GPA.3356-9203-9129-00468 obfuscatedProfileId=6548b950-7af2-4526-a2cd-a3b3108d48e5 obfuscatedAccountId=44f08496-3e82-4a4c-9284-88134981c425 acknowledged=false quantity=1 purchaseTime=1791220386560 token…o0wTwQ
+10-05 20:13:08.109 I/SpikeS1 (19312): t=753497784 +56972ms | RESULT pay=#12/PAY/locked code=OK states=[PURCHASED] payToResultMs=56972
+10-05 20:13:08.174 I/SpikeS1 (19312): t=753497850 +57038ms | activity: onResume keyguardLocked=false deviceLocked=false
+10-05 20:13:08.190 I/SpikeS1 (19312): t=753497865 +57053ms | activity: windowFocus=true keyguardLocked=false deviceLocked=false
+10-05 20:13:15.382 I/SpikeS1 (19312): t=753505057 +64245ms | button: Query purchases
+10-05 20:13:15.382 I/SpikeS1 (19312): t=753505057 +64245ms | billing: queryPurchasesAsync INAPP
+10-05 20:13:15.390 I/SpikeS1 (19312): t=753505065 +64253ms | billing: onQueryPurchasesResponse code=OK(0) debug='' count=1
+10-05 20:13:15.390 I/SpikeS1 (19312): t=753505065 +64253ms |   owned state=PURCHASED products=[spike_s1_test] orderId=GPA.3356-9203-9129-00468 obfuscatedProfileId=6548b950-7af2-4526-a2cd-a3b3108d48e5 obfuscatedAccountId=44f08496-3e82-4a4c-9284-88134981c425 acknowledged=false quantity=1 purchaseTime=1791220386560 token…o0wTwQ
+10-05 20:13:21.721 I/SpikeS1 (19312): t=753511396 +70584ms | button: Consume all
+10-05 20:13:21.721 I/SpikeS1 (19312): t=753511396 +70584ms | billing: queryPurchasesAsync INAPP
+10-05 20:13:21.727 I/SpikeS1 (19312): t=753511402 +70590ms | billing: onQueryPurchasesResponse code=OK(0) debug='' count=1
+10-05 20:13:21.728 I/SpikeS1 (19312): t=753511403 +70591ms |   owned state=PURCHASED products=[spike_s1_test] orderId=GPA.3356-9203-9129-00468 obfuscatedProfileId=6548b950-7af2-4526-a2cd-a3b3108d48e5 obfuscatedAccountId=44f08496-3e82-4a4c-9284-88134981c425 acknowledged=false quantity=1 purchaseTime=1791220386560 token…o0wTwQ
+10-05 20:13:21.728 I/SpikeS1 (19312): t=753511403 +70591ms | billing: consumeAsync token…o0wTwQ
+10-05 20:13:22.462 I/SpikeS1 (19312): t=753512137 +71325ms | billing: onConsumeResponse code=OK(0) debug='' token…o0wTwQ
+10-05 20:13:38.303 I/SpikeS1 (19312): t=753527979 +87167ms | button: Pay
+10-05 20:13:38.309 I/SpikeS1 (19312): t=753527984 +5ms | ==== #13/PAY/unlocked tapped: keyguardLocked=false deviceLocked=false network=validated sound=false alarmVolume=3/16 billing=CONNECTED
+10-05 20:13:38.309 I/SpikeS1 (19312): t=753527984 +5ms | #13/PAY/unlocked obfuscatedProfileId(new random UUID)=9ee0b77d-6df9-443e-8c3a-26fc68393c36
+10-05 20:13:38.309 I/SpikeS1 (19312): t=753527984 +5ms | billing: launchBillingFlow pay=#13/PAY/unlocked obfuscatedProfileId=9ee0b77d-6df9-443e-8c3a-26fc68393c36 obfuscatedAccountId=44f08496-3e82-4a4c-9284-88134981c425
+10-05 20:13:38.339 I/SpikeS1 (19312): t=753528014 +35ms | billing: launchBillingFlow returned code=OK(0) debug=''
+10-05 20:13:38.382 I/SpikeS1 (19312): t=753528057 +78ms | activity: onPause keyguardLocked=false deviceLocked=false
+10-05 20:13:38.488 I/SpikeS1 (19312): t=753528163 +184ms | activity: windowFocus=false keyguardLocked=false deviceLocked=false
+10-05 20:13:52.061 I/SpikeS1 (19312): t=753541736 +13757ms | onPurchasesUpdated code=USER_CANCELED(1) debug='' subResponse=0 purchases=null forPay=#13/PAY/unlocked
+10-05 20:13:52.061 I/SpikeS1 (19312): t=753541736 +13757ms | RESULT pay=#13/PAY/unlocked code=USER_CANCELED states=[-] payToResultMs=13757
+10-05 20:13:52.120 I/SpikeS1 (19312): t=753541795 +13816ms | activity: onResume keyguardLocked=false deviceLocked=false
+10-05 20:13:52.130 I/SpikeS1 (19312): t=753541806 +13827ms | activity: windowFocus=true keyguardLocked=false deviceLocked=false
+10-05 20:46:52.668 I/SpikeS1 ( 8871): t=755522343 | activity: device=OPPO CPH2333 android=13 sdk=33 build=CPH2333_11_F.79 app=v0.1.1-spike (101)
+10-05 20:46:52.679 I/SpikeS1 ( 8871): t=755522354 | activity: onCreate fromAlarm=false keyguardLocked=false deviceLocked=false version=v0.1.1-spike (101)
+10-05 20:46:52.683 I/SpikeS1 ( 8871): t=755522358 | billing: startConnection (state before: DISCONNECTED)
+10-05 20:46:52.696 I/SpikeS1 ( 8871): t=755522372 | activity: onResume keyguardLocked=false deviceLocked=false
+10-05 20:46:53.098 I/SpikeS1 ( 8871): t=755522773 | sound: STARTED usage=ALARM looping alarmVolume=16/16 (user volume was 3)
+10-05 20:46:53.122 I/SpikeS1 ( 8871): t=755522797 | activity: windowFocus=true keyguardLocked=false deviceLocked=false
+10-05 20:46:53.246 I/SpikeS1 ( 8871): t=755522921 | billing: onBillingSetupFinished code=OK(0) debug=''
+10-05 20:46:53.247 I/SpikeS1 ( 8871): t=755522922 | billing: queryProductDetailsAsync spike_s1_test
+10-05 20:46:53.335 I/SpikeS1 ( 8871): t=755523010 | billing: onProductDetailsResponse code=OK(0) debug='' loaded=1 unfetched=[]
+10-05 20:46:53.335 I/SpikeS1 ( 8871): t=755523011 |   offer id=null option=buy €0.59 590000 EUR token…LvAg==
+10-05 20:46:59.099 I/SpikeS1 ( 8871): t=755528774 | activity: windowFocus=false keyguardLocked=false deviceLocked=false
+10-05 20:47:03.106 I/SpikeS1 ( 8871): t=755532781 | sound monitor: playing=true alarmVolume=1/16 purchaseInFlight=false
+10-05 20:47:05.122 I/SpikeS1 ( 8871): t=755534797 | activity: windowFocus=true keyguardLocked=false deviceLocked=false
+10-05 20:47:11.446 I/SpikeS1 ( 8871): t=755541121 | button: Stop sound
+10-05 20:47:11.564 I/SpikeS1 ( 8871): t=755541239 | sound: STOPPED, alarm volume restored to 3/16
+10-05 20:47:17.387 I/SpikeS1 ( 8871): t=755547062 | button: Query purchases
+10-05 20:47:17.387 I/SpikeS1 ( 8871): t=755547062 | billing: queryPurchasesAsync INAPP
+10-05 20:47:17.392 I/SpikeS1 ( 8871): t=755547067 | billing: onQueryPurchasesResponse code=OK(0) debug='' count=0
+10-05 20:47:24.359 I/SpikeS1 ( 8871): t=755554035 | button: Ring in 15 s
+10-05 20:47:24.360 I/SpikeS1 ( 8871): t=755554035 | alarm: asking for POST_NOTIFICATIONS (needed for the full-screen notification); tap again after
+10-05 20:47:24.475 I/SpikeS1 ( 8871): t=755554150 | activity: onPause keyguardLocked=false deviceLocked=false
+10-05 20:47:24.524 I/SpikeS1 ( 8871): t=755554200 | activity: windowFocus=false keyguardLocked=false deviceLocked=false
+10-05 20:47:39.514 I/SpikeS1 ( 8871): t=755569189 | permission: android.permission.POST_NOTIFICATIONS granted=true
+10-05 20:47:39.515 I/SpikeS1 ( 8871): t=755569190 | activity: onResume keyguardLocked=false deviceLocked=false
+10-05 20:47:39.561 I/SpikeS1 ( 8871): t=755569236 | activity: windowFocus=true keyguardLocked=false deviceLocked=false
+10-05 20:47:44.777 I/SpikeS1 ( 8871): t=755574452 | button: Ring in 15 s
+10-05 20:47:44.796 I/SpikeS1 ( 8871): t=755574471 | alarm: setAlarmClock in 15000 ms (wall 1791222479779). Lock the phone now.
+10-05 20:47:44.814 I/SpikeS1 ( 8871): t=755574490 | sound: STOPPED, alarm volume restored to 3/16
+10-05 20:47:46.476 I/SpikeS1 ( 8871): t=755576151 | activity: onPause keyguardLocked=false deviceLocked=false
+10-05 20:47:46.582 I/SpikeS1 ( 8871): t=755576257 | activity: onStop keyguardLocked=true deviceLocked=true
+10-05 20:47:46.586 I/SpikeS1 ( 8871): t=755576261 | activity: windowFocus=false keyguardLocked=true deviceLocked=true
+10-05 20:47:59.836 I/SpikeS1 ( 8871): t=755589511 | alarm: FIRED (setAlarmClock), posting full-screen notification
+10-05 20:47:59.857 I/SpikeS1 ( 8871): t=755589532 | alarm: notification posted, canUseFullScreenIntent=true
+10-05 20:47:59.981 I/SpikeS1 ( 8871): t=755589657 | sound: STARTED usage=ALARM looping alarmVolume=16/16 (user volume was 3)
+10-05 20:48:00.123 I/SpikeS1 ( 8871): t=755589798 | activity: onNewIntent fromAlarm=true keyguardLocked=true deviceLocked=true
+10-05 20:48:00.152 I/SpikeS1 ( 8871): t=755589827 | sound: start ignored, already playing=true
+10-05 20:48:00.180 I/SpikeS1 ( 8871): t=755589855 | activity: onResume keyguardLocked=true deviceLocked=true
+10-05 20:48:00.414 I/SpikeS1 ( 8871): t=755590090 | activity: windowFocus=true keyguardLocked=true deviceLocked=true
+10-05 20:48:07.232 I/SpikeS1 ( 8871): t=755596908 | activity: windowFocus=false keyguardLocked=true deviceLocked=true
+10-05 20:48:08.996 I/SpikeS1 ( 8871): t=755598671 | activity: windowFocus=true keyguardLocked=true deviceLocked=true
+10-05 20:48:09.987 I/SpikeS1 ( 8871): t=755599662 | sound monitor: playing=true alarmVolume=1/16 purchaseInFlight=false
+10-05 20:48:19.994 I/SpikeS1 ( 8871): t=755609669 | sound monitor: playing=true alarmVolume=1/16 purchaseInFlight=false
+10-05 20:48:20.708 I/SpikeS1 ( 8871): t=755610383 | button: Pay
+10-05 20:48:20.717 I/SpikeS1 ( 8871): t=755610392 +9ms | ==== #1/PAY/locked tapped: keyguardLocked=true deviceLocked=true network=validated sound=true alarmVolume=1/16 billing=CONNECTED
+10-05 20:48:20.717 I/SpikeS1 ( 8871): t=755610392 +9ms | #1/PAY/locked obfuscatedProfileId(new random UUID)=d5c95753-c9be-41b4-b0a9-6e0efb720298
+10-05 20:48:20.717 I/SpikeS1 ( 8871): t=755610392 +9ms | #1/PAY/locked requestDismissKeyguard
+10-05 20:48:20.956 I/SpikeS1 ( 8871): t=755610631 +248ms | activity: windowFocus=false keyguardLocked=true deviceLocked=true
+10-05 20:48:29.999 I/SpikeS1 ( 8871): t=755619674 +9291ms | sound monitor: playing=true alarmVolume=1/16 purchaseInFlight=false
+10-05 20:48:33.218 I/SpikeS1 ( 8871): t=755622894 +12511ms | activity: windowFocus=true keyguardLocked=false deviceLocked=true
+10-05 20:48:33.274 I/SpikeS1 ( 8871): t=755622949 +12566ms | #1/PAY/locked onDismissSucceeded keyguardLocked=false deviceLocked=false
+10-05 20:48:33.287 I/SpikeS1 ( 8871): t=755622962 +12579ms | obfuscatedAccountId (new install id)=1c0a24a5-efdf-44f0-b2b9-3432fe3082b5
+10-05 20:48:33.287 I/SpikeS1 ( 8871): t=755622962 +12579ms | billing: launchBillingFlow pay=#1/PAY/locked obfuscatedProfileId=d5c95753-c9be-41b4-b0a9-6e0efb720298 obfuscatedAccountId=1c0a24a5-efdf-44f0-b2b9-3432fe3082b5
+10-05 20:48:33.345 I/SpikeS1 ( 8871): t=755623020 +12637ms | billing: launchBillingFlow returned code=OK(0) debug=''
+10-05 20:48:33.370 I/SpikeS1 ( 8871): t=755623045 +12662ms | activity: onPause keyguardLocked=false deviceLocked=false
+10-05 20:48:33.518 I/SpikeS1 ( 8871): t=755623194 +12811ms | activity: windowFocus=false keyguardLocked=false deviceLocked=false
+10-05 20:48:35.371 I/SpikeS1 ( 8871): t=755625046 +14663ms | sound monitor: playing=true alarmVolume=1/16 purchaseInFlight=true
+10-05 20:48:37.378 I/SpikeS1 ( 8871): t=755627054 +16671ms | sound monitor: playing=true alarmVolume=1/16 purchaseInFlight=true
+10-05 20:48:39.383 I/SpikeS1 ( 8871): t=755629058 +18675ms | sound monitor: playing=true alarmVolume=1/16 purchaseInFlight=true
+10-05 20:48:41.389 I/SpikeS1 ( 8871): t=755631064 +20681ms | sound monitor: playing=true alarmVolume=1/16 purchaseInFlight=true
+10-05 20:48:43.395 I/SpikeS1 ( 8871): t=755633070 +22687ms | sound monitor: playing=true alarmVolume=1/16 purchaseInFlight=true
+10-05 20:48:45.404 I/SpikeS1 ( 8871): t=755635079 +24696ms | sound monitor: playing=true alarmVolume=1/16 purchaseInFlight=true
+10-05 20:48:47.409 I/SpikeS1 ( 8871): t=755637085 +26702ms | sound monitor: playing=true alarmVolume=1/16 purchaseInFlight=true
+10-05 20:48:49.413 I/SpikeS1 ( 8871): t=755639088 +28705ms | sound monitor: playing=true alarmVolume=1/16 purchaseInFlight=true
+10-05 20:48:51.418 I/SpikeS1 ( 8871): t=755641093 +30710ms | sound monitor: playing=true alarmVolume=1/16 purchaseInFlight=true
+10-05 20:48:53.426 I/SpikeS1 ( 8871): t=755643101 +32718ms | sound monitor: playing=true alarmVolume=1/16 purchaseInFlight=true
+10-05 20:48:55.429 I/SpikeS1 ( 8871): t=755645104 +34721ms | sound monitor: playing=true alarmVolume=1/16 purchaseInFlight=true
+10-05 20:48:57.433 I/SpikeS1 ( 8871): t=755647108 +36725ms | sound monitor: playing=true alarmVolume=1/16 purchaseInFlight=true
+10-05 20:48:59.439 I/SpikeS1 ( 8871): t=755649115 +38732ms | sound monitor: playing=true alarmVolume=1/16 purchaseInFlight=true
+10-05 20:49:01.444 I/SpikeS1 ( 8871): t=755651120 +40737ms | sound monitor: playing=true alarmVolume=1/16 purchaseInFlight=true
+10-05 20:49:02.839 I/SpikeS1 ( 8871): t=755652514 +42131ms | onPurchasesUpdated code=OK(0) debug='' subResponse=0 purchases=1 forPay=#1/PAY/locked
+10-05 20:49:02.839 I/SpikeS1 ( 8871): t=755652514 +42131ms |   update state=PURCHASED products=[spike_s1_test] orderId=GPA.3355-7391-8447-19698 obfuscatedProfileId=d5c95753-c9be-41b4-b0a9-6e0efb720298 obfuscatedAccountId=1c0a24a5-efdf-44f0-b2b9-3432fe3082b5 acknowledged=false quantity=1 purchaseTime=1791222541274 token…Mo10XA
+10-05 20:49:02.839 I/SpikeS1 ( 8871): t=755652514 +42131ms | RESULT pay=#1/PAY/locked code=OK states=[PURCHASED] payToResultMs=42131
+10-05 20:49:02.899 I/SpikeS1 ( 8871): t=755652575 +42192ms | activity: onResume keyguardLocked=false deviceLocked=false
+10-05 20:49:02.911 I/SpikeS1 ( 8871): t=755652587 +42204ms | activity: windowFocus=true keyguardLocked=false deviceLocked=false
+10-05 20:49:12.904 I/SpikeS1 ( 8871): t=755662580 +52197ms | sound monitor: playing=true alarmVolume=1/16 purchaseInFlight=false
+10-05 20:49:22.909 I/SpikeS1 ( 8871): t=755672584 +62201ms | sound monitor: playing=true alarmVolume=1/16 purchaseInFlight=false
+10-05 20:49:32.915 I/SpikeS1 ( 8871): t=755682590 +72207ms | sound monitor: playing=true alarmVolume=1/16 purchaseInFlight=false
+10-05 20:49:38.483 I/SpikeS1 ( 8871): t=755688159 +77776ms | button: Ring in 15 s
+10-05 20:49:38.488 I/SpikeS1 ( 8871): t=755688163 +77780ms | alarm: setAlarmClock in 15000 ms (wall 1791222593486). Lock the phone now.
+10-05 20:49:38.538 I/SpikeS1 ( 8871): t=755688213 +77830ms | sound: STOPPED, alarm volume restored to 3/16
+10-05 20:49:45.408 I/SpikeS1 ( 8871): t=755695083 +84700ms | button: Consume all
+10-05 20:49:45.408 I/SpikeS1 ( 8871): t=755695083 +84700ms | billing: queryPurchasesAsync INAPP
+10-05 20:49:45.416 I/SpikeS1 ( 8871): t=755695092 +84709ms | billing: onQueryPurchasesResponse code=OK(0) debug='' count=1
+10-05 20:49:45.417 I/SpikeS1 ( 8871): t=755695092 +84709ms |   owned state=PURCHASED products=[spike_s1_test] orderId=GPA.3355-7391-8447-19698 obfuscatedProfileId=d5c95753-c9be-41b4-b0a9-6e0efb720298 obfuscatedAccountId=1c0a24a5-efdf-44f0-b2b9-3432fe3082b5 acknowledged=false quantity=1 purchaseTime=1791222541274 token…Mo10XA
+10-05 20:49:45.417 I/SpikeS1 ( 8871): t=755695092 +84709ms | billing: consumeAsync token…Mo10XA
+10-05 20:49:46.133 I/SpikeS1 ( 8871): t=755695808 +85425ms | billing: onConsumeResponse code=OK(0) debug='' token…Mo10XA
+10-05 20:49:52.896 I/SpikeS1 ( 8871): t=755702571 +92188ms | button: Ring in 15 s
+10-05 20:49:52.901 I/SpikeS1 ( 8871): t=755702576 +92193ms | alarm: setAlarmClock in 15000 ms (wall 1791222607898). Lock the phone now.
+10-05 20:49:52.928 I/SpikeS1 ( 8871): t=755702603 +92220ms | sound: STOPPED, alarm volume restored to 3/16
+10-05 20:49:54.555 I/SpikeS1 ( 8871): t=755704230 +93847ms | activity: onPause keyguardLocked=false deviceLocked=false
+10-05 20:49:54.628 I/SpikeS1 ( 8871): t=755704304 +93921ms | activity: onStop keyguardLocked=true deviceLocked=true
+10-05 20:49:54.914 I/SpikeS1 ( 8871): t=755704589 +94206ms | activity: windowFocus=false keyguardLocked=true deviceLocked=true
+10-05 20:50:07.961 I/SpikeS1 ( 8871): t=755717636 +107253ms | alarm: FIRED (setAlarmClock), posting full-screen notification
+10-05 20:50:07.975 I/SpikeS1 ( 8871): t=755717650 +107267ms | alarm: notification posted, canUseFullScreenIntent=true
+10-05 20:50:08.098 I/SpikeS1 ( 8871): t=755717773 +107390ms | sound: STARTED usage=ALARM looping alarmVolume=16/16 (user volume was 3)
+10-05 20:50:08.263 I/SpikeS1 ( 8871): t=755717938 +107555ms | activity: onNewIntent fromAlarm=true keyguardLocked=true deviceLocked=true
+10-05 20:50:08.301 I/SpikeS1 ( 8871): t=755717976 +107593ms | sound: start ignored, already playing=true
+10-05 20:50:08.312 I/SpikeS1 ( 8871): t=755717987 +107604ms | activity: onResume keyguardLocked=true deviceLocked=true
+10-05 20:50:08.599 I/SpikeS1 ( 8871): t=755718274 +107891ms | activity: windowFocus=true keyguardLocked=true deviceLocked=true
+10-05 20:50:18.101 I/SpikeS1 ( 8871): t=755727776 +117393ms | sound monitor: playing=true alarmVolume=16/16 purchaseInFlight=false
+10-05 20:50:19.962 I/SpikeS1 ( 8871): t=755729638 +119255ms | button: Stop sound
+10-05 20:50:20.027 I/SpikeS1 ( 8871): t=755729702 +119319ms | sound: STOPPED, alarm volume restored to 3/16
+10-05 20:50:25.433 I/SpikeS1 ( 8871): t=755735108 +124725ms | button: Pay
+10-05 20:50:25.439 I/SpikeS1 ( 8871): t=755735114 +6ms | ==== #2/PAY/locked tapped: keyguardLocked=true deviceLocked=true network=validated sound=false alarmVolume=3/16 billing=CONNECTED
+10-05 20:50:25.439 I/SpikeS1 ( 8871): t=755735114 +6ms | #2/PAY/locked obfuscatedProfileId(new random UUID)=872829ce-46f3-47aa-815c-0fc85c57c2fe
+10-05 20:50:25.439 I/SpikeS1 ( 8871): t=755735114 +6ms | #2/PAY/locked requestDismissKeyguard
+10-05 20:50:25.550 I/SpikeS1 ( 8871): t=755735226 +118ms | activity: windowFocus=false keyguardLocked=true deviceLocked=true
+10-05 20:50:29.372 I/SpikeS1 ( 8871): t=755739047 +3939ms | activity: windowFocus=true keyguardLocked=false deviceLocked=true
+10-05 20:50:29.400 I/SpikeS1 ( 8871): t=755739075 +3967ms | #2/PAY/locked onDismissSucceeded keyguardLocked=false deviceLocked=false
+10-05 20:50:29.400 I/SpikeS1 ( 8871): t=755739076 +3968ms | billing: launchBillingFlow pay=#2/PAY/locked obfuscatedProfileId=872829ce-46f3-47aa-815c-0fc85c57c2fe obfuscatedAccountId=1c0a24a5-efdf-44f0-b2b9-3432fe3082b5
+10-05 20:50:29.422 I/SpikeS1 ( 8871): t=755739097 +3989ms | billing: launchBillingFlow returned code=OK(0) debug=''
+10-05 20:50:29.446 I/SpikeS1 ( 8871): t=755739121 +4013ms | activity: onPause keyguardLocked=false deviceLocked=false
+10-05 20:50:29.571 I/SpikeS1 ( 8871): t=755739246 +4138ms | activity: windowFocus=false keyguardLocked=false deviceLocked=false
+10-05 20:50:48.683 I/SpikeS1 ( 8871): t=755758358 +23250ms | onPurchasesUpdated code=OK(0) debug='' subResponse=0 purchases=1 forPay=#2/PAY/locked
+10-05 20:50:48.683 I/SpikeS1 ( 8871): t=755758358 +23250ms |   update state=PURCHASED products=[spike_s1_test] orderId=GPA.3361-9762-9571-01351 obfuscatedProfileId=872829ce-46f3-47aa-815c-0fc85c57c2fe obfuscatedAccountId=1c0a24a5-efdf-44f0-b2b9-3432fe3082b5 acknowledged=false quantity=1 purchaseTime=1791222647161 token…zchAng
+10-05 20:50:48.683 I/SpikeS1 ( 8871): t=755758358 +23250ms | RESULT pay=#2/PAY/locked code=OK states=[PURCHASED] payToResultMs=23250
+10-05 20:50:48.744 I/SpikeS1 ( 8871): t=755758420 +23312ms | activity: onResume keyguardLocked=false deviceLocked=false
+10-05 20:50:48.747 I/SpikeS1 ( 8871): t=755758423 +23315ms | activity: windowFocus=true keyguardLocked=false deviceLocked=false
+10-05 20:50:57.548 I/SpikeS1 ( 8871): t=755767223 +32115ms | button: Query purchases
+10-05 20:50:57.548 I/SpikeS1 ( 8871): t=755767224 +32116ms | billing: queryPurchasesAsync INAPP
+10-05 20:50:57.554 I/SpikeS1 ( 8871): t=755767229 +32121ms | billing: onQueryPurchasesResponse code=OK(0) debug='' count=1
+10-05 20:50:57.554 I/SpikeS1 ( 8871): t=755767229 +32121ms |   owned state=PURCHASED products=[spike_s1_test] orderId=GPA.3361-9762-9571-01351 obfuscatedProfileId=872829ce-46f3-47aa-815c-0fc85c57c2fe obfuscatedAccountId=1c0a24a5-efdf-44f0-b2b9-3432fe3082b5 acknowledged=false quantity=1 purchaseTime=1791222647161 token…zchAng
+10-05 20:51:04.520 I/SpikeS1 ( 8871): t=755774196 +39088ms | button: Consume all
+10-05 20:51:04.520 I/SpikeS1 ( 8871): t=755774196 +39088ms | billing: queryPurchasesAsync INAPP
+10-05 20:51:04.527 I/SpikeS1 ( 8871): t=755774202 +39094ms | billing: onQueryPurchasesResponse code=OK(0) debug='' count=1
+10-05 20:51:04.528 I/SpikeS1 ( 8871): t=755774203 +39095ms |   owned state=PURCHASED products=[spike_s1_test] orderId=GPA.3361-9762-9571-01351 obfuscatedProfileId=872829ce-46f3-47aa-815c-0fc85c57c2fe obfuscatedAccountId=1c0a24a5-efdf-44f0-b2b9-3432fe3082b5 acknowledged=false quantity=1 purchaseTime=1791222647161 token…zchAng
+10-05 20:51:04.528 I/SpikeS1 ( 8871): t=755774203 +39095ms | billing: consumeAsync token…zchAng
+10-05 20:51:05.183 I/SpikeS1 ( 8871): t=755774858 +39750ms | billing: onConsumeResponse code=OK(0) debug='' token…zchAng
+10-05 20:51:12.711 I/SpikeS1 ( 8871): t=755782386 +47278ms | button: Ring in 15 s
+10-05 20:51:12.716 I/SpikeS1 ( 8871): t=755782391 +47283ms | alarm: setAlarmClock in 15000 ms (wall 1791222687713). Lock the phone now.
+10-05 20:51:12.746 I/SpikeS1 ( 8871): t=755782421 +47313ms | sound: STOPPED, alarm volume restored to 3/16
+10-05 20:51:14.512 I/SpikeS1 ( 8871): t=755784187 +49079ms | activity: onPause keyguardLocked=false deviceLocked=false
+10-05 20:51:14.602 I/SpikeS1 ( 8871): t=755784277 +49169ms | activity: onStop keyguardLocked=true deviceLocked=true
+10-05 20:51:14.876 I/SpikeS1 ( 8871): t=755784552 +49444ms | activity: windowFocus=false keyguardLocked=true deviceLocked=true
+10-05 20:51:27.767 I/SpikeS1 ( 8871): t=755797442 +62334ms | alarm: FIRED (setAlarmClock), posting full-screen notification
+10-05 20:51:27.820 I/SpikeS1 ( 8871): t=755797495 +62387ms | alarm: notification posted, canUseFullScreenIntent=true
+10-05 20:51:27.931 I/SpikeS1 ( 8871): t=755797606 +62498ms | sound: STARTED usage=ALARM looping alarmVolume=16/16 (user volume was 3)
+10-05 20:51:28.084 I/SpikeS1 ( 8871): t=755797759 +62651ms | activity: onNewIntent fromAlarm=true keyguardLocked=true deviceLocked=true
+10-05 20:51:28.136 I/SpikeS1 ( 8871): t=755797811 +62703ms | sound: start ignored, already playing=true
+10-05 20:51:28.140 I/SpikeS1 ( 8871): t=755797815 +62707ms | activity: onResume keyguardLocked=true deviceLocked=true
+10-05 20:51:28.410 I/SpikeS1 ( 8871): t=755798086 +62978ms | activity: windowFocus=true keyguardLocked=true deviceLocked=true
+10-05 20:51:37.935 I/SpikeS1 ( 8871): t=755807610 +72502ms | sound monitor: playing=true alarmVolume=16/16 purchaseInFlight=false
+10-05 20:51:39.939 I/SpikeS1 ( 8871): t=755809615 +74507ms | button: Stop sound
+10-05 20:51:40.000 I/SpikeS1 ( 8871): t=755809676 +74568ms | sound: STOPPED, alarm volume restored to 3/16
+10-05 20:51:45.411 I/SpikeS1 ( 8871): t=755815087 +79979ms | button: Pay
+10-05 20:51:45.415 I/SpikeS1 ( 8871): t=755815090 +3ms | ==== #3/PAY/locked tapped: keyguardLocked=true deviceLocked=true network=validated sound=false alarmVolume=3/16 billing=CONNECTED
+10-05 20:51:45.415 I/SpikeS1 ( 8871): t=755815090 +3ms | #3/PAY/locked obfuscatedProfileId(new random UUID)=a8fa1b43-4377-47ae-af2f-74f37b196fe5
+10-05 20:51:45.415 I/SpikeS1 ( 8871): t=755815090 +3ms | #3/PAY/locked requestDismissKeyguard
+10-05 20:51:45.512 I/SpikeS1 ( 8871): t=755815188 +101ms | activity: windowFocus=false keyguardLocked=true deviceLocked=true
+10-05 20:51:49.297 I/SpikeS1 ( 8871): t=755818972 +3885ms | activity: windowFocus=true keyguardLocked=false deviceLocked=false
+10-05 20:51:49.322 I/SpikeS1 ( 8871): t=755818997 +3910ms | #3/PAY/locked onDismissSucceeded keyguardLocked=false deviceLocked=false
+10-05 20:51:49.322 I/SpikeS1 ( 8871): t=755818997 +3910ms | billing: launchBillingFlow pay=#3/PAY/locked obfuscatedProfileId=a8fa1b43-4377-47ae-af2f-74f37b196fe5 obfuscatedAccountId=1c0a24a5-efdf-44f0-b2b9-3432fe3082b5
+10-05 20:51:49.357 I/SpikeS1 ( 8871): t=755819032 +3945ms | billing: launchBillingFlow returned code=OK(0) debug=''
+10-05 20:51:49.384 I/SpikeS1 ( 8871): t=755819059 +3972ms | activity: onPause keyguardLocked=false deviceLocked=false
+10-05 20:51:49.521 I/SpikeS1 ( 8871): t=755819196 +4109ms | activity: windowFocus=false keyguardLocked=false deviceLocked=false
+10-05 20:52:08.161 I/SpikeS1 ( 8871): t=755837837 +22750ms | onPurchasesUpdated code=OK(0) debug='' subResponse=0 purchases=1 forPay=#3/PAY/locked
+10-05 20:52:08.162 I/SpikeS1 ( 8871): t=755837837 +22750ms |   update state=PURCHASED products=[spike_s1_test] orderId=GPA.3387-5067-5901-99876 obfuscatedProfileId=a8fa1b43-4377-47ae-af2f-74f37b196fe5 obfuscatedAccountId=1c0a24a5-efdf-44f0-b2b9-3432fe3082b5 acknowledged=false quantity=1 purchaseTime=1791222726832 token…OntgCw
+10-05 20:52:08.162 I/SpikeS1 ( 8871): t=755837837 +22750ms | RESULT pay=#3/PAY/locked code=OK states=[PURCHASED] payToResultMs=22749
+10-05 20:52:08.225 I/SpikeS1 ( 8871): t=755837900 +22813ms | activity: onResume keyguardLocked=false deviceLocked=false
+10-05 20:52:08.237 I/SpikeS1 ( 8871): t=755837912 +22825ms | activity: windowFocus=true keyguardLocked=false deviceLocked=false
+10-05 20:52:15.793 I/SpikeS1 ( 8871): t=755845468 +30381ms | button: Query purchases
+10-05 20:52:15.793 I/SpikeS1 ( 8871): t=755845468 +30381ms | billing: queryPurchasesAsync INAPP
+10-05 20:52:15.798 I/SpikeS1 ( 8871): t=755845473 +30386ms | billing: onQueryPurchasesResponse code=OK(0) debug='' count=1
+10-05 20:52:15.800 I/SpikeS1 ( 8871): t=755845473 +30386ms |   owned state=PURCHASED products=[spike_s1_test] orderId=GPA.3387-5067-5901-99876 obfuscatedProfileId=a8fa1b43-4377-47ae-af2f-74f37b196fe5 obfuscatedAccountId=1c0a24a5-efdf-44f0-b2b9-3432fe3082b5 acknowledged=false quantity=1 purchaseTime=1791222726832 token…OntgCw
+10-05 20:52:22.781 I/SpikeS1 ( 8871): t=755852456 +37369ms | button: Consume all
+10-05 20:52:22.781 I/SpikeS1 ( 8871): t=755852456 +37369ms | billing: queryPurchasesAsync INAPP
+10-05 20:52:22.790 I/SpikeS1 ( 8871): t=755852465 +37378ms | billing: onQueryPurchasesResponse code=OK(0) debug='' count=1
+10-05 20:52:22.790 I/SpikeS1 ( 8871): t=755852465 +37378ms |   owned state=PURCHASED products=[spike_s1_test] orderId=GPA.3387-5067-5901-99876 obfuscatedProfileId=a8fa1b43-4377-47ae-af2f-74f37b196fe5 obfuscatedAccountId=1c0a24a5-efdf-44f0-b2b9-3432fe3082b5 acknowledged=false quantity=1 purchaseTime=1791222726832 token…OntgCw
+10-05 20:52:22.790 I/SpikeS1 ( 8871): t=755852466 +37379ms | billing: consumeAsync token…OntgCw
+10-05 20:52:23.434 I/SpikeS1 ( 8871): t=755853109 +38022ms | billing: onConsumeResponse code=OK(0) debug='' token…OntgCw
+10-05 20:52:30.855 I/SpikeS1 ( 8871): t=755860530 +45443ms | button: Ring in 15 s
+10-05 20:52:30.859 I/SpikeS1 ( 8871): t=755860534 +45447ms | alarm: setAlarmClock in 15000 ms (wall 1791222765857). Lock the phone now.
+10-05 20:52:30.893 I/SpikeS1 ( 8871): t=755860568 +45481ms | sound: STOPPED, alarm volume restored to 3/16
+10-05 20:52:32.604 I/SpikeS1 ( 8871): t=755862279 +47192ms | activity: onPause keyguardLocked=false deviceLocked=false
+10-05 20:52:32.706 I/SpikeS1 ( 8871): t=755862381 +47294ms | activity: windowFocus=false keyguardLocked=true deviceLocked=true
+10-05 20:52:32.710 I/SpikeS1 ( 8871): t=755862385 +47298ms | activity: onStop keyguardLocked=true deviceLocked=true
+10-05 20:52:45.909 I/SpikeS1 ( 8871): t=755875584 +60497ms | alarm: FIRED (setAlarmClock), posting full-screen notification
+10-05 20:52:45.943 I/SpikeS1 ( 8871): t=755875618 +60531ms | alarm: notification posted, canUseFullScreenIntent=true
+10-05 20:52:46.056 I/SpikeS1 ( 8871): t=755875731 +60644ms | sound: STARTED usage=ALARM looping alarmVolume=16/16 (user volume was 3)
+10-05 20:52:46.209 I/SpikeS1 ( 8871): t=755875884 +60797ms | activity: onNewIntent fromAlarm=true keyguardLocked=true deviceLocked=true
+10-05 20:52:46.276 I/SpikeS1 ( 8871): t=755875951 +60864ms | sound: start ignored, already playing=true
+10-05 20:52:46.284 I/SpikeS1 ( 8871): t=755875959 +60872ms | activity: onResume keyguardLocked=true deviceLocked=true
+10-05 20:52:46.497 I/SpikeS1 ( 8871): t=755876173 +61086ms | activity: windowFocus=true keyguardLocked=true deviceLocked=true
+10-05 20:52:56.070 I/SpikeS1 ( 8871): t=755885745 +70658ms | sound monitor: playing=true alarmVolume=16/16 purchaseInFlight=false
+10-05 20:52:57.975 I/SpikeS1 ( 8871): t=755887650 +72563ms | button: Stop sound
+10-05 20:52:58.038 I/SpikeS1 ( 8871): t=755887713 +72626ms | sound: STOPPED, alarm volume restored to 3/16
+10-05 20:53:03.464 I/SpikeS1 ( 8871): t=755893139 +78052ms | button: Pay
+10-05 20:53:03.468 I/SpikeS1 ( 8871): t=755893144 +5ms | ==== #4/PAY/locked tapped: keyguardLocked=true deviceLocked=true network=validated sound=false alarmVolume=3/16 billing=CONNECTED
+10-05 20:53:03.468 I/SpikeS1 ( 8871): t=755893144 +5ms | #4/PAY/locked obfuscatedProfileId(new random UUID)=f61930ac-497f-4a83-9cc0-f4da9f24755c
+10-05 20:53:03.468 I/SpikeS1 ( 8871): t=755893144 +5ms | #4/PAY/locked requestDismissKeyguard
+10-05 20:53:03.580 I/SpikeS1 ( 8871): t=755893255 +116ms | activity: windowFocus=false keyguardLocked=true deviceLocked=true
+10-05 20:53:07.386 I/SpikeS1 ( 8871): t=755897061 +3922ms | activity: windowFocus=true keyguardLocked=false deviceLocked=true
+10-05 20:53:07.416 I/SpikeS1 ( 8871): t=755897091 +3952ms | #4/PAY/locked onDismissSucceeded keyguardLocked=false deviceLocked=false
+10-05 20:53:07.416 I/SpikeS1 ( 8871): t=755897091 +3952ms | billing: launchBillingFlow pay=#4/PAY/locked obfuscatedProfileId=f61930ac-497f-4a83-9cc0-f4da9f24755c obfuscatedAccountId=1c0a24a5-efdf-44f0-b2b9-3432fe3082b5
+10-05 20:53:07.445 I/SpikeS1 ( 8871): t=755897120 +3981ms | billing: launchBillingFlow returned code=OK(0) debug=''
+10-05 20:53:07.468 I/SpikeS1 ( 8871): t=755897143 +4004ms | activity: onPause keyguardLocked=false deviceLocked=false
+10-05 20:53:07.587 I/SpikeS1 ( 8871): t=755897262 +4123ms | activity: windowFocus=false keyguardLocked=false deviceLocked=false
+10-05 20:53:25.990 I/SpikeS1 ( 8871): t=755915665 +22526ms | onPurchasesUpdated code=OK(0) debug='' subResponse=0 purchases=1 forPay=#4/PAY/locked
+10-05 20:53:25.990 I/SpikeS1 ( 8871): t=755915665 +22526ms |   update state=PURCHASED products=[spike_s1_test] orderId=GPA.3354-4102-1049-60835 obfuscatedProfileId=f61930ac-497f-4a83-9cc0-f4da9f24755c obfuscatedAccountId=1c0a24a5-efdf-44f0-b2b9-3432fe3082b5 acknowledged=false quantity=1 purchaseTime=1791222804538 token…lEsaXA
+10-05 20:53:25.990 I/SpikeS1 ( 8871): t=755915665 +22526ms | RESULT pay=#4/PAY/locked code=OK states=[PURCHASED] payToResultMs=22526
+10-05 20:53:26.040 I/SpikeS1 ( 8871): t=755915716 +22577ms | activity: onResume keyguardLocked=false deviceLocked=false
+10-05 20:53:26.056 I/SpikeS1 ( 8871): t=755915731 +22592ms | activity: windowFocus=true keyguardLocked=false deviceLocked=false
+10-05 20:53:33.594 I/SpikeS1 ( 8871): t=755923269 +30130ms | button: Query purchases
+10-05 20:53:33.594 I/SpikeS1 ( 8871): t=755923269 +30130ms | billing: queryPurchasesAsync INAPP
+10-05 20:53:33.599 I/SpikeS1 ( 8871): t=755923274 +30135ms | billing: onQueryPurchasesResponse code=OK(0) debug='' count=1
+10-05 20:53:33.599 I/SpikeS1 ( 8871): t=755923274 +30135ms |   owned state=PURCHASED products=[spike_s1_test] orderId=GPA.3354-4102-1049-60835 obfuscatedProfileId=f61930ac-497f-4a83-9cc0-f4da9f24755c obfuscatedAccountId=1c0a24a5-efdf-44f0-b2b9-3432fe3082b5 acknowledged=false quantity=1 purchaseTime=1791222804538 token…lEsaXA
+10-05 20:53:39.849 I/SpikeS1 ( 8871): t=755929524 +36385ms | button: Consume all
+10-05 20:53:39.849 I/SpikeS1 ( 8871): t=755929524 +36385ms | billing: queryPurchasesAsync INAPP
+10-05 20:53:39.855 I/SpikeS1 ( 8871): t=755929530 +36391ms | billing: onQueryPurchasesResponse code=OK(0) debug='' count=1
+10-05 20:53:39.856 I/SpikeS1 ( 8871): t=755929531 +36392ms |   owned state=PURCHASED products=[spike_s1_test] orderId=GPA.3354-4102-1049-60835 obfuscatedProfileId=f61930ac-497f-4a83-9cc0-f4da9f24755c obfuscatedAccountId=1c0a24a5-efdf-44f0-b2b9-3432fe3082b5 acknowledged=false quantity=1 purchaseTime=1791222804538 token…lEsaXA
+10-05 20:53:39.856 I/SpikeS1 ( 8871): t=755929531 +36392ms | billing: consumeAsync token…lEsaXA
+10-05 20:53:40.503 I/SpikeS1 ( 8871): t=755930179 +37040ms | billing: onConsumeResponse code=OK(0) debug='' token…lEsaXA
+10-05 20:53:47.341 I/SpikeS1 ( 8871): t=755937017 +43878ms | button: Ring in 15 s
+10-05 20:53:47.345 I/SpikeS1 ( 8871): t=755937020 +43881ms | alarm: setAlarmClock in 15000 ms (wall 1791222842343). Lock the phone now.
+10-05 20:53:47.370 I/SpikeS1 ( 8871): t=755937045 +43906ms | sound: STOPPED, alarm volume restored to 3/16
+10-05 20:53:48.988 I/SpikeS1 ( 8871): t=755938663 +45524ms | activity: onPause keyguardLocked=false deviceLocked=false
+10-05 20:53:49.036 I/SpikeS1 ( 8871): t=755938712 +45573ms | activity: windowFocus=false keyguardLocked=true deviceLocked=true
+10-05 20:53:49.090 I/SpikeS1 ( 8871): t=755938765 +45626ms | activity: onStop keyguardLocked=true deviceLocked=true
+10-05 20:54:02.414 I/SpikeS1 ( 8871): t=755952090 +58951ms | alarm: FIRED (setAlarmClock), posting full-screen notification
+10-05 20:54:02.437 I/SpikeS1 ( 8871): t=755952112 +58973ms | alarm: notification posted, canUseFullScreenIntent=true
+10-05 20:54:02.547 I/SpikeS1 ( 8871): t=755952222 +59083ms | sound: STARTED usage=ALARM looping alarmVolume=16/16 (user volume was 3)
+10-05 20:54:02.698 I/SpikeS1 ( 8871): t=755952373 +59234ms | activity: onNewIntent fromAlarm=true keyguardLocked=true deviceLocked=true
+10-05 20:54:02.751 I/SpikeS1 ( 8871): t=755952427 +59288ms | sound: start ignored, already playing=true
+10-05 20:54:02.754 I/SpikeS1 ( 8871): t=755952429 +59290ms | activity: onResume keyguardLocked=true deviceLocked=true
+10-05 20:54:03.025 I/SpikeS1 ( 8871): t=755952701 +59562ms | activity: windowFocus=true keyguardLocked=true deviceLocked=true
+10-05 20:54:12.552 I/SpikeS1 ( 8871): t=755962227 +69088ms | sound monitor: playing=true alarmVolume=16/16 purchaseInFlight=false
+10-05 20:54:14.172 I/SpikeS1 ( 8871): t=755963848 +70709ms | button: Stop sound
+10-05 20:54:14.236 I/SpikeS1 ( 8871): t=755963911 +70772ms | sound: STOPPED, alarm volume restored to 3/16
+10-05 20:54:19.678 I/SpikeS1 ( 8871): t=755969353 +76214ms | button: Pay
+10-05 20:54:19.684 I/SpikeS1 ( 8871): t=755969359 +6ms | ==== #5/PAY/locked tapped: keyguardLocked=true deviceLocked=true network=validated sound=false alarmVolume=3/16 billing=CONNECTED
+10-05 20:54:19.684 I/SpikeS1 ( 8871): t=755969359 +6ms | #5/PAY/locked obfuscatedProfileId(new random UUID)=59fa496e-d9ae-4797-b967-3b9b455bae08
+10-05 20:54:19.684 I/SpikeS1 ( 8871): t=755969359 +6ms | #5/PAY/locked requestDismissKeyguard
+10-05 20:54:19.796 I/SpikeS1 ( 8871): t=755969471 +118ms | activity: windowFocus=false keyguardLocked=true deviceLocked=true
+10-05 20:54:23.595 I/SpikeS1 ( 8871): t=755973270 +3917ms | activity: windowFocus=true keyguardLocked=false deviceLocked=true
+10-05 20:54:23.627 I/SpikeS1 ( 8871): t=755973302 +3949ms | #5/PAY/locked onDismissSucceeded keyguardLocked=false deviceLocked=false
+10-05 20:54:23.627 I/SpikeS1 ( 8871): t=755973302 +3949ms | billing: launchBillingFlow pay=#5/PAY/locked obfuscatedProfileId=59fa496e-d9ae-4797-b967-3b9b455bae08 obfuscatedAccountId=1c0a24a5-efdf-44f0-b2b9-3432fe3082b5
+10-05 20:54:23.664 I/SpikeS1 ( 8871): t=755973339 +3986ms | billing: launchBillingFlow returned code=OK(0) debug=''
+10-05 20:54:23.698 I/SpikeS1 ( 8871): t=755973373 +4020ms | activity: onPause keyguardLocked=false deviceLocked=false
+10-05 20:54:23.828 I/SpikeS1 ( 8871): t=755973503 +4150ms | activity: windowFocus=false keyguardLocked=false deviceLocked=false
+10-05 20:54:42.187 I/SpikeS1 ( 8871): t=755991862 +22509ms | onPurchasesUpdated code=OK(0) debug='' subResponse=0 purchases=1 forPay=#5/PAY/locked
+10-05 20:54:42.187 I/SpikeS1 ( 8871): t=755991862 +22509ms |   update state=PURCHASED products=[spike_s1_test] orderId=GPA.3388-9900-6442-08592 obfuscatedProfileId=59fa496e-d9ae-4797-b967-3b9b455bae08 obfuscatedAccountId=1c0a24a5-efdf-44f0-b2b9-3432fe3082b5 acknowledged=false quantity=1 purchaseTime=1791222880874 token…-0MLNQ
+10-05 20:54:42.187 I/SpikeS1 ( 8871): t=755991862 +22509ms | RESULT pay=#5/PAY/locked code=OK states=[PURCHASED] payToResultMs=22509
+10-05 20:54:42.244 I/SpikeS1 ( 8871): t=755991919 +22566ms | activity: onResume keyguardLocked=false deviceLocked=false
+10-05 20:54:42.260 I/SpikeS1 ( 8871): t=755991936 +22583ms | activity: windowFocus=true keyguardLocked=false deviceLocked=false
+10-05 20:54:50.073 I/SpikeS1 ( 8871): t=755999748 +30395ms | button: Query purchases
+10-05 20:54:50.073 I/SpikeS1 ( 8871): t=755999749 +30396ms | billing: queryPurchasesAsync INAPP
+10-05 20:54:50.081 I/SpikeS1 ( 8871): t=755999756 +30403ms | billing: onQueryPurchasesResponse code=OK(0) debug='' count=1
+10-05 20:54:50.081 I/SpikeS1 ( 8871): t=755999757 +30404ms |   owned state=PURCHASED products=[spike_s1_test] orderId=GPA.3388-9900-6442-08592 obfuscatedProfileId=59fa496e-d9ae-4797-b967-3b9b455bae08 obfuscatedAccountId=1c0a24a5-efdf-44f0-b2b9-3432fe3082b5 acknowledged=false quantity=1 purchaseTime=1791222880874 token…-0MLNQ
+10-05 20:54:56.227 I/SpikeS1 ( 8871): t=756005902 +36549ms | button: Consume all
+10-05 20:54:56.227 I/SpikeS1 ( 8871): t=756005902 +36549ms | billing: queryPurchasesAsync INAPP
+10-05 20:54:56.230 I/SpikeS1 ( 8871): t=756005905 +36552ms | billing: onQueryPurchasesResponse code=OK(0) debug='' count=1
+10-05 20:54:56.230 I/SpikeS1 ( 8871): t=756005906 +36553ms |   owned state=PURCHASED products=[spike_s1_test] orderId=GPA.3388-9900-6442-08592 obfuscatedProfileId=59fa496e-d9ae-4797-b967-3b9b455bae08 obfuscatedAccountId=1c0a24a5-efdf-44f0-b2b9-3432fe3082b5 acknowledged=false quantity=1 purchaseTime=1791222880874 token…-0MLNQ
+10-05 20:54:56.230 I/SpikeS1 ( 8871): t=756005906 +36553ms | billing: consumeAsync token…-0MLNQ
+10-05 20:55:06.457 I/SpikeS1 ( 8871): t=756016132 +46779ms | billing: onConsumeResponse code=SERVICE_UNAVAILABLE(2) debug='Server error, please try again.' token…-0MLNQ
+10-05 20:55:21.237 I/SpikeS1 ( 8871): t=756030912 +61559ms | button: Consume all
+10-05 20:55:21.237 I/SpikeS1 ( 8871): t=756030912 +61559ms | billing: queryPurchasesAsync INAPP
+10-05 20:55:21.242 I/SpikeS1 ( 8871): t=756030917 +61564ms | billing: onQueryPurchasesResponse code=OK(0) debug='' count=1
+10-05 20:55:21.243 I/SpikeS1 ( 8871): t=756030918 +61565ms |   owned state=PURCHASED products=[spike_s1_test] orderId=GPA.3388-9900-6442-08592 obfuscatedProfileId=59fa496e-d9ae-4797-b967-3b9b455bae08 obfuscatedAccountId=1c0a24a5-efdf-44f0-b2b9-3432fe3082b5 acknowledged=false quantity=1 purchaseTime=1791222880874 token…-0MLNQ
+10-05 20:55:21.243 I/SpikeS1 ( 8871): t=756030918 +61565ms | billing: consumeAsync token…-0MLNQ
+10-05 20:55:22.387 I/SpikeS1 ( 8871): t=756032062 +62709ms | billing: onConsumeResponse code=OK(0) debug='' token…-0MLNQ
+10-05 20:55:38.179 I/SpikeS1 ( 8871): t=756047854 +78501ms | activity: onPause keyguardLocked=false deviceLocked=false
+10-05 20:55:38.279 I/SpikeS1 ( 8871): t=756047955 +78602ms | activity: onStop keyguardLocked=true deviceLocked=true
+10-05 20:55:38.551 I/SpikeS1 ( 8871): t=756048226 +78873ms | activity: windowFocus=false keyguardLocked=true deviceLocked=true
+10-05 20:55:41.256 I/SpikeS1 ( 8871): t=756050931 +81578ms | activity: onResume keyguardLocked=true deviceLocked=true
+10-05 20:55:41.499 I/SpikeS1 ( 8871): t=756051174 +81821ms | activity: windowFocus=true keyguardLocked=true deviceLocked=true
+10-05 20:55:46.787 I/SpikeS1 ( 8871): t=756056462 +87109ms | button: Pay
+10-05 20:55:46.792 I/SpikeS1 ( 8871): t=756056468 +6ms | ==== #6/PAY/locked tapped: keyguardLocked=true deviceLocked=true network=validated sound=false alarmVolume=3/16 billing=CONNECTED
+10-05 20:55:46.792 I/SpikeS1 ( 8871): t=756056468 +6ms | #6/PAY/locked obfuscatedProfileId(new random UUID)=06050a3a-c179-49cd-b3eb-acfabec83e92
+10-05 20:55:46.792 I/SpikeS1 ( 8871): t=756056468 +6ms | #6/PAY/locked requestDismissKeyguard
+10-05 20:55:46.888 I/SpikeS1 ( 8871): t=756056563 +101ms | activity: windowFocus=false keyguardLocked=true deviceLocked=true
+10-05 20:55:50.166 I/SpikeS1 ( 8871): t=756059841 +3379ms | #6/PAY/locked onDismissCancelled keyguardLocked=true deviceLocked=true (no billing flow launched)
+10-05 20:55:50.208 I/SpikeS1 ( 8871): t=756059884 +3422ms | activity: windowFocus=true keyguardLocked=true deviceLocked=true
+10-05 20:56:06.258 I/SpikeS1 ( 8871): t=756075933 +19471ms | button: Pay
+10-05 20:56:06.262 I/SpikeS1 ( 8871): t=756075937 +4ms | ==== #7/PAY/locked tapped: keyguardLocked=true deviceLocked=true network=validated sound=false alarmVolume=3/16 billing=CONNECTED
+10-05 20:56:06.262 I/SpikeS1 ( 8871): t=756075937 +4ms | #7/PAY/locked obfuscatedProfileId(new random UUID)=7094bd73-84be-47c6-b2bb-66900578ccaf
+10-05 20:56:06.262 I/SpikeS1 ( 8871): t=756075937 +4ms | #7/PAY/locked requestDismissKeyguard
+10-05 20:56:06.327 I/SpikeS1 ( 8871): t=756076002 +69ms | activity: windowFocus=false keyguardLocked=true deviceLocked=true
+10-05 20:56:18.536 I/SpikeS1 ( 8871): t=756088211 +12278ms | activity: windowFocus=true keyguardLocked=false deviceLocked=true
+10-05 20:56:18.568 I/SpikeS1 ( 8871): t=756088243 +12310ms | #7/PAY/locked onDismissSucceeded keyguardLocked=false deviceLocked=false
+10-05 20:56:18.568 I/SpikeS1 ( 8871): t=756088243 +12310ms | billing: launchBillingFlow pay=#7/PAY/locked obfuscatedProfileId=7094bd73-84be-47c6-b2bb-66900578ccaf obfuscatedAccountId=1c0a24a5-efdf-44f0-b2b9-3432fe3082b5
+10-05 20:56:18.602 I/SpikeS1 ( 8871): t=756088277 +12344ms | billing: launchBillingFlow returned code=OK(0) debug=''
+10-05 20:56:18.624 I/SpikeS1 ( 8871): t=756088299 +12366ms | activity: onPause keyguardLocked=false deviceLocked=false
+10-05 20:56:18.704 I/SpikeS1 ( 8871): t=756088380 +12447ms | activity: windowFocus=false keyguardLocked=false deviceLocked=false
+10-05 20:56:24.293 I/SpikeS1 ( 8871): t=756093968 +18035ms | onPurchasesUpdated code=USER_CANCELED(1) debug='' subResponse=0 purchases=null forPay=#7/PAY/locked
+10-05 20:56:24.293 I/SpikeS1 ( 8871): t=756093968 +18035ms | RESULT pay=#7/PAY/locked code=USER_CANCELED states=[-] payToResultMs=18035
+10-05 20:56:24.342 I/SpikeS1 ( 8871): t=756094017 +18084ms | activity: onResume keyguardLocked=false deviceLocked=false
+10-05 20:56:24.352 I/SpikeS1 ( 8871): t=756094027 +18094ms | activity: windowFocus=true keyguardLocked=false deviceLocked=false
+10-05 20:56:45.644 I/SpikeS1 ( 8871): t=756115319 +39386ms | button: Query purchases
+10-05 20:56:45.644 I/SpikeS1 ( 8871): t=756115319 +39386ms | billing: queryPurchasesAsync INAPP
+10-05 20:56:45.650 I/SpikeS1 ( 8871): t=756115326 +39393ms | billing: onQueryPurchasesResponse code=OK(0) debug='' count=0

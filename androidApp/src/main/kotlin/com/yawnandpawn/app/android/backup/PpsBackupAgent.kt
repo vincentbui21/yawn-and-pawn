@@ -14,9 +14,11 @@ import com.yawnandpawn.app.data.db.AppDatabase
 import com.yawnandpawn.app.data.db.appDatabaseFile
 import kotlinx.coroutines.runBlocking
 import org.koin.android.ext.koin.androidContext
+import org.koin.core.Koin
 import org.koin.core.context.GlobalContext
 import org.koin.core.context.startKoin
 import org.koin.core.context.stopKoin
+import org.koin.core.error.KoinApplicationAlreadyStartedException
 import java.io.File
 import java.io.FileInputStream
 import java.io.FileOutputStream
@@ -66,26 +68,61 @@ class PpsBackupAgent : BackupAgent() {
         // The incoming app.db lands in device-protected no_backup storage first (never backed up itself), then the guard
         // decides whether it replaces the current one.
         val incoming = File(createDeviceProtectedStorageContext().noBackupFilesDir, INCOMING_NAME)
-        val guard = AppDatabaseRestoreGuard(AppDatabase.SCHEMA_VERSION, SkippedRestoreNotice(this), logger)
-        if (copy(data, size, incoming)) {
-            guard.accept(incoming, destination)
-        } else {
+        val guard = AppDatabaseRestoreGuard(AppDatabase.SCHEMA_VERSION, SkippedRestoreNotice(this), logger, ::releaseRunningData)
+        // A read error from the pipe still propagates, but a partial copy never stays behind.
+        try {
+            if (copy(data, size, incoming)) guard.accept(incoming, destination)
+        } finally {
             incoming.delete()
         }
     }
 
+    /**
+     * Re-arms the restored alarms. A failure here (Koin, Room, the scheduler) is logged and never ends the agent, and a
+     * Koin graph the agent started is always stopped.
+     */
+    @Suppress("TooGenericExceptionCaught") // Any failure is logged: the restore itself has already succeeded.
     override fun onRestoreFinished() {
         super.onRestoreFinished()
-        val running = GlobalContext.getOrNull()
-        val koin =
-            running ?: startKoin {
-                androidContext(applicationContext)
-                modules(appModule, dataModule)
-            }.koin
+        var started = false
         try {
-            runBlocking { koin.get<AlarmScheduling>().rescheduleAll() }
+            val koin =
+                GlobalContext.getOrNull() ?: try {
+                    startKoin {
+                        androidContext(applicationContext)
+                        modules(appModule, dataModule)
+                    }.koin.also { started = true }
+                } catch (_: KoinApplicationAlreadyStartedException) {
+                    // The app started between the check and here: use its graph.
+                    GlobalContext.get()
+                }
+            runBlocking { if (started) koin.get<AlarmScheduling>().rescheduleAll() else rescheduleRestoredFile(koin) }
+        } catch (e: Exception) {
+            logger.log(LogEvent.OperationFailed(RESCHEDULE_OPERATION, e::class.simpleName ?: "failed"))
         } finally {
-            if (running == null) stopKoin()
+            if (started) stopKoin()
+        }
+    }
+
+    /**
+     * Reschedules while the app is running. The running graph's `AlarmScheduling` may still hold a repository over the
+     * `app.db` the restore replaced, so a new one reads the alarms through the graph's current `AlarmRepository`, which
+     * [releaseRunningData] reloaded when the file was replaced.
+     */
+    private suspend fun rescheduleRestoredFile(koin: Koin) {
+        AlarmScheduling(koin.get(), koin.get(), koin.get(), koin.get(), koin.get(), koin.get()).rescheduleAll()
+    }
+
+    /**
+     * Just before a restored `app.db` replaces the current one: a running app's data graph is reloaded, which closes its
+     * databases (a connection must never stay on the replaced file, and an open file cannot be replaced on every file
+     * system), and the next lookup opens the restored file. Instances the running app already holds stay closed; the
+     * system ends the app process after a restore (`killAfterRestore`).
+     */
+    private fun releaseRunningData() {
+        GlobalContext.getOrNull()?.let { koin ->
+            koin.unloadModules(listOf(dataModule))
+            koin.loadModules(listOf(dataModule))
         }
     }
 
@@ -147,6 +184,7 @@ class PpsBackupAgent : BackupAgent() {
 
     private companion object {
         const val OPERATION = "restore app.db"
+        const val RESCHEDULE_OPERATION = "restore reschedule"
         const val INCOMING_NAME = "app.db.restoring"
         const val BUFFER_BYTES = 32 * 1024
     }

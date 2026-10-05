@@ -29,7 +29,9 @@ import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
 import java.io.File
 import kotlin.test.assertEquals
+import kotlin.test.assertFalse
 import kotlin.test.assertIs
+import kotlin.test.assertNotEquals
 import kotlin.test.assertNotNull
 import kotlin.test.assertTrue
 import kotlin.time.Instant
@@ -39,7 +41,9 @@ import kotlin.time.Instant
  * morning runs on the real Room databases, DataStore and wake runtime: an alarm saved, its session rung, the check
  * done, history recorded, a missed note dismissed and a test alarm armed. Every file left under the app's storage must
  * then be named by an include or an exclude of the cloud backup, the device transfer and the API 30 rules. A later
- * story that adds a file must add it to the rules in the same change; this test names the file it missed.
+ * story that adds a file must add it to the rules in the same change; this test names the file it missed. It only
+ * scans the files its own flow creates, so a later story that adds a new storage file must also extend the flow here to
+ * create that file (and add its rule).
  */
 @RunWith(RobolectricTestRunner::class)
 class BackupRulesCoverageTest {
@@ -71,6 +75,20 @@ class BackupRulesCoverageTest {
         }
 
         assertEquals(emptyList(), storage.uncovered(), "files no backup rule names (found $names)")
+    }
+
+    @Test
+    fun `device-protected and credential-protected storage are separate directories, so each file has one domain`() {
+        val app = WakeApp()
+        stopApp()
+        val deviceRoot =
+            app.app
+                .createDeviceProtectedStorageContext()
+                .dataDir.canonicalFile
+        val credentialRoot = app.app.dataDir.canonicalFile
+
+        assertNotEquals(deviceRoot, credentialRoot)
+        assertFalse(deviceRoot.startsWith(credentialRoot) || credentialRoot.startsWith(deviceRoot), "$deviceRoot vs $credentialRoot")
     }
 
     @Test

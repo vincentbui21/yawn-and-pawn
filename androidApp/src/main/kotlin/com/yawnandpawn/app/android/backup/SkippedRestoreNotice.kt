@@ -18,11 +18,13 @@ class SkippedRestoreNotice(
     val skippedSchema: Int?
         get() = if (prefs.contains(KEY_SKIPPED_SCHEMA)) prefs.getInt(KEY_SKIPPED_SCHEMA, 0) else null
 
-    /** Records that an `app.db` of schema [version] was not restored. */
+    /** Records that an `app.db` of schema [version] was not restored. False when the flag could not be written. */
     @SuppressLint("ApplySharedPref") // The restore process is killed soon after; the flag must be on disk first.
-    fun record(version: Int) {
-        prefs.edit().putInt(KEY_SKIPPED_SCHEMA, version).commit()
-    }
+    fun record(version: Int): Boolean = prefs.edit().putInt(KEY_SKIPPED_SCHEMA, version).commit()
+
+    /** Forgets an earlier skip, once a later restore replaced `app.db`. False when the flag could not be removed. */
+    @SuppressLint("ApplySharedPref") // As in record: on disk before the restore process ends.
+    fun clear(): Boolean = prefs.edit().remove(KEY_SKIPPED_SCHEMA).commit()
 
     companion object {
         /** The preferences file name; `backup_restore.xml` is excluded in both backup rule files. */

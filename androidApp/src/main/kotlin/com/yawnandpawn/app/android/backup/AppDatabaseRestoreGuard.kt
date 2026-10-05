@@ -14,12 +14,16 @@ import java.nio.file.StandardCopyOption
  * [installedVersion], it replaces `destination`, and Room's migrations bring an older file up to date on the next open.
  * A newer schema cannot be opened (there is no down-migration and no destructive fallback). So that file is dropped,
  * the current `app.db` is kept, the skip is logged once, and [notice] records it for the user. A file that is not a
- * SQLite database is dropped and logged too. The incoming copy never survives [accept].
+ * SQLite database, or one with no Room schema (`user_version` 0 or below), is dropped and logged too. A restore that
+ * replaces the file clears an earlier skip from [notice], so a stale notice never shows. The incoming copy never
+ * survives [accept].
  */
 class AppDatabaseRestoreGuard(
     private val installedVersion: Int,
     private val notice: SkippedRestoreNotice,
     private val logger: Logger,
+    /** Runs just before the move that replaces `destination` (the agent closes a running app's connections there). */
+    private val beforeReplace: () -> Unit = {},
 ) {
     /** What happened to a restored `app.db`. */
     sealed interface Result {
@@ -42,19 +46,23 @@ class AppDatabaseRestoreGuard(
         try {
             val restoredVersion = userVersion(incoming)
             return when {
-                restoredVersion == null -> {
+                restoredVersion == null || restoredVersion <= 0 -> {
                     logger.log(LogEvent.OperationFailed(OPERATION, "not a database"))
                     Result.SkippedUnreadable
                 }
 
                 restoredVersion > installedVersion -> {
                     logger.log(LogEvent.OperationFailed(OPERATION, "schema $restoredVersion is newer than $installedVersion"))
-                    notice.record(restoredVersion)
+                    if (!notice.record(restoredVersion)) logger.log(LogEvent.OperationFailed(NOTICE_OPERATION, COMMIT_FAILED))
                     Result.SkippedNewer(restoredVersion)
                 }
 
                 else -> {
-                    replace(incoming, destination)
+                    replace(incoming, destination).also { result ->
+                        if (result == Result.Restored && !notice.clear()) {
+                            logger.log(LogEvent.OperationFailed(NOTICE_OPERATION, COMMIT_FAILED))
+                        }
+                    }
                 }
             }
         } finally {
@@ -68,9 +76,11 @@ class AppDatabaseRestoreGuard(
     ): Result =
         try {
             destination.parentFile?.mkdirs()
-            // A journal left beside the old file must never be rolled back onto the restored one.
-            File(destination.path + JOURNAL_SUFFIX).delete()
+            beforeReplace()
             Files.move(incoming.toPath(), destination.toPath(), StandardCopyOption.REPLACE_EXISTING, StandardCopyOption.ATOMIC_MOVE)
+            // A journal left beside the old file must never be rolled back onto the restored one. It is deleted only
+            // after the move: when the move fails, the kept file still needs its hot journal.
+            File(destination.path + JOURNAL_SUFFIX).delete()
             Result.Restored
         } catch (e: IOException) {
             logger.log(LogEvent.OperationFailed(OPERATION, e::class.simpleName ?: "move failed"))
@@ -79,6 +89,8 @@ class AppDatabaseRestoreGuard(
 
     companion object {
         private const val OPERATION = "restore app.db"
+        private const val NOTICE_OPERATION = "restore app.db notice"
+        private const val COMMIT_FAILED = "commit failed"
         private const val JOURNAL_SUFFIX = "-journal"
 
         /** "SQLite format 3" and a NUL: the first 16 bytes of every SQLite 3 database file. */

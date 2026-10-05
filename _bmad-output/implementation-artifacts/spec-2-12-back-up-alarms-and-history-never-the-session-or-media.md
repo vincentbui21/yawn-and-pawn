@@ -98,6 +98,21 @@ deferred: []
 
 ## Review Triage Log
 
+### Review (2 reviewers, fast mode), 2026-10-05
+
+**Patched:**
+- `AppDatabaseRestoreGuard`: the old `app.db-journal` is deleted only after a successful move, so a failed move keeps the current file with its hot journal. A header `user_version` of 0 or below (no Room schema) counts as not a database. A restore that replaces `app.db` clears an earlier skipped-restore flag.
+- `SkippedRestoreNotice`: `record` and the new `clear` return the `commit()` result, and a failed commit is logged (`OperationFailed("restore app.db notice", "commit failed")`). No test: a failing `commit()` cannot be forced under Robolectric.
+- `PpsBackupAgent.onRestoreFile`: the incoming copy is deleted in a `finally` around the copy as well, so a read error never leaves a partial `no_backup/app.db.restoring`.
+- `PpsBackupAgent.onRestoreFinished`: any failure (starting Koin, resolving, `rescheduleAll`) is logged as `OperationFailed("restore reschedule", …)` and never ends the agent. A graph the agent started is stopped in `finally`. A `KoinApplicationAlreadyStartedException` race uses `GlobalContext.get()`.
+- With the app running, the running graph's `AppDatabase` could still hold the replaced file. Just before the move, the guard's new `beforeReplace` hook makes the agent reload `dataModule` in the running graph. That closes its databases (on Windows an open file cannot be replaced at all), and the next lookup opens the restored file. The reschedule then runs on a new `AlarmScheduling` over the reloaded `AlarmRepository`, with the running app's scheduler, clock, zone, write lock and logger. App singletons that already hold the old data instances are not rebuilt: the system ends the app process after a restore (`killAfterRestore`).
+- Tests: `PpsBackupAgentTest` gains 9 tests: the journal order, a failed move, `user_version` 0 and below, clearing a stale notice, a read error, default handling for other files, the drain on a failed write, a failing reschedule, and the reschedule reading the restored file while the app runs. The "newer" log text is built from `AppDatabase.SCHEMA_VERSION`. `BackupRulesCoverageTest` asserts that the two storage roots are separate directories under Robolectric.
+
+**Deferred:**
+- The restored `app.db` keeps the move's mode and mtime instead of those the default handling sets. Low.
+- An assertion that merge rows are unchanged. Not applicable until Story 2.9.
+- `BackupRule` accepts entries with null attributes. Low.
+
 ## Design Notes
 
 - **No `app.db-wal` include (deviation from the AC):** both databases use the TRUNCATE rollback journal (Story 1.7), so no `-wal` file is ever written. Including one would also need the downgrade guard to drop it, or a newer WAL could pair with a kept older `app.db`. A journal-mode change would create an unlisted `app.db-wal`, and the coverage test then fails, which forces the decision.
@@ -127,11 +142,13 @@ deferred: []
 - `AndroidManifest.xml`, `res/xml/data_extraction_rules.xml`, `res/xml/backup_rules.xml`.
 - `android/backup/PpsBackupAgent.kt`, `AppDatabaseRestoreGuard.kt`, `SkippedRestoreNotice.kt`.
 - `data/.../db/AppDatabase.kt`.
-- Tests: `BackupRulesTest` (every entry), `BackupRule.kt` (parser), `android/backup/PpsBackupAgentTest` (6 tests), `BackupRulesCoverageTest` (2 tests).
+- Tests: `BackupRulesTest` (every entry), `BackupRule.kt` (parser), `android/backup/PpsBackupAgentTest` (15 tests after review), `BackupRulesCoverageTest` (3 tests after review).
 - `docs/decisions/db-downgrade.md`, `deferred-work.md`.
 
 **Verification:** `./gradlew qualityGate` BUILD SUCCESSFUL. `git status --porcelain androidApp/src/test/screenshots/preview` is empty. Every matrix row is covered by a passing test.
 
 **Deferred:** the visible skipped-restore notice, which needs owner-approved copy (`deferred-work.md`).
+
+**Known limit:** `BackupRulesCoverageTest` only scans the files its own flow creates. A later story that adds a new storage file must extend that flow to create the file, and add its rule.
 
 **Not run:** the step-04 review (owner-approved fast mode, planning and implementation only). A real restore on a device is Story 2.13 (human-verify).

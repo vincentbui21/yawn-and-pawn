@@ -14,14 +14,17 @@ import com.yawnandpawn.app.core.alarm.AlarmRepository
 import com.yawnandpawn.app.core.alarm.AlarmScheduler
 import com.yawnandpawn.app.core.error.Outcome
 import com.yawnandpawn.app.core.history.SessionHistoryRepository
+import com.yawnandpawn.app.core.log.LogEvent
 import com.yawnandpawn.app.core.session.SessionEngine
 import com.yawnandpawn.app.core.session.SessionState
 import com.yawnandpawn.app.data.db.AppDatabase
 import com.yawnandpawn.app.data.db.appDatabaseFile
 import com.yawnandpawn.app.data.db.runtimeDatabaseFile
+import com.yawnandpawn.app.data.settings.SettingsDataStore
 import com.yawnandpawn.app.restartKoin
 import com.yawnandpawn.app.stopApp
 import com.yawnandpawn.app.testing.FakeAlarmScheduler
+import com.yawnandpawn.app.testing.FakeLogger
 import com.yawnandpawn.app.testing.aSessionHistoryRow
 import com.yawnandpawn.app.testing.anAlarm
 import kotlinx.coroutines.runBlocking
@@ -41,8 +44,11 @@ import org.robolectric.RobolectricTestRunner
 import org.robolectric.Shadows.shadowOf
 import org.robolectric.shadows.ShadowLog
 import java.io.File
+import java.io.FileInputStream
+import java.io.IOException
 import kotlin.test.assertContentEquals
 import kotlin.test.assertEquals
+import kotlin.test.assertFailsWith
 import kotlin.test.assertFalse
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
@@ -166,7 +172,10 @@ class PpsBackupAgentTest {
 
         assertContentEquals(current, appDatabaseFile(context).readBytes(), "the current app.db is unchanged")
         assertEquals(
-            listOf("OperationFailed operation=restore app.db cause=schema 4 is newer than 3"),
+            listOf(
+                "OperationFailed operation=restore app.db cause=" +
+                    "schema ${AppDatabase.SCHEMA_VERSION + 1} is newer than ${AppDatabase.SCHEMA_VERSION}",
+            ),
             logs().filter { it.startsWith("OperationFailed") },
         )
         assertEquals(AppDatabase.SCHEMA_VERSION + 1, SkippedRestoreNotice(context).skippedSchema)
@@ -218,6 +227,168 @@ class PpsBackupAgentTest {
         assertFalse(runtimeDatabaseFile(context).exists(), "no session comes with a restore")
     }
 
+    @Test
+    fun `a restored app db replaces the current one and only then drops the old journal`() {
+        backedUpAppDb()
+        val journal = File(appDatabaseFile(context).path + "-journal").apply { writeText("old hot journal") }
+        val restored = version2AppDb()
+
+        restoreAppDb(restored)
+
+        assertContentEquals(restored, appDatabaseFile(context).readBytes(), "the restored bytes are intact")
+        assertFalse(journal.exists(), "the old journal never pairs with the restored file")
+        assertEquals(emptyList(), logs().filter { it.startsWith("OperationFailed") })
+    }
+
+    @Test
+    fun `when the move fails the current app db and its journal are kept`() {
+        val folder = temp.newFolder()
+        // A non-empty directory where app.db goes: no move can replace it.
+        val destination = File(folder, "app.db").apply { mkdirs() }
+        val content = File(destination, "page").apply { writeText("current") }
+        val journal = File(folder, "app.db-journal").apply { writeText("hot journal") }
+        val incoming = File(folder, "app.db.restoring").apply { writeBytes(sqliteHeader(AppDatabase.SCHEMA_VERSION)) }
+        val logger = FakeLogger()
+
+        val guard = AppDatabaseRestoreGuard(AppDatabase.SCHEMA_VERSION, SkippedRestoreNotice(context), logger)
+
+        val result = guard.accept(incoming, destination)
+
+        assertEquals(AppDatabaseRestoreGuard.Result.SkippedUnreadable, result)
+        assertEquals("current", content.readText(), "the current app.db is kept")
+        assertEquals("hot journal", journal.readText(), "its journal is kept")
+        assertEquals(1, logger.events.filterIsInstance<LogEvent.OperationFailed>().size)
+        assertFalse(incoming.exists())
+    }
+
+    @Test
+    fun `a sqlite file with no Room schema version is skipped as not a database`() {
+        val current = backedUpAppDb()
+
+        restoreAppDb(withUserVersion(current, 0))
+        restoreAppDb(withUserVersion(current, -1))
+
+        assertContentEquals(current, appDatabaseFile(context).readBytes())
+        assertEquals(
+            List(2) { "OperationFailed operation=restore app.db cause=not a database" },
+            logs().filter { it.startsWith("OperationFailed") },
+        )
+        assertNull(SkippedRestoreNotice(context).skippedSchema)
+    }
+
+    @Test
+    fun `a restore that replaces app db clears an earlier skipped-restore notice`() {
+        val backup = backedUpAppDb()
+        assertTrue(SkippedRestoreNotice(context).record(AppDatabase.SCHEMA_VERSION + 1))
+
+        restoreAppDb(backup)
+
+        assertNull(SkippedRestoreNotice(context).skippedSchema, "no stale notice")
+    }
+
+    @Test
+    fun `a read error from the restore data leaves no partial incoming copy`() {
+        val current = backedUpAppDb()
+        val source = temp.newFile().apply { writeBytes(current) }
+        val data = ParcelFileDescriptor.open(source, ParcelFileDescriptor.MODE_READ_ONLY)
+        data.close() // every read now fails
+
+        assertFailsWith<IOException> {
+            agent().onRestoreFile(data, current.size.toLong(), appDatabaseFile(context), BackupAgent.TYPE_FILE, MODE, 0L)
+        }
+
+        assertFalse(incoming().exists(), "the partial copy is gone")
+        assertContentEquals(current, appDatabaseFile(context).readBytes())
+    }
+
+    @Test
+    fun `files other than app db go to the default handling`() {
+        val current = backedUpAppDb()
+        val settings = SettingsDataStore.settingsFile(context)
+        val offered = "restored settings".toByteArray()
+
+        offer(offered, settings, BackupAgent.TYPE_FILE)
+        offer(ByteArray(0), appDatabaseFile(context), BackupAgent.TYPE_DIRECTORY)
+
+        assertContentEquals(offered, settings.readBytes(), "the settings file holds the offered bytes")
+        assertContentEquals(current, appDatabaseFile(context).readBytes(), "app.db untouched")
+        assertEquals(emptyList(), logs().filter { it.startsWith("OperationFailed") })
+        assertFalse(incoming().exists())
+    }
+
+    @Test
+    fun `a failed write of the incoming copy still drains exactly this file from the restore data`() {
+        val current = backedUpAppDb()
+        incoming().apply { mkdirs() } // a directory where the incoming copy goes: it cannot be opened for writing
+        val restored = version2AppDb()
+        val marker = "NEXT FILE".toByteArray()
+        val source = temp.newFile().apply { writeBytes(restored + marker) }
+
+        val rest =
+            ParcelFileDescriptor.open(source, ParcelFileDescriptor.MODE_READ_ONLY).use { data ->
+                agent().onRestoreFile(data, restored.size.toLong(), appDatabaseFile(context), BackupAgent.TYPE_FILE, MODE, 0L)
+                FileInputStream(data.fileDescriptor).readBytes()
+            }
+
+        assertContentEquals(marker, rest, "the stream is positioned exactly at the next file")
+        assertContentEquals(current, appDatabaseFile(context).readBytes(), "the current app.db is unchanged")
+        assertEquals(1, logs().count { it.startsWith("OperationFailed") })
+    }
+
+    @Test
+    fun `a failing reschedule is logged and never ends the agent`() {
+        backedUpAppDb()
+        restartKoin(context as android.app.Application, module { single<AlarmScheduler> { error("no scheduler") } })
+
+        agent().onRestoreFinished()
+
+        assertEquals(
+            listOf("OperationFailed operation=restore reschedule cause=InstanceCreationException"),
+            logs().filter { it.startsWith("OperationFailed") },
+        )
+        assertTrue(GlobalContext.getOrNull() != null, "the running app's graph is left running")
+    }
+
+    @Test
+    fun `with the app running the reschedule reads the restored app db, not the one it replaced`() {
+        val alarmB = anAlarm(id = "alarm-b", repeatDays = DayOfWeek.entries.toSet(), requestCode = 1001)
+        val backup =
+            GlobalContext.get().let { koin ->
+                runBlocking { assertEquals(Outcome.Success(Unit), koin.get<AlarmRepository>().upsert(alarmB)) }
+                stopApp()
+                appDatabaseFile(context).readBytes()
+            }
+        freshInstall()
+        val koin = startApp()
+        runBlocking {
+            assertEquals(Outcome.Success(Unit), koin.get<AlarmRepository>().upsert(alarm))
+            assertEquals(Outcome.Success(listOf(alarm)), koin.get<AlarmRepository>().listAll(), "the running app's app.db is open")
+        }
+
+        restoreAppDb(backup)
+        agent().onRestoreFinished()
+
+        assertTrue(scheduler.armed.containsKey(alarmB.requestCode), "the restored alarm is armed (logs ${logs()})")
+        assertEquals(emptyList(), logs().filter { it.startsWith("OperationFailed") })
+        assertFalse(scheduler.armed.containsKey(alarm.requestCode), "the replaced file's alarm is not")
+    }
+
+    /** Offers [bytes] to the agent as a restored file of [type] at [destination]. */
+    private fun offer(
+        bytes: ByteArray,
+        destination: File,
+        type: Int,
+    ) {
+        val source = temp.newFile().apply { writeBytes(bytes) }
+        ParcelFileDescriptor.open(source, ParcelFileDescriptor.MODE_READ_ONLY).use { data ->
+            agent().onRestoreFile(data, bytes.size.toLong(), destination, type, MODE, 0L)
+        }
+    }
+
+    /** The first 100 bytes of a SQLite file whose `user_version` is [version]: all the guard reads. */
+    private fun sqliteHeader(version: Int): ByteArray =
+        withUserVersion("SQLite format 3\u0000".toByteArray(Charsets.US_ASCII).copyOf(SQLITE_HEADER_BYTES), version)
+
     private fun incoming() = File(context.createDeviceProtectedStorageContext().noBackupFilesDir, "app.db.restoring")
 
     /** A v2 `app.db` as Room created it (from the exported `2.json`), holding one alarm. */
@@ -254,6 +425,7 @@ class PpsBackupAgentTest {
     private companion object {
         const val MODE = 384L // 0600
         const val USER_VERSION_OFFSET = 60
+        const val SQLITE_HEADER_BYTES = 100
         const val TABLE_NAME = "\${TABLE_NAME}"
     }
 }

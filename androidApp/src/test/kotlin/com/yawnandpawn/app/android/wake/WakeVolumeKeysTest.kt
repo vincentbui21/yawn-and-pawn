@@ -14,6 +14,7 @@ import org.junit.Test
 import org.junit.runner.RunWith
 import org.robolectric.Robolectric
 import org.robolectric.RobolectricTestRunner
+import org.robolectric.android.controller.ActivityController
 import org.robolectric.annotation.Config
 import org.robolectric.annotation.GraphicsMode
 import kotlin.test.assertEquals
@@ -23,8 +24,9 @@ import kotlin.test.assertSame
 import kotlin.test.assertTrue
 
 /**
- * Story 2.8 (FR-SES-6): the wake screen swallows the volume keys only while it is in front, sends no session event for
- * them, lets the accessibility shortcut through, and the app owns no media session or media button receiver.
+ * Story 2.8 (FR-SES-6): the wake screen swallows the volume keys only while it is in front with focus and the alarm
+ * rings, sends no session event for them, lets the accessibility shortcut through, and the app owns no media session
+ * or media button receiver.
  */
 @RunWith(RobolectricTestRunner::class)
 @GraphicsMode(GraphicsMode.Mode.NATIVE)
@@ -42,11 +44,24 @@ class WakeVolumeKeysTest {
         code: Int,
     ) = KeyEvent(action, code)
 
+    /** The wake screen, resumed and with window focus, as the system shows it. */
+    private fun open(): ActivityController<WakeActivity> =
+        Robolectric.buildActivity(WakeActivity::class.java).setup().windowFocusChanged(true)
+
+    private fun WakeApp.ring() = dispatch(SessionEvent.AlarmFired("session-1", aSessionConfig(), listOf(1L), beforeFirstUnlock = false))
+
+    /** Whether the activity itself consumes a volume down press (down and up). */
+    private fun ActivityController<WakeActivity>.consumesVolumeDown(): List<Boolean> =
+        listOf(
+            get().onKeyDown(KeyEvent.KEYCODE_VOLUME_DOWN, key(KeyEvent.ACTION_DOWN, KeyEvent.KEYCODE_VOLUME_DOWN)),
+            get().onKeyUp(KeyEvent.KEYCODE_VOLUME_DOWN, key(KeyEvent.ACTION_UP, KeyEvent.KEYCODE_VOLUME_DOWN)),
+        )
+
     @Test
     fun `while the wake screen is in front the volume keys are consumed, change nothing and send no session event`() {
         val app = WakeApp()
-        app.dispatch(SessionEvent.AlarmFired("session-1", aSessionConfig(), listOf(1L), beforeFirstUnlock = false))
-        val screen = Robolectric.buildActivity(WakeActivity::class.java).setup()
+        app.ring()
+        val screen = open()
         val audio = app.app.getSystemService(AudioManager::class.java)
         val stream = audio.getStreamVolume(AudioManager.STREAM_ALARM)
         val before = app.engine.state.value
@@ -69,8 +84,8 @@ class WakeVolumeKeysTest {
     @Test
     fun `the accessibility shortcut passes, and after onPause nothing is consumed`() {
         val app = WakeApp()
-        app.dispatch(SessionEvent.AlarmFired("session-1", aSessionConfig(), listOf(1L), beforeFirstUnlock = false))
-        val screen = Robolectric.buildActivity(WakeActivity::class.java).setup()
+        app.ring()
+        val screen = open()
         val gate = screen.get().volumeKeys
 
         assertTrue(gate.consumes(KeyEvent.ACTION_DOWN, KeyEvent.KEYCODE_VOLUME_DOWN))
@@ -85,6 +100,39 @@ class WakeVolumeKeysTest {
         screen.resume()
         assertTrue(gate.consumes(KeyEvent.ACTION_DOWN, KeyEvent.KEYCODE_VOLUME_UP))
         assertIs<SessionState.Ringing>(app.engine.state.value)
+    }
+
+    @Test
+    fun `resumed without window focus (shade down, split screen) the volume keys pass, and focus loss forgets a held key`() {
+        val app = WakeApp()
+        app.ring()
+        val screen = open()
+        val gate = screen.get().volumeKeys
+        assertTrue(gate.consumes(KeyEvent.ACTION_DOWN, KeyEvent.KEYCODE_VOLUME_DOWN))
+
+        // The shade comes down while volume down is held; its up goes to the shade.
+        screen.windowFocusChanged(false)
+
+        assertFalse(gate.focused)
+        assertEquals(listOf(false, false), screen.consumesVolumeDown(), "the focused window has the keys")
+        screen.windowFocusChanged(true)
+        assertTrue(gate.consumes(KeyEvent.ACTION_DOWN, KeyEvent.KEYCODE_VOLUME_UP), "a single key, not the shortcut")
+        assertTrue(gate.consumes(KeyEvent.ACTION_UP, KeyEvent.KEYCODE_VOLUME_UP))
+    }
+
+    @Test
+    fun `the volume keys work normally while the screen waits for the session and once it ended`() {
+        val app = WakeApp()
+        val screen = open()
+
+        assertEquals(listOf(false, false), screen.consumesVolumeDown(), "waiting for the session")
+        app.ring()
+        assertEquals(listOf(true, true), screen.consumesVolumeDown(), "ringing")
+        // The screen answers the placeholder step itself.
+        app.dispatch(SessionEvent.ImUpTapped)
+        composeRule.waitUntil(timeoutMillis = 10_000) { app.engine.state.value == SessionState.Idle }
+
+        assertEquals(listOf(false, false), screen.consumesVolumeDown(), "the session ended")
     }
 
     @Test

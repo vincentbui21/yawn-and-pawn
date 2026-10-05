@@ -39,9 +39,44 @@ class NoAudioCaptureOrRoutingTest {
                 "fun f(player: android.media.MediaPlayer, device: android.media.AudioDeviceInfo) = player.setPreferredDevice(device)",
                 "fun f(audio: android.media.AudioManager, c: android.content.ComponentName) = audio.registerMediaButtonEventReceiver(c)",
                 "fun f(audio: android.media.AudioManager) = audio::setSpeakerphoneOn",
+                "fun f(audio: android.media.AudioManager) = audio.startBluetoothSco()",
+                "fun f(audio: android.media.AudioManager) = audio.setBluetoothScoOn(true)",
+                "fun f(audio: android.media.AudioManager) { audio.isBluetoothScoOn = true }",
+                "fun f(audio: android.media.AudioManager) = audio.isBluetoothScoOn",
+                "fun f(audio: android.media.AudioManager) = audio.setMode(android.media.AudioManager.MODE_IN_COMMUNICATION)",
+                "fun f(audio: android.media.AudioManager) = audio.setMode(android.media.AudioManager.MODE_IN_CALL)",
+                "fun f(audio: android.media.AudioManager) { audio.mode = android.media.AudioManager.MODE_IN_COMMUNICATION }",
             )
 
         violating.forEach { code -> assertEquals(1, findings(code).size, code) }
+    }
+
+    @Test
+    fun `a banned type behind an import alias, a constructor reference or a class literal is reported`() {
+        val violating =
+            listOf(
+                "import android.media.session.MediaSession as Session\nfun f(c: android.content.Context) = Session(c, \"alarm\")",
+                "import androidx.media.VolumeProviderCompat as Keys\nlateinit var provider: Keys",
+                "import android.media.session.MediaSession\nval create = ::MediaSession",
+                "import android.media.session.MediaSession\nval type = MediaSession::class",
+                "val type = android.media.VolumeProvider::class.java",
+            )
+
+        violating.forEach { code -> assertEquals(1, findings(code).size, code) }
+    }
+
+    @Test
+    fun `reading the audio mode or setting it back to normal is compliant`() {
+        val compliant =
+            """
+            import android.media.AudioManager
+
+            fun inCall(audio: AudioManager) = audio.mode == AudioManager.MODE_IN_CALL
+
+            fun normal(audio: AudioManager) = audio.setMode(AudioManager.MODE_NORMAL)
+            """.trimIndent()
+
+        assertEquals(emptyList(), findings(compliant).map { it.message })
     }
 
     @Test

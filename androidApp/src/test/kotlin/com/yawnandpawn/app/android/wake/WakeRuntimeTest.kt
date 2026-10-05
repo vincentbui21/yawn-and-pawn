@@ -224,12 +224,18 @@ class WakeRuntimeTest {
     @Test
     fun `the purchase hand-back hook re-asserts the ring volume once, only while the session rings loud (Story 2-8)`() {
         val setVolume = (audio.getStreamMaxVolume(AudioManager.STREAM_ALARM) * 0.8).roundToInt()
+        enter(ringing)
+        audio.setStreamVolume(AudioManager.STREAM_ALARM, 1, 0)
+
+        runtime.reassertRingVolume()
+
+        assertEquals(setVolume, alarmStream(), "ringing")
         enter(SessionState.Loud(session))
         audio.setStreamVolume(AudioManager.STREAM_ALARM, 1, 0)
 
         runtime.reassertRingVolume()
 
-        assertEquals(setVolume, alarmStream())
+        assertEquals(setVolume, alarmStream(), "loud")
         // Muted (grace), paused by a call or snoozed: nothing.
         run(SessionEffect.Mute)
         enter(SessionState.Grace(session))

@@ -35,6 +35,18 @@ internal class EngineHistory(
         if (result is Outcome.Failure) logger.log(LogEvent.OperationFailed.of(RECORD_START, result.error))
     }
 
+    /**
+     * `RecordMergedOccurrence` [effect] at [now] (Story 2.9): one `session_merge` row, insert or ignore, so a replay
+     * leaves one row. A failure is logged; the merge itself (already committed) stands.
+     */
+    suspend fun recordMerge(
+        effect: SessionEffect.RecordMergedOccurrence,
+        now: TimeSnapshot,
+    ) {
+        val result = recorder.recordMerge(effect, Instant.fromEpochMilliseconds(now.wallMillis))
+        if (result is Outcome.Failure) logger.log(LogEvent.OperationFailed.of(RECORD_MERGE, result.error))
+    }
+
     /** `HistoryWriteRequested`: the end row of a Completed or Missed [state] at [now], unless it is already written. */
     suspend fun recordEnd(
         state: SessionState,
@@ -75,6 +87,7 @@ internal class EngineHistory(
     private companion object {
         const val RECORD_START = "record session start"
         const val RECORD_END = "record session end"
+        const val RECORD_MERGE = "record merged occurrence"
     }
 }
 

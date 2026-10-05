@@ -32,7 +32,8 @@ import kotlin.coroutines.cancellation.CancellationException
  * timer events from [dueEvents] and, once the history row of a Completed or Missed session is written, `Recorded`.
  *
  * Session history (AD-18) is the engine's own business, never the runner's: the one-shot
- * [SessionEffect.RecordSessionStart] and the entry effect [EntryEffect.HistoryWriteRequested] go to the
+ * [SessionEffect.RecordSessionStart], the one-shot [SessionEffect.RecordMergedOccurrence] (Story 2.9) and the entry effect
+ * [EntryEffect.HistoryWriteRequested] go to the
  * [SessionRecorder]. The start row is written after the step's other effects and its entry effects, so the first sound
  * never waits for it (the state is already committed, AD-2). When the end write succeeds, `Recorded` is reduced in the
  * same lock, so the session goes Idle and its `runtime.db` row is cleared by that commit. When it fails, the failure
@@ -196,12 +197,18 @@ class SessionEngine internal constructor(
             } else {
                 current.value = transition.state
                 val oneShot = if (runOneShot) transition.effects else emptyList()
-                oneShot.filterNot { it is SessionEffect.RecordSessionStart }.forEach { effect -> guarded(effect) { effects.run(effect) } }
+                oneShot.filterNot { it.isHistory() }.forEach { effect -> guarded(effect) { effects.run(effect) } }
                 applyEntryEffects(transition.state, now)
-                // The start row is written after the effects (device test round 1): the sound never waits for the history
-                // write. It is still inside the lock, so it lands before any end row of this session (recordEnd merges).
-                oneShot.filterIsInstance<SessionEffect.RecordSessionStart>().forEach { effect ->
-                    guarded(effect) { history.recordStart(effect, transition.state) }
+                // The history rows are written after the effects (device test round 1): the sound never waits for them.
+                // Still inside the lock, so a start row lands before any end row of this session (recordEnd merges).
+                oneShot.filter { it.isHistory() }.forEach { effect ->
+                    guarded(effect) {
+                        when (effect) {
+                            is SessionEffect.RecordSessionStart -> history.recordStart(effect, transition.state)
+                            is SessionEffect.RecordMergedOccurrence -> history.recordMerge(effect, now)
+                            else -> Unit
+                        }
+                    }
                 }
                 Outcome.Success(now)
             }
@@ -268,3 +275,6 @@ class SessionEngine internal constructor(
         private const val RESTORE = "restore session"
     }
 }
+
+/** A one-shot history effect: the [SessionRecorder] writes it, never the runner (AD-18; merges since Story 2.9). */
+private fun SessionEffect.isHistory(): Boolean = this is SessionEffect.RecordSessionStart || this is SessionEffect.RecordMergedOccurrence

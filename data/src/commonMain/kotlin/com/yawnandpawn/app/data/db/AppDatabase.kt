@@ -10,15 +10,17 @@ import com.yawnandpawn.app.data.alarm.RequestCodeSequenceDao
 import com.yawnandpawn.app.data.alarm.RequestCodeSequenceEntity
 import com.yawnandpawn.app.data.history.SessionHistoryDao
 import com.yawnandpawn.app.data.history.SessionHistoryEntity
+import com.yawnandpawn.app.data.history.SessionMergeEntity
 
 /**
  * `app.db` (AD-6): user data that is backed up. Version 1 held only `alarm`; version 2 (Story 1.10) adds
  * `request_code_sequence`, the request-code high-water mark ([MIGRATION_1_2]); version 3 (Story 1.13) adds
- * `session_history` ([MIGRATION_2_3]). There is no destructive migration fallback; restoring a newer file onto an
+ * `session_history` ([MIGRATION_2_3]); version 4 (Story 2.9) adds `session_merge` ([MIGRATION_3_4]). There is no
+ * destructive migration fallback; restoring a newer file onto an
  * older install is covered by `docs/decisions/db-downgrade.md`.
  */
 @Database(
-    entities = [AlarmEntity::class, RequestCodeSequenceEntity::class, SessionHistoryEntity::class],
+    entities = [AlarmEntity::class, RequestCodeSequenceEntity::class, SessionHistoryEntity::class, SessionMergeEntity::class],
     version = AppDatabase.SCHEMA_VERSION,
     exportSchema = true,
 )
@@ -38,7 +40,7 @@ abstract class AppDatabase : RoomDatabase() {
          * The `app.db` schema this build knows: the `@Database` version, and the limit `PpsBackupAgent` checks a restored
          * file against (Room cannot open a newer one, `docs/decisions/db-downgrade.md`).
          */
-        const val SCHEMA_VERSION = 3
+        const val SCHEMA_VERSION = 4
     }
 }
 

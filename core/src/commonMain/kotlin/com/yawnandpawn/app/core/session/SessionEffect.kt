@@ -50,7 +50,10 @@ sealed interface SessionEffect {
         val config: SessionConfig,
     ) : SessionEffect
 
-    /** Log the occurrence of [alarmId] at [scheduledAt] as Merged into [sessionId] (FR-SES-7). */
+    /**
+     * Record the occurrence of [alarmId] at [scheduledAt] as merged into [sessionId] (FR-SES-7): `SessionEngine` hands it
+     * to its `SessionRecorder` (one `session_merge` row, Story 2.9), never to the [EffectRunner].
+     */
     data class RecordMergedOccurrence(
         val sessionId: String,
         val alarmId: String,

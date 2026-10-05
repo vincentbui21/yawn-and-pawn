@@ -8,7 +8,8 @@ import kotlin.test.assertTrue
 /**
  * AD-18: session history has one writer. Scans the shipped sources (main source sets, plus the debug build's) of
  * `:core`, `:data`, `:androidApp` and `:composeApp`: only `RoomSessionHistoryRepository` may use the session history
- * DAO's write methods, and only `SessionRecorder` may call `SessionHistoryRepository.upsert`. Files are exempt by their
+ * DAO's write methods, and only `SessionRecorder` may call `SessionHistoryRepository.upsert` or `recordMerge` (the merge
+ * log, Story 2.9). Files are exempt by their
  * path from the repository root, never by bare file name. A text scan: an upsert counts when its receiver is a name
  * declared as (or fetched as) a `SessionHistoryRepository` in that file, or it is a `SessionHistoryRepository::upsert`
  * reference.
@@ -36,10 +37,14 @@ class SessionHistoryWriterScanTest {
     @Test
     fun `the scan sees every module and the real writers, so it cannot pass by finding nothing`() {
         MODULES.forEach { module -> assertTrue(sources.any { it.path.startsWith("$module/src/") }, "no sources scanned in $module") }
-        assertEquals(setOf("upsertRow"), daoWrites)
+        assertEquals(setOf("upsertRow", "insertMerge"), daoWrites)
         // Without their exemptions, the two real writers are exactly what the scan reports.
         assertEquals(
-            listOf("$RECORDER_PATH calls SessionHistoryRepository.upsert", "$REPOSITORY_PATH calls upsertRow"),
+            listOf(
+                "$RECORDER_PATH calls SessionHistoryRepository.upsert",
+                "$REPOSITORY_PATH calls upsertRow",
+                "$REPOSITORY_PATH calls insertMerge",
+            ),
             offenders(listOf(source(RECORDER_PATH), source(REPOSITORY_PATH)), daoWrites, exempt = emptySet()),
         )
     }
@@ -57,6 +62,9 @@ class SessionHistoryWriterScanTest {
                     "core/f/SessionRecorder.kt",
                     "class SessionRecorder(private val r: SessionHistoryRepository) { fun j() = r.upsert(x) }",
                 ),
+                // Story 2.9: the merge log has the same single writer.
+                Source("core/h/Merges.kt", "suspend fun m(history: SessionHistoryRepository) = history.recordMerge(merge)"),
+                Source("data/i/MergeDao.kt", "suspend fun n(dao: SessionHistoryDao) = dao.insertMerge(entity)"),
                 // Not a history write: an alarm upsert in a file that also names a history row.
                 Source("core/g/Alarms.kt", "suspend fun k(alarms: AlarmRepository, row: SessionHistoryRow) = alarms.upsert(alarm)"),
             )
@@ -69,8 +77,10 @@ class SessionHistoryWriterScanTest {
                 "composeApp/d/Inline.kt calls SessionHistoryRepository.upsert",
                 "data/e/Dao.kt calls upsertRow",
                 "core/f/SessionRecorder.kt calls SessionHistoryRepository.upsert",
+                "core/h/Merges.kt calls SessionHistoryRepository.upsert",
+                "data/i/MergeDao.kt calls insertMerge",
             ),
-            offenders(rogue, setOf("upsertRow")),
+            offenders(rogue, setOf("upsertRow", "insertMerge")),
         )
     }
 
@@ -121,7 +131,10 @@ class SessionHistoryWriterScanTest {
         val FETCHED_NAME = Regex("""\b(\w+)\s*(?::[^=\n]*)?(?:=|by)\s*(?:\w+\.)?(?:get|inject)<$REPOSITORY>\(\)""")
 
         /** Upserts that need no declared name: a fetched instance or a function reference. */
-        val DIRECT_UPSERT = Regex("""<$REPOSITORY>\(\)\s*\??\.\s*upsert\b|\b$REPOSITORY::upsert\b""")
+        val DIRECT_UPSERT = Regex("""<$REPOSITORY>\(\)\s*\??\.\s*$WRITES\b|\b$REPOSITORY::$WRITES\b""")
+
+        /** The repository writes: the history row (Story 1.13) and the merge log (Story 2.9). */
+        const val WRITES = "(?:upsert|recordMerge)"
 
         /** Main source sets, and the debug build's, ship; test source sets do not. */
         fun isShipped(sourceSet: String): Boolean = sourceSet == "main" || sourceSet == "debug" || sourceSet.endsWith("Main")
@@ -147,7 +160,7 @@ class SessionHistoryWriterScanTest {
         fun callsRepositoryUpsert(text: String): Boolean {
             if (DIRECT_UPSERT.containsMatchIn(text)) return true
             val names = (TYPED_NAME.findAll(text) + FETCHED_NAME.findAll(text)).map { it.groupValues[1] }.toSet()
-            return names.any { name -> Regex("""\b$name\s*\??\.\s*upsert\b|\b$name::upsert\b""").containsMatchIn(text) }
+            return names.any { name -> Regex("""\b$name\s*\??\.\s*$WRITES\b|\b$name::$WRITES\b""").containsMatchIn(text) }
         }
 
         /** Every use of a DAO write outside the DAO and adapter, and every repository upsert outside the recorder. */

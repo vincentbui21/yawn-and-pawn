@@ -44,5 +44,20 @@ val MIGRATION_2_3: Migration =
         }
     }
 
+/**
+ * v3 to v4 (Story 2.9): adds the empty `session_merge` table, one row per alarm occurrence merged into a session
+ * (FR-SES-7). Alarms, the request-code mark and history are untouched. The SQL matches the exported `4.json`; Room
+ * checks it after migrating.
+ */
+val MIGRATION_3_4: Migration =
+    object : Migration(3, 4) {
+        override suspend fun migrate(connection: SQLiteConnection) {
+            connection.execSQL(
+                "CREATE TABLE IF NOT EXISTS `session_merge` (`session_id` TEXT NOT NULL, `alarm_id` TEXT NOT NULL, " +
+                    "`scheduled_at` INTEGER NOT NULL, `merged_at` INTEGER NOT NULL, PRIMARY KEY(`session_id`, `alarm_id`, `scheduled_at`))",
+            )
+        }
+    }
+
 /** Every migration of `app.db`, oldest first; `buildAppDatabase` registers them all. */
-val APP_DATABASE_MIGRATIONS: Array<Migration> = arrayOf(MIGRATION_1_2, MIGRATION_2_3)
+val APP_DATABASE_MIGRATIONS: Array<Migration> = arrayOf(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4)

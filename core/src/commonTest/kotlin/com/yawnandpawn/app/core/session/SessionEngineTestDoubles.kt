@@ -4,6 +4,7 @@ import com.yawnandpawn.app.core.error.DomainError
 import com.yawnandpawn.app.core.error.Outcome
 import com.yawnandpawn.app.core.history.SessionHistoryRepository
 import com.yawnandpawn.app.core.history.SessionHistoryRow
+import com.yawnandpawn.app.core.history.SessionMergeRow
 import com.yawnandpawn.app.core.log.LogEvent
 import com.yawnandpawn.app.core.log.Logger
 import com.yawnandpawn.app.core.time.BootCounter
@@ -161,4 +162,19 @@ internal class InMemoryHistory : SessionHistoryRepository {
 
     // The engine never reads it.
     override fun observeLatestMissed(): Flow<SessionHistoryRow?> = emptyFlow()
+
+    /** Merge rows by (session, alarm, scheduled time), insert or ignore like the Room table. */
+    val mergeRows = linkedMapOf<Triple<String, String, Instant>, SessionMergeRow>()
+    var mergeFailure: DomainError? = null
+    var mergeCalls = 0
+
+    override suspend fun recordMerge(merge: SessionMergeRow): Outcome<Unit, DomainError> {
+        mergeCalls++
+        mergeFailure?.let { return Outcome.Failure(it) }
+        mergeRows.getOrPut(Triple(merge.sessionId, merge.alarmId, merge.scheduledAt)) { merge }
+        return Outcome.Success(Unit)
+    }
+
+    override suspend fun merges(sessionId: String): Outcome<List<SessionMergeRow>, DomainError> =
+        Outcome.Success(mergeRows.values.filter { it.sessionId == sessionId })
 }

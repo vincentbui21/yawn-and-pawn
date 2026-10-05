@@ -271,6 +271,13 @@ class WakeService :
         fired: AlarmFired,
         current: SessionState,
     ) {
+        // Story 2.9: an alarm deleted before the service handled it is not merged (logged), like it would not start a
+        // session. Its enabled flag is not checked here: the receiver did that before the start, and `RearmOnFire`
+        // switches a fired one-time alarm off meanwhile. A read failure still merges (never silent).
+        if (current.isOngoing() && repository.get(fired.alarmId).let { it is Outcome.Failure && it.error is DomainError.NotFound }) {
+            logger.log(LogEvent.FireIgnored(FireKind.Alarm, fired.alarmId, "alarm deleted before it rang"))
+            return
+        }
         // A real alarm never merges into a test (Story 1.18): the test ends (logged Test) and the real session starts.
         val state = if (current is SessionState.Ring && current.session.config.testMode) endTestSession(current) else current
         if (state.isOngoing()) {

@@ -11,6 +11,8 @@ import androidx.test.core.app.ApplicationProvider
 import com.yawnandpawn.app.core.alarm.Alarm
 import com.yawnandpawn.app.core.alarm.AlarmDraft
 import com.yawnandpawn.app.core.error.Outcome
+import com.yawnandpawn.app.core.history.SessionHistoryRow
+import com.yawnandpawn.app.core.history.SessionMergeRow
 import com.yawnandpawn.app.data.alarm.RoomAlarmRepository
 import com.yawnandpawn.app.data.alarm.RoomRequestCodeSequence
 import com.yawnandpawn.app.data.history.RoomSessionHistoryRepository
@@ -29,6 +31,7 @@ import kotlin.test.assertFalse
 import kotlin.test.assertIs
 import kotlin.test.assertNotEquals
 import kotlin.test.assertTrue
+import kotlin.time.Instant
 
 @RunWith(RobolectricTestRunner::class)
 class AppDatabaseFactoryTest {
@@ -128,7 +131,37 @@ class AppDatabaseFactoryTest {
         }
 
     @Test
-    fun `a v1 database migrates through v2 to v3`() =
+    fun `the exported version 4 schema adds the session merge log keyed by session, alarm and occurrence`() {
+        assertTrue(schema(4).exists(), "exported schema missing: ${schema(4).absolutePath}")
+        val json = schema(4).readText()
+
+        assertTrue(json.contains("\"version\": 4"), "schema version 4")
+        assertEquals(listOf("alarm", "request_code_sequence", "session_history", "session_merge"), tableNames(json))
+        assertTrue(json.contains("PRIMARY KEY(`session_id`, `alarm_id`, `scheduled_at`)"), "one row per merged occurrence")
+    }
+
+    @Test
+    fun `migrating a v3 database keeps alarms, the code mark and history, and adds an empty merge log`() =
+        runTest {
+            val alarm = anAlarm(id = "a", requestCode = 1000)
+            val row = aSessionHistoryRow()
+            createDatabase(version = 3, alarms = listOf(alarm), requestCodeMark = 1002, history = listOf(row))
+
+            withDatabase { database ->
+                assertEquals(Outcome.Success(listOf(alarm)), RoomAlarmRepository(database.alarmDao()).listAll())
+                assertEquals(Outcome.Success(1003), RoomRequestCodeSequence(database.requestCodeSequenceDao()).next())
+                val history = RoomSessionHistoryRepository(database.sessionHistoryDao())
+                assertEquals(Outcome.Success(row), history.find(row.sessionId))
+                assertEquals(Outcome.Success(emptyList()), history.merges(row.sessionId))
+                val merge = SessionMergeRow(row.sessionId, "b", Instant.fromEpochMilliseconds(5_000), Instant.fromEpochMilliseconds(6_000))
+                assertEquals(Outcome.Success(Unit), history.recordMerge(merge))
+                assertEquals(Outcome.Success(listOf(merge)), history.merges(row.sessionId))
+            }
+            assertEquals(4, userVersion())
+        }
+
+    @Test
+    fun `a v1 database migrates through v2 and v3 to v4`() =
         runTest {
             val alarm = anAlarm(id = "a", requestCode = 1005)
             createDatabase(version = 1, alarms = listOf(alarm))
@@ -138,20 +171,20 @@ class AppDatabaseFactoryTest {
                 assertEquals(0, database.sessionHistoryDao().count())
                 assertEquals(Outcome.Success(1006), RoomRequestCodeSequence(database.requestCodeSequenceDao()).next())
             }
-            assertEquals(3, userVersion())
+            assertEquals(4, userVersion())
         }
 
     @Test
-    fun `a new database is created at version 3 with an empty session history`() =
+    fun `a new database is created at version 4 with an empty session history and merge log`() =
         runTest {
             withDatabase { database -> assertEquals(0, database.sessionHistoryDao().count()) }
 
-            assertEquals(3, userVersion())
+            assertEquals(4, userVersion())
         }
 
     @Test
     fun `the migrations cover every version step and nothing is destructive`() {
-        assertEquals(listOf(1 to 2, 2 to 3), APP_DATABASE_MIGRATIONS.map { it.startVersion to it.endVersion })
+        assertEquals(listOf(1 to 2, 2 to 3, 3 to 4), APP_DATABASE_MIGRATIONS.map { it.startVersion to it.endVersion })
     }
 
     @Test
@@ -244,6 +277,7 @@ class AppDatabaseFactoryTest {
         version: Int,
         alarms: List<Alarm> = emptyList(),
         requestCodeMark: Int? = null,
+        history: List<SessionHistoryRow> = emptyList(),
     ) {
         val database = JSONObject(schema(version).readText()).getJSONObject("database")
         val file = appDatabaseFile(context).apply { parentFile?.mkdirs() }
@@ -266,11 +300,21 @@ class AppDatabaseFactoryTest {
             // The alarm table is the same in v1 and v2.
             alarms.forEach { connection.execSQL(it.toVersion1Insert()) }
             requestCodeMark?.let { connection.execSQL("INSERT INTO request_code_sequence (id, last_used) VALUES (0, $it)") }
+            // A v3 session_history row as Story 1.13 writes it.
+            history.forEach { connection.execSQL(it.toVersion3Insert()) }
             connection.execSQL("PRAGMA user_version = $version")
         } finally {
             connection.close()
         }
     }
+
+    /** A v3 `session_history` row with the stored names Story 1.13 uses ("OnTime", comma-separated check types). */
+    private fun SessionHistoryRow.toVersion3Insert(): String =
+        "INSERT INTO session_history (session_id, alarm_id, scheduled_at, first_ring_at, ended_at, snooze_count, check_types, " +
+            "time_to_complete_ms, fallback_used, direct_boot, outcome) VALUES ('$sessionId', '$alarmId', " +
+            "${scheduledAt.toEpochMilliseconds()}, ${firstRingAt.toEpochMilliseconds()}, ${endedAt?.toEpochMilliseconds()}, " +
+            "$snoozeCount, '${checkTypes.joinToString(",")}', $timeToCompleteMs, ${if (fallbackUsed) 1 else 0}, " +
+            "${if (directBoot) 1 else 0}, '${outcome?.name}')"
 
     /** A v1 `alarm` row for a one-time, enabled, labelless alarm with gradual volume and vibration on (the builder defaults). */
     private fun Alarm.toVersion1Insert(): String =

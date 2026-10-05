@@ -24,6 +24,7 @@ import com.yawnandpawn.app.core.error.DomainError
 import com.yawnandpawn.app.core.error.Outcome
 import com.yawnandpawn.app.core.history.SessionHistoryRepository
 import com.yawnandpawn.app.core.history.SessionHistoryRow
+import com.yawnandpawn.app.core.history.SessionMergeRow
 import com.yawnandpawn.app.core.history.SessionOutcome
 import com.yawnandpawn.app.core.session.ActiveSessionStore
 import com.yawnandpawn.app.core.session.SessionEvent
@@ -414,4 +415,10 @@ private class CountingHistory(
         inner.find(sessionId).also { calls.incrementAndGet() }
 
     override fun observeLatestMissed(): Flow<SessionHistoryRow?> = inner.observeLatestMissed().also { calls.incrementAndGet() }
+
+    override suspend fun recordMerge(merge: SessionMergeRow): Outcome<Unit, DomainError> =
+        inner.recordMerge(merge).also { calls.incrementAndGet() }
+
+    override suspend fun merges(sessionId: String): Outcome<List<SessionMergeRow>, DomainError> =
+        inner.merges(sessionId).also { calls.incrementAndGet() }
 }

@@ -4,6 +4,7 @@ import com.yawnandpawn.app.core.error.DomainError
 import com.yawnandpawn.app.core.error.Outcome
 import com.yawnandpawn.app.core.history.SessionHistoryRepository
 import com.yawnandpawn.app.core.history.SessionHistoryRow
+import com.yawnandpawn.app.core.history.SessionMergeRow
 import com.yawnandpawn.app.core.history.SessionOutcome
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
@@ -24,6 +25,12 @@ class RoomSessionHistoryRepository(
     // A read only. An unreadable row (or a failing database) throws into the flow; Home catches it.
     override fun observeLatestMissed(): Flow<SessionHistoryRow?> =
         dao.observeLatestWithOutcome(SessionOutcome.Missed.storedName()).map { it?.toRow() }
+
+    // Story 2.9: insert or ignore, so a replayed merge leaves one row. SessionRecorder is the only caller.
+    override suspend fun recordMerge(merge: SessionMergeRow): Outcome<Unit, DomainError> = storage { dao.insertMerge(merge.toEntity()) }
+
+    override suspend fun merges(sessionId: String): Outcome<List<SessionMergeRow>, DomainError> =
+        storage { dao.mergesOf(sessionId).map { it.toRow() } }
 
     // Same boundary as RoomAlarmRepository: every storage exception is a StorageFailure, cancellation propagates.
     @Suppress("TooGenericExceptionCaught")

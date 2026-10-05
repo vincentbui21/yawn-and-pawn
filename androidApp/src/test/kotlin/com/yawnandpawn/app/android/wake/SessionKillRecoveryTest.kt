@@ -299,8 +299,12 @@ class SessionKillRecoveryTest {
         val before = (stored(first.app) as SessionState.Ringing).session
 
         val app = kill(first)
+        assertEquals(
+            Outcome.Success(Unit),
+            runBlocking { app.koin.get<AlarmRepository>().upsert(anAlarm(id = "alarm-b", requestCode = 1001)) },
+        )
         app.ring(AlarmFired("alarm-b", scheduledAt + 1.minutes))
-        app.awaitUntil("the merge") { app.logs().any { it.startsWith("SessionEffectLogged type=RecordMergedOccurrence") } }
+        app.awaitMerges(before.sessionId)
 
         assertEquals(before.sessionId, assertIs<SessionState.Ringing>(app.engine.state.value).session.sessionId)
         assertEquals(1, app.mediaPlayers.size, "one player")

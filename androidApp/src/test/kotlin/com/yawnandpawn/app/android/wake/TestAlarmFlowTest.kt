@@ -194,5 +194,7 @@ class TestAlarmFlowTest {
         assertEquals(scheduledAt, real.session.config.scheduledAt)
         assertEquals(SessionOutcome.Test, history.rows.single { it.sessionId == test.session.sessionId }.outcome)
         assertTrue(app.player.sound != null, "the real alarm rings")
+        // Story 2.9 keeps this Story 1.18 rule over the AC's "merged like any other": a real morning is never logged as Test.
+        assertEquals(emptyList(), history.merges, "no merge row: the real alarm got its own session")
     }
 }

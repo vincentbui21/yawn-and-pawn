@@ -61,6 +61,7 @@ class WakeServiceTest {
 
     private val scheduledAt = Instant.parse("2027-03-08T06:00:00Z")
     private val alarmA = anAlarm(id = "alarm-a", requestCode = 1000)
+    private val alarmB = anAlarm(id = "alarm-b", requestCode = 1001)
     private val fired = AlarmFired(alarmA.id, scheduledAt)
 
     private fun repository(): AlarmRepository = GlobalContext.get().get()
@@ -125,12 +126,14 @@ class WakeServiceTest {
     fun `a fire while a session rings is merged into it with no second player`() {
         val app = WakeApp()
         upsert(alarmA)
+        upsert(alarmB)
         val controller = app.ring(fired)
         app.awaitRinging()
         val sessionId = (app.engine.state.value as SessionState.Ringing).session.sessionId
 
         controller.withIntent(WakeService.alarmIntent(app.app, AlarmFired("alarm-b", scheduledAt + 1.minutes))).startCommand(0, 2)
-        app.awaitUntil("the merge is handled") { app.logs().any { it.startsWith("SessionEffectLogged type=RecordMergedOccurrence") } }
+        val merge = app.awaitMerges(sessionId).single()
+        assertEquals(AlarmFired("alarm-b", scheduledAt + 1.minutes), AlarmFired(merge.alarmId, merge.scheduledAt))
 
         assertEquals(sessionId, assertIs<SessionState.Ringing>(app.engine.state.value).session.sessionId)
         assertEquals(1, app.mediaPlayers.size, "one player")
@@ -268,8 +271,9 @@ class WakeServiceTest {
         val stored = SessionState.Ringing(aSession())
         assertEquals(Outcome.Success(Unit), runBlocking { store(app).commit(stored) })
 
+        upsert(alarmB)
         app.startService(WakeService.slotIntent(app.app, AlarmFired("alarm-b", scheduledAt)))
-        app.awaitUntil("the merge is handled") { app.logs().any { it.startsWith("SessionEffectLogged type=RecordMergedOccurrence") } }
+        app.awaitMerges(stored.session.sessionId)
 
         assertEquals(stored.session.sessionId, assertIs<SessionState.Ringing>(app.engine.state.value).session.sessionId)
         assertEquals(1, app.mediaPlayers.size, "one player")
@@ -380,6 +384,7 @@ class WakeServiceTest {
         broken.row = SessionJson.encode(dueSnooze(app))
         broken.commitFailure = DomainError.StorageFailure("disk full")
 
+        upsert(alarmA)
         app.ring(fired)
         app.awaitUntil("the emergency ring") { app.runtime.emergency.value != null }
 
@@ -462,6 +467,7 @@ class WakeServiceTest {
             )
         assertEquals(Outcome.Success(Unit), runBlocking { store(app).commit(snoozed) })
 
+        upsert(alarmA)
         app.ring(fired)
         app.awaitRinging()
 
@@ -476,8 +482,9 @@ class WakeServiceTest {
         val stored = SessionState.Ringing(aSession())
         assertEquals(Outcome.Success(Unit), runBlocking { store(app).commit(stored) })
 
+        upsert(alarmA)
         app.ring(fired)
-        app.awaitUntil("the merge is handled") { app.logs().any { it.startsWith("SessionEffectLogged type=RecordMergedOccurrence") } }
+        app.awaitMerges(stored.session.sessionId)
 
         assertEquals(stored.session.sessionId, assertIs<SessionState.Ringing>(app.engine.state.value).session.sessionId)
         assertEquals(1, app.mediaPlayers.size, "one player")

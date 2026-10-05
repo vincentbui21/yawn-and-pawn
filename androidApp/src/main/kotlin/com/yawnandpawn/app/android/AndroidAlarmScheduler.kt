@@ -91,7 +91,7 @@ class AndroidAlarmScheduler(
      */
     private fun wallMillisOf(deadline: Deadline): Long {
         val now = TimeSnapshot.of(clock, monotonicClock, bootCounter)
-        return if (now.bootCount == deadline.bootCount) {
+        return if (deadline.sameBoot(now)) {
             now.wallMillis + deadline.remaining(now).inWholeMilliseconds
         } else {
             deadline.wallMillis

@@ -92,12 +92,15 @@
             android:directBootAware="true"
             android:exported="false" />
 
-        <!-- rescheduleAll() on the system events that clear or shift alarms; all protected system broadcasts. -->
+        <!-- rescheduleAll() and the session slot on the system events that clear or shift alarms; all protected system
+             broadcasts. LOCKED_BOOT_COMPLETED (Story 2.2) arrives before the first unlock; both databases are
+             device-protected, so the slot is armed then. -->
         <receiver
             android:name=".android.SystemEventsReceiver"
             android:directBootAware="true"
             android:exported="true">
             <intent-filter>
+                <action android:name="android.intent.action.LOCKED_BOOT_COMPLETED" />
                 <action android:name="android.intent.action.BOOT_COMPLETED" />
                 <action android:name="android.intent.action.TIME_SET" />
                 <action android:name="android.intent.action.TIMEZONE_CHANGED" />

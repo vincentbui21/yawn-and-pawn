@@ -37,11 +37,16 @@ class SessionSlotRearm(
     private val logger: Logger,
 ) {
     /**
-     * Ringing, Grace or Loud: the slot [IMMEDIATELY]. Snoozed: at its snooze end (a passed one fires at once). Nothing
-     * stored, an unreadable row, Idle, Completed or Missed: nothing (the next restore finishes an ended session). A store
-     * that cannot be read is logged and arms nothing: with no evidence of a session, a broken store must not ring after
-     * every boot. A slot that still carries an alarm ([AlarmScheduler.sessionSlotAlarm], less than
-     * [SessionReducer.NO_INTERACTION_TIMEOUT] past) keeps it and fires at once (Story 2.1 review).
+     * Ringing, Grace or Loud: the slot [IMMEDIATELY]. Snoozed: at its snooze end, or [IMMEDIATELY] once it has passed
+     * (the phone was off through it). Nothing stored, an unreadable row, Idle, Completed or Missed: nothing (the next
+     * restore finishes an ended session). A store that cannot be read is logged and arms nothing: with no evidence of a
+     * session, a broken store must not ring after every boot. A slot that still carries an alarm
+     * ([AlarmScheduler.sessionSlotAlarm], less than [SessionReducer.NO_INTERACTION_TIMEOUT] past) keeps it and fires at
+     * once (Story 2.1 review).
+     *
+     * Story 2.2: after a clock or time-zone change the snooze end is re-armed from its stored [Deadline]; the adapter
+     * converts it to the new wall time plus the monotonic time left (AD-3), so the change neither shortens nor stretches
+     * the snooze. After a reboot (another boot, or the elapsed clock went back) the deadline compares wall time.
      */
     suspend fun afterSystemEvent(): Deadline? {
         val now = now()
@@ -50,7 +55,7 @@ class SessionSlotRearm(
         val at =
             when (state) {
                 is SessionState.Ring -> Deadline.after(now, IMMEDIATELY)
-                is SessionState.Snoozed -> state.session.snoozeEnd?.takeIf { carried == null } ?: Deadline.after(now, IMMEDIATELY)
+                is SessionState.Snoozed -> snoozeSlot(state, carriesAlarm = carried != null, now)
                 else -> null
             }
         return at?.let { arm(it, carried, retrySince = null, SYSTEM_EVENT, state) }
@@ -95,6 +100,16 @@ class SessionSlotRearm(
             }
         return at?.let { arm(it, pending, since, REFUSED_START, state) }
     }
+
+    /**
+     * A snooze's slot after a system event: its stored end, or [IMMEDIATELY] when the slot carries an alarm (Story 2.1
+     * review) or the end passed while the phone was off (Story 2.2).
+     */
+    private fun snoozeSlot(
+        state: SessionState.Snoozed,
+        carriesAlarm: Boolean,
+        now: TimeSnapshot,
+    ): Deadline = state.session.snoozeEnd?.takeUnless { carriesAlarm || it.isDue(now) } ?: Deadline.after(now, IMMEDIATELY)
 
     private fun AlarmFired.isFresh(now: TimeSnapshot): Boolean = now.wallMillis - scheduledAt.toEpochMilliseconds() < WINDOW_MILLIS
 

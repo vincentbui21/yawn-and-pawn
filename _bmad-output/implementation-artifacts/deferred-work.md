@@ -45,7 +45,7 @@
 - source_spec: `_bmad-output/implementation-artifacts/spec-1-6-time-ports-deadlines-and-alarm-occurrence-math-in-core.md`
   summary: Decide how deadlines and scheduling behave right after a reboot when the wall clock is wrong until network time syncs.
   evidence: Unverified (medium if it happens). After a reboot `Deadline` compares wall time by design (AD-3); an RTC reset or manual clock change can make a snooze deadline due too early or too late. Natural home: Stories 1.10 (reschedule on boot/time change) and 1.12 (SessionEngine restore).
-  status: assigned to Story 1.10 by sprint-change-proposal-2026-10-01 (recorded in `docs/decisions/reboot-clock.md`), then carried to Story 2.2.
+  status: assigned to Story 1.10 by sprint-change-proposal-2026-10-01 (recorded in `docs/decisions/reboot-clock.md`), then carried to Story 2.2. Resolved in Story 2.2: no clock-trust check (decision appended to `docs/decisions/reboot-clock.md`); `TIME_SET` re-runs `rescheduleAll()` and re-arms the session slot, a restored ring rings at once whatever the clock says, and a snooze end compares wall time only across a reboot.
 - source_spec: `_bmad-output/implementation-artifacts/spec-1-7-store-alarms-in-app-db.md`
   summary: Decide whether request codes of deleted alarms may be reused, or keep a persisted high-water mark.
   evidence: Unverified (medium once scheduling exists). "Highest in use + 1" reuses a deleted alarm's code; harmful only if a stale PendingIntent survives. Settle in Story 1.10 (scheduler cancels on delete).
@@ -198,3 +198,10 @@
     - Review (2026-10-05): the refused-retry is now capped at 30 minutes (the slot carries `retrySince`), so a retry bound is in place; the device cadence still needs Spike S2. The refused-`startForeground` host test stays deferred (above).
     - Review (2026-10-05): a stored Completed or Missed session is settled (history row, runtime.db cleared) only by a restore, which runs only where a foreground service may start (`WakeService`, `MainActivity`, `WakeActivity`). Without a slot fire or an app open it waits until the UI opens. Low impact (the history row is late, nothing rings); Story 2.3 / 2.13 to decide whether a system event should settle it without a service.
     - Review (2026-10-05): which alarm the session slot carries is known only to the process that armed it (`AlarmScheduler.sessionSlotAlarm`: PendingIntent extras cannot be read back). A payload-less re-arm in a new process (a system event after a kill, within the 60 s after a refused start) can still replace a slot that carries an alarm. Rare; persisting the payload (device-protected storage) would close it. Story 2.13.
+- source_spec: `_bmad-output/implementation-artifacts/spec-2-2-session-deadlines-survive-clock-changes-and-reboots.md`
+  summary: On a device without `Settings.Global.BOOT_COUNT`, a reboot is detected only when the elapsed clock has gone back below the time a deadline was made at.
+  evidence: |
+    - `AndroidBootCounter` now reports -1 every boot on such a device, so a wall-clock change can no longer move a deadline.
+    - If the restore after a reboot runs at a higher uptime than the snooze was granted at, the stored snooze end is read on the new boot's elapsed clock. It can then end up to one snooze length late. A Ringing, Grace or Loud session is not affected, because the restore gives it a fresh deadline.
+    - The usual restore runs within a minute of `LOCKED_BOOT_COMPLETED`, so this is rare. `BOOT_COUNT` exists on API 24+, and minSdk is 26.
+    - Story 2.13 records whether any device in the matrix lacks `BOOT_COUNT`.

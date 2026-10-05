@@ -73,6 +73,7 @@ class ReceiversManifestTest {
         assertTrue(info.exported, "exported for system broadcasts")
         val expected =
             setOf(
+                "android.intent.action.LOCKED_BOOT_COMPLETED",
                 "android.intent.action.BOOT_COMPLETED",
                 "android.intent.action.TIME_SET",
                 "android.intent.action.TIMEZONE_CHANGED",
@@ -83,7 +84,6 @@ class ReceiversManifestTest {
         expected.forEach { action ->
             assertEquals(listOf(SystemEventsReceiver::class.java.name), receiversFor(action), action)
         }
-        assertEquals(emptyList(), receiversFor("android.intent.action.LOCKED_BOOT_COMPLETED"), "LOCKED_BOOT_COMPLETED is Epic 2")
     }
 
     private fun requestedPermissions(): Set<String> =

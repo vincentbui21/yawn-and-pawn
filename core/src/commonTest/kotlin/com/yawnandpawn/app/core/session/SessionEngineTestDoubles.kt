@@ -41,6 +41,23 @@ internal class EngineTime(
     fun advanceBy(duration: Duration) {
         now = now.plus(duration)
     }
+
+    /** The user (or the network) sets the wall clock by [duration], forward or back; monotonic time does not move. */
+    fun jumpWall(duration: Duration) {
+        now = now.copy(wallMillis = now.wallMillis + duration.inWholeMilliseconds)
+    }
+
+    /**
+     * The phone was off for [off] and booted again: the wall clock moved on, the elapsed clock restarted at [elapsedMillis]
+     * and the boot count is [bootCount] (the same one again models a device without `BOOT_COUNT`).
+     */
+    fun reboot(
+        off: Duration,
+        elapsedMillis: Long = 20_000,
+        bootCount: Int = now.bootCount + 1,
+    ) {
+        now = TimeSnapshot(now.wallMillis + off.inWholeMilliseconds, elapsedMillis, bootCount)
+    }
 }
 
 /** An [ActiveSessionStore] holding one JSON row in memory, encoded with [SessionJson] like the Room store. */

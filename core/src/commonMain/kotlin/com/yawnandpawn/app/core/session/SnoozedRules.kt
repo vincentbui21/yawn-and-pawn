@@ -24,7 +24,7 @@ internal fun snoozedRow(
         SessionEvent.SlotFired -> {
             when {
                 !over -> null
-                snoozeEnd?.bootCount == now.bootCount -> Transition(nextRing(session, now, noGrace = false), listOf(heartbeat(now)))
+                snoozeEnd?.sameBoot(now) == true -> Transition(nextRing(session, now, noGrace = false), listOf(heartbeat(now)))
                 else -> ringImmediately(session, now)
             }
         }

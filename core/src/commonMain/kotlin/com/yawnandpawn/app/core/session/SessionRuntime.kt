@@ -64,7 +64,7 @@ fun nextTickIn(
 ): Duration? {
     val deadline = timerDeadline(state) ?: return null
     val left = deadline.remaining(now)
-    return if (deadline.bootCount == now.bootCount) left else minOf(left, SessionReducer.HEARTBEAT)
+    return if (deadline.sameBoot(now)) left else minOf(left, SessionReducer.HEARTBEAT)
 }
 
 /** The one deadline the session's timer events wait for, shared by [dueEvents] and [nextTickIn]. */

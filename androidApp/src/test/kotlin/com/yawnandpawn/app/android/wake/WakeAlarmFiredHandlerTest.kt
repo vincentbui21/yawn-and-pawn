@@ -8,11 +8,19 @@ import com.yawnandpawn.app.core.alarm.AlarmFired
 import com.yawnandpawn.app.core.alarm.AlarmFiredHandler
 import com.yawnandpawn.app.core.error.DomainError
 import com.yawnandpawn.app.core.log.LogEvent
+import com.yawnandpawn.app.core.log.WakeStage
 import com.yawnandpawn.app.testing.FakeAlarmRepository
 import com.yawnandpawn.app.testing.FakeLogger
 import com.yawnandpawn.app.testing.anAlarm
+import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitCancellation
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.test.advanceTimeBy
+import kotlinx.coroutines.test.runCurrent
+import kotlinx.coroutines.test.runTest
+import kotlinx.coroutines.test.testTimeSource
 import kotlinx.coroutines.withTimeoutOrNull
 import org.junit.Rule
 import org.junit.Test
@@ -20,27 +28,51 @@ import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
+import kotlin.test.assertFalse
 import kotlin.test.assertNull
+import kotlin.test.assertTrue
+import kotlin.time.Duration
 import kotlin.time.Duration.Companion.milliseconds
+import kotlin.time.Duration.Companion.seconds
 import kotlin.time.Instant
+import kotlin.time.TimeSource
 
-/** Story 1.14: the fire handler starts the wake service whatever happens to the scheduling part. */
+/**
+ * Story 1.14 and device test round 1: the fire handler starts the wake service first, whatever happens to the scheduling
+ * part, re-arms after, and returns only once the service took the start (bounded).
+ */
+@OptIn(ExperimentalCoroutinesApi::class)
 @RunWith(RobolectricTestRunner::class)
 class WakeAlarmFiredHandlerTest {
     @get:Rule(order = 0)
     val stopApp = StopAppRule()
 
     private val context = ApplicationProvider.getApplicationContext<Context>()
+    private val starts = WakeServiceStarts()
+
+    /** What happened, in order: "start <action>" for a service start, "re-arm" for the scheduling part. */
+    private val steps = mutableListOf<String>()
     private val started = mutableListOf<Intent>()
-    private val starter = WakeServiceStarter(context, FakeLogger()) { started += it }
+
+    /** Like the system: the service reaches `onStartCommand` as soon as it is started. */
+    private val starter =
+        WakeServiceStarter(context, FakeLogger()) {
+            started += it
+            steps += "start ${it.action}"
+            starts.onStartCommandReached(it.token())
+        }
     private val fired = AlarmFired("alarm-a", Instant.fromEpochMilliseconds(1_000))
     private val repository = FakeAlarmRepository(listOf(anAlarm(id = "alarm-a")))
 
     private val logger = FakeLogger()
+    private val timingLogger = FakeLogger()
+    private val timings = WakeTimings(now = { fired.scheduledAt + 40.milliseconds }, logger = timingLogger)
 
     private fun handler(
         starter: WakeServiceStarter = this.starter,
-        schedule: suspend (AlarmFired) -> Unit = {},
+        starts: WakeServiceStarts = this.starts,
+        timeSource: TimeSource = TimeSource.Monotonic,
+        schedule: suspend (AlarmFired) -> Unit = { steps += "re-arm" },
     ) = WakeAlarmFiredHandler(
         repository,
         object : AlarmFiredHandler {
@@ -52,9 +84,23 @@ class WakeAlarmFiredHandlerTest {
         },
         starter,
         logger,
+        starts,
+        timings,
+        timeSource,
     )
 
     private fun startedAlarms() = started.map { it.action to it.getStringExtra("alarmId") }
+
+    @Test
+    fun `an enabled alarm starts the service first and is re-armed after`() {
+        timings.fired(fired.scheduledAt)
+
+        runBlocking { handler().onAlarmFired(fired) }
+
+        assertEquals(listOf("start ${WakeService.ACTION_ALARM}", "re-arm"), steps)
+        assertEquals(listOf<LogEvent>(LogEvent.WakeTiming(WakeStage.ServiceStartRequested, 40)), timingLogger.events)
+        assertEquals(emptyList(), logger.events, "the service took the start, so nothing is logged")
+    }
 
     @Test
     fun `a re-arm that throws still starts the service`() {
@@ -97,4 +143,121 @@ class WakeAlarmFiredHandlerTest {
             logger.events,
         )
     }
+
+    @Test
+    fun `the fire is handled only once the service reached onStartCommand`() =
+        runTest {
+            val slowStarts = WakeServiceStarts()
+            // The system starts the service, but onStartCommand comes later (a frozen process).
+            val slow = WakeServiceStarter(context, FakeLogger()) { started += it }
+
+            val handling = async { handler(starter = slow, starts = slowStarts, timeSource = testTimeSource).onAlarmFired(fired) }
+            advanceTimeBy(5.seconds)
+            runCurrent()
+            assertFalse(handling.isCompleted, "still waiting for the service after 5 s")
+            assertEquals(1, started.size, "the start was requested at once")
+
+            slowStarts.onStartCommandReached(slowStarts.newToken())
+            runCurrent()
+            assertFalse(handling.isCompleted, "another start (a restore, a slot) does not end this fire's wait")
+
+            slowStarts.onStartCommandReached(started.single().token())
+            runCurrent()
+
+            assertTrue(handling.isCompleted, "done once the service took the start")
+            assertEquals(emptyList(), logger.events)
+        }
+
+    @Test
+    fun `a service that never reaches onStartCommand ends the wait after 6 s, logged, and the slot fire waits too`() =
+        runTest {
+            val never = WakeServiceStarter(context, FakeLogger()) { started += it }
+            val waitLog = LogEvent.OperationFailed("wait for wake service", "no onStartCommand within 6s; the broadcast finishes")
+
+            val handling = async { handler(starter = never, starts = WakeServiceStarts(), timeSource = testTimeSource).onAlarmFired(fired) }
+            advanceTimeBy(5.9.seconds)
+            runCurrent()
+            assertFalse(handling.isCompleted)
+            advanceTimeBy(0.2.seconds)
+            runCurrent()
+            assertTrue(handling.isCompleted)
+            assertEquals(listOf<LogEvent>(waitLog), logger.events)
+
+            val slot = async { handler(starter = never, starts = WakeServiceStarts(), timeSource = testTimeSource).onSessionSlotFired() }
+            runCurrent()
+            assertFalse(slot.isCompleted, "the slot fire keeps the broadcast open too")
+            advanceTimeBy(6.1.seconds)
+            runCurrent()
+            assertTrue(slot.isCompleted)
+            assertEquals(listOf<LogEvent>(waitLog, waitLog), logger.events)
+            assertEquals(listOf(WakeService.ACTION_ALARM, WakeService.ACTION_SLOT), started.map { it.action })
+        }
+
+    @Test
+    fun `a start that throws something unexpected still re-arms the alarm`() {
+        val broken = WakeServiceStarter(context, FakeLogger()) { throw UnsupportedOperationException("platform bug") }
+
+        assertFailsWith<UnsupportedOperationException> { runBlocking { handler(starter = broken).onAlarmFired(fired) } }
+
+        assertEquals(listOf("re-arm"), steps, "the next occurrence is armed anyway")
+    }
+
+    @Test
+    fun `the service wait counts from the fire's start, so a slow re-arm never pushes it past the 8 s budget`() =
+        runTest {
+            val never = WakeServiceStarter(context, FakeLogger()) { started += it }
+
+            val handling =
+                async {
+                    handler(starter = never, starts = WakeServiceStarts(), timeSource = testTimeSource) { delay(4.seconds) }
+                        .onAlarmFired(fired)
+                }
+            advanceTimeBy(5.9.seconds)
+            runCurrent()
+            assertFalse(handling.isCompleted)
+            advanceTimeBy(0.2.seconds)
+            runCurrent()
+
+            assertTrue(handling.isCompleted, "done 6 s after the fire, not 4 s + 6 s")
+        }
+
+    @Test
+    fun `a start already taken ends the wait at once, also with no time left, and logs nothing`() {
+        val zero = WakeServiceStarts(Duration.ZERO)
+        val system = WakeServiceStarter(context, FakeLogger()) { zero.onStartCommandReached(it.token()) }
+
+        runBlocking { handler(starter = system, starts = zero).onAlarmFired(fired) }
+        runBlocking { handler(starter = system, starts = zero).onTestAlarmFired() }
+
+        assertEquals(emptyList(), logger.events)
+    }
+
+    @Test
+    fun `a test fire waits for its own start and logs a wait that times out`() =
+        runTest {
+            val slowStarts = WakeServiceStarts()
+            val slow = WakeServiceStarter(context, FakeLogger()) { started += it }
+
+            val handling = async { handler(starter = slow, starts = slowStarts, timeSource = testTimeSource).onTestAlarmFired() }
+            advanceTimeBy(3.seconds)
+            slowStarts.onStartCommandReached(slowStarts.newToken())
+            runCurrent()
+            assertFalse(handling.isCompleted, "another start does not end the test's wait")
+            slowStarts.onStartCommandReached(started.single().token())
+            runCurrent()
+            assertTrue(handling.isCompleted)
+            assertEquals(emptyList(), logger.events)
+
+            val timingOut = async { handler(starter = slow, starts = slowStarts, timeSource = testTimeSource).onTestAlarmFired() }
+            advanceTimeBy(6.1.seconds)
+            runCurrent()
+            assertTrue(timingOut.isCompleted)
+            assertEquals(
+                listOf<LogEvent>(LogEvent.OperationFailed("wait for wake service", "no onStartCommand within 6s; the broadcast finishes")),
+                logger.events,
+            )
+        }
+
+    /** The start token the handler put on [this] start intent. */
+    private fun Intent.token(): Long = getLongExtra(WakeService.EXTRA_START_TOKEN, -1)
 }

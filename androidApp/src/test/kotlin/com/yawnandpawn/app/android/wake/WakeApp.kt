@@ -34,13 +34,15 @@ import org.robolectric.shadow.api.Shadow
 import org.robolectric.shadows.ShadowLog
 import org.robolectric.shadows.ShadowMediaPlayer
 import kotlin.test.fail
+import kotlin.time.Duration
 
 /**
  * The real app's Koin graph, restarted with a [FakeCrashReporter] and optionally a replaced session [store], alarm
  * [repository], service [starter], session [history] repository, wall [clock], [monotonic] clock, pending [testAlarms]
- * or [billing]; the real `MediaPlayer` adapter plays over Robolectric's media shadow (every source opens). The
- * service's coroutines run on the main looper: [awaitUntil] idles it (and the Room threads) until a condition holds.
- * Tear down with `StopAppRule`.
+ * or [billing]. The alarm receiver waits [serviceStartWait] for the wake service (none by default: the tests start
+ * it themselves, as the system would). The real `MediaPlayer` adapter plays over Robolectric's media shadow (every
+ * source opens). The service's coroutines run on the main looper: [awaitUntil] idles it (and the Room threads) until
+ * a condition holds. Tear down with `StopAppRule`.
  */
 internal class WakeApp(
     store: ActiveSessionStore? = null,
@@ -51,6 +53,7 @@ internal class WakeApp(
     monotonic: MonotonicClock? = null,
     testAlarms: TestAlarmStore? = null,
     billing: Billing? = null,
+    serviceStartWait: Duration = Duration.ZERO,
 ) {
     val app: YawnAndPawnApp = ApplicationProvider.getApplicationContext()
     val crashReporter = FakeCrashReporter()
@@ -75,6 +78,7 @@ internal class WakeApp(
                 monotonic?.let { replaced -> single<MonotonicClock> { replaced } }
                 testAlarms?.let { replaced -> single<TestAlarmStore> { replaced } }
                 billing?.let { replaced -> single<Billing> { replaced } }
+                single { WakeServiceStarts(serviceStartWait) }
             },
         )
         ShadowLog.clear()

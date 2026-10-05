@@ -35,15 +35,21 @@ import kotlinx.datetime.TimeZone
 import kotlinx.datetime.toLocalDateTime
 import kotlin.time.Instant
 
-/** The Koin parameter of [AlarmEditorViewModel]: which alarm to edit, `null` for a new one. */
+/**
+ * The Koin parameter of [AlarmEditorViewModel]: which alarm to edit, `null` for a new one; [copyOf] prefills a new one
+ * from that stored alarm (Duplicate).
+ */
 data class AlarmEditorArgs(
     val alarmId: String?,
+    val copyOf: String? = null,
 )
 
 /**
- * The Alarm editor (Story 1.8): loads the alarm with [alarmId] (or starts from the defaults), keeps the form, and
- * saves it through [SaveAlarm] as an enabled alarm. Back (or Duplicate) with unsaved changes asks "Discard changes?" first; on a
- * sub-screen (Sound, Snooze) Back returns to the main screen. "Rings in ..." and "Rings tomorrow" are computed with
+ * The Alarm editor (Story 1.8): loads the alarm with [alarmId] (or starts from the defaults, or, for Duplicate, from the
+ * settings of the stored alarm [copyOf] as a new alarm that is stored only on Save), keeps the form, and saves it
+ * through [SaveAlarm] as an enabled alarm (a new alarm identical to a stored one switches that one on instead). Back
+ * (or Duplicate) with unsaved changes asks "Discard changes?" first; on a sub-screen (Sound, Snooze) Back returns to the
+ * main screen. "Rings in ..." and "Rings tomorrow" are computed with
  * `nextOccurrence` from [clock] and [timeZoneProvider] (never the system clock). A stored alarm that cannot be read
  * closes the editor with [EditorEffect.OpenFailed] (Home shows "Couldn't open this alarm."); an alarm that was read
  * gets the overflow menu (Story 1.9): Duplicate and Delete through [actions]. The Sound sub-screen (Story 1.17) lists
@@ -64,8 +70,9 @@ class AlarmEditorViewModel(
     private val soundPreview: SoundPreview,
     private val notificationPermission: NotificationPermission,
     private val testAlarm: ScheduleTestAlarm,
+    private val copyOf: String? = null,
 ) : ViewModel() {
-    private val _state = MutableStateFlow(EditorUiState(isNew = alarmId == null, isLoading = alarmId != null))
+    private val _state = MutableStateFlow(EditorUiState(isNew = alarmId == null, isLoading = alarmId != null || copyOf != null))
     val state: StateFlow<EditorUiState> = _state.asStateFlow()
 
     private val _effects = Channel<EditorEffect>(Channel.BUFFERED)
@@ -74,7 +81,10 @@ class AlarmEditorViewModel(
     /** The form as it was opened; any difference is an unsaved change. */
     private var initialForm = EditorForm()
 
-    /** The stored alarm being edited: supplies the fields the editor does not show yet (grace window). */
+    /**
+     * The stored alarm being edited, or the one a duplicate is prefilled from: supplies the fields the editor does not
+     * show yet (grace window).
+     */
     private var stored: Alarm? = null
 
     /** The Sound row, the Sound sub-screen's list and its preview (Story 1.17). */
@@ -89,11 +99,19 @@ class AlarmEditorViewModel(
     init {
         // A preview never outlives the editor.
         addCloseable { sounds.stopPreview() }
-        if (alarmId == null) {
-            _state.update { it.withRings(it.form, clock.now(), timeZoneProvider.current()) }
-            sounds.opened()
-        } else {
-            viewModelScope.launch { load(alarmId) }
+        when {
+            alarmId != null -> {
+                viewModelScope.launch { load(alarmId, asCopy = false) }
+            }
+
+            copyOf != null -> {
+                viewModelScope.launch { load(copyOf, asCopy = true) }
+            }
+
+            else -> {
+                _state.update { it.withRings(it.form, clock.now(), timeZoneProvider.current()) }
+                sounds.opened()
+            }
         }
     }
 
@@ -183,7 +201,14 @@ class AlarmEditorViewModel(
         }
     }
 
-    private suspend fun load(id: String) {
+    /**
+     * Opens the stored alarm [id]: to edit it, or ([asCopy], Duplicate) as a new alarm prefilled with its settings, which
+     * stores nothing until Save and has no overflow menu (owner decision 2026-10-05).
+     */
+    private suspend fun load(
+        id: String,
+        asCopy: Boolean,
+    ) {
         when (val result = repository.get(id)) {
             is Outcome.Success -> {
                 val alarm = result.value
@@ -193,7 +218,7 @@ class AlarmEditorViewModel(
                 val custom = form.repeatDays.isNotEmpty() && form.repeatDays != Weekdays
                 _state.update {
                     it
-                        .copy(isLoading = false, form = form, customRepeat = custom, hasOverflowMenu = true)
+                        .copy(isLoading = false, form = form, customRepeat = custom, hasOverflowMenu = !asCopy)
                         .withRings(form, clock.now(), timeZoneProvider.current())
                 }
                 sounds.opened()
@@ -321,7 +346,7 @@ class AlarmEditorViewModel(
 
     private fun hasUnsavedChanges(): Boolean = _state.value.let { !it.isLoading && it.form != initialForm }
 
-    /** "Discard changes?" before [then]: Back closes the editor, Duplicate copies the stored alarm. */
+    /** "Discard changes?" before [then]: Back closes the editor, Duplicate opens a new alarm prefilled from the stored one. */
     private fun askDiscard(then: AfterDiscard) {
         afterDiscard = then
         _state.update { it.copy(showDiscardDialog = true) }
@@ -332,7 +357,7 @@ class AlarmEditorViewModel(
         _state.update { it.copy(showDiscardDialog = false) }
     }
 
-    /** "Discard": does what asked the dialog (Back closes, Duplicate opens the copy of the stored alarm). */
+    /** "Discard": does what asked the dialog (Back closes, Duplicate opens a new alarm prefilled from the stored one). */
     private fun confirmDiscard() {
         // A second tap after the dialog went (or a stale event) does nothing.
         if (!_state.value.showDiscardDialog) return
@@ -350,7 +375,8 @@ class AlarmEditorViewModel(
     }
 
     /**
-     * The overflow menu of a stored alarm. Duplicate copies the stored alarm (not unsaved changes) and opens the copy;
+     * The overflow menu of a stored alarm. Duplicate opens a new, unsaved alarm prefilled from the stored alarm (not
+     * from unsaved changes; owner decision 2026-10-05);
      * with unsaved changes it asks "Discard changes?" first (owner decision 2026-10-02). Delete asks with the stored
      * time, then deletes (logged) and closes. While either runs nothing else is accepted; a failure shows "Couldn't save
      * the alarm. Try again." (owner decision 2026-10-02).
@@ -393,21 +419,11 @@ class AlarmEditorViewModel(
         }
     }
 
-    /** Copies the stored alarm [id] and opens the copy. */
+    /** Opens a new, unsaved alarm prefilled from the stored alarm [id] in place of this editor (nothing is stored). */
     private fun duplicate(id: String) {
+        // From now on this editor only leaves: a Save tapped before the navigation must not store the discarded edits.
         _state.update { it.copy(isSaving = true) }
-        viewModelScope.launch {
-            when (val result = actions.duplicate(id)) {
-                is Outcome.Success -> {
-                    _effects.send(EditorEffect.OpenCopy(result.value.id))
-                }
-
-                is Outcome.Failure -> {
-                    _state.update { it.copy(isSaving = false) }
-                    _effects.send(EditorEffect.ShowSaveFailed)
-                }
-            }
-        }
+        _effects.trySend(EditorEffect.OpenCopy(id))
     }
 }
 

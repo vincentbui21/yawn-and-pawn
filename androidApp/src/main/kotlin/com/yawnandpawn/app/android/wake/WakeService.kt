@@ -20,6 +20,7 @@ import com.yawnandpawn.app.core.id.IdGenerator
 import com.yawnandpawn.app.core.log.FireKind
 import com.yawnandpawn.app.core.log.LogEvent
 import com.yawnandpawn.app.core.log.Logger
+import com.yawnandpawn.app.core.log.WakeStage
 import com.yawnandpawn.app.core.log.diagnostic
 import com.yawnandpawn.app.core.session.CheckAnswer
 import com.yawnandpawn.app.core.session.ConfigResolver
@@ -57,7 +58,9 @@ import kotlin.time.Instant
  * The alarm receiver starts it for a ringing alarm and for the session slot; [WakeRuntime] starts it when a restored
  * session needs it.
  *
- * - `onStartCommand` calls `startForeground` with the ringing notification first, before any suspend work.
+ * - `onStartCommand` calls `startForeground` with the ringing notification first, before any suspend work, then tells
+ *   [WakeServiceStarts] (the alarm receiver keeps its broadcast open until then). Alarm and test starts log their
+ *   ring-start timing ([WakeTimings]).
  * - **Alarm:** while a session rings or is snoozed it dispatches `OverlapAlarmFired`; otherwise it reads the alarm and
  *   dispatches `AlarmFired` with a new session id, the config resolved now (`GlobalSettings` defaults until Epic 5), seeds
  *   from the [SeedSource] and whether the phone is still locked since boot. A deleted alarm rings nothing.
@@ -91,6 +94,8 @@ class WakeService :
     private val bootCounter: BootCounter by inject()
     private val appScope: ApplicationScope by inject()
     private val logger: Logger by inject()
+    private val starts: WakeServiceStarts by inject()
+    private val timings: WakeTimings by inject()
 
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate + CoroutineExceptionHandler { _, e -> onCrash(e) })
     private val commands = Mutex()
@@ -112,6 +117,7 @@ class WakeService :
 
     override fun onCreate() {
         super.onCreate()
+        timings.stage(WakeStage.ServiceCreated)
         runtime.onServiceStarted()
     }
 
@@ -122,9 +128,17 @@ class WakeService :
     ): Int {
         lastStartId = startId
         val fired = intent?.toAlarmFired()
+        // Only alarm and test starts are timed, never the heartbeat slot or a restore.
+        val timed = fired != null || intent?.action == ACTION_TEST
+        fired?.let { timings.fired(it.scheduledAt) }
+        if (timed) timings.stage(WakeStage.StartCommand)
         // An alarm start shows its ringing notification at once; a slot or restore start shows the ringing one only when
         // it is already up, else the quiet one (no full-screen intent) until a ringing state posts its own.
-        if (!enterForeground(fired?.scheduledAt ?: runtime.shownAlarmAt())) {
+        val inForeground = enterForeground(fired?.scheduledAt ?: runtime.shownAlarmAt())
+        if (timed && inForeground) timings.stage(WakeStage.InForeground)
+        // The alarm receiver that asked for this start may finish its broadcast now (WakeServiceStarts).
+        intent?.takeIf { it.hasExtra(EXTRA_START_TOKEN) }?.let { starts.onStartCommandReached(it.getLongExtra(EXTRA_START_TOKEN, 0)) }
+        if (!inForeground) {
             stopSelfResult(startId)
             return START_NOT_STICKY
         }
@@ -391,6 +405,9 @@ class WakeService :
         const val ACTION_SLOT = "com.yawnandpawn.app.action.WAKE_SLOT"
         const val ACTION_RESTORE = "com.yawnandpawn.app.action.WAKE_RESTORE"
         const val ACTION_TEST = "com.yawnandpawn.app.action.WAKE_TEST"
+
+        /** The alarm receiver's `WakeServiceStarts` token on a start it waits for. */
+        const val EXTRA_START_TOKEN = "startToken"
 
         /** The earliest retry of a tick that changed nothing (for example its commit failed). */
         private val TICK_RETRY = 1.seconds

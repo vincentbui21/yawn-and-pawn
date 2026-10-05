@@ -260,7 +260,10 @@ sealed interface EditorIntent {
 
     data object TestAlarmClicked : EditorIntent
 
-    /** "Duplicate" in the overflow menu: copies the stored alarm and opens the copy (unsaved changes ask "Discard changes?" first). */
+    /**
+     * "Duplicate" in the overflow menu: opens a new, unsaved alarm prefilled from the stored alarm (unsaved changes ask
+     * "Discard changes?" first).
+     */
     data object DuplicateClicked : EditorIntent
 
     /** "Delete" in the overflow menu: asks first. */
@@ -286,8 +289,8 @@ sealed interface EditorEffect {
     /** The alarm could not be read: leave the editor, and Home shows "Couldn't open this alarm.". */
     data object OpenFailed : EditorEffect
 
-    /** Replace this editor with one on the copy [alarmId] (after Duplicate). */
+    /** Replace this editor with one on a new, unsaved alarm prefilled from the stored alarm [sourceId] (Duplicate). */
     data class OpenCopy(
-        val alarmId: String,
+        val sourceId: String,
     ) : EditorEffect
 }

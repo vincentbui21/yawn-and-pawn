@@ -411,10 +411,11 @@ class AlarmSchedulingTest {
         }
 
     @Test
-    fun `a one-time alarm that fired is switched off and its code cancelled`() =
+    fun `a one-time alarm that fired is switched off, its code cancelled, and that is logged`() =
         runTest {
             val once = saved()
             scheduler.calls.clear()
+            val logged = logger.events.size
             clock.now = berlin("2027-03-03T07:00") + 10.milliseconds
 
             onFire.onAlarmFired(AlarmFired(once.id, scheduledAt = berlin("2027-03-03T07:00")))
@@ -426,6 +427,7 @@ class AlarmSchedulingTest {
                     .enabled,
             )
             assertEquals(listOf<Call>(Call.Cancel(once.requestCode)), scheduler.calls)
+            assertEquals(listOf<LogEvent>(LogEvent.OneTimeAlarmDisabled(once.id, berlin("2027-03-03T07:00"))), logger.events.drop(logged))
         }
 
     @Test

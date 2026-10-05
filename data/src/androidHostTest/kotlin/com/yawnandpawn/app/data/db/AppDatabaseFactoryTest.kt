@@ -187,17 +187,19 @@ class AppDatabaseFactoryTest {
             withDatabase { database ->
                 val alarms = fixture(database)
                 assertEquals(1000, assertIs<Outcome.Success<Alarm>>(alarms.save(draft)).value.requestCode)
-                val second = assertIs<Outcome.Success<Alarm>>(alarms.save(draft)).value
+                // Other times: a new alarm identical to a stored one would switch that one on instead (2026-10-05).
+                val second = assertIs<Outcome.Success<Alarm>>(alarms.save(draft.copy(time = LocalTime(8, 0)))).value
                 assertEquals(1001, second.requestCode)
                 alarms.delete(second.id)
-                val third = assertIs<Outcome.Success<Alarm>>(alarms.save(draft)).value
+                val third = assertIs<Outcome.Success<Alarm>>(alarms.save(draft.copy(time = LocalTime(9, 0)))).value
                 assertEquals(1002, third.requestCode)
                 alarms.delete(third.id)
             }
 
             // The app restarts: a new database instance over the same file.
             withDatabase { database ->
-                assertEquals(1003, assertIs<Outcome.Success<Alarm>>(fixture(database).save(draft)).value.requestCode)
+                val fourth = fixture(database).save(draft.copy(time = LocalTime(10, 0)))
+                assertEquals(1003, assertIs<Outcome.Success<Alarm>>(fourth).value.requestCode)
             }
         }
 

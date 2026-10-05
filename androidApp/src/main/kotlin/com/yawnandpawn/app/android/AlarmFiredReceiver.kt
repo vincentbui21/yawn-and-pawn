@@ -3,11 +3,13 @@ package com.yawnandpawn.app.android
 import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
+import com.yawnandpawn.app.android.wake.WakeTimings
 import com.yawnandpawn.app.core.alarm.AlarmFired
 import com.yawnandpawn.app.core.alarm.AlarmFiredHandler
 import com.yawnandpawn.app.core.log.FireKind
 import com.yawnandpawn.app.core.log.LogEvent
 import com.yawnandpawn.app.core.log.Logger
+import com.yawnandpawn.app.core.log.WakeStage
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withTimeoutOrNull
 import org.koin.core.component.KoinComponent
@@ -21,9 +23,12 @@ import kotlin.time.Instant
  * every case, also when the handler throws or overruns its budget. Not exported (only the app's own PendingIntents reach
  * it), `directBootAware`, and it never starts an activity.
  *
- * Since Story 1.14 the handler starts the foreground `WakeService` (for an enabled alarm, after re-arming its next
- * occurrence, and for the session slot). A fire from `setAlarmClock` is exempt from the background limits on starting a
- * foreground service, so this start is allowed; boot receivers still never start one (AD-4).
+ * Since Story 1.14 the handler starts the foreground `WakeService` (for an enabled alarm, before re-arming its next
+ * occurrence, and for the session slot and the test alarm), and since device test round 1 it returns only once the
+ * service took the start (bounded), so the broadcast stays open and the process is not frozen in between. An alarm or
+ * test fire also starts the ring-start timing logs (`WakeTimings`). A fire from `setAlarmClock` is exempt from the
+ * background limits on starting a foreground service, so this start is allowed; boot receivers still never start one
+ * (AD-4).
  */
 class AlarmFiredReceiver :
     BroadcastReceiver(),
@@ -54,6 +59,7 @@ class AlarmFiredReceiver :
             logger.log(LogEvent.FireIgnored(FireKind.Alarm, intent.getStringExtra(EXTRA_ALARM_ID), "unknown action or missing extras"))
             return
         }
+        timeRingStart(fire, intent)
         val handler = get<AlarmFiredHandler>()
         val pending = goAsync()
         get<ApplicationScope>().launch {
@@ -69,6 +75,22 @@ class AlarmFiredReceiver :
                 pending.finish()
             }
         }
+    }
+
+    /** An alarm or test fire starts the ring-start timing ([WakeTimings]); the heartbeat slot is not timed. */
+    private fun timeRingStart(
+        fire: Fire,
+        intent: Intent,
+    ) {
+        val timings = getKoin().getOrNull<WakeTimings>() ?: return
+        val scheduledAt =
+            when (fire) {
+                is Fire.Alarm -> fire.fired.scheduledAt
+                Fire.TestAlarm -> intent.takeIf { it.hasExtra(EXTRA_SCHEDULED_AT) }?.let { scheduledAtOf(it) }
+                Fire.SessionSlot -> return
+            }
+        scheduledAt?.let(timings::fired)
+        timings.stage(WakeStage.ReceiverReceived)
     }
 
     companion object {
@@ -90,7 +112,9 @@ class AlarmFiredReceiver :
         private fun Intent.toAlarmFired(): AlarmFired? {
             val alarmId = getStringExtra(EXTRA_ALARM_ID)
             if (alarmId == null || !hasExtra(EXTRA_SCHEDULED_AT)) return null
-            return AlarmFired(alarmId, Instant.fromEpochMilliseconds(getLongExtra(EXTRA_SCHEDULED_AT, 0)))
+            return AlarmFired(alarmId, scheduledAtOf(this))
         }
+
+        private fun scheduledAtOf(intent: Intent): Instant = Instant.fromEpochMilliseconds(intent.getLongExtra(EXTRA_SCHEDULED_AT, 0))
     }
 }

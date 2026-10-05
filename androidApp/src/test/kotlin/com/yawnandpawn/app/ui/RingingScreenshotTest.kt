@@ -67,6 +67,15 @@ class RingingScreenshotTest {
     @Config(fontScale = 2.0f)
     fun `test alarm at 200 percent`() = ringing("wake_ringing_test_sunrise_font200", RingingSamples.testAlarm)
 
+    // Device test round 1: on a 360 dp phone the 12-hour clock "6:15 AM" stays on one line, AM included.
+    @Test
+    @Config(qualifiers = "+w360dp")
+    fun `first ring on a 360 dp phone`() = ringing("wake_ringing_first_sunrise_w360", RingingSamples.firstRing)
+
+    @Test
+    @Config(qualifiers = "+w360dp", fontScale = 2.0f)
+    fun `first ring on a 360 dp phone at 200 percent`() = ringing("wake_ringing_first_sunrise_w360_font200", RingingSamples.firstRing)
+
     @Test
     fun `enabled snooze preview`() = ringing("wake_ringing_snooze_enabled_sunrise", RingingSamples.enabledSnooze)
 

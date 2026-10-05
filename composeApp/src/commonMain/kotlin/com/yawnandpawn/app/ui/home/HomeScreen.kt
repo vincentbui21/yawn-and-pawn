@@ -147,8 +147,10 @@ private fun HomeList(
 ) {
     val spacing = PpsTheme.spacing
     val density = LocalDensity.current
-    val collapse = rememberHeaderCollapse(listState)
     var headerHeight by remember { mutableStateOf(0.dp) }
+    // With no hero the title collapses over the header's own height of scrolling.
+    val collapse =
+        rememberHeaderCollapse(listState, hasHero = state.hero != null, noHeroDistance = with(density) { headerHeight.toPx() })
     val backdrop = rememberGlassBackdrop()
     val statusBarTop = WindowInsets.statusBars.getTop(density)
     val fade = with(density) { spacing.space3.toPx() }
@@ -161,13 +163,15 @@ private fun HomeList(
                     .fillMaxSize()
                     .glassSource(backdrop)
                     .fadeUnderHeader(zoneBottom = { statusBarTop + with(density) { headerHeight.toPx() } }, fade = fade, opaque = opaque),
-            // Starts below the pinned header (and its fade); the last card ends above the floating nav bar (its "+" adds
-            // an alarm; owner decision 2026-10-01 replaced the FAB).
+            // Starts below the pinned header (and its fade), which sits under the status bar: the header is measured
+            // inside its status-bar padding, so that inset is added here (device test round 1: the first item started
+            // under the title). The last card ends above the floating nav bar (its "+" adds an alarm; owner decision
+            // 2026-10-01 replaced the FAB).
             contentPadding =
                 PaddingValues(
                     start = spacing.screenMargin,
                     end = spacing.screenMargin,
-                    top = headerHeight + spacing.space3,
+                    top = with(density) { statusBarTop.toDp() } + headerHeight + spacing.space3,
                     bottom = LocalNavBarClearance.current + spacing.space6,
                 ),
             verticalArrangement = Arrangement.spacedBy(spacing.space3),

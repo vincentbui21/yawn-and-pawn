@@ -18,14 +18,19 @@ class WakeServiceStarter(
     private val logger: Logger,
     private val startService: (Intent) -> Unit = { context.startForegroundService(it) },
 ) {
-    /** The stored alarm [fired] rings. */
-    fun startAlarm(fired: AlarmFired): Boolean = start(WakeService.alarmIntent(context, fired))
+    /** The stored alarm [fired] rings; [token] (`WakeServiceStarts`) tells the receiver when the service took it. */
+    fun startAlarm(
+        fired: AlarmFired,
+        token: Long,
+    ): Boolean = start(WakeService.alarmIntent(context, fired).withToken(token))
 
     /** The session slot fired. */
-    fun startSlot(): Boolean = start(WakeService.intent(context, WakeService.ACTION_SLOT))
+    fun startSlot(token: Long): Boolean = start(WakeService.intent(context, WakeService.ACTION_SLOT).withToken(token))
 
     /** The test alarm fired (Story 1.18): the service rings the pending test. */
-    fun startTest(): Boolean = start(WakeService.intent(context, WakeService.ACTION_TEST))
+    fun startTest(token: Long): Boolean = start(WakeService.intent(context, WakeService.ACTION_TEST).withToken(token))
+
+    private fun Intent.withToken(token: Long): Intent = putExtra(WakeService.EXTRA_START_TOKEN, token)
 
     /** A session (or the emergency ring) needs the service and it is not running. */
     fun startRestore(): Boolean = start(WakeService.intent(context, WakeService.ACTION_RESTORE))

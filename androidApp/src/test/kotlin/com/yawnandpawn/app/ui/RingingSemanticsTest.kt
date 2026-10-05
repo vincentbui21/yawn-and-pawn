@@ -5,6 +5,7 @@ import android.provider.Settings
 import androidx.compose.ui.graphics.lerp
 import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.graphics.toPixelMap
+import androidx.compose.ui.semantics.SemanticsActions
 import androidx.compose.ui.semantics.SemanticsProperties
 import androidx.compose.ui.semantics.getOrNull
 import androidx.compose.ui.test.SemanticsNodeInteraction
@@ -15,6 +16,7 @@ import androidx.compose.ui.test.junit4.createEmptyComposeRule
 import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.onRoot
+import androidx.compose.ui.text.TextLayoutResult
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.DpRect
 import androidx.compose.ui.unit.dp
@@ -34,6 +36,7 @@ import org.robolectric.annotation.Config
 import org.robolectric.annotation.GraphicsMode
 import kotlin.math.abs
 import kotlin.test.assertEquals
+import kotlin.test.assertFalse
 import kotlin.test.assertNotEquals
 import kotlin.test.assertTrue
 
@@ -133,6 +136,41 @@ class RingingSemanticsTest {
             assertTrue(order[0] < order[1] && order[1] < order[2], "strict order $order")
             snooze().assertExists()
         }
+
+    /** Device test round 1: the 12-hour clock on one line, nothing clipped, inside the screen margins. */
+    private fun assertClockOnOneLine() {
+        val time = formatClockTime(LocalTime(6, 15), is24Hour = false)
+        val clock = composeRule.onNodeWithContentDescription(time)
+        val layouts = mutableListOf<TextLayoutResult>()
+        clock
+            .fetchSemanticsNode()
+            .config[SemanticsActions.GetTextLayoutResult]
+            .action
+            ?.invoke(layouts)
+        val layout = layouts.single()
+        assertEquals(time, layout.layoutInput.text.text)
+        assertEquals(1, layout.lineCount, "one line")
+        // The whole time is on that line (a wrapped "6:15 AM" would end it at "6:15 " and hide "AM"), and it is not
+        // wider than the clock's room (clipped at the side).
+        assertEquals(time.length, layout.getLineEnd(0, visibleEnd = true), "the full time, AM included, is on the line")
+        assertTrue(
+            layout.getLineRight(0) <= layout.size.width && layout.getLineLeft(0) >= 0f,
+            "nothing clipped at the side: line ${layout.getLineLeft(0)}..${layout.getLineRight(0)} in ${layout.size.width} px " +
+                "at ${layout.layoutInput.style.fontSize}",
+        )
+        val root = composeRule.onRoot().getBoundsInRoot()
+        val bounds = clock.getBoundsInRoot()
+        val margin = PpsTokens.Spacing.screenMargin - 1.dp
+        assertTrue(bounds.left >= root.left + margin && bounds.right <= root.right - margin, "inside the screen margins: $bounds")
+    }
+
+    @Test
+    @Config(qualifiers = "+w360dp")
+    fun `on a 360 dp screen the 12-hour clock stays on one line`() = ringing { assertClockOnOneLine() }
+
+    @Test
+    @Config(qualifiers = "+w360dp", fontScale = 2.0f)
+    fun `on a 360 dp screen at 200 percent the 12-hour clock stays on one line`() = ringing { assertClockOnOneLine() }
 
     @Test
     fun `a test alarm's snooze is read as Snooze unavailable, Test no charge`() =

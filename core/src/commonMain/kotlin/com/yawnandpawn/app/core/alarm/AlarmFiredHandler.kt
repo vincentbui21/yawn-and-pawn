@@ -31,7 +31,7 @@ interface AlarmFiredHandler {
  * The scheduling part of every fire: keeps the schedule right after a fire and rings nothing itself (the app's wake
  * handler wraps it and starts the ringing).
  * - A repeating alarm is armed at its next occurrence after max(now, scheduledAt).
- * - A one-time alarm is switched off through [SetAlarmEnabled], which cancels its code.
+ * - A one-time alarm is switched off through [SetAlarmEnabled], which cancels its code, and that is logged.
  * - A missing or disabled alarm is logged and ignored, and so are session-slot and test fires.
  */
 class RearmOnFire(
@@ -73,8 +73,10 @@ class RearmOnFire(
             }
         // Outside the lock: SetAlarmEnabled takes it itself.
         if (disableOneTime) {
-            val disabled = setAlarmEnabled(fired.alarmId, enabled = false)
-            if (disabled is Outcome.Failure) logger.log(LogEvent.OperationFailed.of("disable fired one-time alarm", disabled.error))
+            when (val disabled = setAlarmEnabled(fired.alarmId, enabled = false)) {
+                is Outcome.Success -> logger.log(LogEvent.OneTimeAlarmDisabled(fired.alarmId, fired.scheduledAt))
+                is Outcome.Failure -> logger.log(LogEvent.OperationFailed.of("disable fired one-time alarm", disabled.error))
+            }
         }
     }
 

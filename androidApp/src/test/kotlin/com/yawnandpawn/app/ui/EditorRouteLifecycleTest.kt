@@ -58,7 +58,7 @@ class EditorRouteLifecycleTest {
                 saveAlarm = alarms.save,
                 clock = FakeClock(),
                 timeZoneProvider = FakeTimeZoneProvider(),
-                actions = AlarmActions(alarms.setEnabled, alarms.duplicate, alarms.delete, alarms.clock, FakeLogger()),
+                actions = AlarmActions(alarms.setEnabled, alarms.delete, alarms.clock, FakeLogger()),
                 soundLibrary = FakeSoundLibrary(),
                 soundPreview = preview,
                 notificationPermission = FakeNotificationPermission(),

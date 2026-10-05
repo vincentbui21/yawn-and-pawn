@@ -51,12 +51,13 @@ import kotlin.time.Instant
  * soonest enabled one, computed with the scheduler's `nextOccurrence` and `durationUntil` from [clock] and
  * [timeZoneProvider]. The countdown is recomputed on every [timeChanges] signal (each minute, a time set, a zone change)
  * and when Home resumes. A switch calls `SetAlarmEnabled` at once and shows the new value until the store confirms it
- * (or reverts on failure); Duplicate opens the copy in the editor; Delete asks first and is logged. A switch, Duplicate
- * or Delete that cannot be stored shows "Couldn't save the alarm. Try again." (owner decision 2026-10-02). Navigation
- * goes out through [effects]. The missed note (Story 1.16) shows the alarm time of the latest Missed session from [missedNotes]
- * until "Dismiss" stores its dismissal. The reliability banner (Story 1.19) shows while [reliability] finds a setting
- * off; it is checked when Home starts and resumes (a permission dialog only pauses it), and "Fix" checks again and
- * opens the setting that is off now through [reliabilitySettings].
+ * (or reverts on failure); Duplicate opens the editor on a new, unsaved alarm prefilled from the card (owner decision
+ * 2026-10-05); Delete asks first and is logged. A switch or Delete that cannot be stored shows "Couldn't save the
+ * alarm. Try again." (owner decision 2026-10-02). Navigation goes out through [effects]. The missed note (Story 1.16)
+ * shows the alarm time of the latest Missed session from [missedNotes] until "Dismiss" stores its dismissal. The
+ * reliability banner (Story 1.19) shows while [reliability] finds a setting off; it is checked when Home starts and
+ * resumes (a permission dialog only pauses it), and "Fix" checks again and opens the setting that is off now through
+ * [reliabilitySettings].
  */
 class HomeViewModel(
     repository: AlarmRepository,
@@ -126,7 +127,8 @@ class HomeViewModel(
             }
 
             is HomeIntent.DuplicateClicked -> {
-                duplicate(intent.id)
+                // Nothing is stored until the editor saves (owner decision 2026-10-05).
+                _effects.trySend(HomeEffect.OpenDuplicate(intent.id))
             }
 
             is HomeIntent.DeleteClicked -> {
@@ -206,15 +208,6 @@ class HomeViewModel(
 
     private fun checkReliability(): ReliabilityStatus =
         reliability.check().also { status -> local.update { it.copy(reliability = status) } }
-
-    private fun duplicate(id: String) {
-        viewModelScope.launch {
-            when (val result = actions.duplicate(id)) {
-                is Outcome.Success -> _effects.send(HomeEffect.OpenEditor(result.value.id))
-                is Outcome.Failure -> showMessage(HomeMessage.SaveFailed)
-            }
-        }
-    }
 
     private fun requestDelete(id: String) {
         val card = state.value.alarms.firstOrNull { it.id == id } ?: return

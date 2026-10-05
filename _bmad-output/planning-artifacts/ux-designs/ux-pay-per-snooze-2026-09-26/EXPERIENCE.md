@@ -109,7 +109,7 @@ All strings live in resources (NFR-10). `{price}`, `{nextPrice}`, `{minutes}`, `
 | Editor, rows (owner decision 2026-09-27) | "Alarm name" · "Sound" · "Vibration" · "Wake-up check" · "Quiet time" · "Snooze" · "Motivation" · "Test alarm" |
 | Editor, time wheel unit labels | "h" · "min" (owner decision 2026-09-27) |
 | Editor, label too long | "Keep the label under 40 characters." |
-| Editor, unsaved changes dialog | Title "Discard changes?" · actions "Discard" / "Keep editing". Asked on Back and before the overflow menu's "Duplicate" (owner decision 2026-10-02: "Discard" duplicates the saved alarm and opens the copy; "Keep editing" does nothing) |
+| Editor, unsaved changes dialog | Title "Discard changes?" · actions "Discard" / "Keep editing". Asked on Back and before the overflow menu's "Duplicate" (owner decision 2026-10-02: "Discard" opens the duplicate of the saved alarm; "Keep editing" does nothing) |
 | Editor, volume ramp switch | "Gradually increase volume" (no starting-volume slider, owner decision 2026-09-27: on, the ramp starts at 20% and rises to the set volume over 30 s; off, it starts at the set volume) |
 | Sound picker, source captions | "Built-in" · "System" |
 | Sound picker, preview (TalkBack) | "Play preview" / "Stop preview" |
@@ -165,7 +165,7 @@ All strings live in resources (NFR-10). `{price}`, `{nextPrice}`, `{minutes}`, `
 | Home empty | "No alarms yet." · "Add your first alarm" |
 | Home, alarm list failed to load | "Couldn't load your alarms." · "Try again" (sprint-change-proposal-2026-10-01) |
 | Alarm editor, alarm failed to open (snackbar) | "Couldn't open this alarm." (sprint-change-proposal-2026-10-01) |
-| Home and editor, alarm change not saved (snackbar) | "Couldn't save the alarm. Try again." when Save, Duplicate, Delete or a card's on/off switch cannot be stored; the switch goes back to the stored value (owner decision 2026-10-02) |
+| Home and editor, alarm change not saved (snackbar) | "Couldn't save the alarm. Try again." when Save, Delete or a card's on/off switch cannot be stored; the switch goes back to the stored value (owner decision 2026-10-02) |
 | Purchase history empty | "No snoozes paid. Keep it that way." |
 | Recordings empty | "Record a message for your morning self." |
 | Math check, progress | "Problem {n} of {count}" |
@@ -305,7 +305,7 @@ Behavioural rules. Visual specs for every row live in `DESIGN.md > Components` u
 | `fallback-link` | Check footer | Appears **immediately** if camera permission is denied, the camera is unavailable or fails to start; otherwise after **5 failed attempts** on a camera check. Once per session. Opens the Fallback check picker. |
 | `check-type-card` | Onboarding, Check picker, Fallback check picker | Tap toggles selection (picker) or starts that check (fallback picker). "Try it" opens a no-stakes preview. Camera checks show "Needs the camera. If it can't be used, you'll get a fallback check." In the Check picker (and onboarding) it is a row of the "Checks" `card-group` (owner direction 2026-09-27, design preview round 3); "Try it" lives in Check setup, one tap further. |
 | `card-hero` | Home | Not tappable in v0.2 (Progress is one tap away in nav). Streak number animates only on the morning it grows (success screen, not Home). |
-| `card-alarm` | Home list | Animates in when added and out when removed (owner decision 2026-09-27). Tap → editor. Long-press → menu with Duplicate and Delete (both also in the editor overflow menu for TalkBack). `switch` toggles enabled; turning off within 8 h opens `dialog-confirm`. |
+| `card-alarm` | Home list | Animates in when added and out when removed (owner decision 2026-09-27). Tap → editor. Long-press → menu with Duplicate and Delete (both also in the editor overflow menu for TalkBack). Duplicate opens the editor on a new alarm ("New alarm") with the same settings and stores nothing until Save; Cancel or Back leaves no copy. Saving a new alarm whose settings are all identical to an existing alarm switches that alarm on (armed for its next occurrence) instead of adding a second one, and returns to Home (owner decisions 2026-10-05, like Samsung Clock). `switch` toggles enabled; turning off within 8 h opens `dialog-confirm`. |
 | ~~`fab`~~ | Removed from Home | Replaced by the nav bar's centre "+" (owner decision 2026-10-01). The production Story 1.8 Alarms route keeps its FAB until Story 1.9 wires the new shell. |
 | `banner-warning` | Home, Settings | Shown when any reliability item fails. Not dismissible; clears itself when the checklist is all OK (re-evaluated on every app foreground). Info variant (info icon, no error colour) for the fallback re-register prompt; dismissible. |
 | `panel-session-in-progress` | Home during a session | Replaces all Home content. "Back to alarm" opens the wake screen. |

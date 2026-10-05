@@ -65,3 +65,21 @@ val AlarmListOrder: Comparator<Alarm> =
     compareBy<Alarm> { it.time }
         .thenBy { it.createdAt }
         .thenBy { it.id }
+
+/**
+ * True when [other] rings exactly like this alarm: every setting the user chooses is equal (time, repeat days, label,
+ * sound, volume, gradual volume, vibration, snooze length, quiet time). The id, request code, on/off state, timestamps
+ * and the ramp start (fixed, not a user setting) do not count. Saving a new alarm identical to a stored one switches
+ * that one on instead of storing a second (owner decision 2026-10-05, like Samsung Clock). The check plan joins this
+ * list once alarms store one (Epic 3).
+ */
+fun Alarm.hasSameSettingsAs(other: Alarm): Boolean =
+    time == other.time &&
+        repeatDays == other.repeatDays &&
+        label == other.label &&
+        soundRef == other.soundRef &&
+        volumePercent == other.volumePercent &&
+        gradualVolume == other.gradualVolume &&
+        vibration == other.vibration &&
+        snoozeLengthMinutes == other.snoozeLengthMinutes &&
+        graceSeconds == other.graceSeconds

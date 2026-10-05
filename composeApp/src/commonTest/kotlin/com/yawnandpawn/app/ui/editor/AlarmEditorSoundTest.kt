@@ -83,7 +83,7 @@ class AlarmEditorSoundTest {
         saveAlarm = alarms.save,
         clock = clock,
         timeZoneProvider = zone,
-        actions = AlarmActions(alarms.setEnabled, alarms.duplicate, alarms.delete, clock, FakeLogger()),
+        actions = AlarmActions(alarms.setEnabled, alarms.delete, clock, FakeLogger()),
         soundLibrary = library,
         soundPreview = preview,
         notificationPermission = FakeNotificationPermission(),

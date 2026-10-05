@@ -60,7 +60,7 @@ class HomeRouteLifecycleTest {
         val viewModel =
             HomeViewModel(
                 repository,
-                AlarmActions(alarms.setEnabled, alarms.duplicate, alarms.delete, alarms.clock, FakeLogger()),
+                AlarmActions(alarms.setEnabled, alarms.delete, alarms.clock, FakeLogger()),
                 FakeClock(),
                 FakeTimeZoneProvider(),
                 FakeTimeChangeSignal(),
@@ -73,7 +73,7 @@ class HomeRouteLifecycleTest {
             PpsThemeMode.Light,
             content = {
                 CompositionLocalProvider(LocalLifecycleOwner provides owner) {
-                    HomeRoute(onOpenEditor = {}, openFailed = false, onOpenFailedShown = {}, viewModel = viewModel)
+                    HomeRoute(onOpenEditor = {}, onOpenDuplicate = {}, openFailed = false, onOpenFailedShown = {}, viewModel = viewModel)
                 }
             },
         ) {

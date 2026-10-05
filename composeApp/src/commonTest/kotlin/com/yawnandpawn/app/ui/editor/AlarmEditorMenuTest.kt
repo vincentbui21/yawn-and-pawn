@@ -43,8 +43,9 @@ import kotlin.time.Instant
 
 /**
  * The editor's overflow menu (Story 1.9): Duplicate and Delete of a stored alarm. Owner decisions 2026-10-02: Duplicate
- * with unsaved changes asks "Discard changes?" first, and a Duplicate or Delete that cannot be stored shows "Couldn't
- * save the alarm. Try again.".
+ * with unsaved changes asks "Discard changes?" first, and a Delete that cannot be stored shows "Couldn't save the alarm.
+ * Try again.". Owner decisions 2026-10-05: Duplicate opens a new, unsaved alarm prefilled from the stored one, and
+ * saving one identical to a stored alarm switches that alarm on instead.
  */
 @OptIn(ExperimentalCoroutinesApi::class)
 class AlarmEditorMenuTest {
@@ -93,7 +94,7 @@ class AlarmEditorMenuTest {
             saveAlarm = alarms.save,
             clock = clock,
             timeZoneProvider = zone,
-            actions = AlarmActions(alarms.setEnabled, alarms.duplicate, alarms.delete, clock, logger),
+            actions = AlarmActions(alarms.setEnabled, alarms.delete, clock, logger),
             soundLibrary = FakeSoundLibrary(),
             soundPreview = FakeSoundPreview(),
             notificationPermission = FakeNotificationPermission(),
@@ -123,10 +124,9 @@ class AlarmEditorMenuTest {
         }
 
     @Test
-    fun `Duplicate without unsaved changes copies the stored alarm and opens the copy at once`() =
+    fun `Duplicate without unsaved changes opens a new alarm prefilled from the stored one at once, storing nothing`() =
         runTest(dispatcher) {
             repository.upsert(stored)
-            ids.newId() // the stored alarm's id; the copy gets the next one
             val viewModel = viewModel(stored.id)
             val effects = effectsOf(viewModel)
             advanceUntilIdle()
@@ -136,16 +136,15 @@ class AlarmEditorMenuTest {
             assertFalse(viewModel.state.value.showDiscardDialog)
             advanceUntilIdle()
 
-            val copy = repository.current.single { it.id != stored.id }
-            assertEquals("Gym", copy.label)
-            assertEquals(listOf<EditorEffect>(EditorEffect.OpenCopy(copy.id)), effects)
+            // Owner decision 2026-10-05: nothing is stored until the new alarm is saved.
+            assertEquals(listOf(stored), repository.current)
+            assertEquals(listOf<EditorEffect>(EditorEffect.OpenCopy(stored.id)), effects)
         }
 
     @Test
-    fun `Duplicate with unsaved changes asks to discard, and Discard opens a copy of the saved alarm`() =
+    fun `Duplicate with unsaved changes asks to discard, and Discard opens a new alarm prefilled from the saved one`() =
         runTest(dispatcher) {
             repository.upsert(stored)
-            ids.newId() // the stored alarm's id; the copy gets the next one
             val viewModel = viewModel(stored.id)
             val effects = effectsOf(viewModel)
             advanceUntilIdle()
@@ -155,7 +154,6 @@ class AlarmEditorMenuTest {
             viewModel.onIntent(EditorIntent.DuplicateClicked)
             advanceUntilIdle()
             assertTrue(viewModel.state.value.showDiscardDialog)
-            assertEquals(listOf(stored), repository.current, "nothing copied before the answer")
             assertTrue(effects.isEmpty())
 
             viewModel.onIntent(EditorIntent.DiscardConfirmed)
@@ -163,11 +161,120 @@ class AlarmEditorMenuTest {
             advanceUntilIdle()
 
             assertFalse(viewModel.state.value.showDiscardDialog)
+            assertEquals(listOf(stored), repository.current, "the changes are discarded, not saved, and nothing is copied")
+            assertEquals(listOf<EditorEffect>(EditorEffect.OpenCopy(stored.id)), effects, "opened once")
+        }
+
+    @Test
+    fun `after Discard for Duplicate a Save before the navigation stores nothing`() =
+        runTest(dispatcher) {
+            repository.upsert(stored)
+            val viewModel = viewModel(stored.id)
+            val effects = effectsOf(viewModel)
+            advanceUntilIdle()
+            viewModel.onIntent(EditorIntent.LabelChanged("Unsaved"))
+            viewModel.onIntent(EditorIntent.DuplicateClicked)
+            viewModel.onIntent(EditorIntent.DiscardConfirmed)
+
+            viewModel.onIntent(EditorIntent.SaveClicked)
+            viewModel.onIntent(EditorIntent.BackRequested)
+            advanceUntilIdle()
+
+            assertEquals(listOf(stored), repository.current, "the discarded edits are not stored")
+            assertEquals(listOf<EditorEffect>(EditorEffect.OpenCopy(stored.id)), effects, "only the duplicate opens")
+        }
+
+    private fun copyOf(alarmId: String) =
+        AlarmEditorViewModel(
+            alarmId = null,
+            repository = repository,
+            saveAlarm = alarms.save,
+            clock = clock,
+            timeZoneProvider = zone,
+            actions = AlarmActions(alarms.setEnabled, alarms.delete, clock, logger),
+            soundLibrary = FakeSoundLibrary(),
+            soundPreview = FakeSoundPreview(),
+            notificationPermission = FakeNotificationPermission(),
+            testAlarm = ScheduleTestAlarm(FakeAlarmScheduler(), FakeTestAlarmStore(), clock, logger),
+            copyOf = alarmId,
+        )
+
+    @Test
+    fun `a duplicate opens as a new alarm with every setting of the stored one, and Save stores a second alarm`() =
+        runTest(dispatcher) {
+            repository.upsert(stored)
+            ids.newId() // the stored alarm's id; the new alarm gets the next one
+            val viewModel = copyOf(stored.id)
+            val effects = effectsOf(viewModel)
+            advanceUntilIdle()
+
+            val state = viewModel.state.value
+            assertTrue(state.isNew, "the header says New alarm")
+            assertFalse(state.hasOverflowMenu)
+            assertEquals(LocalTime(6, 30), state.form.time)
+            assertEquals(setOf(DayOfWeek.MONDAY), state.form.repeatDays)
+            assertEquals("Gym", state.form.label)
+            assertEquals(5, state.form.snoozeLengthMinutes)
+            assertEquals(60, state.form.volumePercent)
+            assertFalse(state.form.vibration)
+            assertEquals("builtin:birds", state.form.soundRef)
+            assertEquals(listOf(stored), repository.current, "nothing stored on opening")
+
+            viewModel.onIntent(EditorIntent.TimeChanged(LocalTime(6, 45)))
+            viewModel.onIntent(EditorIntent.SaveClicked)
+            advanceUntilIdle()
+
             val copy = repository.current.single { it.id != stored.id }
-            assertEquals("Gym", copy.label, "the copy is of the saved alarm, not the unsaved changes")
-            assertEquals(2, repository.current.size, "copied once")
-            assertEquals(stored, repository.current.single { it.id == stored.id }, "the changes are discarded, not saved")
-            assertEquals(listOf<EditorEffect>(EditorEffect.OpenCopy(copy.id)), effects)
+            assertEquals(LocalTime(6, 45), copy.time)
+            assertEquals("Gym", copy.label)
+            assertEquals(25, copy.graceSeconds, "the quiet time comes from the stored alarm")
+            assertTrue(copy.enabled)
+            assertEquals(stored, repository.current.single { it.id == stored.id }, "the original is untouched")
+            assertEquals(listOf<EditorEffect>(EditorEffect.Close), effects)
+        }
+
+    @Test
+    fun `Back on an unchanged duplicate closes without asking and leaves no copy`() =
+        runTest(dispatcher) {
+            repository.upsert(stored)
+            val viewModel = copyOf(stored.id)
+            val effects = effectsOf(viewModel)
+            advanceUntilIdle()
+
+            viewModel.onIntent(EditorIntent.BackRequested)
+            advanceUntilIdle()
+
+            assertFalse(viewModel.state.value.showDiscardDialog)
+            assertEquals(listOf<EditorEffect>(EditorEffect.Close), effects)
+            assertEquals(listOf(stored), repository.current)
+        }
+
+    @Test
+    fun `saving an unchanged duplicate of a switched-off alarm switches that alarm on instead of storing a second`() =
+        runTest(dispatcher) {
+            repository.upsert(stored.copy(enabled = false))
+            val viewModel = copyOf(stored.id)
+            val effects = effectsOf(viewModel)
+            advanceUntilIdle()
+
+            viewModel.onIntent(EditorIntent.SaveClicked)
+            advanceUntilIdle()
+
+            val only = repository.current.single()
+            assertEquals(stored.id, only.id)
+            assertTrue(only.enabled)
+            assertEquals(listOf<EditorEffect>(EditorEffect.Close), effects, "the editor closes back to Home")
+        }
+
+    @Test
+    fun `a duplicate of an alarm that cannot be read closes, and Home says it could not open`() =
+        runTest(dispatcher) {
+            val viewModel = copyOf("missing")
+            val effects = effectsOf(viewModel)
+            advanceUntilIdle()
+
+            assertEquals(listOf<EditorEffect>(EditorEffect.OpenFailed), effects)
+            assertTrue(repository.current.isEmpty())
         }
 
     @Test
@@ -239,48 +346,6 @@ class AlarmEditorMenuTest {
             assertTrue(repository.current.isEmpty())
             assertEquals(listOf<LogEvent>(LogEvent.AlarmDeleted(stored.id, clock.now())), logger.events)
             assertEquals(listOf<EditorEffect>(EditorEffect.Close), effects)
-        }
-
-    @Test
-    fun `a failed Duplicate is logged, says Couldn't save, opens nothing and leaves the editor usable`() =
-        runTest(dispatcher) {
-            repository.upsert(stored)
-            val viewModel = viewModel(stored.id)
-            val effects = effectsOf(viewModel)
-            advanceUntilIdle()
-            repository.failure = DomainError.StorageFailure("disk full")
-
-            viewModel.onIntent(EditorIntent.DuplicateClicked)
-            advanceUntilIdle()
-
-            assertFalse(viewModel.state.value.isSaving)
-            // Owner decision 2026-10-02: "Couldn't save the alarm. Try again."
-            assertEquals(listOf<EditorEffect>(EditorEffect.ShowSaveFailed), effects)
-            assertEquals(listOf<LogEvent>(LogEvent.OperationFailed("duplicate alarm", "storage failure: disk full")), logger.events)
-
-            viewModel.onIntent(EditorIntent.BackRequested)
-            advanceUntilIdle()
-
-            assertEquals(listOf(EditorEffect.ShowSaveFailed, EditorEffect.Close), effects)
-        }
-
-    @Test
-    fun `a failed Duplicate after Discard says Couldn't save and keeps the editor open`() =
-        runTest(dispatcher) {
-            repository.upsert(stored)
-            val viewModel = viewModel(stored.id)
-            val effects = effectsOf(viewModel)
-            advanceUntilIdle()
-            viewModel.onIntent(EditorIntent.LabelChanged("Unsaved"))
-            viewModel.onIntent(EditorIntent.DuplicateClicked)
-            repository.failure = DomainError.StorageFailure("disk full")
-
-            viewModel.onIntent(EditorIntent.DiscardConfirmed)
-            advanceUntilIdle()
-
-            assertFalse(viewModel.state.value.isSaving)
-            assertFalse(viewModel.state.value.showDiscardDialog)
-            assertEquals(listOf<EditorEffect>(EditorEffect.ShowSaveFailed), effects)
         }
 
     @Test

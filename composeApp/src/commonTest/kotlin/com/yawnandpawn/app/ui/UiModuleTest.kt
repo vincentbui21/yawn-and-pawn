@@ -27,6 +27,7 @@ import com.yawnandpawn.app.testing.FakeSoundPreview
 import com.yawnandpawn.app.testing.FakeTestAlarmStore
 import com.yawnandpawn.app.testing.FakeTimeChangeSignal
 import com.yawnandpawn.app.testing.FakeTimeZoneProvider
+import com.yawnandpawn.app.testing.anAlarm
 import com.yawnandpawn.app.testing.anAppVersion
 import com.yawnandpawn.app.ui.editor.AlarmEditorArgs
 import com.yawnandpawn.app.ui.editor.AlarmEditorViewModel
@@ -36,6 +37,7 @@ import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.test.UnconfinedTestDispatcher
 import kotlinx.coroutines.test.resetMain
 import kotlinx.coroutines.test.setMain
+import kotlinx.datetime.LocalTime
 import org.koin.core.parameter.parametersOf
 import org.koin.dsl.koinApplication
 import org.koin.dsl.module
@@ -59,7 +61,8 @@ class UiModuleTest {
     fun `the ui module builds the Home and editor ViewModels from the core ports`() {
         Dispatchers.setMain(UnconfinedTestDispatcher())
         try {
-            val repository = FakeAlarmRepository()
+            val source = anAlarm(id = "source", time = LocalTime(6, 45), label = "Gym")
+            val repository = FakeAlarmRepository(listOf(source))
             val ports =
                 module {
                     single<AlarmRepository> { repository }
@@ -91,6 +94,15 @@ class UiModuleTest {
             assertTrue(newEditor.state.value.isNew)
             val editEditor = koin.get<AlarmEditorViewModel> { parametersOf(AlarmEditorArgs(alarmId = "some-id")) }
             assertFalse(editEditor.state.value.isNew)
+            // Duplicate (owner decision 2026-10-05): a new alarm prefilled from the stored one, nothing stored.
+            val duplicate = koin.get<AlarmEditorViewModel> { parametersOf(AlarmEditorArgs(alarmId = null, copyOf = source.id)) }
+            val state = duplicate.state.value
+            assertTrue(state.isNew)
+            assertFalse(state.isLoading)
+            assertFalse(state.hasOverflowMenu)
+            assertEquals(LocalTime(6, 45), state.form.time)
+            assertEquals("Gym", state.form.label)
+            assertEquals(listOf(source), repository.current)
         } finally {
             Dispatchers.resetMain()
         }

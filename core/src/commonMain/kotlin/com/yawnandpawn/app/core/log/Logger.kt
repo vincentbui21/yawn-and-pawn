@@ -109,6 +109,55 @@ sealed interface LogEvent {
     data class EmergencyRingStopped(
         val reason: String,
     ) : LogEvent
+
+    /**
+     * The one-time alarm [alarmId] fired (armed for [scheduledAt]) and `RearmOnFire` switched it off, so nothing stays
+     * armed for it.
+     */
+    data class OneTimeAlarmDisabled(
+        val alarmId: String,
+        val scheduledAt: Instant,
+    ) : LogEvent
+
+    /**
+     * The ring start reached [stage], [msSinceScheduled] milliseconds after the time the alarm was armed for (null when
+     * this process has seen no alarm fire yet). NFR-1 wants the sound within 2 s; `adb logcat -s YawnAndPawn` shows
+     * each stage.
+     */
+    data class WakeTiming(
+        val stage: WakeStage,
+        val msSinceScheduled: Long?,
+    ) : LogEvent
+}
+
+/** The steps of a ring start that [LogEvent.WakeTiming] times, in the order they normally happen. */
+enum class WakeStage {
+    /** The alarm receiver got the fire (`onReceive`). */
+    ReceiverReceived,
+
+    /** The fire handler asked for the wake service (`startForegroundService` returned). */
+    ServiceStartRequested,
+
+    /** `WakeService.onCreate`. */
+    ServiceCreated,
+
+    /** `WakeService.onStartCommand` began. */
+    StartCommand,
+
+    /** `startForeground` returned: the ringing notification is posted. */
+    InForeground,
+
+    /** The engine committed the new session (its first effect runs). */
+    SessionCommitted,
+
+    /** The wake runtime applied `SoundAt`: the player was asked to play. */
+    SoundRequested,
+
+    /** The sound is prepared, so it starts playing. */
+    SoundStarted,
+
+    /** `WakeActivity.onCreate`. */
+    WakeScreenCreated,
 }
 
 /** Log text for [this] error: the storage cause, the missing id or the rejected field. */

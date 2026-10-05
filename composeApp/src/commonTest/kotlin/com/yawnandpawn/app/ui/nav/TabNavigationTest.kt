@@ -70,13 +70,22 @@ class TabNavigationTest {
     }
 
     @Test
-    fun `Duplicate replaces the open editor with the copy's`() {
+    fun `Duplicate replaces the open editor with a new alarm prefilled from it`() {
         val backStack = stack(Route.Alarms, Route.AlarmEditor("a"))
 
-        backStack.replaceEditor(Route.AlarmEditor("a"), "copy")
-        backStack.replaceEditor(Route.AlarmEditor("a"), "copy")
+        backStack.replaceEditor(Route.AlarmEditor("a"), "a")
+        backStack.replaceEditor(Route.AlarmEditor("a"), "a")
 
-        assertEquals(listOf<NavKey>(Route.Alarms, Route.AlarmEditor("copy")), backStack)
+        assertEquals(listOf<NavKey>(Route.Alarms, Route.AlarmEditor(alarmId = null, copyOf = "a")), backStack)
+    }
+
+    @Test
+    fun `Duplicate on Home opens the editor on a new alarm prefilled from the card`() {
+        val backStack = stack(Route.Alarms)
+
+        backStack.openEditor(alarmId = null, copyOf = "a")
+
+        assertEquals(listOf<NavKey>(Route.Alarms, Route.AlarmEditor(alarmId = null, copyOf = "a")), backStack)
     }
 
     @Test

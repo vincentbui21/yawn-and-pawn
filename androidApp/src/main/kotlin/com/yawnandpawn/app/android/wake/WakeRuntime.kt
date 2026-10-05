@@ -8,6 +8,7 @@ import com.yawnandpawn.app.core.crash.CrashReporter
 import com.yawnandpawn.app.core.error.Outcome
 import com.yawnandpawn.app.core.log.LogEvent
 import com.yawnandpawn.app.core.log.Logger
+import com.yawnandpawn.app.core.log.WakeStage
 import com.yawnandpawn.app.core.session.EffectRunner
 import com.yawnandpawn.app.core.session.EntryEffect
 import com.yawnandpawn.app.core.session.SessionConfig
@@ -74,6 +75,7 @@ class WakeRuntime(
     private val logger: Logger,
     private val now: () -> TimeSnapshot,
     private val session: () -> SessionState,
+    private val timings: WakeTimings = WakeTimings.None,
 ) : EffectRunner {
     private val player = outputs.player
     private val vibrator = outputs.vibrator
@@ -105,7 +107,7 @@ class WakeRuntime(
 
     private fun runEffect(effect: SessionEffect) {
         when (effect) {
-            is SessionEffect.StartWakeRuntime -> ensureService()
+            is SessionEffect.StartWakeRuntime -> startRuntime()
             is SessionEffect.ArmSlot -> armSlot(effect.at)
             SessionEffect.CancelSlot -> cancelSlot()
             is SessionEffect.ClearRuntimeSession -> endSession()
@@ -116,7 +118,7 @@ class WakeRuntime(
 
     private fun applyEffect(effect: EntryEffect) {
         when (effect) {
-            is EntryEffect.SoundAt -> ring { playFor(effect) }
+            is EntryEffect.SoundAt -> ring { playFor(effect) }.also { timings.stage(WakeStage.SoundRequested) }
 
             EntryEffect.SoundPaused -> ring { player.pause() }
 
@@ -183,6 +185,7 @@ class WakeRuntime(
         vibrator.stop()
         notifier.cancel()
         if (armedSlot != null) cancelSlot()
+        timings.sessionEnded()
     }
 
     /** At app start with no session: a volume a crashed session left saved is put back (AD-5), unless a ring started. */
@@ -324,6 +327,12 @@ class WakeRuntime(
     private fun showWakeUi() {
         ensureService()
         alarmAt()?.let { notifier.show(it) }
+    }
+
+    /** The first effect of a new session, so its state is committed (timed for the ring start). */
+    private fun startRuntime() {
+        timings.stage(WakeStage.SessionCommitted)
+        ensureService()
     }
 
     private fun ensureService() {

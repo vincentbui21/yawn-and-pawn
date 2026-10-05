@@ -17,7 +17,6 @@ import com.yawnandpawn.app.core.alarm.AlarmScheduler
 import com.yawnandpawn.app.core.alarm.AlarmScheduling
 import com.yawnandpawn.app.core.alarm.AlarmWriteLock
 import com.yawnandpawn.app.core.alarm.DeleteAlarm
-import com.yawnandpawn.app.core.alarm.DuplicateAlarm
 import com.yawnandpawn.app.core.alarm.RearmOnFire
 import com.yawnandpawn.app.core.alarm.SaveAlarm
 import com.yawnandpawn.app.core.alarm.SetAlarmEnabled
@@ -59,16 +58,15 @@ val appModule =
         // TimeZoneProvider from androidTimeModule.
         // One lock shared by every alarm use case and by AlarmScheduling: it serializes their read-modify-write.
         single { AlarmWriteLock() }
-        // Scheduling (Story 1.10): the only AlarmScheduler and the sync helper. A fire re-arms through RearmOnFire,
-        // then rings through the wake service (Story 1.14).
+        // Scheduling (Story 1.10): the only AlarmScheduler and the sync helper. A fire rings through the wake service
+        // (Story 1.14), then re-arms through RearmOnFire (device test round 1: the ring first).
         single<AlarmScheduler> { AndroidAlarmScheduler(androidContext(), get(), get(), get(), get()) }
         single { AlarmScheduling(get(), get(), get(), get(), get(), get()) }
         single { RearmOnFire(get(), get(), get(), get(), get(), get()) }
-        single<AlarmFiredHandler> { WakeAlarmFiredHandler(get(), get<RearmOnFire>(), get(), get()) }
+        single<AlarmFiredHandler> { WakeAlarmFiredHandler(get(), get<RearmOnFire>(), get(), get(), starts = get(), timings = get()) }
         factory { SaveAlarm(get(), get(), get(), get(), get(), get()) }
         factory { SetAlarmEnabled(get(), get(), get(), get()) }
         factory { DeleteAlarm(get(), get(), get()) }
-        factory { DuplicateAlarm(get(), get(), get(), get(), get(), get()) }
         // "Test alarm" (Story 1.18): the editor's values ring as a test 10 s later, through the test request code.
         factory { ScheduleTestAlarm(get(), get(), get(), get()) }
         // The wake session (Story 1.12): the Epic 1 policies, the one engine over runtime.db (ActiveSessionStore from

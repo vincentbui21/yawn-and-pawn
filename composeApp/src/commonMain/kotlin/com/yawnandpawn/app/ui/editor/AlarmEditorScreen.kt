@@ -108,7 +108,7 @@ import org.koin.core.parameter.parametersOf
 /**
  * The Alarm editor route: its ViewModel (scoped to the nav entry), effects, and Back interception. [onOpenFailed] runs
  * when the alarm could not be read (the editor closes and Home says so); [onOpenCopy] replaces this editor with one on
- * the copy made by Duplicate.
+ * a new alarm prefilled from the stored alarm it gets (Duplicate). [copyOf] opens this editor that way.
  */
 @Composable
 fun AlarmEditorRoute(
@@ -116,7 +116,8 @@ fun AlarmEditorRoute(
     onClose: () -> Unit,
     onOpenFailed: () -> Unit,
     onOpenCopy: (String) -> Unit,
-    viewModel: AlarmEditorViewModel = koinViewModel { parametersOf(AlarmEditorArgs(alarmId)) },
+    copyOf: String? = null,
+    viewModel: AlarmEditorViewModel = koinViewModel { parametersOf(AlarmEditorArgs(alarmId, copyOf)) },
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
     val snackbarHostState = remember { SnackbarHostState() }
@@ -129,7 +130,7 @@ fun AlarmEditorRoute(
 
                 EditorEffect.OpenFailed -> onOpenFailed()
 
-                is EditorEffect.OpenCopy -> onOpenCopy(effect.alarmId)
+                is EditorEffect.OpenCopy -> onOpenCopy(effect.sourceId)
 
                 // Its own coroutine: showSnackbar suspends until the snackbar goes, which must not hold back a Close.
                 EditorEffect.ShowSaveFailed -> launch { snackbarHostState.showSnackbar(saveFailed) }

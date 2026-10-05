@@ -11,13 +11,15 @@ import org.koin.compose.viewmodel.koinViewModel
 
 /**
  * The Alarms tab route: [HomeViewModel] (scoped to the nav entry) feeding [HomeScreen]. [onOpenEditor] opens the editor
- * (`null` for a new alarm). [openFailed] is the editor's result when its alarm could not be read: Home shows "Couldn't
- * open this alarm." and calls [onOpenFailedShown]. The countdown is recomputed whenever Home resumes, and the
- * reliability settings are checked again whenever it starts or resumes (Story 1.19).
+ * (`null` for a new alarm); [onOpenDuplicate] opens it on a new, unsaved alarm prefilled from the alarm it gets.
+ * [openFailed] is the editor's result when its alarm could not be read: Home shows "Couldn't open this alarm." and
+ * calls [onOpenFailedShown]. The countdown is recomputed whenever Home resumes, and the reliability settings are checked
+ * again whenever it starts or resumes (Story 1.19).
  */
 @Composable
 fun HomeRoute(
     onOpenEditor: (String?) -> Unit,
+    onOpenDuplicate: (String) -> Unit,
     openFailed: Boolean,
     onOpenFailedShown: () -> Unit,
     viewModel: HomeViewModel = koinViewModel(),
@@ -27,6 +29,7 @@ fun HomeRoute(
         viewModel.effects.collect { effect ->
             when (effect) {
                 is HomeEffect.OpenEditor -> onOpenEditor(effect.alarmId)
+                is HomeEffect.OpenDuplicate -> onOpenDuplicate(effect.sourceId)
             }
         }
     }

@@ -57,9 +57,9 @@ class AlarmUseCasesTest {
     fun `each new alarm gets the next code from the sequence, and a deleted alarm's code is never reused`() =
         runTest {
             val first = saved()
-            val second = saved()
+            val second = saved(draft.copy(time = LocalTime(8, 0)))
             delete(second.id)
-            val third = saved()
+            val third = saved(draft.copy(time = LocalTime(9, 0)))
 
             assertEquals(listOf(1000, 1001, 1002), listOf(first.requestCode, second.requestCode, third.requestCode))
             assertEquals(1002, sequence.lastUsed)
@@ -200,7 +200,7 @@ class AlarmUseCasesTest {
             val failure = DomainError.StorageFailure("corrupt")
             sequence.failure = failure
 
-            assertEquals(Outcome.Failure(failure), save(draft))
+            assertEquals(Outcome.Failure(failure), save(draft.copy(time = LocalTime(8, 0))))
             assertEquals(Outcome.Failure(failure), duplicate(alarm.id))
             assertEquals(listOf(alarm), stored())
         }
@@ -245,7 +245,7 @@ class AlarmUseCasesTest {
     fun `deleting removes an existing alarm`() =
         runTest {
             val keep = saved()
-            val remove = saved()
+            val remove = saved(draft.copy(time = LocalTime(8, 0)))
 
             assertEquals(Outcome.Success(Unit), delete(remove.id))
             assertEquals(listOf(keep), stored())
@@ -285,6 +285,102 @@ class AlarmUseCasesTest {
             assertEquals(Outcome.Failure(DomainError.NotFound("missing")), duplicate("missing"))
             assertTrue(stored().isEmpty())
         }
+
+    @Test
+    fun `a new alarm identical to a stored one switches that one on instead of storing a second`() =
+        runTest {
+            val original = saved()
+            setEnabled(original.id, enabled = false)
+            val codes = sequence.lastUsed
+            clock.advanceBy(10.minutes)
+            scheduler.calls.clear()
+
+            val merged = assertIs<Outcome.Success<Alarm>>(save(draft)).value
+
+            assertEquals(original.copy(enabled = true, updatedAt = startMillis + 10.minutes), merged)
+            assertEquals(listOf(merged), stored(), "no second alarm")
+            assertEquals(codes, sequence.lastUsed, "no request code allocated")
+            // Monday 2027-03-08 07:00 UTC, its next occurrence.
+            assertEquals(
+                listOf<Call>(Call.Schedule(original.id, original.requestCode, Instant.parse("2027-03-08T07:00:00Z"))),
+                scheduler.calls,
+            )
+        }
+
+    @Test
+    fun `a new alarm saved off never switches an identical stored alarm on, it is stored as its own alarm`() =
+        runTest {
+            val original = saved()
+            setEnabled(original.id, enabled = false)
+
+            val added = saved(draft.copy(enabled = false))
+
+            assertNotEquals(original.id, added.id)
+            assertTrue(stored().none { it.enabled }, "nothing switched on")
+            assertEquals(2, stored().size)
+        }
+
+    @Test
+    fun `a new alarm that differs in any one setting is stored as a second alarm`() =
+        runTest {
+            val original = saved()
+            val differing =
+                listOf(
+                    draft.copy(time = LocalTime(7, 1)),
+                    draft.copy(repeatDays = setOf(DayOfWeek.TUESDAY)),
+                    draft.copy(label = "Run"),
+                    draft.copy(soundRef = "builtin:chimes"),
+                    draft.copy(volumePercent = 50),
+                    draft.copy(gradualVolume = false),
+                    draft.copy(vibration = false),
+                    draft.copy(snoozeLengthMinutes = 5),
+                    draft.copy(graceSeconds = 30),
+                )
+
+            val added = differing.map { saved(it) }
+
+            assertTrue(added.none { it.id == original.id })
+            assertEquals(differing.size + 1, stored().size)
+        }
+
+    @Test
+    fun `a new one-time alarm identical to one that already rang switches it on for its next date`() =
+        runTest {
+            // A one-time 07:00 alarm that rang this morning (06:00 now, so 07:00 today had not come yet: ring first).
+            val once = saved(draft.copy(repeatDays = emptySet()))
+            clock.advanceBy(90.minutes)
+            setEnabled(once.id, enabled = false)
+            scheduler.calls.clear()
+
+            // 07:30: the same alarm again; it rings tomorrow at 07:00.
+            val merged = assertIs<Outcome.Success<Alarm>>(save(draft.copy(repeatDays = emptySet()))).value
+
+            assertEquals(once.id, merged.id)
+            assertTrue(merged.enabled)
+            assertEquals(listOf(merged), stored())
+            assertEquals(
+                listOf<Call>(Call.Schedule(once.id, once.requestCode, Instant.parse("2027-03-04T07:00:00Z"))),
+                scheduler.calls,
+            )
+        }
+
+    @Test
+    fun `identical settings ignore the id, request code, on-off state, timestamps and the fixed ramp start`() {
+        val a = Alarm(id = "a", time = LocalTime(7, 0), requestCode = 1000, createdAt = start, updatedAt = start)
+        val b =
+            a.copy(
+                id = "b",
+                requestCode = 1001,
+                enabled = false,
+                rampStartPercent = 30,
+                createdAt = start + 1.minutes,
+                updatedAt = start + 2.minutes,
+            )
+
+        assertTrue(a.hasSameSettingsAs(b))
+        assertTrue(!a.hasSameSettingsAs(b.copy(label = "Gym")))
+        assertTrue(!a.hasSameSettingsAs(b.copy(graceSeconds = 30)))
+    }
 
     @Test
     fun `the saved alarm is what the repository returns`() =

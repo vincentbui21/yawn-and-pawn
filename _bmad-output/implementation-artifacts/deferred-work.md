@@ -173,7 +173,10 @@
 - source_spec: `docs/spikes/S1.md`
   summary: The volume keys can turn the alarm stream down while the Play purchase sheet is on top; the wake runtime cannot intercept them then.
   evidence: Spike S1 runs U1 and L1: alarm stream went 16/16 → 1/16 from key presses with the sheet open, sound still playing.
-  status: assigned to Story 2.8 (volume keys) to decide: re-assert the alarm-stream volume while a purchase is in flight, or accept it; Epic 4 orchestration must keep the sound running under the sheet.
+  status: assigned to Story 2.8 (volume keys) to decide: re-assert the alarm-stream volume while a purchase is in flight, or accept it; Epic 4 orchestration must keep the sound running under the sheet. Decided in Story 2.8:
+    - The gap while the Play sheet is on top is accepted. Play's activity owns the keys then, and FR-SES-6 forbids re-applying the volume continuously.
+    - The volume is re-asserted once when the purchase flow hands the screen back. `WakeRuntime.reassertRingVolume()` sets the alarm stream to the ring's volume while the session rings loud (Ringing or Loud, not paused, no emergency ring) and does nothing otherwise. It is tested in `WakeRuntimeTest`; nothing calls it in Epic 2.
+    - Story 4.11 (purchase orchestration) must call it on every payment outcome that returns to ringing, including cancelled, error, offline, unlock cancelled and pending.
 - source_spec: `docs/spikes/S1.md`
   summary: Billing results can arrive very late: offline, the Play sheet shows an error and only reports a result when the user closes it (no timeout); declines arrive as BILLING_UNAVAILABLE; consume can fail transiently with SERVICE_UNAVAILABLE.
   evidence: Spike S1 runs N1u (USER_CANCELED after 200 s), N2u (NETWORK_ERROR), C1u (BILLING_UNAVAILABLE), L5 (consume SERVICE_UNAVAILABLE, retry OK).

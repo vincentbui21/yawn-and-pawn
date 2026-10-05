@@ -58,6 +58,13 @@ yawn-and-pawn:
       - '**/data/src/**'
       - '**/androidApp/src/**'
     excludes: *testSources
+  # No media session, volume provider or audio rerouting: the volume keys and routing stay the system's (Story 2.8,
+  # FR-SES-6, NFR-13). App UI modules only.
+  NoAudioCaptureOrRouting:
+    active: true
+    includes:
+      - '**/androidApp/src/**'
+      - '**/composeApp/src/**'
 
 # Test source sets detekt's defaults do not know (androidHostTest, testDebug) are tests too.
 complexity:

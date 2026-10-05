@@ -233,6 +233,21 @@ class WakeRuntime(
     }
 
     /**
+     * Sets the alarm stream back to the ring's volume once, while the session rings loud (Ringing or Loud, not paused by
+     * a call, no emergency ring); otherwise nothing (Story 2.8).
+     *
+     * Spike S1: while Google Play's purchase sheet is on top, its activity gets the volume keys and they change the alarm
+     * stream; the wake screen cannot consume them then, and FR-SES-6 forbids re-applying the volume continuously. The
+     * gap is accepted, and Epic 4's purchase orchestration calls this once on every payment outcome that hands the
+     * screen back to the ring ("alarm at full volume" again). Nothing calls it in Epic 2.
+     */
+    fun reassertRingVolume() {
+        val state = session()
+        val loud = state is SessionState.Ringing || state is SessionState.Loud
+        if (loud && emergency.value == null && !(state as SessionState.Ring).session.paused) player.reassertVolume()
+    }
+
+    /**
      * The session could not start (or the wake flow failed before it did): the default sound at [volumePercent] with
      * vibration, the notification and the wake screen for the alarm at [alarmAt], until [stopEmergency] ("I'm up") or
      * after [EMERGENCY_LIMIT]. Logged with [cause]. Nothing when one already plays.
@@ -348,7 +363,7 @@ class WakeRuntime(
     private fun runSound(effect: SessionEffect): Boolean {
         when (effect) {
             SessionEffect.Mute -> player.mute()
-            is SessionEffect.UnmuteToVolume -> player.unmute()
+            is SessionEffect.UnmuteToVolume -> player.unmuteTo(effect.volumePercent)
             SessionEffect.StrongHaptic -> vibrator.strongHaptic()
             SessionEffect.StopSound -> silence()
             SessionEffect.PauseSound -> player.pause().also { vibrator.stop() }

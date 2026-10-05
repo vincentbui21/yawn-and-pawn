@@ -156,7 +156,7 @@ class AndroidAlarmPlayerTest {
 
         player.mute()
         assertEquals(0f, player.gain)
-        player.unmute()
+        player.unmuteTo(80)
         assertEquals(1f, player.gain, "the grace window ends at the set volume")
         player.pause()
         assertTrue(!playback.playing && player.isPaused)

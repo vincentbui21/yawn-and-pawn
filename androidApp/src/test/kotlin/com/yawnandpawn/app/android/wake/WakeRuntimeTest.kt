@@ -180,6 +180,72 @@ class WakeRuntimeTest {
     }
 
     @Test
+    fun `with vibrate in grace on the grace window keeps vibrating, and Loud vibrates again either way (Story 2-8)`() {
+        val inGrace = session.copy(config = session.config.copy(vibrateInGrace = true))
+        enter(SessionState.Ringing(inGrace))
+        run(SessionEffect.Mute)
+
+        enter(SessionState.Grace(inGrace))
+
+        assertTrue(player.isMuted)
+        assertTrue(vibrator.isVibrating, "vibrate in grace is on")
+        run(SessionEffect.UnmuteToVolume(80))
+        enter(SessionState.Loud(inGrace))
+        assertTrue(vibrator.isVibrating)
+    }
+
+    @Test
+    fun `the alarm stream is set at the ring start and the grace end, never in between, and the user volume comes back (Story 2-8)`() {
+        audio.setStreamVolume(AudioManager.STREAM_ALARM, 2, 0)
+        val setVolume = (audio.getStreamMaxVolume(AudioManager.STREAM_ALARM) * 0.8).roundToInt()
+
+        enter(ringing)
+        assertEquals(setVolume, alarmStream(), "ring start")
+        audio.setStreamVolume(AudioManager.STREAM_ALARM, 1, 0)
+        // A heartbeat or a tap re-runs the entry effects: the volume is not enforced.
+        enter(ringing)
+        assertEquals(1, alarmStream())
+        run(SessionEffect.Mute)
+        enter(SessionState.Grace(session))
+        assertEquals(1, alarmStream())
+
+        run(SessionEffect.UnmuteToVolume(80))
+        enter(SessionState.Loud(session))
+        assertEquals(setVolume, alarmStream(), "grace end")
+        assertEquals(1f, player.gain, "full gain once the grace window ends")
+        audio.setStreamVolume(AudioManager.STREAM_ALARM, 1, 0)
+        enter(SessionState.Loud(session))
+        assertEquals(1, alarmStream(), "not re-applied during Loud")
+
+        runtime.endSession()
+        assertEquals(2, alarmStream(), "the user's own volume is back")
+    }
+
+    @Test
+    fun `the purchase hand-back hook re-asserts the ring volume once, only while the session rings loud (Story 2-8)`() {
+        val setVolume = (audio.getStreamMaxVolume(AudioManager.STREAM_ALARM) * 0.8).roundToInt()
+        enter(SessionState.Loud(session))
+        audio.setStreamVolume(AudioManager.STREAM_ALARM, 1, 0)
+
+        runtime.reassertRingVolume()
+
+        assertEquals(setVolume, alarmStream())
+        // Muted (grace), paused by a call or snoozed: nothing.
+        run(SessionEffect.Mute)
+        enter(SessionState.Grace(session))
+        audio.setStreamVolume(AudioManager.STREAM_ALARM, 1, 0)
+        runtime.reassertRingVolume()
+        assertEquals(1, alarmStream(), "grace")
+        run(SessionEffect.PauseSound)
+        enter(SessionState.Loud(session.copy(pausedAt = now)))
+        runtime.reassertRingVolume()
+        assertEquals(1, alarmStream(), "paused by a call")
+        enter(SessionState.Snoozed(session.copy(snoozeEnd = Deadline.after(now, 9.minutes), interactionDeadline = null)))
+        runtime.reassertRingVolume()
+        assertEquals(1, alarmStream(), "snoozed")
+    }
+
+    @Test
     fun `a call pauses sound and vibration and its end resumes them`() {
         enter(ringing)
         val paused = SessionState.Ringing(session.copy(pausedAt = now))

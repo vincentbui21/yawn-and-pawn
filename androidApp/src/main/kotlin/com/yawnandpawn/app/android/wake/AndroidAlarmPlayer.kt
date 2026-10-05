@@ -17,8 +17,10 @@ import kotlin.time.Duration.Companion.seconds
  * The only alarm player (AD-5), owned by [WakeRuntime]. It plays one looping sound on the alarm stream
  * ([ALARM_AUDIO_ATTRIBUTES], `USAGE_ALARM`), independent of media and ringer volume.
  *
- * - **Volume:** at the start of a ring it sets `STREAM_ALARM` to the alarm's volume ([AlarmVolume], which saves the
- *   user's own volume); [stop] with `restoreVolume` puts it back at the end of the session.
+ * - **Volume:** at the start of a ring, and again when a grace window ends ([unmuteTo]), it sets `STREAM_ALARM` to the
+ *   alarm's volume ([AlarmVolume], which saves the user's own volume once); never continuously, so between those
+ *   moments the user's change stays (Story 2.8). [stop] with `restoreVolume` puts the user's volume back at the end of
+ *   the session.
  * - **Ramp:** with "Gradually increase volume" on, the gain follows the pure `rampGain(elapsed, start, 30 s)`, updated
  *   about every 250 ms; off, the first frame plays at full gain. Elapsed time is monotonic.
  * - **Never silent:** a sound that cannot be opened, or fails during prepare or while ringing, is replaced in the same
@@ -148,12 +150,26 @@ class AndroidAlarmPlayer(
             applyGainLocked()
         }
 
-    /** The grace window ended: back to the set volume at full gain (the ramp is over). */
-    fun unmute() =
+    /**
+     * The grace window ended (Story 2.8, FR-SES-6): the alarm stream is set to [volumePercent] again (the user may have
+     * turned it down meanwhile) and the sound is back at full gain. Once per grace end, never continuously.
+     */
+    fun unmuteTo(volumePercent: Int) =
         synchronized(lock) {
+            if (request != null) volume.setForRing(volumePercent)
             isMuted = false
             rampDone = true
             applyGainLocked()
+        }
+
+    /**
+     * Sets the alarm stream back to the playing ring's volume once (Story 2.8): the hook for a purchase flow handing the
+     * screen back (Spike S1: the volume keys work on the Play sheet). Nothing while no ring is open, muted or paused.
+     */
+    fun reassertVolume() =
+        synchronized(lock) {
+            val playing = request ?: return@synchronized
+            if (!isMuted && !isPaused) volume.setForRing(playing.volumePercent)
         }
 
     /** A call: paused until [resume] (or the next [play]). */

@@ -20,10 +20,12 @@ import com.yawnandpawn.app.core.alarm.DeleteAlarm
 import com.yawnandpawn.app.core.alarm.RearmOnFire
 import com.yawnandpawn.app.core.alarm.SaveAlarm
 import com.yawnandpawn.app.core.alarm.SetAlarmEnabled
+import com.yawnandpawn.app.core.error.valueOrNull
 import com.yawnandpawn.app.core.history.MissedNotes
 import com.yawnandpawn.app.core.id.IdGenerator
 import com.yawnandpawn.app.core.id.UuidV4IdGenerator
 import com.yawnandpawn.app.core.log.Logger
+import com.yawnandpawn.app.core.session.ActiveSessionStore
 import com.yawnandpawn.app.core.session.Billing
 import com.yawnandpawn.app.core.session.CheckValidator
 import com.yawnandpawn.app.core.session.EffectRunner
@@ -36,8 +38,10 @@ import com.yawnandpawn.app.core.session.ScheduleTestAlarm
 import com.yawnandpawn.app.core.session.SessionEngine
 import com.yawnandpawn.app.core.session.SessionRecorder
 import com.yawnandpawn.app.core.session.SessionReducer
+import com.yawnandpawn.app.core.session.SessionSlotRearm
 import com.yawnandpawn.app.core.session.SessionState
 import com.yawnandpawn.app.core.session.SnoozeAvailabilityPolicy
+import com.yawnandpawn.app.core.session.StoredSession
 import com.yawnandpawn.app.core.session.TierFeeLadder
 import com.yawnandpawn.app.data.dataModule
 import com.yawnandpawn.app.ui.uiModule
@@ -63,7 +67,11 @@ val appModule =
         single<AlarmScheduler> { AndroidAlarmScheduler(androidContext(), get(), get(), get(), get()) }
         single { AlarmScheduling(get(), get(), get(), get(), get(), get()) }
         single { RearmOnFire(get(), get(), get(), get(), get(), get()) }
-        single<AlarmFiredHandler> { WakeAlarmFiredHandler(get(), get<RearmOnFire>(), get(), get(), starts = get(), timings = get()) }
+        single<AlarmFiredHandler> {
+            WakeAlarmFiredHandler(get(), get<RearmOnFire>(), get(), get(), starts = get(), timings = get(), rearm = get())
+        }
+        // The session slot armed from runtime.db without the engine (Story 2.1): after system events and refused starts.
+        single { SessionSlotRearm(get(), get(), get(), get(), get(), get()) }
         factory { SaveAlarm(get(), get(), get(), get(), get(), get()) }
         factory { SetAlarmEnabled(get(), get(), get(), get()) }
         factory { DeleteAlarm(get(), get(), get()) }
@@ -87,7 +95,11 @@ val appModule =
         single { SessionEngine(get(), get(), get(), get(), get(), get(), get(), get()) }
     }
 
-/** The app process: starts Koin, re-arms alarms and restores the session. Open for the Robolectric test application. */
+/**
+ * The app process: starts Koin and re-arms alarms. It never restores the session (Story 2.1): a process started for a
+ * broadcast must not run the ringing entry effects or start a foreground service. `WakeService`, `MainActivity` and
+ * `WakeActivity` restore it; a system event arms the session slot instead. Open for the Robolectric test application.
+ */
 open class YawnAndPawnApp : Application() {
     /** Bindings loaded after the app's own (they win); only the Robolectric test application adds any. */
     protected open val overrideModules: List<Module> = emptyList()
@@ -105,13 +117,16 @@ open class YawnAndPawnApp : Application() {
         // App start re-arms every alarm (AD-4); it also covers a backup restore, which restarts the app.
         val scheduling = koin.get<AlarmScheduling>()
         scope.launch { scheduling.rescheduleAll() }
-        // Then the engine takes over a session the last process left in runtime.db (AD-2 rule 2): entry effects only.
-        // With no session left, an alarm volume a crashed session saved is put back.
-        val engine = koin.get<SessionEngine>()
+        // With no session left in runtime.db (nothing, an unreadable row or a stored Idle), an alarm volume a crashed session
+        // saved is put back (AD-5). Only a read: the session itself is restored by WakeService, MainActivity or
+        // WakeActivity (Story 2.1).
+        val store = koin.get<ActiveSessionStore>()
         val runtime = koin.get<WakeRuntime>()
         scope.launch {
-            engine.restore()
-            if (engine.state.value == SessionState.Idle) runtime.restoreVolumeIfIdle()
+            if (store.load().valueOrNull()?.holdsNoSession() == true) runtime.restoreVolumeIfIdle()
         }
     }
+
+    private fun StoredSession.holdsNoSession(): Boolean =
+        this == StoredSession.Empty || this is StoredSession.Unreadable || this == StoredSession.Found(SessionState.Idle)
 }

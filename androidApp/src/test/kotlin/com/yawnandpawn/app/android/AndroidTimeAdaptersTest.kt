@@ -17,7 +17,6 @@ import org.koin.core.context.GlobalContext
 import org.robolectric.RobolectricTestRunner
 import kotlin.test.assertEquals
 import kotlin.test.assertIs
-import kotlin.test.assertNotEquals
 import kotlin.test.assertSame
 import kotlin.test.assertTrue
 
@@ -59,39 +58,15 @@ class AndroidTimeAdaptersTest {
     }
 
     @Test
-    fun `without BOOT_COUNT the boot counter is a negative identity that is stable within a boot`() {
+    fun `without BOOT_COUNT the boot counter is the same negative value every boot, whatever the wall clock does`() {
         assertEquals(-1, Settings.Global.getInt(app.contentResolver, Settings.Global.BOOT_COUNT, -1), "precondition: setting missing")
-        var wall = 1_800_000_000_000L
-        var elapsed = 3_600_000L
-        val counter = AndroidBootCounter(app.contentResolver, wallMillis = { wall }, elapsedMillis = { elapsed })
-        val first = counter.bootCount()
+        val counter = AndroidBootCounter(app.contentResolver)
 
-        wall += 5 * 3_600_000L
-        elapsed += 5 * 3_600_000L
-
-        assertTrue(first < 0, "identity $first must be negative")
-        assertEquals(first, counter.bootCount())
-    }
-
-    @Test
-    fun `without BOOT_COUNT the boot counter changes when the boot instant changes`() {
-        var wall = 1_800_000_000_000L
-        var elapsed = 3_600_000L
-        val counter = AndroidBootCounter(app.contentResolver, wallMillis = { wall }, elapsedMillis = { elapsed })
-        val beforeReboot = counter.bootCount()
-
-        // Reboot ten minutes later: elapsed restarts near 0 while the wall clock keeps running.
-        wall += 10 * 60_000L
-        elapsed = 5_000L
-
-        val afterReboot = counter.bootCount()
-        assertTrue(afterReboot < 0, "identity $afterReboot must be negative")
-        assertNotEquals(beforeReboot, afterReboot)
-    }
-
-    @Test
-    fun `without BOOT_COUNT the default sources are the system clocks`() {
-        assertTrue(AndroidBootCounter(app.contentResolver).bootCount() < 0)
+        assertEquals(AndroidBootCounter.MISSING_BOOT_COUNT, counter.bootCount())
+        assertTrue(AndroidBootCounter.MISSING_BOOT_COUNT < 0, "never a real boot count")
+        // A reboot is then told by the elapsed clock going back (Deadline.sameBoot), never by the wall clock.
+        SystemClock.setCurrentTimeMillis(System.currentTimeMillis() + 2 * 3_600_000L)
+        assertEquals(AndroidBootCounter.MISSING_BOOT_COUNT, counter.bootCount())
     }
 
     @Test

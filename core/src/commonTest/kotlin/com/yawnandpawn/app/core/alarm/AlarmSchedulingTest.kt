@@ -472,7 +472,7 @@ class AlarmSchedulingTest {
     @Test
     fun `session-slot and test fires are logged and ignored until their stories bind them`() =
         runTest {
-            onFire.onSessionSlotFired()
+            onFire.onSessionSlotFired(null)
             onFire.onTestAlarmFired()
 
             assertEquals(emptyList(), scheduler.calls)

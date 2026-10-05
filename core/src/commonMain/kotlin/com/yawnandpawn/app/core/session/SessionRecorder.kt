@@ -48,8 +48,10 @@ class SessionRecorder(
      * reducer), so a write retried or restored hours later records the real end; [now] (wall time) only stands in for a
      * session stored before Story 1.13, after an end time already stored. The time to complete is monotonic when the
      * first ring and the end share a boot (a wall clock change cannot distort it), wall time otherwise, never negative.
-     * The first ring time comes from the session, else the stored row, else the scheduled time. The same write
-     * repeated leaves one row with the same values. A failed read writes nothing.
+     * On a device without `BOOT_COUNT` (a negative boot count) it is always wall time: there a reboot whose uptime passed
+     * the first ring's cannot be detected, and a clock change during one session is rarer than that error. The first
+     * ring time comes from the session, else the stored row, else the scheduled time. The same write repeated leaves
+     * one row with the same values. A failed read writes nothing.
      */
     suspend fun recordEnd(
         session: SessionData,
@@ -62,10 +64,13 @@ class SessionRecorder(
             val firstRing = session.firstRing
             val ended = session.ended
             val timeToComplete =
-                if (firstRing != null && ended != null) {
-                    durationBetween(firstRing, ended).inWholeMilliseconds
-                } else {
-                    (endedAt - firstRingAt).inWholeMilliseconds.coerceAtLeast(0)
+                when {
+                    firstRing == null || ended == null -> (endedAt - firstRingAt).inWholeMilliseconds.coerceAtLeast(0)
+
+                    // No BOOT_COUNT: a reboot at a higher uptime would pass for the same boot, so wall time.
+                    firstRing.bootCount < 0 || ended.bootCount < 0 -> (ended.wallMillis - firstRing.wallMillis).coerceAtLeast(0)
+
+                    else -> durationBetween(firstRing, ended).inWholeMilliseconds
                 }
             repository.upsert(
                 rowOf(

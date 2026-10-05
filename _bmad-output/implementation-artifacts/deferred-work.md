@@ -45,7 +45,7 @@
 - source_spec: `_bmad-output/implementation-artifacts/spec-1-6-time-ports-deadlines-and-alarm-occurrence-math-in-core.md`
   summary: Decide how deadlines and scheduling behave right after a reboot when the wall clock is wrong until network time syncs.
   evidence: Unverified (medium if it happens). After a reboot `Deadline` compares wall time by design (AD-3); an RTC reset or manual clock change can make a snooze deadline due too early or too late. Natural home: Stories 1.10 (reschedule on boot/time change) and 1.12 (SessionEngine restore).
-  status: assigned to Story 1.10 by sprint-change-proposal-2026-10-01 (recorded in `docs/decisions/reboot-clock.md`), then carried to Story 2.2.
+  status: assigned to Story 1.10 by sprint-change-proposal-2026-10-01 (recorded in `docs/decisions/reboot-clock.md`), then carried to Story 2.2. Resolved in Story 2.2: no clock-trust check (decision appended to `docs/decisions/reboot-clock.md`); `TIME_SET` re-runs `rescheduleAll()` and re-arms the session slot, a restored ring rings at once whatever the clock says, and a snooze end compares wall time only across a reboot.
 - source_spec: `_bmad-output/implementation-artifacts/spec-1-7-store-alarms-in-app-db.md`
   summary: Decide whether request codes of deleted alarms may be reused, or keep a persisted high-water mark.
   evidence: Unverified (medium once scheduling exists). "Highest in use + 1" reuses a deleted alarm's code; harmful only if a stale PendingIntent survives. Settle in Story 1.10 (scheduler cancels on delete).
@@ -154,11 +154,11 @@
 - source_spec: `_bmad-output/implementation-artifacts/spec-1-14-ring-the-alarm-wakeservice-alarmplayer-and-the-ongoing-notification.md`
   summary: Story 1.14 follow-ups for later stories.
   evidence: |
-    - A refused foreground-service start for a fresh alarm has no session slot to retry it, and stopSelf after a refused startForeground may crash. Settle with device evidence in Spike S2 / Story 1.20.
+    - A refused foreground-service start for a fresh alarm has no session slot to retry it, and stopSelf after a refused startForeground may crash. Settle with device evidence in Spike S2 / Story 1.20. Retry half resolved in Story 2.1: a refused alarm or slot start (in the receiver's handler) and a refused `startForeground` (in `WakeService`) re-arm the session slot one heartbeat later carrying the alarm (`SessionSlotRearm.afterRefusedStart`, dropped once 30 min late); its fire handles the alarm in a new process. The `stopSelf` crash risk and whether a retried start is allowed stay with Spike S2 / Story 2.13 (entry below).
     - Android 13+ without POST_NOTIFICATIONS shows no notification or full-screen intent, so nothing stops the ring before the 30-minute limit. Story 1.19 requests the permission and must log or flag the missing permission. Resolved in Story 1.19: the editor asks for POST_NOTIFICATIONS once after the first save, and the Home reliability banner flags it (and a revoked full-screen intent on API 34+, or denied exact alarms on API 31-32) on every start, with "Fix" opening the setting.
     - MediaPlayer.prepare() runs on the main thread under the player lock, which is an ANR risk for content URIs. Story 1.17 (sound library, user files) should move it to prepareAsync or off main. Resolved in Story 1.17: `MediaPlayerPlaybackFactory` and the preview player use `prepareAsync`; a prepare error falls back like a playback error.
     - Only the 12 h format is tested for the notification and wake-screen time. Story 1.15 adds the 24 h case. (Resolved in Story 1.15: `WakeNotifierTest` and `WakeActivityTest` cover the 24-hour setting.)
-    - The emergency ring arms no backstop slot, so a process death during it is not recovered. Story 2.1 (recover after a kill).
+    - The emergency ring arms no backstop slot, so a process death during it is not recovered. Story 2.1 (recover after a kill). Resolved in Story 2.1: with no session ringing or snoozed, the emergency ring arms the session slot one heartbeat away carrying its alarm, re-armed on every slot fire while it plays and cancelled by "I'm up" or the 30-minute limit; after a kill the slot rings that alarm again (a real session once storage works, else the emergency ring with a fresh limit).
 - source_spec: `_bmad-output/implementation-artifacts/spec-1-15-ringing-screen-over-the-lock-screen-with-i-m-up.md`
   summary: Story 1.15 follow-ups.
   evidence: |
@@ -189,3 +189,21 @@
   summary: Check on the phone that tapping the ringing notification from the shade after Home brings the wake screen back within 1,000 ms, and that three taps leave one wake screen.
   evidence: The GMD test for it failed in CI because the managed device is an ATD image with no notification shade (PR #24, 2026-10-06); it was removed. Robolectric LeaveAndReturnTest covers the logic.
   status: assigned to Story 2.13 (device checklist).
+- source_spec: `_bmad-output/implementation-artifacts/spec-2-1-keep-the-backup-alarm-armed-and-recover-after-a-kill.md`
+  summary: Story 2.1 follow-ups that need device evidence (Spike S2 / Story 2.13).
+  evidence: |
+    - Whether `stopSelf` after a refused `startForeground` crashes the process (`Context.startForegroundService() did not then call Service.startForeground()`), and whether a start retried from a session-slot fire is allowed after a refusal. The retry cadence is one heartbeat (60 s), the same as the session slot; device logs (`SessionSlotRearmed reason=wake service start refused`) should confirm it on the matrix.
+    - The refused-`startForeground` branch of `WakeService.onStartCommand` (it re-arms the slot through `SessionSlotRearm.afterRefusedStart`) has no host test: Robolectric cannot make `startForeground` throw. The rearm itself is unit-tested in core and through the alarm handler.
+    - The actual kill recovery (OEM task killer, swipe from Recents, `adb shell am kill`) within 60 s on the same step is human-verify in Story 2.13; the host tests rebuild the engine over the same `runtime.db`.
+    - Review (2026-10-05): the refused-retry is now capped at 30 minutes (the slot carries `retrySince`), so a retry bound is in place; the device cadence still needs Spike S2. The refused-`startForeground` host test stays deferred (above).
+    - Review (2026-10-05): a stored Completed or Missed session is settled (history row, runtime.db cleared) only by a restore, which runs only where a foreground service may start (`WakeService`, `MainActivity`, `WakeActivity`). Without a slot fire or an app open it waits until the UI opens. Low impact (the history row is late, nothing rings); Story 2.3 / 2.13 to decide whether a system event should settle it without a service.
+    - Review (2026-10-05): which alarm the session slot carries is known only to the process that armed it (`AlarmScheduler.sessionSlotAlarm`: PendingIntent extras cannot be read back). A payload-less re-arm in a new process (a system event after a kill, within the 60 s after a refused start) can still replace a slot that carries an alarm. Rare; persisting the payload (device-protected storage) would close it. Story 2.13.
+- source_spec: `_bmad-output/implementation-artifacts/spec-2-2-session-deadlines-survive-clock-changes-and-reboots.md`
+  summary: On a device without `Settings.Global.BOOT_COUNT`, a reboot is detected only when the elapsed clock has gone back below the time a deadline was made at.
+  evidence: |
+    - `AndroidBootCounter` now reports -1 every boot on such a device, so a wall-clock change can no longer move a deadline.
+    - If the restore after a reboot runs at a higher uptime than the snooze was granted at, the stored snooze end is read on the new boot's elapsed clock. It can then end up to one snooze length late. A restored Grace session is affected the same way: the restore keeps its grace end, so Loud can come up to one grace window late (the restore runs "now + 1 s" after the reboot, so the error is bounded by the window; refreshing the grace end would make every such restore a full window late, so the code is unchanged). Ringing and Loud are not affected, because the restore gives them a fresh 30-minute deadline.
+    - A session row written by an older app version on such a device holds a negative boot identity derived from the wall clock. `Deadline` treats any negative boot count as the missing marker (review of Story 2.2), so that session keeps its monotonic deadlines after the update. Its deadlines have no creation time (0), so a reboot during that one session is not detected until it ends.
+    - History's time to complete on such a device is always wall time (review of Story 2.2): a reboot to a higher uptime cannot be detected, and a clock change during one session is rarer than that error.
+    - The usual restore runs within a minute of `LOCKED_BOOT_COMPLETED`, so this is rare. `BOOT_COUNT` exists on API 24+, and minSdk is 26.
+    - Story 2.13 records whether any device in the matrix lacks `BOOT_COUNT`.

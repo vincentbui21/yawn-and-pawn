@@ -122,6 +122,35 @@ class SessionRecorderTest {
         }
 
     @Test
+    fun `across a reboot with the same boot count (no BOOT_COUNT) the time to complete is measured in wall time`() =
+        runTest {
+            // The count stays the same, but the elapsed clock went back below the first ring's: a reboot.
+            val ringingLate = firstRing.copy(elapsedMillis = 600_000)
+            val afterReboot = TimeSnapshot(firstRing.wallMillis + 10.minutes.inWholeMilliseconds, elapsedMillis = 30_000, bootCount = 1)
+
+            recorder.recordEnd(started.copy(firstRing = ringingLate, ended = afterReboot), SessionEnd.Completed, SCHEDULED_AT)
+
+            assertEquals(10.minutes.inWholeMilliseconds, history.rows.getValue(SESSION_ID).timeToCompleteMs)
+        }
+
+    @Test
+    fun `without BOOT_COUNT the time to complete is wall time, also across a reboot to a higher uptime`() =
+        runTest {
+            // Rebooted, and the end came 60 s after the new boot: higher than the first ring's 5 s, so it looks like
+            // the same boot. Elapsed time would say 55 s; the wall clock says 10 minutes.
+            val noCount = firstRing.copy(bootCount = -1)
+            val afterReboot = TimeSnapshot(firstRing.wallMillis + 10.minutes.inWholeMilliseconds, elapsedMillis = 60_000, bootCount = -1)
+
+            recorder.recordEnd(started.copy(firstRing = noCount, ended = afterReboot), SessionEnd.Completed, SCHEDULED_AT)
+            assertEquals(10.minutes.inWholeMilliseconds, history.rows.getValue(SESSION_ID).timeToCompleteMs)
+
+            // A count missing on only one side (a row from before the update) is wall time too, never negative.
+            val backwards = afterReboot.copy(wallMillis = firstRing.wallMillis - 1_000)
+            recorder.recordEnd(started.copy(ended = backwards.copy(bootCount = -7)), SessionEnd.Completed, SCHEDULED_AT)
+            assertEquals(0L, history.rows.getValue(SESSION_ID).timeToCompleteMs)
+        }
+
+    @Test
     fun `completed after 2 granted snoozes is Snoozed with a snooze count of 2`() =
         runTest {
             recorder.recordEnd(endedAfter(30.minutes).copy(snoozesGranted = 2), SessionEnd.Completed, SCHEDULED_AT)

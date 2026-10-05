@@ -5,13 +5,15 @@ import android.content.Intent
 import com.yawnandpawn.app.core.alarm.AlarmFired
 import com.yawnandpawn.app.core.log.LogEvent
 import com.yawnandpawn.app.core.log.Logger
+import kotlin.time.Instant
 
 /**
  * Starts [WakeService] in the foreground. A fire from `setAlarmClock` lets the app start a foreground service from the
  * background for a short while, so [startAlarm], [startSlot] and [startTest] (called from the alarm receiver) are
  * allowed. A start the platform refuses (`ForegroundServiceStartNotAllowedException`, an `IllegalStateException`, for
- * example a restore at app start from the background) is logged and returns false: the armed session slot (at most 60 s
- * away) fires the receiver, which starts the service again.
+ * example a restore from the background) is logged and returns false. The session slot then starts the service again:
+ * the alarm handler re-arms it for a refused alarm or slot start (`SessionSlotRearm.afterRefusedStart`, Story 2.1), and
+ * a restored session's own entry effects arm it for a refused restore.
  */
 class WakeServiceStarter(
     private val context: Context,
@@ -24,8 +26,12 @@ class WakeServiceStarter(
         token: Long,
     ): Boolean = start(WakeService.alarmIntent(context, fired).withToken(token))
 
-    /** The session slot fired. */
-    fun startSlot(token: Long): Boolean = start(WakeService.intent(context, WakeService.ACTION_SLOT).withToken(token))
+    /** The session slot fired, standing also for [alarm] when it carried one (Story 2.1), retried since [retrySince]. */
+    fun startSlot(
+        token: Long,
+        alarm: AlarmFired? = null,
+        retrySince: Instant? = null,
+    ): Boolean = start(WakeService.slotIntent(context, alarm, retrySince).withToken(token))
 
     /** The test alarm fired (Story 1.18): the service rings the pending test. */
     fun startTest(token: Long): Boolean = start(WakeService.intent(context, WakeService.ACTION_TEST).withToken(token))

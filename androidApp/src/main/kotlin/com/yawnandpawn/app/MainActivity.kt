@@ -8,11 +8,13 @@ import androidx.activity.enableEdgeToEdge
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.lifecycle.DefaultLifecycleObserver
 import androidx.lifecycle.LifecycleOwner
+import com.yawnandpawn.app.android.ApplicationScope
 import com.yawnandpawn.app.android.reliability.AndroidNotificationPermission
 import com.yawnandpawn.app.android.wake.WakeRuntime
 import com.yawnandpawn.app.android.wake.forwardToWakeScreenWhileResumed
 import com.yawnandpawn.app.core.session.SessionEngine
 import com.yawnandpawn.app.ui.App
+import kotlinx.coroutines.launch
 import org.koin.android.ext.android.inject
 
 /**
@@ -30,12 +32,16 @@ class MainActivity : ComponentActivity() {
     private val notificationPermission: AndroidNotificationPermission by inject()
     private val engine: SessionEngine by inject()
     private val runtime: WakeRuntime by inject()
+    private val appScope: ApplicationScope by inject()
 
     private val requestNotifications = registerForActivityResult(ActivityResultContracts.RequestPermission()) { }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         enableEdgeToEdge()
         super.onCreate(savedInstanceState)
+        // A restore entry point (Story 2.1): a session the last process left in runtime.db is taken over here, in the
+        // foreground, where its wake service may start. Off the main thread, outside composition.
+        appScope.launch { engine.restore() }
         // This activity's own launcher: a stopping old instance detaches only its own, never a newer one's.
         val launch = { requestNotifications.launch(Manifest.permission.POST_NOTIFICATIONS) }
         lifecycle.addObserver(

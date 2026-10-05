@@ -9,6 +9,8 @@ import com.yawnandpawn.app.core.log.Logger
  * personal data (alarm ids are random UUIDs; storage causes are diagnostic text).
  */
 class AndroidLogger : Logger {
+    // One flat branch per LogEvent type: the count grows with the events, not with any logic.
+    @Suppress("CyclomaticComplexMethod")
     override fun log(event: LogEvent) {
         when (event) {
             is LogEvent.AlarmDeleted -> {
@@ -49,6 +51,14 @@ class AndroidLogger : Logger {
 
             is LogEvent.EmergencyRingStopped -> {
                 Log.i(TAG, "EmergencyRingStopped reason=${event.reason}")
+            }
+
+            is LogEvent.SessionSlotRearmed -> {
+                Log.i(
+                    TAG,
+                    "SessionSlotRearmed reason=${event.reason} inMillis=${event.inMillis} " +
+                        "sessionId=${event.sessionId} alarmId=${event.alarmId}",
+                )
             }
 
             is LogEvent.OneTimeAlarmDisabled -> {

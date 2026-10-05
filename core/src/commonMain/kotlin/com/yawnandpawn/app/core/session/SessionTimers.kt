@@ -28,7 +28,7 @@ internal fun durationBetween(
     from: TimeSnapshot,
     to: TimeSnapshot,
 ): Duration {
-    val millis = if (from.bootCount == to.bootCount) to.elapsedMillis - from.elapsedMillis else to.wallMillis - from.wallMillis
+    val millis = if (Deadline.sameBoot(from, to)) to.elapsedMillis - from.elapsedMillis else to.wallMillis - from.wallMillis
     return millis.coerceAtLeast(0).milliseconds
 }
 

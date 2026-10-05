@@ -21,8 +21,10 @@ class SessionJsonTest {
             beforeFirstUnlock = true,
             paymentPending = true,
             declinedReuseProduct = PRODUCT,
-            graceEnd = Deadline.after(T0, 20.seconds),
-            snoozeEnd = Deadline.after(T0, 9.minutes),
+            // Version 1 deadlines have no creation time (Story 2.2 added it): it decodes as 0.
+            graceEnd = Deadline.after(T0, 20.seconds).copy(createdElapsedMillis = 0),
+            interactionDeadline = Deadline.after(T0, 30.minutes).copy(createdElapsedMillis = 0),
+            snoozeEnd = Deadline.after(T0, 9.minutes).copy(createdElapsedMillis = 0),
             pausedAt = at(1.minutes),
         )
 

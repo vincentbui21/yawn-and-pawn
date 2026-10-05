@@ -79,18 +79,28 @@
             android:exported="false"
             android:foregroundServiceType="mediaPlayback" />
 
-        <!-- Every system alarm the app armed fires here; only the app's own PendingIntents reach it. -->
+        <!-- The stored alarms and the test alarm fire here; only the app's own PendingIntents reach it. -->
         <receiver
             android:name=".android.AlarmFiredReceiver"
             android:directBootAware="true"
             android:exported="false" />
 
-        <!-- rescheduleAll() on the system events that clear or shift alarms; all protected system broadcasts. -->
+        <!-- The session slot (Story 2.1): the backup alarm that brings a session back after a kill. Only the app's own
+             PendingIntent reaches it. -->
+        <receiver
+            android:name=".android.SessionSlotReceiver"
+            android:directBootAware="true"
+            android:exported="false" />
+
+        <!-- rescheduleAll() and the session slot on the system events that clear or shift alarms; all protected system
+             broadcasts. LOCKED_BOOT_COMPLETED (Story 2.2) arrives before the first unlock; both databases are
+             device-protected, so the slot is armed then. -->
         <receiver
             android:name=".android.SystemEventsReceiver"
             android:directBootAware="true"
             android:exported="true">
             <intent-filter>
+                <action android:name="android.intent.action.LOCKED_BOOT_COMPLETED" />
                 <action android:name="android.intent.action.BOOT_COMPLETED" />
                 <action android:name="android.intent.action.TIME_SET" />
                 <action android:name="android.intent.action.TIMEZONE_CHANGED" />

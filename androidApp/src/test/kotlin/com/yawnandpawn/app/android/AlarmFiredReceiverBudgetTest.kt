@@ -35,6 +35,7 @@ import kotlin.test.assertEquals
 import kotlin.test.assertFalse
 import kotlin.test.assertTrue
 import kotlin.time.Duration.Companion.seconds
+import kotlin.time.Instant
 
 /**
  * Deferred from Stories 1.10 and 1.12: the alarm receiver finishes its `goAsync()` pending result in every case. The
@@ -55,7 +56,10 @@ class AlarmFiredReceiverBudgetTest {
             object : AlarmFiredHandler {
                 override suspend fun onAlarmFired(fired: AlarmFired) = Unit
 
-                override suspend fun onSessionSlotFired() = onSlot()
+                override suspend fun onSessionSlotFired(
+                    alarm: AlarmFired?,
+                    retrySince: Instant?,
+                ) = onSlot()
 
                 override suspend fun onTestAlarmFired() = Unit
             },
@@ -74,7 +78,7 @@ class AlarmFiredReceiverBudgetTest {
     }
 
     /** Sends a session-slot fire; the returned flag turns true once the receiver finished its pending result. */
-    private fun fireSlot(): AtomicBoolean = fire(AlarmFiredReceiver.intent(app, AlarmFiredReceiver.ACTION_SESSION_SLOT))
+    private fun fireSlot(): AtomicBoolean = fire(SessionSlotReceiver.intent(app))
 
     /** Sends [intent] as an ordered broadcast; the returned flag turns true once the receiver finished its pending result. */
     private fun fire(intent: Intent): AtomicBoolean {
@@ -111,7 +115,7 @@ class AlarmFiredReceiverBudgetTest {
         runWork(seconds = 2)
 
         assertTrue(finished.get(), "the pending result is finished after the timeout")
-        assertEquals(listOf<LogEvent>(LogEvent.OperationFailed("handle alarm fire", "took longer than 8s")), fakeLogger.events)
+        assertEquals(listOf<LogEvent>(LogEvent.OperationFailed("handle session slot fire", "took longer than 8s")), fakeLogger.events)
     }
 
     /**
@@ -134,6 +138,7 @@ class AlarmFiredReceiverBudgetTest {
                     },
                 logger = fakeLogger,
                 starts = starts,
+                rearm = GlobalContext.get().get(),
             )
         bind(handler)
 
@@ -166,7 +171,10 @@ class AlarmFiredReceiverBudgetTest {
     private class RecordingSchedule : AlarmFiredHandler {
         override suspend fun onAlarmFired(fired: AlarmFired) = Unit
 
-        override suspend fun onSessionSlotFired() = Unit
+        override suspend fun onSessionSlotFired(
+            alarm: AlarmFired?,
+            retrySince: Instant?,
+        ) = Unit
 
         override suspend fun onTestAlarmFired() = Unit
     }

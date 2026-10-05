@@ -8,8 +8,12 @@ import com.yawnandpawn.app.core.error.Outcome
 import com.yawnandpawn.app.core.log.LogEvent
 import com.yawnandpawn.app.core.log.Logger
 import com.yawnandpawn.app.core.log.WakeStage
+import com.yawnandpawn.app.core.session.SessionSlotRearm
+import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.isActive
+import kotlinx.coroutines.withContext
+import kotlin.time.Instant
 import kotlin.time.TimeMark
 import kotlin.time.TimeSource
 
@@ -23,7 +27,9 @@ import kotlin.time.TimeSource
  *   service, which rings the emergency default rather than stay silent (NFR-2).
  * - The service start never depends on the read going well: it runs in `finally`, so a read that throws or overruns the
  *   receiver's budget (and is cancelled) still rings. Until the read says otherwise the alarm rings.
- * - The session slot: start the service with the slot action.
+ * - The session slot: start the service with the slot action and the alarm the slot stands for, if any.
+ * - A refused start of an alarm or the slot (Story 2.1): [rearm] arms the session slot one heartbeat later carrying the
+ *   alarm, so its fire tries the start again (`SessionSlotRearm.afterRefusedStart`).
  * - The test alarm (Story 1.18): start the service with the test action; it rings the pending test config. Nothing is
  *   re-armed (a test rings once).
  * - The re-arm runs even when the read or the start throws.
@@ -40,6 +46,7 @@ class WakeAlarmFiredHandler(
     private val starts: WakeServiceStarts,
     private val timings: WakeTimings = WakeTimings.None,
     private val timeSource: TimeSource = TimeSource.Monotonic,
+    private val rearm: SessionSlotRearm,
 ) : AlarmFiredHandler {
     override suspend fun onAlarmFired(fired: AlarmFired) {
         val begin = timeSource.markNow()
@@ -50,7 +57,7 @@ class WakeAlarmFiredHandler(
             try {
                 rings = rings(fired)
             } finally {
-                if (rings) started = start { starter.startAlarm(fired, token) }
+                if (rings) started = startOrRearm(fired, token)
             }
         } finally {
             // The re-arm never depends on the read or the start: a start that throws still re-arms the next occurrence.
@@ -63,10 +70,13 @@ class WakeAlarmFiredHandler(
         }
     }
 
-    override suspend fun onSessionSlotFired() {
+    override suspend fun onSessionSlotFired(
+        alarm: AlarmFired?,
+        retrySince: Instant?,
+    ) {
         val begin = timeSource.markNow()
         val token = starts.newToken()
-        if (starter.startSlot(token)) awaitService(token, begin)
+        if (starter.startSlot(token, alarm, retrySince)) awaitService(token, begin) else rearm.afterRefusedStart(alarm, retrySince)
     }
 
     override suspend fun onTestAlarmFired() {
@@ -78,6 +88,23 @@ class WakeAlarmFiredHandler(
         } else {
             logger.log(LogEvent.OperationFailed("start test alarm", "service start refused; the test does not ring"))
         }
+    }
+
+    /**
+     * Starts the service for [fired]; a refused start (Story 2.1) arms the session slot carrying the alarm, so its fire
+     * starts the service again. The re-arm runs even after the read threw or ran out of budget, and is not cancellable.
+     */
+    private suspend fun startOrRearm(
+        fired: AlarmFired,
+        token: Long,
+    ): Boolean {
+        var started = false
+        try {
+            started = start { starter.startAlarm(fired, token) }
+        } finally {
+            if (!started) withContext(NonCancellable) { rearm.afterRefusedStart(fired) }
+        }
+        return started
     }
 
     /** Whether the stored alarm rings: it is enabled, or it cannot be read (the service then rings the default). */

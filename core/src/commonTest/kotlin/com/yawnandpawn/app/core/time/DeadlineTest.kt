@@ -56,8 +56,57 @@ class DeadlineTest {
     }
 
     @Test
-    fun `after adds the duration to wall and elapsed time and keeps the boot count`() {
-        assertEquals(Deadline(wallMillis = 1_800_000_600_000, elapsedMillis = 4_200_000, bootCount = 7), deadline)
+    fun `after adds the duration to wall and elapsed time and keeps the boot count and the elapsed time it was made at`() {
+        assertEquals(
+            Deadline(wallMillis = 1_800_000_600_000, elapsedMillis = 4_200_000, bootCount = 7, createdElapsedMillis = 3_600_000),
+            deadline,
+        )
+    }
+
+    @Test
+    fun `with the same boot count a lower elapsed time than at creation means a reboot - wall time decides`() {
+        // A device without BOOT_COUNT reports the same count every boot.
+        val sameCountRebooted =
+            TimeSnapshot(wallMillis = created.wallMillis + 4.minutes.inWholeMilliseconds, elapsedMillis = 60_000, bootCount = 7)
+        val sameCountRebootedLate = sameCountRebooted.copy(wallMillis = created.wallMillis + 11.minutes.inWholeMilliseconds)
+
+        assertFalse(deadline.sameBoot(sameCountRebooted))
+        assertEquals(6.minutes, deadline.remaining(sameCountRebooted))
+        assertEquals(true, deadline.isDue(sameCountRebootedLate))
+        assertEquals(true, deadline.sameBoot(later(wall = (-2).hours, elapsed = Duration.ZERO)), "at creation, whatever the wall clock")
+    }
+
+    @Test
+    fun `a deadline stored before Story 2_2 has no creation time, so only the boot count decides, as before`() {
+        val legacy = Deadline(wallMillis = deadline.wallMillis, elapsedMillis = deadline.elapsedMillis, bootCount = 7)
+
+        cases.forEach { case -> assertEquals(case.remaining, legacy.remaining(case.now), case.name) }
+    }
+
+    @Test
+    fun `any negative boot count is the missing marker, so a wall-derived identity from an older version still matches`() {
+        // An older version stored a negative identity derived from the wall clock; after the update the counter says -1.
+        val oldRow = Deadline(wallMillis = deadline.wallMillis, elapsedMillis = deadline.elapsedMillis, bootCount = -1_234_567)
+        val afterUpdate =
+            created.copy(
+                wallMillis = created.wallMillis + 3.hours.inWholeMilliseconds,
+                elapsedMillis = created.elapsedMillis + 60_000,
+                bootCount = -1,
+            )
+
+        assertEquals(true, oldRow.sameBoot(afterUpdate))
+        assertEquals(9.minutes, oldRow.remaining(afterUpdate), "monotonic, the 3 h wall change is ignored")
+        assertFalse(oldRow.sameBoot(afterUpdate.copy(bootCount = 7)), "a negative count never matches a real one")
+        assertEquals(true, Deadline.sameBoot(created.copy(bootCount = -9), afterUpdate))
+        assertFalse(Deadline.sameBoot(created.copy(bootCount = -9), afterUpdate.copy(elapsedMillis = 1_000)), "elapsed went back")
+        assertFalse(Deadline.sameBoot(created.copy(bootCount = -9), created))
+    }
+
+    @Test
+    fun `two snapshots are of the same boot only with the same count and elapsed time not going back`() {
+        assertEquals(true, Deadline.sameBoot(created, later(wall = (-1).hours, elapsed = 1.minutes)))
+        assertFalse(Deadline.sameBoot(created, created.copy(elapsedMillis = 1_000)), "elapsed went back: a reboot")
+        assertFalse(Deadline.sameBoot(created, rebooted(wall = 1.minutes, elapsedMillis = 99_999_999)), "another boot count")
     }
 
     @Test
@@ -72,7 +121,7 @@ class DeadlineTest {
         val nearMax = TimeSnapshot(wallMillis = Long.MAX_VALUE - 10, elapsedMillis = Long.MAX_VALUE - 10, bootCount = 1)
         val far = Deadline.after(nearMax, 1.hours)
 
-        assertEquals(Deadline(Long.MAX_VALUE, Long.MAX_VALUE, 1), far)
+        assertEquals(Deadline(Long.MAX_VALUE, Long.MAX_VALUE, 1, createdElapsedMillis = Long.MAX_VALUE - 10), far)
         assertFalse(far.isDue(nearMax))
         assertEquals(10.milliseconds, far.remaining(nearMax))
     }

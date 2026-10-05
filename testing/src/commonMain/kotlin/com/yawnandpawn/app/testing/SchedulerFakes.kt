@@ -1,5 +1,6 @@
 package com.yawnandpawn.app.testing
 
+import com.yawnandpawn.app.core.alarm.AlarmFired
 import com.yawnandpawn.app.core.alarm.AlarmRepository
 import com.yawnandpawn.app.core.alarm.AlarmScheduler
 import com.yawnandpawn.app.core.alarm.AlarmScheduling
@@ -17,6 +18,7 @@ import com.yawnandpawn.app.core.log.Logger
 import com.yawnandpawn.app.core.time.Clock
 import com.yawnandpawn.app.core.time.Deadline
 import com.yawnandpawn.app.core.time.TimeZoneProvider
+import kotlin.time.Instant
 
 /** One call on [FakeAlarmScheduler], in the order it was made. */
 sealed interface SchedulerCall {
@@ -32,6 +34,8 @@ sealed interface SchedulerCall {
 
     data class ArmSessionSlot(
         val deadline: Deadline,
+        val alarm: AlarmFired? = null,
+        val retrySince: Instant? = null,
     ) : SchedulerCall
 
     data object CancelSessionSlot : SchedulerCall
@@ -77,10 +81,21 @@ class FakeAlarmScheduler : AlarmScheduler {
 
     override fun cancel(requestCode: Int): Outcome<Unit, DomainError> = disarm(SchedulerCall.Cancel(requestCode), requestCode)
 
-    override fun armSessionSlot(deadline: Deadline): Outcome<Unit, DomainError> =
-        arm(SchedulerCall.ArmSessionSlot(deadline), RequestCodes.SESSION_SLOT, deadline.wallMillis)
+    /** The alarm the armed slot carries: the last successful [armSessionSlot]'s, null after [cancelSessionSlot]. */
+    var slotAlarm: AlarmFired? = null
 
-    override fun cancelSessionSlot(): Outcome<Unit, DomainError> = disarm(SchedulerCall.CancelSessionSlot, RequestCodes.SESSION_SLOT)
+    override fun armSessionSlot(
+        deadline: Deadline,
+        alarm: AlarmFired?,
+        retrySince: Instant?,
+    ): Outcome<Unit, DomainError> =
+        arm(SchedulerCall.ArmSessionSlot(deadline, alarm, retrySince), RequestCodes.SESSION_SLOT, deadline.wallMillis)
+            .also { if (it is Outcome.Success) slotAlarm = alarm }
+
+    override fun sessionSlotAlarm(): AlarmFired? = slotAlarm
+
+    override fun cancelSessionSlot(): Outcome<Unit, DomainError> =
+        disarm(SchedulerCall.CancelSessionSlot, RequestCodes.SESSION_SLOT).also { slotAlarm = null }
 
     override fun scheduleTest(triggerAtWallMillis: Long): Outcome<Unit, DomainError> =
         arm(SchedulerCall.ScheduleTest(triggerAtWallMillis), RequestCodes.TEST_ALARM, triggerAtWallMillis)

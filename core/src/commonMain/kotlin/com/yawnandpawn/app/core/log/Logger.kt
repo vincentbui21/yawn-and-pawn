@@ -111,6 +111,17 @@ sealed interface LogEvent {
     ) : LogEvent
 
     /**
+     * The session slot was armed outside the engine (Story 2.1) because of [reason] (a system event or a refused
+     * wake-service start), [inMillis] from now, for the session [sessionId] and/or the alarm [alarmId] it stands for.
+     */
+    data class SessionSlotRearmed(
+        val reason: String,
+        val inMillis: Long,
+        val sessionId: String?,
+        val alarmId: String?,
+    ) : LogEvent
+
+    /**
      * The one-time alarm [alarmId] fired (armed for [scheduledAt]) and `RearmOnFire` switched it off, so nothing stays
      * armed for it.
      */

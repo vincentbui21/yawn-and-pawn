@@ -22,7 +22,8 @@ data class AlarmFired(
 interface AlarmFiredHandler {
     suspend fun onAlarmFired(fired: AlarmFired)
 
-    suspend fun onSessionSlotFired()
+    /** The session slot fired; [alarm] is the alarm it also stands for ([AlarmScheduler.armSessionSlot]), if any. */
+    suspend fun onSessionSlotFired(alarm: AlarmFired?)
 
     suspend fun onTestAlarmFired()
 }
@@ -80,7 +81,7 @@ class RearmOnFire(
         }
     }
 
-    override suspend fun onSessionSlotFired() {
+    override suspend fun onSessionSlotFired(alarm: AlarmFired?) {
         logger.log(LogEvent.FireIgnored(FireKind.SessionSlot, alarmId = null, reason = NOT_BOUND))
     }
 

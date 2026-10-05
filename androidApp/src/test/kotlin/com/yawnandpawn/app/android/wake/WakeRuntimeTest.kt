@@ -81,7 +81,7 @@ class WakeRuntimeTest {
             if (refuseStart) throw ForegroundServiceStartNotAllowedException("background")
             started += intent
         }
-    private val now = TimeSnapshot(wallMillis = 1_000_000, elapsedMillis = 5_000, bootCount = 1)
+    private var now = TimeSnapshot(wallMillis = 1_000_000, elapsedMillis = 5_000, bootCount = 1)
     private var state: SessionState = SessionState.Idle
     private val runtime =
         WakeRuntime(
@@ -113,10 +113,18 @@ class WakeRuntimeTest {
 
     private fun alarmStream() = audio.getStreamVolume(AudioManager.STREAM_ALARM)
 
+    /** [from] plus [seconds] of real time, wall and monotonic together. */
+    private fun later(
+        from: TimeSnapshot,
+        seconds: Int,
+    ) = TimeSnapshot(from.wallMillis + seconds * 1_000L, from.elapsedMillis + seconds * 1_000L, from.bootCount)
+
     @Test
     fun `a ringing state plays at the set volume, vibrates, arms the heartbeat slot, posts the notification and starts the service`() {
         audio.setStreamVolume(AudioManager.STREAM_ALARM, 2, 0)
 
+        // A new session's step: its one-shot StartWakeRuntime, then the entry effects.
+        run(SessionEffect.StartWakeRuntime(session.sessionId))
         enter(ringing)
 
         assertEquals(AlarmSound.Default, player.sound)
@@ -437,6 +445,86 @@ class WakeRuntimeTest {
 
         assertEquals(Instant.fromEpochMilliseconds(42), runtime.emergency.value?.alarmAt)
         assertEquals(AlarmSound.Default, player.sound)
+    }
+
+    @Test
+    fun `a restored ring plays at the set volume with no ramp, and later steps keep the same ring`() {
+        // ProcessRestored: entry effects only, nothing playing yet.
+        enter(ringing)
+        assertEquals(1f, player.gain, 1e-6f, "no ramp on a restored ring")
+
+        enter(ringing)
+        enter(SessionState.Loud(session))
+        assertEquals(1, playbacks.opened.size, "the same request: never restarted")
+
+        // The next ring (after a snooze) is announced by its one-shot slot arming: it ramps again.
+        enter(SessionState.Snoozed(session.copy(snoozeEnd = Deadline.after(now, 9.minutes), interactionDeadline = null)))
+        run(SessionEffect.ArmSlot(Deadline.after(now, SessionReducer.HEARTBEAT)))
+        enter(SessionState.Ringing(session.copy(ringIndex = 2)))
+        assertEquals(0.2f, player.gain, 1e-6f)
+    }
+
+    @Test
+    fun `a restored grace stays muted and its end plays the loud ring at the set volume with no ramp`() {
+        enter(SessionState.Grace(session))
+        assertNull(player.sound, "nothing plays during a restored grace window")
+
+        run(SessionEffect.UnmuteToVolume(80), SessionEffect.StrongHaptic)
+        enter(SessionState.Loud(session))
+
+        assertNotNull(player.sound)
+        assertEquals(1f, player.gain, 1e-6f)
+    }
+
+    @Test
+    fun `a heartbeat slot that is already due (its fire never handled here) is armed again`() {
+        enter(ringing)
+        val first = Deadline.after(now, SessionReducer.HEARTBEAT)
+        assertEquals(SchedulerCall.ArmSessionSlot(first), scheduler.calls.last())
+
+        now = later(now, 61)
+        enter(ringing)
+
+        assertEquals(SchedulerCall.ArmSessionSlot(Deadline.after(now, SessionReducer.HEARTBEAT)), scheduler.calls.last())
+        assertEquals(2, scheduler.calls.count { it is SchedulerCall.ArmSessionSlot })
+    }
+
+    @Test
+    fun `the session end cancels the slot even when this process armed none`() {
+        runtime.endSession()
+
+        assertEquals(listOf<SchedulerCall>(SchedulerCall.CancelSessionSlot), scheduler.calls)
+    }
+
+    @Test
+    fun `the emergency ring arms a backup slot carrying its alarm, re-armed on each slot fire, cancelled by I'm up`() {
+        val alarm = AlarmFired("alarm-b", Instant.fromEpochMilliseconds(42))
+
+        runtime.startEmergency(alarm.scheduledAt, volumePercent = 60, cause = "commit failed", alarm = alarm)
+        val backup = SchedulerCall.ArmSessionSlot(Deadline.after(now, SessionReducer.HEARTBEAT), alarm)
+        assertEquals(listOf<SchedulerCall>(backup), scheduler.calls)
+
+        now = later(now, 60)
+        runtime.onSlotFired()
+        runtime.keepEmergencySlot()
+        assertEquals(SchedulerCall.ArmSessionSlot(Deadline.after(now, SessionReducer.HEARTBEAT), alarm), scheduler.calls.last())
+
+        runtime.stopEmergency()
+        assertEquals(SchedulerCall.CancelSessionSlot, scheduler.calls.last())
+        assertNull(scheduler.armed[RequestCodes.SESSION_SLOT])
+        runtime.keepEmergencySlot()
+        assertEquals(SchedulerCall.CancelSessionSlot, scheduler.calls.last(), "nothing once it stopped")
+    }
+
+    @Test
+    fun `a session that takes over the emergency ring arms its own heartbeat slot without the alarm`() {
+        val alarm = AlarmFired("alarm-b", Instant.fromEpochMilliseconds(42))
+        runtime.startEmergency(alarm.scheduledAt, volumePercent = 60, cause = "commit failed", alarm = alarm)
+
+        enter(ringing)
+
+        assertNull(runtime.emergency.value)
+        assertEquals(SchedulerCall.ArmSessionSlot(Deadline.after(now, SessionReducer.HEARTBEAT)), scheduler.calls.last())
     }
 
     @Test

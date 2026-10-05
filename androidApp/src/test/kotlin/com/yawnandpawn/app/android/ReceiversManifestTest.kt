@@ -3,8 +3,10 @@ package com.yawnandpawn.app.android
 import android.content.ComponentName
 import android.content.Intent
 import android.content.pm.PackageManager
+import android.content.pm.ServiceInfo
 import androidx.test.core.app.ApplicationProvider
 import com.yawnandpawn.app.YawnAndPawnApp
+import com.yawnandpawn.app.android.wake.WakeService
 import com.yawnandpawn.app.stopApp
 import org.junit.After
 import org.junit.Test
@@ -40,8 +42,27 @@ class ReceiversManifestTest {
 
         assertTrue(info.directBootAware, "directBootAware")
         assertFalse(info.exported, "exported")
-        listOf(AlarmFiredReceiver.ACTION_ALARM, AlarmFiredReceiver.ACTION_SESSION_SLOT, AlarmFiredReceiver.ACTION_TEST_ALARM)
+        listOf(AlarmFiredReceiver.ACTION_ALARM, AlarmFiredReceiver.ACTION_TEST_ALARM)
             .forEach { action -> assertEquals(emptyList(), receiversFor(action), "no implicit $action") }
+    }
+
+    @Test
+    fun `the session slot receiver is direct-boot aware, not exported and has no intent filter`() {
+        val info = receiver(SessionSlotReceiver::class.java)
+
+        assertTrue(info.directBootAware, "directBootAware")
+        assertFalse(info.exported, "exported")
+        assertEquals(emptyList(), receiversFor(SessionSlotReceiver.ACTION_SESSION_SLOT), "no implicit slot action")
+    }
+
+    @Test
+    fun `the wake service does not stop with its task, so a swipe from Recents keeps the session`() {
+        val info = packageManager.getServiceInfo(ComponentName(app, WakeService::class.java), 0)
+
+        assertEquals(0, info.flags and ServiceInfo.FLAG_STOP_WITH_TASK, "stopWithTask is never set")
+        assertTrue(info.directBootAware, "directBootAware")
+        assertFalse(info.exported, "exported")
+        assertFalse(File("src/main/AndroidManifest.xml").readText().contains("stopWithTask"), "no stopWithTask attribute")
     }
 
     @Test

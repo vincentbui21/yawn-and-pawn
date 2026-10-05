@@ -51,7 +51,7 @@ data class EmergencyRing(
  * [AndroidAlarmPlayer], the [AlarmVibrator], the session slot ([AlarmScheduler.armSessionSlot]) and the ongoing
  * [WakeNotifier] notification, and it starts [WakeService] when a ringing state needs it and the service is not running
  * (for example a restore at app start). A start the platform refuses is logged by [WakeServiceStarter]; the armed
- * session slot (at most 60 s away) then brings the ring back through the alarm receiver.
+ * session slot (at most 60 s away) then brings the ring back through `SessionSlotReceiver`.
  *
  * - Entry effects are idempotent: the same effect again changes nothing (same sound and volume, same slot, same
  *   notification). A sound effect also stops the vibration when the state no longer wants it.
@@ -92,6 +92,21 @@ class WakeRuntime(
     private var armedSlot: Deadline? = null
 
     private val emergencyRing = MutableStateFlow<EmergencyRing?>(null)
+
+    /**
+     * A one-shot effect of the current step starts a new ring (`StartWakeRuntime`, or the slot armed for one), so its
+     * sound may ramp; cleared by the step's sound entry effect. A step with none (a restore) plays without a ramp.
+     */
+    @Volatile
+    private var newRing = false
+
+    /** The ring that plays was restored (no ramp); kept until the next ring starts, so its request never changes. */
+    @Volatile
+    private var restoredRing = false
+
+    /** The alarm the emergency ring plays for, carried by its backup slot (Story 2.1); null when unknown or none plays. */
+    @Volatile
+    private var emergencyAlarm: AlarmFired? = null
     private var emergencyLimit: Job? = null
 
     /** The emergency ring that is playing, or null. [WakeActivity] shows it; "I'm up" calls [stopEmergency]. */
@@ -108,7 +123,7 @@ class WakeRuntime(
     private fun runEffect(effect: SessionEffect) {
         when (effect) {
             is SessionEffect.StartWakeRuntime -> startRuntime()
-            is SessionEffect.ArmSlot -> armSlot(effect.at)
+            is SessionEffect.ArmSlot -> armSlotForRing(effect.at)
             SessionEffect.CancelSlot -> cancelSlot()
             is SessionEffect.ClearRuntimeSession -> endSession()
             is SessionEffect.LogIgnored -> logger.log(LogEvent.SessionEventIgnored(effect.eventType, effect.sessionId))
@@ -128,7 +143,7 @@ class WakeRuntime(
 
             EntryEffect.Vibrating -> vibrator.start()
 
-            EntryEffect.HeartbeatSlotArmed -> if (armedSlot == null) armSlot(Deadline.after(now(), SessionReducer.HEARTBEAT))
+            EntryEffect.HeartbeatSlotArmed -> keepHeartbeat()
 
             is EntryEffect.SlotArmedAt -> if (armedSlot != effect.at) armSlot(effect.at)
 
@@ -194,7 +209,8 @@ class WakeRuntime(
         player.stop(restoreVolume = true)
         vibrator.stop()
         notifier.cancel()
-        if (armedSlot != null) cancelSlot()
+        // Always (Story 2.1): a slot armed by an earlier process, or outside the engine, is not in armedSlot.
+        cancelSlot()
         timings.sessionEnded()
     }
 
@@ -207,16 +223,24 @@ class WakeRuntime(
      * The session could not start (or the wake flow failed before it did): the default sound at [volumePercent] with
      * vibration, the notification and the wake screen for the alarm at [alarmAt], until [stopEmergency] ("I'm up") or
      * after [EMERGENCY_LIMIT]. Logged with [cause]. Nothing when one already plays.
+     *
+     * Backstop (Story 2.1): with no session ringing or snoozed, the session slot is armed one heartbeat away carrying
+     * [alarm] (the alarm it rings for, when known), and every slot fire while it plays arms it again
+     * ([keepEmergencySlot]). If the process dies, the slot's fire handles [alarm] again in a new process: a real session
+     * when storage works by then, else the emergency ring again (with a fresh limit). A slot carrying no alarm brings it
+     * back only while the stored session cannot be read.
      */
     fun startEmergency(
         alarmAt: Instant,
         volumePercent: Int,
         cause: String,
+        alarm: AlarmFired? = null,
     ) {
         synchronized(emergencyRing) {
             if (emergencyRing.value != null) return
             logger.log(LogEvent.EmergencyRingStarted(cause))
             emergencyRing.value = EmergencyRing(alarmAt, volumePercent)
+            emergencyAlarm = alarm
             emergencyLimit =
                 scope.launch {
                     delay(EMERGENCY_LIMIT)
@@ -227,6 +251,17 @@ class WakeRuntime(
         vibrator.start()
         notifier.show(alarmAt)
         ensureService()
+        keepEmergencySlot()
+    }
+
+    /**
+     * Arms the emergency ring's backup slot one heartbeat from now, carrying its alarm (Story 2.1). Nothing when no
+     * emergency ring plays, or a session rings or is snoozed (its own slot stays).
+     */
+    fun keepEmergencySlot() {
+        val state = session()
+        if (emergency.value == null || state is SessionState.Ring || state is SessionState.Snoozed) return
+        armSlot(Deadline.after(now(), SessionReducer.HEARTBEAT), emergencyAlarm)
     }
 
     /** Stops the emergency ring ([reason] is logged); a session that took over keeps ringing. */
@@ -244,6 +279,7 @@ class WakeRuntime(
                 else -> endSession()
             }
             emergencyRing.value = null
+            emergencyAlarm = null
         }
         logger.log(LogEvent.EmergencyRingStopped(reason))
     }
@@ -260,7 +296,7 @@ class WakeRuntime(
             }
 
             pending != null -> {
-                startEmergency(pending.scheduledAt, Alarm.DEFAULT_VOLUME_PERCENT, CRASHED)
+                startEmergency(pending.scheduledAt, Alarm.DEFAULT_VOLUME_PERCENT, CRASHED, pending)
             }
         }
     }
@@ -312,12 +348,20 @@ class WakeRuntime(
         ensureService()
         if (emergency.value != null) clearEmergencyForSession()
         sound()
+        newRing = false
         if (EntryEffect.Vibrating !in entryEffects(session())) vibrator.stop()
     }
 
+    /**
+     * Plays the session's sound. A restored ring (Story 2.1, UX-DR78) plays at the set volume with no ramp: nothing plays
+     * yet and no one-shot effect of this step started a new ring (`ProcessRestored` runs entry effects only). A sound
+     * already open keeps the ramp setting it started with, so the same request stays the same and never restarts the ring.
+     */
     private fun playFor(effect: EntryEffect.SoundAt) {
         val ring = ringConfig()
-        player.play(effect.soundRef, effect.volumePercent, ring.gradual, ring.rampStart)
+        // Decided only when a sound starts: a heartbeat (ArmSlot on SlotFired) while it plays must not change the request.
+        if (player.sound == null) restoredRing = !newRing
+        player.play(effect.soundRef, effect.volumePercent, ring.gradual && !restoredRing, ring.rampStart)
     }
 
     private fun clearEmergencyForSession() {
@@ -325,6 +369,9 @@ class WakeRuntime(
             emergencyLimit?.cancel()
             emergencyLimit = null
             emergencyRing.value = null
+            emergencyAlarm = null
+            // The backup slot carried the emergency's alarm: the session's heartbeat arms its own slot instead.
+            armedSlot = null
         }
         logger.log(LogEvent.EmergencyRingStopped("a session took over"))
     }
@@ -332,6 +379,7 @@ class WakeRuntime(
     private fun silence() {
         player.stop(restoreVolume = false)
         vibrator.stop()
+        newRing = false
     }
 
     private fun showWakeUi() {
@@ -342,7 +390,14 @@ class WakeRuntime(
     /** The first effect of a new session, so its state is committed (timed for the ring start). */
     private fun startRuntime() {
         timings.stage(WakeStage.SessionCommitted)
+        newRing = true
         ensureService()
+    }
+
+    /** The one-shot `ArmSlot`: the heartbeat of a ring, or the slot of a ring that starts now (it may ramp). */
+    private fun armSlotForRing(at: Deadline) {
+        newRing = true
+        armSlot(at)
     }
 
     private fun ensureService() {
@@ -350,9 +405,24 @@ class WakeRuntime(
         startRequested = starter.startRestore()
     }
 
-    /** Arms the slot at [at]; a failure (logged) records nothing, so the next slot entry effect tries again. */
-    private fun armSlot(at: Deadline) {
-        val armed = outputs.scheduler.armSessionSlot(at)
+    /**
+     * The heartbeat slot (Story 2.1): armed one heartbeat from now when this process has none armed, or when the one it
+     * armed is already due (it fired, but this process never handled that fire), so a ringing session always has one.
+     */
+    private fun keepHeartbeat() {
+        val now = now()
+        if (armedSlot?.isDue(now) != false) armSlot(Deadline.after(now, SessionReducer.HEARTBEAT))
+    }
+
+    /**
+     * Arms the slot at [at], carrying [alarm] when given; a failure (logged) records nothing, so the next slot entry
+     * effect tries again.
+     */
+    private fun armSlot(
+        at: Deadline,
+        alarm: AlarmFired? = null,
+    ) {
+        val armed = outputs.scheduler.armSessionSlot(at, alarm)
         armedSlot = if (armed is Outcome.Success) at else null
         if (armed is Outcome.Failure) logger.log(LogEvent.OperationFailed.of("arm session slot", armed.error))
     }

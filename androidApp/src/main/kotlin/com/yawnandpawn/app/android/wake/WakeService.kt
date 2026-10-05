@@ -9,6 +9,8 @@ import android.os.IBinder
 import android.os.UserManager
 import com.yawnandpawn.app.android.AlarmFiredReceiver
 import com.yawnandpawn.app.android.ApplicationScope
+import com.yawnandpawn.app.android.alarmFiredOrNull
+import com.yawnandpawn.app.android.putAlarmFired
 import com.yawnandpawn.app.core.alarm.Alarm
 import com.yawnandpawn.app.core.alarm.AlarmFired
 import com.yawnandpawn.app.core.alarm.AlarmRepository
@@ -28,6 +30,7 @@ import com.yawnandpawn.app.core.session.GlobalSettings
 import com.yawnandpawn.app.core.session.SeedSource
 import com.yawnandpawn.app.core.session.SessionEngine
 import com.yawnandpawn.app.core.session.SessionEvent
+import com.yawnandpawn.app.core.session.SessionSlotRearm
 import com.yawnandpawn.app.core.session.SessionState
 import com.yawnandpawn.app.core.session.TestAlarmStore
 import com.yawnandpawn.app.core.session.nextTickIn
@@ -64,11 +67,17 @@ import kotlin.time.Instant
  * - **Alarm:** while a session rings or is snoozed it dispatches `OverlapAlarmFired`; otherwise it reads the alarm and
  *   dispatches `AlarmFired` with a new session id, the config resolved now (`GlobalSettings` defaults until Epic 5), seeds
  *   from the [SeedSource] and whether the phone is still locked since boot. A deleted alarm rings nothing.
- * - **Slot:** it dispatches `SlotFired`, then ticks. **Restore:** it loads the stored session (`SessionEngine.restore`).
+ * - **Slot (Story 2.1):** the kill-recovery path; see [onSlot]. **Restore:** it loads the stored session
+ *   (`SessionEngine.restore`).
  * - **Test:** it takes the pending test config and dispatches `TestAlarmFired` (Story 1.18).
  * - **Repost** (the ringing notification's delete intent, Story 2.5): entering the foreground posts the notification
  *   again, without its full-screen intent unless the alarm rings (a snooze never opens the wake screen). An Idle engine
  *   (a new process) loads the stored session first, as a restore does; otherwise nothing is dispatched.
+ * - **Order (Story 2.1):** `startForeground` first, then `SessionEngine.restore()` (with a stored session that is
+ *   `ProcessRestored`), and only then any event from the broadcast, so an alarm that fires into a killed process with a
+ *   stored session becomes `OverlapAlarmFired`, never a second session. A refused `startForeground` re-arms the session
+ *   slot one heartbeat later ([SessionSlotRearm.afterRefusedStart]); a test is never retried. Swiping the app from
+ *   Recents stops nothing ([onTaskRemoved]).
  * - While a session is active it calls `SessionEngine.tick` when the next deadline (grace end or the 30-minute
  *   interaction timeout, FR-ALM-9) is due on the monotonic clock (Story 1.16). A forgotten alarm becomes Missed there.
  * - When the state is Idle, Completed or Missed and no emergency ring plays, it stops the sound and vibration, restores
@@ -99,6 +108,7 @@ class WakeService :
     private val logger: Logger by inject()
     private val starts: WakeServiceStarts by inject()
     private val timings: WakeTimings by inject()
+    private val rearm: SessionSlotRearm by inject()
 
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate + CoroutineExceptionHandler { _, e -> onCrash(e) })
     private val commands = Mutex()
@@ -143,6 +153,7 @@ class WakeService :
         // The alarm receiver that asked for this start may finish its broadcast now (WakeServiceStarts).
         intent?.takeIf { it.hasExtra(EXTRA_START_TOKEN) }?.let { starts.onStartCommandReached(it.getLongExtra(EXTRA_START_TOKEN, 0)) }
         if (!inForeground) {
+            retryLater(intent, fired)
             stopSelfResult(startId)
             return START_NOT_STICKY
         }
@@ -153,7 +164,7 @@ class WakeService :
                 when {
                     fired != null -> onAlarm(fired)
 
-                    intent?.action == ACTION_SLOT -> onSlot()
+                    intent?.action == ACTION_SLOT -> onSlot(intent?.alarmFiredOrNull())
 
                     intent?.action == ACTION_TEST -> onTest()
 
@@ -167,6 +178,27 @@ class WakeService :
         }
         // Not sticky: a restart without an intent would post the alarm notification for nothing; the slot revives a ring.
         return START_NOT_STICKY
+    }
+
+    /**
+     * The platform refused `startForeground` (Story 2.1): the session slot tries again one heartbeat later, carrying the
+     * alarm of an alarm or slot start ([SessionSlotRearm.afterRefusedStart]). A test is never retried.
+     */
+    private fun retryLater(
+        intent: Intent?,
+        fired: AlarmFired?,
+    ) {
+        if (intent?.action == ACTION_TEST) return
+        val alarm = fired ?: intent?.takeIf { it.action == ACTION_SLOT }?.alarmFiredOrNull()
+        appScope.launch { rearm.afterRefusedStart(alarm) }
+    }
+
+    /**
+     * The user swiped the app from Recents (Story 2.1): the session, the player and the foreground notification keep
+     * running. The manifest never sets `stopWithTask`, so the service is not stopped with the task.
+     */
+    override fun onTaskRemoved(rootIntent: Intent?) {
+        super.onTaskRemoved(rootIntent)
     }
 
     override fun onDestroy() {
@@ -227,7 +259,7 @@ class WakeService :
         if (current is SessionState.Ring && current.session.config.testMode) current = endTestSession(current)
         if (current is SessionState.Ring || current is SessionState.Snoozed) {
             val merged = engine.dispatch(SessionEvent.OverlapAlarmFired(fired.alarmId, fired.scheduledAt))
-            if (merged is Outcome.Failure) ringIfSilent("merge not saved: ${merged.error.diagnostic()}", fired.scheduledAt)
+            if (merged is Outcome.Failure) ringIfSilent("merge not saved: ${merged.error.diagnostic()}", fired)
         } else {
             startSession(fired)
         }
@@ -267,7 +299,7 @@ class WakeService :
             )
         val started = engine.dispatch(event)
         if (started is Outcome.Failure) {
-            runtime.startEmergency(fired.scheduledAt, alarm.volumePercent, "session not started: ${started.error.diagnostic()}")
+            runtime.startEmergency(fired.scheduledAt, alarm.volumePercent, "session not started: ${started.error.diagnostic()}", fired)
         }
     }
 
@@ -278,7 +310,7 @@ class WakeService :
         if (error is DomainError.NotFound) {
             logger.log(LogEvent.FireIgnored(FireKind.Alarm, fired.alarmId, "alarm deleted before it rang"))
         } else {
-            runtime.startEmergency(fired.scheduledAt, Alarm.DEFAULT_VOLUME_PERCENT, "alarm not readable: ${error.diagnostic()}")
+            runtime.startEmergency(fired.scheduledAt, Alarm.DEFAULT_VOLUME_PERCENT, "alarm not readable: ${error.diagnostic()}", fired)
         }
     }
 
@@ -288,6 +320,8 @@ class WakeService :
      * it (AD-2); a test never starts the emergency ring.
      */
     private suspend fun onTest() {
+        // The stored session first (Story 2.1): a test that fires into a killed session is ignored by it, never a second one.
+        engine.restore()
         val pending =
             when (val taken = testAlarms.take()) {
                 is Outcome.Success -> taken.value
@@ -313,13 +347,40 @@ class WakeService :
         }
     }
 
-    private suspend fun onSlot() {
+    /**
+     * The session slot fired (Story 2.1), standing also for [alarm] when it carried one. The stored session is restored
+     * first (after a kill that is `ProcessRestored`: entry effects only, same step), then [alarm] is handled like an
+     * alarm start (merged into the session, or a new one). Then:
+     * - a session: `SlotFired` (the heartbeat re-arms), then a tick;
+     * - no session and the store could not be read: the emergency ring (NFR-2);
+     * - no session and the emergency ring plays: its backup slot is armed again;
+     * - otherwise an orphan slot: logged, and the service shuts down (slot cancelled, notification removed, NFR-8).
+     */
+    private suspend fun onSlot(alarm: AlarmFired?) {
         runtime.onSlotFired()
-        val slot = engine.dispatch(SessionEvent.SlotFired)
-        if (slot is Outcome.Failure) ringIfSilent("slot fire not saved: ${slot.error.diagnostic()}")
-        // The slot wakes the phone at least every heartbeat: a deadline the main-thread timer missed in deep sleep is
-        // handled here.
-        engine.tick()
+        val restored = engine.restore()
+        alarm?.let { onAlarm(it) }
+        when {
+            engine.state.value is SessionState.Active -> {
+                val slot = engine.dispatch(SessionEvent.SlotFired)
+                if (slot is Outcome.Failure) ringIfSilent("slot fire not saved: ${slot.error.diagnostic()}")
+                // The slot wakes the phone at least every heartbeat: a deadline the main-thread timer missed in deep sleep
+                // is handled here.
+                engine.tick()
+            }
+
+            restored is Outcome.Failure -> {
+                ringIfSilent("session not loaded: ${restored.error.diagnostic()}")
+            }
+
+            runtime.emergency.value != null -> {
+                runtime.keepEmergencySlot()
+            }
+
+            else -> {
+                logger.log(LogEvent.FireIgnored(FireKind.SessionSlot, alarmId = null, reason = "no session stored"))
+            }
+        }
     }
 
     /**
@@ -338,11 +399,12 @@ class WakeService :
 
     /**
      * A step of a session that should ring could not be committed (or loaded): unless the in-memory session rings
-     * anyway, the emergency ring plays (NFR-2) for [alarmAt], else the session's alarm time, else now.
+     * anyway, the emergency ring plays (NFR-2) for [alarm], else the session's alarm time, else now. Its backup slot
+     * carries [alarm] (Story 2.1).
      */
     private fun ringIfSilent(
         cause: String,
-        alarmAt: Instant? = null,
+        alarm: AlarmFired? = null,
     ) {
         val state = engine.state.value
         if (state is SessionState.Ring) {
@@ -350,8 +412,8 @@ class WakeService :
             return
         }
         val config = (state as? SessionState.Active)?.session?.config
-        val at = alarmAt ?: config?.scheduledAt ?: clock.now()
-        runtime.startEmergency(at, config?.volumePercent ?: Alarm.DEFAULT_VOLUME_PERCENT, cause)
+        val at = alarm?.scheduledAt ?: config?.scheduledAt ?: clock.now()
+        runtime.startEmergency(at, config?.volumePercent ?: Alarm.DEFAULT_VOLUME_PERCENT, cause, alarm)
     }
 
     /**
@@ -462,6 +524,12 @@ class WakeService :
 
         /** The intent that posts the swiped-away ringing notification again ([ACTION_REPOST]). */
         fun repostIntent(context: Context): Intent = intent(context, ACTION_REPOST)
+
+        /** The intent of a session slot fire, standing also for [alarm] when the slot carried one (Story 2.1). */
+        fun slotIntent(
+            context: Context,
+            alarm: AlarmFired?,
+        ): Intent = intent(context, ACTION_SLOT).putAlarmFired(alarm)
 
         /** The intent that rings the stored alarm [fired]. */
         fun alarmIntent(

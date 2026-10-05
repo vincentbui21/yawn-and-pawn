@@ -55,7 +55,7 @@ class AlarmFiredReceiverBudgetTest {
             object : AlarmFiredHandler {
                 override suspend fun onAlarmFired(fired: AlarmFired) = Unit
 
-                override suspend fun onSessionSlotFired() = onSlot()
+                override suspend fun onSessionSlotFired(alarm: AlarmFired?) = onSlot()
 
                 override suspend fun onTestAlarmFired() = Unit
             },
@@ -74,7 +74,7 @@ class AlarmFiredReceiverBudgetTest {
     }
 
     /** Sends a session-slot fire; the returned flag turns true once the receiver finished its pending result. */
-    private fun fireSlot(): AtomicBoolean = fire(AlarmFiredReceiver.intent(app, AlarmFiredReceiver.ACTION_SESSION_SLOT))
+    private fun fireSlot(): AtomicBoolean = fire(SessionSlotReceiver.intent(app))
 
     /** Sends [intent] as an ordered broadcast; the returned flag turns true once the receiver finished its pending result. */
     private fun fire(intent: Intent): AtomicBoolean {
@@ -111,7 +111,7 @@ class AlarmFiredReceiverBudgetTest {
         runWork(seconds = 2)
 
         assertTrue(finished.get(), "the pending result is finished after the timeout")
-        assertEquals(listOf<LogEvent>(LogEvent.OperationFailed("handle alarm fire", "took longer than 8s")), fakeLogger.events)
+        assertEquals(listOf<LogEvent>(LogEvent.OperationFailed("handle session slot fire", "took longer than 8s")), fakeLogger.events)
     }
 
     /**
@@ -166,7 +166,7 @@ class AlarmFiredReceiverBudgetTest {
     private class RecordingSchedule : AlarmFiredHandler {
         override suspend fun onAlarmFired(fired: AlarmFired) = Unit
 
-        override suspend fun onSessionSlotFired() = Unit
+        override suspend fun onSessionSlotFired(alarm: AlarmFired?) = Unit
 
         override suspend fun onTestAlarmFired() = Unit
     }

@@ -81,6 +81,9 @@ class WakeActivity : ComponentActivity() {
         enableEdgeToEdge()
         super.onCreate(savedInstanceState)
         showOverLockScreen()
+        // A restore entry point (Story 2.1): opened after a kill, the screen takes over the stored session and shows the
+        // same step from memory (nothing when the engine already holds it).
+        appScope.launch { engine.restore() }
         onBackPressedDispatcher.addCallback(
             this,
             object : OnBackPressedCallback(true) {

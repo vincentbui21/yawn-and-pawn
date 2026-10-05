@@ -6,6 +6,7 @@ import android.content.ComponentName
 import androidx.test.core.app.ApplicationProvider
 import com.yawnandpawn.app.MainActivity
 import com.yawnandpawn.app.YawnAndPawnApp
+import com.yawnandpawn.app.core.alarm.AlarmFired
 import com.yawnandpawn.app.core.alarm.RequestCodes
 import com.yawnandpawn.app.core.error.DomainError
 import com.yawnandpawn.app.core.error.Outcome
@@ -32,6 +33,7 @@ import kotlin.test.assertTrue
 import kotlin.time.Duration.Companion.hours
 import kotlin.time.Duration.Companion.minutes
 import kotlin.time.Duration.Companion.seconds
+import kotlin.time.Instant
 
 @RunWith(RobolectricTestRunner::class)
 class AndroidAlarmSchedulerTest {
@@ -119,9 +121,18 @@ class AndroidAlarmSchedulerTest {
 
         val byCode = alarmManager.scheduledAlarms.associateBy { shadowOf(it.operation).requestCode }
         assertEquals(setOf(RequestCodes.SESSION_SLOT, RequestCodes.TEST_ALARM, 1000), byCode.keys)
-        val slot = shadowOf(byCode.getValue(RequestCodes.SESSION_SLOT).operation).savedIntent
+        val slotAlarm = byCode.getValue(RequestCodes.SESSION_SLOT)
+        val slot = shadowOf(slotAlarm.operation).savedIntent
         val test = shadowOf(byCode.getValue(RequestCodes.TEST_ALARM).operation).savedIntent
-        assertEquals(AlarmFiredReceiver.ACTION_SESSION_SLOT, slot.action)
+        assertEquals(SessionSlotReceiver.ACTION_SESSION_SLOT, slot.action)
+        assertEquals(ComponentName(app, SessionSlotReceiver::class.java), slot.component, "Story 2.1: the slot has its own receiver")
+        assertTrue(shadowOf(slotAlarm.operation).isBroadcast)
+        assertTrue(shadowOf(slotAlarm.operation).isImmutable)
+        assertEquals(
+            ComponentName(app, MainActivity::class.java),
+            shadowOf(assertNotNull(slotAlarm.alarmClockInfo).showIntent).savedIntent.component,
+            "the show intent opens the app",
+        )
         assertEquals(AlarmFiredReceiver.ACTION_TEST_ALARM, test.action)
         assertNull(slot.getStringExtra(AlarmFiredReceiver.EXTRA_ALARM_ID))
         assertEquals(trigger, test.getLongExtra(AlarmFiredReceiver.EXTRA_SCHEDULED_AT, 0))
@@ -129,6 +140,28 @@ class AndroidAlarmSchedulerTest {
         scheduler.cancelSessionSlot()
         scheduler.cancel(RequestCodes.TEST_ALARM)
         assertEquals(listOf(1000), alarmManager.scheduledAlarms.map { shadowOf(it.operation).requestCode })
+    }
+
+    @Test
+    fun `re-arming the slot replaces it and what it carries - one pending slot, the alarm it stands for, then none`() {
+        val alarm = AlarmFired("alarm-b", Instant.fromEpochMilliseconds(trigger))
+
+        scheduler.armSessionSlot(Deadline.after(time.snapshot(), 60.seconds), alarm)
+        val carrying = shadowOf(only().operation).savedIntent
+        assertEquals("alarm-b", carrying.getStringExtra(AlarmFiredReceiver.EXTRA_ALARM_ID))
+        assertEquals(trigger, carrying.getLongExtra(AlarmFiredReceiver.EXTRA_SCHEDULED_AT, 0))
+
+        scheduler.armSessionSlot(Deadline.after(time.snapshot(), 30.seconds))
+
+        val slot = only()
+        assertEquals((time.clock.now() + 30.seconds).toEpochMilliseconds(), slot.triggerAtTime)
+        // FLAG_UPDATE_CURRENT: the system alarm and the extras it carries are replaced.
+        assertNull(
+            shadowOf(slot.operation).savedIntent.getStringExtra(AlarmFiredReceiver.EXTRA_ALARM_ID),
+            "the new arming carries no alarm",
+        )
+        assertEquals(Outcome.Success(Unit), scheduler.cancelSessionSlot())
+        assertTrue(alarmManager.scheduledAlarms.isEmpty())
     }
 
     @Test

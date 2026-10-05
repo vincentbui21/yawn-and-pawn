@@ -6,6 +6,7 @@ import android.content.Context
 import android.content.Intent
 import android.os.Build
 import com.yawnandpawn.app.MainActivity
+import com.yawnandpawn.app.core.alarm.AlarmFired
 import com.yawnandpawn.app.core.alarm.AlarmScheduler
 import com.yawnandpawn.app.core.alarm.RequestCodes
 import com.yawnandpawn.app.core.error.DomainError
@@ -22,9 +23,10 @@ import com.yawnandpawn.app.core.time.TimeSnapshot
  * [AlarmScheduler] on `AlarmManager.setAlarmClock()` only (AD-4): exact, allowed in Doze, shown as the next alarm in
  * the status bar and on the lock screen. There is never an inexact fallback (detekt `NoInexactAlarm`).
  *
- * - The operation is an immutable broadcast to [AlarmFiredReceiver] with an explicit component, one action per kind
- *   ([AlarmFiredReceiver.ACTION_ALARM], [AlarmFiredReceiver.ACTION_SESSION_SLOT], [AlarmFiredReceiver.ACTION_TEST_ALARM]),
- *   the extras [AlarmFiredReceiver.EXTRA_ALARM_ID] and [AlarmFiredReceiver.EXTRA_SCHEDULED_AT], and the request code.
+ * - The operation is an immutable broadcast with an explicit component and the request code: to [AlarmFiredReceiver]
+ *   for a stored alarm ([AlarmFiredReceiver.ACTION_ALARM]) and the test alarm ([AlarmFiredReceiver.ACTION_TEST_ALARM])
+ *   with the extras [AlarmFiredReceiver.EXTRA_ALARM_ID] and [AlarmFiredReceiver.EXTRA_SCHEDULED_AT], and to
+ *   [SessionSlotReceiver] for the session slot (Story 2.1), carrying the alarm it stands for, if any, in the same extras.
  * - The show intent (tapping the alarm icon in the system UI) is an immutable activity intent opening [MainActivity].
  * - Scheduling again under a request code replaces the earlier alarm: the PendingIntents are equal.
  * - On API 31-32 without the exact-alarm permission (and whenever `setAlarmClock` throws `SecurityException`) it returns
@@ -43,17 +45,24 @@ class AndroidAlarmScheduler(
         alarmId: String,
         requestCode: Int,
         triggerAtWallMillis: Long,
-    ): Outcome<Unit, DomainError> = arm(AlarmFiredReceiver.ACTION_ALARM, requestCode, triggerAtWallMillis, alarmId)
+    ): Outcome<Unit, DomainError> {
+        val intent = firedIntent(context, AlarmFiredReceiver.ACTION_ALARM, triggerAtWallMillis, alarmId)
+        return arm(intent, requestCode, triggerAtWallMillis)
+    }
 
-    override fun cancel(requestCode: Int): Outcome<Unit, DomainError> = cancel(actionFor(requestCode), requestCode)
+    override fun cancel(requestCode: Int): Outcome<Unit, DomainError> = cancel(operationFor(context, requestCode), requestCode)
 
-    override fun armSessionSlot(deadline: Deadline): Outcome<Unit, DomainError> =
-        arm(AlarmFiredReceiver.ACTION_SESSION_SLOT, RequestCodes.SESSION_SLOT, wallMillisOf(deadline), alarmId = null)
+    override fun armSessionSlot(
+        deadline: Deadline,
+        alarm: AlarmFired?,
+    ): Outcome<Unit, DomainError> = arm(SessionSlotReceiver.intent(context, alarm), RequestCodes.SESSION_SLOT, wallMillisOf(deadline))
 
-    override fun cancelSessionSlot(): Outcome<Unit, DomainError> = cancel(AlarmFiredReceiver.ACTION_SESSION_SLOT, RequestCodes.SESSION_SLOT)
+    override fun cancelSessionSlot(): Outcome<Unit, DomainError> = cancel(SessionSlotReceiver.intent(context), RequestCodes.SESSION_SLOT)
 
-    override fun scheduleTest(triggerAtWallMillis: Long): Outcome<Unit, DomainError> =
-        arm(AlarmFiredReceiver.ACTION_TEST_ALARM, RequestCodes.TEST_ALARM, triggerAtWallMillis, alarmId = null)
+    override fun scheduleTest(triggerAtWallMillis: Long): Outcome<Unit, DomainError> {
+        val intent = firedIntent(context, AlarmFiredReceiver.ACTION_TEST_ALARM, triggerAtWallMillis, alarmId = null)
+        return arm(intent, RequestCodes.TEST_ALARM, triggerAtWallMillis)
+    }
 
     /**
      * The only place a [Deadline] becomes wall time (AD-3): within the boot it was made in, now plus the monotonic
@@ -71,17 +80,12 @@ class AndroidAlarmScheduler(
     // setAlarmClock throws platform exceptions (permission, per-app alarm limit); map them all at this boundary (AD-12).
     @Suppress("TooGenericExceptionCaught")
     private fun arm(
-        action: String,
+        intent: Intent,
         requestCode: Int,
         triggerAtWallMillis: Long,
-        alarmId: String?,
     ): Outcome<Unit, DomainError> {
         if (exactAlarmsDenied()) return denied(requestCode, "canScheduleExactAlarms() is false")
-        val intent =
-            AlarmFiredReceiver
-                .intent(context, action)
-                .putExtra(AlarmFiredReceiver.EXTRA_ALARM_ID, alarmId)
-                .putExtra(AlarmFiredReceiver.EXTRA_SCHEDULED_AT, triggerAtWallMillis)
+        // FLAG_UPDATE_CURRENT: arming again under the code replaces the alarm and the extras it carries.
         val operation = PendingIntent.getBroadcast(context, requestCode, intent, IMMUTABLE_UPDATE)
         val show = PendingIntent.getActivity(context, requestCode, Intent(context, MainActivity::class.java), IMMUTABLE_UPDATE)
         return try {
@@ -98,7 +102,7 @@ class AndroidAlarmScheduler(
     }
 
     private fun cancel(
-        action: String,
+        intent: Intent,
         requestCode: Int,
     ): Outcome<Unit, DomainError> {
         // Equal to the armed one (same component, action and code; extras do not count), so this finds it.
@@ -106,7 +110,7 @@ class AndroidAlarmScheduler(
             PendingIntent.getBroadcast(
                 context,
                 requestCode,
-                AlarmFiredReceiver.intent(context, action),
+                intent,
                 PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_NO_CREATE,
             ) ?: return Outcome.Success(Unit)
         alarmManager.cancel(operation)
@@ -133,11 +137,27 @@ class AndroidAlarmScheduler(
     private companion object {
         const val IMMUTABLE_UPDATE = PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT
 
-        fun actionFor(requestCode: Int): String =
+        /** The [AlarmFiredReceiver] operation for a stored alarm or the test alarm, with its extras. */
+        fun firedIntent(
+            context: Context,
+            action: String,
+            triggerAtWallMillis: Long,
+            alarmId: String?,
+        ): Intent =
+            AlarmFiredReceiver
+                .intent(context, action)
+                .putExtra(AlarmFiredReceiver.EXTRA_ALARM_ID, alarmId)
+                .putExtra(AlarmFiredReceiver.EXTRA_SCHEDULED_AT, triggerAtWallMillis)
+
+        /** The operation armed under [requestCode], without extras (they do not count when PendingIntents are compared). */
+        fun operationFor(
+            context: Context,
+            requestCode: Int,
+        ): Intent =
             when (requestCode) {
-                RequestCodes.SESSION_SLOT -> AlarmFiredReceiver.ACTION_SESSION_SLOT
-                RequestCodes.TEST_ALARM -> AlarmFiredReceiver.ACTION_TEST_ALARM
-                else -> AlarmFiredReceiver.ACTION_ALARM
+                RequestCodes.SESSION_SLOT -> SessionSlotReceiver.intent(context)
+                RequestCodes.TEST_ALARM -> AlarmFiredReceiver.intent(context, AlarmFiredReceiver.ACTION_TEST_ALARM)
+                else -> AlarmFiredReceiver.intent(context, AlarmFiredReceiver.ACTION_ALARM)
             }
     }
 }

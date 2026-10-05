@@ -4,6 +4,7 @@ import android.app.AlarmManager
 import android.app.ForegroundServiceStartNotAllowedException
 import android.app.NotificationManager
 import android.content.ComponentName
+import android.content.Intent
 import android.media.AudioAttributes
 import android.media.AudioManager
 import android.os.Looper
@@ -15,6 +16,7 @@ import com.yawnandpawn.app.awaitChildren
 import com.yawnandpawn.app.core.alarm.Alarm
 import com.yawnandpawn.app.core.alarm.AlarmFired
 import com.yawnandpawn.app.core.alarm.AlarmRepository
+import com.yawnandpawn.app.core.alarm.AlarmScheduler
 import com.yawnandpawn.app.core.alarm.RequestCodes
 import com.yawnandpawn.app.core.error.DomainError
 import com.yawnandpawn.app.core.error.Outcome
@@ -224,13 +226,108 @@ class WakeServiceTest {
     }
 
     @Test
-    fun `a slot fire with no session leaves the engine Idle and stops the service`() {
+    fun `an orphan slot fire is logged, cancels the slot, removes its notification and leaves no service running`() {
         val app = WakeApp()
+        // A slot is still armed although runtime.db holds nothing (for example from a process that died after the end).
+        app.koin
+            .get<AlarmScheduler>()
+            .armSessionSlot(Deadline.after(app.now(), 1.minutes))
 
         val service = app.startService(WakeService.intent(app.app, WakeService.ACTION_SLOT)).get()
         app.awaitUntil("the service stops") { shadowOf(service).isStoppedBySelf }
 
         assertEquals(SessionState.Idle, app.engine.state.value)
+        assertTrue(app.logs().any { it == "FireIgnored kind=SessionSlot alarmId=null reason=no session stored" }, "${app.logs()}")
+        assertFalse(armedSlot(app), "the slot is cancelled")
+        assertTrue(shadowOf(service).isForegroundStopped)
+        assertTrue(shadowOf(service).notificationShouldRemoved, "its notification is removed")
+        assertEquals(0, notifications(app).size(), "no notification left")
+    }
+
+    @Test
+    fun `a slot carrying an alarm with no session stored rings that alarm as a new session`() {
+        val app = WakeApp()
+        upsert(alarmA)
+
+        app.startService(WakeService.slotIntent(app.app, fired))
+        app.awaitRinging()
+
+        val ringing = assertIs<SessionState.Ringing>(app.engine.state.value)
+        assertEquals(alarmA.id, ringing.session.config.alarmId)
+        assertEquals(scheduledAt, ringing.session.config.scheduledAt)
+        assertTrue(armedSlot(app))
+    }
+
+    @Test
+    fun `a slot carrying an alarm into a stored ringing session merges it - one session, one player`() {
+        val app = WakeApp()
+        val stored = SessionState.Ringing(aSession())
+        assertEquals(Outcome.Success(Unit), runBlocking { store(app).commit(stored) })
+
+        app.startService(WakeService.slotIntent(app.app, AlarmFired("alarm-b", scheduledAt)))
+        app.awaitUntil("the merge is handled") { app.logs().any { it.startsWith("SessionEffectLogged type=RecordMergedOccurrence") } }
+
+        assertEquals(stored.session.sessionId, assertIs<SessionState.Ringing>(app.engine.state.value).session.sessionId)
+        assertEquals(1, app.mediaPlayers.size, "one player")
+    }
+
+    @Test
+    fun `a swipe from Recents keeps the session, the player and the notification`() {
+        val app = WakeApp()
+        upsert(alarmA)
+        val controller = app.ring(fired)
+        app.awaitRinging()
+
+        controller.get().onTaskRemoved(Intent(app.app, WakeActivity::class.java))
+        shadowOf(Looper.getMainLooper()).idle()
+
+        assertIs<SessionState.Ringing>(app.engine.state.value)
+        assertTrue(app.lastMediaPlayer().isReallyPlaying, "still playing")
+        assertFalse(shadowOf(controller.get()).isStoppedBySelf)
+        assertTrue(app.runtime.isServiceRunning)
+        assertEquals(1, notifications(app).size())
+    }
+
+    @Test
+    fun `the emergency ring arms a backup slot carrying its alarm, and after a kill that slot rings it as a real session`() {
+        val broken = FakeActiveSessionStore().apply { commitFailure = DomainError.StorageFailure("disk full") }
+        val first = WakeApp(store = broken)
+        upsert(alarmA)
+        val service = first.ring(fired)
+        first.awaitUntil("the emergency ring") { first.runtime.emergency.value != null }
+        val slot =
+            shadowOf(first.app.getSystemService(AlarmManager::class.java)).scheduledAlarms.single {
+                shadowOf(it.operation).requestCode == RequestCodes.SESSION_SLOT
+            }
+        val carried = shadowOf(slot.operation).savedIntent
+        assertEquals(alarmA.id, carried.getStringExtra(AlarmFiredReceiver.EXTRA_ALARM_ID))
+        assertEquals(scheduledAt.toEpochMilliseconds(), carried.getLongExtra(AlarmFiredReceiver.EXTRA_SCHEDULED_AT, 0))
+
+        // The process dies while the emergency ring plays; storage works again in the new one.
+        service.destroy()
+        val app = WakeApp()
+        app.app.sendBroadcast(Intent(carried))
+        shadowOf(Looper.getMainLooper()).idle()
+        app.koin.get<ApplicationScope>().awaitChildren()
+        app.startService(assertNotNull(shadowOf(app.app).nextStartedService))
+        app.awaitRinging()
+
+        assertEquals(alarmA.id, assertIs<SessionState.Ringing>(app.engine.state.value).session.config.alarmId)
+        assertNull(app.runtime.emergency.value)
+    }
+
+    @Test
+    fun `I'm up on the emergency ring cancels its backup slot`() {
+        val broken = FakeActiveSessionStore().apply { commitFailure = DomainError.StorageFailure("disk full") }
+        val app = WakeApp(store = broken)
+        upsert(alarmA)
+        app.ring(fired)
+        app.awaitUntil("the emergency ring") { app.runtime.emergency.value != null }
+        assertTrue(armedSlot(app))
+
+        app.runtime.stopEmergency()
+
+        assertFalse(armedSlot(app), "no slot left after the emergency ring")
     }
 
     @Test

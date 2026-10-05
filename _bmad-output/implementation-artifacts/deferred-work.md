@@ -154,11 +154,11 @@
 - source_spec: `_bmad-output/implementation-artifacts/spec-1-14-ring-the-alarm-wakeservice-alarmplayer-and-the-ongoing-notification.md`
   summary: Story 1.14 follow-ups for later stories.
   evidence: |
-    - A refused foreground-service start for a fresh alarm has no session slot to retry it, and stopSelf after a refused startForeground may crash. Settle with device evidence in Spike S2 / Story 1.20.
+    - A refused foreground-service start for a fresh alarm has no session slot to retry it, and stopSelf after a refused startForeground may crash. Settle with device evidence in Spike S2 / Story 1.20. Retry half resolved in Story 2.1: a refused alarm or slot start (in the receiver's handler) and a refused `startForeground` (in `WakeService`) re-arm the session slot one heartbeat later carrying the alarm (`SessionSlotRearm.afterRefusedStart`, dropped once 30 min late); its fire handles the alarm in a new process. The `stopSelf` crash risk and whether a retried start is allowed stay with Spike S2 / Story 2.13 (entry below).
     - Android 13+ without POST_NOTIFICATIONS shows no notification or full-screen intent, so nothing stops the ring before the 30-minute limit. Story 1.19 requests the permission and must log or flag the missing permission. Resolved in Story 1.19: the editor asks for POST_NOTIFICATIONS once after the first save, and the Home reliability banner flags it (and a revoked full-screen intent on API 34+, or denied exact alarms on API 31-32) on every start, with "Fix" opening the setting.
     - MediaPlayer.prepare() runs on the main thread under the player lock, which is an ANR risk for content URIs. Story 1.17 (sound library, user files) should move it to prepareAsync or off main. Resolved in Story 1.17: `MediaPlayerPlaybackFactory` and the preview player use `prepareAsync`; a prepare error falls back like a playback error.
     - Only the 12 h format is tested for the notification and wake-screen time. Story 1.15 adds the 24 h case. (Resolved in Story 1.15: `WakeNotifierTest` and `WakeActivityTest` cover the 24-hour setting.)
-    - The emergency ring arms no backstop slot, so a process death during it is not recovered. Story 2.1 (recover after a kill).
+    - The emergency ring arms no backstop slot, so a process death during it is not recovered. Story 2.1 (recover after a kill). Resolved in Story 2.1: with no session ringing or snoozed, the emergency ring arms the session slot one heartbeat away carrying its alarm, re-armed on every slot fire while it plays and cancelled by "I'm up" or the 30-minute limit; after a kill the slot rings that alarm again (a real session once storage works, else the emergency ring with a fresh limit).
 - source_spec: `_bmad-output/implementation-artifacts/spec-1-15-ringing-screen-over-the-lock-screen-with-i-m-up.md`
   summary: Story 1.15 follow-ups.
   evidence: |
@@ -189,3 +189,9 @@
   summary: Check on the phone that tapping the ringing notification from the shade after Home brings the wake screen back within 1,000 ms, and that three taps leave one wake screen.
   evidence: The GMD test for it failed in CI because the managed device is an ATD image with no notification shade (PR #24, 2026-10-06); it was removed. Robolectric LeaveAndReturnTest covers the logic.
   status: assigned to Story 2.13 (device checklist).
+- source_spec: `_bmad-output/implementation-artifacts/spec-2-1-keep-the-backup-alarm-armed-and-recover-after-a-kill.md`
+  summary: Story 2.1 follow-ups that need device evidence (Spike S2 / Story 2.13).
+  evidence: |
+    - Whether `stopSelf` after a refused `startForeground` crashes the process (`Context.startForegroundService() did not then call Service.startForeground()`), and whether a start retried from a session-slot fire is allowed after a refusal. The retry cadence is one heartbeat (60 s), the same as the session slot; device logs (`SessionSlotRearmed reason=wake service start refused`) should confirm it on the matrix.
+    - The refused-`startForeground` branch of `WakeService.onStartCommand` (it re-arms the slot through `SessionSlotRearm.afterRefusedStart`) has no host test: Robolectric cannot make `startForeground` throw. The rearm itself is unit-tested in core and through the alarm handler.
+    - The actual kill recovery (OEM task killer, swipe from Recents, `adb shell am kill`) within 60 s on the same step is human-verify in Story 2.13; the host tests rebuild the engine over the same `runtime.db`.

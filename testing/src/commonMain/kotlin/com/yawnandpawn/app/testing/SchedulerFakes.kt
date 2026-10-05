@@ -1,5 +1,6 @@
 package com.yawnandpawn.app.testing
 
+import com.yawnandpawn.app.core.alarm.AlarmFired
 import com.yawnandpawn.app.core.alarm.AlarmRepository
 import com.yawnandpawn.app.core.alarm.AlarmScheduler
 import com.yawnandpawn.app.core.alarm.AlarmScheduling
@@ -32,6 +33,7 @@ sealed interface SchedulerCall {
 
     data class ArmSessionSlot(
         val deadline: Deadline,
+        val alarm: AlarmFired? = null,
     ) : SchedulerCall
 
     data object CancelSessionSlot : SchedulerCall
@@ -77,8 +79,10 @@ class FakeAlarmScheduler : AlarmScheduler {
 
     override fun cancel(requestCode: Int): Outcome<Unit, DomainError> = disarm(SchedulerCall.Cancel(requestCode), requestCode)
 
-    override fun armSessionSlot(deadline: Deadline): Outcome<Unit, DomainError> =
-        arm(SchedulerCall.ArmSessionSlot(deadline), RequestCodes.SESSION_SLOT, deadline.wallMillis)
+    override fun armSessionSlot(
+        deadline: Deadline,
+        alarm: AlarmFired?,
+    ): Outcome<Unit, DomainError> = arm(SchedulerCall.ArmSessionSlot(deadline, alarm), RequestCodes.SESSION_SLOT, deadline.wallMillis)
 
     override fun cancelSessionSlot(): Outcome<Unit, DomainError> = disarm(SchedulerCall.CancelSessionSlot, RequestCodes.SESSION_SLOT)
 

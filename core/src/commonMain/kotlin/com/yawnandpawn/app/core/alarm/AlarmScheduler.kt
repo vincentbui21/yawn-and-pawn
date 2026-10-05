@@ -24,8 +24,16 @@ interface AlarmScheduler {
     /** Cancels whatever is armed under [requestCode]; nothing armed is not an error. */
     fun cancel(requestCode: Int): Outcome<Unit, DomainError>
 
-    /** Arms the one session slot ([RequestCodes.SESSION_SLOT]) at [deadline], converted to wall time by the adapter (AD-3). */
-    fun armSessionSlot(deadline: Deadline): Outcome<Unit, DomainError>
+    /**
+     * Arms the one session slot ([RequestCodes.SESSION_SLOT]) at [deadline], converted to wall time by the adapter (AD-3),
+     * replacing any earlier arming and what it carried. [alarm] is the stored alarm the slot also stands for while no
+     * committed session holds it (a refused wake-service start, or the emergency ring, Story 2.1): the fire hands it to
+     * [AlarmFiredHandler.onSessionSlotFired], so a new process still rings it.
+     */
+    fun armSessionSlot(
+        deadline: Deadline,
+        alarm: AlarmFired? = null,
+    ): Outcome<Unit, DomainError>
 
     /** Cancels the session slot. */
     fun cancelSessionSlot(): Outcome<Unit, DomainError>

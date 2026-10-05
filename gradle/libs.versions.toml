@@ -51,6 +51,7 @@ junit4 = "4.13.2"
 androidx-test-runner = "1.7.0"
 androidx-test-core = "1.7.0"
 androidx-test-ext-junit = "1.3.0"
+androidx-test-uiautomator = "2.3.0"
 foojay = "1.0.0"
 # Build-time only (tools/tokens parses the DESIGN.md frontmatter); never on an app runtime classpath.
 snakeyaml = "2.6"
@@ -115,6 +116,7 @@ junit4 = { module = "junit:junit", version.ref = "junit4" }
 androidx-test-runner = { module = "androidx.test:runner", version.ref = "androidx-test-runner" }
 androidx-test-core = { module = "androidx.test:core", version.ref = "androidx-test-core" }
 androidx-test-ext-junit = { module = "androidx.test.ext:junit", version.ref = "androidx-test-ext-junit" }
+androidx-test-uiautomator = { module = "androidx.test.uiautomator:uiautomator", version.ref = "androidx-test-uiautomator" }
 robolectric = { module = "org.robolectric:robolectric", version.ref = "robolectric" }
 turbine = { module = "app.cash.turbine:turbine", version.ref = "turbine" }
 roborazzi = { module = "io.github.takahirom.roborazzi:roborazzi", version.ref = "roborazzi" }

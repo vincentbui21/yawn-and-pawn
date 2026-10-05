@@ -49,6 +49,7 @@ import kotlin.test.assertEquals
 import kotlin.test.assertFalse
 import kotlin.test.assertNotNull
 import kotlin.test.assertNull
+import kotlin.test.assertSame
 import kotlin.test.assertTrue
 import kotlin.time.Duration.Companion.minutes
 import kotlin.time.Instant
@@ -342,12 +343,31 @@ class WakeRuntimeTest {
         val alarmAt = session.config.scheduledAt
 
         val notification = runtime.foregroundNotification(alarmAt)
+        // startForeground posts it under the notification id.
+        notifications.notify(WakeNotifier.NOTIFICATION_ID, notification)
         runtime.foregroundPosted(alarmAt)
         runtime.onServiceStarted()
         enter(ringing)
 
         assertEquals(WakeNotifier.CHANNEL_ID, notification.channelId)
-        assertEquals(0, shadowOf(notifications).size(), "already shown by startForeground, not posted again")
+        assertSame(
+            notification,
+            shadowOf(notifications).getNotification(WakeNotifier.NOTIFICATION_ID),
+            "already shown by startForeground, not posted again",
+        )
+    }
+
+    @Test
+    fun `a ringing notification the user swiped away is posted again by the next WakeUiShown`() {
+        val alarmAt = session.config.scheduledAt
+        notifications.notify(WakeNotifier.NOTIFICATION_ID, runtime.foregroundNotification(alarmAt))
+        runtime.foregroundPosted(alarmAt)
+        runtime.onServiceStarted()
+
+        notifications.cancel(WakeNotifier.NOTIFICATION_ID)
+        enter(ringing)
+
+        assertEquals(1, shadowOf(notifications).size(), "posted again")
     }
 
     @Test

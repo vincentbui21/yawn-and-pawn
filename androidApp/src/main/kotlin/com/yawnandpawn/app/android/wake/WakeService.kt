@@ -66,6 +66,8 @@ import kotlin.time.Instant
  *   from the [SeedSource] and whether the phone is still locked since boot. A deleted alarm rings nothing.
  * - **Slot:** it dispatches `SlotFired`, then ticks. **Restore:** it loads the stored session (`SessionEngine.restore`).
  * - **Test:** it takes the pending test config and dispatches `TestAlarmFired` (Story 1.18).
+ * - **Repost** (the ringing notification's delete intent, Story 2.5): entering the foreground posts the notification
+ *   again; nothing is dispatched.
  * - While a session is active it calls `SessionEngine.tick` when the next deadline (grace end or the 30-minute
  *   interaction timeout, FR-ALM-9) is due on the monotonic clock (Story 1.16). A forgotten alarm becomes Missed there.
  * - When the state is Idle, Completed or Missed and no emergency ring plays, it stops the sound and vibration, restores
@@ -148,8 +150,14 @@ class WakeService :
             commands.withLock {
                 when {
                     fired != null -> onAlarm(fired)
+
                     intent?.action == ACTION_SLOT -> onSlot()
+
                     intent?.action == ACTION_TEST -> onTest()
+
+                    // The ringing notification was swiped away: entering the foreground above posted it again.
+                    intent?.action == ACTION_REPOST -> Unit
+
                     else -> onRestore()
                 }
             }
@@ -406,6 +414,9 @@ class WakeService :
         const val ACTION_RESTORE = "com.yawnandpawn.app.action.WAKE_RESTORE"
         const val ACTION_TEST = "com.yawnandpawn.app.action.WAKE_TEST"
 
+        /** The ringing notification's delete intent (Story 2.5): post it again, nothing else. */
+        const val ACTION_REPOST = "com.yawnandpawn.app.action.WAKE_REPOST"
+
         /** The alarm receiver's `WakeServiceStarts` token on a start it waits for. */
         const val EXTRA_START_TOKEN = "startToken"
 
@@ -418,6 +429,9 @@ class WakeService :
             context: Context,
             action: String,
         ): Intent = Intent(context, WakeService::class.java).setAction(action)
+
+        /** The intent that posts the swiped-away ringing notification again ([ACTION_REPOST]). */
+        fun repostIntent(context: Context): Intent = intent(context, ACTION_REPOST)
 
         /** The intent that rings the stored alarm [fired]. */
         fun alarmIntent(

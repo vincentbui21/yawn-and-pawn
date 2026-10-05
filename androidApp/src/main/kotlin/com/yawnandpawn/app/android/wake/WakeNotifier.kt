@@ -18,7 +18,8 @@ import kotlin.time.Instant
  * importance, category alarm, ongoing, public on the lock screen, the sunrise status icon in the accent colour. Its
  * title is the alarm time (in the phone's 12/24-hour format), its text "{time} alarm · Tap to return to your alarm".
  * Both its full-screen intent and its content intent open [WakeActivity] (immutable); it has no action, so nothing in
- * it stops the sound. The notification is the foreground notification of [WakeService] ([NOTIFICATION_ID]).
+ * it stops the sound. Its delete intent (a swipe on Android 14+) restarts [WakeService] to post it again (Story 2.5).
+ * The notification is the foreground notification of [WakeService] ([NOTIFICATION_ID]).
  */
 class WakeNotifier(
     private val context: Context,
@@ -42,6 +43,14 @@ class WakeNotifier(
                 WakeActivity.intent(context),
                 PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT,
             )
+        // Android 14+ lets the user swipe it away: the wake service posts it again at once (Story 2.5).
+        val postAgain =
+            PendingIntent.getService(
+                context,
+                REQUEST_REPOST,
+                WakeService.repostIntent(context),
+                PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT,
+            )
         return Notification
             .Builder(context, CHANNEL_ID)
             .setSmallIcon(R.drawable.ic_stat_alarm)
@@ -55,6 +64,7 @@ class WakeNotifier(
             .setShowWhen(false)
             .setContentIntent(openWakeScreen)
             .setFullScreenIntent(openWakeScreen, true)
+            .setDeleteIntent(postAgain)
             .apply {
                 if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) setForegroundServiceBehavior(Notification.FOREGROUND_SERVICE_IMMEDIATE)
             }.build()
@@ -83,9 +93,13 @@ class WakeNotifier(
             .build()
     }
 
-    /** Posts (or updates) the notification for [alarmAt]; nothing when it already shows that time. */
+    /**
+     * Posts (or updates) the notification for [alarmAt]; nothing when it already shows that time. A notification the
+     * user swiped away (Android 14+) is posted again, so every `WakeUiShown` (each session step, the heartbeat included)
+     * restores it (Story 2.5).
+     */
     fun show(alarmAt: Instant) {
-        if (shownFor == alarmAt) return
+        if (shownFor == alarmAt && isPosted()) return
         manager.notify(NOTIFICATION_ID, build(alarmAt))
         shownFor = alarmAt
     }
@@ -100,6 +114,8 @@ class WakeNotifier(
         manager.cancel(NOTIFICATION_ID)
         shownFor = null
     }
+
+    private fun isPosted(): Boolean = manager.activeNotifications.any { it.id == NOTIFICATION_ID }
 
     private fun ensureChannel() {
         if (manager.getNotificationChannel(CHANNEL_ID) != null) return
@@ -121,5 +137,6 @@ class WakeNotifier(
         const val QUIET_CHANNEL_ID = "alarm_in_progress"
         const val NOTIFICATION_ID = 1_014
         private const val REQUEST_WAKE_SCREEN = 0
+        private const val REQUEST_REPOST = 1
     }
 }

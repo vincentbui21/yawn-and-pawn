@@ -22,11 +22,20 @@
     <application
         android:name=".YawnAndPawnApp"
         android:allowBackup="true"
+        android:backupAgent=".android.backup.PpsBackupAgent"
         android:dataExtractionRules="@xml/data_extraction_rules"
         android:fullBackupContent="@xml/backup_rules"
+        android:fullBackupOnly="true"
         android:label="@string/app_name"
         android:supportsRtl="true"
         android:theme="@android:style/Theme.Material.Light.NoActionBar">
+
+        <!-- Backup (Story 2.12, NFR-14, AD-6): Auto Backup with PpsBackupAgent (the app.db downgrade guard, re-arming after
+             a restore). Restricted mode on every Android version: YawnAndPawnApp (Room, the session restore) never runs
+             while a restore replaces app.db. restoreAnyVersion is never set (docs/decisions/db-downgrade.md). -->
+        <property
+            android:name="android.app.backup.PROPERTY_USE_RESTRICTED_BACKUP_MODE"
+            android:value="true" />
 
         <!-- Firebase (Story 1.19, AD-15): no auto-start before the first unlock (FirebaseStartup starts it after), and
              no Analytics collection (consent arrives in Epic 5). Crashlytics stays on. -->

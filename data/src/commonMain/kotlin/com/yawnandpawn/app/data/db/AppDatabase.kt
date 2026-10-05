@@ -19,7 +19,7 @@ import com.yawnandpawn.app.data.history.SessionHistoryEntity
  */
 @Database(
     entities = [AlarmEntity::class, RequestCodeSequenceEntity::class, SessionHistoryEntity::class],
-    version = 3,
+    version = AppDatabase.SCHEMA_VERSION,
     exportSchema = true,
 )
 @ConstructedBy(AppDatabaseConstructor::class)
@@ -33,6 +33,12 @@ abstract class AppDatabase : RoomDatabase() {
     companion object {
         /** File name in the device-protected database directory; also named in the backup rules. */
         const val FILE_NAME = "app.db"
+
+        /**
+         * The `app.db` schema this build knows: the `@Database` version, and the limit `PpsBackupAgent` checks a restored
+         * file against (Room cannot open a newer one, `docs/decisions/db-downgrade.md`).
+         */
+        const val SCHEMA_VERSION = 3
     }
 }
 

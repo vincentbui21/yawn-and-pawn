@@ -3,7 +3,11 @@
 - **Date:** 2026-10-01 (Story 1.13)
 - **Question:** `app.db` is backed up (AD-6) and its schema only moves forward (version 3 since Story 1.13, with `session_history`). What happens when a backup made by a newer app version, with a higher schema version, is restored onto an install of an older app version?
 - **Decision (accepted, Story 1.13):** the restore of an `app.db` whose schema version (`PRAGMA user_version`) is above the schema the installed app knows (`AppDatabase` version) is **skipped and logged**. The `app.db` already on the phone stays as it is, the rest of the restore (DataStore settings) goes ahead, and the log line names only the two version numbers.
-- **Implementation:** Story 2.12 (back up alarms and history), which adds `PpsBackupAgent`, including the user notice below. Nothing in Story 1.13 changes backup behaviour. Tracked in `_bmad-output/implementation-artifacts/deferred-work.md`.
+- **Implementation:** Story 2.12 (back up alarms and history) added `PpsBackupAgent`.
+  - Its `onRestoreFile` writes an incoming `app.db` to a temporary file in device-protected `no_backup` first.
+  - `AppDatabaseRestoreGuard` then reads `user_version` from the SQLite header and compares it with `AppDatabase.SCHEMA_VERSION`. A newer file is dropped, logged once, and recorded in `SkippedRestoreNotice` (device-protected preferences, excluded from backup). A file that is not a database is dropped and logged.
+  - The manifest keeps restores in restricted mode, so the app's own Room instance never has `app.db` open while it is replaced.
+  - **Still open:** the visible notice. It needs owner-approved copy, so the flag is stored but not yet shown (`_bmad-output/implementation-artifacts/deferred-work.md`).
 
 ## Why
 

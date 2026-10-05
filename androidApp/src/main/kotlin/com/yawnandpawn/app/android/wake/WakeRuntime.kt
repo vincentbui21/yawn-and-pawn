@@ -112,6 +112,11 @@ class WakeRuntime(
     /** The emergency ring that is playing, or null. [WakeActivity] shows it; "I'm up" calls [stopEmergency]. */
     val emergency: StateFlow<EmergencyRing?> = emergencyRing.asStateFlow()
 
+    private val emergencyPlaying = MutableStateFlow(false)
+
+    /** [emergency] is not null; the session lock (Story 2.6) holds the app while it plays. */
+    val emergencyRinging: StateFlow<Boolean> = emergencyPlaying.asStateFlow()
+
     /** [WakeService] is running in the foreground. */
     val isServiceRunning: Boolean
         get() = serviceRunning
@@ -249,6 +254,7 @@ class WakeRuntime(
             logger.log(LogEvent.EmergencyRingStarted(cause))
             emergencyRing.value = EmergencyRing(alarmAt, volumePercent)
             emergencyAlarm = alarm
+            emergencyPlaying.value = true
             emergencyLimit =
                 scope.launch {
                     delay(EMERGENCY_LIMIT)
@@ -288,6 +294,7 @@ class WakeRuntime(
             }
             emergencyRing.value = null
             emergencyAlarm = null
+            emergencyPlaying.value = false
         }
         logger.log(LogEvent.EmergencyRingStopped(reason))
     }
@@ -391,6 +398,7 @@ class WakeRuntime(
             emergencyAlarm = null
             // The backup slot carried the emergency's alarm: the session's heartbeat arms its own slot instead.
             armedSlot = null
+            emergencyPlaying.value = false
         }
         logger.log(LogEvent.EmergencyRingStopped("a session took over"))
     }

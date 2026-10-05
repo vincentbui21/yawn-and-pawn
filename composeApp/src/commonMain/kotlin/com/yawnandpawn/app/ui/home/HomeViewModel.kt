@@ -202,7 +202,7 @@ class HomeViewModel(
                     is Outcome.Failure -> ui.copy(toggles = ui.toggles - id)
                 }
             }
-            if (ownsSwitch && result is Outcome.Failure) showMessage(HomeMessage.SaveFailed)
+            if (ownsSwitch && result is Outcome.Failure && result.error.isSaveFailure()) showMessage(HomeMessage.SaveFailed)
         }
     }
 
@@ -221,9 +221,12 @@ class HomeViewModel(
         viewModelScope.launch {
             // Gone already (deleted elsewhere) is what the user asked for.
             val error = actions.delete(dialog.alarmId).errorOrNull()
-            if (error != null && error !is DomainError.NotFound) showMessage(HomeMessage.SaveFailed)
+            if (error != null && error !is DomainError.NotFound && error.isSaveFailure()) showMessage(HomeMessage.SaveFailed)
         }
     }
+
+    /** A session that started meanwhile refused the write (Story 2.6): the lock screen replaces Home, no message. */
+    private fun DomainError.isSaveFailure(): Boolean = this != DomainError.SessionActive
 
     /**
      * Dismisses exactly the note the user saw ([sessionId], carried by the intent), never a newer one that arrived since.

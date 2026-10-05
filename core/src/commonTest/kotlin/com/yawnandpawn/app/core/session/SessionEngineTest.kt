@@ -258,6 +258,29 @@ class SessionEngineTest {
         }
 
     @Test
+    fun `restored turns true only once the stored session is published, and stays false while the load fails (Story 2-6)`() =
+        runTest {
+            store.row = SessionJson.encode(SessionState.Ringing(ringSession()))
+            store.loadFailure = DomainError.StorageFailure("locked")
+            val engine = engine()
+            var stateWhenRestored: SessionState? = null
+            val watch = launch { engine.restored.collect { if (it) stateWhenRestored = engine.state.value } }
+            runCurrent()
+
+            engine.restore()
+            runCurrent()
+            assertEquals(false, engine.restored.value, "a failed load is not restored")
+
+            store.loadFailure = null
+            engine.restore()
+            runCurrent()
+
+            assertEquals(true, engine.restored.value)
+            assertIs<SessionState.Ringing>(stateWhenRestored, "the restored state is published first")
+            watch.cancel()
+        }
+
+    @Test
     fun `a failed load fails the dispatch without reducing and the next dispatch loads again`() =
         runTest {
             store.row = SessionJson.encode(SessionState.Ringing(ringSession()))

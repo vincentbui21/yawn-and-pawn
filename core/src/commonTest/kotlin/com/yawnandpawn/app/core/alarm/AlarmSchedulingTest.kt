@@ -43,7 +43,7 @@ class AlarmSchedulingTest {
     private val logger = RecordingLogger()
     private val scheduling = AlarmScheduling(repository, scheduler, clock, zone, lock, logger)
     private val sessionState = MutableStateFlow<SessionState>(SessionState.Idle)
-    private val sessionLock = SessionLockGuard(sessionState)
+    private val sessionLock = SessionLockGuard(sessionState, restored = MutableStateFlow(true), emergency = MutableStateFlow(false))
     private val save = SaveAlarm(repository, ids, clock, lock, sequence, scheduling, sessionLock)
     private val setEnabled = SetAlarmEnabled(repository, clock, lock, scheduling, sessionLock)
     private val delete = DeleteAlarm(repository, lock, scheduling, sessionLock)

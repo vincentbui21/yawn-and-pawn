@@ -34,6 +34,7 @@ import com.yawnandpawn.app.core.session.SeedSource
 import com.yawnandpawn.app.core.session.SessionData
 import com.yawnandpawn.app.core.session.SessionEngine
 import com.yawnandpawn.app.core.session.SessionEvent
+import com.yawnandpawn.app.core.session.SessionLockGuard
 import com.yawnandpawn.app.core.session.SessionReducer
 import com.yawnandpawn.app.core.session.SessionSlotRearm
 import com.yawnandpawn.app.core.session.SessionState
@@ -77,6 +78,8 @@ import kotlin.time.Instant
  * - **Slot (Story 2.1):** the kill-recovery path; see [onSlot]. **Restore:** it loads the stored session
  *   (`SessionEngine.restore`).
  * - **Test:** it takes the pending test config and dispatches `TestAlarmFired` (Story 1.18).
+ * - A dispatch that may start a session (`AlarmFired`, `TestAlarmFired`) runs in [SessionLockGuard.startingSession], so
+ *   it never lands in the middle of a guarded alarm write (Story 2.6).
  * - **Repost** (the ringing notification's delete intent, Story 2.5): entering the foreground posts the notification
  *   again, without its full-screen intent unless the alarm rings (a snooze never opens the wake screen). An Idle engine
  *   (a new process) loads the stored session first, as a restore does; otherwise nothing is dispatched.
@@ -117,6 +120,7 @@ class WakeService :
     private val timings: WakeTimings by inject()
     private val rearm: SessionSlotRearm by inject()
     private val userLock: UserLockState by inject()
+    private val sessionLock: SessionLockGuard by inject()
 
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate + CoroutineExceptionHandler { _, e -> onCrash(e) })
     private val commands = Mutex()
@@ -287,7 +291,8 @@ class WakeService :
             val merged = engine.dispatch(SessionEvent.OverlapAlarmFired(fired.alarmId, fired.scheduledAt))
             if (merged is Outcome.Failure) ringIfSilent("merge not saved: ${merged.error.diagnostic()}", fired)
         } else {
-            startSession(fired)
+            // After any guarded alarm write in flight, so a session never starts in the middle of one (Story 2.6).
+            sessionLock.startingSession { startSession(fired) }
         }
     }
 
@@ -408,7 +413,7 @@ class WakeService :
                 seeds = seedsFor(pending.checkPlan, locked),
                 beforeFirstUnlock = locked,
             )
-        val started = engine.dispatch(event)
+        val started = sessionLock.startingSession { engine.dispatch(event) }
         if (started is Outcome.Failure) {
             logger.log(LogEvent.OperationFailed.of("start test session", started.error))
             // Not lost: the config goes back, so a later test fire (or "Test alarm" again) still has it.

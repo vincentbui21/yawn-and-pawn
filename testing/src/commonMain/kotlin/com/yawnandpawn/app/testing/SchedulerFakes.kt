@@ -165,7 +165,7 @@ class AlarmUseCasesFixture(
     val sessionState: MutableStateFlow<SessionState> = MutableStateFlow(SessionState.Idle),
 ) {
     val scheduling = AlarmScheduling(repository, scheduler, clock, timeZoneProvider, lock, logger)
-    val sessionLock = SessionLockGuard(sessionState)
+    val sessionLock = SessionLockGuard(sessionState, restored = MutableStateFlow(true), emergency = MutableStateFlow(false))
     val save = SaveAlarm(repository, ids, clock, lock, requestCodes, scheduling, sessionLock)
     val setEnabled = SetAlarmEnabled(repository, clock, lock, scheduling, sessionLock)
     val delete = DeleteAlarm(repository, lock, scheduling, sessionLock)

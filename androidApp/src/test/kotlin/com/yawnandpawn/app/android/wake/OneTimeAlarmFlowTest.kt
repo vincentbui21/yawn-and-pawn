@@ -58,7 +58,9 @@ class OneTimeAlarmFlowTest {
         val repository = app.koin.get<AlarmRepository>()
         val once = anAlarm(id = "once", requestCode = 1000, enabled = false)
         assertEquals(Outcome.Success(Unit), runBlocking { repository.upsert(once) })
-        // Switched on in the app: stored enabled and armed for its next 07:00.
+        // Switched on in the app: stored enabled and armed for its next 07:00. The alarms are editable once the stored
+        // session is restored (the session lock, Story 2.6).
+        runBlocking { app.engine.restore() }
         assertIs<Outcome.Success<*>>(runBlocking { app.koin.get<SetAlarmEnabled>()(once.id, enabled = true) })
         assertEquals(listOf(once.requestCode), armedCodes(app))
 

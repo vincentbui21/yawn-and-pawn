@@ -24,7 +24,6 @@ import androidx.navigation3.runtime.rememberSaveableStateHolderNavEntryDecorator
 import androidx.navigation3.scene.Scene
 import androidx.navigation3.ui.NavDisplay
 import com.yawnandpawn.app.core.session.SessionLockGuard
-import com.yawnandpawn.app.core.session.SessionState
 import com.yawnandpawn.app.core.time.Clock
 import com.yawnandpawn.app.core.time.TimeZoneProvider
 import com.yawnandpawn.app.ui.components.subScreenTransition
@@ -56,19 +55,24 @@ import org.koin.compose.koinInject
  * a tab returns to Alarms, Back on Alarms leaves the app (see TabNavigation.kt). Each entry gets its own saveable state
  * (scroll position) and ViewModel store, so an editor's ViewModel is cleared when the editor leaves the back stack.
  *
- * While a wake session is active ([SessionLockGuard]) the stack is only [Route.SessionInProgress] (Story 2.6): Home's
- * approved session state, whose "Back to alarm" opens the wake screen ([WakeScreenOpener]). The editor leaves without a
- * dialog (its ViewModel, draft and preview with it), and Home returns once the session is over.
+ * While the app is session-locked ([SessionLockGuard.isLocked]: not restored yet, or a ring, snooze or emergency ring in
+ * progress) only [Route.SessionInProgress] is shown, from the same composition (Story 2.6): Home's approved session
+ * state, whose "Back to alarm" opens the wake screen ([WakeScreenOpener]). The stack itself is replaced right after,
+ * so the editor leaves without a dialog (its ViewModel, draft and preview with it), and Home returns once unlocked.
  */
 @Composable
 fun AppNavHost(modifier: Modifier = Modifier) {
     val backStack = rememberNavBackStack(RouteSavedStateConfiguration, Route.Alarms)
-    SessionLockEffect(backStack)
+    val locked = sessionLocked()
+    SideEffect { backStack.applySessionLock(locked) }
+    // What is shown follows the lock in the same composition, so a locked app never composes the route it held (Home
+    // or the editor would start their loads and previews); the SideEffect then makes the real stack match.
+    val shown: List<NavKey> = if (locked) LockedStack else backStack
     // The editor's result for Home: its alarm could not be read, so Home shows "Couldn't open this alarm.".
     var openFailed by rememberSaveable { mutableStateOf(false) }
-    val topTab = (backStack.lastOrNull() as? Route)?.tab
+    val topTab = (shown.lastOrNull() as? Route)?.tab
     // Under the editor the capsule is hidden; it keeps the tab the stack returns to.
-    val selected = topTab ?: backStack.asReversed().firstNotNullOfOrNull { (it as? Route)?.tab } ?: AppTab.Alarms
+    val selected = topTab ?: shown.asReversed().firstNotNullOfOrNull { (it as? Route)?.tab } ?: AppTab.Alarms
     AppShell(
         selected = selected,
         onSelect = { backStack.selectTab(it) },
@@ -77,7 +81,7 @@ fun AppNavHost(modifier: Modifier = Modifier) {
         showNavBar = topTab != null,
     ) {
         NavDisplay(
-            backStack = backStack,
+            backStack = shown,
             modifier = Modifier.fillMaxSize().background(PpsTheme.colors.bg),
             onBack = { backStack.pop() },
             entryDecorators =
@@ -130,15 +134,19 @@ private val LockMetadata: Map<String, Any> = mapOf(LOCK_ENTRY to true)
 /** Home as the session lock shows it: only `panel-session-in-progress` under the header. */
 private val SessionLockedHome = HomeUiState(sessionInProgress = true)
 
+/** What a locked app shows: only the session lock. */
+private val LockedStack: List<NavKey> = listOf(Route.SessionInProgress)
+
 /**
- * The session lock (Story 2.6): while a session is active the stack is only [Route.SessionInProgress]; a route pushed
- * then is replaced again after the composition that shows it, and the end of the session returns to Home.
+ * The session lock (Story 2.6, [SessionLockGuard.isLocked]): until the stored session is restored, and while a ring, a
+ * snooze or the emergency ring is in progress. Completed and Missed (only the history row pending) do not lock. Read
+ * synchronously for the first frame, so a cold start into a session never shows Home first.
  */
 @Composable
-private fun SessionLockEffect(backStack: MutableList<NavKey>) {
-    val session by koinInject<SessionLockGuard>().state.collectAsState()
-    val locked = session != SessionState.Idle
-    SideEffect { backStack.applySessionLock(locked) }
+private fun sessionLocked(): Boolean {
+    val guard = koinInject<SessionLockGuard>()
+    val locked by remember(guard) { guard.locked }.collectAsState(initial = guard.isLocked)
+    return locked
 }
 
 /** The approved `home-session` screen: the Home header and `panel-session-in-progress`, no nav capsule. */

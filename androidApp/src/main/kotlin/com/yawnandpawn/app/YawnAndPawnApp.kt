@@ -100,10 +100,20 @@ val appModule =
         // Home's missed note (Story 1.16): the latest Missed history row, unless dismissed (settings DataStore).
         single { MissedNotes(get(), get()) }
         single { SessionEngine(get(), get(), get(), get(), get(), get(), get(), get(), userLock = get()) }
-        // The session lock (Story 2.6): the alarm use cases refuse to write while a session is active, and the app shows
-        // only "Alarm in progress", whose "Back to alarm" opens the wake screen.
-        single { SessionLockGuard(get<SessionEngine>().state) }
-        single<WakeScreenOpener> { AndroidWakeScreenOpener(androidContext()) }
+        // The session lock (Story 2.6): until the stored session is restored, and while a ring, a snooze or the emergency
+        // ring is in progress, the alarm use cases refuse to write and the app shows only "Alarm in progress", whose
+        // "Back to alarm" opens the wake screen.
+        single {
+            val engine = get<SessionEngine>()
+            SessionLockGuard(engine.state, engine.restored, get<WakeRuntime>().emergencyRinging)
+        }
+        single<WakeScreenOpener> {
+            AndroidWakeScreenOpener(
+                androidContext(),
+                get<SessionEngine>().state,
+                get<WakeRuntime>().emergencyRinging,
+            )
+        }
     }
 
 /**

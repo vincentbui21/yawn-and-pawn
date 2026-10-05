@@ -347,7 +347,23 @@ class WakeRuntimeTest {
         enter(ringing)
 
         assertEquals(WakeNotifier.CHANNEL_ID, notification.channelId)
+        // The system lists a startForeground post only after a while: WakeUiShown right after it posts nothing more.
         assertEquals(0, shadowOf(notifications).size(), "already shown by startForeground, not posted again")
+    }
+
+    @Test
+    fun `a ringing notification the user swiped away is posted again by the next WakeUiShown`() {
+        val alarmAt = session.config.scheduledAt
+        notifications.notify(WakeNotifier.NOTIFICATION_ID, runtime.foregroundNotification(alarmAt))
+        runtime.foregroundPosted(alarmAt)
+        runtime.onServiceStarted()
+
+        // The swipe removes it and its delete intent tells the runtime (WakeService.ACTION_REPOST).
+        notifications.cancel(WakeNotifier.NOTIFICATION_ID)
+        runtime.notificationSwiped()
+        enter(ringing)
+
+        assertEquals(1, shadowOf(notifications).size(), "posted again")
     }
 
     @Test

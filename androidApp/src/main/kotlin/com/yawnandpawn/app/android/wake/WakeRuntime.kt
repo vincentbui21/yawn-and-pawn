@@ -153,14 +153,24 @@ class WakeRuntime(
 
     /**
      * The foreground notification [WakeService] posts with `startForeground`: the ringing one for the alarm scheduled at
-     * [alarmAt], or the quiet one when there is no alarm to show yet. [foregroundPosted] once it is posted.
+     * [alarmAt] (without its full-screen intent unless [fullScreen]), or the quiet one when there is no alarm to show
+     * yet. [foregroundPosted] once a full-screen one is posted.
      */
-    fun foregroundNotification(alarmAt: Instant?): Notification = alarmAt?.let { notifier.build(it) } ?: notifier.buildQuiet()
+    fun foregroundNotification(
+        alarmAt: Instant?,
+        fullScreen: Boolean = true,
+    ): Notification = alarmAt?.let { notifier.build(it, fullScreen) } ?: notifier.buildQuiet()
 
     /** `startForeground` posted [foregroundNotification] for [alarmAt] (null for the quiet one). */
     fun foregroundPosted(alarmAt: Instant?) {
         alarmAt?.let { notifier.shownByService(it) }
     }
+
+    /**
+     * The user swiped the ringing notification away (its delete intent, Story 2.5): the next `WakeUiShown` posts it
+     * again, even when the start that re-posts it cannot enter the foreground.
+     */
+    fun notificationSwiped() = notifier.forget()
 
     /** The alarm time the posted ringing notification shows, or null when none is posted. */
     fun shownAlarmAt(): Instant? = notifier.shownFor

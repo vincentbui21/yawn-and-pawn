@@ -9,6 +9,9 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.lifecycle.DefaultLifecycleObserver
 import androidx.lifecycle.LifecycleOwner
 import com.yawnandpawn.app.android.reliability.AndroidNotificationPermission
+import com.yawnandpawn.app.android.wake.WakeRuntime
+import com.yawnandpawn.app.android.wake.forwardToWakeScreenWhileResumed
+import com.yawnandpawn.app.core.session.SessionEngine
 import com.yawnandpawn.app.ui.App
 import org.koin.android.ext.android.inject
 
@@ -19,9 +22,14 @@ import org.koin.android.ext.android.inject
  *
  * While it is started it lends the notification permission (Story 1.19) its launcher for the system dialog, so the
  * editor can ask after the first save; the answer needs no handling (the Home banner reflects it).
+ *
+ * While it is resumed and the alarm rings (Ringing, Grace, Loud or an emergency ring), it opens the wake screen
+ * (Story 2.5): opening the app during a ring brings the user back to the alarm.
  */
 class MainActivity : ComponentActivity() {
     private val notificationPermission: AndroidNotificationPermission by inject()
+    private val engine: SessionEngine by inject()
+    private val runtime: WakeRuntime by inject()
 
     private val requestNotifications = registerForActivityResult(ActivityResultContracts.RequestPermission()) { }
 
@@ -37,6 +45,8 @@ class MainActivity : ComponentActivity() {
                 override fun onStop(owner: LifecycleOwner) = notificationPermission.detach(launch)
             },
         )
+        // During a ring the app hands over to the wake screen (Story 2.5).
+        forwardToWakeScreenWhileResumed(this, engine, runtime)
         setContent {
             App()
         }

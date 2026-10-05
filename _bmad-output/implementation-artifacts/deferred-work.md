@@ -185,3 +185,7 @@
   summary: Re-check the Spike S1 lock-screen findings on a Pixel and a Samsung device, and the slow-card anomaly (a completed slow-card purchase was missing from queryPurchasesAsync about 5 minutes later).
   evidence: Spike S1 ran on the Oppo A96 only; V1s purchase gone by 20:11:36.
   status: assigned to Story 4.18.
+- source_spec: `_bmad-output/implementation-artifacts/spec-2-5-leave-the-alarm-and-come-back-through-the-notification.md`
+  summary: Check on the phone that tapping the ringing notification from the shade after Home brings the wake screen back within 1,000 ms, and that three taps leave one wake screen.
+  evidence: The GMD test for it failed in CI because the managed device is an ATD image with no notification shade (PR #24, 2026-10-06); it was removed. Robolectric LeaveAndReturnTest covers the logic.
+  status: assigned to Story 2.13 (device checklist).

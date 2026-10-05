@@ -308,6 +308,19 @@ class AlarmUseCasesTest {
         }
 
     @Test
+    fun `a new alarm saved off never switches an identical stored alarm on, it is stored as its own alarm`() =
+        runTest {
+            val original = saved()
+            setEnabled(original.id, enabled = false)
+
+            val added = saved(draft.copy(enabled = false))
+
+            assertNotEquals(original.id, added.id)
+            assertTrue(stored().none { it.enabled }, "nothing switched on")
+            assertEquals(2, stored().size)
+        }
+
+    @Test
     fun `a new alarm that differs in any one setting is stored as a second alarm`() =
         runTest {
             val original = saved()

@@ -3,6 +3,7 @@ package com.yawnandpawn.app
 import android.Manifest
 import androidx.compose.ui.semantics.SemanticsActions
 import androidx.compose.ui.semantics.SemanticsProperties
+import androidx.compose.ui.semantics.getOrNull
 import androidx.compose.ui.test.SemanticsMatcher
 import androidx.compose.ui.test.assert
 import androidx.compose.ui.test.assertCountEquals
@@ -28,7 +29,12 @@ import androidx.compose.ui.test.performTouchInput
 import androidx.lifecycle.Lifecycle
 import com.github.takahirom.roborazzi.captureRoboImage
 import com.yawnandpawn.app.StopAppRule
+import com.yawnandpawn.app.core.alarm.AlarmRepository
+import com.yawnandpawn.app.core.error.Outcome
 import com.yawnandpawn.app.core.reliability.NotificationPermission
+import com.yawnandpawn.app.testing.anAlarm
+import kotlinx.coroutines.runBlocking
+import kotlinx.datetime.LocalTime
 import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -306,37 +312,61 @@ class MainActivityTest {
         waitForText("No alarms yet.")
     }
 
+    /** Stores a 6:45 AM alarm labelled "Gym" (settings the defaults do not have) and waits for its card. */
+    private fun addGymAlarm() {
+        val gym = anAlarm(id = "gym", time = LocalTime(6, 45), label = "Gym", requestCode = 1000)
+        assertEquals(Outcome.Success(Unit), runBlocking { GlobalContext.get().get<AlarmRepository>().upsert(gym) })
+        waitForText("6:45 AM")
+    }
+
+    private fun wheelValue(title: String): String? =
+        composeRule
+            .onAllNodes(hasContentDescription(title))
+            .fetchSemanticsNodes()
+            .firstOrNull()
+            ?.config
+            ?.getOrNull(SemanticsProperties.StateDescription)
+
+    /** The "New alarm" editor shows the Gym alarm's settings: its label and its time on the wheels. */
+    private fun assertPrefilledFromGym() {
+        waitForText("New alarm")
+        composeRule.waitUntil(timeoutMillis = 5_000) {
+            composeRule.onAllNodes(hasText("Gym") and hasSetTextAction()).fetchSemanticsNodes().isNotEmpty()
+        }
+        assertTrue(wheelValue("Hour").orEmpty().contains("6"), "hour wheel: ${wheelValue("Hour")}")
+        assertTrue(wheelValue("Minute").orEmpty().contains("45"), "minute wheel: ${wheelValue("Minute")}")
+    }
+
+    private fun gymCards() = composeRule.onAllNodes(hasText("6:45 AM") and hasClickAction()).fetchSemanticsNodes().size
+
     @Test
-    fun `long-press Duplicate opens a new unsaved alarm, Cancel leaves no copy, and an unchanged Save adds none`() {
+    fun `long-press Duplicate opens a new unsaved alarm with the card's settings, Cancel leaves no copy, an unchanged Save adds none`() {
         waitForText("No alarms yet.")
-        addDefaultAlarm()
+        addGymAlarm()
 
         // Owner decision 2026-10-05: Duplicate stores nothing; the editor opens on a new alarm with the same settings.
-        composeRule.onNode(hasText("7:00 AM") and hasClickAction()).performTouchInput { longClick() }
+        composeRule.onNode(hasText("6:45 AM") and hasClickAction()).performTouchInput { longClick() }
         composeRule.onNode(hasText("Duplicate") and hasClickAction()).performClick()
-        waitForText("New alarm")
+        assertPrefilledFromGym()
         composeRule.onNodeWithText("Cancel").performClick()
         waitForGone("New alarm")
-        assertEquals(1, composeRule.onAllNodes(hasText("7:00 AM") and hasClickAction()).fetchSemanticsNodes().size, "no copy")
+        assertEquals(1, gymCards(), "no copy")
 
         // Saved unchanged, it is identical to the stored alarm, which stays the only one (and on).
-        composeRule.onNode(hasText("7:00 AM") and hasClickAction()).performTouchInput { longClick() }
+        composeRule.onNode(hasText("6:45 AM") and hasClickAction()).performTouchInput { longClick() }
         composeRule.onNode(hasText("Duplicate") and hasClickAction()).performClick()
-        waitForText("New alarm")
-        composeRule.waitUntil(
-            timeoutMillis = 5_000,
-        ) { composeRule.onAllNodes(hasText("Save") and isEnabled()).fetchSemanticsNodes().isNotEmpty() }
+        assertPrefilledFromGym()
         composeRule.onNodeWithText("Save").performClick()
         waitForGone("New alarm")
-        assertEquals(1, composeRule.onAllNodes(hasText("7:00 AM") and hasClickAction()).fetchSemanticsNodes().size, "merged")
-        composeRule.onNodeWithContentDescription("7:00 AM alarm").assertIsOn()
+        assertEquals(1, gymCards(), "merged")
+        composeRule.onNodeWithContentDescription("6:45 AM alarm").assertIsOn()
     }
 
     @Test
-    fun `the editor's overflow Duplicate replaces the editor with a new unsaved alarm, and Cancel leaves no copy`() {
+    fun `the editor's overflow Duplicate replaces the editor with a new unsaved alarm with its settings, and Cancel leaves no copy`() {
         waitForText("No alarms yet.")
-        addDefaultAlarm()
-        composeRule.onNode(hasText("7:00 AM") and hasClickAction()).performClick()
+        addGymAlarm()
+        composeRule.onNode(hasText("6:45 AM") and hasClickAction()).performClick()
         waitForText("Edit alarm")
 
         composeRule.onNodeWithContentDescription("More options").performClick()
@@ -347,12 +377,11 @@ class MainActivityTest {
             composeRule.onAllNodes(hasText("New alarm")).fetchSemanticsNodes().size == 1 &&
                 composeRule.onAllNodes(hasText("Edit alarm")).fetchSemanticsNodes().isEmpty()
         }
+        assertPrefilledFromGym()
         composeRule.onNodeWithText("Cancel").performClick()
         waitForGone("New alarm")
-        composeRule.waitUntil(timeoutMillis = 5_000) {
-            composeRule.onAllNodes(hasText("Rings in", substring = true)).fetchSemanticsNodes().isNotEmpty()
-        }
-        assertEquals(1, composeRule.onAllNodes(hasText("7:00 AM") and hasClickAction()).fetchSemanticsNodes().size, "no copy")
+        waitForText("6:45 AM")
+        assertEquals(1, gymCards(), "no copy")
     }
 
     @Test

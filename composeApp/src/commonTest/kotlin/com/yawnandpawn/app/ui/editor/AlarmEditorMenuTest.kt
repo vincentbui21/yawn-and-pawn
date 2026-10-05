@@ -165,6 +165,25 @@ class AlarmEditorMenuTest {
             assertEquals(listOf<EditorEffect>(EditorEffect.OpenCopy(stored.id)), effects, "opened once")
         }
 
+    @Test
+    fun `after Discard for Duplicate a Save before the navigation stores nothing`() =
+        runTest(dispatcher) {
+            repository.upsert(stored)
+            val viewModel = viewModel(stored.id)
+            val effects = effectsOf(viewModel)
+            advanceUntilIdle()
+            viewModel.onIntent(EditorIntent.LabelChanged("Unsaved"))
+            viewModel.onIntent(EditorIntent.DuplicateClicked)
+            viewModel.onIntent(EditorIntent.DiscardConfirmed)
+
+            viewModel.onIntent(EditorIntent.SaveClicked)
+            viewModel.onIntent(EditorIntent.BackRequested)
+            advanceUntilIdle()
+
+            assertEquals(listOf(stored), repository.current, "the discarded edits are not stored")
+            assertEquals(listOf<EditorEffect>(EditorEffect.OpenCopy(stored.id)), effects, "only the duplicate opens")
+        }
+
     private fun copyOf(alarmId: String) =
         AlarmEditorViewModel(
             alarmId = null,

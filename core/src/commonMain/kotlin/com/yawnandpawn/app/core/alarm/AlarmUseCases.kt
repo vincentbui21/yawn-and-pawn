@@ -49,9 +49,10 @@ class AlarmWriteLock {
  * is truncated to whole minutes, and a blank label is stored as no label. Invalid input is `InvalidAlarm(field)` and
  * nothing is stored. Once stored, the system alarm follows ([AlarmScheduling.sync]).
  *
- * A new alarm whose settings are identical to a stored alarm's ([hasSameSettingsAs]) is not stored a second time: the
- * stored one is switched on instead (`updatedAt = now`, armed at its next occurrence) and returned, and no request code
- * is allocated (owner decision 2026-10-05, like Samsung Clock). Any difference stores the new alarm as usual.
+ * A new enabled alarm whose settings are identical to a stored alarm's ([hasSameSettingsAs]) is not stored a second
+ * time: the stored one is switched on instead (`updatedAt = now`, armed at its next occurrence) and returned, and no
+ * request code is allocated (owner decision 2026-10-05, like Samsung Clock). Any difference, or a new alarm saved off,
+ * stores the new alarm as usual.
  */
 class SaveAlarm(
     private val repository: AlarmRepository,
@@ -73,10 +74,13 @@ class SaveAlarm(
                     if (invalid != null) {
                         Outcome.Failure(DomainError.InvalidAlarm(invalid))
                     } else {
-                        // A new alarm identical to a stored one switches that one on instead (owner decision 2026-10-05).
-                        when (val same = identicalStored(template)) {
-                            is Outcome.Failure -> return@withLock same
-                            is Outcome.Success -> same.value?.let { return@withLock switchOn(it, now) }
+                        // A new enabled alarm identical to a stored one switches that one on instead (owner decision
+                        // 2026-10-05). A new alarm saved off is stored as usual: it must not switch anything on.
+                        if (draft.enabled) {
+                            when (val same = identicalStored(template)) {
+                                is Outcome.Failure -> return@withLock same
+                                is Outcome.Success -> same.value?.let { return@withLock switchOn(it, now) }
+                            }
                         }
                         requestCodes.next().map { code -> template.copy(requestCode = code) }
                     }

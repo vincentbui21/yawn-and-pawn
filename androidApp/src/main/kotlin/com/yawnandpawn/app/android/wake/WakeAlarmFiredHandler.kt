@@ -10,6 +10,8 @@ import com.yawnandpawn.app.core.log.Logger
 import com.yawnandpawn.app.core.log.WakeStage
 import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.isActive
+import kotlin.time.TimeMark
+import kotlin.time.TimeSource
 
 /**
  * The production [AlarmFiredHandler] (Story 1.14): the ring first, then the scheduling (device test round 1: the ring
@@ -24,7 +26,9 @@ import kotlinx.coroutines.isActive
  * - The session slot: start the service with the slot action.
  * - The test alarm (Story 1.18): start the service with the test action; it rings the pending test config. Nothing is
  *   re-armed (a test rings once).
- * - After a start, the fire is not handled until [WakeService] took it ([WakeServiceStarts], bounded): the receiver's
+ * - The re-arm runs even when the read or the start throws.
+ * - After a start, the fire is not handled until [WakeService] took that start (its [WakeServiceStarts] token), at
+ *   most [WakeServiceStarts.wait] from the fire's start, so the receiver's budget never cuts the wait: the receiver's
  *   broadcast stays open meanwhile, so the phone does not freeze the process between the start and `onStartCommand`.
  *   A wait that times out is logged; the ring still comes (the service, or the session slot).
  */
@@ -35,47 +39,62 @@ class WakeAlarmFiredHandler(
     private val logger: Logger,
     private val starts: WakeServiceStarts,
     private val timings: WakeTimings = WakeTimings.None,
+    private val timeSource: TimeSource = TimeSource.Monotonic,
 ) : AlarmFiredHandler {
     override suspend fun onAlarmFired(fired: AlarmFired) {
-        val mark = starts.mark()
-        var rings = true
+        val begin = timeSource.markNow()
+        val token = starts.newToken()
         var started = false
         try {
-            rings =
-                when (val stored = repository.get(fired.alarmId)) {
-                    is Outcome.Success -> stored.value.enabled
-                    is Outcome.Failure -> stored.error !is DomainError.NotFound
-                }
+            var rings = true
+            try {
+                rings = rings(fired)
+            } finally {
+                if (rings) started = start { starter.startAlarm(fired, token) }
+            }
         } finally {
-            if (rings) started = start { starter.startAlarm(fired) }
-        }
-        try {
-            schedule.onAlarmFired(fired)
-        } finally {
-            // Not after a cancellation (the budget is spent): the broadcast finishes now.
-            if (started && currentCoroutineContext().isActive) awaitService(mark)
+            // The re-arm never depends on the read or the start: a start that throws still re-arms the next occurrence.
+            try {
+                schedule.onAlarmFired(fired)
+            } finally {
+                // Not after a cancellation (the budget is spent): the broadcast finishes now.
+                if (started && currentCoroutineContext().isActive) awaitService(token, begin)
+            }
         }
     }
 
     override suspend fun onSessionSlotFired() {
-        val mark = starts.mark()
-        if (starter.startSlot()) awaitService(mark)
+        val begin = timeSource.markNow()
+        val token = starts.newToken()
+        if (starter.startSlot(token)) awaitService(token, begin)
     }
 
     override suspend fun onTestAlarmFired() {
-        val mark = starts.mark()
+        val begin = timeSource.markNow()
+        val token = starts.newToken()
         // No session slot backs a test up: a refused start means this test does not ring.
-        if (start { starter.startTest() }) {
-            awaitService(mark)
+        if (start { starter.startTest(token) }) {
+            awaitService(token, begin)
         } else {
             logger.log(LogEvent.OperationFailed("start test alarm", "service start refused; the test does not ring"))
         }
     }
 
+    /** Whether the stored alarm rings: it is enabled, or it cannot be read (the service then rings the default). */
+    private suspend fun rings(fired: AlarmFired): Boolean =
+        when (val stored = repository.get(fired.alarmId)) {
+            is Outcome.Success -> stored.value.enabled
+            is Outcome.Failure -> stored.error !is DomainError.NotFound
+        }
+
     private inline fun start(request: () -> Boolean): Boolean = request().also { timings.stage(WakeStage.ServiceStartRequested) }
 
-    private suspend fun awaitService(mark: Long) {
-        if (!starts.awaitStartAfter(mark)) {
+    /** Waits for the start [token] until [WakeServiceStarts.wait] after the fire began at [begin] (the re-arm counts). */
+    private suspend fun awaitService(
+        token: Long,
+        begin: TimeMark,
+    ) {
+        if (!starts.awaitStart(token, starts.wait - begin.elapsedNow())) {
             logger.log(LogEvent.OperationFailed("wait for wake service", "no onStartCommand within ${starts.wait}; the broadcast finishes"))
         }
     }

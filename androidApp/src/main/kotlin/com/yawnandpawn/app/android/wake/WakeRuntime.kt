@@ -185,6 +185,7 @@ class WakeRuntime(
         vibrator.stop()
         notifier.cancel()
         if (armedSlot != null) cancelSlot()
+        timings.sessionEnded()
     }
 
     /** At app start with no session: a volume a crashed session left saved is put back (AD-5), unless a ring started. */

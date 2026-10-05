@@ -136,8 +136,8 @@ class WakeService :
         // it is already up, else the quiet one (no full-screen intent) until a ringing state posts its own.
         val inForeground = enterForeground(fired?.scheduledAt ?: runtime.shownAlarmAt())
         if (timed && inForeground) timings.stage(WakeStage.InForeground)
-        // The alarm receiver may finish its broadcast now (WakeServiceStarts).
-        starts.onStartCommandReached()
+        // The alarm receiver that asked for this start may finish its broadcast now (WakeServiceStarts).
+        intent?.takeIf { it.hasExtra(EXTRA_START_TOKEN) }?.let { starts.onStartCommandReached(it.getLongExtra(EXTRA_START_TOKEN, 0)) }
         if (!inForeground) {
             stopSelfResult(startId)
             return START_NOT_STICKY
@@ -405,6 +405,9 @@ class WakeService :
         const val ACTION_SLOT = "com.yawnandpawn.app.action.WAKE_SLOT"
         const val ACTION_RESTORE = "com.yawnandpawn.app.action.WAKE_RESTORE"
         const val ACTION_TEST = "com.yawnandpawn.app.action.WAKE_TEST"
+
+        /** The alarm receiver's `WakeServiceStarts` token on a start it waits for. */
+        const val EXTRA_START_TOKEN = "startToken"
 
         /** The earliest retry of a tick that changed nothing (for example its commit failed). */
         private val TICK_RETRY = 1.seconds

@@ -421,6 +421,8 @@ class AlarmEditorViewModel(
 
     /** Opens a new, unsaved alarm prefilled from the stored alarm [id] in place of this editor (nothing is stored). */
     private fun duplicate(id: String) {
+        // From now on this editor only leaves: a Save tapped before the navigation must not store the discarded edits.
+        _state.update { it.copy(isSaving = true) }
         _effects.trySend(EditorEffect.OpenCopy(id))
     }
 }

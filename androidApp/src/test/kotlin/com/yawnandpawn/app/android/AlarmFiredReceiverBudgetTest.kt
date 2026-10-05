@@ -122,11 +122,16 @@ class AlarmFiredReceiverBudgetTest {
     fun `an alarm fire keeps the broadcast open until the wake service reached onStartCommand`() {
         val starts = WakeServiceStarts()
         val requested = mutableListOf<String?>()
+        val tokens = mutableListOf<Long>()
         val handler =
             WakeAlarmFiredHandler(
                 repository = FakeAlarmRepository(listOf(anAlarm(id = "alarm-a"))),
                 schedule = RecordingSchedule(),
-                starter = WakeServiceStarter(app, fakeLogger) { requested += it.action },
+                starter =
+                    WakeServiceStarter(app, fakeLogger) {
+                        requested += it.action
+                        tokens += it.getLongExtra(WakeService.EXTRA_START_TOKEN, -1)
+                    },
                 logger = fakeLogger,
                 starts = starts,
             )
@@ -143,7 +148,7 @@ class AlarmFiredReceiverBudgetTest {
         assertEquals(listOf<String?>(WakeService.ACTION_ALARM), requested, "the service was asked for at once")
         assertFalse(finished.get(), "the broadcast is still open while the service has not started")
 
-        starts.onStartCommandReached()
+        starts.onStartCommandReached(tokens.single())
         runWork(seconds = 0)
 
         assertTrue(finished.get(), "the broadcast finishes once the service took the start")

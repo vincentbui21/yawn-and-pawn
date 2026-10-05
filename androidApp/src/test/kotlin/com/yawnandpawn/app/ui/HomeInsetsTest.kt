@@ -2,6 +2,9 @@ package com.yawnandpawn.app.ui
 
 import android.view.ViewGroup
 import androidx.activity.compose.setContent
+import androidx.compose.foundation.gestures.scrollBy
+import androidx.compose.foundation.lazy.LazyListState
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.ui.test.getBoundsInRoot
 import androidx.compose.ui.test.junit4.createEmptyComposeRule
 import androidx.compose.ui.test.onNodeWithText
@@ -21,6 +24,7 @@ import com.yawnandpawn.app.ui.shell.AppTab
 import com.yawnandpawn.app.ui.theme.PpsTheme
 import com.yawnandpawn.app.ui.theme.PpsThemeMode
 import com.yawnandpawn.app.ui.theme.PpsTokens
+import kotlinx.coroutines.runBlocking
 import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -99,4 +103,40 @@ class HomeInsetsTest {
                 roborazziOptions = screenshotOptions,
             )
         }
+
+    /**
+     * Device test round 1, part 2: with no hero (always in Epic 1) the header collapses continuously with the scroll.
+     * Scrolled about half the header's height, the title is part way between `headline` and `title` size, not snapped.
+     */
+    @Test
+    fun `with no hero, scrolling half the header height shrinks the title part way`() {
+        val many = HomeSamples.many
+        val state = many.copy(alarms = many.alarms + many.alarms.map { it.copy(id = it.id + "-more") })
+        lateinit var listState: LazyListState
+        ActivityScenario.launch(MainActivity::class.java).use { scenario ->
+            scenario.onActivity { activity ->
+                activity.setContent {
+                    PpsTheme(mode = PpsThemeMode.Light) {
+                        listState = rememberLazyListState()
+                        AppShell(selected = AppTab.Alarms, onSelect = {}) {
+                            HomeScreen(state = state, is24Hour = false, onIntent = {}, listState = listState)
+                        }
+                    }
+                }
+            }
+            composeRule.waitForIdle()
+            val title = { composeRule.onNodeWithText("Yawn & Pawn").getBoundsInRoot().let { it.bottom - it.top } }
+            val atRest = title()
+            // The header is the title row plus its space3 top padding (mdpi: one pixel per dp).
+            val halfHeader = (atRest + PpsTokens.Spacing.space3).value / 2
+
+            composeRule.runOnIdle { runBlocking { listState.scrollBy(halfHeader) } }
+            composeRule.waitForIdle()
+
+            val partWay = title()
+            val collapsed = atRest * (20f / 28f)
+            assertTrue(partWay < atRest - 1.dp, "the title shrank ($partWay of $atRest)")
+            assertTrue(partWay > collapsed + 1.dp, "but not all the way to $collapsed: $partWay")
+        }
+    }
 }

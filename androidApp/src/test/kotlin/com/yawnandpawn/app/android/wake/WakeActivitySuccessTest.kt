@@ -2,6 +2,7 @@ package com.yawnandpawn.app.android.wake
 
 import android.app.Activity
 import android.app.NotificationManager
+import android.os.Bundle
 import android.view.HapticFeedbackConstants
 import android.view.View
 import android.view.ViewGroup
@@ -34,6 +35,7 @@ import kotlin.test.assertFalse
 import kotlin.test.assertIs
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
+import kotlin.time.Instant
 
 /** Story 3.3: the wake screen shows the basic Success screen once the session it showed completes. */
 @RunWith(RobolectricTestRunner::class)
@@ -196,11 +198,64 @@ class WakeActivitySuccessTest {
         composeRule.waitForIdle()
         assertTrue(HapticFeedbackConstants.CONFIRM in haptics(controller.get()), "the success haptic")
 
+        val before = controller.get()
+
         controller.recreate()
         composeRule.waitForIdle()
 
+        assertFalse(before.isFinishing, "a recreation does not close Success")
+        assertFalse(controller.get().isFinishing, "the new screen shows it")
         composeRule.onNodeWithText(upOnTime).assertExists()
         assertNull(haptics(controller.get()).firstOrNull { it == HapticFeedbackConstants.CONFIRM }, "not played again")
+    }
+
+    @Test
+    fun `the 60 seconds count from when Success first showed, across a recreation`() {
+        val controller = completed(WakeApp())
+        composeRule.mainClock.autoAdvance = false
+        composeRule.mainClock.advanceTimeBy(FORTY_SECONDS)
+        ShadowSystemClock.advanceBy(Duration.ofMillis(FORTY_SECONDS))
+
+        controller.recreate()
+        composeRule.mainClock.advanceTimeBy(WakeActivity.SUCCESS_TIMEOUT.inWholeMilliseconds - FORTY_SECONDS - ONE_SECOND)
+        assertFalse(controller.get().isFinishing, "59 s in all: still shown")
+        composeRule.onNodeWithText(upOnTime).assertExists()
+
+        composeRule.mainClock.advanceTimeBy(ONE_SECOND + FRAME)
+        assertTrue(controller.get().isFinishing, "60 s in all: closed")
+    }
+
+    @Test
+    fun `an emergency ring after Success shows the ring, and when it stops the screen closes without Success`() {
+        val app = WakeApp()
+        val screen = completed(app).get()
+
+        app.runtime.startEmergency(Instant.parse("2027-03-03T06:15:00Z"), volumePercent = 80, cause = "commit failed")
+        composeRule.waitUntil(timeoutMillis = 5_000) { !composeRule.successShown(upOnTime) }
+        composeRule.onNodeWithText("I'm up").performClick()
+
+        composeRule.waitUntil(timeoutMillis = 5_000) { screen.isFinishing }
+        assertNull(app.runtime.emergency.value)
+        assertFalse(composeRule.successShown(upOnTime), "Success does not come back")
+    }
+
+    @Test
+    fun `restored after a kill while Success showed, the screen closes, since the new process does not know that session`() {
+        val controller = completed(WakeApp())
+        val bundle = Bundle()
+        controller
+            .pause()
+            .saveInstanceState(bundle)
+            .stop()
+            .destroy()
+
+        // A new process: a fresh engine with nothing stored and no ended session.
+        val app = WakeApp()
+        val screen = Robolectric.buildActivity(WakeActivity::class.java).setup(bundle).get()
+
+        composeRule.waitUntil(timeoutMillis = 5_000) { screen.isFinishing }
+        assertNull(app.engine.ended.value)
+        assertFalse(composeRule.successShown(upOnTime))
     }
 
     /** The last haptic each view of [activity] performed (Robolectric records the last one per view). */
@@ -219,5 +274,6 @@ class WakeActivitySuccessTest {
     private companion object {
         const val ONE_SECOND = 1_000L
         const val FRAME = 32L
+        const val FORTY_SECONDS = 40_000L
     }
 }

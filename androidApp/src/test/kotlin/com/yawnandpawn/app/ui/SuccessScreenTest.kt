@@ -1,6 +1,9 @@
 package com.yawnandpawn.app.ui
 
 import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.graphics.toPixelMap
 import androidx.compose.ui.hapticfeedback.HapticFeedback
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
@@ -152,6 +155,29 @@ class SuccessScreenTest {
                 assertEquals(listOf(HapticFeedbackType.Confirm), haptics.played, "for $state")
             }
         }
+
+    @Test
+    fun `leaving and re-entering composition asks the caller again, which plays the haptic only once`() {
+        var shown by mutableStateOf(true)
+        var claims = 0
+        withScreen(
+            PpsThemeMode.Light,
+            content = {
+                CompositionLocalProvider(LocalHapticFeedback provides haptics) {
+                    if (shown) SuccessScreen(state = SuccessSamples.onTime, onIntent = {}, basic = true, claimHaptic = { ++claims == 1 })
+                }
+            },
+        ) {
+            composeRule.waitForIdle()
+            shown = false
+            composeRule.waitForIdle()
+            shown = true
+            composeRule.waitForIdle()
+
+            assertEquals(2, claims, "asked on each entry")
+            assertEquals(listOf(HapticFeedbackType.Confirm), haptics.played, "played once")
+        }
+    }
 
     @Test
     fun `Done sends DoneClicked`() =

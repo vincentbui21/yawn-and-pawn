@@ -31,6 +31,7 @@ import com.yawnandpawn.app.core.session.SessionEvent
 import com.yawnandpawn.app.core.session.SessionState
 import com.yawnandpawn.app.core.session.SnoozeAvailabilityPolicy
 import com.yawnandpawn.app.core.session.UserLockState
+import com.yawnandpawn.app.core.time.MonotonicClock
 import com.yawnandpawn.app.core.time.TimeZoneProvider
 import com.yawnandpawn.app.ui.format.is24HourClock
 import com.yawnandpawn.app.ui.wake.PlaceholderStep
@@ -88,6 +89,7 @@ class WakeActivity : ComponentActivity() {
     private val timings: WakeTimings by inject()
     private val userLock: UserLockState by inject()
     private val unlockSignals: UnlockSignals by inject()
+    private val monotonicClock: MonotonicClock by inject()
 
     /** "I'm up" was tapped before the session existed; replayed once it rings. */
     private var pendingImUp by mutableStateOf(false)
@@ -138,7 +140,7 @@ class WakeActivity : ComponentActivity() {
         timings.stage(WakeStage.WakeScreenCreated)
         enableEdgeToEdge()
         super.onCreate(savedInstanceState)
-        end = WakeScreenEnd(this, ended = { engine.ended.value })
+        end = WakeScreenEnd(this, ended = { engine.ended.value }, elapsedMillis = monotonicClock::elapsedMillis)
         showOverLockScreen()
         // A restore entry point (Story 2.1): opened after a kill, the screen takes over the stored session and shows the
         // same step from memory (nothing when the engine already holds it).
@@ -161,16 +163,24 @@ class WakeActivity : ComponentActivity() {
             // notification first): it waits for a session or an emergency ring, and closes only once that is over.
             val active = state.isRinging() || emergency != null
             val ringingSessionId = (state as? SessionState.Active)?.takeIf { it.isRinging() }?.session?.sessionId
-            LaunchedEffect(active, ringingSessionId) { end.follow(active, ringingSessionId) }
+            // Recreated after a kill, the engine is Idle until it restores the stored session: the screen waits for that.
+            val restored by engine.restored.collectAsState()
+            LaunchedEffect(active, ringingSessionId, restored) { end.follow(active, ringingSessionId, restored) }
             SessionAnswers(state, emergency != null)
             // Once a session ends the screen keeps its last look until it closes, instead of flashing an empty surface.
             val last = remember { LastShown() }
             val success = end.success()
             if (success != null) {
                 key(success.sessionId) {
-                    SuccessScreen(state = successUiState(success), onIntent = ::onIntent, basic = true)
+                    SuccessScreen(
+                        state = successUiState(success),
+                        onIntent = ::onIntent,
+                        basic = true,
+                        claimHaptic = { end.claimHaptic(success.sessionId) },
+                    )
+                    // Counted from when Success started, so a recreated screen still closes 60 s after it first showed.
                     LaunchedEffect(Unit) {
-                        delay(SUCCESS_TIMEOUT)
+                        delay(end.successRemaining(SUCCESS_TIMEOUT))
                         finish()
                     }
                 }

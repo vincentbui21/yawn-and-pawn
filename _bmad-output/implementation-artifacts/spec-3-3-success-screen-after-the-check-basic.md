@@ -89,6 +89,21 @@ deferred: []
 
 ## Review Triage Log
 
+### Review (2 reviewers, fast mode), 2026-10-06
+
+6 findings, all patched (`fix(3.3): review fixes`):
+
+| # | Finding | Verdict | Action |
+|---|---------|---------|--------|
+| 1 | After a kill, the screen is recreated with `seen` while the engine is Idle before `restore()`, so it closed before the ring came back | high | `WakeScreenEnd.follow` closes on Idle only once `engine.restored` is true, and the effect is keyed on it. `WakeScreenEndTest` |
+| 2 | An emergency ring that replaced Success kept the old session id, so Success (haptic, timer) came back when the emergency ring stopped | medium | A ring with no session id clears `shownSessionId`, matching the matrix row "Emergency ring stopped". `WakeScreenEndTest` and `WakeActivitySuccessTest` |
+| 3 | The 60 s timeout restarted on a recreation | medium | The Success start time (`MonotonicClock`) is in the saved state, and the delay is the time left. A test recreates at 40 s and the screen closes at 60 s in all |
+| 4 | The haptic flag lived in `rememberSaveable` inside `key()`, so Success re-entering composition played it again | low | `SuccessScreen(claimHaptic)`. `WakeScreenEnd.claimHaptic(sessionId)` is saved state. Unit and composable re-entry tests |
+| 5 | The recreation test did not catch removing the `isChangingConfigurations` guard | low | Asserts that neither the old nor the new instance is finishing |
+| 6 | No test for a restore after a process death while Success showed | low | A saved bundle plus a fresh engine (no `ended`) closes the screen |
+
+Mutation checks: removing fixes 1–3 makes the new tests fail.
+
 ## Design Notes
 
 - **Why `ended` in the engine:** `SessionEngine` publishes Completed and then Idle inside one lock, so a UI collector usually sees only Idle and cannot tell a completion from a miss. `ended` is set before `state`, so a reader that sees the session gone can read `ended.value` and trust it. It lives in memory only (it is not persisted) and changes nothing in the AD-2 table.

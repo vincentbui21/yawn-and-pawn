@@ -15,9 +15,7 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.saveable.rememberSaveable
-import androidx.compose.runtime.setValue
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -110,7 +108,8 @@ fun FallbackPickerScreen(
  * then "Done" (64 dp, thumb zone).
  *
  * [basic] is the production screen until Epic 6 (Story 3.3): no celebration (no count-up, no confetti), one success
- * haptic for every kind (once, even across an activity recreation), and "Done" as a 72 dp `button-wake-primary`.
+ * haptic for every kind when [claimHaptic] allows it (the caller plays it once per session), and "Done" as a 72 dp
+ * `button-wake-primary`.
  */
 @Composable
 fun SuccessScreen(
@@ -118,10 +117,11 @@ fun SuccessScreen(
     onIntent: (WakeIntent) -> Unit,
     modifier: Modifier = Modifier,
     basic: Boolean = false,
+    claimHaptic: () -> Boolean = { true },
 ) {
     // On time only: the celebration (count-up, confetti, one success haptic); after a snooze or a test, none.
     val celebration = if (state.kind is SuccessKind.OnTime && !basic) rememberCelebration() else null
-    if (basic) SuccessHapticOnce()
+    if (basic) SuccessHaptic(claimHaptic)
     WakeSurface(modifier = modifier, overlay = { celebration?.let { Confetti(it) } }) {
         val colors = PpsTheme.colors
         val spacing = PpsTheme.spacing
@@ -166,16 +166,16 @@ fun SuccessScreen(
     }
 }
 
-/** The success haptic pattern, once per screen: a saved flag keeps a recreated activity from playing it again. */
+/**
+ * The success haptic pattern when the screen enters composition, if [claim] allows it: the caller keeps the played flag
+ * per session, so leaving and re-entering composition or a recreated activity does not play it again.
+ */
 @Composable
-private fun SuccessHapticOnce() {
+private fun SuccessHaptic(claim: () -> Boolean) {
     val haptics = LocalHapticFeedback.current
-    var played by rememberSaveable { mutableStateOf(false) }
+    val currentClaim by rememberUpdatedState(claim)
     LaunchedEffect(Unit) {
-        if (!played) {
-            played = true
-            haptics.performHapticFeedback(HapticFeedbackType.Confirm)
-        }
+        if (currentClaim()) haptics.performHapticFeedback(HapticFeedbackType.Confirm)
     }
 }
 

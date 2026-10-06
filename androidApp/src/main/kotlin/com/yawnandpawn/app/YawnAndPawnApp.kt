@@ -77,9 +77,9 @@ val appModule =
         }
         // The session slot armed from runtime.db without the engine (Story 2.1): after system events and refused starts.
         single { SessionSlotRearm(get(), get(), get(), get(), get(), get()) }
-        factory { SaveAlarm(get(), get(), get(), get(), get(), get(), get()) }
+        factory { SaveAlarm(get(), get(), get(), get(), get(), get(), get(), get()) }
         factory { SetAlarmEnabled(get(), get(), get(), get(), get()) }
-        factory { DeleteAlarm(get(), get(), get(), get()) }
+        factory { DeleteAlarm(get(), get(), get(), get(), get()) }
         // "Test alarm" (Story 1.18): the editor's values ring as a test 10 s later, through the test request code.
         factory { ScheduleTestAlarm(get(), get(), get(), get()) }
         // The wake session (Story 1.12): the Epic 1 policies, the one engine over runtime.db (ActiveSessionStore from

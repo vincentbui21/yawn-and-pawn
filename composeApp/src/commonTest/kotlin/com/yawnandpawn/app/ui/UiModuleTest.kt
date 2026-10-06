@@ -1,6 +1,7 @@
 package com.yawnandpawn.app.ui
 
 import com.yawnandpawn.app.core.alarm.AlarmRepository
+import com.yawnandpawn.app.core.alarm.CheckConfigRepository
 import com.yawnandpawn.app.core.history.MissedNotes
 import com.yawnandpawn.app.core.log.Logger
 import com.yawnandpawn.app.core.reliability.NotificationPermission
@@ -76,6 +77,7 @@ class UiModuleTest {
                     single<ReliabilitySettings> { FakeReliabilitySettings() }
                     single<NotificationPermission> { FakeNotificationPermission() }
                     single { AlarmUseCasesFixture(repository = get(), clock = get(), timeZoneProvider = get()) }
+                    single<CheckConfigRepository> { get<AlarmUseCasesFixture>().checkConfigs }
                     factory { get<AlarmUseCasesFixture>().save }
                     factory { get<AlarmUseCasesFixture>().setEnabled }
                     factory { get<AlarmUseCasesFixture>().delete }

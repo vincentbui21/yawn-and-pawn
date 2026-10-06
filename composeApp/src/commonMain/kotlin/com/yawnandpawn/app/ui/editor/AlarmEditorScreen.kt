@@ -179,7 +179,7 @@ fun AlarmEditorScreen(
         } else {
             AnimatedContent(
                 targetState = state.pane,
-                transitionSpec = { subScreenTransition(forward = targetState != EditorPane.Main) },
+                transitionSpec = { subScreenTransition(forward = targetState.depth > initialState.depth) },
                 label = "editor pane",
             ) { pane ->
                 when (pane) {
@@ -332,8 +332,9 @@ private fun RowsCard(
     onIntent: (EditorIntent) -> Unit,
 ) {
     val full = state.full
+    val shown = full?.rows.orEmpty()
     GroupCard {
-        if (full != null) {
+        if (full != null && EditorPane.WakeCheck in shown) {
             NavRow(
                 label = stringResource(Res.string.editor_wake_check),
                 value = checkSummary(full),
@@ -359,7 +360,7 @@ private fun RowsCard(
             value = stringResource(Res.string.editor_snooze_minutes, state.form.snoozeLengthMinutes),
             onClick = { onIntent(EditorIntent.PaneOpened(EditorPane.Snooze)) },
         )
-        if (full != null) {
+        if (full != null && EditorPane.Motivation in shown) {
             GroupDivider()
             NavRow(
                 label = stringResource(Res.string.editor_motivation),

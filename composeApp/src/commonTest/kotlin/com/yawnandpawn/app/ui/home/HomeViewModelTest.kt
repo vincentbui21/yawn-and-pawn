@@ -3,6 +3,7 @@ package com.yawnandpawn.app.ui.home
 import com.yawnandpawn.app.core.alarm.Alarm
 import com.yawnandpawn.app.core.alarm.AlarmRepository
 import com.yawnandpawn.app.core.alarm.AlarmWriteLock
+import com.yawnandpawn.app.core.checks.CheckEntry
 import com.yawnandpawn.app.core.error.DomainError
 import com.yawnandpawn.app.core.error.Outcome
 import com.yawnandpawn.app.core.history.MissedNotes
@@ -14,6 +15,7 @@ import com.yawnandpawn.app.core.reliability.ReliabilityStatus
 import com.yawnandpawn.app.core.session.SessionState
 import com.yawnandpawn.app.testing.AlarmUseCasesFixture
 import com.yawnandpawn.app.testing.FakeAlarmRepository
+import com.yawnandpawn.app.testing.FakeCheckConfigRepository
 import com.yawnandpawn.app.testing.FakeClock
 import com.yawnandpawn.app.testing.FakeIdGenerator
 import com.yawnandpawn.app.testing.FakeLogger
@@ -27,6 +29,8 @@ import com.yawnandpawn.app.testing.FakeTimeZoneProvider
 import com.yawnandpawn.app.testing.aSession
 import com.yawnandpawn.app.testing.aSessionHistoryRow
 import com.yawnandpawn.app.testing.anAlarm
+import com.yawnandpawn.app.testing.checkConfigsOf
+import com.yawnandpawn.app.ui.checks.CheckType
 import com.yawnandpawn.app.ui.format.Countdown
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
@@ -55,6 +59,8 @@ import kotlin.test.assertTrue
 import kotlin.time.Duration.Companion.minutes
 import kotlin.time.Duration.Companion.seconds
 import kotlin.time.Instant
+import com.yawnandpawn.app.core.checks.CheckType as CoreCheckType
+import com.yawnandpawn.app.core.checks.Difficulty as CoreDifficulty
 
 /** The Story 1.9 I/O matrix for Home, plus list order, navigation, toggle, duplicate and delete. */
 @OptIn(ExperimentalCoroutinesApi::class)
@@ -73,6 +79,7 @@ class HomeViewModelTest {
     private val missedNotes = MissedNotes(history, dismissals)
     private val probe = FakeReliabilityProbe()
     private val settings = FakeReliabilitySettings()
+    private val checkConfigs = FakeCheckConfigRepository()
 
     /** The session the use cases' lock reads (Story 2.6); Idle unless a test starts one. */
     private val sessionState = MutableStateFlow<SessionState>(SessionState.Idle)
@@ -119,7 +126,7 @@ class HomeViewModelTest {
     }
 
     private fun TestScope.home(repository: AlarmRepository): HomeViewModel {
-        val viewModel = HomeViewModel(repository, actions(repository), clock, zone, signal, missedNotes, probe, settings)
+        val viewModel = HomeViewModel(repository, actions(repository), clock, zone, signal, missedNotes, probe, settings, checkConfigs)
         backgroundScope.launch { viewModel.state.collect { } }
         return viewModel
     }
@@ -262,6 +269,29 @@ class HomeViewModelTest {
                     AlarmCard(FakeIdGenerator.fakeUuid(1), LocalTime(22, 0), weekdays, "Late", emptyList(), enabled = true),
                 ),
                 viewModel.state.value.alarms,
+            )
+        }
+
+    @Test
+    fun `a card shows its alarm's check icons, and follows a change of the checks (Story 3-5)`() =
+        runTest(dispatcher) {
+            val stored = alarm(1, LocalTime(7, 0))
+            val other = alarm(2, LocalTime(8, 0))
+            val repository = FakeAlarmRepository(listOf(stored, other))
+            val math = CheckEntry(CoreCheckType.Math, CoreDifficulty.Medium, 3)
+            val viewModel = home(repository)
+            assertEquals(
+                listOf(emptyList<CheckType>(), emptyList()),
+                viewModel.state.value.alarms
+                    .map { it.checks },
+            )
+
+            assertEquals(Outcome.Success(Unit), checkConfigs.saveWithAlarm(stored, checkConfigsOf(stored.id, listOf(math))))
+
+            assertEquals(
+                listOf(listOf(CheckType.Math), emptyList()),
+                viewModel.state.value.alarms
+                    .map { it.checks },
             )
         }
 
@@ -495,7 +525,17 @@ class HomeViewModelTest {
         runTest(dispatcher) {
             assertEquals(0, signal.subscribers)
             val viewModel =
-                HomeViewModel(FakeAlarmRepository(), actions(FakeAlarmRepository()), clock, zone, signal, missedNotes, probe, settings)
+                HomeViewModel(
+                    FakeAlarmRepository(),
+                    actions(FakeAlarmRepository()),
+                    clock,
+                    zone,
+                    signal,
+                    missedNotes,
+                    probe,
+                    settings,
+                    checkConfigs,
+                )
             val collector = launch { viewModel.state.collect { } }
             assertEquals(1, signal.subscribers)
 

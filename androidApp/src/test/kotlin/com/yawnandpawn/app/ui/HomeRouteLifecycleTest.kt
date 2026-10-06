@@ -12,6 +12,7 @@ import com.yawnandpawn.app.core.history.MissedNotes
 import com.yawnandpawn.app.core.reliability.ReliabilityStatus
 import com.yawnandpawn.app.testing.AlarmUseCasesFixture
 import com.yawnandpawn.app.testing.FakeAlarmRepository
+import com.yawnandpawn.app.testing.FakeCheckConfigRepository
 import com.yawnandpawn.app.testing.FakeClock
 import com.yawnandpawn.app.testing.FakeLogger
 import com.yawnandpawn.app.testing.FakeMissedNoteDismissals
@@ -67,6 +68,7 @@ class HomeRouteLifecycleTest {
                 MissedNotes(FakeSessionHistoryRepository(), FakeMissedNoteDismissals()),
                 probe,
                 FakeReliabilitySettings(),
+                FakeCheckConfigRepository(),
             )
         val owner = TestOwner()
         withScreen(

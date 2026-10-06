@@ -2,9 +2,12 @@ package com.yawnandpawn.app.ui.editor
 
 import com.yawnandpawn.app.core.alarm.Alarm
 import com.yawnandpawn.app.core.alarm.AlarmField
+import com.yawnandpawn.app.core.alarm.CheckConfig
 import com.yawnandpawn.app.ui.checks.CheckType
 import com.yawnandpawn.app.ui.checks.Difficulty
 import com.yawnandpawn.app.ui.checks.defaultCount
+import com.yawnandpawn.app.ui.checks.toUi
+import com.yawnandpawn.app.ui.checksetup.CheckSetupIntent
 import com.yawnandpawn.app.ui.format.Countdown
 import com.yawnandpawn.app.ui.format.Money
 import com.yawnandpawn.app.ui.format.Weekdays
@@ -35,10 +38,19 @@ data class EditorForm(
     val graceSeconds: Int = Alarm.DEFAULT_GRACE_SECONDS,
     /** "Vibrate during quiet time" (Story 3.4: per alarm, on by default). */
     val vibrateInGrace: Boolean = Alarm.DEFAULT_VIBRATE_IN_GRACE,
+    /** The checks in the order All mode runs them (Story 3.5); a new alarm starts with Math · Medium · 3. */
+    val checks: List<CheckChip> = DEFAULT_CHECKS,
+    val checkMode: CheckMode = CheckMode.Random,
 ) {
     companion object {
         /** The time a new alarm opens with. */
         val DEFAULT_TIME: LocalTime = LocalTime(hour = 7, minute = 0)
+
+        /** The checks of a new alarm: core's `CheckConfig.DEFAULT_ENTRIES`. */
+        val DEFAULT_CHECKS: List<CheckChip> =
+            CheckConfig.DEFAULT_ENTRIES.mapNotNull { entry ->
+                entry.type.toUi()?.let { CheckChip(it, entry.difficulty.toUi(), entry.count) }
+            }
 
         /** The snooze-length options in the order the Snooze sub-screen lists them. */
         val SNOOZE_OPTIONS: List<Int> = Alarm.SNOOZE_LENGTHS_MINUTES.sorted()
@@ -47,9 +59,28 @@ data class EditorForm(
 
 /**
  * The editor screen that is showing (progressive disclosure, owner decision 2026-09-27): the main card list, or the
- * sub-screen one of its rows opened. Back on a sub-screen returns to [Main].
+ * sub-screen one of its rows opened. Back on a sub-screen returns to [Main]; from [CheckSetup] (one check's setup,
+ * opened from [WakeCheck], Story 3.5) it returns to [WakeCheck].
  */
-enum class EditorPane { Main, Sound, Snooze, WakeCheck, QuietTime, Motivation }
+enum class EditorPane {
+    Main,
+    Sound,
+    Snooze,
+    WakeCheck,
+    QuietTime,
+    Motivation,
+    CheckSetup,
+    ;
+
+    /** How deep the pane is: Back goes up one level, and the slide runs forward when going deeper. */
+    val depth: Int
+        get() =
+            when (this) {
+                Main -> 0
+                CheckSetup -> 2
+                else -> 1
+            }
+}
 
 /** The repeat quick choices "Once" · "Weekdays" · "Custom"; Custom reveals the day chips. */
 enum class RepeatChoice { Once, Weekdays, Custom }
@@ -90,6 +121,8 @@ data class EditorUiState(
      * list (the Story 1.8 editor).
      */
     val sound: EditorSound? = null,
+    /** The check whose setup [EditorPane.CheckSetup] shows. */
+    val setupType: CheckType? = null,
 ) {
     /** The highlighted repeat quick choice. */
     val repeatChoice: RepeatChoice
@@ -155,6 +188,14 @@ data class FullEditorSections(
     val motivationTiming: MotivationTiming = MotivationTiming.AfterImUp,
     /** A weakening change was saved under the commitment lock; it applies after the alarm at this time. */
     val weakeningAppliesAfter: LocalTime? = null,
+    /**
+     * The full-editor rows shown on the main screen ([EditorPane.WakeCheck], [EditorPane.QuietTime],
+     * [EditorPane.Motivation]): all of them in the design preview; the app shows each once its story wires it (Story 3.5:
+     * the Wake-up check only).
+     */
+    val rows: Set<EditorPane> = setOf(EditorPane.WakeCheck, EditorPane.QuietTime, EditorPane.Motivation),
+    /** The checks the Wake-up check sub-screen lists: every one in the preview, the pickable ones in the app. */
+    val types: List<CheckType> = CheckType.entries,
 )
 
 /** Everything the user can do in the editor. */
@@ -251,6 +292,11 @@ sealed interface EditorIntent {
     /** A selected check's row in the Wake-up check sub-screen: opens its Check setup (design-preview round 3). */
     data class CheckSetupClicked(
         val type: CheckType,
+    ) : EditorIntent
+
+    /** A change in the open Check setup ([EditorUiState.setupType]): its difficulty or count; its Back (Story 3.5). */
+    data class CheckSetup(
+        val intent: CheckSetupIntent,
     ) : EditorIntent
 
     /** All mode: move a selected check one place up or down in the order the checks run. */

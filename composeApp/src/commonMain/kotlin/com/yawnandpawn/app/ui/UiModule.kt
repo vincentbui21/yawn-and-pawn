@@ -15,11 +15,12 @@ import org.koin.dsl.module
 val uiModule =
     module {
         factory { AlarmActions(get(), get(), get(), get()) }
-        viewModel { HomeViewModel(get(), get(), get(), get(), get(), get(), get(), get()) }
+        viewModel { HomeViewModel(get(), get(), get(), get(), get(), get(), get(), get(), get()) }
         viewModel { params ->
             AlarmEditorViewModel(
                 alarmId = params.get<AlarmEditorArgs>().alarmId,
                 repository = get(),
+                checkConfigs = get(),
                 saveAlarm = get(),
                 clock = get(),
                 timeZoneProvider = get(),

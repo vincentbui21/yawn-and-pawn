@@ -1,5 +1,7 @@
 package com.yawnandpawn.app.core.alarm
 
+import com.yawnandpawn.app.core.checks.CheckEntry
+import com.yawnandpawn.app.core.checks.CheckMode
 import com.yawnandpawn.app.core.error.DomainError
 import com.yawnandpawn.app.core.error.Outcome
 import com.yawnandpawn.app.core.error.flatMap
@@ -31,6 +33,9 @@ data class AlarmDraft(
     val snoozeLengthMinutes: Int = Alarm.DEFAULT_SNOOZE_LENGTH_MINUTES,
     val graceSeconds: Int = Alarm.DEFAULT_GRACE_SECONDS,
     val vibrateInGrace: Boolean = Alarm.DEFAULT_VIBRATE_IN_GRACE,
+    /** The alarm's checks in the order All mode runs them (Story 3.5). */
+    val checks: List<CheckEntry> = CheckConfig.DEFAULT_ENTRIES,
+    val checkMode: CheckMode = CheckMode.Random,
 )
 
 /**
@@ -54,7 +59,9 @@ class AlarmWriteLock {
  * A new enabled alarm whose settings are identical to a stored alarm's ([hasSameSettingsAs]) is not stored a second
  * time: the stored one is switched on instead (`updatedAt = now`, armed at its next occurrence) and returned, and no
  * request code is allocated (owner decision 2026-10-05, like Samsung Clock). Any difference, or a new alarm saved off,
- * stores the new alarm as usual.
+ * stores the new alarm as usual. The draft's checks (Story 3.5) are validated with the alarm (`InvalidAlarm(Checks)`)
+ * and stored with it in one transaction ([CheckConfigRepository.saveWithAlarm]); an identical alarm has the same checks
+ * in the same order too.
  */
 class SaveAlarm(
     private val repository: AlarmRepository,
@@ -64,6 +71,7 @@ class SaveAlarm(
     private val requestCodes: RequestCodeSequence,
     private val scheduling: AlarmScheduling,
     private val sessionLock: SessionLockGuard,
+    private val checkConfigRepository: CheckConfigRepository,
 ) {
     suspend operator fun invoke(draft: AlarmDraft): Outcome<Alarm, DomainError> =
         lock.withLock {
@@ -74,14 +82,14 @@ class SaveAlarm(
                     if (id == null) {
                         val template = draft.toAlarm(id = idGenerator.newId(), requestCode = RequestCodes.FIRST_ALARM, createdAt = now)
                         // Validate before allocating a code, so invalid input never touches storage.
-                        val invalid = validate(template)
+                        val invalid = validate(template) ?: validateChecks(draft.checks)
                         if (invalid != null) {
                             Outcome.Failure(DomainError.InvalidAlarm(invalid))
                         } else {
                             // A new enabled alarm identical to a stored one switches that one on instead (owner decision
                             // 2026-10-05). A new alarm saved off is stored as usual: it must not switch anything on.
                             if (draft.enabled) {
-                                when (val same = identicalStored(template)) {
+                                when (val same = identicalStored(template, draft.checks)) {
                                     is Outcome.Failure -> return@whenIdle same
                                     is Outcome.Success -> same.value?.let { return@whenIdle switchOn(it, now) }
                                 }
@@ -92,14 +100,33 @@ class SaveAlarm(
                         repository.get(id).map { stored -> draft.toAlarm(id, stored.requestCode, stored.createdAt) }
                     }
                 base
-                    .flatMap { alarm -> validateAndStore(repository, alarm.copy(updatedAt = now)) }
-                    .onSuccess(scheduling::sync)
+                    .flatMap { alarm ->
+                        storeWithChecks(checkConfigRepository, alarm.copy(updatedAt = now), draft.checks, now)
+                    }.onSuccess(scheduling::sync)
             }
         }
 
-    /** The stored alarm that rings exactly like [alarm] ([hasSameSettingsAs]), or null; a failed read is returned. */
-    private suspend fun identicalStored(alarm: Alarm): Outcome<Alarm?, DomainError> =
-        repository.listAll().map { stored -> stored.firstOrNull { it.hasSameSettingsAs(alarm) } }
+    /**
+     * The stored alarm that rings exactly like [alarm] ([hasSameSettingsAs]) with the same [checks] in the same order, or
+     * null; a failed read is returned.
+     */
+    private suspend fun identicalStored(
+        alarm: Alarm,
+        checks: List<CheckEntry>,
+    ): Outcome<Alarm?, DomainError> =
+        repository.listAll().flatMap { all ->
+            var found: Outcome<Alarm?, DomainError> = Outcome.Success(null)
+            for (candidate in all.filter { it.hasSameSettingsAs(alarm) }) {
+                // An alarm stored without rows has the default checks (the editor opens it with them).
+                found =
+                    checkConfigRepository.forAlarm(candidate.id).map { rows ->
+                        candidate.takeIf { rows.orderedEntries().ifEmpty { CheckConfig.DEFAULT_ENTRIES } == checks }
+                    }
+                // A failed read ends the search, and so does a match.
+                if (found !is Outcome.Success || found.value != null) break
+            }
+            found
+        }
 
     /** Switches [alarm] on (`updatedAt = now`) and arms its next occurrence after now (for a one-time alarm, its next date). */
     private suspend fun switchOn(
@@ -131,6 +158,7 @@ class SaveAlarm(
         requestCode = requestCode,
         createdAt = createdAt,
         updatedAt = createdAt,
+        checkMode = checkMode,
     )
 }
 
@@ -163,29 +191,35 @@ class SetAlarmEnabled(
 }
 
 /**
- * Removes an alarm and then cancels its system alarm. `NotFound(id)` when there is no such alarm, and nothing changes;
- * a failed delete cancels nothing.
+ * Removes an alarm with its checks and then cancels its system alarm. `NotFound(id)` when there is no such alarm, and
+ * nothing changes; a failed delete cancels nothing. The checks go first (in `app.db` the foreign key would remove them
+ * with the alarm anyway), so a failure there leaves the alarm stored and armed.
  */
 class DeleteAlarm(
     private val repository: AlarmRepository,
     private val lock: AlarmWriteLock,
     private val scheduling: AlarmScheduling,
     private val sessionLock: SessionLockGuard,
+    private val checkConfigRepository: CheckConfigRepository,
 ) {
     suspend operator fun invoke(id: String): Outcome<Unit, DomainError> =
         lock.withLock {
             sessionLock.whenIdle {
                 repository.get(id).flatMap { stored ->
-                    repository.delete(id).onSuccess { scheduling.cancel(stored.requestCode) }
+                    checkConfigRepository
+                        .deleteForAlarm(id)
+                        .flatMap { repository.delete(id) }
+                        .onSuccess { scheduling.cancel(stored.requestCode) }
                 }
             }
         }
 }
 
 /**
- * Copies an alarm with a new id, a new request code and fresh timestamps; the copy is then armed when it is enabled.
- * `NotFound(id)` when there is no such alarm. Not used by the app since 2026-10-05: Duplicate opens the editor on a new,
- * unsaved alarm prefilled from the stored one, which [SaveAlarm] stores on Save (owner decision).
+ * Copies an alarm with its checks (in the same order, with new ids), a new id, a new request code and fresh timestamps;
+ * the copy is then armed when it is enabled. `NotFound(id)` when there is no such alarm. Not used by the app since
+ * 2026-10-05: Duplicate opens the editor on a new, unsaved alarm prefilled from the stored one, which [SaveAlarm] stores
+ * on Save (owner decision).
  */
 class DuplicateAlarm(
     private val repository: AlarmRepository,
@@ -195,6 +229,7 @@ class DuplicateAlarm(
     private val requestCodes: RequestCodeSequence,
     private val scheduling: AlarmScheduling,
     private val sessionLock: SessionLockGuard,
+    private val checkConfigRepository: CheckConfigRepository,
 ) {
     suspend operator fun invoke(id: String): Outcome<Alarm, DomainError> =
         lock.withLock {
@@ -202,22 +237,46 @@ class DuplicateAlarm(
                 repository
                     .get(id)
                     .flatMap { stored ->
-                        requestCodes.next().flatMap { code ->
-                            val now = clock.nowMillis()
-                            val copy = stored.copy(id = idGenerator.newId(), requestCode = code, createdAt = now, updatedAt = now)
-                            validateAndStore(repository, copy)
+                        checkConfigRepository.forAlarm(id).flatMap { configs ->
+                            requestCodes.next().flatMap { code ->
+                                val now = clock.nowMillis()
+                                val copy = stored.copy(id = idGenerator.newId(), requestCode = code, createdAt = now, updatedAt = now)
+                                // An alarm stored without rows rings the default checks, so its copy gets them.
+                                val checks = configs.orderedEntries().ifEmpty { CheckConfig.DEFAULT_ENTRIES }
+                                storeWithChecks(checkConfigRepository, copy, checks, now)
+                            }
                         }
                     }.onSuccess(scheduling::sync)
             }
         }
 }
 
-private suspend fun validateAndStore(
-    repository: AlarmRepository,
+/**
+ * Validates [alarm] and its [checks], then stores both in one transaction. The rows take the order of [checks]; a type
+ * the alarm already had keeps its creation time.
+ */
+private suspend fun storeWithChecks(
+    checkConfigRepository: CheckConfigRepository,
     alarm: Alarm,
+    checks: List<CheckEntry>,
+    now: Instant,
 ): Outcome<Alarm, DomainError> {
-    validate(alarm)?.let { return Outcome.Failure(DomainError.InvalidAlarm(it)) }
-    return repository.upsert(alarm).map { alarm }
+    (validate(alarm) ?: validateChecks(checks))?.let { return Outcome.Failure(DomainError.InvalidAlarm(it)) }
+    return checkConfigRepository.forAlarm(alarm.id).flatMap { stored ->
+        val previous = stored.associateBy { it.entry.type }
+        val configs =
+            checks.mapIndexed { position, entry ->
+                CheckConfig(
+                    id = CheckConfig.idFor(alarm.id, entry.type),
+                    alarmId = alarm.id,
+                    position = position,
+                    entry = entry,
+                    createdAt = previous[entry.type]?.createdAt ?: now,
+                    updatedAt = now,
+                )
+            }
+        checkConfigRepository.saveWithAlarm(alarm, configs).map { alarm }
+    }
 }
 
 /** Runs [action] on the success value and returns this outcome unchanged. */

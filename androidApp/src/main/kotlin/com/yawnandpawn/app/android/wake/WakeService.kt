@@ -17,6 +17,8 @@ import com.yawnandpawn.app.android.screen.forwardsToWakeScreen
 import com.yawnandpawn.app.core.alarm.Alarm
 import com.yawnandpawn.app.core.alarm.AlarmFired
 import com.yawnandpawn.app.core.alarm.AlarmRepository
+import com.yawnandpawn.app.core.alarm.CheckConfigRepository
+import com.yawnandpawn.app.core.alarm.orderedEntries
 import com.yawnandpawn.app.core.checks.CheckAnswer
 import com.yawnandpawn.app.core.checks.Puzzle
 import com.yawnandpawn.app.core.crash.CrashReporter
@@ -110,6 +112,7 @@ class WakeService :
     private val engine: SessionEngine by inject()
     private val runtime: WakeRuntime by inject()
     private val repository: AlarmRepository by inject()
+    private val checkConfigs: CheckConfigRepository by inject()
     private val ids: IdGenerator by inject()
     private val testAlarms: TestAlarmStore by inject()
     private val crashReporter: CrashReporter by inject()
@@ -374,7 +377,19 @@ class WakeService :
         fired: AlarmFired,
         alarm: Alarm,
     ) {
-        val config = ConfigResolver.resolve(alarm, GlobalSettings(), testMode = false, scheduledAt = fired.scheduledAt)
+        // The alarm's checks (Story 3.5); unreadable ones never stop the ring: it rings the default plan, logged.
+        val checks =
+            when (val read = checkConfigs.forAlarm(alarm.id)) {
+                is Outcome.Success -> {
+                    read.value.orderedEntries()
+                }
+
+                is Outcome.Failure -> {
+                    logger.log(LogEvent.OperationFailed.of("read alarm checks", read.error))
+                    emptyList()
+                }
+            }
+        val config = ConfigResolver.resolve(alarm, checks, GlobalSettings(), testMode = false, scheduledAt = fired.scheduledAt)
         val locked = !userLock.isUserUnlocked()
         val event =
             SessionEvent.AlarmFired(

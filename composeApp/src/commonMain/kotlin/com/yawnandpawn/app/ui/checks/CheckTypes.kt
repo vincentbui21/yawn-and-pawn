@@ -1,6 +1,7 @@
 package com.yawnandpawn.app.ui.checks
 
 import androidx.compose.runtime.Composable
+import com.yawnandpawn.app.core.alarm.CheckConfig
 import com.yawnandpawn.app.ui.resources.Res
 import com.yawnandpawn.app.ui.resources.check_count_problem
 import com.yawnandpawn.app.ui.resources.check_count_problems
@@ -32,6 +33,8 @@ import com.yawnandpawn.app.ui.resources.symbol_sort_by_alpha
 import org.jetbrains.compose.resources.DrawableResource
 import org.jetbrains.compose.resources.StringResource
 import org.jetbrains.compose.resources.stringResource
+import com.yawnandpawn.app.core.checks.CheckType as CoreCheckType
+import com.yawnandpawn.app.core.checks.Difficulty as CoreDifficulty
 
 /** The five proof-of-wake checks (EXPERIENCE.md glossary), in the order pickers list them. */
 enum class CheckType {
@@ -119,6 +122,28 @@ val CheckType.icon: DrawableResource
             CheckType.QrBarcode -> Res.drawable.symbol_qr_code_scanner
             CheckType.HouseHunt -> Res.drawable.symbol_house
         }
+
+/** The core plugin of this check (AD-9), or null while its story has not added one (only Math so far). */
+val CheckType.core: CoreCheckType?
+    get() =
+        when (this) {
+            CheckType.Math -> CoreCheckType.Math
+            CheckType.WordUnscramble, CheckType.MemorySequence, CheckType.QrBarcode, CheckType.HouseHunt -> null
+        }
+
+/** The UI check of a core plugin, or null for one a user never sees (the Epic 1 placeholder). */
+fun CoreCheckType.toUi(): CheckType? = CheckType.entries.firstOrNull { it.core == this }
+
+fun Difficulty.toCore(): CoreDifficulty = CoreDifficulty.valueOf(name)
+
+fun CoreDifficulty.toUi(): Difficulty = Difficulty.valueOf(name)
+
+/**
+ * The checks the pickers offer (Story 3.5): those with a core plugin a user may pick (`CheckConfig.PICKABLE_TYPES`), in
+ * the picker order. Story 3.2's `CheckRegistry` also requires a wake screen.
+ */
+val PickableCheckTypes: List<CheckType>
+    get() = CheckType.entries.filter { type -> type.core?.let { it in CheckConfig.PICKABLE_TYPES } == true }
 
 @Composable
 fun Difficulty.displayName(): String =

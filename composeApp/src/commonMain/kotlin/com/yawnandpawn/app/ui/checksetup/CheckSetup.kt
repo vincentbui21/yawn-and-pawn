@@ -1,5 +1,6 @@
 package com.yawnandpawn.app.ui.checksetup
 
+import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
@@ -55,8 +56,10 @@ import org.jetbrains.compose.resources.stringResource
 data class CheckSetupUiState(
     val type: CheckType,
     val difficulty: Difficulty = Difficulty.Medium,
-    /** Problems, words or rounds (Math, Word Unscramble, Memory Sequence), [MIN_COUNT] to [MAX_COUNT]. */
+    /** Problems, words or rounds (Math, Word Unscramble, Memory Sequence), within [countRange]. */
     val count: Int = type.defaultCount,
+    /** The counts the stepper allows: the core type's `countRange` in the app (Story 3.5, Math 1 to 10). */
+    val countRange: IntRange = MIN_COUNT..MAX_COUNT,
     /** QR/Barcode: a code is registered. */
     val codeSaved: Boolean = false,
     /** House Hunt: reference photos taken, 0 to 3. */
@@ -136,20 +139,30 @@ fun CheckSetupScreen(
         onBack = { onIntent(CheckSetupIntent.Back) },
         modifier = modifier,
     ) {
-        Banners(state = state, onIntent = onIntent)
-        AboutCard(state = state)
-        when (type) {
-            CheckType.QrBarcode -> QrRows(state = state, onIntent = onIntent)
-            CheckType.HouseHunt -> PhotoRow(state = state, onIntent = onIntent)
-            else -> if (type.hasDifficulty) DifficultyAndCount(state = state, onIntent = onIntent)
-        }
-        PpsTextButton(
-            text = stringResource(Res.string.check_try_it),
-            onClick = { onIntent(CheckSetupIntent.TryItClicked) },
-            enabled = state.canTry,
-            modifier = Modifier.align(Alignment.CenterHorizontally),
-        )
+        CheckSetupContent(state = state, onIntent = onIntent)
     }
+}
+
+/** Check setup's cards and "Try it", emitted into the caller's column (the editor's sub-screen, Story 3.5). */
+@Composable
+fun ColumnScope.CheckSetupContent(
+    state: CheckSetupUiState,
+    onIntent: (CheckSetupIntent) -> Unit,
+) {
+    val type = state.type
+    Banners(state = state, onIntent = onIntent)
+    AboutCard(state = state)
+    when (type) {
+        CheckType.QrBarcode -> QrRows(state = state, onIntent = onIntent)
+        CheckType.HouseHunt -> PhotoRow(state = state, onIntent = onIntent)
+        else -> if (type.hasDifficulty) DifficultyAndCount(state = state, onIntent = onIntent)
+    }
+    PpsTextButton(
+        text = stringResource(Res.string.check_try_it),
+        onClick = { onIntent(CheckSetupIntent.TryItClicked) },
+        enabled = state.canTry,
+        modifier = Modifier.align(Alignment.CenterHorizontally),
+    )
 }
 
 @Composable
@@ -224,8 +237,8 @@ private fun DifficultyAndCount(
                 increaseLabel = stringResource(Res.string.stepper_raise, label),
                 onDecrease = { onIntent(CheckSetupIntent.CountChanged(state.count - 1)) },
                 onIncrease = { onIntent(CheckSetupIntent.CountChanged(state.count + 1)) },
-                canDecrease = state.count > CheckSetupUiState.MIN_COUNT,
-                canIncrease = state.count < CheckSetupUiState.MAX_COUNT,
+                canDecrease = state.count > state.countRange.first,
+                canIncrease = state.count < state.countRange.last,
             )
         }
     }

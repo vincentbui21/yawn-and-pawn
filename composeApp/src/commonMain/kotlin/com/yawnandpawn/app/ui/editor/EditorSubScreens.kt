@@ -7,6 +7,10 @@ import com.yawnandpawn.app.core.alarm.Alarm
 import com.yawnandpawn.app.ui.checkpicker.CheckPickerContent
 import com.yawnandpawn.app.ui.checkpicker.CheckPickerIntent
 import com.yawnandpawn.app.ui.checkpicker.CheckPickerUiState
+import com.yawnandpawn.app.ui.checks.core
+import com.yawnandpawn.app.ui.checks.displayName
+import com.yawnandpawn.app.ui.checksetup.CheckSetupContent
+import com.yawnandpawn.app.ui.checksetup.CheckSetupUiState
 import com.yawnandpawn.app.ui.components.GroupCard
 import com.yawnandpawn.app.ui.components.GroupDivider
 import com.yawnandpawn.app.ui.components.NavRow
@@ -57,27 +61,64 @@ internal fun EditorSubScreen(
     onIntent: (EditorIntent) -> Unit,
 ) {
     val full = state.full
+    val setup = if (pane == EditorPane.CheckSetup) state.checkSetupState() else null
     SubScreen(
-        title = stringResource(pane.title()),
+        // Check setup is titled with the check's name, like the standalone Check setup screen.
+        title = setup?.type?.displayName() ?: stringResource(pane.title()),
         backContentDescription = stringResource(Res.string.editor_back),
         onBack = { onIntent(EditorIntent.BackRequested) },
     ) {
         when (pane) {
-            EditorPane.Main -> Unit
-            EditorPane.Sound -> SoundPane(state = state, onIntent = onIntent)
-            EditorPane.Snooze -> SnoozePane(state = state, onIntent = onIntent)
-            EditorPane.WakeCheck -> full?.let { WakeCheckPane(full = it, onIntent = onIntent) }
-            EditorPane.QuietTime -> QuietTimePane(form = state.form, onIntent = onIntent)
-            EditorPane.Motivation -> full?.let { MotivationPane(full = it, onIntent = onIntent) }
+            EditorPane.Main -> {
+                Unit
+            }
+
+            EditorPane.Sound -> {
+                SoundPane(state = state, onIntent = onIntent)
+            }
+
+            EditorPane.Snooze -> {
+                SnoozePane(state = state, onIntent = onIntent)
+            }
+
+            EditorPane.WakeCheck -> {
+                full?.let { WakeCheckPane(full = it, onIntent = onIntent) }
+            }
+
+            EditorPane.QuietTime -> {
+                QuietTimePane(form = state.form, onIntent = onIntent)
+            }
+
+            EditorPane.Motivation -> {
+                full?.let { MotivationPane(full = it, onIntent = onIntent) }
+            }
+
+            EditorPane.CheckSetup -> {
+                setup?.let {
+                    CheckSetupContent(state = it, onIntent = { intent ->
+                        onIntent(EditorIntent.CheckSetup(intent))
+                    })
+                }
+            }
         }
     }
+}
+
+/**
+ * The Check setup of [EditorUiState.setupType] as the form holds it, with the core type's count range; null when that
+ * check is not selected.
+ */
+internal fun EditorUiState.checkSetupState(): CheckSetupUiState? {
+    val chip = form.checks.firstOrNull { it.type == setupType } ?: return null
+    val range = chip.type.core?.countRange ?: (CheckSetupUiState.MIN_COUNT..CheckSetupUiState.MAX_COUNT)
+    return CheckSetupUiState(type = chip.type, difficulty = chip.difficulty, count = chip.count, countRange = range)
 }
 
 private fun EditorPane.title(): StringResource =
     when (this) {
         EditorPane.Main, EditorPane.Sound -> Res.string.editor_sound
         EditorPane.Snooze -> Res.string.editor_snooze
-        EditorPane.WakeCheck -> Res.string.editor_wake_check
+        EditorPane.WakeCheck, EditorPane.CheckSetup -> Res.string.editor_wake_check
         EditorPane.QuietTime -> Res.string.editor_quiet_time
         EditorPane.Motivation -> Res.string.editor_motivation
     }
@@ -158,6 +199,7 @@ private fun WakeCheckPane(
                 noCheckError = full.noCheckError,
                 qrCodeSaved = full.qrCodeSaved,
                 houseHuntPhotos = full.houseHuntPhotos,
+                types = full.types,
             ),
         onIntent = { intent ->
             when (intent) {

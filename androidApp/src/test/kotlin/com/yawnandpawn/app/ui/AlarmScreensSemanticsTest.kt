@@ -32,6 +32,7 @@ import com.yawnandpawn.app.core.session.ScheduleTestAlarm
 import com.yawnandpawn.app.testing.AlarmUseCasesFixture
 import com.yawnandpawn.app.testing.FakeAlarmRepository
 import com.yawnandpawn.app.testing.FakeAlarmScheduler
+import com.yawnandpawn.app.testing.FakeCheckConfigRepository
 import com.yawnandpawn.app.testing.FakeClock
 import com.yawnandpawn.app.testing.FakeLogger
 import com.yawnandpawn.app.testing.FakeMissedNoteDismissals
@@ -261,6 +262,7 @@ class AlarmScreensSemanticsTest {
             AlarmEditorViewModel(
                 alarmId = null,
                 repository = repository,
+                checkConfigs = FakeCheckConfigRepository(repository),
                 saveAlarm = AlarmUseCasesFixture(repository = repository).save,
                 clock = FakeClock(),
                 timeZoneProvider = FakeTimeZoneProvider(),
@@ -303,6 +305,7 @@ class AlarmScreensSemanticsTest {
             AlarmEditorViewModel(
                 alarmId = null,
                 repository = repository,
+                checkConfigs = FakeCheckConfigRepository(repository),
                 saveAlarm = AlarmUseCasesFixture(repository = repository).save,
                 clock = FakeClock(),
                 timeZoneProvider = FakeTimeZoneProvider(),
@@ -340,6 +343,7 @@ class AlarmScreensSemanticsTest {
             AlarmEditorViewModel(
                 alarmId = "missing",
                 repository = repository,
+                checkConfigs = FakeCheckConfigRepository(repository),
                 saveAlarm = AlarmUseCasesFixture(repository = repository).save,
                 clock = FakeClock(),
                 timeZoneProvider = FakeTimeZoneProvider(),
@@ -517,6 +521,7 @@ class AlarmScreensSemanticsTest {
                 MissedNotes(FakeSessionHistoryRepository(), FakeMissedNoteDismissals()),
                 FakeReliabilityProbe(),
                 FakeReliabilitySettings(),
+                FakeCheckConfigRepository(),
             )
         withScreen(
             PpsThemeMode.Light,
@@ -584,6 +589,7 @@ class AlarmScreensSemanticsTest {
                 missedNotes,
                 FakeReliabilityProbe(),
                 FakeReliabilitySettings(),
+                FakeCheckConfigRepository(),
             )
         var shown = false
         withScreen(

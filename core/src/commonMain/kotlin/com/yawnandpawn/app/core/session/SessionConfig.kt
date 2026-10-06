@@ -2,6 +2,7 @@ package com.yawnandpawn.app.core.session
 
 import com.yawnandpawn.app.core.alarm.Alarm
 import com.yawnandpawn.app.core.alarm.AlarmDraft
+import com.yawnandpawn.app.core.checks.CheckEntry
 import com.yawnandpawn.app.core.checks.CheckPlan
 import kotlinx.serialization.Serializable
 import kotlin.time.Instant
@@ -59,9 +60,14 @@ data class GlobalSettings(
  * Pending changes inside the commitment lock window arrive in Epic 4.
  */
 object ConfigResolver {
-    /** The config for a session ringing [alarm] at [scheduledAt]; [testMode] for the test alarm. */
+    /**
+     * The config for a session ringing [alarm] at [scheduledAt]; [testMode] for the test alarm. The check plan is the
+     * alarm's [checks] (its `check_config` rows, sorted by position) in its `checkMode` (Story 3.5); an alarm without
+     * checks rings the [defaultPlan].
+     */
     fun resolve(
         alarm: Alarm,
+        checks: List<CheckEntry>,
         globalSettings: GlobalSettings,
         testMode: Boolean,
         scheduledAt: Instant,
@@ -83,8 +89,14 @@ object ConfigResolver {
             rampStartPercent = Alarm.DEFAULT_RAMP_START_PERCENT,
             soundRef = alarm.soundRef,
             vibration = alarm.vibration,
-            checkPlan = CheckPlan.default(),
+            checkPlan = if (checks.isEmpty()) defaultPlan() else CheckPlan(alarm.checkMode, checks),
         )
+
+    /**
+     * The plan of a ring without configured checks, and of every test ring: Random · Math · Medium · 3 (Story 3.2,
+     * [CheckPlan.default]).
+     */
+    fun defaultPlan(): CheckPlan = CheckPlan.default()
 
     /**
      * The config of a test ring (FR-ALM-12, Story 1.18) from the editor's current, possibly unsaved, [draft]: always
@@ -111,7 +123,8 @@ object ConfigResolver {
             rampStartPercent = Alarm.DEFAULT_RAMP_START_PERCENT,
             soundRef = draft.soundRef,
             vibration = draft.vibration,
-            checkPlan = CheckPlan.default(),
+            // The draft's own checks are not rung yet (Story 3.5 deferred item): a test ring uses the default plan.
+            checkPlan = defaultPlan(),
         )
 
     /** The alarm id of a test ring for an alarm that is not stored yet. */

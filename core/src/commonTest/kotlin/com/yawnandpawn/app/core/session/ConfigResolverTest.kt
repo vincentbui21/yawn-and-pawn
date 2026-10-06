@@ -2,7 +2,6 @@ package com.yawnandpawn.app.core.session
 
 import com.yawnandpawn.app.core.alarm.Alarm
 import com.yawnandpawn.app.core.alarm.AlarmDraft
-import com.yawnandpawn.app.core.checks.CheckAnswer
 import com.yawnandpawn.app.core.checks.CheckEntry
 import com.yawnandpawn.app.core.checks.CheckMode
 import com.yawnandpawn.app.core.checks.CheckPlan
@@ -60,7 +59,7 @@ class ConfigResolverTest {
                 vibration = false,
                 checkPlan = CheckPlan(CheckMode.Random, listOf(CheckEntry(CheckType.Math, Difficulty.Medium, count = 3))),
             ),
-            ConfigResolver.resolve(alarm, settings, testMode = false, scheduledAt = SCHEDULED_AT),
+            ConfigResolver.resolve(alarm, emptyList(), settings, testMode = false, scheduledAt = SCHEDULED_AT),
         )
     }
 
@@ -68,14 +67,38 @@ class ConfigResolverTest {
     fun `the ramp start is always the fixed 20 percent, also for an alarm saved with the old clamped value`() {
         listOf(0, 10, 20, 100).forEach { stored ->
             val stale = alarm.copy(rampStartPercent = stored)
-            val resolved = ConfigResolver.resolve(stale, GlobalSettings(), testMode = false, scheduledAt = SCHEDULED_AT)
+            val resolved = ConfigResolver.resolve(stale, emptyList(), GlobalSettings(), testMode = false, scheduledAt = SCHEDULED_AT)
             assertEquals(Alarm.DEFAULT_RAMP_START_PERCENT, resolved.rampStartPercent, "stored $stored")
         }
     }
 
     @Test
+    fun `the plan is the alarm's checks in its mode, in the given order (Story 3-5)`() {
+        val hard = CheckEntry(CheckType.Math, Difficulty.Hard, count = 5)
+        listOf(CheckMode.Random, CheckMode.All).forEach { mode ->
+            val config =
+                ConfigResolver.resolve(
+                    alarm.copy(checkMode = mode),
+                    listOf(hard),
+                    GlobalSettings(),
+                    testMode = false,
+                    scheduledAt = SCHEDULED_AT,
+                )
+
+            assertEquals(CheckPlan(mode, listOf(hard)), config.checkPlan, "mode $mode")
+        }
+    }
+
+    @Test
+    fun `an alarm without checks rings the default plan`() {
+        val config = ConfigResolver.resolve(alarm.copy(checkMode = CheckMode.All), emptyList(), GlobalSettings(), false, SCHEDULED_AT)
+
+        assertEquals(ConfigResolver.defaultPlan(), config.checkPlan)
+    }
+
+    @Test
     fun `test mode is carried into the config`() {
-        val config = ConfigResolver.resolve(alarm, GlobalSettings(), testMode = true, scheduledAt = SCHEDULED_AT)
+        val config = ConfigResolver.resolve(alarm, emptyList(), GlobalSettings(), testMode = true, scheduledAt = SCHEDULED_AT)
         assertEquals(true, config.testMode)
         assertEquals(1, config.baseFeeTier)
         assertEquals(5, config.maxSnoozes)
@@ -94,12 +117,12 @@ class ConfigResolverTest {
         assertEquals(
             true,
             ConfigResolver
-                .resolve(alarm.copy(vibration = true, vibrateInGrace = true), off, testMode = false, scheduledAt = SCHEDULED_AT)
+                .resolve(alarm.copy(vibration = true, vibrateInGrace = true), NO_CHECKS, off, testMode = false, scheduledAt = SCHEDULED_AT)
                 .vibrateInGrace,
         )
         assertEquals(
             false,
-            ConfigResolver.resolve(alarm.copy(vibration = true), on, testMode = false, scheduledAt = SCHEDULED_AT).vibrateInGrace,
+            ConfigResolver.resolve(alarm.copy(vibration = true), NO_CHECKS, on, false, SCHEDULED_AT).vibrateInGrace,
         )
         val draft = AlarmDraft(time = LocalTime(7, 0))
         assertEquals(true, draft.vibrateInGrace)
@@ -111,9 +134,13 @@ class ConfigResolverTest {
     fun `an alarm with vibration off never vibrates during quiet time, whatever its quiet-time switch says (review fix)`() {
         val quiet = alarm.copy(vibration = false, vibrateInGrace = true)
 
-        assertEquals(false, ConfigResolver.resolve(quiet, GlobalSettings(), testMode = false, scheduledAt = SCHEDULED_AT).vibrateInGrace)
+        val config = ConfigResolver.resolve(quiet, NO_CHECKS, GlobalSettings(), testMode = false, scheduledAt = SCHEDULED_AT)
+        assertEquals(false, config.vibrateInGrace)
         val draft = AlarmDraft(time = LocalTime(7, 0), vibration = false, vibrateInGrace = true)
         assertEquals(false, ConfigResolver.resolveTest(draft, GlobalSettings(), SCHEDULED_AT).vibrateInGrace)
         assertEquals(true, ConfigResolver.resolveTest(draft.copy(vibration = true), GlobalSettings(), SCHEDULED_AT).vibrateInGrace)
     }
 }
+
+/** An alarm without check rows (the resolver then uses the default plan). */
+private val NO_CHECKS: List<CheckEntry> = emptyList()

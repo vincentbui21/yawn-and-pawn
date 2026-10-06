@@ -84,6 +84,40 @@ internal class InMemoryAlarms : AlarmRepository {
     }
 }
 
+/**
+ * The alarms' checks next to [alarms]: [saveWithAlarm] stores the alarm through it and then the rows, and no row when the
+ * alarm fails (one transaction). [failure] fails every call.
+ */
+internal class InMemoryCheckConfigs(
+    private val alarms: AlarmRepository,
+) : CheckConfigRepository {
+    val rows = MutableStateFlow<Map<String, List<CheckConfig>>>(emptyMap())
+    var failure: DomainError.StorageFailure? = null
+
+    override fun observeAll(): Flow<Map<String, List<CheckConfig>>> = rows
+
+    override suspend fun forAlarm(alarmId: String): Outcome<List<CheckConfig>, DomainError> {
+        failure?.let { return Outcome.Failure(it) }
+        return Outcome.Success(rows.value[alarmId].orEmpty())
+    }
+
+    override suspend fun saveWithAlarm(
+        alarm: Alarm,
+        configs: List<CheckConfig>,
+    ): Outcome<Unit, DomainError> {
+        failure?.let { return Outcome.Failure(it) }
+        val stored = alarms.upsert(alarm)
+        if (stored is Outcome.Success) rows.value += alarm.id to configs.sortedBy { it.position }
+        return stored
+    }
+
+    override suspend fun deleteForAlarm(alarmId: String): Outcome<Unit, DomainError> {
+        failure?.let { return Outcome.Failure(it) }
+        rows.value -= alarmId
+        return Outcome.Success(Unit)
+    }
+}
+
 /** Hands out mark + 1, like the persisted high-water mark; [failure] fails every call. */
 internal class InMemorySequence(
     var lastUsed: Int = RequestCodes.INITIAL_HIGH_WATER_MARK,

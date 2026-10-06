@@ -91,6 +91,7 @@ class AlarmEditorMenuTest {
         AlarmEditorViewModel(
             alarmId = alarmId,
             repository = repository,
+            checkConfigs = alarms.checkConfigs,
             saveAlarm = alarms.save,
             clock = clock,
             timeZoneProvider = zone,
@@ -188,6 +189,7 @@ class AlarmEditorMenuTest {
         AlarmEditorViewModel(
             alarmId = null,
             repository = repository,
+            checkConfigs = alarms.checkConfigs,
             saveAlarm = alarms.save,
             clock = clock,
             timeZoneProvider = zone,

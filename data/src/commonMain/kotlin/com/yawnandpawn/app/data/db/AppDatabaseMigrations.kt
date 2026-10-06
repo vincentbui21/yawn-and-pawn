@@ -3,7 +3,9 @@ package com.yawnandpawn.app.data.db
 import androidx.room3.migration.Migration
 import androidx.sqlite.SQLiteConnection
 import androidx.sqlite.execSQL
+import com.yawnandpawn.app.core.alarm.CheckConfig
 import com.yawnandpawn.app.core.alarm.RequestCodes
+import com.yawnandpawn.app.core.checks.CheckMode
 
 /**
  * v1 to v2 (Story 1.10): adds `request_code_sequence` and seeds its one row with the highest request code in use, at
@@ -72,5 +74,33 @@ val MIGRATION_4_5: Migration =
         }
     }
 
+/**
+ * v5 to v6 (Story 3.5): adds `alarm.check_mode` (Random for every alarm) and the `check_config` table, and gives every
+ * existing alarm the default checks (Math · Medium · 3, `CheckConfig.DEFAULT_ENTRIES`) at position 0, with the row id
+ * the use cases use (`CheckConfig.idFor`) and the migration time as its timestamps. The SQL matches the exported
+ * `6.json`; Room checks it after migrating.
+ */
+val MIGRATION_5_6: Migration =
+    object : Migration(5, 6) {
+        override suspend fun migrate(connection: SQLiteConnection) {
+            val default = CheckConfig.DEFAULT_ENTRIES.single()
+            connection.execSQL("ALTER TABLE `alarm` ADD COLUMN `check_mode` TEXT NOT NULL DEFAULT '${CheckMode.Random.name}'")
+            connection.execSQL(
+                "CREATE TABLE IF NOT EXISTS `check_config` (`id` TEXT NOT NULL, `alarm_id` TEXT NOT NULL, " +
+                    "`position` INTEGER NOT NULL, `type` TEXT NOT NULL, `difficulty` TEXT NOT NULL, `count` INTEGER NOT NULL, " +
+                    "`created_at` INTEGER NOT NULL, `updated_at` INTEGER NOT NULL, PRIMARY KEY(`id`), " +
+                    "FOREIGN KEY(`alarm_id`) REFERENCES `alarm`(`id`) ON UPDATE NO ACTION ON DELETE CASCADE )",
+            )
+            connection.execSQL("CREATE INDEX IF NOT EXISTS `index_check_config_alarm_id` ON `check_config` (`alarm_id`)")
+            connection.execSQL(
+                "INSERT INTO `check_config` (`id`, `alarm_id`, `position`, `type`, `difficulty`, `count`, `created_at`, " +
+                    "`updated_at`) SELECT `id` || ':${default.type.id}', `id`, 0, '${default.type.id}', '${default.difficulty.name}', " +
+                    "${default.count}, CAST(strftime('%s', 'now') AS INTEGER) * 1000, " +
+                    "CAST(strftime('%s', 'now') AS INTEGER) * 1000 FROM `alarm`",
+            )
+        }
+    }
+
 /** Every migration of `app.db`, oldest first; `buildAppDatabase` registers them all. */
-val APP_DATABASE_MIGRATIONS: Array<Migration> = arrayOf(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5)
+val APP_DATABASE_MIGRATIONS: Array<Migration> =
+    arrayOf(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6)

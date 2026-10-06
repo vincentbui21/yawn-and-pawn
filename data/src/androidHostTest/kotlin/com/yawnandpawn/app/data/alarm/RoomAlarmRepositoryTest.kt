@@ -189,7 +189,11 @@ class RoomAlarmRepositoryTest {
             val alarm = anAlarm()
             repository.upsert(alarm)
             val alarms =
-                AlarmUseCasesFixture(repository = repository, requestCodes = RoomRequestCodeSequence(database.requestCodeSequenceDao()))
+                AlarmUseCasesFixture(
+                    repository = repository,
+                    requestCodes = RoomRequestCodeSequence(database.requestCodeSequenceDao()),
+                    checkConfigs = RoomCheckConfigRepository(database.checkConfigDao()),
+                )
             val save = alarms.save
             val duplicate = alarms.duplicate
             database.close()
@@ -227,6 +231,7 @@ class RoomAlarmRepositoryTest {
                 AlarmUseCasesFixture(
                     repository = repository,
                     requestCodes = RoomRequestCodeSequence(database.requestCodeSequenceDao()),
+                    checkConfigs = RoomCheckConfigRepository(database.checkConfigDao()),
                 ).save
 
             val first = assertIs<Outcome.Success<Alarm>>(save(AlarmDraft(time = LocalTime(7, 0)))).value

@@ -17,10 +17,17 @@ import com.yawnandpawn.app.core.alarm.Alarm
 import com.yawnandpawn.app.core.alarm.AlarmFired
 import com.yawnandpawn.app.core.alarm.AlarmRepository
 import com.yawnandpawn.app.core.alarm.AlarmScheduler
+import com.yawnandpawn.app.core.alarm.CheckConfigRepository
 import com.yawnandpawn.app.core.alarm.RequestCodes
+import com.yawnandpawn.app.core.checks.CheckEntry
+import com.yawnandpawn.app.core.checks.CheckMode
+import com.yawnandpawn.app.core.checks.CheckPlan
+import com.yawnandpawn.app.core.checks.CheckType
+import com.yawnandpawn.app.core.checks.Difficulty
 import com.yawnandpawn.app.core.error.DomainError
 import com.yawnandpawn.app.core.error.Outcome
 import com.yawnandpawn.app.core.session.ActiveSessionStore
+import com.yawnandpawn.app.core.session.ConfigResolver
 import com.yawnandpawn.app.core.session.SessionEvent
 import com.yawnandpawn.app.core.session.SessionJson
 import com.yawnandpawn.app.core.session.SessionState
@@ -30,6 +37,7 @@ import com.yawnandpawn.app.testing.FakeActiveSessionStore
 import com.yawnandpawn.app.testing.FakeAlarmRepository
 import com.yawnandpawn.app.testing.aSession
 import com.yawnandpawn.app.testing.anAlarm
+import com.yawnandpawn.app.testing.checkConfigsOf
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.runBlocking
@@ -508,6 +516,31 @@ class WakeServiceTest {
         app.awaitRinging()
 
         assertTrue((app.engine.state.value as SessionState.Ringing).session.beforeFirstUnlock)
+    }
+
+    @Test
+    fun `a ring freezes the alarm's checks in its mode, in position order (Story 3-5)`() {
+        val app = WakeApp()
+        val math = CheckEntry(CheckType.Math, Difficulty.Hard, count = 4)
+        val alarm = alarmA.copy(checkMode = CheckMode.All)
+        val checks = app.koin.get<CheckConfigRepository>()
+        assertEquals(Outcome.Success(Unit), runBlocking { checks.saveWithAlarm(alarm, checkConfigsOf(alarm.id, listOf(math))) })
+
+        app.ring(fired)
+        app.awaitRinging()
+
+        assertEquals(CheckPlan(CheckMode.All, listOf(math)), (app.engine.state.value as SessionState.Ringing).session.config.checkPlan)
+    }
+
+    @Test
+    fun `an alarm without checks rings the default plan`() {
+        val app = WakeApp()
+        upsert(alarmA)
+
+        app.ring(fired)
+        app.awaitRinging()
+
+        assertEquals(ConfigResolver.defaultPlan(), (app.engine.state.value as SessionState.Ringing).session.config.checkPlan)
     }
 
     private fun slot(app: WakeApp): ShadowAlarmManager.ScheduledAlarm? =

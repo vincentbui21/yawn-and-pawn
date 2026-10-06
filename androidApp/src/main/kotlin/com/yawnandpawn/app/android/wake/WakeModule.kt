@@ -70,5 +70,5 @@ fun wakeModule(): Module =
             )
         }
         // The first unlock after a boot (Story 2.4): UserUnlocked, billing and crash reporting.
-        single { UnlockSignals(get(), get(), get(), get()) }
+        single { UnlockSignals(get(), get(), get(), get(), get()) }
     }

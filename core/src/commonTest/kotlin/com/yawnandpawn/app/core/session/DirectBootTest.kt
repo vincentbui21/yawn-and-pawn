@@ -220,12 +220,51 @@ class DirectBootTest {
     fun `the fallback plan gets the substitutions before the first unlock`() {
         val grace = checkStates(ringSession()).first()
 
-        val locked = marking.reduce(grace.with(grace.session.copy(beforeFirstUnlock = true)), SessionEvent.FallbackRequested, T0).state
+        val locked =
+            marking
+                .reduce(
+                    grace.with(grace.session.copy(beforeFirstUnlock = true, directBootRing = true)),
+                    SessionEvent.FallbackRequested,
+                    T0,
+                ).state
         val unlocked = marking.reduce(grace, SessionEvent.FallbackRequested, T0).state
 
         assertEquals(LOCKED, locked.plan())
         assertEquals(FALLBACK_PLAN, unlocked.plan())
     }
+
+    @Test
+    fun `the fallback follows the ring's Direct Boot flag, also after an unlock earlier in the ring (Story 2_4 review)`() {
+        val grace = checkStates(ringSession()).first()
+        // The ring started locked and saw the unlock: its sound stays the default one, so its check stays locked too.
+        val unlockedInRing = grace.with(grace.session.copy(beforeFirstUnlock = false, directBootRing = true))
+
+        assertEquals(LOCKED, marking.reduce(unlockedInRing, SessionEvent.FallbackRequested, T0).state.plan())
+    }
+
+    @Test
+    fun `the ring after a snooze while still locked keeps the Direct Boot sound and check (Story 2_4 review)`() =
+        runTest {
+            val config = testConfig().copy(soundRef = systemSound)
+            val snoozed =
+                snoozedSession().copy(
+                    config = config,
+                    beforeFirstUnlock = true,
+                    directBootRing = true,
+                    startedBeforeUnlock = true,
+                )
+            store.commit(SessionState.Snoozed(snoozed))
+            val engine = engine()
+            engine.restore()
+            time.advanceBy(9.minutes)
+
+            val next = engine.dispatch(SessionEvent.SlotFired).session()
+
+            assertEquals(2, next.ringIndex)
+            assertTrue(next.beforeFirstUnlock)
+            assertTrue(next.directBootRing)
+            assertEquals(EntryEffect.SoundAt(Alarm.DEFAULT_SOUND_REF, 80), runner.entry.last { it is EntryEffect.SoundAt })
+        }
 
     @Test
     fun `snooze availability - test mode first, then before the first unlock while locked, then prices not loaded`() {
@@ -306,7 +345,9 @@ class DirectBootTest {
             val next = engine.dispatch(SessionEvent.SlotFired).session()
 
             assertEquals(2, next.ringIndex)
+            assertFalse(next.beforeFirstUnlock, "the live lock state, so the unlock is not waited for again")
             assertFalse(next.directBootRing)
+            assertEquals(config.checkPlan, next.checkRun.plan, "the chosen check is back with the chosen sound")
             assertEquals(EntryEffect.SoundAt(systemSound, 80), runner.entry.last { it is EntryEffect.SoundAt })
         }
 

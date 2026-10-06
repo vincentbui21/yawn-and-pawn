@@ -118,6 +118,24 @@ There is also a 2.3 behaviour to fix. The ring's Direct Boot sound follows the s
 
 ## Review Triage Log
 
+### Review (2 reviewers, fast mode)
+
+Rebased onto the Lane 2 stack (2.6, 2.8, 2.11 on main with 2.1, 2.2, 2.3, 2.5, 2.9, 2.12). The cherry-pick kept 2.3's review fix: `SessionData.newRing` (not `lockedIf`) now sets `directBootRing` with `beforeFirstUnlock` from the live lock state. It also kept 2.8's volume-key gate in `WakeActivity.onResume` and 2.6's session lock in `WakeService`.
+
+All 12 findings patched in `fix(2.4): review fixes`, with tests:
+1. **The next ring kept waiting for an unlock that already happened during Snoozed, Grace or Loud.** Since 2.3, `newRing` sets `beforeFirstUnlock` from the live lock state. `WakeService` now arms a fresh watch for any new ring still before the first unlock. Tests: `DirectBootTest` (after the unlock the next ring has `beforeFirstUnlock` false, the chosen sound and the chosen check), `UnlockDuringRingTest` (an unlock seen in Snoozed is not watched again for that ring; the next ring still before the unlock gets a fresh watch).
+2. **`watchUnlock` re-armed only when null, and its failure reached `onCrash`.** It now re-arms when the watch is not active, except for the ring whose watch already saw the unlock. A cancelled or failed watch is re-armed. The body catches and logs any exception and rethrows only cancellation. Covered by the tests of 1 and 11.
+3. **Billing and Firebase starts.** `initialiseAfterUnlock` (`@Synchronized`) wraps each start, logs a throw as `OperationFailed`, and marks a start done only after it succeeds, so the next signal retries it. `FirebaseStartup.start()` is now idempotent: it starts nothing twice, registers no second receiver while one waits, and logs a missing configuration once. `UnlockSignals` also skips it once started. Tests: `UnlockDuringRingTest` (throwing starts are logged and tried again), `CrashReportingTest` (idempotent start).
+4. **BOOT_COMPLETED.** The unlock signal runs before the re-arm, inside a try/catch that logs, so it never waits for the re-arm and a throw never skips it. Test: `UnlockDuringRingTest` (throwing billing start: the alarm is still re-armed and the unlock applied).
+5. **A failed `UserUnlocked` commit was lost.** It is retried up to `UnlockSignals.MAX_ATTEMPTS` (5), `RETRY` (1 s) apart, while the ring still waits for the unlock. After that a failure is logged. Tests: applied on the third attempt; gives up after 5 attempts and logs it.
+6. **Concurrent signals.** An `AtomicBoolean` lets one dispatch (with its retries) run at a time; other signals meanwhile only initialise. Test: two signals during a held commit send no second `UserUnlocked`.
+7. **`WakeActivity.onResume` dispatched in every state.** It now calls `onScreenResumedUnlocked()`, which dispatches only to `Ringing` before the unlock (it still initialises billing and Firebase). Test: resumed unlocked during a snooze, billing starts and nothing is ignored.
+8. **`remember(session, unlocked)` would go stale with Epic 4's inputs.** The availability is no longer remembered. It is computed in `key(unlocked)`, so an unlock still recomposes it.
+9. **`directBootRing` KDoc vs behaviour.** There is now one per-ring flag for both the sound and the check: `newRing` sets it from the live lock state, and the fallback plan follows it (`CheckRules`). A session stored before 2.4 takes it from `beforeFirstUnlock`, as the default. Tests: `DirectBootTest` (the fallback stays locked after an unlock in the ring), `SessionJsonTest` (a v1 row gets the flag).
+10. **The ring after a snooze while still locked.** Test: `DirectBootTest` (`directBootRing` and `beforeFirstUnlock` true, `SoundAt(DEFAULT_SOUND_REF, 80)` with a system sound).
+11. **A locked ring that ends without an unlock.** Test: the `ACTION_USER_UNLOCKED` receiver count goes to 0, and a second locked ring in the same service registers a fresh receiver that applies the unlock.
+12. **Tests for 2 to 7:** listed above.
+
 ## Auto Run Result
 
 Status: done (fast mode: one agent planned and implemented, no separate review pass). Stacked on Story 2.9 (36a60b2).

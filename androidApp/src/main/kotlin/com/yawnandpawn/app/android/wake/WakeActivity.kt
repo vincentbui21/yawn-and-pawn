@@ -15,6 +15,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
@@ -98,7 +99,7 @@ class WakeActivity : ComponentActivity() {
     override fun onResume() {
         super.onResume()
         volumeKeys.resumed = true
-        if (userLock.isUserUnlocked()) unlockSignals.onUnlocked()
+        if (userLock.isUserUnlocked()) unlockSignals.onScreenResumedUnlocked()
     }
 
     override fun onPause() {
@@ -143,6 +144,8 @@ class WakeActivity : ComponentActivity() {
             val state by engine.state.collectAsState()
             val emergency by runtime.emergency.collectAsState()
             // Story 2.4: the lock state is part of the snooze availability, so an unlock re-renders the control in place.
+            // The availability below is never remembered (the policy reads live inputs: the lock state now, the
+            // catalogue and connectivity in Epic 4); keyed on this observed state, an unlock recomposes it.
             val unlocked by remember { userLock.observe() }.collectAsState(initial = userLock.isUserUnlocked())
             // The full-screen intent can open the screen just before the session starts (the service posts the ringing
             // notification first): it waits for a session or an emergency ring, and closes only once that is over.
@@ -160,7 +163,7 @@ class WakeActivity : ComponentActivity() {
             val session = (state as? SessionState.Active)?.session
             val current =
                 emergency?.let { alarmOnlyRingingUiState(it.alarmAt, zone) }
-                    ?: session?.let { ringingUiState(it, remember(it, unlocked) { snoozePolicy.availability(it) }, zone) }
+                    ?: session?.let { ringingUiState(it, key(unlocked) { snoozePolicy.availability(it) }, zone) }
                     ?: runtime.shownAlarmAt()?.let { alarmOnlyRingingUiState(it, zone) }
             // Once a session ends the screen keeps its last look until it closes, instead of flashing an empty surface.
             val last = remember { LastShown() }

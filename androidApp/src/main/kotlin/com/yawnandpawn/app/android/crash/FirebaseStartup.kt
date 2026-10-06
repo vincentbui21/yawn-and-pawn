@@ -22,7 +22,8 @@ fun isFirebaseConfigured(context: Context): Boolean = FirebaseOptions.fromResour
  * closed, and the Direct Boot ring must not depend on it. Without a configuration ([configured] false) nothing starts.
  *
  * [start] runs from `Application.onCreate`: unlocked, it starts at once; locked, a receiver registered at runtime
- * waits for `ACTION_USER_UNLOCKED`.
+ * waits for `ACTION_USER_UNLOCKED`. The unlock signals (Story 2.4) call it again, so it is idempotent: it starts
+ * nothing twice, registers no second receiver while one waits and logs a missing configuration only once.
  */
 class FirebaseStartup(
     private val context: Context,
@@ -38,15 +39,28 @@ class FirebaseStartup(
     var started = false
         private set
 
+    private val reportedUnconfigured = AtomicBoolean(false)
+
+    /** A receiver already waits for the unlock. */
+    private val waiting = AtomicBoolean(false)
+
     fun start() {
-        if (!configured()) {
+        when {
+            started -> Unit
+            !configured() -> reportUnconfigured()
+            unlocked() -> startNow()
+            !waiting.getAndSet(true) -> startAtUnlock()
+        }
+    }
+
+    private fun reportUnconfigured() {
+        if (!reportedUnconfigured.getAndSet(true)) {
             logger.log(LogEvent.OperationFailed("start crash reporting", "no Firebase configuration; crashes are only logged"))
-            return
         }
-        if (unlocked()) {
-            startNow()
-            return
-        }
+    }
+
+    /** Locked: a receiver registered at runtime starts Firebase at `ACTION_USER_UNLOCKED`. */
+    private fun startAtUnlock() {
         val registered = AtomicBoolean(true)
         val receiver =
             object : BroadcastReceiver() {

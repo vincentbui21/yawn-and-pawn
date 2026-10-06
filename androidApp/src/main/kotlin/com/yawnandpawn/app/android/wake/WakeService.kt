@@ -46,6 +46,7 @@ import com.yawnandpawn.app.core.time.BootCounter
 import com.yawnandpawn.app.core.time.Clock
 import com.yawnandpawn.app.core.time.MonotonicClock
 import com.yawnandpawn.app.core.time.TimeSnapshot
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineExceptionHandler
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -131,6 +132,9 @@ class WakeService :
 
     /** The unlock watch of a session before the first unlock (Story 2.4); null or done otherwise. */
     private var unlockWatch: Job? = null
+
+    /** The ring whose unlock watch saw the unlock; that ring is not watched again. */
+    private var unlockSeenFor: UnlockRing? = null
     private var stopping = false
 
     /** The latest start, so a stop never ends a start that arrived after it (`stopSelfResult`). */
@@ -533,25 +537,48 @@ class WakeService :
      * While a session before the first unlock runs (Story 2.4), listen for the unlock: [UserLockState.observe] registers a
      * context receiver for `ACTION_USER_UNLOCKED` while collected (a manifest receiver never gets it) and unregisters it
      * when this watch is cancelled, at the session's end or when the service stops. The unlock goes to [UnlockSignals].
+     *
+     * A watch that saw the unlock is done for its ring: Snoozed, Grace and Loud ignore `UserUnlocked` (AD-2), so it is
+     * not armed again while that ring lasts. A ring still before the first unlock after it (a new session, or a ring that
+     * somehow kept the flag) gets a fresh watch, and so does a ring whose watch was cancelled or failed. A failure of
+     * the watch is logged and never reaches [onCrash].
      */
+    @Suppress("TooGenericExceptionCaught")
     private fun watchUnlock(state: SessionState) {
-        val locked = state is SessionState.Active && state.session.beforeFirstUnlock && state.isOngoing()
+        val session = (state as? SessionState.Active)?.session
+        val ring = session?.takeIf { it.beforeFirstUnlock && state.isOngoing() }?.let { UnlockRing(it.sessionId, it.ringIndex) }
         when {
-            !locked -> {
+            ring == null -> {
                 unlockWatch?.cancel()
                 unlockWatch = null
             }
 
-            // One unlock per boot: once seen, the signal is not sent again (Grace and Loud ignore it, AD-2).
-            unlockWatch == null -> {
+            unlockWatch?.isActive == true || unlockSeenFor == ring -> {
+                Unit
+            }
+
+            else -> {
                 unlockWatch =
                     scope.launch {
-                        userLock.observe().first { it }
-                        unlockSignals.onUnlocked()
+                        try {
+                            userLock.observe().first { it }
+                            unlockSeenFor = ring
+                            unlockSignals.onUnlocked()
+                        } catch (e: CancellationException) {
+                            throw e
+                        } catch (e: Exception) {
+                            logger.log(LogEvent.OperationFailed("watch the unlock", e::class.simpleName.orEmpty()))
+                        }
                     }
             }
         }
     }
+
+    /** The ring an unlock watch is for. */
+    private data class UnlockRing(
+        val sessionId: String,
+        val ringIndex: Int,
+    )
 
     private fun startTicking() {
         if (ticking?.isActive == true) return

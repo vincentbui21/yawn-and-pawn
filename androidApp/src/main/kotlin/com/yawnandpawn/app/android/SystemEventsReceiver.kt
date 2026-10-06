@@ -5,6 +5,8 @@ import android.content.Context
 import android.content.Intent
 import com.yawnandpawn.app.android.wake.UnlockSignals
 import com.yawnandpawn.app.core.alarm.AlarmScheduling
+import com.yawnandpawn.app.core.log.LogEvent
+import com.yawnandpawn.app.core.log.Logger
 import com.yawnandpawn.app.core.session.SessionSlotRearm
 import com.yawnandpawn.app.core.session.UserLockState
 import org.koin.core.component.KoinComponent
@@ -36,13 +38,25 @@ class SystemEventsReceiver :
         if (intent.action == Intent.ACTION_MY_PACKAGE_REPLACED) AndroidAlarmScheduler.cancelLegacySessionSlot(context)
         val scheduling = get<AlarmScheduling>()
         val rearm = get<SessionSlotRearm>()
-        // BOOT_COMPLETED arrives only after the first unlock (Story 2.4): a ring running before it gets the unlock.
-        if (intent.action == Intent.ACTION_BOOT_COMPLETED && get<UserLockState>().isUserUnlocked()) get<UnlockSignals>().onUnlocked()
+        if (intent.action == Intent.ACTION_BOOT_COMPLETED) unlockSignal()
         runWithinBudget(get(), get(), "reschedule alarms") {
             // The alarms first (review): a slow store open at boot that overruns the budget in the slot re-arm must not
             // leave every alarm unarmed. Then the session slot.
             scheduling.rescheduleAll()
             rearm.afterSystemEvent()
+        }
+    }
+
+    /**
+     * `BOOT_COMPLETED` arrives only after the first unlock (Story 2.4): a ring running before it gets the unlock. Sent
+     * before the re-arm so the unlock never waits for it; whatever it throws is logged and the re-arm still runs.
+     */
+    @Suppress("TooGenericExceptionCaught")
+    private fun unlockSignal() {
+        try {
+            if (get<UserLockState>().isUserUnlocked()) get<UnlockSignals>().onUnlocked()
+        } catch (e: Exception) {
+            get<Logger>().log(LogEvent.OperationFailed("apply the unlock", e::class.simpleName.orEmpty()))
         }
     }
 

@@ -1,11 +1,13 @@
 package com.yawnandpawn.app
 
 import android.app.Application
+import com.yawnandpawn.app.android.AndroidAccessibilityState
 import com.yawnandpawn.app.android.AndroidAlarmScheduler
 import com.yawnandpawn.app.android.AndroidLogger
 import com.yawnandpawn.app.android.AndroidUserLockState
 import com.yawnandpawn.app.android.ApplicationScope
 import com.yawnandpawn.app.android.UnavailableBilling
+import com.yawnandpawn.app.android.WordListLoader
 import com.yawnandpawn.app.android.androidTimeModule
 import com.yawnandpawn.app.android.crash.FirebaseStartup
 import com.yawnandpawn.app.android.reliability.reliabilityModule
@@ -22,6 +24,8 @@ import com.yawnandpawn.app.core.alarm.DeleteAlarm
 import com.yawnandpawn.app.core.alarm.RearmOnFire
 import com.yawnandpawn.app.core.alarm.SaveAlarm
 import com.yawnandpawn.app.core.alarm.SetAlarmEnabled
+import com.yawnandpawn.app.core.checks.AccessibilityState
+import com.yawnandpawn.app.core.checks.word.WordBank
 import com.yawnandpawn.app.core.error.valueOrNull
 import com.yawnandpawn.app.core.history.MissedNotes
 import com.yawnandpawn.app.core.id.IdGenerator
@@ -77,9 +81,9 @@ val appModule =
         }
         // The session slot armed from runtime.db without the engine (Story 2.1): after system events and refused starts.
         single { SessionSlotRearm(get(), get(), get(), get(), get(), get()) }
-        factory { SaveAlarm(get(), get(), get(), get(), get(), get(), get()) }
+        factory { SaveAlarm(get(), get(), get(), get(), get(), get(), get(), get()) }
         factory { SetAlarmEnabled(get(), get(), get(), get(), get()) }
-        factory { DeleteAlarm(get(), get(), get(), get()) }
+        factory { DeleteAlarm(get(), get(), get(), get(), get()) }
         // "Test alarm" (Story 1.18): the editor's values ring as a test 10 s later, through the test request code.
         factory { ScheduleTestAlarm(get(), get(), get(), get()) }
         // The wake session (Story 1.12): the Epic 1 policies, the one engine over runtime.db (ActiveSessionStore from
@@ -87,6 +91,8 @@ val appModule =
         // unavailable until Epic 4.
         // Before the first unlock (Story 2.3): the engine marks the ring, and snooze says "Unlock your phone to snooze".
         single<UserLockState> { AndroidUserLockState(androidContext(), get()) }
+        // TalkBack (Story 3.8): the numbered Memory Sequence when a ring's plan is frozen, and the editor's notes.
+        single<AccessibilityState> { AndroidAccessibilityState(androidContext()) }
         single<SnoozeAvailabilityPolicy> { NoBillingSnoozeAvailability(get()) }
         single<CheckValidator> { PluginCheckValidator }
         single<FallbackPolicy> { NoFallbackPolicy }
@@ -127,6 +133,8 @@ open class YawnAndPawnApp : Application() {
 
     override fun onCreate() {
         super.onCreate()
+        // The Word Unscramble list (Story 3.7), before any ring, restore or preview can make a Word puzzle.
+        WordBank.install(WordListLoader.load(this, AndroidLogger()))
         val koin =
             startKoin {
                 androidContext(this@YawnAndPawnApp)

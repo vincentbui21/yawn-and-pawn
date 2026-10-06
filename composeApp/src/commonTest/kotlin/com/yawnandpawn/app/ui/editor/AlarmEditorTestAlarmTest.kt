@@ -77,6 +77,7 @@ class AlarmEditorTestAlarmTest {
         AlarmEditorViewModel(
             alarmId = alarmId,
             repository = repository,
+            checkConfigs = alarms.checkConfigs,
             saveAlarm = alarms.save,
             clock = clock,
             timeZoneProvider = FakeTimeZoneProvider(TimeZone.UTC),
@@ -171,6 +172,7 @@ class AlarmEditorTestAlarmTest {
                 AlarmEditorViewModel(
                     alarmId = null,
                     repository = repository,
+                    checkConfigs = alarms.checkConfigs,
                     saveAlarm = alarms.save,
                     clock = clock,
                     timeZoneProvider = FakeTimeZoneProvider(TimeZone.UTC),

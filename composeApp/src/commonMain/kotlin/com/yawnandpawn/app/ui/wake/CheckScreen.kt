@@ -3,6 +3,7 @@
 package com.yawnandpawn.app.ui.wake
 
 import androidx.compose.animation.core.Animatable
+import androidx.compose.animation.core.AnimationVector1D
 import androidx.compose.animation.core.KeyframesSpec
 import androidx.compose.animation.core.keyframes
 import androidx.compose.foundation.background
@@ -122,6 +123,8 @@ fun CheckScreen(
         // Math keeps its number pad out of the scrolling area (Story 3.2): at 200% font on a small phone only the problem
         // scrolls, and "Check" stays on screen above the snooze control. Where everything fits, it looks the same.
         val math = state.content as? CheckContent.Math
+        // Word Unscramble keeps "Shuffle" and "Clear" out of the scrolling area the same way (Story 3.7).
+        val word = state.content as? CheckContent.WordUnscramble
         BoxWithConstraints(modifier = Modifier.fillMaxSize().wakeContentPadding()) {
             // In a short window (landscape, split screen) the pad and the footer alone would not fit: the pad scrolls with
             // the problem instead, so "Check" can always be reached, and snooze stays pinned (Story 3.2 review).
@@ -143,13 +146,22 @@ fun CheckScreen(
                 Column(modifier = Modifier.fillMaxSize()) {
                     Column(modifier = Modifier.fillMaxWidth().weight(1f), horizontalAlignment = Alignment.CenterHorizontally) {
                         Column(
-                            modifier = Modifier.fillMaxWidth().weight(1f, fill = math == null).verticalScroll(rememberScrollState()),
+                            modifier =
+                                Modifier
+                                    .fillMaxWidth()
+                                    .weight(1f, fill = math == null && word == null)
+                                    .verticalScroll(rememberScrollState()),
                             verticalArrangement = Arrangement.spacedBy(spacing.space4),
                         ) {
                             CheckHeader(state)
-                            if (math != null) MathProblem(math) else CheckContentView(content = state.content, onIntent = onIntent)
+                            when {
+                                math != null -> MathProblem(math)
+                                word != null -> WordCheck(word, onIntent, withActions = false)
+                                else -> CheckContentView(content = state.content, onIntent = onIntent)
+                            }
                         }
                         if (math != null) NumberPad(onIntent = onIntent, modifier = Modifier.padding(top = spacing.space3))
+                        if (word != null) WordActions(onIntent = onIntent, modifier = Modifier.fillMaxWidth().padding(top = spacing.space4))
                     }
                     CheckFooter(state, onIntent)
                 }
@@ -256,21 +268,18 @@ private fun MathProblem(content: CheckContent.Math) {
         val spoken = joinedProblem(content.operands, words)
         Text(
             text = joinedProblem(content.operands, content.operators.map { it.symbol }),
-            modifier = Modifier.clearAndSetSemantics { contentDescription = spoken }.semantics { heading() },
+            // One semantics block: a `semantics { heading() }` after `clearAndSetSemantics` is cleared too (Story 3.6 finding).
+            modifier =
+                Modifier.clearAndSetSemantics {
+                    contentDescription = spoken
+                    heading()
+                },
             style = PpsTheme.typography.display,
             color = colors.text,
             textAlign = TextAlign.Center,
         )
         val answerSpoken = stringResource(Res.string.math_answer, content.answer)
-        val shake = remember { Animatable(0f) }
-        val haptics = LocalHapticFeedback.current
-        val shakeDistance = with(LocalDensity.current) { spacing.space2.toPx() }
-        LaunchedEffect(content.wrong) {
-            if (content.wrong) {
-                haptics.performHapticFeedback(HapticFeedbackType.Reject)
-                shake.animateTo(0f, keyframes { shakeKeyframes(shakeDistance) })
-            }
-        }
+        val shake = rememberWrongShake(content.wrong)
         Box(
             modifier =
                 Modifier
@@ -289,6 +298,27 @@ private fun MathProblem(content: CheckContent.Math) {
         }
         if (content.wrong) WrongAnswer()
     }
+}
+
+/**
+ * The horizontal offset of a wrong answer's 200 ms shake (instant with animator duration scale 0), with the error haptic,
+ * each time [wrong] turns true. When [wrong] clears during the shake (a key tapped right after a wrong answer), the
+ * field snaps back to rest instead of staying offset (Story 3.6 review).
+ */
+@Composable
+internal fun rememberWrongShake(wrong: Boolean): Animatable<Float, AnimationVector1D> {
+    val shake = remember { Animatable(0f) }
+    val haptics = LocalHapticFeedback.current
+    val distance = with(LocalDensity.current) { PpsTheme.spacing.space2.toPx() }
+    LaunchedEffect(wrong) {
+        if (wrong) {
+            haptics.performHapticFeedback(HapticFeedbackType.Reject)
+            shake.animateTo(0f, keyframes { shakeKeyframes(distance) })
+        } else {
+            shake.snapTo(0f)
+        }
+    }
+    return shake
 }
 
 /** The 200 ms shake of a wrong answer: left, right, left, right, back to rest. */
@@ -402,12 +432,31 @@ private fun PadKey(
 private fun WordCheck(
     content: CheckContent.WordUnscramble,
     onIntent: (WakeIntent) -> Unit,
+    withActions: Boolean = true,
 ) {
-    val colors = PpsTheme.colors
     val spacing = PpsTheme.spacing
+    val haptics = LocalHapticFeedback.current
+    // Story 3.7: a wrong word shakes the slots with the error haptic, as the other checks do.
+    val shake = rememberWrongShake(content.wrong)
+    // Each tile tap: a light haptic before the intent.
+    val tap: (WakeIntent) -> Unit = { intent ->
+        if (intent is WakeIntent.LetterTapped ||
+            intent is WakeIntent.SlotTapped
+        ) {
+            haptics.performHapticFeedback(HapticFeedbackType.KeyboardTap)
+        }
+        onIntent(intent)
+    }
     Column(verticalArrangement = Arrangement.spacedBy(spacing.space4)) {
-        ProgressLine(stringResource(Res.string.word_progress, content.wordNumber, content.wordCount))
-        FlowRow(horizontalArrangement = Arrangement.spacedBy(spacing.space2), verticalArrangement = Arrangement.spacedBy(spacing.space2)) {
+        Box {
+            ProgressLine(stringResource(Res.string.word_progress, content.wordNumber, content.wordCount))
+            AnswerSoFar(content.slots)
+        }
+        FlowRow(
+            modifier = Modifier.graphicsLayer { translationX = shake.value },
+            horizontalArrangement = Arrangement.spacedBy(spacing.space2),
+            verticalArrangement = Arrangement.spacedBy(spacing.space2),
+        ) {
             content.slots.forEachIndexed { index, letter ->
                 val spoken =
                     if (letter == null) {
@@ -415,7 +464,7 @@ private fun WordCheck(
                     } else {
                         stringResource(Res.string.word_slot_filled, index + 1, letter.toString())
                     }
-                LetterTile(letter = letter, spoken = spoken, dashed = letter == null, onClick = { onIntent(WakeIntent.SlotTapped(index)) })
+                LetterTile(letter = letter, spoken = spoken, dashed = letter == null, onClick = { tap(WakeIntent.SlotTapped(index)) })
             }
         }
         if (content.wrong) WrongAnswer()
@@ -426,17 +475,41 @@ private fun WordCheck(
                         letter = letter,
                         spoken = stringResource(Res.string.word_letter, letter.toString()),
                         dashed = false,
-                        onClick = { onIntent(WakeIntent.LetterTapped(index)) },
+                        onClick = { tap(WakeIntent.LetterTapped(index)) },
                     )
                 }
             }
         }
-        Row(horizontalArrangement = Arrangement.spacedBy(spacing.space2)) {
-            PpsTextButton(text = stringResource(Res.string.word_shuffle), onClick = { onIntent(WakeIntent.ShuffleLetters) })
-            PpsTextButton(text = stringResource(Res.string.word_clear), onClick = {
-                onIntent(WakeIntent.ClearLetters)
-            }, contentColor = colors.accentText)
-        }
+        if (withActions) WordActions(onIntent = onIntent)
+    }
+}
+
+/** The answer so far for TalkBack, announced after each move: no visual, and no extra gap where it sits (Story 3.7). */
+@Composable
+private fun AnswerSoFar(slots: List<Char?>) {
+    slots.filterNotNull().takeIf { it.isNotEmpty() }?.let { placed ->
+        Box(
+            Modifier.clearAndSetSemantics {
+                contentDescription = placed.joinToString(" ")
+                liveRegion = LiveRegionMode.Polite
+            },
+        )
+    }
+}
+
+/** "Shuffle" and "Clear", start-aligned. On the Check screen they are pinned under the scrolling area (Story 3.7). */
+@Composable
+private fun WordActions(
+    onIntent: (WakeIntent) -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    Row(modifier = modifier, horizontalArrangement = Arrangement.spacedBy(PpsTheme.spacing.space2)) {
+        PpsTextButton(text = stringResource(Res.string.word_shuffle), onClick = { onIntent(WakeIntent.ShuffleLetters) })
+        PpsTextButton(
+            text = stringResource(Res.string.word_clear),
+            onClick = { onIntent(WakeIntent.ClearLetters) },
+            contentColor = PpsTheme.colors.accentText,
+        )
     }
 }
 
@@ -480,7 +553,10 @@ private fun LetterTile(
 
 /**
  * Memory Sequence: "Watch the sequence" (input disabled, the lit tile in accent) or "Your turn", "Round {n} of {count}",
- * and the 3x3 `memory-tile` grid (64 dp, "Tile {number}"; numbers shown on every tile in the TalkBack variant).
+ * and the `memory-tile` grid ("Tile {number}"; numbers shown on every tile in the TalkBack variant): 3x3 with 84 dp
+ * tiles, or 4x4 on Hard with 64 dp tiles so it fits a 360 dp phone (Story 3.8). The TalkBack variant announces the
+ * round's tiles as numbers ("3, 7, 1, 9") while it watches. A tap gives a light haptic; a wrong tap shakes the grid for
+ * 200 ms with an error haptic and shows "Not quite. Try again." while the new sequence plays.
  */
 @Composable
 private fun MemoryCheck(
@@ -490,50 +566,80 @@ private fun MemoryCheck(
     val colors = PpsTheme.colors
     val spacing = PpsTheme.spacing
     val watching = content.phase == MemoryPhase.Watch
+    val shake = rememberWrongShake(content.wrong)
     Column(verticalArrangement = Arrangement.spacedBy(spacing.space3), horizontalAlignment = Alignment.CenterHorizontally) {
         Row(
             modifier = Modifier.fillMaxWidth(),
         ) { ProgressLine(stringResource(Res.string.memory_progress, content.round, content.roundCount)) }
-        Text(
-            text = stringResource(if (watching) Res.string.memory_watch else Res.string.memory_your_turn),
-            modifier = Modifier.semantics { liveRegion = LiveRegionMode.Polite },
-            style = PpsTheme.typography.headline,
-            color = colors.text,
-        )
+        Box {
+            Text(
+                text = stringResource(if (watching) Res.string.memory_watch else Res.string.memory_your_turn),
+                modifier = Modifier.semantics { liveRegion = LiveRegionMode.Polite },
+                style = PpsTheme.typography.headline,
+                color = colors.text,
+            )
+            // The sequence as numbers for TalkBack, announced once per round before the input: no visual, no extra gap
+            // in the column, and the size of the phase line, since a 0x0 node never reaches TalkBack (Story 3.8 review).
+            content.announced?.takeIf { watching && content.numbered }?.let { tiles ->
+                Box(
+                    Modifier.matchParentSize().clearAndSetSemantics {
+                        contentDescription = tiles.joinToString(", ")
+                        liveRegion = LiveRegionMode.Polite
+                    },
+                )
+            }
+        }
         if (content.wrong) WrongAnswer()
-        Column(verticalArrangement = Arrangement.spacedBy(spacing.space2)) {
-            for (row in 0 until GRID) {
+        Column(
+            modifier = Modifier.graphicsLayer { translationX = shake.value },
+            verticalArrangement = Arrangement.spacedBy(spacing.space2),
+        ) {
+            val grid = content.gridSize
+            for (row in 0 until grid) {
                 Row(horizontalArrangement = Arrangement.spacedBy(spacing.space2)) {
-                    for (column in 1..GRID) {
-                        val tile = row * GRID + column
-                        val lit = tile == content.litTile
-                        val spoken = stringResource(Res.string.memory_tile, tile)
-                        Box(
-                            modifier =
-                                Modifier
-                                    .size(spacing.targetWake + spacing.space5)
-                                    .clip(PpsTheme.shapes.md)
-                                    .background(if (lit) colors.accent else colors.surface)
-                                    .border(1.dp, colors.outline, PpsTheme.shapes.md)
-                                    .clickable(enabled = !watching, role = Role.Button) { onIntent(WakeIntent.TileTapped(tile)) }
-                                    .semantics {
-                                        contentDescription = spoken
-                                        if (watching) disabled()
-                                    },
-                            contentAlignment = Alignment.Center,
-                        ) {
-                            if (content.numbered || lit) {
-                                Text(
-                                    text = tile.toString(),
-                                    modifier = Modifier.clearAndSetSemantics { },
-                                    style = PpsTheme.typography.title,
-                                    color = if (lit) colors.onAccent else colors.text,
-                                )
-                            }
-                        }
-                    }
+                    for (column in 1..grid) MemoryTile(content, tile = row * grid + column, onIntent = onIntent)
                 }
             }
+        }
+    }
+}
+
+/** One `memory-tile`: lit in accent with its number, numbered in the TalkBack variant, disabled while the sequence plays. */
+@Composable
+private fun MemoryTile(
+    content: CheckContent.MemorySequence,
+    tile: Int,
+    onIntent: (WakeIntent) -> Unit,
+) {
+    val colors = PpsTheme.colors
+    val spacing = PpsTheme.spacing
+    val haptics = LocalHapticFeedback.current
+    val watching = content.phase == MemoryPhase.Watch
+    val lit = tile == content.litTile
+    val spoken = stringResource(Res.string.memory_tile, tile)
+    Box(
+        modifier =
+            Modifier
+                .size(if (content.gridSize > SMALL_GRID) spacing.targetWake else spacing.targetWake + spacing.space5)
+                .clip(PpsTheme.shapes.md)
+                .background(if (lit) colors.accent else colors.surface)
+                .border(1.dp, colors.outline, PpsTheme.shapes.md)
+                .clickable(enabled = !watching, role = Role.Button) {
+                    haptics.performHapticFeedback(HapticFeedbackType.KeyboardTap)
+                    onIntent(WakeIntent.TileTapped(tile))
+                }.semantics {
+                    contentDescription = spoken
+                    if (watching) disabled()
+                },
+        contentAlignment = Alignment.Center,
+    ) {
+        if (content.numbered || lit) {
+            Text(
+                text = tile.toString(),
+                modifier = Modifier.clearAndSetSemantics { },
+                style = PpsTheme.typography.title,
+                color = if (lit) colors.onAccent else colors.text,
+            )
         }
     }
 }
@@ -655,6 +761,7 @@ private fun CameraUnavailable() {
     )
 }
 
-private const val GRID = 3
+/** The 3x3 Memory Sequence grid; 4x4 tiles are smaller. */
+private const val SMALL_GRID = 3
 private const val DASH = 8f
 private val GHOST_SIZE = 72.dp

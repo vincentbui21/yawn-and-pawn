@@ -131,7 +131,11 @@ sealed interface CheckContent {
         override val type: CheckType get() = CheckType.WordUnscramble
     }
 
-    /** A 3x3 grid; [litTile] (1 to 9) is highlighted while the sequence plays; [numbered] is the TalkBack variant. */
+    /**
+     * A [gridSize] × [gridSize] grid (3, or 4 on Hard, Story 3.8); [litTile] (numbered from 1, row by row) is highlighted
+     * while the sequence plays or briefly after a tap; [numbered] is the TalkBack variant, which also announces
+     * [announced] (the round's tiles as numbers) while it watches.
+     */
     data class MemorySequence(
         val round: Int,
         val roundCount: Int,
@@ -139,6 +143,8 @@ sealed interface CheckContent {
         val litTile: Int? = null,
         val numbered: Boolean = false,
         val wrong: Boolean = false,
+        val gridSize: Int = 3,
+        val announced: List<Int>? = null,
     ) : CheckContent {
         override val type: CheckType get() = CheckType.MemorySequence
     }

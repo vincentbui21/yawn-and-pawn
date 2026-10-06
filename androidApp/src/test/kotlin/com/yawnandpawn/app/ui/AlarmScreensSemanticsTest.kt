@@ -32,6 +32,7 @@ import com.yawnandpawn.app.core.session.ScheduleTestAlarm
 import com.yawnandpawn.app.testing.AlarmUseCasesFixture
 import com.yawnandpawn.app.testing.FakeAlarmRepository
 import com.yawnandpawn.app.testing.FakeAlarmScheduler
+import com.yawnandpawn.app.testing.FakeCheckConfigRepository
 import com.yawnandpawn.app.testing.FakeClock
 import com.yawnandpawn.app.testing.FakeLogger
 import com.yawnandpawn.app.testing.FakeMissedNoteDismissals
@@ -261,6 +262,7 @@ class AlarmScreensSemanticsTest {
             AlarmEditorViewModel(
                 alarmId = null,
                 repository = repository,
+                checkConfigs = FakeCheckConfigRepository(repository),
                 saveAlarm = AlarmUseCasesFixture(repository = repository).save,
                 clock = FakeClock(),
                 timeZoneProvider = FakeTimeZoneProvider(),
@@ -303,6 +305,7 @@ class AlarmScreensSemanticsTest {
             AlarmEditorViewModel(
                 alarmId = null,
                 repository = repository,
+                checkConfigs = FakeCheckConfigRepository(repository),
                 saveAlarm = AlarmUseCasesFixture(repository = repository).save,
                 clock = FakeClock(),
                 timeZoneProvider = FakeTimeZoneProvider(),
@@ -340,6 +343,7 @@ class AlarmScreensSemanticsTest {
             AlarmEditorViewModel(
                 alarmId = "missing",
                 repository = repository,
+                checkConfigs = FakeCheckConfigRepository(repository),
                 saveAlarm = AlarmUseCasesFixture(repository = repository).save,
                 clock = FakeClock(),
                 timeZoneProvider = FakeTimeZoneProvider(),
@@ -509,7 +513,7 @@ class AlarmScreensSemanticsTest {
         val repository = FakeAlarmRepository(listOf(anAlarm(time = LocalTime(6, 30))))
         val viewModel =
             HomeViewModel(
-                repository,
+                FakeCheckConfigRepository(repository),
                 actions(repository),
                 FakeClock(),
                 FakeTimeZoneProvider(),
@@ -576,7 +580,7 @@ class AlarmScreensSemanticsTest {
         val missedNotes = MissedNotes(FakeSessionHistoryRepository(), FakeMissedNoteDismissals())
         val viewModel =
             HomeViewModel(
-                repository,
+                FakeCheckConfigRepository(repository),
                 actions(repository),
                 FakeClock(),
                 FakeTimeZoneProvider(),

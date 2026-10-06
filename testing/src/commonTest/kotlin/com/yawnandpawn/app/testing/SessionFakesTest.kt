@@ -25,6 +25,7 @@ class SessionFakesTest {
     private val config =
         ConfigResolver.resolve(
             alarm = anAlarm(id = "alarm-1"),
+            checks = emptyList(),
             globalSettings = GlobalSettings(baseFeeTier = 2),
             testMode = false,
             scheduledAt = DEFAULT_FAKE_INSTANT,

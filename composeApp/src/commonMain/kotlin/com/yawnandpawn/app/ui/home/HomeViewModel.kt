@@ -4,9 +4,12 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.yawnandpawn.app.core.alarm.Alarm
 import com.yawnandpawn.app.core.alarm.AlarmListOrder
-import com.yawnandpawn.app.core.alarm.AlarmRepository
+import com.yawnandpawn.app.core.alarm.AlarmWithChecks
+import com.yawnandpawn.app.core.alarm.CheckConfig
+import com.yawnandpawn.app.core.alarm.CheckConfigRepository
 import com.yawnandpawn.app.core.alarm.durationUntil
 import com.yawnandpawn.app.core.alarm.nextOccurrence
+import com.yawnandpawn.app.core.alarm.orderedEntries
 import com.yawnandpawn.app.core.error.DomainError
 import com.yawnandpawn.app.core.error.Outcome
 import com.yawnandpawn.app.core.error.errorOrNull
@@ -18,6 +21,7 @@ import com.yawnandpawn.app.core.reliability.ReliabilityStatus
 import com.yawnandpawn.app.core.time.Clock
 import com.yawnandpawn.app.core.time.TimeChangeSignal
 import com.yawnandpawn.app.core.time.TimeZoneProvider
+import com.yawnandpawn.app.ui.checks.toUi
 import com.yawnandpawn.app.ui.format.Countdown
 import com.yawnandpawn.app.ui.format.countdownOf
 import kotlinx.coroutines.ExperimentalCoroutinesApi
@@ -60,7 +64,8 @@ import kotlin.time.Instant
  * [reliabilitySettings].
  */
 class HomeViewModel(
-    repository: AlarmRepository,
+    /** The stored alarms with their checks (the card's check icons, Story 3.5), from one read of both tables. */
+    checkConfigs: CheckConfigRepository,
     private val actions: AlarmActions,
     private val clock: Clock,
     private val timeZoneProvider: TimeZoneProvider,
@@ -81,10 +86,11 @@ class HomeViewModel(
     @OptIn(ExperimentalCoroutinesApi::class)
     private val stored: Flow<StoredAlarms> =
         loads.flatMapLatest {
-            repository
-                .observeAll()
-                .map<List<Alarm>, StoredAlarms> { StoredAlarms.Loaded(it) }
-                // A storage failure must not look like "No alarms yet." (that invites re-creating alarms that exist).
+            checkConfigs
+                .observeAlarmsWithChecks()
+                .map<List<AlarmWithChecks>, StoredAlarms> { StoredAlarms.Loaded(it) }
+                // A storage failure must not look like "No alarms yet." (that invites re-creating alarms that exist). The
+                // alarms and their checks are one read, so a failure of either shows the load failure with "Try again".
                 .catch { cause ->
                     actions.logFailure("load alarms", cause)
                     emit(StoredAlarms.Failed)
@@ -271,8 +277,9 @@ class HomeViewModel(
             }
 
             is StoredAlarms.Loaded -> {
-                val alarms = stored.alarms.sortedWith(AlarmListOrder)
-                val cards = alarms.map { it.toCard(ui.toggles[it.id]) }
+                val sorted = stored.alarms.sortedWith(compareBy(AlarmListOrder) { it.alarm })
+                val alarms = sorted.map { it.alarm }
+                val cards = sorted.map { it.alarm.toCard(ui.toggles[it.alarm.id], it.checks) }
                 HomeUiState(
                     nextAlarm = nextAlarm(alarms.filterIndexed { index, _ -> cards[index].enabled }),
                     alarms = cards,
@@ -317,7 +324,8 @@ internal fun missedRetryDelay(attempt: Long): Duration {
 /** What the repository gave: the alarms, or a read failure. */
 private sealed interface StoredAlarms {
     data class Loaded(
-        val alarms: List<Alarm>,
+        /** Each alarm with its checks (Story 3.5). */
+        val alarms: List<AlarmWithChecks>,
     ) : StoredAlarms
 
     data object Failed : StoredAlarms
@@ -349,9 +357,17 @@ private data class LocalState(
     val reliability: ReliabilityStatus = ReliabilityStatus.ALL_OK,
 )
 
-/** Epic 1 cards show no check icons (checks arrive in Epic 3). */
-private fun Alarm.toCard(pending: PendingToggle?): AlarmCard {
+/**
+ * The card of this alarm, with its [checks]' icons in order (Story 3.5; a check the app cannot show has no icon). An
+ * alarm without check rows rings the default checks, so its card shows theirs (review fix: the same default as the
+ * editor, Save, Duplicate and the ring).
+ */
+private fun Alarm.toCard(
+    pending: PendingToggle?,
+    checks: List<CheckConfig>,
+): AlarmCard {
     val confirmed = pending?.confirmedAt
     val shown = if (pending == null || (confirmed != null && updatedAt >= confirmed)) enabled else pending.enabled
-    return AlarmCard(id = id, time = time, repeatDays = repeatDays, label = label, checks = emptyList(), enabled = shown)
+    val icons = checks.orderedEntries().ifEmpty { CheckConfig.DEFAULT_ENTRIES }.mapNotNull { it.type.toUi() }
+    return AlarmCard(id = id, time = time, repeatDays = repeatDays, label = label, checks = icons, enabled = shown)
 }

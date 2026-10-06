@@ -36,6 +36,10 @@ gradlePlugin {
             id = "yawnandpawn.allowlists"
             implementationClass = "com.yawnandpawn.app.buildlogic.AllowlistsPlugin"
         }
+        register("wordList") {
+            id = "yawnandpawn.word-list"
+            implementationClass = "com.yawnandpawn.app.buildlogic.WordListPlugin"
+        }
         register("soundLoudness") {
             id = "yawnandpawn.sound-loudness"
             implementationClass = "com.yawnandpawn.app.buildlogic.SoundLoudnessPlugin"

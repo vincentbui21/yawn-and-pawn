@@ -11,6 +11,7 @@ import com.yawnandpawn.app.android.ApplicationScope
 import com.yawnandpawn.app.android.call.CallState
 import com.yawnandpawn.app.core.alarm.AlarmFired
 import com.yawnandpawn.app.core.alarm.AlarmRepository
+import com.yawnandpawn.app.core.alarm.CheckConfigRepository
 import com.yawnandpawn.app.core.crash.CrashReporter
 import com.yawnandpawn.app.core.error.Outcome
 import com.yawnandpawn.app.core.history.SessionHistoryRepository
@@ -45,10 +46,10 @@ import kotlin.time.Duration
 
 /**
  * The real app's Koin graph, restarted with a [FakeCrashReporter] and optionally a replaced session [store], alarm
- * [repository], service [starter], session [history] repository, wall [clock], [monotonic] clock, pending [testAlarms]
- * or [billing]. The alarm receiver waits [serviceStartWait] for the wake service (none by default: the tests start
- * it themselves, as the system would). The real `MediaPlayer` adapter plays over Robolectric's media shadow (every
- * source opens). The service's coroutines run on the main looper: [awaitUntil] idles it (and the Room threads) until
+ * [repository], service [starter], session [history] repository, wall [clock], [monotonic] clock, pending [testAlarms],
+ * [billing] or the alarms' [checkConfigs]. The alarm receiver waits [serviceStartWait] for the wake service (none by
+ * default: the tests start it themselves, as the system would). The real `MediaPlayer` adapter plays over Robolectric's
+ * media shadow (every source opens). The service's coroutines run on the main looper: [awaitUntil] idles it (and the Room threads) until
  * a condition holds. Tear down with `StopAppRule`.
  */
 internal class WakeApp(
@@ -64,6 +65,7 @@ internal class WakeApp(
     serviceStartWait: Duration = Duration.ZERO,
     calls: CallState? = null,
     policy: SnoozeAvailabilityPolicy? = null,
+    checkConfigs: CheckConfigRepository? = null,
 ) {
     val app: YawnAndPawnApp = ApplicationProvider.getApplicationContext()
     val crashReporter = FakeCrashReporter()
@@ -91,6 +93,7 @@ internal class WakeApp(
                 userLock?.let { replaced -> single<UserLockState> { replaced } }
                 calls?.let { replaced -> single<CallState> { replaced } }
                 policy?.let { replaced -> single<SnoozeAvailabilityPolicy> { replaced } }
+                checkConfigs?.let { replaced -> single<CheckConfigRepository> { replaced } }
                 single { WakeServiceStarts(serviceStartWait) }
             },
         )

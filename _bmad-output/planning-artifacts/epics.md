@@ -2127,6 +2127,7 @@ So that Epic 4 builds payments on checks I know work at 6 a.m.
 16. Kill the process mid-check (`adb shell am kill com.yawnandpawn.app`): within 60 s the same problem or step returns.
 17. The Success screen shows the right variant (on time, test); "Done" closes it; untouched it closes after 60 s.
 18. All copy seen matches EXPERIENCE.md, and every `(EXPERIENCE.md Key strings)` string from this epic has been accepted or reworded by the owner in EXPERIENCE.md (FR-MSG-4).
+19. Reboot before unlock with a Word Unscramble alarm: when it rings before the first unlock, "I'm up" shows a Word puzzle (the word list is read from the APK, which Direct Boot allows; Story 3.7 review, as Robolectric cannot prove it).
 
 **Given** any failed item
 **When** the owner records it

@@ -7,22 +7,42 @@ import com.yawnandpawn.app.core.alarm.AlarmDraft
 import com.yawnandpawn.app.core.alarm.AlarmField
 import com.yawnandpawn.app.core.alarm.AlarmRepository
 import com.yawnandpawn.app.core.alarm.AlarmRule
+import com.yawnandpawn.app.core.alarm.CheckConfig
+import com.yawnandpawn.app.core.alarm.CheckConfigRepository
 import com.yawnandpawn.app.core.alarm.SaveAlarm
 import com.yawnandpawn.app.core.alarm.nextOccurrence
+import com.yawnandpawn.app.core.alarm.orderedEntries
+import com.yawnandpawn.app.core.checks.AccessibilityState
+import com.yawnandpawn.app.core.checks.CheckEntry
 import com.yawnandpawn.app.core.error.DomainError
 import com.yawnandpawn.app.core.error.Outcome
 import com.yawnandpawn.app.core.error.errorOrNull
+import com.yawnandpawn.app.core.error.flatMap
+import com.yawnandpawn.app.core.error.map
 import com.yawnandpawn.app.core.reliability.NotificationPermission
 import com.yawnandpawn.app.core.session.ScheduleTestAlarm
 import com.yawnandpawn.app.core.sound.SoundLibrary
 import com.yawnandpawn.app.core.sound.SoundPreview
 import com.yawnandpawn.app.core.time.Clock
 import com.yawnandpawn.app.core.time.TimeZoneProvider
+import com.yawnandpawn.app.ui.checks.CheckRegistry
+import com.yawnandpawn.app.ui.checks.CheckTrial
+import com.yawnandpawn.app.ui.checks.CheckType
+import com.yawnandpawn.app.ui.checks.Difficulty
+import com.yawnandpawn.app.ui.checks.PickableCheckTypes
+import com.yawnandpawn.app.ui.checks.core
+import com.yawnandpawn.app.ui.checks.defaultCount
+import com.yawnandpawn.app.ui.checks.toCore
+import com.yawnandpawn.app.ui.checks.toUi
+import com.yawnandpawn.app.ui.checksetup.CheckSetupIntent
 import com.yawnandpawn.app.ui.format.Weekdays
 import com.yawnandpawn.app.ui.format.countdownOf
 import com.yawnandpawn.app.ui.home.AlarmActions
+import com.yawnandpawn.app.ui.wake.WakeIntent
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.channels.Channel
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -33,7 +53,9 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import kotlinx.datetime.TimeZone
 import kotlinx.datetime.toLocalDateTime
+import kotlin.random.Random
 import kotlin.time.Instant
+import com.yawnandpawn.app.core.checks.CheckMode as CoreCheckMode
 
 /**
  * The Koin parameter of [AlarmEditorViewModel]: which alarm to edit, `null` for a new one; [copyOf] prefills a new one
@@ -56,12 +78,15 @@ data class AlarmEditorArgs(
  * the built-in sounds and the phone's alarm ringtones ([soundLibrary]) and previews one at a time ([soundPreview]); the
  * preview stops on leaving the sub-screen, on [EditorIntent.Backgrounded] and when the editor closes. "Test alarm"
  * (Story 1.18) rings the form as it is now, unsaved changes included, as a test 10 s later through [testAlarm], then
- * shows its snackbar.
+ * shows its snackbar. The Wake-up check row (Story 3.5) edits the alarm's checks ([checkConfigs]) in the form: tick a
+ * check, its setup (difficulty and count within the type's range), Random / All and the order; with none, Save shows
+ * "Pick at least one check." and stores nothing.
  */
-@Suppress("TooManyFunctions") // One small handler per editor action (save, back, repeat, menu, test).
+@Suppress("TooManyFunctions") // One small handler per editor action (save, back, repeat, menu, test, checks).
 class AlarmEditorViewModel(
     private val alarmId: String?,
     private val repository: AlarmRepository,
+    private val checkConfigs: CheckConfigRepository,
     private val saveAlarm: SaveAlarm,
     private val clock: Clock,
     private val timeZoneProvider: TimeZoneProvider,
@@ -71,8 +96,27 @@ class AlarmEditorViewModel(
     private val notificationPermission: NotificationPermission,
     private val testAlarm: ScheduleTestAlarm,
     private val copyOf: String? = null,
+    /** The checks the Wake-up check sub-screen offers; tests widen it to exercise several checks. */
+    private val pickable: List<CheckType> = PickableCheckTypes,
+    /** The seed of each "Try it" (Story 3.6): random in the app (a practice run, not a session), fixed in tests. */
+    private val previewSeed: () -> Long = { Random.nextLong() },
+    /** TalkBack (Story 3.8): the Memory Sequence note and its numbered "Try it". */
+    private val accessibility: AccessibilityState = AccessibilityState { false },
 ) : ViewModel() {
-    private val _state = MutableStateFlow(EditorUiState(isNew = alarmId == null, isLoading = alarmId != null || copyOf != null))
+    /** The pending tick of the running preview (Memory's playback). */
+    private var trialTicks: Job? = null
+
+    /** The running "Try it" preview, if any (Story 3.6). */
+    private var trial: CheckTrial? = null
+
+    private val _state =
+        MutableStateFlow(
+            EditorUiState(
+                isNew = alarmId == null,
+                isLoading = alarmId != null || copyOf != null,
+                full = wakeCheckOnly(pickable, talkBackOn = accessibility.isScreenReaderOn()),
+            ).withChecks(),
+        )
     val state: StateFlow<EditorUiState> = _state.asStateFlow()
 
     private val _effects = Channel<EditorEffect>(Channel.BUFFERED)
@@ -80,6 +124,9 @@ class AlarmEditorViewModel(
 
     /** The form as it was opened; any difference is an unsaved change. */
     private var initialForm = EditorForm()
+
+    /** The stored alarm held a check the form cannot show, so the form already differs from what is stored. */
+    private var changedOnOpen = false
 
     /** The stored alarm being edited, or the one a duplicate is prefilled from (its time names it in the delete dialog). */
     private var stored: Alarm? = null
@@ -141,6 +188,7 @@ class AlarmEditorViewModel(
             is EditorIntent.PaneOpened -> {
                 if (intent.pane != EditorPane.Sound) sounds.stopPreview()
                 _state.update { if (it.isLoading) it else it.copy(pane = intent.pane) }
+                if (intent.pane == EditorPane.WakeCheck) refreshTalkBack()
             }
 
             is EditorIntent.RepeatChosen -> {
@@ -202,10 +250,158 @@ class AlarmEditorViewModel(
             }
 
             else -> {
-                onMenuIntent(intent)
+                if (!onCheckIntent(intent)) onMenuIntent(intent)
             }
         }
     }
+
+    /**
+     * The Wake-up check sub-screen and Check setup (Story 3.5); false for any other intent. A ticked check is added last
+     * at Medium with its type's default count, and only a check the picker offers can be added.
+     */
+    private fun onCheckIntent(intent: EditorIntent): Boolean {
+        when (intent) {
+            is EditorIntent.CheckToggled -> {
+                toggleCheck(intent.type, intent.selected)
+            }
+
+            is EditorIntent.CheckModeSelected -> {
+                editForm { it.copy(checkMode = intent.mode) }
+            }
+
+            is EditorIntent.CheckMoved -> {
+                editForm { it.copy(checks = it.checks.moved(intent.type, intent.up)) }
+            }
+
+            is EditorIntent.CheckSetupClicked -> {
+                _state.update { if (it.isLoading) it else it.copy(pane = EditorPane.CheckSetup, setupType = intent.type) }
+                refreshTalkBack()
+            }
+
+            is EditorIntent.CheckSetup -> {
+                onSetupIntent(intent.intent)
+            }
+
+            is EditorIntent.TryIt -> {
+                onTryItIntent(intent.intent)
+            }
+
+            else -> {
+                return false
+            }
+        }
+        return true
+    }
+
+    /** Ticks or unticks [type]: added last when the picker offers it; any check left clears "Pick at least one check." */
+    private fun toggleCheck(
+        type: CheckType,
+        selected: Boolean,
+    ) {
+        editForm { form ->
+            val has = form.checks.any { it.type == type }
+            when {
+                selected && !has && type in pickable -> form.copy(checks = form.checks + newCheck(type))
+                !selected -> form.copy(checks = form.checks.filterNot { it.type == type })
+                else -> form
+            }
+        }
+        _state.update { if (it.form.hasNoCoreCheck()) it else it.copy(full = it.full?.copy(noCheckError = false)) }
+    }
+
+    /** Check setup of [EditorUiState.setupType]: difficulty, count (within the type's range) and Back. */
+    private fun onSetupIntent(intent: CheckSetupIntent) {
+        val type = _state.value.setupType ?: return
+        when (intent) {
+            CheckSetupIntent.Back -> {
+                requestBack()
+            }
+
+            is CheckSetupIntent.DifficultySelected -> {
+                editCheck(type) { it.copy(difficulty = intent.difficulty) }
+            }
+
+            is CheckSetupIntent.CountChanged -> {
+                val range = type.core?.countRange ?: return
+                editCheck(type) { it.copy(count = intent.count.coerceIn(range)) }
+            }
+
+            CheckSetupIntent.TryItClicked -> {
+                startTryIt(type)
+            }
+
+            // The camera checks' rows arrive with their stories.
+            else -> {
+                Unit
+            }
+        }
+    }
+
+    /**
+     * "Try it" (Story 3.6): [type] at the difficulty set now, one item, from a fresh [previewSeed]. It runs in this
+     * ViewModel's state only (no engine, sound, history or scheduler), and never changes the form.
+     */
+    private fun startTryIt(type: CheckType) {
+        val chip =
+            _state.value.form.checks
+                .firstOrNull { it.type == type } ?: return
+        // TalkBack on: the accessible variant (Memory Sequence's numbered tiles, Story 3.8); the notes follow the same read.
+        val talkBackOn = refreshTalkBack()
+        val started = CheckRegistry.startTrial(type, chip.difficulty, previewSeed(), talkBackOn) ?: return
+        _state.update { it.copy(pane = EditorPane.TryIt) }
+        showTrial(started)
+    }
+
+    /**
+     * Reads TalkBack again into the Wake-up check and Check setup notes ("Uses numbered tiles with TalkBack."), so they
+     * and "Try it" agree after TalkBack was turned on or off while the editor was open (Story 3.8 review); returns it.
+     */
+    private fun refreshTalkBack(): Boolean {
+        val on = accessibility.isScreenReaderOn()
+        _state.update { it.copy(full = it.full?.copy(talkBackOn = on)) }
+        return on
+    }
+
+    /** A tap in the preview: "Done" returns to Check setup, anything else goes to the trial. */
+    private fun onTryItIntent(intent: WakeIntent) {
+        val current = trial ?: return
+        if (intent == WakeIntent.DoneClicked) {
+            closeTryIt()
+            return
+        }
+        showTrial(current.onIntent(intent))
+    }
+
+    /**
+     * Shows [next] and, when it changes by itself (Memory's playback, Story 3.8), ticks it after its delay on this
+     * ViewModel's scope: virtual time in tests, and cancelled by the next change or by leaving the preview.
+     */
+    private fun showTrial(next: CheckTrial) {
+        if (next === trial) return
+        trial = next
+        _state.update { it.copy(tryIt = next.state) }
+        trialTicks?.cancel()
+        trialTicks =
+            next.nextTick?.let { wait ->
+                viewModelScope.launch {
+                    delay(wait)
+                    if (trial === next) showTrial(next.tick())
+                }
+            }
+    }
+
+    /** Back or "Done": Check setup again, with the form as it was. */
+    private fun closeTryIt() {
+        trialTicks?.cancel()
+        trialTicks = null
+        trial = null
+        _state.update { it.copy(pane = EditorPane.CheckSetup, tryIt = null) }
+    }
+
+    private fun editCheck(
+        type: CheckType,
+        change: (CheckChip) -> CheckChip,
+    ) = editForm { form -> form.copy(checks = form.checks.map { if (it.type == type) change(it) else it }) }
 
     /**
      * Opens the stored alarm [id]: to edit it, or ([asCopy], Duplicate) as a new alarm prefilled with its settings, which
@@ -215,17 +411,19 @@ class AlarmEditorViewModel(
         id: String,
         asCopy: Boolean,
     ) {
-        when (val result = repository.get(id)) {
+        when (val result = repository.get(id).flatMap { alarm -> checkConfigs.forAlarm(id).map { alarm to it } }) {
             is Outcome.Success -> {
-                val alarm = result.value
+                val (alarm, checks) = result.value
                 stored = alarm
-                val form = alarm.toForm()
+                val form = alarm.toForm(checks)
                 initialForm = form
+                changedOnOpen = hasUnshownChecks(checks)
                 val custom = form.repeatDays.isNotEmpty() && form.repeatDays != Weekdays
                 _state.update {
                     it
                         .copy(isLoading = false, form = form, customRepeat = custom, hasOverflowMenu = !asCopy)
                         .withRings(form, clock.now(), timeZoneProvider.current())
+                        .withChecks()
                 }
                 sounds.opened()
             }
@@ -243,7 +441,7 @@ class AlarmEditorViewModel(
             if (current.isLoading) return@update current
             val form = change(current.form)
             val fieldError = current.fieldError?.takeUnless { it != AlarmField.Label && form != current.form }
-            current.copy(form = form, fieldError = fieldError).withRings(form, clock.now(), timeZoneProvider.current())
+            current.copy(form = form, fieldError = fieldError).withRings(form, clock.now(), timeZoneProvider.current()).withChecks()
         }
     }
 
@@ -255,9 +453,18 @@ class AlarmEditorViewModel(
         }
     }
 
+    /** No check a ring can run: none at all, or only checks without a core plugin, which a save would drop. */
+    private fun EditorForm.hasNoCoreCheck(): Boolean = checks.none { it.type.core != null }
+
     private fun save() {
         val current = _state.value
         if (current.isLoading || current.isSaving) return
+        // No check (or only checks without a core plugin, which a save would drop): "Pick at least one check." under the
+        // Wake-up check row and in its sub-screen; nothing is stored.
+        if (current.form.hasNoCoreCheck()) {
+            _state.update { it.copy(full = it.full?.copy(noCheckError = true)) }
+            return
+        }
         _state.update { it.copy(isSaving = true) }
         viewModelScope.launch {
             when (val result = saveAlarm(current.form.toDraft(alarmId))) {
@@ -311,6 +518,7 @@ class AlarmEditorViewModel(
     private suspend fun showFailure(error: DomainError) {
         // A session started meanwhile (Story 2.6): the session lock closes the editor, nothing failed.
         if (error == DomainError.SessionActive) return
+        // No check never gets here: Save shows "Pick at least one check." first, and the picker offers valid checks only.
         if (error is DomainError.InvalidAlarm) {
             _state.update { it.copy(fieldError = error.field) }
             // Only the label has its own message on the field; the other controls cannot produce an invalid value.
@@ -336,6 +544,15 @@ class AlarmEditorViewModel(
                 hideDiscardDialog()
             }
 
+            current.pane == EditorPane.TryIt -> {
+                closeTryIt()
+            }
+
+            current.pane == EditorPane.CheckSetup -> {
+                // Check setup returns to the Wake-up check sub-screen it was opened from.
+                _state.update { it.copy(pane = EditorPane.WakeCheck, setupType = null) }
+            }
+
             current.pane != EditorPane.Main -> {
                 // Leaving the Sound sub-screen stops its preview.
                 sounds.stopPreview()
@@ -352,7 +569,7 @@ class AlarmEditorViewModel(
         }
     }
 
-    private fun hasUnsavedChanges(): Boolean = _state.value.let { !it.isLoading && it.form != initialForm }
+    private fun hasUnsavedChanges(): Boolean = _state.value.let { !it.isLoading && (changedOnOpen || it.form != initialForm) }
 
     /** "Discard changes?" before [then]: Back closes the editor, Duplicate opens a new alarm prefilled from the stored one. */
     private fun askDiscard(then: AfterDiscard) {
@@ -466,7 +683,35 @@ private fun EditorForm.toDraft(alarmId: String?): AlarmDraft =
         snoozeLengthMinutes = snoozeLengthMinutes,
         graceSeconds = graceSeconds.coerceIn(Alarm.GRACE_SECONDS_RANGE),
         vibrateInGrace = vibrateInGrace,
+        checks = checks.mapNotNull { chip -> chip.type.core?.let { CheckEntry(it, chip.difficulty.toCore(), chip.count) } },
+        checkMode = CoreCheckMode.valueOf(checkMode.name),
     )
+
+/**
+ * The production editor's full-editor rows (Story 3.5): only the Wake-up check, offering [pickable] (the Quiet time row
+ * shows in every editor, Story 3.4); motivation and the fee ladder wait for their stories.
+ */
+private fun wakeCheckOnly(
+    pickable: List<CheckType>,
+    talkBackOn: Boolean,
+): FullEditorSections = FullEditorSections(rows = setOf(EditorPane.WakeCheck), types = pickable, talkBackOn = talkBackOn)
+
+/** The Wake-up check row and sub-screen show the form's checks and mode. */
+private fun EditorUiState.withChecks(): EditorUiState = copy(full = full?.copy(checks = form.checks, checkMode = form.checkMode))
+
+/** A newly ticked check: Medium, with its type's default count (Story 3.5). */
+private fun newCheck(type: CheckType): CheckChip = CheckChip(type, Difficulty.Medium, type.core?.defaultCount ?: type.defaultCount)
+
+/** [type] one place up or down, or the list unchanged at either end. */
+private fun List<CheckChip>.moved(
+    type: CheckType,
+    up: Boolean,
+): List<CheckChip> {
+    val from = indexOfFirst { it.type == type }
+    val to = if (up) from - 1 else from + 1
+    if (from < 0 || to !in indices) return this
+    return toMutableList().apply { add(to, removeAt(from)) }
+}
 
 /** "Rings in ..." and, for a one-time alarm whose time has passed today, when it rings tomorrow (shifted in a DST gap). */
 private fun EditorUiState.withRings(
@@ -480,9 +725,20 @@ private fun EditorUiState.withRings(
     return copy(ringsIn = countdownOf(next - now), ringsTomorrowAt = if (tomorrow) ring.time else null)
 }
 
-/** The stored alarm as the form shows it; out-of-range stored values open as the nearest valid value. */
-private fun Alarm.toForm(): EditorForm =
+/**
+ * The stored alarm and its [checks] as the form shows them; out-of-range stored values (a check's count included, within
+ * its type's range) open as the nearest valid value, and an alarm stored without checks opens with the default ones. A
+ * check the editor cannot show ([hasUnshownChecks]) is left out.
+ */
+private fun Alarm.toForm(checks: List<CheckConfig>): EditorForm =
     EditorForm(
+        checks =
+            checks
+                .orderedEntries()
+                .mapNotNull { entry ->
+                    entry.type.toUi()?.let { CheckChip(it, entry.difficulty.toUi(), entry.count.coerceIn(entry.type.countRange)) }
+                }.ifEmpty { EditorForm.DEFAULT_CHECKS },
+        checkMode = CheckMode.valueOf(checkMode.name),
         time = time,
         repeatDays = repeatDays,
         label = label.orEmpty(),
@@ -495,6 +751,14 @@ private fun Alarm.toForm(): EditorForm =
         graceSeconds = graceSeconds.coerceIn(Alarm.GRACE_SECONDS_RANGE),
         vibrateInGrace = vibrateInGrace,
     )
+
+/**
+ * Whether [checks] hold a type the editor cannot show (no picker row; only the Epic 1 `Placeholder`, which no picker
+ * offers and `validateChecks` rejects, so it could never be saved back). The editor leaves it out of the form and
+ * counts that as an unsaved change, so the replacement is explicit: Back asks "Discard changes?" and Save stores the
+ * checks shown (Story 3.5 review).
+ */
+private fun hasUnshownChecks(checks: List<CheckConfig>): Boolean = checks.any { it.entry.type.toUi() == null }
 
 private fun <T> Set<T>.toggle(item: T): Set<T> = if (item in this) this - item else this + item
 

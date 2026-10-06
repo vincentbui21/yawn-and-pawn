@@ -2,7 +2,11 @@ package com.yawnandpawn.app.core.session
 
 import com.yawnandpawn.app.core.alarm.Alarm
 import com.yawnandpawn.app.core.alarm.AlarmDraft
+import com.yawnandpawn.app.core.checks.CheckEntry
 import com.yawnandpawn.app.core.checks.CheckPlan
+import com.yawnandpawn.app.core.checks.CheckType
+import com.yawnandpawn.app.core.checks.accessibleEntries
+import com.yawnandpawn.app.core.checks.word.WordBank
 import kotlinx.serialization.Serializable
 import kotlin.time.Instant
 
@@ -59,12 +63,22 @@ data class GlobalSettings(
  * Pending changes inside the commitment lock window arrive in Epic 4.
  */
 object ConfigResolver {
-    /** The config for a session ringing [alarm] at [scheduledAt]; [testMode] for the test alarm. */
+    /**
+     * The config for a session ringing [alarm] at [scheduledAt]; [testMode] for the test alarm. The check plan is the
+     * alarm's [checks] (its `check_config` rows, sorted by position) in its `checkMode` (Story 3.5); an alarm without
+     * checks rings the [defaultPlan]. With [accessible] (TalkBack on at the fire, Story 3.8) its Memory Sequence entries
+     * use the numbered variant for the whole session: the plan is frozen at the fire, and snooze re-rings reuse it.
+     * Without [wordsAvailable] (the word list failed to load, Story 3.7 review) a Word Unscramble entry could never be
+     * solved, so Math takes its place for the session ([ringableEntries]).
+     */
     fun resolve(
         alarm: Alarm,
+        checks: List<CheckEntry>,
         globalSettings: GlobalSettings,
         testMode: Boolean,
         scheduledAt: Instant,
+        accessible: Boolean = false,
+        wordsAvailable: Boolean = WordBank.current.words.isNotEmpty(),
     ): SessionConfig =
         SessionConfig(
             alarmId = alarm.id,
@@ -83,8 +97,15 @@ object ConfigResolver {
             rampStartPercent = Alarm.DEFAULT_RAMP_START_PERCENT,
             soundRef = alarm.soundRef,
             vibration = alarm.vibration,
-            checkPlan = CheckPlan.default(),
+            checkPlan =
+                if (checks.isEmpty()) defaultPlan() else CheckPlan(alarm.checkMode, ringableEntries(checks, accessible, wordsAvailable)),
         )
+
+    /**
+     * The plan of a ring without configured checks, and of every test ring: Random · Math · Medium · 3 (Story 3.2,
+     * [CheckPlan.default]).
+     */
+    fun defaultPlan(): CheckPlan = CheckPlan.default()
 
     /**
      * The config of a test ring (FR-ALM-12, Story 1.18) from the editor's current, possibly unsaved, [draft]: always
@@ -111,9 +132,40 @@ object ConfigResolver {
             rampStartPercent = Alarm.DEFAULT_RAMP_START_PERCENT,
             soundRef = draft.soundRef,
             vibration = draft.vibration,
-            checkPlan = CheckPlan.default(),
+            // The draft's own checks are not rung yet (Story 3.5 deferred item): a test ring uses the default plan.
+            checkPlan = defaultPlan(),
         )
 
     /** The alarm id of a test ring for an alarm that is not stored yet. */
     const val TEST_ALARM_ID = "test-alarm"
 }
+
+/**
+ * The [checks] as a ring runs them: Memory Sequence numbered when [accessible] (Story 3.8), and, when no word list is
+ * installed (![wordsAvailable]), no Word Unscramble entry, since it could never be solved (Story 3.7 review): Math at
+ * the same difficulty with its default count takes its place, or the entry is dropped when the plan already has Math.
+ */
+internal fun ringableEntries(
+    checks: List<CheckEntry>,
+    accessible: Boolean,
+    wordsAvailable: Boolean,
+): List<CheckEntry> {
+    val playable =
+        when {
+            wordsAvailable || checks.none { it.type == CheckType.WordUnscramble } -> {
+                checks
+            }
+
+            checks.any { it.type == CheckType.Math } -> {
+                checks.filterNot { it.type == CheckType.WordUnscramble }
+            }
+
+            else -> {
+                checks.map { if (it.type == CheckType.WordUnscramble) mathInPlaceOf(it) else it }
+            }
+        }
+    return accessibleEntries(playable, accessible)
+}
+
+/** Math at [word]'s difficulty with Math's default count. */
+private fun mathInPlaceOf(word: CheckEntry): CheckEntry = CheckEntry(CheckType.Math, word.difficulty, CheckType.Math.defaultCount)

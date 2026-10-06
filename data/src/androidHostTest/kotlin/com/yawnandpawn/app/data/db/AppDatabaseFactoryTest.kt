@@ -10,10 +10,17 @@ import androidx.sqlite.execSQL
 import androidx.test.core.app.ApplicationProvider
 import com.yawnandpawn.app.core.alarm.Alarm
 import com.yawnandpawn.app.core.alarm.AlarmDraft
+import com.yawnandpawn.app.core.alarm.CheckConfig
+import com.yawnandpawn.app.core.alarm.orderedEntries
+import com.yawnandpawn.app.core.checks.CheckEntry
+import com.yawnandpawn.app.core.checks.CheckMode
+import com.yawnandpawn.app.core.checks.CheckType
+import com.yawnandpawn.app.core.checks.Difficulty
 import com.yawnandpawn.app.core.error.Outcome
 import com.yawnandpawn.app.core.history.SessionHistoryRow
 import com.yawnandpawn.app.core.history.SessionMergeRow
 import com.yawnandpawn.app.data.alarm.RoomAlarmRepository
+import com.yawnandpawn.app.data.alarm.RoomCheckConfigRepository
 import com.yawnandpawn.app.data.alarm.RoomRequestCodeSequence
 import com.yawnandpawn.app.data.history.RoomSessionHistoryRepository
 import com.yawnandpawn.app.testing.AlarmUseCasesFixture
@@ -56,6 +63,7 @@ class AppDatabaseFactoryTest {
         AlarmUseCasesFixture(
             repository = RoomAlarmRepository(database.alarmDao()),
             requestCodes = RoomRequestCodeSequence(database.requestCodeSequenceDao()),
+            checkConfigs = RoomCheckConfigRepository(database.checkConfigDao()),
         )
 
     @Test
@@ -202,7 +210,46 @@ class AppDatabaseFactoryTest {
                 assertEquals(Outcome.Success(Unit), repository.upsert(alarm.copy(vibrateInGrace = false)))
                 assertEquals(Outcome.Success(listOf(alarm.copy(vibrateInGrace = false))), repository.listAll())
             }
-            assertEquals(5, userVersion())
+            assertEquals(AppDatabase.SCHEMA_VERSION, userVersion())
+        }
+
+    @Test
+    fun `the exported version 6 schema adds check config with a cascading alarm key and the alarm check mode`() {
+        assertTrue(schema(6).exists(), "exported schema missing: ${schema(6).absolutePath}")
+        val json = schema(6).readText()
+
+        assertTrue(json.contains("\"version\": 6"), "schema version 6")
+        assertEquals(listOf("alarm", "request_code_sequence", "session_history", "session_merge", "check_config"), tableNames(json))
+        assertTrue(json.contains("REFERENCES `alarm`(`id`) ON UPDATE NO ACTION ON DELETE CASCADE"), "rows go with their alarm")
+        assertTrue(json.contains("`check_mode` TEXT NOT NULL DEFAULT 'Random'"), "check mode, Random by default")
+        assertTrue(json.contains("`vibrate_in_grace` INTEGER NOT NULL DEFAULT 1"), "Story 3.4's column is kept")
+    }
+
+    @Test
+    fun `migrating a v5 database gives every alarm Random and one Math Medium 3 check, keeping everything else (Story 3-5)`() =
+        runTest {
+            val first = anAlarm(id = "a", requestCode = 1000)
+            val second = anAlarm(id = "b", requestCode = 1001, time = LocalTime(8, 0))
+            val row = aSessionHistoryRow()
+            createDatabase(version = 5, alarms = listOf(first, second), requestCodeMark = 1001, history = listOf(row))
+
+            withDatabase { database ->
+                assertEquals(Outcome.Success(listOf(first, second)), RoomAlarmRepository(database.alarmDao()).listAll())
+                val checks = RoomCheckConfigRepository(database.checkConfigDao())
+                listOf(first, second).forEach { alarm ->
+                    val configs = assertIs<Outcome.Success<List<CheckConfig>>>(checks.forAlarm(alarm.id)).value
+                    assertEquals(listOf(CheckEntry(CheckType.Math, Difficulty.Medium, 3)), configs.orderedEntries(), alarm.id)
+                    assertEquals(CheckConfig.idFor(alarm.id, CheckType.Math), configs.single().id)
+                    assertEquals(0, configs.single().position)
+                }
+                assertEquals(
+                    CheckMode.Random,
+                    assertIs<Outcome.Success<Alarm>>(RoomAlarmRepository(database.alarmDao()).get("a")).value.checkMode,
+                )
+                assertEquals(Outcome.Success(row), RoomSessionHistoryRepository(database.sessionHistoryDao()).find(row.sessionId))
+                assertEquals(Outcome.Success(1002), RoomRequestCodeSequence(database.requestCodeSequenceDao()).next())
+            }
+            assertEquals(AppDatabase.SCHEMA_VERSION, userVersion())
         }
 
     @Test
@@ -229,8 +276,11 @@ class AppDatabaseFactoryTest {
 
     @Test
     fun `the migrations cover every version step and nothing is destructive`() {
-        assertEquals(listOf(1 to 2, 2 to 3, 3 to 4, 4 to 5), APP_DATABASE_MIGRATIONS.map { it.startVersion to it.endVersion })
-        assertEquals(5, AppDatabase.SCHEMA_VERSION)
+        assertEquals(
+            listOf(1 to 2, 2 to 3, 3 to 4, 4 to 5, 5 to 6),
+            APP_DATABASE_MIGRATIONS.map { it.startVersion to it.endVersion },
+        )
+        assertEquals(6, AppDatabase.SCHEMA_VERSION)
     }
 
     @Test

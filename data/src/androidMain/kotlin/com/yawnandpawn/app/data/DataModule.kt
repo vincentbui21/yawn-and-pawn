@@ -2,12 +2,14 @@ package com.yawnandpawn.app.data
 
 import android.content.Context
 import com.yawnandpawn.app.core.alarm.AlarmRepository
+import com.yawnandpawn.app.core.alarm.CheckConfigRepository
 import com.yawnandpawn.app.core.alarm.RequestCodeSequence
 import com.yawnandpawn.app.core.history.MissedNoteDismissals
 import com.yawnandpawn.app.core.history.SessionHistoryRepository
 import com.yawnandpawn.app.core.session.ActiveSessionStore
 import com.yawnandpawn.app.core.session.TestAlarmStore
 import com.yawnandpawn.app.data.alarm.RoomAlarmRepository
+import com.yawnandpawn.app.data.alarm.RoomCheckConfigRepository
 import com.yawnandpawn.app.data.alarm.RoomRequestCodeSequence
 import com.yawnandpawn.app.data.db.AppDatabase
 import com.yawnandpawn.app.data.db.RuntimeDatabase
@@ -33,6 +35,9 @@ val dataModule =
         single { get<AppDatabase>().alarmDao() }
         single { get<AppDatabase>().requestCodeSequenceDao() }
         single<AlarmRepository> { RoomAlarmRepository(get()) }
+        // check_config (Story 3.5): written only by the guarded alarm use cases.
+        single { get<AppDatabase>().checkConfigDao() }
+        single<CheckConfigRepository> { RoomCheckConfigRepository(get()) }
         single<RequestCodeSequence> { RoomRequestCodeSequence(get()) }
         // session_history (Story 1.13): written only by core's SessionRecorder, wired in the app.
         single { get<AppDatabase>().sessionHistoryDao() }

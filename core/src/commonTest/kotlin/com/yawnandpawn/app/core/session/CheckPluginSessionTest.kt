@@ -9,6 +9,8 @@ import com.yawnandpawn.app.core.checks.CheckType
 import com.yawnandpawn.app.core.checks.Difficulty
 import com.yawnandpawn.app.core.checks.Puzzle
 import com.yawnandpawn.app.core.checks.SeedDeriver
+import com.yawnandpawn.app.core.checks.word.WordBank
+import com.yawnandpawn.app.core.checks.word.WordList
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertIs
@@ -271,6 +273,66 @@ class CheckPluginSessionTest {
         send(SessionEvent.CheckAnswerSubmitted(answerFor(hard, seeds[1], 0)), 2)
         val completed = assertIs<SessionState.Completed>(state)
         assertEquals(StepPointer(2, 0), completed.session.checkRun.step)
+    }
+
+    @Test
+    fun `a wrong Memory tap restarts only the current round with a new seed, and the session completes (Story 3-8)`() {
+        val memory = CheckEntry(CheckType.MemorySequence(), Difficulty.Easy, count = 2)
+        val memoryPlan = CheckPlan(CheckMode.All, listOf(memory))
+        val reducer = SessionReducer(StubAvailability(SnoozeAvailability.Available(OFFER)), PluginCheckValidator, NoFallbackPolicy)
+        var state: SessionState = SessionState.Idle
+
+        fun run(): CheckRun = assertIs<SessionState.Active>(state).session.checkRun
+
+        fun tap(tile: Int) {
+            state = reducer.reduce(state, SessionEvent.CheckAnswerSubmitted(CheckAnswer.Tile(tile)), at(1.minutes)).state
+        }
+
+        fun taps(): List<Int> = (memory.type.generate(run().seeds[0], memory.difficulty, memory.count) as Puzzle.Memory).taps
+
+        state = reducer.reduce(state, SessionEvent.AlarmFired(SESSION_ID, testConfig(checkPlan = memoryPlan), false), T0).state
+        state = reducer.reduce(state, SessionEvent.ImUpTapped, T0).state
+        taps().take(5).forEach(::tap)
+        assertEquals(StepPointer(0, 5), run().step, "round 1 done, one tap into round 2")
+        val seedBefore = run().seeds[0]
+
+        tap(taps()[5] % 9 + 1)
+
+        assertEquals(StepPointer(0, 4), run().step, "back to round 2's first tap, not to round 1")
+        assertEquals(1, run().failedAttempts)
+        assertNotEquals(seedBefore, run().seeds[0], "a new sequence")
+        taps().drop(4).forEach(::tap)
+        assertIs<SessionState.Completed>(state)
+    }
+
+    @Test
+    fun `a two-word Word plan passes on a listed anagram, item then last, and a reinstalled list keeps the scramble (Story 3-7 review)`() {
+        // Every word has a listed anagram, so whichever two the seed picks, the other spelling is tried.
+        val words = listOf("listen", "silent", "garden", "danger", "rescue", "secure", "master", "stream")
+        val wordEntry = CheckEntry(CheckType.WordUnscramble, Difficulty.Medium, count = 2)
+        val run = CheckRun(CheckPlan(CheckMode.All, listOf(wordEntry)), listOf(31L))
+        try {
+            WordBank.install(WordList(words))
+            val puzzle = wordEntry.type.generate(31L, wordEntry.difficulty, wordEntry.count) as Puzzle.Word
+
+            fun anagram(item: Int): CheckAnswer =
+                CheckAnswer.Word(
+                    WordBank.current.anagramsOf(puzzle.words[item]).first {
+                        it !=
+                            puzzle.words[item]
+                    },
+                )
+
+            assertEquals(StepResult.ValidNextItem, PluginCheckValidator.validate(run, anagram(0)))
+            assertEquals(StepResult.ValidLast, PluginCheckValidator.validate(run.copy(step = StepPointer(0, 1)), anagram(1)))
+
+            // The process restarts and installs the same list again: the stored seed gives the same scramble and answers.
+            WordBank.install(WordList(words.reversed()))
+            assertEquals(puzzle, wordEntry.type.generate(31L, wordEntry.difficulty, wordEntry.count))
+            assertEquals(StepResult.ValidNextItem, PluginCheckValidator.validate(run, CheckAnswer.Word(puzzle.words[0].uppercase())))
+        } finally {
+            WordBank.install(WordList(emptyList()))
+        }
     }
 
     @Test

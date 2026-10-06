@@ -20,6 +20,7 @@ val uiModule =
             AlarmEditorViewModel(
                 alarmId = params.get<AlarmEditorArgs>().alarmId,
                 repository = get(),
+                checkConfigs = get(),
                 saveAlarm = get(),
                 clock = get(),
                 timeZoneProvider = get(),
@@ -29,6 +30,7 @@ val uiModule =
                 notificationPermission = get(),
                 testAlarm = get(),
                 copyOf = params.get<AlarmEditorArgs>().copyOf,
+                accessibility = get(),
             )
         }
     }

@@ -20,6 +20,38 @@ sealed interface Puzzle {
             get() = problems.size
     }
 
+    /**
+     * The rounds of a [CheckType.MemorySequence] puzzle on a [gridSize] × [gridSize] grid (tiles numbered from 1, row by
+     * row). Every tap is one item, so the puzzle has as many items as tiles in all its rounds.
+     */
+    @Serializable
+    @SerialName("Memory")
+    data class Memory(
+        val gridSize: Int,
+        val rounds: List<List<Int>>,
+    ) : Puzzle {
+        override val size: Int
+            get() = rounds.sumOf { it.size }
+
+        /** Every tile in the order it must be tapped, across the rounds. */
+        val taps: List<Int>
+            get() = rounds.flatten()
+    }
+
+    /**
+     * The words of a [CheckType.WordUnscramble] puzzle (lowercase) and the scrambled letters shown for each, in order.
+     * Each word is one item.
+     */
+    @Serializable
+    @SerialName("Word")
+    data class Word(
+        val words: List<String>,
+        val scrambles: List<String>,
+    ) : Puzzle {
+        override val size: Int
+            get() = words.size
+    }
+
     /** The puzzle of the [CheckType.Placeholder] stand-in: one item, answered by "I'm up". */
     @Serializable
     @SerialName("Placeholder")

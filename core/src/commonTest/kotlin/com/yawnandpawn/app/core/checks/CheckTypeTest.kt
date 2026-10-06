@@ -17,11 +17,13 @@ class CheckTypeTest {
             CheckType.all.map { type ->
                 when (type) {
                     CheckType.Math -> "Math"
+                    CheckType.WordUnscramble -> "WordUnscramble"
+                    is CheckType.MemorySequence -> "MemorySequence"
                     CheckType.Placeholder -> "Placeholder"
                 }
             }
 
-        assertEquals(listOf("Math", "Placeholder"), listed)
+        assertEquals(listOf("Math", "WordUnscramble", "MemorySequence", "Placeholder"), listed)
         assertEquals(listed, CheckType.all.map { it.id })
     }
 
@@ -36,6 +38,8 @@ class CheckTypeTest {
         assertEquals(
             mapOf(
                 "Math" to listOf(false, true, true, 1..10, 3),
+                "WordUnscramble" to listOf(false, true, true, 1..5, 2),
+                "MemorySequence" to listOf(false, true, true, 1..5, 2),
                 "Placeholder" to listOf(false, true, false, 1..1, 1),
             ),
             declared,
@@ -108,6 +112,21 @@ class CheckTypeTest {
             assertEquals(answer, json.decodeFromString(CheckAnswer.serializer(), json.encodeToString(CheckAnswer.serializer(), answer)))
         }
         assertEquals("""{"type":"Number","digits":"0109"}""", json.encodeToString(CheckAnswer.serializer(), answers.first()))
+    }
+
+    @Test
+    fun `Word Unscramble entries, answers and puzzles serialize with stable names (Story 3-7 review)`() {
+        val json = SessionJson.json
+        val entry = CheckEntry(CheckType.WordUnscramble, Difficulty.Easy, 2)
+        val puzzle: Puzzle = Puzzle.Word(listOf("apple", "stone"), listOf("pplea", "notse"))
+
+        assertEquals(
+            """{"type":{"type":"WordUnscramble"},"difficulty":"Easy","count":2}""",
+            json.encodeToString(CheckEntry.serializer(), entry),
+        )
+        assertEquals(entry, json.decodeFromString(CheckEntry.serializer(), json.encodeToString(CheckEntry.serializer(), entry)))
+        assertEquals("""{"type":"Word","text":"abc"}""", json.encodeToString(CheckAnswer.serializer(), CheckAnswer.Word("abc")))
+        assertEquals(puzzle, json.decodeFromString(Puzzle.serializer(), json.encodeToString(Puzzle.serializer(), puzzle)))
     }
 
     private companion object {

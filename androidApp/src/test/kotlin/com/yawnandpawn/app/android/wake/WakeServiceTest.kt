@@ -9,6 +9,7 @@ import android.media.AudioAttributes
 import android.media.AudioManager
 import android.os.Looper
 import android.os.UserManager
+import android.view.accessibility.AccessibilityManager
 import com.yawnandpawn.app.StopAppRule
 import com.yawnandpawn.app.android.AlarmFiredReceiver
 import com.yawnandpawn.app.android.ApplicationScope
@@ -17,10 +18,19 @@ import com.yawnandpawn.app.core.alarm.Alarm
 import com.yawnandpawn.app.core.alarm.AlarmFired
 import com.yawnandpawn.app.core.alarm.AlarmRepository
 import com.yawnandpawn.app.core.alarm.AlarmScheduler
+import com.yawnandpawn.app.core.alarm.CheckConfigRepository
 import com.yawnandpawn.app.core.alarm.RequestCodes
+import com.yawnandpawn.app.core.checks.CheckEntry
+import com.yawnandpawn.app.core.checks.CheckMode
+import com.yawnandpawn.app.core.checks.CheckPlan
+import com.yawnandpawn.app.core.checks.CheckType
+import com.yawnandpawn.app.core.checks.Difficulty
+import com.yawnandpawn.app.core.checks.word.WordBank
+import com.yawnandpawn.app.core.checks.word.WordList
 import com.yawnandpawn.app.core.error.DomainError
 import com.yawnandpawn.app.core.error.Outcome
 import com.yawnandpawn.app.core.session.ActiveSessionStore
+import com.yawnandpawn.app.core.session.ConfigResolver
 import com.yawnandpawn.app.core.session.SessionEvent
 import com.yawnandpawn.app.core.session.SessionJson
 import com.yawnandpawn.app.core.session.SessionState
@@ -28,8 +38,10 @@ import com.yawnandpawn.app.core.session.StoredSession
 import com.yawnandpawn.app.core.time.Deadline
 import com.yawnandpawn.app.testing.FakeActiveSessionStore
 import com.yawnandpawn.app.testing.FakeAlarmRepository
+import com.yawnandpawn.app.testing.FakeCheckConfigRepository
 import com.yawnandpawn.app.testing.aSession
 import com.yawnandpawn.app.testing.anAlarm
+import com.yawnandpawn.app.testing.checkConfigsOf
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.runBlocking
@@ -508,6 +520,118 @@ class WakeServiceTest {
         app.awaitRinging()
 
         assertTrue((app.engine.state.value as SessionState.Ringing).session.beforeFirstUnlock)
+    }
+
+    @Test
+    fun `a ring freezes the alarm's checks in its mode, in position order (Story 3-5)`() {
+        val app = WakeApp()
+        val memory = CheckEntry(CheckType.MemorySequence(), Difficulty.Easy, count = 1)
+        val math = CheckEntry(CheckType.Math, Difficulty.Hard, count = 4)
+        val alarm = alarmA.copy(checkMode = CheckMode.All)
+        val checks = app.koin.get<CheckConfigRepository>()
+        // Stored out of position order (Math at position 1 first), so the order the plan keeps is the positions'.
+        val rows = checkConfigsOf(alarm.id, listOf(memory, math)).reversed()
+        assertEquals(Outcome.Success(Unit), runBlocking { checks.saveWithAlarm(alarm, rows) })
+
+        app.ring(fired)
+        app.awaitRinging()
+
+        assertEquals(
+            CheckPlan(CheckMode.All, listOf(memory, math)),
+            (app.engine.state.value as SessionState.Ringing).session.config.checkPlan,
+        )
+    }
+
+    @Test
+    fun `checks that cannot be read still ring, with the default plan, and are logged (review fix)`() {
+        val failing = FakeCheckConfigRepository().apply { failure = DomainError.StorageFailure("disk I/O error") }
+        val app = WakeApp(checkConfigs = failing)
+        upsert(alarmA)
+
+        app.ring(fired)
+        app.awaitRinging()
+
+        assertEquals(ConfigResolver.defaultPlan(), (app.engine.state.value as SessionState.Ringing).session.config.checkPlan)
+        assertTrue(
+            app.logs().any { it == "OperationFailed operation=read alarm checks cause=storage failure: disk I/O error" },
+            "${app.logs()}",
+        )
+    }
+
+    @Test
+    fun `an alarm without checks rings the default plan`() {
+        val app = WakeApp()
+        upsert(alarmA)
+
+        app.ring(fired)
+        app.awaitRinging()
+
+        assertEquals(ConfigResolver.defaultPlan(), (app.engine.state.value as SessionState.Ringing).session.config.checkPlan)
+    }
+
+    @Test
+    fun `with TalkBack on at the fire, the ring freezes Memory Sequence as its numbered variant (Story 3-8)`() {
+        val app = WakeApp()
+        val memory = CheckEntry(CheckType.MemorySequence(), Difficulty.Hard, count = 2)
+        val checks = app.koin.get<CheckConfigRepository>()
+        assertEquals(Outcome.Success(Unit), runBlocking { checks.saveWithAlarm(alarmA, checkConfigsOf(alarmA.id, listOf(memory))) })
+        shadowOf(app.app.getSystemService(AccessibilityManager::class.java)).apply {
+            setEnabled(true)
+            setTouchExplorationEnabled(true)
+        }
+
+        app.ring(fired)
+        app.awaitRinging()
+
+        val entry =
+            (app.engine.state.value as SessionState.Ringing)
+                .session.config.checkPlan.entries
+                .single()
+        assertEquals(memory.copy(type = CheckType.MemorySequence(numbered = true)), entry)
+    }
+
+    @Test
+    fun `with no word list installed a Word Unscramble alarm rings Math instead, never an unsolvable check (Story 3-7 review fix)`() {
+        val app = WakeApp()
+        val word = CheckEntry(CheckType.WordUnscramble, Difficulty.Medium, count = 2)
+        val checks = app.koin.get<CheckConfigRepository>()
+        assertEquals(Outcome.Success(Unit), runBlocking { checks.saveWithAlarm(alarmA, checkConfigsOf(alarmA.id, listOf(word))) })
+        val installed = WordBank.current
+        try {
+            WordBank.install(WordList(emptyList()))
+
+            app.ring(fired)
+            app.awaitRinging()
+
+            assertEquals(
+                listOf(CheckEntry(CheckType.Math, Difficulty.Medium, CheckType.Math.defaultCount)),
+                (app.engine.state.value as SessionState.Ringing)
+                    .session.config.checkPlan.entries,
+            )
+        } finally {
+            WordBank.install(installed)
+        }
+    }
+
+    @Test
+    fun `accessibility on without touch exploration keeps Memory Sequence plain (Story 3-8 review fix)`() {
+        val app = WakeApp()
+        val memory = CheckEntry(CheckType.MemorySequence(), Difficulty.Hard, count = 2)
+        val checks = app.koin.get<CheckConfigRepository>()
+        assertEquals(Outcome.Success(Unit), runBlocking { checks.saveWithAlarm(alarmA, checkConfigsOf(alarmA.id, listOf(memory))) })
+        shadowOf(app.app.getSystemService(AccessibilityManager::class.java)).apply {
+            setEnabled(true)
+            setTouchExplorationEnabled(false)
+        }
+
+        app.ring(fired)
+        app.awaitRinging()
+
+        val entry =
+            (app.engine.state.value as SessionState.Ringing)
+                .session.config.checkPlan.entries
+                .single()
+        assertEquals(CheckType.MemorySequence(numbered = false), entry.type, "another accessibility service is not TalkBack")
     }
 
     private fun slot(app: WakeApp): ShadowAlarmManager.ScheduledAlarm? =

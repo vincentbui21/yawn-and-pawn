@@ -10,6 +10,7 @@ import com.yawnandpawn.app.core.time.Deadline
 import com.yawnandpawn.app.core.time.TimeZoneProvider
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.yield
 import kotlinx.datetime.TimeZone
@@ -81,6 +82,42 @@ internal class InMemoryAlarms : AlarmRepository {
             id !in alarms.value -> Outcome.Failure(DomainError.NotFound(id))
             else -> Outcome.Success(Unit).also { alarms.value -= id }
         }
+    }
+}
+
+/**
+ * The alarms' checks next to [alarms]: [saveWithAlarm] stores the alarm through it and then the rows, and no row when the
+ * alarm fails (one transaction). [failure] fails every call.
+ */
+internal class InMemoryCheckConfigs(
+    private val alarms: AlarmRepository,
+) : CheckConfigRepository {
+    val rows = MutableStateFlow<Map<String, List<CheckConfig>>>(emptyMap())
+    var failure: DomainError.StorageFailure? = null
+
+    override fun observeAlarmsWithChecks(): Flow<List<AlarmWithChecks>> =
+        combine(alarms.observeAll(), rows) { all, byAlarm -> all.map { AlarmWithChecks(it, byAlarm[it.id].orEmpty()) } }
+
+    override suspend fun forAlarm(alarmId: String): Outcome<List<CheckConfig>, DomainError> {
+        failure?.let { return Outcome.Failure(it) }
+        return Outcome.Success(rows.value[alarmId].orEmpty())
+    }
+
+    override suspend fun saveWithAlarm(
+        alarm: Alarm,
+        configs: List<CheckConfig>,
+    ): Outcome<Unit, DomainError> {
+        failure?.let { return Outcome.Failure(it) }
+        val stored = alarms.upsert(alarm)
+        if (stored is Outcome.Success) rows.value += alarm.id to configs.sortedBy { it.position }
+        return stored
+    }
+
+    override suspend fun deleteWithAlarm(alarmId: String): Outcome<Unit, DomainError> {
+        failure?.let { return Outcome.Failure(it) }
+        val deleted = alarms.delete(alarmId)
+        if (deleted is Outcome.Success) rows.value -= alarmId
+        return deleted
     }
 }
 

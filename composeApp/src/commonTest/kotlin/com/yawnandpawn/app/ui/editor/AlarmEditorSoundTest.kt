@@ -80,6 +80,7 @@ class AlarmEditorSoundTest {
     ) = AlarmEditorViewModel(
         alarmId = alarmId,
         repository = repository,
+        checkConfigs = alarms.checkConfigs,
         saveAlarm = alarms.save,
         clock = clock,
         timeZoneProvider = zone,

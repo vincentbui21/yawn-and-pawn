@@ -39,6 +39,7 @@ import androidx.navigationevent.compose.NavigationBackHandler
 import androidx.navigationevent.compose.rememberNavigationEventState
 import com.yawnandpawn.app.core.alarm.AlarmField
 import com.yawnandpawn.app.ui.checks.displayName
+import com.yawnandpawn.app.ui.checksetup.CheckPreviewScreen
 import com.yawnandpawn.app.ui.components.ConfirmDialog
 import com.yawnandpawn.app.ui.components.DayChipRow
 import com.yawnandpawn.app.ui.components.GroupCard
@@ -179,12 +180,29 @@ fun AlarmEditorScreen(
         } else {
             AnimatedContent(
                 targetState = state.pane,
-                transitionSpec = { subScreenTransition(forward = targetState != EditorPane.Main) },
+                transitionSpec = { subScreenTransition(forward = targetState.depth > initialState.depth) },
                 label = "editor pane",
             ) { pane ->
                 when (pane) {
-                    EditorPane.Main -> EditorMain(state = state, is24Hour = is24Hour, onIntent = onIntent, scroll = mainScroll)
-                    else -> EditorSubScreen(pane = pane, state = state, onIntent = onIntent)
+                    EditorPane.Main -> {
+                        EditorMain(state = state, is24Hour = is24Hour, onIntent = onIntent, scroll = mainScroll)
+                    }
+
+                    // "Try it" (Story 3.6): the approved Sunrise preview, full screen, over the editor's own state.
+                    EditorPane.TryIt -> {
+                        // The last preview, so it slides out with its content after Done or Back (Story 3.6 review).
+                        rememberLastNonNull(state.tryIt)?.let { tryIt ->
+                            CheckPreviewScreen(
+                                state = tryIt,
+                                onIntent = { onIntent(EditorIntent.TryIt(it)) },
+                                onClose = { onIntent(EditorIntent.BackRequested) },
+                            )
+                        }
+                    }
+
+                    else -> {
+                        EditorSubScreen(pane = pane, state = state, onIntent = onIntent)
+                    }
                 }
             }
         }
@@ -332,8 +350,9 @@ private fun RowsCard(
     onIntent: (EditorIntent) -> Unit,
 ) {
     val full = state.full
+    val shown = full?.rows.orEmpty()
     GroupCard {
-        if (full != null) {
+        if (full != null && EditorPane.WakeCheck in shown) {
             NavRow(
                 label = stringResource(Res.string.editor_wake_check),
                 value = checkSummary(full),
@@ -359,7 +378,7 @@ private fun RowsCard(
             value = stringResource(Res.string.editor_snooze_minutes, state.form.snoozeLengthMinutes),
             onClick = { onIntent(EditorIntent.PaneOpened(EditorPane.Snooze)) },
         )
-        if (full != null) {
+        if (full != null && EditorPane.Motivation in shown) {
             GroupDivider()
             NavRow(
                 label = stringResource(Res.string.editor_motivation),

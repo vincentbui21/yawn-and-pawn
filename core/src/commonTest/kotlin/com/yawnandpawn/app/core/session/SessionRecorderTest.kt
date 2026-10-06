@@ -283,6 +283,7 @@ class SessionRecorderTest {
         assertEquals(names.size, names.toSet().size, "unique: $names")
         assertTrue(names.all { it.isNotEmpty() && ',' !in it }, "non-empty and comma-free: $names")
         // Stored in session history: a changed id would split a type's history in two.
-        assertEquals(listOf("Math", "Placeholder"), names)
+        assertEquals(listOf("Math", "WordUnscramble", "MemorySequence", "Placeholder"), names)
+        assertEquals("MemorySequence", CheckType.MemorySequence(numbered = true).id, "both variants record one type")
     }
 }

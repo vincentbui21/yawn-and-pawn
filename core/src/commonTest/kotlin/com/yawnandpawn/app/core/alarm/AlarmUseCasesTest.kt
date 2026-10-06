@@ -36,10 +36,11 @@ class AlarmUseCasesTest {
     private val restored = MutableStateFlow(true)
     private val emergency = MutableStateFlow(false)
     private val sessionLock = SessionLockGuard(sessionState, restored, emergency)
-    private val save = SaveAlarm(repository, ids, clock, lock, sequence, scheduling, sessionLock)
+    private val checkConfigs = InMemoryCheckConfigs(repository)
+    private val save = SaveAlarm(repository, ids, clock, lock, sequence, scheduling, sessionLock, checkConfigs)
     private val setEnabled = SetAlarmEnabled(repository, clock, lock, scheduling, sessionLock)
-    private val delete = DeleteAlarm(repository, lock, scheduling, sessionLock)
-    private val duplicate = DuplicateAlarm(repository, ids, clock, lock, sequence, scheduling, sessionLock)
+    private val delete = DeleteAlarm(repository, lock, scheduling, sessionLock, checkConfigs)
+    private val duplicate = DuplicateAlarm(repository, ids, clock, lock, sequence, scheduling, sessionLock, checkConfigs)
 
     private val draft = AlarmDraft(time = LocalTime(7, 0), repeatDays = setOf(DayOfWeek.MONDAY), label = "Gym")
 
@@ -405,6 +406,7 @@ class AlarmUseCasesTest {
             val alarm = saved()
             val before = stored()
             val codeBefore = sequence.lastUsed
+            val checksBefore = checkConfigs.rows.value
             scheduler.calls.clear()
             val active = ringSession()
             val locks: List<Pair<String, () -> Unit>> =
@@ -438,6 +440,7 @@ class AlarmUseCasesTest {
 
             assertEquals(before, stored(), "nothing stored")
             assertEquals(codeBefore, sequence.lastUsed, "no request code allocated")
+            assertEquals(checksBefore, checkConfigs.rows.value, "no check written or removed")
             assertEquals(emptyList(), scheduler.calls, "nothing armed or cancelled")
             // Back to Idle: the same calls work again.
             sessionState.value = SessionState.Idle

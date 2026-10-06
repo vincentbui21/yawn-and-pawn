@@ -129,9 +129,10 @@ internal class CheckRules(
     ): Transition = Transition(state.with(state.session.copy(checkRun = run)), emptyList())
 
     /**
-     * One more failed attempt on the current entry and in the session. With [restart] the entry's puzzle starts over at
-     * its first item with a new seed from [SeedDeriver], keyed by the entry's new failed-attempt count, so each restart
-     * gets another puzzle (with no seed slot for the entry, only the item starts over).
+     * One more failed attempt on the current entry and in the session. With [restart] the entry's puzzle starts over where
+     * its type says (item 0, or the current Memory round, [restartItem]) with a new seed from [SeedDeriver], keyed by the
+     * entry's new failed-attempt count, so each restart gets another puzzle (with no seed slot for the entry, only the
+     * item starts over).
      */
     private fun failedAttempt(
         state: Ring,
@@ -151,13 +152,19 @@ internal class CheckRules(
 
                 entry in run.seeds.indices -> {
                     val seed = run.seedOf(session.sessionId, session.ringIndex, entry, attempts)
-                    counted.copy(seeds = run.seeds.toMutableList().also { it[entry] = seed }, step = run.step.copy(item = 0))
+                    counted.copy(
+                        seeds = run.seeds.toMutableList().also { it[entry] = seed },
+                        step = run.step.copy(item = run.restartItem()),
+                    )
                 }
 
                 else -> {
-                    counted.copy(step = run.step.copy(item = 0))
+                    counted.copy(step = run.step.copy(item = run.restartItem()))
                 }
             }
         return Transition(state.with(session.copy(checkRun = next)), listOf(feedback))
     }
 }
+
+/** Where the current entry starts again after a wrong restart: item 0, or the current round's first tap (Memory, Story 3.8). */
+private fun CheckRun.restartItem(): Int = currentEntry?.let { it.type.restartFrom(step.item, it.difficulty) } ?: 0

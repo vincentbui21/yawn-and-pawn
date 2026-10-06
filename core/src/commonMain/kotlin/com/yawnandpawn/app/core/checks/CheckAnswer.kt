@@ -25,4 +25,18 @@ sealed interface CheckAnswer {
     data class Number(
         val digits: String,
     ) : CheckAnswer
+
+    /** A word spelled from the letters of a [CheckType.WordUnscramble] item (any case). */
+    @Serializable
+    @SerialName("Word")
+    data class Word(
+        val text: String,
+    ) : CheckAnswer
+
+    /** One tile tapped on a [CheckType.MemorySequence] grid, numbered from 1 row by row. */
+    @Serializable
+    @SerialName("Tile")
+    data class Tile(
+        val number: Int,
+    ) : CheckAnswer
 }

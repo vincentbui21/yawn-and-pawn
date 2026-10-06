@@ -55,6 +55,7 @@ class EditorRouteLifecycleTest {
             AlarmEditorViewModel(
                 alarmId = null,
                 repository = repository,
+                checkConfigs = alarms.checkConfigs,
                 saveAlarm = alarms.save,
                 clock = FakeClock(),
                 timeZoneProvider = FakeTimeZoneProvider(),

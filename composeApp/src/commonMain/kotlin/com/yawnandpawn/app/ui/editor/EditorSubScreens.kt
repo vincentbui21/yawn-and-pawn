@@ -2,11 +2,16 @@ package com.yawnandpawn.app.ui.editor
 
 import androidx.compose.foundation.layout.padding
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import com.yawnandpawn.app.core.alarm.Alarm
 import com.yawnandpawn.app.ui.checkpicker.CheckPickerContent
 import com.yawnandpawn.app.ui.checkpicker.CheckPickerIntent
 import com.yawnandpawn.app.ui.checkpicker.CheckPickerUiState
+import com.yawnandpawn.app.ui.checks.core
+import com.yawnandpawn.app.ui.checks.displayName
+import com.yawnandpawn.app.ui.checksetup.CheckSetupContent
+import com.yawnandpawn.app.ui.checksetup.CheckSetupUiState
 import com.yawnandpawn.app.ui.components.GroupCard
 import com.yawnandpawn.app.ui.components.GroupDivider
 import com.yawnandpawn.app.ui.components.NavRow
@@ -57,27 +62,88 @@ internal fun EditorSubScreen(
     onIntent: (EditorIntent) -> Unit,
 ) {
     val full = state.full
+    // The last setup shown, so the pane keeps its content and title while it slides out after Back (Story 3.5 review).
+    val setup = rememberLastNonNull(if (pane == EditorPane.CheckSetup) state.checkSetupState() else null)
     SubScreen(
-        title = stringResource(pane.title()),
+        // Check setup is titled with the check's name, like the standalone Check setup screen.
+        title = setup?.type?.displayName() ?: stringResource(pane.title()),
         backContentDescription = stringResource(Res.string.editor_back),
         onBack = { onIntent(EditorIntent.BackRequested) },
     ) {
         when (pane) {
-            EditorPane.Main -> Unit
-            EditorPane.Sound -> SoundPane(state = state, onIntent = onIntent)
-            EditorPane.Snooze -> SnoozePane(state = state, onIntent = onIntent)
-            EditorPane.WakeCheck -> full?.let { WakeCheckPane(full = it, onIntent = onIntent) }
-            EditorPane.QuietTime -> QuietTimePane(form = state.form, onIntent = onIntent)
-            EditorPane.Motivation -> full?.let { MotivationPane(full = it, onIntent = onIntent) }
+            // "Try it" has its own full-screen preview (AlarmEditorScreen), never a sub-screen.
+            EditorPane.Main, EditorPane.TryIt -> {
+                Unit
+            }
+
+            EditorPane.Sound -> {
+                SoundPane(state = state, onIntent = onIntent)
+            }
+
+            EditorPane.Snooze -> {
+                SnoozePane(state = state, onIntent = onIntent)
+            }
+
+            EditorPane.WakeCheck -> {
+                full?.let { WakeCheckPane(full = it, onIntent = onIntent) }
+            }
+
+            EditorPane.QuietTime -> {
+                QuietTimePane(form = state.form, onIntent = onIntent)
+            }
+
+            EditorPane.Motivation -> {
+                full?.let { MotivationPane(full = it, onIntent = onIntent) }
+            }
+
+            EditorPane.CheckSetup -> {
+                setup?.let {
+                    CheckSetupContent(state = it, onIntent = { intent ->
+                        onIntent(EditorIntent.CheckSetup(intent))
+                    })
+                }
+            }
         }
     }
+}
+
+/**
+ * The Check setup of [EditorUiState.setupType] as the form holds it, with the core type's count range; null when that
+ * check is not selected.
+ */
+internal fun EditorUiState.checkSetupState(): CheckSetupUiState? {
+    val chip = form.checks.firstOrNull { it.type == setupType } ?: return null
+    val range = chip.type.core?.countRange ?: (CheckSetupUiState.MIN_COUNT..CheckSetupUiState.MAX_COUNT)
+    return CheckSetupUiState(
+        type = chip.type,
+        difficulty = chip.difficulty,
+        count = chip.count,
+        countRange = range,
+        talkBackOn = full?.talkBackOn == true,
+    )
+}
+
+/**
+ * [value], or the last non-null value it had in this composition: a pane sliding out after Back keeps showing what it
+ * showed (its Check setup, its "Try it" preview) although the editor state no longer holds it (Stories 3.5, 3.6 review).
+ */
+@Composable
+internal fun <T : Any> rememberLastNonNull(value: T?): T? {
+    val last = remember { LastValue<T>() }
+    if (value != null) last.value = value
+    return last.value
+}
+
+/** Holds the last value for [rememberLastNonNull]; not snapshot state, since a new value always comes with a recomposition. */
+private class LastValue<T : Any> {
+    var value: T? = null
 }
 
 private fun EditorPane.title(): StringResource =
     when (this) {
         EditorPane.Main, EditorPane.Sound -> Res.string.editor_sound
         EditorPane.Snooze -> Res.string.editor_snooze
-        EditorPane.WakeCheck -> Res.string.editor_wake_check
+        EditorPane.WakeCheck, EditorPane.CheckSetup, EditorPane.TryIt -> Res.string.editor_wake_check
         EditorPane.QuietTime -> Res.string.editor_quiet_time
         EditorPane.Motivation -> Res.string.editor_motivation
     }
@@ -158,6 +224,8 @@ private fun WakeCheckPane(
                 noCheckError = full.noCheckError,
                 qrCodeSaved = full.qrCodeSaved,
                 houseHuntPhotos = full.houseHuntPhotos,
+                talkBackOn = full.talkBackOn,
+                types = full.types,
             ),
         onIntent = { intent ->
             when (intent) {

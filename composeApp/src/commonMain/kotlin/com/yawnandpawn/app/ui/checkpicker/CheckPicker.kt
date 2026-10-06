@@ -15,7 +15,10 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.semantics.CustomAccessibilityAction
 import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.customActions
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
 import com.yawnandpawn.app.ui.checks.CheckType
 import com.yawnandpawn.app.ui.checks.Difficulty
@@ -78,6 +81,8 @@ data class CheckPickerUiState(
     val qrCodeSaved: Boolean = false,
     /** House Hunt reference photos taken, 0 to 3; with none its row says "Take at least one photo." */
     val houseHuntPhotos: Int = 0,
+    /** The checks the "Checks" card lists, in order: every one in the preview, the pickable ones in the app (Story 3.5). */
+    val types: List<CheckType> = CheckType.entries,
 )
 
 /** Everything the user can do in the Check picker. */
@@ -147,7 +152,7 @@ fun CheckPickerContent(
         )
     }
     GroupCard(title = stringResource(Res.string.editor_checks)) {
-        CheckType.entries.forEachIndexed { index, type ->
+        state.types.forEachIndexed { index, type ->
             if (index > 0) GroupDivider()
             CheckTypeRow(
                 type = type,
@@ -282,6 +287,7 @@ private fun SetupRow(
 ) {
     val colors = PpsTheme.colors
     val spacing = PpsTheme.spacing
+    val moves = moveActions(chip, reorder, onIntent)
     Row(verticalAlignment = Alignment.CenterVertically) {
         reorder?.let { (index, last) ->
             MoveButton(
@@ -303,6 +309,7 @@ private fun SetupRow(
                 Modifier
                     .weight(1f)
                     .clickable(role = Role.Button) { onIntent(CheckPickerIntent.SetupClicked(chip.type)) }
+                    .semantics { if (moves.isNotEmpty()) customActions = moves }
                     .heightIn(min = ROW_HEIGHT)
                     .padding(start = if (reorder == null) spacing.cardPadding else spacing.space1, end = spacing.cardPadding)
                     .padding(vertical = spacing.space2),
@@ -321,6 +328,30 @@ private fun SetupRow(
             )
         }
     }
+}
+
+/**
+ * TalkBack: the row's actions menu offers the same "Move up" / "Move down" as its buttons, each only where the check can
+ * move ([reorder]: index to last index, All mode only; Story 3.5).
+ */
+@Composable
+private fun moveActions(
+    chip: CheckChip,
+    reorder: Pair<Int, Int>?,
+    onIntent: (CheckPickerIntent) -> Unit,
+): List<CustomAccessibilityAction> {
+    val moveUp = stringResource(Res.string.check_move_up)
+    val moveDown = stringResource(Res.string.check_move_down)
+    val (index, last) = reorder ?: return emptyList()
+
+    fun move(
+        label: String,
+        up: Boolean,
+    ) = CustomAccessibilityAction(label) {
+        onIntent(CheckPickerIntent.Moved(chip.type, up))
+        true
+    }
+    return listOfNotNull(if (index > 0) move(moveUp, up = true) else null, if (index < last) move(moveDown, up = false) else null)
 }
 
 @Composable

@@ -5,13 +5,15 @@ import com.yawnandpawn.app.core.error.Outcome
 import com.yawnandpawn.app.core.error.flatMap
 import com.yawnandpawn.app.core.history.SessionHistoryRepository
 import com.yawnandpawn.app.core.history.SessionHistoryRow
+import com.yawnandpawn.app.core.history.SessionMergeRow
 import com.yawnandpawn.app.core.history.SessionOutcome
 import kotlin.time.Instant
 
 /**
  * The only writer of session history (AD-18): one row per session id, upserted, so a repeated write is safe.
  * `SessionEngine` drives it: [recordStart] for the one-shot `RecordSessionStart`, [recordEnd] for the entry effect
- * `HistoryWriteRequested` of Completed and Missed. Nothing else calls [SessionHistoryRepository.upsert] (a writer scan
+ * `HistoryWriteRequested` of Completed and Missed, [recordMerge] for `RecordMergedOccurrence` (Story 2.9). Nothing else
+ * calls [SessionHistoryRepository.upsert] or [SessionHistoryRepository.recordMerge] (a writer scan
  * test enforces it). Failures come back as values; the engine logs them and retries the end write later.
  */
 class SessionRecorder(
@@ -42,6 +44,18 @@ class SessionRecorder(
                 ) ?: start,
             )
         }
+
+    /**
+     * The occurrence [merge] joined its session at [mergedAt] (FR-SES-7, Story 2.9): one `session_merge` row, insert or
+     * ignore, so the same merge replayed after a crash leaves one row with the first time.
+     */
+    suspend fun recordMerge(
+        merge: SessionEffect.RecordMergedOccurrence,
+        mergedAt: Instant,
+    ): Outcome<Unit, DomainError> =
+        repository.recordMerge(
+            SessionMergeRow(sessionId = merge.sessionId, alarmId = merge.alarmId, scheduledAt = merge.scheduledAt, mergedAt = mergedAt),
+        )
 
     /**
      * The full row of [session], which ended as [end]. The end time is the session's own [SessionData.ended] (set by the

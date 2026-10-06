@@ -18,28 +18,42 @@ import kotlin.time.Duration.Companion.seconds
  * engine applies entry effects).
  * The rows live in `IdleRules.kt`, [RingRules], [CheckRules], [PurchaseRules] and `SnoozedRules.kt`.
  */
-class SessionReducer(
+class SessionReducer internal constructor(
     private val availabilityPolicy: SnoozeAvailabilityPolicy,
     checkValidator: CheckValidator,
     fallbackPolicy: FallbackPolicy,
+    /** A check plan before the first unlock ([DirectBootSubstitution.lockedPlan]); tests pass one that shows its use. */
+    private val directBootPlan: (CheckPlan) -> CheckPlan,
 ) {
+    constructor(
+        availabilityPolicy: SnoozeAvailabilityPolicy,
+        checkValidator: CheckValidator,
+        fallbackPolicy: FallbackPolicy,
+    ) : this(availabilityPolicy, checkValidator, fallbackPolicy, DirectBootSubstitution::lockedPlan)
+
     private val ringRules =
         RingRules(
-            checks = CheckRules(checkValidator, fallbackPolicy),
+            checks = CheckRules(checkValidator, fallbackPolicy, directBootPlan),
             purchases = PurchaseRules(this::snoozeAvailability),
+            directBootPlan = directBootPlan,
         )
 
-    /** The next state and one-shot effects for [event] in [state] at [now]. */
+    /**
+     * The next state and one-shot effects for [event] in [state] at [now]. [userLocked] is the environment input "the
+     * user has not unlocked since boot" (Story 2.3), read by `SessionEngine` with the time: a ring that starts or is
+     * restored while locked is marked before the first unlock (Direct Boot substitutions, history `direct_boot`).
+     */
     fun reduce(
         state: SessionState,
         event: SessionEvent,
         now: TimeSnapshot,
+        userLocked: Boolean = false,
     ): Transition {
         val row =
             when (state) {
-                SessionState.Idle -> idleRow(event, now)
-                is SessionState.Ring -> ringRules.row(state, event, now)
-                is SessionState.Snoozed -> snoozedRow(state, event, now)
+                SessionState.Idle -> idleRow(event, now, userLocked, directBootPlan)
+                is SessionState.Ring -> ringRules.row(state, event, now, userLocked)
+                is SessionState.Snoozed -> snoozedRow(state, event, now, userLocked, directBootPlan)
                 is SessionState.Completed, is SessionState.Missed -> endedRow(state, event)
             }
         return row ?: Transition(state, listOf(SessionEffect.LogIgnored.of(event, (state as? SessionState.Active)?.session?.sessionId)))

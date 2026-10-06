@@ -11,6 +11,7 @@
       - app.db-journal: the rollback journal (TRUNCATE mode keeps every commit in app.db itself); app.db.lck and
         runtime.db.lck: Room's lock files;
       - wake_runtime.xml: the user's volume saved during a ring; backup_restore.xml: the skipped-restore notice flag;
+        reliability.xml: whether the notification permission was asked (Story 2.3), per device, so a new phone asks again;
       - the whole credential-protected storage (root, file, database, sharedpref), where media will live (Epic 7).
     Because there are includes, anything not included is not backed up either. Lint calls an exclude outside every
     include redundant (FullBackupContent); it is ignored on those elements on purpose.
@@ -28,6 +29,7 @@
         <exclude domain="device_database" path="runtime.db.lck" tools:ignore="FullBackupContent" />
         <exclude domain="device_sharedpref" path="wake_runtime.xml" tools:ignore="FullBackupContent" />
         <exclude domain="device_sharedpref" path="backup_restore.xml" tools:ignore="FullBackupContent" />
+        <exclude domain="device_sharedpref" path="reliability.xml" tools:ignore="FullBackupContent" />
         <exclude domain="root" path="." tools:ignore="FullBackupContent" />
         <exclude domain="file" path="." tools:ignore="FullBackupContent" />
         <exclude domain="database" path="." tools:ignore="FullBackupContent" />
@@ -45,6 +47,7 @@
         <exclude domain="device_database" path="runtime.db.lck" tools:ignore="FullBackupContent" />
         <exclude domain="device_sharedpref" path="wake_runtime.xml" tools:ignore="FullBackupContent" />
         <exclude domain="device_sharedpref" path="backup_restore.xml" tools:ignore="FullBackupContent" />
+        <exclude domain="device_sharedpref" path="reliability.xml" tools:ignore="FullBackupContent" />
         <exclude domain="root" path="." tools:ignore="FullBackupContent" />
         <exclude domain="file" path="." tools:ignore="FullBackupContent" />
         <exclude domain="database" path="." tools:ignore="FullBackupContent" />

@@ -50,6 +50,14 @@ yawn-and-pawn:
   # Active for every module; it only looks at files that import or name android.app.AlarmManager.
   NoInexactAlarm:
     active: true
+  # Device-protected storage only, so the alarm rings before the first unlock (AD-15, Story 2.3). App modules that
+  # touch storage; tests are excluded, and package ...android.media (Epic 7 media) is exempt inside the rule.
+  CredentialStorageAccess:
+    active: true
+    includes:
+      - '**/data/src/**'
+      - '**/androidApp/src/**'
+    excludes: *testSources
 
 # Test source sets detekt's defaults do not know (androidHostTest, testDebug) are tests too.
 complexity:

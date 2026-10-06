@@ -48,6 +48,8 @@ class BackupRulesTest {
             Triple("exclude", "device_database", "$runtimeDb.lck"),
             Triple("exclude", "device_sharedpref", "wake_runtime.xml"),
             Triple("exclude", "device_sharedpref", "${SkippedRestoreNotice.PREFS}.xml"),
+            // AndroidNotificationPermission's "asked once" flag (device-protected since Story 2.3), kept per device.
+            Triple("exclude", "device_sharedpref", "reliability.xml"),
             Triple("exclude", "root", "."),
             Triple("exclude", "file", "."),
             Triple("exclude", "database", "."),

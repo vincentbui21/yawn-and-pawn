@@ -6,7 +6,6 @@ import android.content.Intent
 import android.content.pm.ServiceInfo
 import android.os.Build
 import android.os.IBinder
-import android.os.UserManager
 import com.yawnandpawn.app.android.AlarmFiredReceiver
 import com.yawnandpawn.app.android.ApplicationScope
 import com.yawnandpawn.app.android.alarmFiredOrNull
@@ -27,15 +26,19 @@ import com.yawnandpawn.app.core.log.Logger
 import com.yawnandpawn.app.core.log.WakeStage
 import com.yawnandpawn.app.core.log.diagnostic
 import com.yawnandpawn.app.core.session.CheckAnswer
+import com.yawnandpawn.app.core.session.CheckPlan
 import com.yawnandpawn.app.core.session.ConfigResolver
+import com.yawnandpawn.app.core.session.DirectBootSubstitution
 import com.yawnandpawn.app.core.session.GlobalSettings
 import com.yawnandpawn.app.core.session.SeedSource
+import com.yawnandpawn.app.core.session.SessionData
 import com.yawnandpawn.app.core.session.SessionEngine
 import com.yawnandpawn.app.core.session.SessionEvent
 import com.yawnandpawn.app.core.session.SessionReducer
 import com.yawnandpawn.app.core.session.SessionSlotRearm
 import com.yawnandpawn.app.core.session.SessionState
 import com.yawnandpawn.app.core.session.TestAlarmStore
+import com.yawnandpawn.app.core.session.UserLockState
 import com.yawnandpawn.app.core.session.nextTickIn
 import com.yawnandpawn.app.core.time.BootCounter
 import com.yawnandpawn.app.core.time.Clock
@@ -67,7 +70,8 @@ import kotlin.time.Instant
  * - `onStartCommand` calls `startForeground` with the ringing notification first, before any suspend work, then tells
  *   [WakeServiceStarts] (the alarm receiver keeps its broadcast open until then). Alarm and test starts log their
  *   ring-start timing ([WakeTimings]).
- * - **Alarm:** while a session rings or is snoozed it dispatches `OverlapAlarmFired`; otherwise it reads the alarm and
+ * - **Alarm:** while a session rings or is snoozed it dispatches `OverlapAlarmFired` (unless the fire is not merged, see
+ *   [mergeIgnoredBecause]); otherwise it reads the alarm and
  *   dispatches `AlarmFired` with a new session id, the config resolved now (`GlobalSettings` defaults until Epic 5), seeds
  *   from the [SeedSource] and whether the phone is still locked since boot. A deleted alarm rings nothing.
  * - **Slot (Story 2.1):** the kill-recovery path; see [onSlot]. **Restore:** it loads the stored session
@@ -112,6 +116,7 @@ class WakeService :
     private val starts: WakeServiceStarts by inject()
     private val timings: WakeTimings by inject()
     private val rearm: SessionSlotRearm by inject()
+    private val userLock: UserLockState by inject()
 
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate + CoroutineExceptionHandler { _, e -> onCrash(e) })
     private val commands = Mutex()
@@ -263,11 +268,19 @@ class WakeService :
         pending = null
     }
 
-    /** Merges [fired] into the session in [current] when one rings or is snoozed, else starts a session for it. */
+    /**
+     * Merges [fired] into the session in [current] when one rings or is snoozed, else starts a session for it. A fire
+     * that is not merged ([mergeIgnoredBecause]) is logged and rings nothing.
+     */
     private suspend fun route(
         fired: AlarmFired,
         current: SessionState,
     ) {
+        val notMerged = (current as? SessionState.Active)?.takeIf { it.isOngoing() }?.let { mergeIgnoredBecause(it.session, fired) }
+        if (notMerged != null) {
+            logger.log(LogEvent.FireIgnored(FireKind.Alarm, fired.alarmId, notMerged))
+            return
+        }
         // A real alarm never merges into a test (Story 1.18): the test ends (logged Test) and the real session starts.
         val state = if (current is SessionState.Ring && current.session.config.testMode) endTestSession(current) else current
         if (state.isOngoing()) {
@@ -275,6 +288,34 @@ class WakeService :
             if (merged is Outcome.Failure) ringIfSilent("merge not saved: ${merged.error.diagnostic()}", fired)
         } else {
             startSession(fired)
+        }
+    }
+
+    /**
+     * Why [fired] is not merged into the ringing or snoozed [session] (Story 2.9), or null when it merges:
+     * - the session's own occurrence (same alarm and scheduled time, for example the backup slot of the alarm that
+     *   started it): never merged into itself;
+     * - the alarm was deleted before the service handled it;
+     * - a repeating alarm switched off before the service handled it. A disabled one-time alarm still merges:
+     *   `RearmOnFire` switches a fired one-time alarm off before the service reads it, and the receiver already refused
+     *   one that was off when it fired.
+     *
+     * The read is bounded by [ALARM_READ_TIMEOUT]: a read that fails or takes longer merges (never silent).
+     */
+    private suspend fun mergeIgnoredBecause(
+        session: SessionData,
+        fired: AlarmFired,
+    ): String? {
+        val config = session.config
+        if (!config.testMode && config.alarmId == fired.alarmId && config.scheduledAt == fired.scheduledAt) {
+            return "the session's own occurrence"
+        }
+        val read = withTimeoutOrNull(ALARM_READ_TIMEOUT) { repository.get(fired.alarmId) }
+        val alarm = (read as? Outcome.Success)?.value
+        return when {
+            read is Outcome.Failure && read.error is DomainError.NotFound -> "alarm deleted before it rang"
+            alarm != null && !alarm.enabled && alarm.repeatDays.isNotEmpty() -> "repeating alarm switched off before it rang"
+            else -> null
         }
     }
 
@@ -302,12 +343,13 @@ class WakeService :
         alarm: Alarm,
     ) {
         val config = ConfigResolver.resolve(alarm, GlobalSettings(), testMode = false, scheduledAt = fired.scheduledAt)
+        val locked = !userLock.isUserUnlocked()
         val event =
             SessionEvent.AlarmFired(
                 sessionId = ids.newId(),
                 config = config,
-                seeds = seeds.seedsFor(config.checkPlan),
-                beforeFirstUnlock = !getSystemService(UserManager::class.java).isUserUnlocked,
+                seeds = seedsFor(config.checkPlan, locked),
+                beforeFirstUnlock = locked,
             )
         when (val started = engine.dispatch(event)) {
             is Outcome.Failure -> {
@@ -323,6 +365,12 @@ class WakeService :
             }
         }
     }
+
+    /** Seeds for the plan the first ring really runs: before the first unlock, with the Direct Boot substitutions (Story 2.3). */
+    private fun seedsFor(
+        plan: CheckPlan,
+        locked: Boolean,
+    ): List<Long> = seeds.seedsFor(DirectBootSubstitution.plan(plan, locked))
 
     private fun alarmUnreadable(
         fired: AlarmFired,
@@ -352,12 +400,13 @@ class WakeService :
             logger.log(LogEvent.FireIgnored(FireKind.TestAlarm, alarmId = null, reason = "no test pending"))
             return
         }
+        val locked = !userLock.isUserUnlocked()
         val event =
             SessionEvent.TestAlarmFired(
                 sessionId = ids.newId(),
                 config = pending,
-                seeds = seeds.seedsFor(pending.checkPlan),
-                beforeFirstUnlock = !getSystemService(UserManager::class.java).isUserUnlocked,
+                seeds = seedsFor(pending.checkPlan, locked),
+                beforeFirstUnlock = locked,
             )
         val started = engine.dispatch(event)
         if (started is Outcome.Failure) {
@@ -543,6 +592,9 @@ class WakeService :
 
         /** The earliest retry of a tick that changed nothing (for example its commit failed). */
         private val TICK_RETRY = 1.seconds
+
+        /** The bound on the alarm read before a merge (Story 2.9 review): a slower read counts as a failure and merges. */
+        internal val ALARM_READ_TIMEOUT = 3.seconds
         private const val MAX_CRASH_RESTARTS = 3
 
         /** The explicit intent for [action]. */

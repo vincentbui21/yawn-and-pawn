@@ -165,7 +165,11 @@ class SessionClockChangeTest {
             val state = assertIs<SessionState.Ringing>(phone.dispatch(merged))
 
             assertEquals(SESSION_ID, state.session.sessionId)
-            assertTrue(phone.runner.oneShot.any { it is SessionEffect.RecordMergedOccurrence && it.alarmId == "alarm-2" })
+            assertTrue(
+                phone.history.mergeRows.values
+                    .any { it.alarmId == "alarm-2" },
+                "recorded in session_merge",
+            )
             assertTrue(SessionEffect.RescheduleAlarm("alarm-2") in phone.runner.oneShot)
         }
 

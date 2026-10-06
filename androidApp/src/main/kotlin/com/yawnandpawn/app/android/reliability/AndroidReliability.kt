@@ -121,7 +121,8 @@ class AndroidNotificationPermission(
     private val logger: Logger,
     private val sdkInt: Int = Build.VERSION.SDK_INT,
 ) : NotificationPermission {
-    private val prefs = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
+    // Device-protected like every app file (Story 2.3, detekt CredentialStorageAccess); read only with the app open.
+    private val prefs = context.createDeviceProtectedStorageContext().getSharedPreferences(PREFS, Context.MODE_PRIVATE)
 
     @Volatile
     private var launcher: (() -> Unit)? = null

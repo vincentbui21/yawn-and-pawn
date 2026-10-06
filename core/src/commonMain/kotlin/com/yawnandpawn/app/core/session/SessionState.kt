@@ -99,7 +99,8 @@ sealed interface SessionState {
  * @property ringIndex 1 for the first ring, +1 for each ring after a snooze or a merge.
  * @property paying the purchase in flight, if any; cleared on restore (billing is never relaunched).
  * @property noGraceThisRing this ring started from a merged alarm, so "I'm up" goes straight to [SessionState.Loud].
- * @property beforeFirstUnlock the phone has not been unlocked since boot (Direct Boot substitutions apply).
+ * @property beforeFirstUnlock this ring rings before the first unlock since boot (Direct Boot substitutions apply). Set
+ * from the lock state when a ring starts, is restored or follows a snooze (Story 2.3), and cleared by `UserUnlocked`.
  * @property paymentPending Play reported a pending payment; cleared by a later grant.
  * @property declinedReuseProduct the product whose stranded payment the user declined to reuse.
  * @property graceEnd when the grace window ends (Grace only).
@@ -109,8 +110,9 @@ sealed interface SessionState {
  * [graceEnd] and [interactionDeadline], so paused time never counts.
  * @property firstRing when the first ring started (AD-18 history), set by `AlarmFired` / `TestAlarmFired`. Null in a
  * session stored before Story 1.13; the recorder then falls back to the stored history row, then to the scheduled time.
- * @property startedBeforeUnlock the session started before the first unlock after a boot. Unlike [beforeFirstUnlock]
- * it never changes, so history keeps it after `UserUnlocked`.
+ * @property startedBeforeUnlock a ring of the session rang before the first unlock after a boot: its first ring, or a
+ * ring started or restored while locked (Story 2.3; history `direct_boot`). Unlike [beforeFirstUnlock], which each
+ * new ring sets from the lock state, it only ever goes from false to true, so history keeps it after the unlock.
  * @property ended when the session ended (Completed or Missed), set by the reducer on that transition; null before.
  */
 @Serializable

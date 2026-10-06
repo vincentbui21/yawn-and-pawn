@@ -5,18 +5,24 @@ import com.yawnandpawn.app.core.time.TimeSnapshot
 
 // AD-2 rows from Idle, Completed and Missed. A null result means no row matches.
 
-/** Idle + AlarmFired (alarm enabled) and Idle + TestAlarmFired: the first ring. */
+/**
+ * Idle + AlarmFired (alarm enabled) and Idle + TestAlarmFired: the first ring. It is before the first unlock when the
+ * event says so or the user is locked now ([userLocked], Story 2.3).
+ */
 internal fun idleRow(
     event: SessionEvent,
     now: TimeSnapshot,
+    userLocked: Boolean = false,
+    directBootPlan: (CheckPlan) -> CheckPlan = DirectBootSubstitution::lockedPlan,
 ): Transition? =
     when (event) {
         is SessionEvent.AlarmFired -> {
-            event.config?.let { startSession(event.sessionId, it, event.seeds, event.beforeFirstUnlock, now) }
+            event.config?.let { startSession(event.sessionId, it, event.seeds, event.beforeFirstUnlock || userLocked, now, directBootPlan) }
         }
 
         is SessionEvent.TestAlarmFired -> {
-            startSession(event.sessionId, event.config.copy(testMode = true), event.seeds, event.beforeFirstUnlock, now)
+            val config = event.config.copy(testMode = true)
+            startSession(event.sessionId, config, event.seeds, event.beforeFirstUnlock || userLocked, now, directBootPlan)
         }
 
         else -> {
@@ -45,6 +51,7 @@ private fun startSession(
     seeds: List<Long>,
     beforeFirstUnlock: Boolean,
     now: TimeSnapshot,
+    directBootPlan: (CheckPlan) -> CheckPlan,
 ): Transition {
     val session =
         SessionData(
@@ -52,7 +59,9 @@ private fun startSession(
             config = config,
             ringIndex = 1,
             snoozesGranted = 0,
-            checkRun = CheckRun(plan = config.checkPlan, seeds = seeds),
+            // Before the first unlock the first check plan has the Direct Boot substitutions (Story 2.3); the wake service
+            // takes the seeds for that substituted plan, one per step.
+            checkRun = CheckRun(plan = if (beforeFirstUnlock) directBootPlan(config.checkPlan) else config.checkPlan, seeds = seeds),
             firstRing = now,
             startedBeforeUnlock = beforeFirstUnlock,
             beforeFirstUnlock = beforeFirstUnlock,

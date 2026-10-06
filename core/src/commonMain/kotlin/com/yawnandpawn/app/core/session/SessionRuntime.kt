@@ -77,8 +77,13 @@ private fun timerDeadline(state: SessionState): Deadline? {
     }
 }
 
+/** The ring's sound: before the first unlock a sound that needs normal storage is the default one (Story 2.3). */
 private fun soundOf(session: SessionData): EntryEffect =
-    if (session.paused) EntryEffect.SoundPaused else EntryEffect.SoundAt(session.config.soundRef, session.config.volumePercent)
+    if (session.paused) {
+        EntryEffect.SoundPaused
+    } else {
+        EntryEffect.SoundAt(DirectBootSubstitution.apply(session.config, session.beforeFirstUnlock).soundRef, session.config.volumePercent)
+    }
 
 private fun ringing(
     session: SessionData,

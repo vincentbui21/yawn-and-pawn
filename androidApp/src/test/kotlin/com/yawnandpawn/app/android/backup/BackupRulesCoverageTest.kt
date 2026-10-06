@@ -4,6 +4,7 @@ import android.content.Context
 import com.yawnandpawn.app.BackupRule
 import com.yawnandpawn.app.R
 import com.yawnandpawn.app.StopAppRule
+import com.yawnandpawn.app.android.reliability.AndroidNotificationPermission
 import com.yawnandpawn.app.android.wake.WakeApp
 import com.yawnandpawn.app.backupRules
 import com.yawnandpawn.app.core.alarm.Alarm
@@ -39,8 +40,9 @@ import kotlin.time.Instant
 /**
  * Story 2.12: every file the app creates is either backed up or explicitly kept out, in every rule section. A full
  * morning runs on the real Room databases, DataStore and wake runtime: an alarm saved, its session rung, the check
- * done, history recorded, a missed note dismissed and a test alarm armed. Every file left under the app's storage must
- * then be named by an include or an exclude of the cloud backup, the device transfer and the API 30 rules. A later
+ * done, history recorded, a missed note dismissed, a test alarm armed and the notification permission asked. Every
+ * file left under the app's storage must then be named by an include or an exclude of the cloud backup, the device
+ * transfer and the API 30 rules. A later
  * story that adds a file must add it to the rules in the same change; this test names the file it missed. It only
  * scans the files its own flow creates, so a later story that adds a new storage file must also extend the flow here to
  * create that file (and add its rule).
@@ -64,6 +66,10 @@ class BackupRulesCoverageTest {
         assertNotNull(assertIs<Outcome.Success<*>>(runBlocking { koin.get<SessionHistoryRepository>().find(sessionId) }).value)
         assertIs<Outcome.Success<*>>(runBlocking { koin.get<MissedNoteDismissals>().dismiss("missed-session") })
         assertIs<Outcome.Success<*>>(runBlocking { koin.get<ScheduleTestAlarm>()(AlarmDraft(time = LocalTime(8, 0))) })
+        // The notification permission is asked once (Story 2.3 keeps that flag in device-protected preferences).
+        val reliability = File(app.app.createDeviceProtectedStorageContext().dataDir, "shared_prefs/reliability.xml")
+        koin.get<AndroidNotificationPermission>().apply { attach {} }.request()
+        app.awaitUntil("the asked-once flag is written") { reliability.isFile }
         // Close the databases and the DataStore, as when the process ends, so their files are final.
         stopApp()
 

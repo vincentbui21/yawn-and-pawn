@@ -6,6 +6,7 @@ import com.yawnandpawn.app.core.session.SnoozeAvailability
 import com.yawnandpawn.app.core.session.TierFeeLadder
 import com.yawnandpawn.app.core.session.UnavailableReason
 import com.yawnandpawn.app.core.session.nextOffer
+import com.yawnandpawn.app.testing.FakeUserLockState
 import com.yawnandpawn.app.testing.aSession
 import com.yawnandpawn.app.testing.aSessionConfig
 import com.yawnandpawn.app.ui.format.Money
@@ -28,7 +29,7 @@ object RingingSamples {
     ): SessionData = aSession(config = aSessionConfig(label = label, scheduledAt = at, testMode = testMode))
 
     private fun epic1(session: SessionData): RingingUiState =
-        ringingUiState(session, NoBillingSnoozeAvailability.availability(session), utc)
+        ringingUiState(session, NoBillingSnoozeAvailability().availability(session), utc)
 
     /** A normal Epic 1 first ring: "Prices not loaded yet" (TalkBack "Snooze unavailable, prices not loaded yet"). */
     val firstRing: RingingUiState = epic1(session())
@@ -41,6 +42,15 @@ object RingingSamples {
 
     /** A test alarm: "Test · no charge". */
     val testAlarm: RingingUiState = epic1(session(label = null, testMode = true))
+
+    /** The Epic 1 policy while the phone is still locked after a reboot (Story 2.3). */
+    private val locked = NoBillingSnoozeAvailability(FakeUserLockState(unlocked = false))
+
+    /** Before the first unlock: lock icon, "Unlock your phone to snooze" (TalkBack "Snooze unavailable, Unlock ..."). */
+    val lockedBeforeUnlock: RingingUiState = session().let { ringingUiState(it, locked.availability(it), utc) }
+
+    /** A test alarm before the first unlock still says "Test · no charge". */
+    val testAlarmLocked: RingingUiState = session(label = null, testMode = true).let { ringingUiState(it, locked.availability(it), utc) }
 
     /** The enabled "Snooze · {price}" variant, preview only until billing (Epic 4). */
     val enabledSnooze: RingingUiState =

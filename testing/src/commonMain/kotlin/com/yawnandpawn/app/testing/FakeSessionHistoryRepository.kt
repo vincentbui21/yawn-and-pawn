@@ -4,6 +4,7 @@ import com.yawnandpawn.app.core.error.DomainError
 import com.yawnandpawn.app.core.error.Outcome
 import com.yawnandpawn.app.core.history.SessionHistoryRepository
 import com.yawnandpawn.app.core.history.SessionHistoryRow
+import com.yawnandpawn.app.core.history.SessionMergeRow
 import com.yawnandpawn.app.core.history.SessionOutcome
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -47,6 +48,25 @@ class FakeSessionHistoryRepository : SessionHistoryRepository {
         findFailure?.let { return Outcome.Failure(it) }
         return Outcome.Success(stored[sessionId])
     }
+
+    private val mergeRows = linkedMapOf<Triple<String, String, Instant>, SessionMergeRow>()
+
+    /** Set to make [recordMerge] fail (nothing changes). */
+    var mergeFailure: DomainError? = null
+
+    /** The stored merge rows, oldest first. */
+    val merges: List<SessionMergeRow>
+        get() = mergeRows.values.toList()
+
+    /** Like the Room table: insert or ignore on (session id, alarm id, scheduled time). */
+    override suspend fun recordMerge(merge: SessionMergeRow): Outcome<Unit, DomainError> {
+        mergeFailure?.let { return Outcome.Failure(it) }
+        mergeRows.getOrPut(Triple(merge.sessionId, merge.alarmId, merge.scheduledAt)) { merge }
+        return Outcome.Success(Unit)
+    }
+
+    override suspend fun merges(sessionId: String): Outcome<List<SessionMergeRow>, DomainError> =
+        Outcome.Success(mergeRows.values.filter { it.sessionId == sessionId })
 
     /** Like the Room query: the Missed row with the latest end time, again after every upsert. */
     override fun observeLatestMissed(): Flow<SessionHistoryRow?> =

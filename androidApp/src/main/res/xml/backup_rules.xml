@@ -17,6 +17,7 @@
     <exclude domain="device_database" path="runtime.db.lck" tools:ignore="FullBackupContent" />
     <exclude domain="device_sharedpref" path="wake_runtime.xml" tools:ignore="FullBackupContent" />
     <exclude domain="device_sharedpref" path="backup_restore.xml" tools:ignore="FullBackupContent" />
+    <exclude domain="device_sharedpref" path="reliability.xml" tools:ignore="FullBackupContent" />
     <exclude domain="root" path="." tools:ignore="FullBackupContent" />
     <exclude domain="file" path="." tools:ignore="FullBackupContent" />
     <exclude domain="database" path="." tools:ignore="FullBackupContent" />

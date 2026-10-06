@@ -14,11 +14,11 @@ class SessionPoliciesTest {
     fun `the Epic 1 availability says test mode for test sessions and catalogue not loaded otherwise`() {
         assertEquals(
             SnoozeAvailability.Unavailable(UnavailableReason.TestMode),
-            NoBillingSnoozeAvailability.availability(ringSession(testConfig(testMode = true))),
+            NoBillingSnoozeAvailability().availability(ringSession(testConfig(testMode = true))),
         )
         assertEquals(
             SnoozeAvailability.Unavailable(UnavailableReason.CatalogueNotLoaded),
-            NoBillingSnoozeAvailability.availability(ringSession()),
+            NoBillingSnoozeAvailability().availability(ringSession()),
         )
     }
 

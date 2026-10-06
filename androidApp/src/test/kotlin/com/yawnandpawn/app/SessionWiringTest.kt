@@ -2,6 +2,7 @@ package com.yawnandpawn.app
 
 import android.content.Context
 import androidx.test.core.app.ApplicationProvider
+import com.yawnandpawn.app.android.AndroidUserLockState
 import com.yawnandpawn.app.android.ApplicationScope
 import com.yawnandpawn.app.android.UnavailableBilling
 import com.yawnandpawn.app.android.crash.FirebaseCrashReporter
@@ -27,6 +28,7 @@ import com.yawnandpawn.app.core.session.SessionReducer
 import com.yawnandpawn.app.core.session.SessionState
 import com.yawnandpawn.app.core.session.SnoozeAvailabilityPolicy
 import com.yawnandpawn.app.core.session.TierFeeLadder
+import com.yawnandpawn.app.core.session.UserLockState
 import com.yawnandpawn.app.data.history.RoomSessionHistoryRepository
 import com.yawnandpawn.app.data.session.RoomActiveSessionStore
 import org.junit.Rule
@@ -74,7 +76,8 @@ class SessionWiringTest {
     fun `Koin binds the Epic 1 production policies`() {
         val koin = GlobalContext.get()
 
-        assertSame(NoBillingSnoozeAvailability, koin.get<SnoozeAvailabilityPolicy>())
+        assertIs<NoBillingSnoozeAvailability>(koin.get<SnoozeAvailabilityPolicy>())
+        assertIs<AndroidUserLockState>(koin.get<UserLockState>())
         assertSame(PlaceholderCheckValidator, koin.get<CheckValidator>())
         assertSame(NoFallbackPolicy, koin.get<FallbackPolicy>())
         assertSame(TierFeeLadder, koin.get<FeeLadder>())

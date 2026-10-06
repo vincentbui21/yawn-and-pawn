@@ -90,7 +90,7 @@ class PpsBackupAgentTest {
         }
     }
 
-    /** The bytes of a v3 `app.db` holding [alarm] and [history], made by the app itself; the app is stopped after. */
+    /** The bytes of a current-schema `app.db` holding [alarm] and [history], made by the app itself; the app is stopped after. */
     private fun backedUpAppDb(): ByteArray {
         val koin = GlobalContext.get()
         runBlocking {

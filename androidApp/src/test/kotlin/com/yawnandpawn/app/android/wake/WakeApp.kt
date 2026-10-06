@@ -11,7 +11,9 @@ import com.yawnandpawn.app.android.ApplicationScope
 import com.yawnandpawn.app.core.alarm.AlarmFired
 import com.yawnandpawn.app.core.alarm.AlarmRepository
 import com.yawnandpawn.app.core.crash.CrashReporter
+import com.yawnandpawn.app.core.error.Outcome
 import com.yawnandpawn.app.core.history.SessionHistoryRepository
+import com.yawnandpawn.app.core.history.SessionMergeRow
 import com.yawnandpawn.app.core.session.ActiveSessionStore
 import com.yawnandpawn.app.core.session.Billing
 import com.yawnandpawn.app.core.session.SessionEngine
@@ -24,6 +26,7 @@ import com.yawnandpawn.app.core.time.TimeSnapshot
 import com.yawnandpawn.app.restartKoin
 import com.yawnandpawn.app.testing.FakeCrashReporter
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.runBlocking
 import org.koin.core.Koin
 import org.koin.core.context.GlobalContext
 import org.koin.dsl.module
@@ -109,6 +112,22 @@ internal class WakeApp(
     /** Starts the service for the alarm [fired]. */
     fun ring(fired: AlarmFired): ServiceController<WakeService> = startService(WakeService.alarmIntent(app, fired))
 
+    /** The `session_merge` rows of [sessionId] (Story 2.9) in the app's history repository. */
+    fun merges(sessionId: String): List<SessionMergeRow> =
+        when (val read = runBlocking { koin.get<SessionHistoryRepository>().merges(sessionId) }) {
+            is Outcome.Success -> read.value
+            is Outcome.Failure -> fail("merges not readable: ${read.error}")
+        }
+
+    /** Waits until [sessionId] has [count] merge rows (the engine writes them after the merge's other effects). */
+    fun awaitMerges(
+        sessionId: String,
+        count: Int = 1,
+    ): List<SessionMergeRow> {
+        awaitUntil("$count merge row(s) of $sessionId") { merges(sessionId).size >= count }
+        return merges(sessionId)
+    }
+
     /** The log lines of the app's logger. */
     fun logs(): List<String> = ShadowLog.getLogsForTag(AndroidLogger.TAG).map { it.msg }
 
@@ -142,7 +161,10 @@ internal class WakeApp(
 
     private companion object {
         const val MEDIA_MILLIS = 3_600_000
-        const val MAX_ROUNDS = 500
+
+        // About 30 s of real sleep (System.nanoTime is shadowed, so rounds count the time). A loaded gate run (many
+        // workers, a first Room open on another SDK) once needed more than 5 s for one dispatch.
+        const val MAX_ROUNDS = 3_000
         const val ROUND_MILLIS = 10L
     }
 }

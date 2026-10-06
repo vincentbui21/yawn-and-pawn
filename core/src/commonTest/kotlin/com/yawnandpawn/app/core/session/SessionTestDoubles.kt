@@ -117,7 +117,8 @@ internal fun reducer(
 ): SessionReducer = SessionReducer(StubAvailability(availability), StubCheck(check), StubFallback(fallback))
 
 /** The reducer Epic 1 ships with. */
-internal fun productionReducer(): SessionReducer = SessionReducer(NoBillingSnoozeAvailability, PlaceholderCheckValidator, NoFallbackPolicy)
+internal fun productionReducer(): SessionReducer =
+    SessionReducer(NoBillingSnoozeAvailability(), PlaceholderCheckValidator, NoFallbackPolicy)
 
 internal fun ignored(
     state: SessionState,

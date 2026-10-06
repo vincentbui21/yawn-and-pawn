@@ -67,4 +67,25 @@ interface SessionHistoryRepository {
      * Story 1.16). A read only. A storage failure is thrown into the flow; the collector catches it.
      */
     fun observeLatestMissed(): Flow<SessionHistoryRow?>
+
+    /**
+     * Records that the occurrence of [SessionMergeRow.alarmId] at [SessionMergeRow.scheduledAt] joined session
+     * [SessionMergeRow.sessionId] (FR-SES-7, Story 2.9). Insert or ignore on those three: recording the same merge twice
+     * (a replay after a crash) leaves one row with the first `mergedAt`.
+     */
+    suspend fun recordMerge(merge: SessionMergeRow): Outcome<Unit, DomainError>
+
+    /** The merges into [sessionId], oldest first (Day detail, Epic 6). */
+    suspend fun merges(sessionId: String): Outcome<List<SessionMergeRow>, DomainError>
 }
+
+/**
+ * One row of `session_merge` (Story 2.9): an alarm occurrence that rang during session [sessionId] and joined it
+ * instead of starting its own ("{time} alarm merged into this session", Epic 6). [mergedAt] is when it joined.
+ */
+data class SessionMergeRow(
+    val sessionId: String,
+    val alarmId: String,
+    val scheduledAt: Instant,
+    val mergedAt: Instant,
+)

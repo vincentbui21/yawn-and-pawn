@@ -2,7 +2,7 @@
 title: 'Story 3.13: Suggest re-registering after 3 fallbacks in 7 days'
 type: 'feature'
 created: '2026-10-06'
-status: 'in-progress'
+status: 'done'
 baseline_revision: '4899c12'
 review_loop_iteration: 0
 followup_review_recommended: false
@@ -33,7 +33,7 @@ deferred:
   - `FallbackHistory`: Room's `observeFallbacks`, the rows with a known `fallback_from`, newest first.
   - `CheckRegistrations`: `None` until 3.10.
   - `ReRegisterDismissals`: the device-protected settings DataStore, one epoch-millis key per `reregister_dismissed/<alarm>/<type>`.
-  - `ReRegisterSuggestions` combines the stored inputs and stores a dismissal at the clock's time.
+  - `ReRegisterSuggestions` combines the stored inputs and stores a dismissal marked with the newest fallback the banner counted (`ReRegisterSuggestion.newestFallbackAt`), not the clock's time, so a wrong clock at the tap neither silences the banner longer nor ignores the dismissal.
 - **Home:** `HomeViewModel` combines the inputs with the alarms it already lists and its own ticks. The 7-day window therefore moves with the clock, with no second read of the alarms and no second time receiver. It fills `reregisterCheck`, which the approved `home-missed` banner already renders. "Dismiss" stores the dismissal, and "Re-register" opens that alarm (see the deviations).
 
 ## Boundaries & Constraints
@@ -61,14 +61,14 @@ All three are in deferred-work.md, assigned to 3.10.
 | Scenario | Input / State | Expected Output / Behavior |
 |----------|--------------|---------------------------|
 | Below threshold | 2 fallbacks this week | none |
-| Threshold | 3 fallbacks, 1–7 days ago (7 days exactly counts) | suggested, count 3 |
+| Threshold | 3 fallbacks, 1–7 days ago (7 days exactly counts; 7 days + 1 ms does not) | suggested, count 3 |
 | Window | one of 3 is 7 days + 1 h old; or the clock moves 4 days on | none (Home updates on the next tick) |
 | Excluded | a Test session; a fallback from another check; `fallback_used` false; a ring in the future | not counted |
-| Re-registered | registration after the fallbacks | none until 3 newer fallbacks |
-| Dismissed | dismissal after the fallbacks; or older than the registration | none until 3 newer fallbacks; or no effect |
+| Re-registered | registration after the fallbacks; a fallback at the registration instant | none until 3 newer fallbacks; not counted (1 ms later counts) |
+| Dismissed | dismissal (mark = newest counted fallback); or older than the registration; or tapped with the clock 30 days ahead | none until 3 newer fallbacks; counts from the registration; the same mark, so 3 new fallbacks bring it back |
 | Gone | check no longer configured; alarm deleted; no camera type | none |
-| Two alarms | 2 each | none; with two suggestions, the newest last fallback wins |
-| Home | Re-register / Dismiss; with no banner | opens the editor of the alarm / stores (alarm, type) at now; does nothing |
+| Two alarms | 2 each; two suggestions; one is a camera type without a screen | none; the newest last fallback wins (not the most fallbacks); the type without a screen drops out before the pick |
+| Home | Re-register / Dismiss; with no banner | opens the editor of the alarm / stores (alarm, type) at the newest counted fallback; does nothing |
 | Failures | fallback read fails; dismissal write fails | logged, no banner, retry after 1 s; logged, banner stays |
 
 </intent-contract>
@@ -127,4 +127,15 @@ Status: implemented in fast mode (one agent), waiting for review. Branch `story/
 
 **Residual risks:**
 - **Inert banner:** the banner stays hidden in production until 3.10 (see the deviations and deferred-work.md).
-- **Schema:** no schema change. The rule reads 3.9's `fallback_from` (`app.db` v6 on this stack, renumbered at the rebase).
+- **Schema:** no schema change. The rule reads 3.9's `fallback_from` (`app.db` v7 after the rebase onto 3.5–3.8).
+
+## Review (2 reviewers, fast mode)
+
+Two reviewers (verification gaps and edge cases) read `b14c6f1`. Nothing HIGH in the code (the banner is off in production until 3.10). Fixed in `fix(3.13): review fixes`:
+
+- **Dismissal mark (edge case):** the dismissal was stamped with `clock.now()`: a clock ahead at the tap silenced the banner for that long, a clock behind ignored the dismissal. It now stores the suggestion's `newestFallbackAt` (new field). Tests: `ReRegisterSuggestionTest` and `HomeReRegisterBannerTest` dismiss with the clock 30 days ahead, then 3 new fallbacks bring it back.
+- **UI-type filter order (edge case):** Home filtered the check types without a screen after the rule picked the winner, so such a type could hide another alarm's valid suggestion. Home now filters `checkConfigs` first. Test: two candidates in `HomeReRegisterBannerTest`.
+- **Tests that could not fail:** "older dismissal than registration" now has a case the `dismissed ?: registeredAt` mutant fails (4 vs 3), plus the 1-in-window case; "newest wins" is no longer confounded with "most fallbacks"; `firstRingAt > since` is pinned at the instant and 1 ms later; the window edge at 7 days + 1 ms.
+- **Seams:** `CheckMappingTest` requires a screen for every camera type (3.10's QR type then maps to `UiCheckType.QrBarcode`); `BackupRulesCoverageTest` resolves the production `ReRegisterSuggestions` from the real Koin graph (no registrations, the dismissal reads back); `HomeReRegisterBannerTest` hides the banner on a fresh registration; the Room test pins that `fallback_used = false` rows are not returned and Test rows are (the Kotlin rule drops them).
+
+**Rebase onto main `917bebc` (3.5–3.8):** `HomeViewModel` takes 3.5's `CheckConfigRepository` first and the `ReRegisterSuggestions` after the reliability settings; the banner reads the alarms of `AlarmWithChecks`. `UiModule`, `HomeSamples` and the tests construct it that way. The "is this check still configured" input stays `CheckRegistrations` (None until 3.10 stores QR registrations), not 3.5's `check_config` rows.

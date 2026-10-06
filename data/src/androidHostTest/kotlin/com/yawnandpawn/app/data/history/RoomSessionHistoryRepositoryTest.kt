@@ -169,15 +169,20 @@ class RoomSessionHistoryRepositoryTest {
             repository.upsert(newer)
             repository.upsert(aSessionHistoryRow(sessionId = "no-fallback"))
             repository.upsert(aSessionHistoryRow(sessionId = "unknown-source").copy(fallbackUsed = true, fallbackFrom = null))
+            // A replaced check without the fallback flag is no fallback row.
+            repository.upsert(aSessionHistoryRow(sessionId = "not-used").copy(fallbackUsed = false, fallbackFrom = "QrBarcode"))
+            // A Test session is returned: the rule in Kotlin leaves it out (Story 3.13), not the query.
+            val test = older.copy(sessionId = "test", firstRingAt = DEFAULT_FAKE_INSTANT - 1.days, outcome = SessionOutcome.Test)
+            repository.upsert(test)
             val seen = MutableStateFlow<List<String>?>(null)
             backgroundScope.launch(Dispatchers.Default) {
                 repository.observeFallbacks().collect { rows -> seen.value = rows.map { it.sessionId } }
             }
 
-            assertEquals(listOf(newer, older), repository.observeFallbacks().first())
-            withContext(Dispatchers.Default) { withTimeout(WAIT) { seen.first { it == listOf("newer", "older") } } }
+            assertEquals(listOf(newer, older, test), repository.observeFallbacks().first())
+            withContext(Dispatchers.Default) { withTimeout(WAIT) { seen.first { it == listOf("newer", "older", "test") } } }
             repository.upsert(older.copy(sessionId = "newest", firstRingAt = DEFAULT_FAKE_INSTANT + 2.days))
-            withContext(Dispatchers.Default) { withTimeout(WAIT) { seen.first { it == listOf("newest", "newer", "older") } } }
+            withContext(Dispatchers.Default) { withTimeout(WAIT) { seen.first { it == listOf("newest", "newer", "older", "test") } } }
         }
 
     @Test

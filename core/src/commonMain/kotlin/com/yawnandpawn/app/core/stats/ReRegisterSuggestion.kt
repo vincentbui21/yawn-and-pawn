@@ -27,11 +27,15 @@ data class CheckKey(
     val typeId: String,
 )
 
-/** Home should suggest re-registering [type] of the alarm [alarmId]: its fallback was used [fallbacks] times this week. */
+/**
+ * Home should suggest re-registering [type] of the alarm [alarmId]: its fallback was used [fallbacks] times this week,
+ * the newest of them at [newestFallbackAt] (that session's `first_ring_at`, the mark a dismissal stores).
+ */
 data class ReRegisterSuggestion(
     val alarmId: String,
     val type: CheckType,
     val fallbacks: Int,
+    val newestFallbackAt: Instant,
 )
 
 /**
@@ -41,8 +45,8 @@ data class ReRegisterSuggestion(
  * - rang first within [ReRegisterRule.WINDOW] before [now] (`first_ring_at`);
  * - used the fallback with `fallback_from` equal to that check's type id;
  * - were not test sessions;
- * - started after the check's last registration and after the user last dismissed the banner for it ([dismissedAt]), so
- *   a new code or a dismissal waits for 3 new fallbacks.
+ * - started after the check's last registration and after the user last dismissed the banner for it ([dismissedAt], the
+ *   newest fallback the dismissed banner counted), so a new code or a dismissal waits for 3 new fallbacks.
  *
  * With more than one such check, the one whose last counted fallback is the newest wins.
  */
@@ -72,10 +76,9 @@ fun reRegisterSuggestion(
                         row.firstRingAt <= now
                 }
             counted.maxOfOrNull { it.firstRingAt }?.takeIf { counted.size >= ReRegisterRule.FALLBACKS }?.let { newest ->
-                newest to ReRegisterSuggestion(check.alarmId, check.type, counted.size)
+                ReRegisterSuggestion(check.alarmId, check.type, counted.size, newest)
             }
-        }.maxByOrNull { it.first }
-        ?.second
+        }.maxByOrNull { it.newestFallbackAt }
 }
 
 /** The thresholds of [reRegisterSuggestion] (FR-PWK-11). */
@@ -106,8 +109,9 @@ fun interface CheckRegistrations {
 }
 
 /**
- * Port: when the user last dismissed the re-register banner of each check, kept in device-protected DataStore by
- * `:data`. A read failure emits an empty map (the banner shows again rather than never).
+ * Port: the mark of the user's last dismissal of the re-register banner of each check (the newest fallback that banner
+ * counted, not the time of the tap), kept in device-protected DataStore by `:data`. A read failure emits an empty map
+ * (the banner shows again rather than never).
  */
 interface ReRegisterDismissals {
     fun dismissed(): Flow<Map<CheckKey, Instant>>
@@ -148,7 +152,11 @@ class ReRegisterSuggestions(
     ): ReRegisterSuggestion? =
         reRegisterSuggestion(inputs.fallbacks, alarms, inputs.checkConfigs, clock.now(), inputs.dismissedAt, usesCamera)
 
-    /** The user dismissed [suggestion]: it returns only after 3 new fallbacks. */
+    /**
+     * The user dismissed [suggestion]: it returns only after 3 new fallbacks. The mark is the newest fallback it counted,
+     * not the clock at the tap, so a wrong clock at dismissal neither silences the banner for longer nor ignores the
+     * dismissal (the history times are what the rule compares it with).
+     */
     suspend fun dismiss(suggestion: ReRegisterSuggestion): Outcome<Unit, DomainError> =
-        dismissals.dismiss(CheckKey(suggestion.alarmId, suggestion.type.id), clock.now())
+        dismissals.dismiss(CheckKey(suggestion.alarmId, suggestion.type.id), suggestion.newestFallbackAt)
 }

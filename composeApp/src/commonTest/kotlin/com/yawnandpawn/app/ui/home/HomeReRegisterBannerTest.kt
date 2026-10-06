@@ -85,6 +85,7 @@ class HomeReRegisterBannerTest {
     private fun TestScope.home(
         repository: AlarmRepository = repository(),
         uiTypeOf: (CoreCheckType) -> UiCheckType? = qrStandIn,
+        suggestions: ReRegisterSuggestions = reRegister,
     ): HomeViewModel {
         val alarms = AlarmUseCasesFixture(repository, clock, zone)
         val actions = AlarmActions(alarms.setEnabled, alarms.delete, clock, logger)
@@ -99,7 +100,7 @@ class HomeReRegisterBannerTest {
                 missedNotes,
                 probe,
                 FakeReliabilitySettings(),
-                reRegister,
+                suggestions,
                 uiTypeOf,
             )
         backgroundScope.launch { viewModel.state.collect { } }
@@ -116,17 +117,19 @@ class HomeReRegisterBannerTest {
         registrations.value = listOf(ConfiguredCheck(alarmId, CoreCheckType.Placeholder, registeredAt = clock.now() - 30.days))
     }
 
-    /** A session of the alarm that used the fallback for the stand-in camera check [ago] before the clock. */
+    /** A session of [alarm] that used the fallback for the check [from] (the stand-in camera check) [ago] before the clock. */
     private suspend fun fallbackUsed(
         sessionId: String,
         ago: Duration,
+        alarm: String = alarmId,
+        from: CoreCheckType = CoreCheckType.Placeholder,
     ) = assertEquals(
         Outcome.Success(Unit),
         fallbacks.upsert(
-            aSessionHistoryRow(sessionId = sessionId, alarmId = alarmId).copy(
+            aSessionHistoryRow(sessionId = sessionId, alarmId = alarm).copy(
                 firstRingAt = clock.now() - ago,
                 fallbackUsed = true,
-                fallbackFrom = CoreCheckType.Placeholder.id,
+                fallbackFrom = from.id,
             ),
         ),
     )
@@ -181,13 +184,13 @@ class HomeReRegisterBannerTest {
         }
 
     @Test
-    fun `Dismiss stores the dismissal now and hides the banner until 3 new fallbacks`() =
+    fun `Dismiss stores the newest counted fallback as the mark and hides the banner until 3 new fallbacks`() =
         runTest(dispatcher) {
             val viewModel = homeWithBanner()
 
             viewModel.onIntent(HomeIntent.ReregisterDismissed)
 
-            assertEquals(mapOf(qrKey to clock.now()), dismissals.current)
+            assertEquals(mapOf(qrKey to clock.now() - 1.days), dismissals.current)
             assertNull(viewModel.state.value.reregisterCheck)
             clock.advanceBy(1.hours)
             fallbackUsed("f4", 0.days)
@@ -195,6 +198,65 @@ class HomeReRegisterBannerTest {
             assertNull(viewModel.state.value.reregisterCheck)
             fallbackUsed("f6", 0.days)
             assertEquals(UiCheckType.QrBarcode, viewModel.state.value.reregisterCheck)
+        }
+
+    @Test
+    fun `a dismissal with the clock 30 days ahead silences nothing once the clock is right again`() =
+        runTest(dispatcher) {
+            val viewModel = homeWithBanner()
+            val rightNow = clock.now()
+            clock.set(rightNow + 30.days)
+
+            viewModel.onIntent(HomeIntent.ReregisterDismissed)
+
+            assertEquals(mapOf(qrKey to rightNow - 1.days), dismissals.current, "the mark is the newest fallback, not the clock")
+            clock.set(rightNow + 1.hours)
+            fallbackUsed("f4", 0.days)
+            fallbackUsed("f5", 0.days)
+            fallbackUsed("f6", 0.days)
+            assertEquals(UiCheckType.QrBarcode, viewModel.state.value.reregisterCheck)
+        }
+
+    @Test
+    fun `a new registration of the check hides the banner`() =
+        runTest(dispatcher) {
+            val viewModel = homeWithBanner()
+
+            registrations.value = listOf(ConfiguredCheck(alarmId, CoreCheckType.Placeholder, registeredAt = clock.now()))
+
+            assertNull(viewModel.state.value.reregisterCheck)
+        }
+
+    @Test
+    fun `a camera check without a screen never hides another alarm's suggestion`() =
+        runTest(dispatcher) {
+            // Two camera checks: the stand-in (named QR/Barcode) on the alarm, and Math, which has no re-register screen
+            // here, on another alarm with newer fallbacks. Math must drop out before the newest one is picked.
+            val otherAlarm = FakeIdGenerator.fakeUuid(2)
+            val twoCameras =
+                ReRegisterSuggestions(fallbacks, { registrations }, dismissals, clock, usesCamera = {
+                    it == CoreCheckType.Placeholder || it == CoreCheckType.Math
+                })
+            register()
+            registrations.value += ConfiguredCheck(otherAlarm, CoreCheckType.Math, registeredAt = clock.now() - 30.days)
+            listOf("f1" to 3.days, "f2" to 2.days, "f3" to 1.days).forEach { (id, ago) -> fallbackUsed(id, ago) }
+            listOf("m1" to 12.hours, "m2" to 6.hours, "m3" to 1.hours).forEach { (id, ago) ->
+                fallbackUsed(id, ago, alarm = otherAlarm, from = CoreCheckType.Math)
+            }
+            val both =
+                FakeAlarmRepository(
+                    listOf(
+                        anAlarm(id = alarmId, time = LocalTime(7, 0), requestCode = 1001),
+                        anAlarm(id = otherAlarm, time = LocalTime(8, 0), requestCode = 1002),
+                    ),
+                )
+
+            val viewModel = home(both, suggestions = twoCameras)
+            val effects = effectsOf(viewModel)
+            viewModel.onIntent(HomeIntent.ReregisterClicked)
+
+            assertEquals(UiCheckType.QrBarcode, viewModel.state.value.reregisterCheck)
+            assertEquals(listOf<HomeEffect>(HomeEffect.OpenEditor(alarmId)), effects)
         }
 
     @Test

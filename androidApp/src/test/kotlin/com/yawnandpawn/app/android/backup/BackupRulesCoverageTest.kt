@@ -19,10 +19,12 @@ import com.yawnandpawn.app.core.session.SessionEvent
 import com.yawnandpawn.app.core.session.SessionState
 import com.yawnandpawn.app.core.stats.CheckKey
 import com.yawnandpawn.app.core.stats.ReRegisterDismissals
+import com.yawnandpawn.app.core.stats.ReRegisterSuggestions
 import com.yawnandpawn.app.data.db.appDatabaseFile
 import com.yawnandpawn.app.data.db.runtimeDatabaseFile
 import com.yawnandpawn.app.data.settings.SettingsDataStore
 import com.yawnandpawn.app.stopApp
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.runBlocking
 import kotlinx.datetime.LocalTime
 import org.junit.Rule
@@ -73,6 +75,11 @@ class BackupRulesCoverageTest {
         val reRegisterKey = CheckKey(alarmId, "QrBarcode")
         val dismissedAt = Instant.parse("2027-03-08T06:10:00Z")
         assertIs<Outcome.Success<*>>(runBlocking { koin.get<ReRegisterDismissals>().dismiss(reRegisterKey, dismissedAt) })
+        // The production banner source resolves from the real graph: the dismissal reads back, and no check is registered
+        // before Story 3.10.
+        val reRegisterInputs = runBlocking { koin.get<ReRegisterSuggestions>().inputs().first() }
+        assertEquals(emptyList(), reRegisterInputs.checkConfigs)
+        assertEquals(mapOf(reRegisterKey to dismissedAt), reRegisterInputs.dismissedAt)
         assertIs<Outcome.Success<*>>(runBlocking { koin.get<ScheduleTestAlarm>()(AlarmDraft(time = LocalTime(8, 0))) })
         // The notification permission is asked once (Story 2.3 keeps that flag in device-protected preferences).
         val reliability = File(app.app.createDeviceProtectedStorageContext().dataDir, "shared_prefs/reliability.xml")

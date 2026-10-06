@@ -19,6 +19,7 @@ import kotlin.test.assertNull
 import kotlin.time.Duration
 import kotlin.time.Duration.Companion.days
 import kotlin.time.Duration.Companion.hours
+import kotlin.time.Duration.Companion.milliseconds
 import kotlin.time.Duration.Companion.minutes
 import kotlin.time.Instant
 
@@ -70,6 +71,13 @@ class ReRegisterSuggestionTest {
         alarms: List<Alarm> = listOf(alarmA, alarmB),
     ) = reRegisterSuggestion(history, alarms, checks, now, dismissedAt, cameraStandIn)
 
+    /** The suggestion for the camera check of [alarmId]: [fallbacks] counted, the newest [newestAgo] before now. */
+    private fun suggested(
+        alarmId: String,
+        fallbacks: Int,
+        newestAgo: Duration,
+    ) = ReRegisterSuggestion(alarmId, camera, fallbacks, newestFallbackAt = now - newestAgo)
+
     @Test
     fun `the table`() {
         fun two() = listOf(fallback(ago = 1.days), fallback(ago = 2.days))
@@ -78,6 +86,7 @@ class ReRegisterSuggestionTest {
                 "2 fallbacks" to two(),
                 "3 within 7 days" to listOf(fallback(ago = 1.days), fallback(ago = 3.days), fallback(ago = 7.days)),
                 "one of 3 older than 7 days" to two() + fallback(ago = 7.days + 1.hours),
+                "one of 3 at 7 days and 1 ms" to two() + fallback(ago = 7.days + 1.milliseconds),
                 "a Test session among the 3" to two() + fallback(ago = 3.days, outcome = SessionOutcome.Test),
                 "two alarms with 2 each" to
                     listOf(fallback("a", 1.days), fallback("a", 2.days), fallback("b", 1.days), fallback("b", 2.days)),
@@ -89,8 +98,9 @@ class ReRegisterSuggestionTest {
         assertEquals(
             mapOf(
                 "2 fallbacks" to null,
-                "3 within 7 days" to ReRegisterSuggestion("a", camera, 3),
+                "3 within 7 days" to suggested("a", 3, newestAgo = 1.days),
                 "one of 3 older than 7 days" to null,
+                "one of 3 at 7 days and 1 ms" to null,
                 "a Test session among the 3" to null,
                 "two alarms with 2 each" to null,
                 "another replaced check" to null,
@@ -107,7 +117,17 @@ class ReRegisterSuggestionTest {
 
         assertNull(suggest(old, checks = listOf(reRegistered)))
         val fresh = listOf(fallback(ago = 3.hours), fallback(ago = 2.hours), fallback(ago = 1.hours))
-        assertEquals(ReRegisterSuggestion("a", camera, 3), suggest(old + fresh, checks = listOf(reRegistered)))
+        assertEquals(suggested("a", 3, newestAgo = 1.hours), suggest(old + fresh, checks = listOf(reRegistered)))
+    }
+
+    @Test
+    fun `a fallback counts only when it rang after the registration, not at the same instant`() {
+        val registered = listOf(registeredA.copy(registeredAt = now - 5.days))
+        val atRegistration = listOf(fallback(ago = 5.days), fallback(ago = 2.days), fallback(ago = 1.days))
+        val justAfter = listOf(fallback(ago = 5.days - 1.milliseconds), fallback(ago = 2.days), fallback(ago = 1.days))
+
+        assertNull(suggest(atRegistration, checks = registered))
+        assertEquals(suggested("a", 3, newestAgo = 1.days), suggest(justAfter, checks = registered))
     }
 
     @Test
@@ -116,9 +136,20 @@ class ReRegisterSuggestionTest {
         val key = CheckKey("a", camera.id)
 
         assertNull(suggest(three, dismissedAt = mapOf(key to now - 12.hours)))
-        assertEquals(ReRegisterSuggestion("a", camera, 3), suggest(three, dismissedAt = mapOf(key to now - 25.days)))
+        assertEquals(suggested("a", 3, newestAgo = 1.days), suggest(three, dismissedAt = mapOf(key to now - 25.days)))
         val afterDismissal = three + listOf(fallback(ago = 3.hours), fallback(ago = 2.hours), fallback(ago = 1.hours))
-        assertEquals(ReRegisterSuggestion("a", camera, 3), suggest(afterDismissal, dismissedAt = mapOf(key to now - 12.hours)))
+        assertEquals(suggested("a", 3, newestAgo = 1.hours), suggest(afterDismissal, dismissedAt = mapOf(key to now - 12.hours)))
+    }
+
+    @Test
+    fun `a dismissal older than the registration counts from the registration`() {
+        val registered = listOf(registeredA.copy(registeredAt = now - 4.days))
+        val dismissed = mapOf(CheckKey("a", camera.id) to now - 6.days)
+        val four = listOf(fallback(ago = 5.days), fallback(ago = 3.days), fallback(ago = 2.days), fallback(ago = 1.days))
+        val oneAfterRegistration = listOf(fallback(ago = 5.days), fallback(ago = 4.days + 12.hours), fallback(ago = 1.days))
+
+        assertEquals(suggested("a", 3, newestAgo = 1.days), suggest(four, checks = registered, dismissedAt = dismissed))
+        assertNull(suggest(oneAfterRegistration, checks = registered, dismissedAt = dismissed))
     }
 
     @Test
@@ -132,15 +163,15 @@ class ReRegisterSuggestionTest {
     }
 
     @Test
-    fun `with two suggestions the newest fallback wins`() {
-        val a = listOf(fallback("a", 4.days), fallback("a", 5.days), fallback("a", 6.days))
-        val b = listOf(fallback("b", 1.days), fallback("b", 2.days), fallback("b", 3.days), fallback("b", 4.days))
+    fun `with two suggestions the newest fallback wins, not the most fallbacks`() {
+        val a = listOf(fallback("a", 6.days), fallback("a", 5.days), fallback("a", 4.days), fallback("a", 3.days + 12.hours))
+        val b = listOf(fallback("b", 3.days), fallback("b", 2.days), fallback("b", 1.days))
 
-        assertEquals(ReRegisterSuggestion("b", camera, 4), suggest(a + b))
+        assertEquals(suggested("b", 3, newestAgo = 1.days), suggest(a + b))
     }
 
     @Test
-    fun `the Home source combines its inputs and stores a dismissal at now`() =
+    fun `the Home source combines its inputs and stores a dismissal at the newest fallback, whatever the clock`() =
         runTest {
             val rows = MutableStateFlow(listOf(fallback(ago = 1.days), fallback(ago = 2.days), fallback(ago = 3.days)))
             val dismissals =
@@ -172,16 +203,22 @@ class ReRegisterSuggestionTest {
 
             val inputs = suggestions.inputs().first()
             assertEquals(ReRegisterInputs(rows.value, listOf(registeredA), emptyMap()), inputs)
-            val suggestion = ReRegisterSuggestion("a", camera, 3)
+            val suggestion = suggested("a", 3, newestAgo = 1.days)
             assertEquals(suggestion, suggestions.suggestion(inputs, listOf(alarmA)))
             assertNull(suggestions.suggestion(inputs, emptyList()), "the alarm Home lists is gone")
             time = now + 4.days + 1.hours
             assertNull(suggestions.suggestion(inputs, listOf(alarmA)), "the oldest left the window")
-            time = now
 
+            // Dismissed while the clock is 30 days ahead: the mark is the newest fallback, not the wrong clock.
+            time = now + 30.days
             assertEquals(Outcome.Success(Unit), suggestions.dismiss(suggestion))
-            assertEquals(mapOf(CheckKey("a", camera.id) to now), dismissals.stored.value)
+            assertEquals(mapOf(CheckKey("a", camera.id) to now - 1.days), dismissals.stored.value)
+            time = now
             assertNull(suggestions.suggestion(suggestions.inputs().first(), listOf(alarmA)), "dismissed")
+            // After the correction, 3 new fallbacks bring it back: nothing was silenced for 30 days.
+            rows.value = rows.value + listOf(fallback(ago = 3.hours), fallback(ago = 2.hours), fallback(ago = 1.hours))
+            val back = suggestions.suggestion(suggestions.inputs().first(), listOf(alarmA))
+            assertEquals(suggested("a", 3, newestAgo = 1.hours), back)
             assertEquals(emptyList(), CheckRegistrations.None.observe().first())
         }
 }

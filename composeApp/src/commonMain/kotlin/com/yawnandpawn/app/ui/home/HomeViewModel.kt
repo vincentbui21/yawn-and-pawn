@@ -375,15 +375,18 @@ internal fun missedRetryDelay(attempt: Long): Duration {
     return (MISSED_RETRY_FIRST * (1 shl doublings)).coerceAtMost(MISSED_RETRY_MAX)
 }
 
-/** The suggestion the banner shows: none while the alarms cannot be read, nor for a type without a screen ([uiTypeOf]). */
+/**
+ * The suggestion the banner shows: none while the alarms cannot be read. A check type without a screen ([uiTypeOf]) is
+ * left out before the rule picks one, so it never hides another alarm's suggestion.
+ */
 private fun ReRegisterSuggestions.banner(
     stored: StoredAlarms,
     inputs: ReRegisterInputs,
     uiTypeOf: (CoreCheckType) -> UiCheckType?,
 ): ReRegisterSuggestion? =
-    (stored as? StoredAlarms.Loaded)
-        ?.let { loaded -> suggestion(inputs, loaded.alarms.map { it.alarm }) }
-        ?.takeIf { uiTypeOf(it.type) != null }
+    (stored as? StoredAlarms.Loaded)?.let { loaded ->
+        suggestion(inputs.copy(checkConfigs = inputs.checkConfigs.filter { uiTypeOf(it.type) != null }), loaded.alarms.map { it.alarm })
+    }
 
 /** What the repository gave: the alarms, or a read failure. */
 private sealed interface StoredAlarms {

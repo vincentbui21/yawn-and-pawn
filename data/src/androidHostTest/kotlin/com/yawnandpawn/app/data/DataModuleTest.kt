@@ -12,6 +12,7 @@ import com.yawnandpawn.app.core.session.ActiveSessionStore
 import com.yawnandpawn.app.core.stats.CheckRegistrations
 import com.yawnandpawn.app.core.stats.FallbackHistory
 import com.yawnandpawn.app.core.stats.ReRegisterDismissals
+import com.yawnandpawn.app.core.stats.StoredCheckRegistrations
 import com.yawnandpawn.app.core.time.Clock
 import com.yawnandpawn.app.data.alarm.RoomAlarmRepository
 import com.yawnandpawn.app.data.alarm.RoomRequestCodeSequence
@@ -50,7 +51,7 @@ class DataModuleTest {
             assertIs<RoomRequestCodeSequence>(koin.get<RequestCodeSequence>())
             assertIs<RoomSessionHistoryRepository>(koin.get<SessionHistoryRepository>())
             assertIs<RoomSessionHistoryRepository>(koin.get<FallbackHistory>())
-            assertSame(CheckRegistrations.None, koin.get<CheckRegistrations>())
+            assertIs<StoredCheckRegistrations>(koin.get<CheckRegistrations>())
             assertSame(database, koin.get<AppDatabase>())
         } finally {
             database.close()

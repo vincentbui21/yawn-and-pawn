@@ -103,24 +103,14 @@ fun AppNavHost(modifier: Modifier = Modifier) {
                             onOpenDuplicate = { id -> backStack.openEditor(alarmId = null, copyOf = id) },
                             openFailed = openFailed,
                             onOpenFailedShown = { openFailed = false },
+                            onOpenQrRegistration = { id -> backStack.openEditor(id, scanCode = true) },
                         )
                     }
                     entry<Route.Progress>(metadata = TabMetadata) { ProgressTab() }
                     entry<Route.Settings>(metadata = TabMetadata) { SettingsTab() }
                     entry<Route.You>(metadata = TabMetadata) { YouTab() }
                     entry<Route.SessionInProgress>(metadata = LockMetadata) { SessionInProgressScreen() }
-                    entry<Route.AlarmEditor> { route ->
-                        AlarmEditorRoute(
-                            alarmId = route.alarmId,
-                            copyOf = route.copyOf,
-                            onClose = { backStack.close(route) },
-                            onOpenFailed = {
-                                backStack.close(route)
-                                openFailed = true
-                            },
-                            onOpenCopy = { copyId -> backStack.replaceEditor(route, copyId) },
-                        )
-                    }
+                    entry<Route.AlarmEditor> { route -> EditorEntry(route, backStack, onOpenFailed = { openFailed = true }) }
                 },
         )
     }
@@ -207,3 +197,23 @@ private fun YouTab() {
 
 /** Never shown: the Settings rows that would show the base fee are hidden until Epic 4. */
 private val HIDDEN_BASE_FEE = Money(amountMicros = 0, currencyCode = "USD")
+
+/** The editor of [route] on [backStack]; [onOpenFailed] after it closed because its alarm could not be read. */
+@Composable
+private fun EditorEntry(
+    route: Route.AlarmEditor,
+    backStack: MutableList<NavKey>,
+    onOpenFailed: () -> Unit,
+) {
+    AlarmEditorRoute(
+        alarmId = route.alarmId,
+        copyOf = route.copyOf,
+        scanCode = route.scanCode,
+        onClose = { backStack.close(route) },
+        onOpenFailed = {
+            backStack.close(route)
+            onOpenFailed()
+        },
+        onOpenCopy = { copyId -> backStack.replaceEditor(route, copyId) },
+    )
+}

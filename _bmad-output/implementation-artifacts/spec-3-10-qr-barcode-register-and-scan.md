@@ -11,7 +11,7 @@ context:
   - '{project-root}/_bmad-output/implementation-artifacts/spec-3-1-check-plugin-contract-and-the-math-generator-in-core.md'
   - '{project-root}/_bmad-output/implementation-artifacts/spec-3-2-solve-math-to-stop-the-alarm.md'
 warnings:
-  - 'Built on main (cef47fa) without Stories 3.5-3.9, which land first. Their touch points are thin and marked `// 3.5 hook`, `// 3.6 hook` and `// 3.9 hook`; see Rebase notes.'
+  - 'Built on main (cef47fa) without Stories 3.5-3.9, then rebased onto main with 3.5-3.9 and 3.13 (see Rebase, done): every hook is wired and no hook marker is left.'
 deferred:
   - 'Camera privacy toggle on a phone that mutes the camera (black frames, no error): no public API reads the toggle; Story 3.11 watchdog and the 3.14 device checklist (see Review).'
   - 'Torch toggle state after screen off/on (low, optional review item): Story 3.11.'
@@ -127,7 +127,7 @@ deferred:
 
 ## Rebase notes
 
-Stories 3.5 to 3.9 land before this story. When rebasing:
+Kept for the record; every note below is applied (see Rebase, done). Stories 3.5 to 3.9 land before this story. When rebasing:
 - **`app.db` (3.5 v6, 3.9 v7):** `MIGRATION_7_8` in `AppDatabaseMigrations.kt` is a placeholder and not registered. Give it the next free version (v8 if 3.5 = v6 and 3.9 = v7). Add it to `APP_DATABASE_MIGRATIONS`, bump `AppDatabase.SCHEMA_VERSION`, and add nullable `code_format` and `code_value` to 3.5's `check_config` entity, mapped through `CheckCodeColumns.columnsOf` / `registeredCodeOf` into `CheckEntry.code`. Export the schema and add the step to `AppDatabaseFactoryTest`. Update `CheckCodeMigrationTest`, whose "not registered" assertion must flip.
 - **`SaveAlarm` (3.5):** reject a plan with an entry that is not `isReady` (QR without a code). The editor shows "Scan a code to use this check." (`Res.string.qr_no_code`). The Check setup value is "Code saved" (`qr_code_saved`) once there is a code.
 - **Picker and registry (3.5, `// 3.5 hook`):** add `CheckType.QrBarcode` to `PICKABLE_TYPES` and to `CheckRegistry`, where the wake composable is `CheckScreen`'s `QrCheck` through `qrCheckUiState`. The picker's QR toggle calls `CameraPermission.allowsCameraCheck()`: if it returns false, the card stays unselected and `CheckPickerUiState.cameraUnavailable` shows "Camera isn't available." with "Fix" (`CameraPermission.openSettings`). Map the UI `CheckType.QrBarcode` to the core one.
@@ -139,6 +139,19 @@ Stories 3.5 to 3.9 land before this story. When rebasing:
 - **Tripwires (review):** `CheckCodeMigrationTest` fails once the latest exported `app.db` schema has `check_config` without `code_format`/`code_value`, or without the code migration in `APP_DATABASE_MIGRATIONS` (rename `MIGRATION_7_8` there too). `QrRebaseTripwireTest` (`:androidApp`) fails while any `3.5 hook` marker is left once `object CheckRegistry` exists, or any `3.9 hook` marker once `class CameraFallbackPolicy` exists. Wire each hook, then delete its marker; `QrCheckScreenTest`'s fallback-link `assertDoesNotExist` lines are marked too and flip to `assertExists` in 3.9.
 - **3.9 policy input (review):** `ScanEvent.CameraUnavailable` now also covers a camera-state error after binding, a setup step that throws and 10 failed decodes in a row; all reach `WakeCheck.cameraFailed`, which 3.9's policy reads as `CameraUnavailable`.
 - **Retail family (review):** a code registered as UPC-A or UPC-E is stored with format `EAN_13` (see Design Notes); 3.5's "Code saved" row and any format display must not assume the format the user scanned.
+
+## Rebase (done)
+
+Rebased onto `main` with Stories 3.5 to 3.9 and 3.13 (one `feat(3.10): wire QR into 3.5-3.9 and 3.13` commit on top of the three 3.10 commits). The tripwires are green with no `3.5 hook` or `3.9 hook` marker left.
+- **`app.db` v8:** `MIGRATION_7_8` adds `code_format`, `code_value` and `code_registered_at` to `check_config` (registered, `SCHEMA_VERSION = 8`, `8.json` exported). `RoomCheckConfigRepository` maps them through `CheckCodeColumns`; a code is read only for a QR/Barcode row. `AppDatabaseFactoryTest` migrates a v7 file with a check row and stores a code with its time.
+- **Registration time (3.13):** `CheckConfig.codeRegisteredAt`, its own column rather than the row's `updated_at` (which every save rewrites). `storeWithChecks` keeps it while the same code is saved again and sets it anew for a new code. `StoredCheckRegistrations` (core) feeds Home's re-register banner from the stored checks, bound in `dataModule` instead of `CheckRegistrations.None`.
+- **Save:** `validateChecks` refuses an entry that is not `isReady` with the new `AlarmField.CheckCode`. The editor never gets there: Save with QR/Barcode and no code opens its Check setup, where "Your code" says "Scan a code to use this check.".
+- **Picker and registry:** `CheckType.QrBarcode` is in `CheckType.all`, so in `PICKABLE_TYPES` (and never in `fallbackChoices`, it uses the camera); the UI type maps to it, and `CheckRegistry` has its `QrTrial`. Ticking it asks for the camera when missing (`allowsCameraCheck`); refused, the card stays unselected and the picker shows "Camera isn't available." with "Fix".
+- **Registration:** Check setup's "Your code" opens `QrRegistrationRoute` as the editor's `ScanCode` pane (the permission is read again on each resume); "Use this code" writes `CheckChip.code`, saved with the alarm. "Make a printable QR" is hidden in the app (`CheckSetupUiState.printable = false`, Epic 7); previews keep it.
+- **Try it (3.6):** `QrTrial` checks each stable code against the form's code with the core `validate` (the registered one preferred among several in view, a different code counted once while held up); the editor provides the camera feed while it scans. No engine event.
+- **Generators (3.7, 3.8):** `memoryRound`/`wordRound` use `entry.puzzle(seed)`; `rightAnswer` and `WakeService.solution` have the `Puzzle.Code` branch next to Word and Memory.
+- **Fallback (3.9):** on a QR/Barcode entry whose camera is unavailable, the wake screen (`WakeQr`, part of `WakeCheck`) asks the policy with reason `CameraUnavailable`, so "Can't do this check?" shows at once (`CameraFallbackPolicy`); with a working camera it waits for 5 failed attempts. `QrCheckScreenTest` asserts the link now and runs the fallback to Math.
+- **Re-register (3.13):** a QR/Barcode suggestion sends `HomeEffect.OpenQrRegistration`, which opens the editor straight on QR registration (`Route.AlarmEditor.scanCode`); "Use this code" saves the new code at once (and restarts the count), Back leaves the alarm unchanged. `HomeReRegisterBannerTest` now runs on the real QR/Barcode type.
 
 ## Verification
 

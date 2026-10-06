@@ -23,7 +23,6 @@ import com.yawnandpawn.app.testing.FakeTimeChangeSignal
 import com.yawnandpawn.app.testing.FakeTimeZoneProvider
 import com.yawnandpawn.app.testing.aSessionHistoryRow
 import com.yawnandpawn.app.testing.anAlarm
-import com.yawnandpawn.app.ui.wake.uiCheckType
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -50,8 +49,8 @@ import com.yawnandpawn.app.core.checks.CheckType as CoreCheckType
 import com.yawnandpawn.app.ui.checks.CheckType as UiCheckType
 
 /**
- * Story 3.13: Home's re-register banner. No camera type exists before Story 3.10, so the placeholder stands in for
- * QR/Barcode: the rule treats it as a camera check and [qrStandIn] names it.
+ * Story 3.13: Home's re-register banner on the QR/Barcode check (Story 3.10); [qrStandIn] names only it, so Math (made a
+ * camera check in one test) has no re-register screen.
  */
 @OptIn(ExperimentalCoroutinesApi::class)
 class HomeReRegisterBannerTest {
@@ -65,10 +64,10 @@ class HomeReRegisterBannerTest {
     private val registrations = MutableStateFlow<List<ConfiguredCheck>>(emptyList())
     private val dismissals = FakeReRegisterDismissals()
     private val reRegister =
-        ReRegisterSuggestions(fallbacks, { registrations }, dismissals, clock, usesCamera = { it == CoreCheckType.Placeholder })
-    private val qrStandIn: (CoreCheckType) -> UiCheckType? = { if (it == CoreCheckType.Placeholder) UiCheckType.QrBarcode else null }
+        ReRegisterSuggestions(fallbacks, { registrations }, dismissals, clock)
+    private val qrStandIn: (CoreCheckType) -> UiCheckType? = { if (it == CoreCheckType.QrBarcode) UiCheckType.QrBarcode else null }
     private val alarmId = FakeIdGenerator.fakeUuid(1)
-    private val qrKey = CheckKey(alarmId, CoreCheckType.Placeholder.id)
+    private val qrKey = CheckKey(alarmId, CoreCheckType.QrBarcode.id)
 
     @BeforeTest
     fun setUp() {
@@ -114,15 +113,15 @@ class HomeReRegisterBannerTest {
     }
 
     private fun register() {
-        registrations.value = listOf(ConfiguredCheck(alarmId, CoreCheckType.Placeholder, registeredAt = clock.now() - 30.days))
+        registrations.value = listOf(ConfiguredCheck(alarmId, CoreCheckType.QrBarcode, registeredAt = clock.now() - 30.days))
     }
 
-    /** A session of [alarm] that used the fallback for the check [from] (the stand-in camera check) [ago] before the clock. */
+    /** A session of [alarm] that used the fallback for the check [from] (QR/Barcode) [ago] before the clock. */
     private suspend fun fallbackUsed(
         sessionId: String,
         ago: Duration,
         alarm: String = alarmId,
-        from: CoreCheckType = CoreCheckType.Placeholder,
+        from: CoreCheckType = CoreCheckType.QrBarcode,
     ) = assertEquals(
         Outcome.Success(Unit),
         fallbacks.upsert(
@@ -134,7 +133,7 @@ class HomeReRegisterBannerTest {
         ),
     )
 
-    /** Home with the alarm, its registered stand-in camera check and 3 fallbacks for it in the last 3 days. */
+    /** Home with the alarm, its registered QR/Barcode check and 3 fallbacks for it in the last 3 days. */
     private suspend fun TestScope.homeWithBanner(): HomeViewModel {
         register()
         listOf("f1" to 3.days, "f2" to 2.days, "f3" to 1.days).forEach { (id, ago) -> fallbackUsed(id, ago) }
@@ -169,7 +168,7 @@ class HomeReRegisterBannerTest {
         }
 
     @Test
-    fun `Re-register opens the alarm's editor, and nothing opens without a banner`() =
+    fun `Re-register opens QR registration of the alarm, and nothing opens without a banner (Story 3_10)`() =
         runTest(dispatcher) {
             val quiet = home()
             val quietEffects = effectsOf(quiet)
@@ -180,7 +179,7 @@ class HomeReRegisterBannerTest {
             val effects = effectsOf(viewModel)
             viewModel.onIntent(HomeIntent.ReregisterClicked)
 
-            assertEquals(listOf<HomeEffect>(HomeEffect.OpenEditor(alarmId)), effects)
+            assertEquals(listOf<HomeEffect>(HomeEffect.OpenQrRegistration(alarmId)), effects)
         }
 
     @Test
@@ -222,7 +221,7 @@ class HomeReRegisterBannerTest {
         runTest(dispatcher) {
             val viewModel = homeWithBanner()
 
-            registrations.value = listOf(ConfiguredCheck(alarmId, CoreCheckType.Placeholder, registeredAt = clock.now()))
+            registrations.value = listOf(ConfiguredCheck(alarmId, CoreCheckType.QrBarcode, registeredAt = clock.now()))
 
             assertNull(viewModel.state.value.reregisterCheck)
         }
@@ -230,12 +229,12 @@ class HomeReRegisterBannerTest {
     @Test
     fun `a camera check without a screen never hides another alarm's suggestion`() =
         runTest(dispatcher) {
-            // Two camera checks: the stand-in (named QR/Barcode) on the alarm, and Math, which has no re-register screen
+            // Two camera checks: QR/Barcode on the alarm, and Math, which has no re-register screen
             // here, on another alarm with newer fallbacks. Math must drop out before the newest one is picked.
             val otherAlarm = FakeIdGenerator.fakeUuid(2)
             val twoCameras =
                 ReRegisterSuggestions(fallbacks, { registrations }, dismissals, clock, usesCamera = {
-                    it == CoreCheckType.Placeholder || it == CoreCheckType.Math
+                    it == CoreCheckType.QrBarcode || it == CoreCheckType.Math
                 })
             register()
             registrations.value += ConfiguredCheck(otherAlarm, CoreCheckType.Math, registeredAt = clock.now() - 30.days)
@@ -256,7 +255,7 @@ class HomeReRegisterBannerTest {
             viewModel.onIntent(HomeIntent.ReregisterClicked)
 
             assertEquals(UiCheckType.QrBarcode, viewModel.state.value.reregisterCheck)
-            assertEquals(listOf<HomeEffect>(HomeEffect.OpenEditor(alarmId)), effects)
+            assertEquals(listOf<HomeEffect>(HomeEffect.OpenQrRegistration(alarmId)), effects)
         }
 
     @Test
@@ -295,8 +294,8 @@ class HomeReRegisterBannerTest {
             val failing = repository().apply { failure = DomainError.StorageFailure("closed") }
             assertNull(home(failing).state.value.reregisterCheck)
 
-            // The production names: the placeholder has no screen, so it never shows (and Re-register does nothing).
-            val unnamed = home(uiTypeOf = ::uiCheckType)
+            // A check type without a screen never shows (and Re-register does nothing).
+            val unnamed = home(uiTypeOf = { null })
             val effects = effectsOf(unnamed)
             unnamed.onIntent(HomeIntent.ReregisterClicked)
             unnamed.onIntent(HomeIntent.ReregisterDismissed)

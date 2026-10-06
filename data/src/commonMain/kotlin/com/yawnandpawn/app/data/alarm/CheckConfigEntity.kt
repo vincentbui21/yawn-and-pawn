@@ -17,7 +17,8 @@ data class AlarmWithCheckRows(
 )
 
 /**
- * Row of the `check_config` table in `app.db` (schema v6, Story 3.5): one check of an alarm. Deleting the alarm deletes
+ * Row of the `check_config` table in `app.db` (schema v6, Story 3.5; the code columns v8, Story 3.10): one check of an
+ * alarm. Deleting the alarm deletes
  * its rows (foreign key, cascade). [type] is the stable core `CheckType.id`, [difficulty] the `Difficulty` name.
  */
 @Entity(
@@ -52,4 +53,13 @@ data class CheckConfigEntity(
     /** Epoch milliseconds. */
     @ColumnInfo(name = "updated_at")
     val updatedAt: Long,
+    /** A QR/Barcode entry's code format (`CodeFormat.storedName`, schema v8, Story 3.10); null for every other entry. */
+    @ColumnInfo(name = "code_format")
+    val codeFormat: String? = null,
+    /** The SHA-256 fingerprint of the trimmed code value, never the raw value (`CheckCodeColumns`); null without a code. */
+    @ColumnInfo(name = "code_value")
+    val codeValue: String? = null,
+    /** When the code was last registered, epoch milliseconds (Story 3.13's re-register banner); null without a code. */
+    @ColumnInfo(name = "code_registered_at")
+    val codeRegisteredAt: Long? = null,
 )

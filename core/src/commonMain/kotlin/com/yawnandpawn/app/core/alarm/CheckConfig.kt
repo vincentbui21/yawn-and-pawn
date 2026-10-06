@@ -14,6 +14,9 @@ import kotlin.time.Instant
  *
  * @property id [idFor] the alarm and type: stable while the type stays on the alarm, and unique since a type appears
  * once per alarm.
+ * @property codeRegisteredAt when the entry's code (QR/Barcode, Story 3.10) was last registered: kept while the same code
+ * is saved again, set anew when it changes; null without a code. Story 3.13's re-register banner counts fallbacks after
+ * it ([StoredCheckRegistrations]).
  */
 data class CheckConfig(
     val id: String,
@@ -22,6 +25,7 @@ data class CheckConfig(
     val entry: CheckEntry,
     val createdAt: Instant,
     val updatedAt: Instant,
+    val codeRegisteredAt: Instant? = null,
 ) {
     companion object {
         /** The row id of [type] on [alarmId] (`<alarm id>:<type id>`; the v6 migration writes the same form). */
@@ -53,7 +57,8 @@ fun List<CheckConfig>.orderedEntries(): List<CheckEntry> = sortedBy { it.positio
 
 /**
  * Whether [entries] are valid checks for an alarm, or [AlarmField.Checks]: at least one, only [CheckConfig.PICKABLE_TYPES],
- * no type twice, and each count within its type's `countRange`.
+ * no type twice, and each count within its type's `countRange`. An entry that can never be passed (a QR/Barcode entry
+ * without a registered code, Story 3.10) is [AlarmField.CheckCode].
  */
 fun validateChecks(entries: List<CheckEntry>): AlarmField? =
     when {
@@ -61,6 +66,7 @@ fun validateChecks(entries: List<CheckEntry>): AlarmField? =
         entries.any { it.type !in CheckConfig.PICKABLE_TYPES } -> AlarmField.Checks
         entries.map { it.type }.toSet().size != entries.size -> AlarmField.Checks
         entries.any { it.count !in it.type.countRange } -> AlarmField.Checks
+        entries.any { !it.isReady } -> AlarmField.CheckCode
         else -> null
     }
 

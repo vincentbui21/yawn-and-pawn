@@ -137,6 +137,11 @@ sealed interface HomeEffect {
         val alarmId: String?,
     ) : HomeEffect
 
+    /** Open QR registration of the alarm [alarmId]'s QR/Barcode check, which saves the new code (Re-register, Story 3.10). */
+    data class OpenQrRegistration(
+        val alarmId: String,
+    ) : HomeEffect
+
     /** Open the editor on a new, unsaved alarm prefilled from the alarm [sourceId] (Duplicate, owner decision 2026-10-05). */
     data class OpenDuplicate(
         val sourceId: String,

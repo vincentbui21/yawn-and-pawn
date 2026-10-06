@@ -184,7 +184,7 @@ class DirectBootTest {
     fun `a QR-Barcode entry rings as Math before the first unlock and as itself after it (Story 3_10)`() {
         val code = RegisteredCode.of(CodeFormat.QrCode, "kitchen")!!
         val qr = CheckPlan(CheckMode.All, listOf(CheckEntry(CheckType.QrBarcode, Difficulty.Medium, 1, code = code)))
-        val reducer = SessionReducer(NoBillingSnoozeAvailability(lock), PluginCheckValidator, NoFallbackPolicy)
+        val reducer = SessionReducer(NoBillingSnoozeAvailability(lock), PluginCheckValidator, CameraFallbackPolicy())
 
         val locked = reducer.reduce(SessionState.Idle, alarmFired(testConfig(checkPlan = qr)), T0, userLocked = true).state
         val unlocked = reducer.reduce(SessionState.Idle, alarmFired(testConfig(checkPlan = qr)), T0, userLocked = false).state

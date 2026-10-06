@@ -14,8 +14,8 @@ import com.yawnandpawn.app.core.time.TimeSnapshot
  *   which shows "That's a different code. Scan your registered one." with an error haptic per failed attempt.
  * - [torchOn] is the torch toggle, UI only.
  *
- * 3.9 hook: `showFallbackLink` is left to the fallback policy of Story 3.9, which shows the link at once when the camera
- * is unavailable (reason `CameraUnavailable`): feed [cameraAvailable] into it when rebasing.
+ * `showFallbackLink` is set by the wake screen from Story 3.9's policy (`WakeCheck`): while the camera is unavailable it
+ * asks with reason `CameraUnavailable`, so the link shows at once.
  */
 fun qrCheckUiState(
     state: SessionState,

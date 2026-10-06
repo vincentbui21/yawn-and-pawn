@@ -62,6 +62,8 @@ data class CheckSetupUiState(
     val countRange: IntRange = MIN_COUNT..MAX_COUNT,
     /** QR/Barcode: a code is registered. */
     val codeSaved: Boolean = false,
+    /** QR/Barcode: "Make a printable QR" is offered (Epic 7; the app hides it until then, Story 3.10). */
+    val printable: Boolean = true,
     /** House Hunt: reference photos taken, 0 to 3. */
     val photoCount: Int = 0,
     /** House Hunt: the photos weren't restored from a backup ("Retake them."). */
@@ -256,12 +258,14 @@ private fun QrRows(
             value = stringResource(if (state.codeSaved) Res.string.qr_code_saved else Res.string.qr_no_code),
             onClick = { onIntent(CheckSetupIntent.ScanCodeClicked) },
         )
-        GroupDivider()
-        NavRow(
-            label = stringResource(Res.string.qr_printable),
-            value = stringResource(Res.string.qr_printable_body),
-            onClick = { onIntent(CheckSetupIntent.PrintableQrClicked) },
-        )
+        if (state.printable) {
+            GroupDivider()
+            NavRow(
+                label = stringResource(Res.string.qr_printable),
+                value = stringResource(Res.string.qr_printable_body),
+                onClick = { onIntent(CheckSetupIntent.PrintableQrClicked) },
+            )
+        }
     }
 }
 

@@ -34,7 +34,7 @@ fun wordRound(state: SessionState): WordRound? {
     val run = ((state as? SessionState.Grace)?.session ?: (state as? SessionState.Loud)?.session)?.usableRun()
     val entry = run?.currentEntry?.takeIf { it.type == CheckType.WordUnscramble }
     val seed = run?.seeds?.getOrNull(run.step.entry)
-    return if (entry == null || seed == null) null else wordRound(entry.type.generate(seed, entry.difficulty, entry.count), run.step.item)
+    return if (entry == null || seed == null) null else wordRound(entry.puzzle(seed), run.step.item)
 }
 
 /**

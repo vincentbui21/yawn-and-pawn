@@ -71,8 +71,8 @@ internal fun EditorSubScreen(
         onBack = { onIntent(EditorIntent.BackRequested) },
     ) {
         when (pane) {
-            // "Try it" has its own full-screen preview (AlarmEditorScreen), never a sub-screen.
-            EditorPane.Main, EditorPane.TryIt -> {
+            // "Try it" and QR registration are full screens of their own (AlarmEditorScreen), never a sub-screen.
+            EditorPane.Main, EditorPane.TryIt, EditorPane.ScanCode -> {
                 Unit
             }
 
@@ -119,6 +119,9 @@ internal fun EditorUiState.checkSetupState(): CheckSetupUiState? {
         difficulty = chip.difficulty,
         count = chip.count,
         countRange = range,
+        codeSaved = chip.code != null,
+        // The printable QR is Epic 7 (FR-PWK-13): hidden in the app until then.
+        printable = false,
         talkBackOn = full?.talkBackOn == true,
     )
 }
@@ -143,7 +146,7 @@ private fun EditorPane.title(): StringResource =
     when (this) {
         EditorPane.Main, EditorPane.Sound -> Res.string.editor_sound
         EditorPane.Snooze -> Res.string.editor_snooze
-        EditorPane.WakeCheck, EditorPane.CheckSetup, EditorPane.TryIt -> Res.string.editor_wake_check
+        EditorPane.WakeCheck, EditorPane.CheckSetup, EditorPane.TryIt, EditorPane.ScanCode -> Res.string.editor_wake_check
         EditorPane.QuietTime -> Res.string.editor_quiet_time
         EditorPane.Motivation -> Res.string.editor_motivation
     }
@@ -223,6 +226,7 @@ private fun WakeCheckPane(
                 mode = full.checkMode,
                 noCheckError = full.noCheckError,
                 qrCodeSaved = full.qrCodeSaved,
+                cameraUnavailable = full.cameraUnavailable,
                 houseHuntPhotos = full.houseHuntPhotos,
                 talkBackOn = full.talkBackOn,
                 types = full.types,
@@ -237,8 +241,8 @@ private fun WakeCheckPane(
 
                 is CheckPickerIntent.Moved -> onIntent(EditorIntent.CheckMoved(intent.type, intent.up))
 
-                // The camera banner only shows in onboarding and the standalone picker.
-                CheckPickerIntent.FixCamera -> Unit
+                // Story 3.10: picking QR/Barcode was refused the camera; "Fix" opens the app's settings.
+                CheckPickerIntent.FixCamera -> onIntent(EditorIntent.FixCamera)
             }
         },
     )

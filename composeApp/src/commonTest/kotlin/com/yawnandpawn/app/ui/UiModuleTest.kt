@@ -38,6 +38,8 @@ import com.yawnandpawn.app.testing.anAppVersion
 import com.yawnandpawn.app.ui.editor.AlarmEditorArgs
 import com.yawnandpawn.app.ui.editor.AlarmEditorViewModel
 import com.yawnandpawn.app.ui.home.HomeViewModel
+import com.yawnandpawn.app.ui.qr.CameraPermission
+import com.yawnandpawn.app.ui.qr.TestCameraPermission
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.test.UnconfinedTestDispatcher
@@ -82,6 +84,7 @@ class UiModuleTest {
                     single<ReliabilitySettings> { FakeReliabilitySettings() }
                     single<NotificationPermission> { FakeNotificationPermission() }
                     single<AccessibilityState> { FakeAccessibilityState() }
+                    single<CameraPermission> { TestCameraPermission() }
                     single { AlarmUseCasesFixture(repository = get(), clock = get(), timeZoneProvider = get()) }
                     single<CheckConfigRepository> { get<AlarmUseCasesFixture>().checkConfigs }
                     factory { get<AlarmUseCasesFixture>().save }

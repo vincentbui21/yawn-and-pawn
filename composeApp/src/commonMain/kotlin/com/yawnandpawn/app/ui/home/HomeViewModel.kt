@@ -223,9 +223,17 @@ class HomeViewModel(
                 checkReliability().firstFailing?.let(reliabilitySettings::open)
             }
 
-            // QR registration for the alarm arrives with Story 3.10; until then the alarm's editor, where its checks are.
+            // Story 3.10: QR registration of the alarm's code (another camera check: the alarm's editor, where its checks are).
             HomeIntent.ReregisterClicked -> {
-                shownSuggestion?.let { _effects.trySend(HomeEffect.OpenEditor(it.alarmId)) }
+                shownSuggestion?.let { shown ->
+                    val effect =
+                        if (shown.type == CoreCheckType.QrBarcode) {
+                            HomeEffect.OpenQrRegistration(shown.alarmId)
+                        } else {
+                            HomeEffect.OpenEditor(shown.alarmId)
+                        }
+                    _effects.trySend(effect)
+                }
             }
 
             HomeIntent.ReregisterDismissed -> {

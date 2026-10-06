@@ -50,7 +50,7 @@ fun memoryRound(state: SessionState): MemoryRound? {
     return if (entry == null || type == null || seed == null) {
         null
     } else {
-        memoryRound(type, type.generate(seed, entry.difficulty, entry.count), run.step.item)
+        memoryRound(type, entry.puzzle(seed), run.step.item)
     }
 }
 

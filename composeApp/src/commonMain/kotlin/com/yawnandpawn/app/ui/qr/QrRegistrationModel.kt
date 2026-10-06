@@ -123,8 +123,9 @@ class QrRegistrationModel(
  * [resumed] changes each time the screen comes back to the front (for example from the system settings after "Fix"), so
  * the permission is read again.
  *
- * 3.5 hook: Check setup's "Your code" row (`CheckSetupIntent.ScanCodeClicked`) pushes this screen, and [onCodeChosen]
- * writes the code into the QR/Barcode entry of the setup draft (`CheckEntry.code`), saved with the alarm, then pops it.
+ * Check setup's "Your code" row (`CheckSetupIntent.ScanCodeClicked`) opens this screen in the editor, and [onCodeChosen]
+ * writes the code into the QR/Barcode check of the form (`CheckChip.code`), saved with the alarm. Home's "Re-register"
+ * opens it the same way and saves the new code at once.
  */
 @Composable
 fun QrRegistrationRoute(

@@ -9,10 +9,10 @@ import com.yawnandpawn.app.core.checks.CheckType
 import com.yawnandpawn.app.core.checks.Difficulty
 import com.yawnandpawn.app.core.checks.Puzzle
 import com.yawnandpawn.app.core.checks.SeedDeriver
-import com.yawnandpawn.app.core.checks.word.WordBank
-import com.yawnandpawn.app.core.checks.word.WordList
 import com.yawnandpawn.app.core.checks.qr.CodeFormat
 import com.yawnandpawn.app.core.checks.qr.RegisteredCode
+import com.yawnandpawn.app.core.checks.word.WordBank
+import com.yawnandpawn.app.core.checks.word.WordList
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertIs

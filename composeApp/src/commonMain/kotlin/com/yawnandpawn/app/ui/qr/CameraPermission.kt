@@ -22,10 +22,7 @@ interface CameraPermission {
  * What picking QR/Barcode in the Check picker does about the camera: granted already, or granted in the dialog asked now,
  * selects the card; denied (also "Don't ask again") leaves it unselected and shows "Camera isn't available." with "Fix".
  *
- * 3.5 hook: the Check picker's toggle of a camera type calls this before it selects the card, and sets
- * `CheckPickerUiState.cameraUnavailable` from the result.
- *
- * 3.5 hook: add `CheckType.QrBarcode` to `PICKABLE_TYPES` and to `CheckRegistry` (the wake composable is `CheckScreen`'s
- * QR check through `qrCheckUiState`).
+ * The editor's Check picker calls this when QR/Barcode is ticked (`AlarmEditorViewModel`), and shows
+ * `CheckPickerUiState.cameraUnavailable` when it returns false.
  */
 suspend fun CameraPermission.allowsCameraCheck(): Boolean = isGranted() || request()

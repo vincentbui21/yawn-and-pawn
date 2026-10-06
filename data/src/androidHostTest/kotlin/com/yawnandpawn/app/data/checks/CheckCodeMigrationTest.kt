@@ -21,8 +21,9 @@ import kotlin.test.assertNull
 import kotlin.test.assertTrue
 
 /**
- * Story 3.10: the registered code's columns. Story 3.5's `check_config` is not on this base yet, so the migration runs on
- * a stand-in table with an entry already in it; the real migration test joins `AppDatabaseFactoryTest` on rebase.
+ * Story 3.10: the registered code's columns. The migration on a bare `check_config` table with an entry in it, the
+ * column mapping, and the tripwire that keeps the code columns in the latest exported schema; the migration through
+ * Room is in `AppDatabaseFactoryTest`.
  */
 @RunWith(RobolectricTestRunner::class)
 class CheckCodeMigrationTest {
@@ -56,7 +57,7 @@ class CheckCodeMigrationTest {
             runTest { MIGRATION_7_8.migrate(connection) }
 
             assertEquals(
-                listOf("alarm_id", "position", "type", "difficulty", "count", "code_format", "code_value"),
+                listOf("alarm_id", "position", "type", "difficulty", "count", "code_format", "code_value", "code_registered_at"),
                 connection.columns("check_config"),
             )
             connection.prepare("SELECT `type`, `code_format`, `code_value` FROM `check_config`").use { row ->
@@ -67,7 +68,7 @@ class CheckCodeMigrationTest {
                 assertFalse(row.step(), "one entry")
             }
             connection.execSQL(
-                "INSERT INTO `check_config` VALUES ('alarm-a', 1, 'QrBarcode', 'Medium', 1, 'QR_CODE', '${"a".repeat(64)}')",
+                "INSERT INTO `check_config` VALUES ('alarm-a', 1, 'QrBarcode', 'Medium', 1, 'QR_CODE', '${"a".repeat(64)}', 3000)",
             )
         }
 

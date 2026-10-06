@@ -113,23 +113,21 @@ val MIGRATION_6_7: Migration =
     }
 
 /**
- * Story 3.10 (placeholder number): adds the registered code of a QR/Barcode check to Story 3.5's `check_config`, as two
- * nullable columns: `code_format` (`CodeFormat.storedName`) and `code_value` (the SHA-256 fingerprint of the trimmed
- * value, never the raw value; see `CheckCodeColumns`). Every other entry keeps nulls.
- *
- * 3.5 hook: NOT registered yet. `check_config` arrives with Story 3.5 (v6) and Story 3.9 takes v7, so on rebase this
- * migration takes the next free version: rename it, add it to [APP_DATABASE_MIGRATIONS], bump
- * `AppDatabase.SCHEMA_VERSION`, add the two columns to the `check_config` entity, export the schema and extend the
- * migration test in `AppDatabaseFactoryTest`. `CheckCodeMigrationTest` already runs it on a `check_config` table.
+ * v7 to v8 (Story 3.10): adds the registered code of a QR/Barcode check to `check_config`, as three nullable columns:
+ * `code_format` (`CodeFormat.storedName`), `code_value` (the SHA-256 fingerprint of the trimmed value, never the raw
+ * value; see `CheckCodeColumns`) and `code_registered_at` (epoch milliseconds, Story 3.13's re-register banner). Every
+ * stored entry keeps nulls (no QR/Barcode entry existed before). The SQL matches the exported `8.json`; Room checks it
+ * after migrating.
  */
 val MIGRATION_7_8: Migration =
     object : Migration(7, 8) {
         override suspend fun migrate(connection: SQLiteConnection) {
             connection.execSQL("ALTER TABLE `check_config` ADD COLUMN `code_format` TEXT")
             connection.execSQL("ALTER TABLE `check_config` ADD COLUMN `code_value` TEXT")
+            connection.execSQL("ALTER TABLE `check_config` ADD COLUMN `code_registered_at` INTEGER")
         }
     }
 
 /** Every migration of `app.db`, oldest first; `buildAppDatabase` registers them all. */
 val APP_DATABASE_MIGRATIONS: Array<Migration> =
-    arrayOf(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6, MIGRATION_6_7)
+    arrayOf(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6, MIGRATION_6_7, MIGRATION_7_8)

@@ -250,7 +250,8 @@ class DuplicateAlarm(
 
 /**
  * Validates [alarm] and its [checks], then stores both in one transaction. The rows take the order of [checks]; a type
- * the alarm already had keeps its creation time.
+ * the alarm already had keeps its creation time, and a code saved again unchanged keeps its registration time (Story
+ * 3.10), so only a new code restarts Story 3.13's count of fallbacks.
  */
 private suspend fun storeWithChecks(
     checkConfigRepository: CheckConfigRepository,
@@ -263,13 +264,16 @@ private suspend fun storeWithChecks(
         val previous = stored.associateBy { it.entry.type }
         val configs =
             checks.mapIndexed { position, entry ->
+                val before = previous[entry.type]
                 CheckConfig(
                     id = CheckConfig.idFor(alarm.id, entry.type),
                     alarmId = alarm.id,
                     position = position,
                     entry = entry,
-                    createdAt = previous[entry.type]?.createdAt ?: now,
+                    createdAt = before?.createdAt ?: now,
                     updatedAt = now,
+                    codeRegisteredAt =
+                        entry.code?.let { code -> before?.codeRegisteredAt?.takeIf { before.entry.code == code } ?: now },
                 )
             }
         checkConfigRepository.saveWithAlarm(alarm, configs).map { alarm }

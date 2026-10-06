@@ -9,6 +9,7 @@ import androidx.compose.animation.shrinkVertically
 import androidx.compose.foundation.ScrollState
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxScope
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
@@ -23,9 +24,13 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberUpdatedState
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clipToBounds
@@ -40,11 +45,13 @@ import androidx.navigationevent.compose.rememberNavigationEventState
 import com.yawnandpawn.app.core.alarm.AlarmField
 import com.yawnandpawn.app.ui.checks.displayName
 import com.yawnandpawn.app.ui.checksetup.CheckPreviewScreen
+import com.yawnandpawn.app.ui.checksetup.CheckPreviewUiState
 import com.yawnandpawn.app.ui.components.ConfirmDialog
 import com.yawnandpawn.app.ui.components.DayChipRow
 import com.yawnandpawn.app.ui.components.GroupCard
 import com.yawnandpawn.app.ui.components.GroupDivider
 import com.yawnandpawn.app.ui.components.InlineError
+import com.yawnandpawn.app.ui.components.LocalViewfinderFeed
 import com.yawnandpawn.app.ui.components.NavRow
 import com.yawnandpawn.app.ui.components.NoteInline
 import com.yawnandpawn.app.ui.components.PILL_CLEARANCE
@@ -61,6 +68,8 @@ import com.yawnandpawn.app.ui.format.countdownText
 import com.yawnandpawn.app.ui.format.formatClockTime
 import com.yawnandpawn.app.ui.format.is24HourClock
 import com.yawnandpawn.app.ui.home.DeleteAlarmConfirm
+import com.yawnandpawn.app.ui.qr.CodeScanner
+import com.yawnandpawn.app.ui.qr.QrRegistrationRoute
 import com.yawnandpawn.app.ui.resources.Res
 import com.yawnandpawn.app.ui.resources.editor_after_im_up
 import com.yawnandpawn.app.ui.resources.editor_alarm_name
@@ -99,17 +108,20 @@ import com.yawnandpawn.app.ui.resources.repeat_once
 import com.yawnandpawn.app.ui.resources.repeat_weekdays
 import com.yawnandpawn.app.ui.resources.sound_file_missing
 import com.yawnandpawn.app.ui.theme.PpsTheme
+import com.yawnandpawn.app.ui.wake.CheckContent
 import kotlinx.coroutines.launch
 import kotlinx.datetime.DayOfWeek
 import kotlinx.datetime.LocalTime
 import org.jetbrains.compose.resources.stringResource
+import org.koin.compose.koinInject
 import org.koin.compose.viewmodel.koinViewModel
 import org.koin.core.parameter.parametersOf
 
 /**
  * The Alarm editor route: its ViewModel (scoped to the nav entry), effects, and Back interception. [onOpenFailed] runs
  * when the alarm could not be read (the editor closes and Home says so); [onOpenCopy] replaces this editor with one on
- * a new alarm prefilled from the stored alarm it gets (Duplicate). [copyOf] opens this editor that way.
+ * a new alarm prefilled from the stored alarm it gets (Duplicate). [copyOf] opens this editor that way. [scanCode] opens
+ * it on QR registration of the alarm's QR/Barcode check and saves the code chosen (Home's "Re-register", Story 3.10).
  */
 @Composable
 fun AlarmEditorRoute(
@@ -118,9 +130,13 @@ fun AlarmEditorRoute(
     onOpenFailed: () -> Unit,
     onOpenCopy: (String) -> Unit,
     copyOf: String? = null,
-    viewModel: AlarmEditorViewModel = koinViewModel { parametersOf(AlarmEditorArgs(alarmId, copyOf)) },
+    scanCode: Boolean = false,
+    viewModel: AlarmEditorViewModel = koinViewModel { parametersOf(AlarmEditorArgs(alarmId, copyOf, scanCode)) },
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
+    // QR registration reads the camera permission again each time the editor comes back (from "Fix", Story 3.10).
+    var resumed by remember { mutableIntStateOf(0) }
+    LifecycleEventEffect(Lifecycle.Event.ON_RESUME) { resumed++ }
     val snackbarHostState = remember { SnackbarHostState() }
     val saveFailed = stringResource(Res.string.editor_save_failed)
     val testScheduled = stringResource(Res.string.editor_test_scheduled)
@@ -151,6 +167,7 @@ fun AlarmEditorRoute(
         is24Hour = is24HourClock(),
         onIntent = viewModel::onIntent,
         snackbarHostState = snackbarHostState,
+        resumed = resumed,
     )
 }
 
@@ -171,6 +188,7 @@ fun AlarmEditorScreen(
     onIntent: (EditorIntent) -> Unit,
     modifier: Modifier = Modifier,
     snackbarHostState: SnackbarHostState = remember { SnackbarHostState() },
+    resumed: Int = 0,
 ) {
     // Outside the pane animation, so returning from a sub-screen keeps the main screen where it was scrolled to.
     val mainScroll = rememberScrollState()
@@ -188,20 +206,8 @@ fun AlarmEditorScreen(
                         EditorMain(state = state, is24Hour = is24Hour, onIntent = onIntent, scroll = mainScroll)
                     }
 
-                    // "Try it" (Story 3.6): the approved Sunrise preview, full screen, over the editor's own state.
-                    EditorPane.TryIt -> {
-                        // The last preview, so it slides out with its content after Done or Back (Story 3.6 review).
-                        rememberLastNonNull(state.tryIt)?.let { tryIt ->
-                            CheckPreviewScreen(
-                                state = tryIt,
-                                onIntent = { onIntent(EditorIntent.TryIt(it)) },
-                                onClose = { onIntent(EditorIntent.BackRequested) },
-                            )
-                        }
-                    }
-
                     else -> {
-                        EditorSubScreen(pane = pane, state = state, onIntent = onIntent)
+                        EditorPaneContent(pane = pane, state = state, onIntent = onIntent, resumed = resumed)
                     }
                 }
             }
@@ -415,4 +421,68 @@ internal fun motivationSummary(full: FullEditorSections): String {
             if (full.motivationTiming == MotivationTiming.AfterImUp) Res.string.editor_after_im_up else Res.string.editor_mix_into_alarm,
         )
     return stringResource(Res.string.editor_check_chip, message, timing)
+}
+
+/**
+ * A QR/Barcode "Try it" (Story 3.10) shows the live camera in its viewfinder while it scans, and hands what the camera
+ * reports to the editor ([EditorIntent.TryItScanned]); any other preview shows [content] as it is. One feed while the
+ * camera runs: the torch is read inside it.
+ */
+@Composable
+private fun TryItFeed(
+    tryIt: CheckPreviewUiState,
+    onIntent: (EditorIntent) -> Unit,
+    content: @Composable () -> Unit,
+) {
+    val qr = tryIt.content as? CheckContent.QrBarcode
+    val camera = qr != null && qr.cameraAvailable && !tryIt.done
+    val torch by rememberUpdatedState(qr?.torchOn == true)
+    val events by rememberUpdatedState(onIntent)
+    val feed: (@Composable BoxScope.() -> Unit)? =
+        remember(camera) {
+            if (camera) {
+                { koinInject<CodeScanner>().Feed(torchOn = torch, onEvent = { events(EditorIntent.TryItScanned(it)) }) }
+            } else {
+                null
+            }
+        }
+    CompositionLocalProvider(LocalViewfinderFeed provides feed) { content() }
+}
+
+/** A pane other than the main screen: "Try it", QR registration, or one of the sub-screens. */
+@Composable
+private fun EditorPaneContent(
+    pane: EditorPane,
+    state: EditorUiState,
+    onIntent: (EditorIntent) -> Unit,
+    resumed: Int,
+) {
+    when (pane) {
+        // "Try it" (Story 3.6): the approved Sunrise preview, full screen, over the editor's own state.
+        EditorPane.TryIt -> {
+            // The last preview, so it slides out with its content after Done or Back (Story 3.6 review).
+            rememberLastNonNull(state.tryIt)?.let { tryIt ->
+                TryItFeed(tryIt, onIntent) {
+                    CheckPreviewScreen(
+                        state = tryIt,
+                        onIntent = { onIntent(EditorIntent.TryIt(it)) },
+                        onClose = { onIntent(EditorIntent.BackRequested) },
+                    )
+                }
+            }
+        }
+
+        // QR registration (Story 3.10): "Use this code" puts the code in the form.
+        EditorPane.ScanCode -> {
+            QrRegistrationRoute(
+                onCodeChosen = { onIntent(EditorIntent.CodeRegistered(it)) },
+                onBack = { onIntent(EditorIntent.BackRequested) },
+                resumed = resumed,
+            )
+        }
+
+        else -> {
+            EditorSubScreen(pane = pane, state = state, onIntent = onIntent)
+        }
+    }
 }

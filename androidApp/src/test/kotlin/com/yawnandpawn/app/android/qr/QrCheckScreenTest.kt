@@ -1,8 +1,11 @@
 package com.yawnandpawn.app.android.qr
 
 import android.content.Intent
+import androidx.compose.ui.test.hasClickAction
 import androidx.compose.ui.test.hasContentDescription
+import androidx.compose.ui.test.hasText
 import androidx.compose.ui.test.junit4.createEmptyComposeRule
+import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.test.core.app.ActivityScenario
@@ -17,10 +20,12 @@ import com.yawnandpawn.app.core.checks.CheckType
 import com.yawnandpawn.app.core.checks.Difficulty
 import com.yawnandpawn.app.core.checks.qr.CodeFormat
 import com.yawnandpawn.app.core.checks.qr.RegisteredCode
+import com.yawnandpawn.app.core.session.CameraFallbackPolicy
 import com.yawnandpawn.app.core.session.CheckRun
 import com.yawnandpawn.app.core.session.SessionEvent
 import com.yawnandpawn.app.core.session.SessionState
 import com.yawnandpawn.app.testing.aSessionConfig
+import com.yawnandpawn.app.testing.wrongAnswer
 import com.yawnandpawn.app.ui.qr.QrRegistrationRoute
 import com.yawnandpawn.app.ui.qr.ScanResult
 import com.yawnandpawn.app.ui.theme.PpsThemeMode
@@ -171,8 +176,8 @@ class QrCheckScreenTest {
             imUp(app)
             composeRule.onNodeWithText("Camera isn't available. Pick a fallback check.").assertExists()
             composeRule.onNode(hasContentDescription("Camera viewfinder. Point at your code.")).assertDoesNotExist()
-            // 3.9 hook: flip in 3.9 to assertExists (the fallback link shows at once when the camera is unavailable).
-            composeRule.onNodeWithText("Can't do this check?").assertDoesNotExist()
+            // Story 3.9: the fallback link shows at once when the camera is unavailable.
+            composeRule.onNodeWithText("Can't do this check?").assertExists()
             assertFalse(scanner.running)
             assertEquals(0, scanner.starts)
         }
@@ -188,8 +193,8 @@ class QrCheckScreenTest {
             scanner.fail()
             composeRule.waitForIdle()
             composeRule.onNodeWithText("Camera isn't available. Pick a fallback check.").assertExists()
-            // 3.9 hook: flip in 3.9 to assertExists (the fallback link shows at once when the camera is unavailable).
-            composeRule.onNodeWithText("Can't do this check?").assertDoesNotExist()
+            // Story 3.9: the fallback link shows at once when the camera is unavailable.
+            composeRule.onNodeWithText("Can't do this check?").assertExists()
             assertFalse(scanner.running, "the camera is released")
         }
     }
@@ -236,6 +241,45 @@ class QrCheckScreenTest {
             assertEquals(0, run(app).failedAttempts, "another code next to one not yet stable is never submitted")
             scanner.frames(1, cereal, toothpaste)
             composeRule.awaitSuccess(app, "Up on time.")
+        }
+    }
+
+    @Test
+    fun `without the camera the fallback link replaces the QR check with Math, asked for an unavailable camera (Story 3_9)`() {
+        val scanner = FakeCodeScanner(permitted = false)
+        val app = WakeApp(scanner = scanner)
+        ringQr(app, assertNotNull(RegisteredCode.of(toothpaste.format, toothpaste.rawValue)))
+        launch(app).use {
+            imUp(app)
+            composeRule.onNodeWithText("Can't do this check?").performClick()
+            composeRule.onNodeWithText("Pick a fallback check").assertExists()
+            composeRule.onNode(hasText("Math") and hasClickAction()).performClick()
+            app.awaitUntil("the fallback replaced the check") {
+                composeRule.waitForIdle()
+                run(app).fallbackUsed
+            }
+
+            assertEquals(CameraFallbackPolicy.fallbackPlan(CheckType.Math), run(app).plan)
+            composeRule.onNodeWithText("Problem 1 of 6").assertExists()
+            composeRule.onNodeWithText("Can't do this check?").assertDoesNotExist()
+        }
+    }
+
+    @Test
+    fun `with a working camera the fallback link waits for 5 failed attempts (Story 3_9)`() {
+        val scanner = FakeCodeScanner()
+        val app = WakeApp(scanner = scanner)
+        ringQr(app, assertNotNull(RegisteredCode.of(toothpaste.format, toothpaste.rawValue)))
+        launch(app).use {
+            imUp(app)
+            composeRule.onNodeWithText("Can't do this check?").assertDoesNotExist()
+            repeat(
+                CameraFallbackPolicy.FAILED_ATTEMPTS,
+            ) { app.dispatch(SessionEvent.CheckAnswerSubmitted(assertNotNull(wrongAnswer(run(app))))) }
+            app.awaitUntil("the link shows") {
+                composeRule.waitForIdle()
+                composeRule.onAllNodesWithText("Can't do this check?").fetchSemanticsNodes().isNotEmpty()
+            }
         }
     }
 

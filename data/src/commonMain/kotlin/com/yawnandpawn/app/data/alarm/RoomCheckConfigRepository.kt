@@ -10,6 +10,7 @@ import com.yawnandpawn.app.core.checks.Difficulty
 import com.yawnandpawn.app.core.error.DomainError
 import com.yawnandpawn.app.core.error.Outcome
 import com.yawnandpawn.app.core.error.flatMap
+import com.yawnandpawn.app.data.checks.CheckCodeColumns
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
 import kotlin.coroutines.cancellation.CancellationException
@@ -53,8 +54,9 @@ class RoomCheckConfigRepository(
         }
 }
 
-internal fun CheckConfig.toEntity(): CheckConfigEntity =
-    CheckConfigEntity(
+internal fun CheckConfig.toEntity(): CheckConfigEntity {
+    val (codeFormat, codeValue) = CheckCodeColumns.columnsOf(entry.code)
+    return CheckConfigEntity(
         id = id,
         alarmId = alarmId,
         position = position,
@@ -63,12 +65,18 @@ internal fun CheckConfig.toEntity(): CheckConfigEntity =
         count = entry.count,
         createdAt = createdAt.toEpochMilliseconds(),
         updatedAt = updatedAt.toEpochMilliseconds(),
+        codeFormat = codeFormat,
+        codeValue = codeValue,
+        codeRegisteredAt = codeRegisteredAt?.takeIf { entry.code != null }?.toEpochMilliseconds(),
     )
+}
 
 /** The row as a [CheckConfig], or null for a type or difficulty this build does not know. */
 internal fun CheckConfigEntity.toConfig(): CheckConfig? {
     val checkType = CheckType.all.firstOrNull { it.id == type }
     val level = Difficulty.entries.firstOrNull { it.name == difficulty }
+    // A code is read only for the type that has one, so a damaged row never gives another check a code.
+    val code = CheckCodeColumns.registeredCodeOf(codeFormat, codeValue)?.takeIf { checkType == CheckType.QrBarcode }
     return if (checkType == null || level == null) {
         null
     } else {
@@ -76,9 +84,10 @@ internal fun CheckConfigEntity.toConfig(): CheckConfig? {
             id = id,
             alarmId = alarmId,
             position = position,
-            entry = CheckEntry(checkType, level, count),
+            entry = CheckEntry(checkType, level, count, code = code),
             createdAt = Instant.fromEpochMilliseconds(createdAt),
             updatedAt = Instant.fromEpochMilliseconds(updatedAt),
+            codeRegisteredAt = codeRegisteredAt?.takeIf { code != null }?.let(Instant::fromEpochMilliseconds),
         )
     }
 }

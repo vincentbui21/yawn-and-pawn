@@ -4,11 +4,16 @@ import com.yawnandpawn.app.core.checks.CheckEntry
 import com.yawnandpawn.app.core.checks.CheckMode
 import com.yawnandpawn.app.core.checks.CheckType
 import com.yawnandpawn.app.core.checks.Difficulty
+import com.yawnandpawn.app.core.checks.qr.CodeFormat
+import com.yawnandpawn.app.core.checks.qr.RegisteredCode
 import com.yawnandpawn.app.core.error.DomainError
 import com.yawnandpawn.app.core.error.Outcome
 import com.yawnandpawn.app.core.session.SessionLockGuard
 import com.yawnandpawn.app.core.session.SessionState
+import com.yawnandpawn.app.core.stats.ConfiguredCheck
+import com.yawnandpawn.app.core.stats.StoredCheckRegistrations
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.test.runTest
 import kotlinx.datetime.LocalTime
 import kotlinx.datetime.TimeZone
@@ -48,7 +53,10 @@ class CheckConfigUseCasesTest {
     fun `a new alarm starts with Random Math Medium 3`() {
         assertEquals(listOf(CheckEntry(CheckType.Math, Difficulty.Medium, 3)), AlarmDraft(time = LocalTime(7, 0)).checks)
         assertEquals(CheckMode.Random, AlarmDraft(time = LocalTime(7, 0)).checkMode)
-        assertEquals(listOf(CheckType.Math, CheckType.WordUnscramble, CheckType.MemorySequence()), CheckConfig.PICKABLE_TYPES)
+        assertEquals(
+            listOf(CheckType.Math, CheckType.WordUnscramble, CheckType.MemorySequence(), CheckType.QrBarcode),
+            CheckConfig.PICKABLE_TYPES,
+        )
     }
 
     @Test
@@ -244,4 +252,47 @@ class CheckConfigUseCasesTest {
 
         assertEquals(listOf(mathHard, mathHard.copy(count = 2)), listOf(second, first).orderedEntries())
     }
+
+    private val code = RegisteredCode.of(CodeFormat.Ean13, "4006381333931")!!
+    private val qr = CheckEntry(CheckType.QrBarcode, Difficulty.Medium, count = 1, code = code)
+
+    @Test
+    fun `a QR-Barcode entry without a code is refused with CheckCode, and nothing is stored (Story 3_10)`() =
+        runTest {
+            assertEquals(AlarmField.CheckCode, validateChecks(listOf(mathHard, qr.copy(code = null))))
+            assertNull(validateChecks(listOf(mathHard, qr)))
+            val refused = save(draft.copy(checks = listOf(qr.copy(code = null))))
+
+            assertEquals(Outcome.Failure(DomainError.InvalidAlarm(AlarmField.CheckCode)), refused)
+            assertTrue(repository.alarms.value.isEmpty())
+        }
+
+    @Test
+    fun `a code keeps its registration time while saved again unchanged, and a new code restarts it (Story 3_10)`() =
+        runTest {
+            val alarm = saved(draft.copy(checks = listOf(mathHard, qr)))
+            assertEquals(start, rowsOf(alarm).single { it.entry.type == CheckType.QrBarcode }.codeRegisteredAt)
+            assertNull(rowsOf(alarm).single { it.entry.type == CheckType.Math }.codeRegisteredAt, "no code, no time")
+
+            clock.advanceBy(5.minutes)
+            saved(draft.copy(id = alarm.id, checks = listOf(qr, mathHard), label = "Gym"))
+            assertEquals(start, rowsOf(alarm).single { it.entry.type == CheckType.QrBarcode }.codeRegisteredAt, "same code")
+
+            clock.advanceBy(5.minutes)
+            val other = qr.copy(code = RegisteredCode.of(CodeFormat.QrCode, "hallway"))
+            saved(draft.copy(id = alarm.id, checks = listOf(other)))
+            assertEquals(start + 10.minutes, rowsOf(alarm).single().codeRegisteredAt, "a new code")
+        }
+
+    @Test
+    fun `the stored registrations are the checks with a code, at their registration time (Story 3_10)`() =
+        runTest {
+            val first = saved(draft.copy(checks = listOf(mathHard, qr)))
+            saved(draft.copy(time = LocalTime(8, 0)))
+
+            assertEquals(
+                listOf(ConfiguredCheck(first.id, CheckType.QrBarcode, start)),
+                StoredCheckRegistrations(checkConfigs).observe().first(),
+            )
+        }
 }

@@ -308,9 +308,9 @@ class AlarmEditorChecksTest {
     @Test
     fun `with only a check that has no core plugin Save shows Pick at least one check, not a save failure (review fix)`() =
         runTest(dispatcher) {
-            val viewModel = viewModel(pickable = listOf(CheckType.Math, CheckType.QrBarcode))
+            val viewModel = viewModel(pickable = listOf(CheckType.Math, CheckType.HouseHunt))
             val effects = effectsOf(viewModel)
-            viewModel.onIntent(EditorIntent.CheckToggled(CheckType.QrBarcode, selected = true))
+            viewModel.onIntent(EditorIntent.CheckToggled(CheckType.HouseHunt, selected = true))
             viewModel.onIntent(EditorIntent.CheckToggled(CheckType.Math, selected = false))
 
             viewModel.onIntent(EditorIntent.SaveClicked)
@@ -344,7 +344,7 @@ class AlarmEditorChecksTest {
                 )
 
             assertEquals(
-                listOf(CheckType.Math, CheckType.WordUnscramble, CheckType.MemorySequence),
+                listOf(CheckType.Math, CheckType.WordUnscramble, CheckType.MemorySequence, CheckType.QrBarcode),
                 viewModel.state.value.full
                     ?.types,
             )

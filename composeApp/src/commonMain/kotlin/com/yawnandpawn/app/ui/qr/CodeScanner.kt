@@ -67,8 +67,8 @@ sealed interface ScanEvent {
  * use `FakeCodeScanner` (the `:androidApp` host tests), so no host or device test needs a camera. Frames are analysed on
  * the device only and never stored.
  *
- * 3.6 hook: the QR "Try it" preview provides `LocalViewfinderFeed` with [Feed] and compares each stable code with the
- * draft's `CheckEntry.code` itself, sending no engine event.
+ * The QR "Try it" preview (Check setup, Story 3.6) shows [Feed] too and checks each stable code against the draft's code
+ * itself (`QrTrial`), sending no engine event.
  */
 interface CodeScanner {
     /** Whether the app may use the camera now (the `CAMERA` permission is granted). Never asks. */

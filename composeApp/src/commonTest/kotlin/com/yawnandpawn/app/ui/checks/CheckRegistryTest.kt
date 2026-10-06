@@ -1,6 +1,8 @@
 package com.yawnandpawn.app.ui.checks
 
 import com.yawnandpawn.app.core.checks.Puzzle
+import com.yawnandpawn.app.core.checks.qr.CodeFormat
+import com.yawnandpawn.app.core.checks.qr.RegisteredCode
 import com.yawnandpawn.app.core.checks.word.WordBank
 import com.yawnandpawn.app.core.checks.word.WordList
 import com.yawnandpawn.app.ui.wake.CheckContent
@@ -37,9 +39,11 @@ class CheckRegistryTest {
         // Word Unscramble needs the app's word list; here a small one.
         WordBank.install(WordList(listOf("apple", "stone", "garden", "listen", "airplane", "notebook")))
         assertTrue(PickableCheckTypes.isNotEmpty())
-        PickableCheckTypes.forEach { type -> assertNotNull(CheckRegistry.startTrial(type, Difficulty.Medium, seed), "$type") }
+        val code = RegisteredCode.of(CodeFormat.QrCode, "kitchen")
+        PickableCheckTypes.forEach { type -> assertNotNull(CheckRegistry.startTrial(type, Difficulty.Medium, seed, code = code), "$type") }
         assertTrue(CheckRegistry.types.containsAll(PickableCheckTypes))
-        assertEquals(listOf(CheckType.Math, CheckType.WordUnscramble, CheckType.MemorySequence), PickableCheckTypes)
+        assertEquals(listOf(CheckType.Math, CheckType.WordUnscramble, CheckType.MemorySequence, CheckType.QrBarcode), PickableCheckTypes)
+        assertNull(CheckRegistry.startTrial(CheckType.QrBarcode, Difficulty.Medium, seed), "QR/Barcode needs its code to try")
     }
 
     @Test

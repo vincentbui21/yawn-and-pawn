@@ -31,6 +31,8 @@ val uiModule =
                 testAlarm = get(),
                 copyOf = params.get<AlarmEditorArgs>().copyOf,
                 accessibility = get(),
+                cameraPermission = get(),
+                scanCode = params.get<AlarmEditorArgs>().scanCode,
             )
         }
     }

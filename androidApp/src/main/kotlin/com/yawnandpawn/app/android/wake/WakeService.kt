@@ -751,7 +751,9 @@ class WakeService :
             val puzzle = if (entry == null || seed == null) null else entry.puzzle(seed)
             return when (puzzle) {
                 is Puzzle.Math -> puzzle.problems.getOrNull(step.item)?.let { CheckAnswer.Number(it.answer.toString()) }
+
                 is Puzzle.Memory -> puzzle.taps.getOrNull(step.item)?.let { CheckAnswer.Tile(it) }
+
                 is Puzzle.Word -> puzzle.words.getOrNull(step.item)?.let { CheckAnswer.Word(it) }
 
                 // A QR/Barcode test (Story 3.10) is answered with its own registered code.

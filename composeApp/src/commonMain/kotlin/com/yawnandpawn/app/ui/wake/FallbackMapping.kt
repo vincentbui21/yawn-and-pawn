@@ -8,7 +8,7 @@ import com.yawnandpawn.app.ui.checks.CheckType as UiCheckType
 /** The UI check of a core [type], by its stable id, or null for one a user never sees (the Epic 1 placeholder). */
 fun uiCheckType(type: CheckType): UiCheckType? = type.toUi()
 
-/** The core check type a UI [type] stands for, when core has its plugin (not the camera checks before Story 3.10). */
+/** The core check type a UI [type] stands for, when core has its plugin (not House Hunt before Epic 7). */
 fun coreCheckType(type: UiCheckType): CheckType? = type.core
 
 /**

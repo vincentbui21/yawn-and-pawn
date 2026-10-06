@@ -11,7 +11,6 @@ import com.yawnandpawn.app.core.alarm.Alarm
 import com.yawnandpawn.app.core.alarm.AlarmDraft
 import com.yawnandpawn.app.core.alarm.AlarmFired
 import com.yawnandpawn.app.core.alarm.SaveAlarm
-import com.yawnandpawn.app.core.checks.CheckAnswer
 import com.yawnandpawn.app.core.error.Outcome
 import com.yawnandpawn.app.core.history.MissedNoteDismissals
 import com.yawnandpawn.app.core.history.SessionHistoryRepository
@@ -63,7 +62,8 @@ class BackupRulesCoverageTest {
         app.ring(AlarmFired(alarmId, Instant.parse("2027-03-08T06:00:00Z")))
         app.awaitRinging()
         val sessionId = (app.engine.state.value as SessionState.Ringing).session.sessionId
-        app.dispatch(SessionEvent.ImUpTapped, SessionEvent.CheckAnswerSubmitted(CheckAnswer.Placeholder))
+        app.dispatch(SessionEvent.ImUpTapped)
+        app.solveCheck()
         app.awaitUntil("the session is recorded and Idle") { app.engine.state.value == SessionState.Idle }
         assertNotNull(assertIs<Outcome.Success<*>>(runBlocking { koin.get<SessionHistoryRepository>().find(sessionId) }).value)
         assertIs<Outcome.Success<*>>(runBlocking { koin.get<MissedNoteDismissals>().dismiss("missed-session") })

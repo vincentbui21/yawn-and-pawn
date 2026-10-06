@@ -143,7 +143,9 @@ object PreviewSetupSamples {
     // "Try it" ------------------------------------------------------------------------------------------------------
 
     val tryMath =
-        CheckPreviewUiState(CheckContent.Math(problemNumber = 1, problemCount = 2, left = 47, right = 38, operator = MathOperator.Plus))
+        CheckPreviewUiState(
+            CheckContent.Math(problemNumber = 1, problemCount = 2, operands = listOf(47, 38), operators = listOf(MathOperator.Plus)),
+        )
 
     val tryMemory = CheckPreviewUiState(CheckContent.MemorySequence(round = 1, roundCount = 3, phase = MemoryPhase.Watch, litTile = 5))
 

@@ -10,7 +10,6 @@ import com.yawnandpawn.app.MainActivity
 import com.yawnandpawn.app.StopAppRule
 import com.yawnandpawn.app.core.alarm.AlarmFired
 import com.yawnandpawn.app.core.alarm.AlarmRepository
-import com.yawnandpawn.app.core.checks.CheckAnswer
 import com.yawnandpawn.app.core.error.Outcome
 import com.yawnandpawn.app.core.session.ActiveSessionStore
 import com.yawnandpawn.app.core.session.SessionEvent
@@ -199,7 +198,8 @@ class LeaveAndReturnTest {
         val app = WakeApp()
         val service = ring(app)
         val notification = assertNotNull(posted(app))
-        app.dispatch(SessionEvent.ImUpTapped, SessionEvent.CheckAnswerSubmitted(CheckAnswer.Placeholder))
+        app.dispatch(SessionEvent.ImUpTapped)
+        app.solveCheck()
         app.awaitUntil("the session ends") { app.engine.state.value == SessionState.Idle && shadowOf(service.get()).isStoppedBySelf }
 
         notification.deleteIntent.send()

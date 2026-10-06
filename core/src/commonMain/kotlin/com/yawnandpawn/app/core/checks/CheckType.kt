@@ -97,8 +97,9 @@ sealed interface CheckType {
     }
 
     /**
-     * The Epic 1 stand-in, where "I'm up" alone passes the check. Production plans keep it until Story 3.2 and sessions
-     * stored by Epics 1–2 hold it, so it is part of the sealed hierarchy; it is not a check a user can choose.
+     * The Epic 1 stand-in, where "I'm up" alone passes the check. No production plan holds it since Story 3.2, but sessions
+     * stored by Epics 1–2 hold it (the wake screen still answers it), so it stays in the sealed hierarchy; it is not a
+     * check a user can choose. Tests that are not about the check use it too.
      */
     @Serializable
     @SerialName("Placeholder")

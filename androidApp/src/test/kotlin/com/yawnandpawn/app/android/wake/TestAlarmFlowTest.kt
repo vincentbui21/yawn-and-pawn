@@ -15,6 +15,8 @@ import com.yawnandpawn.app.core.alarm.AlarmDraft
 import com.yawnandpawn.app.core.alarm.AlarmFired
 import com.yawnandpawn.app.core.alarm.AlarmRepository
 import com.yawnandpawn.app.core.alarm.RequestCodes
+import com.yawnandpawn.app.core.checks.CheckPlan
+import com.yawnandpawn.app.core.checks.CheckType
 import com.yawnandpawn.app.core.error.DomainError
 import com.yawnandpawn.app.core.error.Outcome
 import com.yawnandpawn.app.core.history.SessionOutcome
@@ -106,6 +108,8 @@ class TestAlarmFlowTest {
         assertIs<SessionState.Ringing>(app.engine.state.value)
 
         composeRule.onNodeWithText("I'm up").performClick()
+        app.awaitUntil("the check starts") { app.engine.state.value is SessionState.Grace }
+        app.solveCheck()
         // Story 3.3: the test Success screen, then "Done" closes the wake screen.
         composeRule.awaitSuccess(app, "Test finished. Your alarm works.")
         composeRule.onNodeWithText("Done").performClick()
@@ -199,5 +203,59 @@ class TestAlarmFlowTest {
         assertTrue(app.player.sound != null, "the real alarm rings")
         // Story 2.9 keeps this Story 1.18 rule over the AC's "merged like any other": a real morning is never logged as Test.
         assertEquals(emptyList(), history.merges, "no merge row: the real alarm got its own session")
+    }
+
+    @Test
+    fun `a real alarm during a Math test answers the test's check, ends it as Test and rings as a real session (Story 3_2)`() {
+        val app = app()
+        val alarm = anAlarm(id = "alarm-a", requestCode = 1000)
+        assertEquals(Outcome.Success(Unit), runBlocking { app.koin.get<AlarmRepository>().upsert(alarm) })
+        testAlarms.pending = aSessionConfig(label = "test", testMode = true).copy(checkPlan = CheckPlan.default())
+        val controller = app.startService(WakeService.intent(app.app, WakeService.ACTION_TEST))
+        app.awaitRinging()
+        val test = app.engine.state.value as SessionState.Ringing
+        assertEquals(
+            CheckType.Math,
+            test.session.checkRun.currentEntry
+                ?.type,
+        )
+
+        val scheduledAt = Instant.parse("2027-03-08T06:00:00Z")
+        controller.withIntent(WakeService.alarmIntent(app.app, AlarmFired(alarm.id, scheduledAt))).startCommand(0, 2)
+        app.awaitUntil("the real session rings") {
+            (app.engine.state.value as? SessionState.Ringing)?.session?.config?.testMode == false
+        }
+
+        assertEquals(alarm.id, (app.engine.state.value as SessionState.Ringing).session.config.alarmId)
+        assertEquals(SessionOutcome.Test, history.rows.single { it.sessionId == test.session.sessionId }.outcome)
+        assertEquals(emptyList(), history.merges, "no merge row: the real alarm got its own session")
+        assertTrue(app.logs().none { it.startsWith("SessionEventIgnored type=CheckAnswerSubmitted") }, "${app.logs()}")
+        controller.destroy() // No ticking service left behind for the next test.
+    }
+
+    @Test
+    fun `a Math test whose I'm up cannot be saved gets no answers when a real alarm rings, and still rings (Story 3_2 review)`() {
+        val store = FakeActiveSessionStore()
+        val app = WakeApp(store = store, history = history, billing = billing, testAlarms = testAlarms)
+        val alarm = anAlarm(id = "alarm-a", requestCode = 1000)
+        assertEquals(Outcome.Success(Unit), runBlocking { app.koin.get<AlarmRepository>().upsert(alarm) })
+        testAlarms.pending = aSessionConfig(label = "test", testMode = true).copy(checkPlan = CheckPlan.default())
+        val controller = app.startService(WakeService.intent(app.app, WakeService.ACTION_TEST))
+        app.awaitRinging()
+        store.commitFailure = DomainError.StorageFailure("disk full")
+
+        val scheduledAt = Instant.parse("2027-03-08T06:00:00Z")
+        controller.withIntent(WakeService.alarmIntent(app.app, AlarmFired(alarm.id, scheduledAt))).startCommand(0, 2)
+        // After ending the test (which sends every answer first), the service merges the real alarm into the test.
+        app.awaitUntil("the real alarm is merged into the test that rings on") {
+            app.logs().any { "finish test session" in it } && (history.merges.isNotEmpty() || app.logs().any { "rings on" in it })
+        }
+
+        val test = assertIs<SessionState.Ringing>(app.engine.state.value)
+        assertTrue(test.session.config.testMode, "the test still rings")
+        assertTrue(app.player.sound != null, "never silent")
+        assertTrue(app.logs().none { it.startsWith("SessionEventIgnored type=CheckAnswerSubmitted") }, "no ignored answers: ${app.logs()}")
+        store.commitFailure = null
+        controller.destroy() // No ticking service left behind for the next test.
     }
 }

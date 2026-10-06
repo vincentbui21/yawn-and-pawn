@@ -120,31 +120,17 @@ class NoBillingSnoozeAvailability(
 }
 
 /**
- * The Epic 1 production [CheckValidator], until Story 3.2 wires [PluginCheckValidator]: the answer to a
- * [CheckType.Placeholder] entry is valid; anything else is not.
- */
-object PlaceholderCheckValidator : CheckValidator {
-    override fun validate(
-        run: CheckRun,
-        answer: CheckAnswer,
-    ): StepResult =
-        when {
-            run.currentEntry?.type != CheckType.Placeholder || answer != CheckAnswer.Placeholder -> StepResult.Invalid
-            run.step.entry >= run.plan.entries.lastIndex -> StepResult.ValidLast
-            else -> StepResult.ValidNext
-        }
-}
-
-/**
- * The AD-9 [CheckValidator]: the current entry's [CheckType] generates the puzzle from the entry's seed and validates
+ * The production [CheckValidator] (AD-9, wired since Story 3.2): the current entry's [CheckType] generates the puzzle
+ * from the entry's seed and validates
  * the answer, and its [CheckResult] maps onto the AD-2 rows:
  * - [CheckResult.ItemCorrect] → [StepResult.ValidNextItem]; [CheckResult.Correct] → [StepResult.ValidNext], or
  *   [StepResult.ValidLast] on the last entry;
  * - [CheckResult.Wrong] → [StepResult.Invalid]; [CheckResult.WrongRestart] → [StepResult.InvalidRestart].
  *
  * A run with no current entry or no seed for it is [StepResult.Invalid]; it never throws. The reducer derives the seeds
- * a damaged row is missing from the session coordinates before it validates, so only a passed check gets there.
- * Story 3.2 wires it in place of [PlaceholderCheckValidator].
+ * a damaged row is missing from the session coordinates before it validates, so only a passed check gets there. An item
+ * outside the entry's puzzle is checked on the nearest item ([CheckRun.withItemInPuzzle]), so the last one passes it.
+ * A [CheckType.Placeholder] entry of a session stored by Epics 1–2 passes with the placeholder answer.
  */
 object PluginCheckValidator : CheckValidator {
     override fun validate(
@@ -156,7 +142,9 @@ object PluginCheckValidator : CheckValidator {
         return if (entry == null || seed == null) {
             StepResult.Invalid
         } else {
-            val result = entry.type.validate(entry.type.generate(seed, entry.difficulty, entry.count), run.step.item, answer)
+            // A damaged row's item past the end is checked on the last item, as the wake screen shows it (Story 3.2).
+            val item = run.withItemInPuzzle().step.item
+            val result = entry.type.validate(entry.type.generate(seed, entry.difficulty, entry.count), item, answer)
             stepResultOf(result, lastEntry = run.step.entry >= run.plan.entries.lastIndex)
         }
     }

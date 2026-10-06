@@ -54,23 +54,23 @@ class SessionPoliciesTest {
     }
 
     @Test
-    fun `the placeholder validator accepts the placeholder answer as valid and last`() {
+    fun `the plugin validator passes a stored placeholder entry with the placeholder answer`() {
         val run = CheckRun(CheckPlan.placeholder(), SEEDS)
-        assertEquals(StepResult.ValidLast, PlaceholderCheckValidator.validate(run, CheckAnswer.Placeholder))
-        assertEquals(StepResult.ValidNext, PlaceholderCheckValidator.validate(CheckRun(TWO_STEPS, SEEDS), CheckAnswer.Placeholder))
+        assertEquals(StepResult.ValidLast, PluginCheckValidator.validate(run, CheckAnswer.Placeholder))
+        assertEquals(StepResult.ValidNext, PluginCheckValidator.validate(CheckRun(TWO_STEPS, NEW_SEEDS), CheckAnswer.Placeholder))
         assertEquals(
             StepResult.ValidLast,
-            PlaceholderCheckValidator.validate(CheckRun(TWO_STEPS, SEEDS, step = StepPointer(1, 0)), CheckAnswer.Placeholder),
+            PluginCheckValidator.validate(CheckRun(TWO_STEPS, NEW_SEEDS, step = StepPointer(1, 0)), CheckAnswer.Placeholder),
         )
     }
 
     @Test
-    fun `the placeholder validator rejects other answers and a run past its last step`() {
+    fun `the plugin validator rejects other answers on a placeholder entry and a run past its last step`() {
         val run = CheckRun(CheckPlan.placeholder(), SEEDS)
-        assertEquals(StepResult.Invalid, PlaceholderCheckValidator.validate(run, CheckAnswer.ImageMatched))
+        assertEquals(StepResult.Invalid, PluginCheckValidator.validate(run, CheckAnswer.ImageMatched))
         val finished = run.copy(step = StepPointer(1, 0))
         assertNull(finished.currentEntry)
-        assertEquals(StepResult.Invalid, PlaceholderCheckValidator.validate(finished, CheckAnswer.Placeholder))
+        assertEquals(StepResult.Invalid, PluginCheckValidator.validate(finished, CheckAnswer.Placeholder))
     }
 
     @Test

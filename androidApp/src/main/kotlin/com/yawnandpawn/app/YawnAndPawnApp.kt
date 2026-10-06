@@ -35,7 +35,7 @@ import com.yawnandpawn.app.core.session.FallbackPolicy
 import com.yawnandpawn.app.core.session.FeeLadder
 import com.yawnandpawn.app.core.session.NoBillingSnoozeAvailability
 import com.yawnandpawn.app.core.session.NoFallbackPolicy
-import com.yawnandpawn.app.core.session.PlaceholderCheckValidator
+import com.yawnandpawn.app.core.session.PluginCheckValidator
 import com.yawnandpawn.app.core.session.ScheduleTestAlarm
 import com.yawnandpawn.app.core.session.SessionEngine
 import com.yawnandpawn.app.core.session.SessionLockGuard
@@ -88,7 +88,7 @@ val appModule =
         // Before the first unlock (Story 2.3): the engine marks the ring, and snooze says "Unlock your phone to snooze".
         single<UserLockState> { AndroidUserLockState(androidContext(), get()) }
         single<SnoozeAvailabilityPolicy> { NoBillingSnoozeAvailability(get()) }
-        single<CheckValidator> { PlaceholderCheckValidator }
+        single<CheckValidator> { PluginCheckValidator }
         single<FallbackPolicy> { NoFallbackPolicy }
         single<FeeLadder> { TierFeeLadder }
         single { SessionReducer(get(), get(), get()) }

@@ -169,7 +169,7 @@ All strings live in resources (NFR-10). `{price}`, `{nextPrice}`, `{minutes}`, `
 | Purchase history empty | "No snoozes paid. Keep it that way." |
 | Recordings empty | "Record a message for your morning self." |
 | Math check, progress | "Problem {n} of {count}" |
-| Math check, problem (TalkBack) | Spoken form with "plus" / "times", e.g. "47 plus 38" |
+| Math check, problem (TalkBack) | Spoken form with "plus" / "minus" / "times", e.g. "47 plus 38", "47 minus 38" |
 | Math check, backspace (TalkBack) | "Delete digit" |
 | Math check, answer (TalkBack) | "Answer {value}" |
 | Word Unscramble, progress | "Word {n} of {count}" |

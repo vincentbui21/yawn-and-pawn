@@ -94,8 +94,10 @@ internal class CheckRules(
                 advanced(state, run.copy(step = step.copy(item = step.item + 1)))
             }
 
+            // The next entry is shown through StartCheckStep, as "I'm up" shows the first (Story 3.2).
             StepResult.ValidNext -> {
                 advanced(state, run.copy(step = StepPointer(entry = step.entry + 1), failedAttempts = 0))
+                    .copy(effects = listOf(SessionEffect.StartCheckStep(step.entry + 1)))
             }
 
             StepResult.Invalid -> {

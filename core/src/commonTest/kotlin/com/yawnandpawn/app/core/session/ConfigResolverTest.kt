@@ -56,7 +56,7 @@ class ConfigResolverTest {
                 rampStartPercent = 20,
                 soundRef = "builtin:birds",
                 vibration = false,
-                checkPlan = CheckPlan(CheckMode.All, listOf(CheckEntry(CheckType.Placeholder, Difficulty.Medium, count = 1))),
+                checkPlan = CheckPlan(CheckMode.Random, listOf(CheckEntry(CheckType.Math, Difficulty.Medium, count = 3))),
             ),
             ConfigResolver.resolve(alarm, settings, testMode = false, scheduledAt = SCHEDULED_AT),
         )

@@ -28,6 +28,7 @@ import com.yawnandpawn.app.core.time.MonotonicClock
 import com.yawnandpawn.app.core.time.TimeSnapshot
 import com.yawnandpawn.app.restartKoin
 import com.yawnandpawn.app.testing.FakeCrashReporter
+import com.yawnandpawn.app.testing.rightAnswer
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
 import org.koin.core.Koin
@@ -168,7 +169,20 @@ internal class WakeApp(
         awaitUntil("${events.map { it::class.simpleName }} are dispatched") { job.isCompleted }
     }
 
+    /**
+     * Answers every item of the session's check right, one `CheckAnswerSubmitted` each, as a user does on the Check
+     * screen (Story 3.2: Math problems; the placeholder of a placeholder plan), until the session leaves Grace or Loud.
+     */
+    fun solveCheck() {
+        repeat(MAX_ANSWERS) {
+            val ring = engine.state.value as? SessionState.Ring ?: return
+            val answer = rightAnswer(ring.session.checkRun) ?: return
+            dispatch(SessionEvent.CheckAnswerSubmitted(answer))
+        }
+    }
+
     private companion object {
+        const val MAX_ANSWERS = 100
         const val MEDIA_MILLIS = 3_600_000
 
         // About 30 s of real sleep (System.nanoTime is shadowed, so rounds count the time). A loaded gate run (many

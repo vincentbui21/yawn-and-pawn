@@ -81,13 +81,13 @@ object ConfigResolver {
             rampStartPercent = Alarm.DEFAULT_RAMP_START_PERCENT,
             soundRef = alarm.soundRef,
             vibration = alarm.vibration,
-            checkPlan = CheckPlan.placeholder(),
+            checkPlan = CheckPlan.default(),
         )
 
     /**
      * The config of a test ring (FR-ALM-12, Story 1.18) from the editor's current, possibly unsaved, [draft]: always
      * `testMode`, the alarm id of the draft (or [TEST_ALARM_ID] for a new alarm), a trimmed label (blank means none)
-     * and the same fixed ramp start and placeholder check as a real ring at [scheduledAt].
+     * and the same fixed ramp start and check plan as a real ring at [scheduledAt].
      */
     fun resolveTest(
         draft: AlarmDraft,
@@ -109,7 +109,7 @@ object ConfigResolver {
             rampStartPercent = Alarm.DEFAULT_RAMP_START_PERCENT,
             soundRef = draft.soundRef,
             vibration = draft.vibration,
-            checkPlan = CheckPlan.placeholder(),
+            checkPlan = CheckPlan.default(),
         )
 
     /** The alarm id of a test ring for an alarm that is not stored yet. */

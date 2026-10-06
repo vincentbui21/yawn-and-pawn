@@ -237,3 +237,7 @@
   summary: Version 2 device pass for the Epic 2 escape checklist items the owner deferred: before-first-unlock UI and unlock-in-place on the lock screen (4, 5), restart and power-off during a ring (6, 7), clock and time-zone change during a ring (8), Bluetooth and wired headphones (9), real and VoIP calls (10), the accessibility shortcut (12), a real call and the lock-screen emergency dialer during a ring (16), other makers' task managers (1) and the emulator / other-maker matrix. Also the observations: no heads-up on the re-ring after a crash while the phone is in use (A), a force-stopped session rings again when the app is reopened (B, confirm intended), the Recents thumbnail can show the alarm list during a ring (C), one fire 2.4 s late (D), and the debug fire hook not storing its time (E).
   evidence: Story 2.13 run on the Oppo A96 on 2026-10-06; owner decision the same day to push to launch and handle these in version 2.
   status: deferred to version 2 (after launch) by owner decision 2026-10-06.
+- source_spec: `_bmad-output/implementation-artifacts/spec-3-2-solve-math-to-stop-the-alarm.md`
+  summary: A compact grace header on small phones at large font scales, so the Math problem is not pushed below the fold.
+  evidence: On 360 × 640 dp at 200% font the grace header fills the scrolling area of the Check screen; the problem is below it and must be scrolled to. "Check" and snooze stay on screen (screenshot `wake_check_math_hard_sunrise_w360_h640_font200`).
+  status: deferred to version 2 (after launch) by owner decision 2026-10-06.

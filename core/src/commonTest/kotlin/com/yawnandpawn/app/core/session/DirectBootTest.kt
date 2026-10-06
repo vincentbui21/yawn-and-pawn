@@ -43,7 +43,7 @@ class DirectBootTest {
 
     private fun engine(policy: SnoozeAvailabilityPolicy = NoBillingSnoozeAvailability(lock)) =
         SessionEngine(
-            SessionReducer(policy, PlaceholderCheckValidator, NoFallbackPolicy),
+            SessionReducer(policy, PluginCheckValidator, NoFallbackPolicy),
             store,
             runner,
             SessionRecorder(history),
@@ -75,7 +75,7 @@ class DirectBootTest {
         assertSame(builtIn, DirectBootSubstitution.apply(builtIn, beforeFirstUnlock = true))
         assertSame(system, DirectBootSubstitution.apply(system, beforeFirstUnlock = false))
         assertTrue(CheckType.Placeholder.directBootSafe)
-        assertEquals(CheckEntry(CheckType.Placeholder, Difficulty.Medium, count = 1), DirectBootSubstitution.DIRECT_BOOT_CHECK)
+        assertEquals(CheckEntry(CheckType.Math, Difficulty.Medium, count = 3), DirectBootSubstitution.DIRECT_BOOT_CHECK)
     }
 
     @Test
@@ -182,7 +182,7 @@ class DirectBootTest {
     private val marking =
         SessionReducer(
             NoBillingSnoozeAvailability(lock),
-            PlaceholderCheckValidator,
+            PluginCheckValidator,
             StubFallback(FallbackDecision.Allowed(FALLBACK_PLAN)),
             directBootPlan = { LOCKED },
         )

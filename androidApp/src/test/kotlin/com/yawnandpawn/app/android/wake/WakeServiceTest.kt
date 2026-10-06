@@ -18,7 +18,6 @@ import com.yawnandpawn.app.core.alarm.AlarmFired
 import com.yawnandpawn.app.core.alarm.AlarmRepository
 import com.yawnandpawn.app.core.alarm.AlarmScheduler
 import com.yawnandpawn.app.core.alarm.RequestCodes
-import com.yawnandpawn.app.core.checks.CheckAnswer
 import com.yawnandpawn.app.core.error.DomainError
 import com.yawnandpawn.app.core.error.Outcome
 import com.yawnandpawn.app.core.session.ActiveSessionStore
@@ -147,7 +146,8 @@ class WakeServiceTest {
         val service = app.ring(fired).get()
         app.awaitRinging()
 
-        app.dispatch(SessionEvent.ImUpTapped, SessionEvent.CheckAnswerSubmitted(CheckAnswer.Placeholder))
+        app.dispatch(SessionEvent.ImUpTapped)
+        app.solveCheck()
         app.awaitUntil("the service stops") { shadowOf(service).isStoppedBySelf }
 
         assertEquals(SessionState.Idle, app.engine.state.value)
@@ -498,7 +498,8 @@ class WakeServiceTest {
         app.ring(fired)
         app.awaitRinging()
         assertFalse((app.engine.state.value as SessionState.Ringing).session.beforeFirstUnlock)
-        app.dispatch(SessionEvent.ImUpTapped, SessionEvent.CheckAnswerSubmitted(CheckAnswer.Placeholder))
+        app.dispatch(SessionEvent.ImUpTapped)
+        app.solveCheck()
         app.awaitUntil("the session ends") { app.engine.state.value == SessionState.Idle }
 
         shadowOf(app.app.getSystemService(UserManager::class.java)).setUserUnlocked(false)

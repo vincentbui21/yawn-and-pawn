@@ -124,6 +124,22 @@ class CheckPluginSessionTest {
     }
 
     @Test
+    fun `a damaged row whose item is past the end of its puzzle is checked on the last item, as the screen shows it (Story 3_2 review)`() {
+        val reducer = SessionReducer(StubAvailability(SnoozeAvailability.Available(OFFER)), PluginCheckValidator, NoFallbackPolicy)
+        val seeds = listOf(101L, 202L)
+        val damaged = ringSession(testConfig(checkPlan = plan)).copy(checkRun = CheckRun(plan, seeds, StepPointer(0, 5)))
+        val usable = damaged.checkRun.usable(damaged.sessionId, damaged.ringIndex)
+
+        assertEquals(StepPointer(0, 1), usable.step, "the last of the entry's 2 items")
+        assertEquals(StepPointer(0, 0), CheckRun(plan, seeds, StepPointer(0, -1)).usable(SESSION_ID, 1).step)
+        assertSame(usable, usable.usable(damaged.sessionId, damaged.ringIndex), "a usable run stays as it is")
+        val passed = CheckRun(plan, seeds, StepPointer(2, 0))
+        assertSame(passed, passed.usable(SESSION_ID, 1), "a passed check has no item to move")
+        val next = reducer.reduce(SessionState.Loud(damaged), SessionEvent.CheckAnswerSubmitted(answerFor(easy, 101, 1)), T0).state
+        assertEquals(StepPointer(1, 0), assertIs<SessionState.Loud>(next).session.checkRun.step, "the last item's answer passes the entry")
+    }
+
+    @Test
     fun `a restart with no seed slot for the entry still starts the item over (Story 3_1 review)`() {
         val run = CheckRun(plan, listOf(1L, 2L), step = StepPointer(2, 1), failedAttempts = 1, totalFailedAttempts = 4)
         val from = SessionState.Loud(ringSession(testConfig(checkPlan = plan)).copy(checkRun = run))
@@ -237,9 +253,14 @@ class CheckPluginSessionTest {
         assertEquals(listOf(SessionEffect.WrongAnswerFeedback), wrong.effects)
         assertEquals(StepPointer(0, 0) to 1, run().step to run().failedAttempts)
 
-        send(SessionEvent.CheckAnswerSubmitted(answerFor(easy, seeds[0], 0)), 1)
+        assertEquals(
+            emptyList(),
+            send(SessionEvent.CheckAnswerSubmitted(answerFor(easy, seeds[0], 0)), 1).effects,
+            "the next item: no effect",
+        )
         assertEquals(StepPointer(0, 1) to 1, run().step to run().failedAttempts, "the next item keeps the entry's failed attempts")
-        send(SessionEvent.CheckAnswerSubmitted(answerFor(easy, seeds[0], 1)), 1)
+        val nextEntry = send(SessionEvent.CheckAnswerSubmitted(answerFor(easy, seeds[0], 1)), 1)
+        assertEquals(listOf(SessionEffect.StartCheckStep(1)), nextEntry.effects, "the next entry is shown (Story 3.2)")
         assertEquals(StepPointer(1, 0) to 0, run().step to run().failedAttempts, "the next entry starts with none")
 
         val restored = assertIs<StoredSession.Found>(SessionJson.decode(SessionJson.encode(state))).state

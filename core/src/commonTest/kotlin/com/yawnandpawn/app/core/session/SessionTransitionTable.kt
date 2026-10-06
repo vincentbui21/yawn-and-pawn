@@ -334,7 +334,7 @@ internal val ROW_CASES: Map<String, List<RowExample>> =
                         expected =
                             Transition(
                                 from.with(touched.copy(checkRun = touched.checkRun.copy(step = StepPointer(1, 0), failedAttempts = 0))),
-                                emptyList(),
+                                listOf(SessionEffect.StartCheckStep(1)),
                             ),
                         reducer = reducer(check = StepResult.ValidNext),
                     ),
@@ -575,7 +575,7 @@ internal val ROW_CASES: Map<String, List<RowExample>> =
                         expected =
                             Transition(
                                 from.with(from.session.copy(checkRun = from.session.checkRun.copy(step = next))),
-                                emptyList(),
+                                listOf(SessionEffect.StartCheckStep(1)),
                             ),
                         reducer = reducer(check = StepResult.ValidNext),
                     ),

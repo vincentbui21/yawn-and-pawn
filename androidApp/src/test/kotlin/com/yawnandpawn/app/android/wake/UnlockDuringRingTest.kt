@@ -14,7 +14,6 @@ import com.yawnandpawn.app.android.crash.FirebaseStartup
 import com.yawnandpawn.app.awaitChildren
 import com.yawnandpawn.app.core.alarm.AlarmFired
 import com.yawnandpawn.app.core.alarm.AlarmRepository
-import com.yawnandpawn.app.core.checks.CheckAnswer
 import com.yawnandpawn.app.core.error.DomainError
 import com.yawnandpawn.app.core.error.Outcome
 import com.yawnandpawn.app.core.log.LogEvent
@@ -133,7 +132,8 @@ class UnlockDuringRingTest {
         assertEquals(1, billing.initCalls, "billing initialised once (AD-2 InitBilling and the signal share it)")
         assertTrue(app.logs().any { it == "SessionEffectLogged type=LiftDirectBootSubstitutions entry=false" }, "${app.logs()}")
 
-        app.dispatch(SessionEvent.ImUpTapped, SessionEvent.CheckAnswerSubmitted(CheckAnswer.Placeholder))
+        app.dispatch(SessionEvent.ImUpTapped)
+        app.solveCheck()
         app.awaitUntil("the session ends") { app.engine.state.value == SessionState.Idle }
         app.awaitUntil("the receiver is unregistered") { unlockReceivers(app) == 0 }
     }
@@ -227,7 +227,8 @@ class UnlockDuringRingTest {
         val service = lockedRing(app)
         app.awaitUntil("a receiver for the first ring") { unlockReceivers(app) == 1 }
 
-        app.dispatch(SessionEvent.ImUpTapped, SessionEvent.CheckAnswerSubmitted(CheckAnswer.Placeholder))
+        app.dispatch(SessionEvent.ImUpTapped)
+        app.solveCheck()
         app.awaitUntil("the session ends") { app.engine.state.value == SessionState.Idle }
         app.awaitUntil("the receiver is unregistered (${unlockReceivers(app)})") { unlockReceivers(app) == 0 }
 

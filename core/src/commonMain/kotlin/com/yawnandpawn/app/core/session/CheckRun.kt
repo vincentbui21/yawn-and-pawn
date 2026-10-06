@@ -74,6 +74,27 @@ data class CheckRun(
         }
 
     /**
+     * This run as the wake screen shows it, so a damaged row can still be passed (Story 3.2): the missing seeds derived
+     * again as the reducer does ([withMissingSeeds]) and the item [moved into the puzzle][withItemInPuzzle] as
+     * [PluginCheckValidator] does. The problem the screen shows is then the one the answer is checked against.
+     */
+    fun usable(
+        sessionId: String,
+        ringIndex: Int,
+    ): CheckRun = withMissingSeeds(sessionId, ringIndex).withItemInPuzzle()
+
+    /**
+     * This run with an item outside the current entry's puzzle (a damaged row) moved back into it: past the end, the
+     * last item, so its answer passes the entry. Unchanged with no current entry or no seed for it.
+     */
+    fun withItemInPuzzle(): CheckRun {
+        val entry = currentEntry
+        val seed = seeds.getOrNull(step.entry)
+        val last = if (entry == null || seed == null) -1 else entry.type.generate(seed, entry.difficulty, entry.count).size - 1
+        return if (last < 0 || step.item in 0..last) this else copy(step = step.copy(item = step.item.coerceIn(0, last)))
+    }
+
+    /**
      * The same run on [newPlan] (Direct Boot substitutions on a restore, Story 2.3): when the current entry changed,
      * its progress starts again at the first item.
      */

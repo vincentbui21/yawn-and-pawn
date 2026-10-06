@@ -98,7 +98,13 @@ class PreviewWakeFlow {
         WakeStep.Check(
             CheckUiState(
                 grace = GraceState.Running(secondsLeft = GRACE_SECONDS, totalSeconds = GRACE_SECONDS),
-                content = CheckContent.Math(problemNumber = 1, problemCount = 2, left = 47, right = 38, operator = MathOperator.Plus),
+                content =
+                    CheckContent.Math(
+                        problemNumber = 1,
+                        problemCount = 2,
+                        operands = PreviewSamples.mathProblem.operands,
+                        operators = listOf(MathOperator.Plus),
+                    ),
                 snooze = offer(),
             ),
         )
@@ -194,7 +200,8 @@ private fun mathStep(
 
 /** A wrong answer clears the field; a right one moves to problem 2, or ends the check (`null`). */
 private fun submitted(math: CheckContent.Math): CheckContent.Math? {
-    val expected = if (math.operator == MathOperator.Plus) math.left + math.right else math.left * math.right
+    val (left, right) = math.operands
+    val expected = if (math.operators.single() == MathOperator.Plus) left + right else left * right
     return when {
         math.answer.toIntOrNull() != expected -> {
             math.copy(answer = "", wrong = true)
@@ -203,9 +210,8 @@ private fun submitted(math: CheckContent.Math): CheckContent.Math? {
         math.problemNumber < math.problemCount -> {
             math.copy(
                 problemNumber = 2,
-                left = 6,
-                right = 7,
-                operator = MathOperator.Times,
+                operands = (PreviewSamples.checkMathWrong.content as CheckContent.Math).operands,
+                operators = listOf(MathOperator.Times),
                 answer = "",
             )
         }

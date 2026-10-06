@@ -69,7 +69,8 @@ internal fun EditorSubScreen(
         onBack = { onIntent(EditorIntent.BackRequested) },
     ) {
         when (pane) {
-            EditorPane.Main -> {
+            // "Try it" has its own full-screen preview (AlarmEditorScreen), never a sub-screen.
+            EditorPane.Main, EditorPane.TryIt -> {
                 Unit
             }
 
@@ -118,7 +119,7 @@ private fun EditorPane.title(): StringResource =
     when (this) {
         EditorPane.Main, EditorPane.Sound -> Res.string.editor_sound
         EditorPane.Snooze -> Res.string.editor_snooze
-        EditorPane.WakeCheck, EditorPane.CheckSetup -> Res.string.editor_wake_check
+        EditorPane.WakeCheck, EditorPane.CheckSetup, EditorPane.TryIt -> Res.string.editor_wake_check
         EditorPane.QuietTime -> Res.string.editor_quiet_time
         EditorPane.Motivation -> Res.string.editor_motivation
     }

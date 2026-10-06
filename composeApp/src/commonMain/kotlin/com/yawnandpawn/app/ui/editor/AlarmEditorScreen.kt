@@ -39,6 +39,7 @@ import androidx.navigationevent.compose.NavigationBackHandler
 import androidx.navigationevent.compose.rememberNavigationEventState
 import com.yawnandpawn.app.core.alarm.AlarmField
 import com.yawnandpawn.app.ui.checks.displayName
+import com.yawnandpawn.app.ui.checksetup.CheckPreviewScreen
 import com.yawnandpawn.app.ui.components.ConfirmDialog
 import com.yawnandpawn.app.ui.components.DayChipRow
 import com.yawnandpawn.app.ui.components.GroupCard
@@ -183,8 +184,24 @@ fun AlarmEditorScreen(
                 label = "editor pane",
             ) { pane ->
                 when (pane) {
-                    EditorPane.Main -> EditorMain(state = state, is24Hour = is24Hour, onIntent = onIntent, scroll = mainScroll)
-                    else -> EditorSubScreen(pane = pane, state = state, onIntent = onIntent)
+                    EditorPane.Main -> {
+                        EditorMain(state = state, is24Hour = is24Hour, onIntent = onIntent, scroll = mainScroll)
+                    }
+
+                    // "Try it" (Story 3.6): the approved Sunrise preview, full screen, over the editor's own state.
+                    EditorPane.TryIt -> {
+                        state.tryIt?.let { tryIt ->
+                            CheckPreviewScreen(
+                                state = tryIt,
+                                onIntent = { onIntent(EditorIntent.TryIt(it)) },
+                                onClose = { onIntent(EditorIntent.BackRequested) },
+                            )
+                        }
+                    }
+
+                    else -> {
+                        EditorSubScreen(pane = pane, state = state, onIntent = onIntent)
+                    }
                 }
             }
         }

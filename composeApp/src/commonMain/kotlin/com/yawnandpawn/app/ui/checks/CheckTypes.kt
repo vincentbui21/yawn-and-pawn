@@ -139,11 +139,11 @@ fun Difficulty.toCore(): CoreDifficulty = CoreDifficulty.valueOf(name)
 fun CoreDifficulty.toUi(): Difficulty = Difficulty.valueOf(name)
 
 /**
- * The checks the pickers offer (Story 3.5): those with a core plugin a user may pick (`CheckConfig.PICKABLE_TYPES`), in
- * the picker order. Story 3.2's `CheckRegistry` also requires a wake screen.
+ * The checks the pickers offer (Story 3.5): those with a core plugin a user may pick (`CheckConfig.PICKABLE_TYPES`) and a
+ * registered "Try it" ([CheckRegistry], Story 3.6), in the picker order. The wake screen joins the registry with 3.2.
  */
 val PickableCheckTypes: List<CheckType>
-    get() = CheckType.entries.filter { type -> type.core?.let { it in CheckConfig.PICKABLE_TYPES } == true }
+    get() = CheckType.entries.filter { type -> type.core?.let { it in CheckConfig.PICKABLE_TYPES } == true && type in CheckRegistry.types }
 
 @Composable
 fun Difficulty.displayName(): String =

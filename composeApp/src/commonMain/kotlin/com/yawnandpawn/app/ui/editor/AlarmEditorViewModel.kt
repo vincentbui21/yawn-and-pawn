@@ -24,6 +24,8 @@ import com.yawnandpawn.app.core.sound.SoundLibrary
 import com.yawnandpawn.app.core.sound.SoundPreview
 import com.yawnandpawn.app.core.time.Clock
 import com.yawnandpawn.app.core.time.TimeZoneProvider
+import com.yawnandpawn.app.ui.checks.CheckRegistry
+import com.yawnandpawn.app.ui.checks.CheckTrial
 import com.yawnandpawn.app.ui.checks.CheckType
 import com.yawnandpawn.app.ui.checks.Difficulty
 import com.yawnandpawn.app.ui.checks.PickableCheckTypes
@@ -35,6 +37,7 @@ import com.yawnandpawn.app.ui.checksetup.CheckSetupIntent
 import com.yawnandpawn.app.ui.format.Weekdays
 import com.yawnandpawn.app.ui.format.countdownOf
 import com.yawnandpawn.app.ui.home.AlarmActions
+import com.yawnandpawn.app.ui.wake.WakeIntent
 import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.flow.Flow
@@ -47,6 +50,7 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import kotlinx.datetime.TimeZone
 import kotlinx.datetime.toLocalDateTime
+import kotlin.random.Random
 import kotlin.time.Instant
 import com.yawnandpawn.app.core.checks.CheckMode as CoreCheckMode
 
@@ -91,7 +95,12 @@ class AlarmEditorViewModel(
     private val copyOf: String? = null,
     /** The checks the Wake-up check sub-screen offers; tests widen it to exercise several checks. */
     private val pickable: List<CheckType> = PickableCheckTypes,
+    /** The seed of each "Try it" (Story 3.6): random in the app (a practice run, not a session), fixed in tests. */
+    private val previewSeed: () -> Long = { Random.nextLong() },
 ) : ViewModel() {
+    /** The running "Try it" preview, if any (Story 3.6). */
+    private var trial: CheckTrial? = null
+
     private val _state =
         MutableStateFlow(
             EditorUiState(
@@ -241,16 +250,7 @@ class AlarmEditorViewModel(
     private fun onCheckIntent(intent: EditorIntent): Boolean {
         when (intent) {
             is EditorIntent.CheckToggled -> {
-                editForm { form ->
-                    val has = form.checks.any { it.type == intent.type }
-                    when {
-                        intent.selected && !has && intent.type in pickable -> form.copy(checks = form.checks + newCheck(intent.type))
-                        !intent.selected -> form.copy(checks = form.checks.filterNot { it.type == intent.type })
-                        else -> form
-                    }
-                }
-                // A check picked again clears "Pick at least one check."
-                _state.update { if (it.form.checks.isEmpty()) it else it.copy(full = it.full?.copy(noCheckError = false)) }
+                toggleCheck(intent.type, intent.selected)
             }
 
             is EditorIntent.CheckModeSelected -> {
@@ -269,11 +269,31 @@ class AlarmEditorViewModel(
                 onSetupIntent(intent.intent)
             }
 
+            is EditorIntent.TryIt -> {
+                onTryItIntent(intent.intent)
+            }
+
             else -> {
                 return false
             }
         }
         return true
+    }
+
+    /** Ticks or unticks [type]: added last when the picker offers it; any check left clears "Pick at least one check." */
+    private fun toggleCheck(
+        type: CheckType,
+        selected: Boolean,
+    ) {
+        editForm { form ->
+            val has = form.checks.any { it.type == type }
+            when {
+                selected && !has && type in pickable -> form.copy(checks = form.checks + newCheck(type))
+                !selected -> form.copy(checks = form.checks.filterNot { it.type == type })
+                else -> form
+            }
+        }
+        _state.update { if (it.form.checks.isEmpty()) it else it.copy(full = it.full?.copy(noCheckError = false)) }
     }
 
     /** Check setup of [EditorUiState.setupType]: difficulty, count (within the type's range) and Back. */
@@ -293,11 +313,46 @@ class AlarmEditorViewModel(
                 editCheck(type) { it.copy(count = intent.count.coerceIn(range)) }
             }
 
-            // "Try it" arrives with Story 3.6; the camera checks' rows with their stories.
+            CheckSetupIntent.TryItClicked -> {
+                startTryIt(type)
+            }
+
+            // The camera checks' rows arrive with their stories.
             else -> {
                 Unit
             }
         }
+    }
+
+    /**
+     * "Try it" (Story 3.6): [type] at the difficulty set now, one item, from a fresh [previewSeed]. It runs in this
+     * ViewModel's state only (no engine, sound, history or scheduler), and never changes the form.
+     */
+    private fun startTryIt(type: CheckType) {
+        val chip =
+            _state.value.form.checks
+                .firstOrNull { it.type == type } ?: return
+        val started = CheckRegistry.startTrial(type, chip.difficulty, previewSeed()) ?: return
+        trial = started
+        _state.update { it.copy(pane = EditorPane.TryIt, tryIt = started.state) }
+    }
+
+    /** A tap in the preview: "Done" returns to Check setup, anything else goes to the trial. */
+    private fun onTryItIntent(intent: WakeIntent) {
+        val current = trial ?: return
+        if (intent == WakeIntent.DoneClicked) {
+            closeTryIt()
+            return
+        }
+        val next = current.onIntent(intent)
+        trial = next
+        _state.update { it.copy(tryIt = next.state) }
+    }
+
+    /** Back or "Done": Check setup again, with the form as it was. */
+    private fun closeTryIt() {
+        trial = null
+        _state.update { it.copy(pane = EditorPane.CheckSetup, tryIt = null) }
     }
 
     private fun editCheck(
@@ -439,6 +494,10 @@ class AlarmEditorViewModel(
         when {
             current.showDiscardDialog -> {
                 hideDiscardDialog()
+            }
+
+            current.pane == EditorPane.TryIt -> {
+                closeTryIt()
             }
 
             current.pane == EditorPane.CheckSetup -> {

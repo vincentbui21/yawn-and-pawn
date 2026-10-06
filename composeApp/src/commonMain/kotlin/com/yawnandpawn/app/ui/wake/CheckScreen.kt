@@ -256,7 +256,12 @@ private fun MathProblem(content: CheckContent.Math) {
         val spoken = joinedProblem(content.operands, words)
         Text(
             text = joinedProblem(content.operands, content.operators.map { it.symbol }),
-            modifier = Modifier.clearAndSetSemantics { contentDescription = spoken }.semantics { heading() },
+            // One semantics block: a `semantics { heading() }` after `clearAndSetSemantics` is cleared too (Story 3.6 finding).
+            modifier =
+                Modifier.clearAndSetSemantics {
+                    contentDescription = spoken
+                    heading()
+                },
             style = PpsTheme.typography.display,
             color = colors.text,
             textAlign = TextAlign.Center,

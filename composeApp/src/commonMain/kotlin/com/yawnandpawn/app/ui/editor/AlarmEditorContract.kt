@@ -7,12 +7,14 @@ import com.yawnandpawn.app.ui.checks.CheckType
 import com.yawnandpawn.app.ui.checks.Difficulty
 import com.yawnandpawn.app.ui.checks.defaultCount
 import com.yawnandpawn.app.ui.checks.toUi
+import com.yawnandpawn.app.ui.checksetup.CheckPreviewUiState
 import com.yawnandpawn.app.ui.checksetup.CheckSetupIntent
 import com.yawnandpawn.app.ui.format.Countdown
 import com.yawnandpawn.app.ui.format.Money
 import com.yawnandpawn.app.ui.format.Weekdays
 import com.yawnandpawn.app.ui.sound.SoundPickerIntent
 import com.yawnandpawn.app.ui.sound.SoundPickerUiState
+import com.yawnandpawn.app.ui.wake.WakeIntent
 import kotlinx.datetime.DayOfWeek
 import kotlinx.datetime.LocalTime
 import org.jetbrains.compose.resources.StringResource
@@ -60,7 +62,8 @@ data class EditorForm(
 /**
  * The editor screen that is showing (progressive disclosure, owner decision 2026-09-27): the main card list, or the
  * sub-screen one of its rows opened. Back on a sub-screen returns to [Main]; from [CheckSetup] (one check's setup,
- * opened from [WakeCheck], Story 3.5) it returns to [WakeCheck].
+ * opened from [WakeCheck], Story 3.5) it returns to [WakeCheck], and from [TryIt] (its "Try it" preview, Story 3.6) to
+ * [CheckSetup].
  */
 enum class EditorPane {
     Main,
@@ -70,6 +73,7 @@ enum class EditorPane {
     QuietTime,
     Motivation,
     CheckSetup,
+    TryIt,
     ;
 
     /** How deep the pane is: Back goes up one level, and the slide runs forward when going deeper. */
@@ -78,6 +82,7 @@ enum class EditorPane {
             when (this) {
                 Main -> 0
                 CheckSetup -> 2
+                TryIt -> 3
                 else -> 1
             }
 }
@@ -123,6 +128,8 @@ data class EditorUiState(
     val sound: EditorSound? = null,
     /** The check whose setup [EditorPane.CheckSetup] shows. */
     val setupType: CheckType? = null,
+    /** The "Try it" preview [EditorPane.TryIt] shows (Story 3.6); never part of the form. */
+    val tryIt: CheckPreviewUiState? = null,
 ) {
     /** The highlighted repeat quick choice. */
     val repeatChoice: RepeatChoice
@@ -297,6 +304,11 @@ sealed interface EditorIntent {
     /** A change in the open Check setup ([EditorUiState.setupType]): its difficulty or count; its Back (Story 3.5). */
     data class CheckSetup(
         val intent: CheckSetupIntent,
+    ) : EditorIntent
+
+    /** A tap in the "Try it" preview (Story 3.6): the pad, "Check" or "Done". */
+    data class TryIt(
+        val intent: WakeIntent,
     ) : EditorIntent
 
     /** All mode: move a selected check one place up or down in the order the checks run. */

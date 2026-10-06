@@ -22,6 +22,7 @@ import com.yawnandpawn.app.core.alarm.AlarmScheduler
 import com.yawnandpawn.app.core.alarm.AlarmScheduling
 import com.yawnandpawn.app.core.alarm.AlarmWriteLock
 import com.yawnandpawn.app.core.alarm.DeleteAlarm
+import com.yawnandpawn.app.core.alarm.ReRegisterCode
 import com.yawnandpawn.app.core.alarm.RearmOnFire
 import com.yawnandpawn.app.core.alarm.SaveAlarm
 import com.yawnandpawn.app.core.alarm.SetAlarmEnabled
@@ -85,6 +86,8 @@ val appModule =
         single { SessionSlotRearm(get(), get(), get(), get(), get(), get()) }
         factory { SaveAlarm(get(), get(), get(), get(), get(), get(), get(), get()) }
         factory { SetAlarmEnabled(get(), get(), get(), get(), get()) }
+        // Story 3.10: Home's "Re-register" stores a new code alone.
+        factory { ReRegisterCode(get(), get(), get(), get(), get()) }
         factory { DeleteAlarm(get(), get(), get(), get(), get()) }
         // "Test alarm" (Story 1.18): the editor's values ring as a test 10 s later, through the test request code.
         factory { ScheduleTestAlarm(get(), get(), get(), get()) }

@@ -1,6 +1,10 @@
 package com.yawnandpawn.app.ui.home
 
+import com.yawnandpawn.app.core.alarm.Alarm
 import com.yawnandpawn.app.core.alarm.AlarmRepository
+import com.yawnandpawn.app.core.checks.CheckEntry
+import com.yawnandpawn.app.core.checks.qr.CodeFormat
+import com.yawnandpawn.app.core.checks.qr.RegisteredCode
 import com.yawnandpawn.app.core.error.DomainError
 import com.yawnandpawn.app.core.error.Outcome
 import com.yawnandpawn.app.core.history.MissedNotes
@@ -8,6 +12,7 @@ import com.yawnandpawn.app.core.log.LogEvent
 import com.yawnandpawn.app.core.stats.CheckKey
 import com.yawnandpawn.app.core.stats.ConfiguredCheck
 import com.yawnandpawn.app.core.stats.ReRegisterSuggestions
+import com.yawnandpawn.app.core.stats.StoredCheckRegistrations
 import com.yawnandpawn.app.testing.AlarmUseCasesFixture
 import com.yawnandpawn.app.testing.FakeAlarmRepository
 import com.yawnandpawn.app.testing.FakeCheckConfigRepository
@@ -23,6 +28,7 @@ import com.yawnandpawn.app.testing.FakeTimeChangeSignal
 import com.yawnandpawn.app.testing.FakeTimeZoneProvider
 import com.yawnandpawn.app.testing.aSessionHistoryRow
 import com.yawnandpawn.app.testing.anAlarm
+import com.yawnandpawn.app.testing.checkConfigsOf
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -40,12 +46,15 @@ import kotlin.test.AfterTest
 import kotlin.test.BeforeTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertIs
+import kotlin.test.assertNotNull
 import kotlin.test.assertNull
 import kotlin.time.Duration
 import kotlin.time.Duration.Companion.days
 import kotlin.time.Duration.Companion.hours
 import kotlin.time.Instant
 import com.yawnandpawn.app.core.checks.CheckType as CoreCheckType
+import com.yawnandpawn.app.core.checks.Difficulty as CoreDifficulty
 import com.yawnandpawn.app.ui.checks.CheckType as UiCheckType
 
 /**
@@ -303,5 +312,25 @@ class HomeReRegisterBannerTest {
             assertNull(unnamed.state.value.reregisterCheck)
             assertEquals(emptyList(), effects)
             assertEquals(emptyMap(), dismissals.current)
+        }
+
+    @Test
+    fun `the banner leaves once the same code is registered again (review fix)`() =
+        runTest(dispatcher) {
+            val repository = repository()
+            val checkRows = FakeCheckConfigRepository(repository)
+            val code = assertNotNull(RegisteredCode.of(CodeFormat.Ean13, "4006381333931"))
+            val alarm = assertIs<Outcome.Success<Alarm>>(repository.get(alarmId)).value
+            val qr = CheckEntry(CoreCheckType.QrBarcode, CoreDifficulty.Medium, 1, code = code)
+            checkRows.saveWithAlarm(alarm, checkConfigsOf(alarmId, listOf(qr), at = clock.now() - 30.days))
+            listOf("f1" to 3.days, "f2" to 2.days, "f3" to 1.days).forEach { (id, ago) -> fallbackUsed(id, ago) }
+            val stored = ReRegisterSuggestions(fallbacks, StoredCheckRegistrations(checkRows), dismissals, clock)
+            val viewModel = home(repository, suggestions = stored)
+            assertEquals(UiCheckType.QrBarcode, viewModel.state.value.reregisterCheck)
+
+            val reRegister = AlarmUseCasesFixture(repository, clock, zone, checkConfigs = checkRows).reRegisterCode
+            assertEquals(Outcome.Success(Unit), reRegister(alarmId, code))
+
+            assertNull(viewModel.state.value.reregisterCheck, "the same sticker counts as registered now")
         }
 }

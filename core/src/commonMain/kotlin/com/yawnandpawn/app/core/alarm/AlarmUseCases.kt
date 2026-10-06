@@ -2,6 +2,8 @@ package com.yawnandpawn.app.core.alarm
 
 import com.yawnandpawn.app.core.checks.CheckEntry
 import com.yawnandpawn.app.core.checks.CheckMode
+import com.yawnandpawn.app.core.checks.CheckType
+import com.yawnandpawn.app.core.checks.qr.RegisteredCode
 import com.yawnandpawn.app.core.error.DomainError
 import com.yawnandpawn.app.core.error.Outcome
 import com.yawnandpawn.app.core.error.flatMap
@@ -249,9 +251,51 @@ class DuplicateAlarm(
 }
 
 /**
+ * Registers [code] again for the QR/Barcode check of the alarm `alarmId` (Home's "Re-register", Stories 3.10 and 3.13):
+ * only that check's code and registration time change (`codeRegisteredAt = now`, also for the same code, since
+ * re-scanning the same sticker is the usual case and must restart the count of fallbacks). The alarm itself (enabled or
+ * not, its time, its other checks) is stored as it is, and nothing is re-armed: arming does not depend on the code.
+ * `NotFound(alarmId)` without such an alarm; `InvalidAlarm(CheckCode)` when it has no QR/Barcode check.
+ */
+class ReRegisterCode(
+    private val repository: AlarmRepository,
+    private val clock: Clock,
+    private val lock: AlarmWriteLock,
+    private val sessionLock: SessionLockGuard,
+    private val checkConfigRepository: CheckConfigRepository,
+) {
+    suspend operator fun invoke(
+        alarmId: String,
+        code: RegisteredCode,
+    ): Outcome<Unit, DomainError> =
+        lock.withLock {
+            sessionLock.whenIdle {
+                repository.get(alarmId).flatMap { alarm ->
+                    checkConfigRepository.forAlarm(alarmId).flatMap { configs ->
+                        if (configs.none { it.entry.type == CheckType.QrBarcode }) {
+                            Outcome.Failure(DomainError.InvalidAlarm(AlarmField.CheckCode))
+                        } else {
+                            val now = clock.nowMillis()
+                            val updated =
+                                configs.map { config ->
+                                    if (config.entry.type != CheckType.QrBarcode) {
+                                        config
+                                    } else {
+                                        config.copy(entry = config.entry.copy(code = code), updatedAt = now, codeRegisteredAt = now)
+                                    }
+                                }
+                            checkConfigRepository.saveWithAlarm(alarm, updated)
+                        }
+                    }
+                }
+            }
+        }
+}
+
+/**
  * Validates [alarm] and its [checks], then stores both in one transaction. The rows take the order of [checks]; a type
  * the alarm already had keeps its creation time, and a code saved again unchanged keeps its registration time (Story
- * 3.10), so only a new code restarts Story 3.13's count of fallbacks.
+ * 3.10), so an ordinary save never restarts Story 3.13's count of fallbacks ([ReRegisterCode] does).
  */
 private suspend fun storeWithChecks(
     checkConfigRepository: CheckConfigRepository,

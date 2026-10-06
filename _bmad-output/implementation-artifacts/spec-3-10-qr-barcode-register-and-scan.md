@@ -151,7 +151,7 @@ Rebased onto `main` with Stories 3.5 to 3.9 and 3.13 (one `feat(3.10): wire QR i
 - **Try it (3.6):** `QrTrial` checks each stable code against the form's code with the core `validate` (the registered one preferred among several in view, a different code counted once while held up); the editor provides the camera feed while it scans. No engine event.
 - **Generators (3.7, 3.8):** `memoryRound`/`wordRound` use `entry.puzzle(seed)`; `rightAnswer` and `WakeService.solution` have the `Puzzle.Code` branch next to Word and Memory.
 - **Fallback (3.9):** on a QR/Barcode entry whose camera is unavailable, the wake screen (`WakeQr`, part of `WakeCheck`) asks the policy with reason `CameraUnavailable`, so "Can't do this check?" shows at once (`CameraFallbackPolicy`); with a working camera it waits for 5 failed attempts. `QrCheckScreenTest` asserts the link now and runs the fallback to Math.
-- **Re-register (3.13):** a QR/Barcode suggestion sends `HomeEffect.OpenQrRegistration`, which opens the editor straight on QR registration (`Route.AlarmEditor.scanCode`); "Use this code" saves the new code at once (and restarts the count), Back leaves the alarm unchanged. `HomeReRegisterBannerTest` now runs on the real QR/Barcode type.
+- **Re-register (3.13):** a QR/Barcode suggestion sends `HomeEffect.OpenQrRegistration`, which opens the editor straight on QR registration (`Route.AlarmEditor.scanCode`, only when the alarm has a QR/Barcode check); "Use this code" stores that code alone through `ReRegisterCode` (registration time now, even for the same code; the alarm, its other checks and its arming untouched), and Back leaves the alarm unchanged. `HomeReRegisterBannerTest` now runs on the real QR/Barcode type.
 
 ## Verification
 
@@ -203,3 +203,5 @@ Edge-case and verification-gap reviewers on `a61a569` + `a74616c`. Alarm safety 
 Renamed and strengthened: "a camera that fails while scanning shows the same message and is released" (the real bind failure is in `CameraXCodeScannerTest`), "no scanner source can write a frame or a code to storage or the log", and the 200% wake screenshots assert the wrong-code and camera-unavailable lines. No baseline changed.
 
 Deferred: the camera privacy toggle on phones that mute the camera (item 2), and the optional torch state after screen off/on (3.11).
+
+Rebase review (wiring commit): Re-register now stores the code alone through the guarded `ReRegisterCode` use case, so the same code restarts the count (the banner clears) and a disabled alarm stays disabled with nothing re-armed; the editor re-registers only when it actually opened on QR registration (`fix(3.10): re-register keeps the alarm state and restarts the count`).

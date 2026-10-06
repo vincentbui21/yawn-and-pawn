@@ -91,6 +91,7 @@ class UiModuleTest {
                     factory { get<AlarmUseCasesFixture>().setEnabled }
                     factory { get<AlarmUseCasesFixture>().delete }
                     factory { get<AlarmUseCasesFixture>().duplicate }
+                    factory { get<AlarmUseCasesFixture>().reRegisterCode }
                     single { MissedNotes(FakeSessionHistoryRepository(), FakeMissedNoteDismissals()) }
                     single {
                         ReRegisterSuggestions(FakeSessionHistoryRepository(), CheckRegistrations.None, FakeReRegisterDismissals(), get())

@@ -39,7 +39,7 @@ class SessionLockGuardScanTest {
     @Test
     fun `the scan finds the guarded alarm use cases and every allowed writer, so it cannot pass by finding nothing`() {
         val writers = sources.flatMap { writers(it) }.toSet()
-        assertEquals(setOf("SaveAlarm", "SetAlarmEnabled", "DeleteAlarm", "DuplicateAlarm"), writers - ALLOWED.keys)
+        assertEquals(setOf("SaveAlarm", "SetAlarmEnabled", "DeleteAlarm", "DuplicateAlarm", "ReRegisterCode"), writers - ALLOWED.keys)
         assertEquals(ALLOWED.keys, writers intersect ALLOWED.keys, "an allowed writer no longer writes: drop it from ALLOWED")
     }
 

@@ -8,6 +8,7 @@ import com.yawnandpawn.app.core.alarm.AlarmWriteLock
 import com.yawnandpawn.app.core.alarm.CheckConfigRepository
 import com.yawnandpawn.app.core.alarm.DeleteAlarm
 import com.yawnandpawn.app.core.alarm.DuplicateAlarm
+import com.yawnandpawn.app.core.alarm.ReRegisterCode
 import com.yawnandpawn.app.core.alarm.RequestCodeSequence
 import com.yawnandpawn.app.core.alarm.RequestCodes
 import com.yawnandpawn.app.core.alarm.SaveAlarm
@@ -173,4 +174,5 @@ class AlarmUseCasesFixture(
     val setEnabled = SetAlarmEnabled(repository, clock, lock, scheduling, sessionLock)
     val delete = DeleteAlarm(repository, lock, scheduling, sessionLock, checkConfigs)
     val duplicate = DuplicateAlarm(repository, ids, clock, lock, requestCodes, scheduling, sessionLock, checkConfigs)
+    val reRegisterCode = ReRegisterCode(repository, clock, lock, sessionLock, checkConfigs)
 }

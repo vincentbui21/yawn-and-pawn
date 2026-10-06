@@ -33,6 +33,7 @@ val uiModule =
                 accessibility = get(),
                 cameraPermission = get(),
                 scanCode = params.get<AlarmEditorArgs>().scanCode,
+                reRegisterCode = get(),
             )
         }
     }

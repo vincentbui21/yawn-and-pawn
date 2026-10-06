@@ -9,11 +9,13 @@ import com.yawnandpawn.app.core.alarm.AlarmRepository
 import com.yawnandpawn.app.core.alarm.AlarmRule
 import com.yawnandpawn.app.core.alarm.CheckConfig
 import com.yawnandpawn.app.core.alarm.CheckConfigRepository
+import com.yawnandpawn.app.core.alarm.ReRegisterCode
 import com.yawnandpawn.app.core.alarm.SaveAlarm
 import com.yawnandpawn.app.core.alarm.nextOccurrence
 import com.yawnandpawn.app.core.alarm.orderedEntries
 import com.yawnandpawn.app.core.checks.AccessibilityState
 import com.yawnandpawn.app.core.checks.CheckEntry
+import com.yawnandpawn.app.core.checks.qr.RegisteredCode
 import com.yawnandpawn.app.core.error.DomainError
 import com.yawnandpawn.app.core.error.Outcome
 import com.yawnandpawn.app.core.error.errorOrNull
@@ -109,9 +111,17 @@ class AlarmEditorViewModel(
     private val accessibility: AccessibilityState = AccessibilityState { false },
     /** The camera permission asked when QR/Barcode is picked (Story 3.10); null treats the camera as allowed (tests). */
     private val cameraPermission: CameraPermission? = null,
-    /** Re-register (Story 3.13): open on QR registration and save the new code at once. */
+    /** Re-register (Story 3.13): open on QR registration and store the code at once, through [reRegisterCode]. */
     private val scanCode: Boolean = false,
+    /** Stores a re-registered code alone (the alarm unchanged); null in tests that never re-register. */
+    private val reRegisterCode: ReRegisterCode? = null,
 ) : ViewModel() {
+    /**
+     * The editor opened on QR registration for "Re-register" (only when the alarm has a QR/Barcode check): "Use this
+     * code" stores that code alone, and Back closes the editor. Any other opening edits the form as usual.
+     */
+    private var reRegistering = false
+
     /** The pending tick of the running preview (Memory's playback). */
     private var trialTicks: Job? = null
 
@@ -306,8 +316,12 @@ class AlarmEditorViewModel(
     private fun onCodeIntent(intent: EditorIntent): Boolean {
         when (intent) {
             is EditorIntent.CodeRegistered -> {
-                editCheck(CheckType.QrBarcode) { it.copy(code = intent.code) }
-                if (scanCode) save() else _state.update { it.copy(pane = EditorPane.CheckSetup, setupType = CheckType.QrBarcode) }
+                if (reRegistering) {
+                    storeCode(intent.code)
+                } else {
+                    editCheck(CheckType.QrBarcode) { it.copy(code = intent.code) }
+                    _state.update { it.copy(pane = EditorPane.CheckSetup, setupType = CheckType.QrBarcode) }
+                }
             }
 
             is EditorIntent.TryItScanned -> {
@@ -450,6 +464,30 @@ class AlarmEditorViewModel(
             }
     }
 
+    /**
+     * "Re-register" (Stories 3.10 and 3.13): stores [code] as the alarm's QR/Barcode code with a new registration time,
+     * leaving everything else of the alarm as it is (enabled or not, its time, its arming), then closes. A failure
+     * shows "Couldn't save the alarm. Try again." and stays on QR registration.
+     */
+    private fun storeCode(code: RegisteredCode) {
+        val id = alarmId
+        val store = reRegisterCode
+        if (id == null || store == null || _state.value.isSaving) return
+        _state.update { it.copy(isSaving = true) }
+        viewModelScope.launch {
+            when (val result = store(id, code)) {
+                is Outcome.Success -> {
+                    close()
+                }
+
+                is Outcome.Failure -> {
+                    _state.update { it.copy(isSaving = false) }
+                    showFailure(result.error)
+                }
+            }
+        }
+    }
+
     /** Back or "Done": Check setup again, with the form as it was. */
     private fun closeTryIt() {
         trialTicks?.cancel()
@@ -481,6 +519,7 @@ class AlarmEditorViewModel(
                 val custom = form.repeatDays.isNotEmpty() && form.repeatDays != Weekdays
                 // Re-register (Story 3.13): straight to QR registration when the alarm has a QR/Barcode check.
                 val scan = scanCode && form.checks.any { it.type == CheckType.QrBarcode }
+                reRegistering = scan
                 _state.update {
                     it
                         .copy(isLoading = false, form = form, customRepeat = custom, hasOverflowMenu = !asCopy)
@@ -624,7 +663,7 @@ class AlarmEditorViewModel(
 
             // QR registration returns to Check setup; opened from "Re-register", Back leaves the editor unchanged.
             current.pane == EditorPane.ScanCode -> {
-                if (scanCode) close() else _state.update { it.copy(pane = EditorPane.CheckSetup) }
+                if (reRegistering) close() else _state.update { it.copy(pane = EditorPane.CheckSetup) }
             }
 
             current.pane == EditorPane.CheckSetup -> {

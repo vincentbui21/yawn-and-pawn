@@ -40,6 +40,7 @@ import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.resetMain
 import kotlinx.coroutines.test.runTest
 import kotlinx.coroutines.test.setMain
+import kotlinx.datetime.LocalTime
 import kotlin.test.AfterTest
 import kotlin.test.BeforeTest
 import kotlin.test.Test
@@ -65,8 +66,10 @@ class AlarmEditorQrTest {
     private val repository = FakeAlarmRepository()
     private val logger = FakeLogger()
     private val checkRows = FakeCheckConfigRepository(repository)
+    private val scheduler = FakeAlarmScheduler()
     private val alarms =
         AlarmUseCasesFixture(
+            scheduler = scheduler,
             repository = repository,
             clock = clock,
             requestCodes = FakeRequestCodeSequence(lastUsed = RequestCodes.FIRST_ALARM),
@@ -104,6 +107,7 @@ class AlarmEditorQrTest {
         testAlarm = ScheduleTestAlarm(FakeAlarmScheduler(), FakeTestAlarmStore(), clock, logger),
         cameraPermission = permission,
         scanCode = scanCode,
+        reRegisterCode = alarms.reRegisterCode,
     )
 
     private fun TestScope.effectsOf(viewModel: AlarmEditorViewModel): List<EditorEffect> {
@@ -284,18 +288,25 @@ class AlarmEditorQrTest {
             )
         }
 
+    /** The alarm "a", stored with Math and QR/Barcode (its code registered 30 days ago), [enabled] or not. */
+    private suspend fun storedWithCode(enabled: Boolean = true): Instant {
+        repository.upsert(anAlarm(id = "a", requestCode = 1001, enabled = enabled))
+        val registered = clock.now() - 30.days
+        val entries =
+            listOf(
+                CheckEntry(CoreCheckType.Math, CoreDifficulty.Medium, 3),
+                CheckEntry(CoreCheckType.QrBarcode, CoreDifficulty.Medium, 1, code = code),
+            )
+        checkRows.saveWithAlarm(anAlarm(id = "a", requestCode = 1001, enabled = enabled), checkConfigsOf("a", entries, at = registered))
+        return registered
+    }
+
+    private fun storedQr() = checkRows.current.getValue("a").single { it.entry.type == CoreCheckType.QrBarcode }
+
     @Test
-    fun `Re-register opens on QR registration and saves the new code at once, and Back leaves the alarm unchanged`() =
+    fun `Re-register opens on QR registration, and Back leaves the alarm unchanged`() =
         runTest(dispatcher) {
-            val alarm = anAlarm(id = "a", requestCode = 1001)
-            repository.upsert(alarm)
-            val registered = clock.now() - 30.days
-            val entries =
-                listOf(
-                    CheckEntry(CoreCheckType.Math, CoreDifficulty.Medium, 3),
-                    CheckEntry(CoreCheckType.QrBarcode, CoreDifficulty.Medium, 1, code = code),
-                )
-            checkRows.saveWithAlarm(alarm, checkConfigsOf("a", entries, at = registered))
+            val registered = storedWithCode()
 
             val back = viewModel(alarmId = "a", scanCode = true)
             val backEffects = effectsOf(back)
@@ -303,25 +314,58 @@ class AlarmEditorQrTest {
             assertEquals(EditorPane.ScanCode, back.state.value.pane)
             back.onIntent(EditorIntent.BackRequested)
             advanceUntilIdle()
-            assertEquals(listOf<EditorEffect>(EditorEffect.Close), backEffects)
-            assertEquals(
-                registered,
-                checkRows.current
-                    .getValue("a")
-                    .single { it.entry.code != null }
-                    .codeRegisteredAt,
-            )
 
+            assertEquals(listOf<EditorEffect>(EditorEffect.Close), backEffects)
+            assertEquals(registered, storedQr().codeRegisteredAt)
+        }
+
+    @Test
+    fun `Re-register of the same code restarts the count (review fix)`() =
+        runTest(dispatcher) {
+            storedWithCode()
             val viewModel = viewModel(alarmId = "a", scanCode = true)
             val effects = effectsOf(viewModel)
             advanceUntilIdle()
-            val newCode = assertNotNull(RegisteredCode.of(CodeFormat.QrCode, "hallway"))
-            viewModel.onIntent(EditorIntent.CodeRegistered(newCode))
+
+            viewModel.onIntent(EditorIntent.CodeRegistered(code))
             advanceUntilIdle()
 
             assertEquals(listOf<EditorEffect>(EditorEffect.Close), effects)
-            val qr = checkRows.current.getValue("a").single { it.entry.type == CoreCheckType.QrBarcode }
-            assertEquals(newCode, qr.entry.code)
-            assertEquals(clock.now(), qr.codeRegisteredAt, "a new code restarts the re-register count")
+            assertEquals(code, storedQr().entry.code)
+            assertEquals(clock.now(), storedQr().codeRegisteredAt, "the same sticker scanned again counts as registered now")
+        }
+
+    @Test
+    fun `Re-register stores the code alone, so a disabled alarm stays disabled and nothing is armed (review fix)`() =
+        runTest(dispatcher) {
+            storedWithCode(enabled = false)
+            val viewModel = viewModel(alarmId = "a", scanCode = true)
+            advanceUntilIdle()
+            scheduler.clearCalls()
+            val newCode = assertNotNull(RegisteredCode.of(CodeFormat.QrCode, "hallway"))
+
+            viewModel.onIntent(EditorIntent.CodeRegistered(newCode))
+            advanceUntilIdle()
+
+            assertEquals(newCode, storedQr().entry.code)
+            assertEquals(clock.now(), storedQr().codeRegisteredAt, "a new code restarts the count")
+            assertFalse(repository.current.single().enabled, "still disabled")
+            assertEquals(emptyList(), scheduler.calls, "no arming")
+        }
+
+    @Test
+    fun `a stale Re-register on an alarm without QR-Barcode is an ordinary edit (review fix)`() =
+        runTest(dispatcher) {
+            repository.upsert(anAlarm(id = "b", requestCode = 1002))
+            val viewModel = viewModel(alarmId = "b", scanCode = true)
+            val effects = effectsOf(viewModel)
+            advanceUntilIdle()
+            assertEquals(EditorPane.Main, viewModel.state.value.pane)
+            viewModel.onIntent(EditorIntent.TimeChanged(LocalTime(9, 30)))
+
+            viewModel.onIntent(EditorIntent.BackRequested)
+
+            assertTrue(viewModel.state.value.showDiscardDialog, "Back still asks Discard changes?")
+            assertEquals(emptyList(), effects)
         }
 }

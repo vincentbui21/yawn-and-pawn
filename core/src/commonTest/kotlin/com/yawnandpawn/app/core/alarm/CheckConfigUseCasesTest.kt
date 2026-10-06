@@ -295,4 +295,25 @@ class CheckConfigUseCasesTest {
                 StoredCheckRegistrations(checkConfigs).observe().first(),
             )
         }
+
+    private val reRegister = ReRegisterCode(repository, clock, lock, sessionLock, checkConfigs)
+
+    @Test
+    fun `re-registering stores the code alone at a new time, and refuses an alarm without QR-Barcode (review fix)`() =
+        runTest {
+            val alarm = saved(draft.copy(checks = listOf(mathHard, qr), enabled = false))
+            val calls = scheduler.calls.size
+            clock.advanceBy(5.minutes)
+
+            assertEquals(Outcome.Success(Unit), reRegister(alarm.id, code))
+
+            assertEquals(start + 5.minutes, rowsOf(alarm).single { it.entry.type == CheckType.QrBarcode }.codeRegisteredAt)
+            assertEquals(listOf(mathHard, qr), rowsOf(alarm).orderedEntries(), "the other check and the order stay")
+            assertEquals(alarm, repository.alarms.value.getValue(alarm.id), "the alarm itself is unchanged")
+            assertEquals(calls, scheduler.calls.size, "nothing re-armed")
+
+            val plain = saved(draft.copy(time = LocalTime(8, 0)))
+            assertEquals(Outcome.Failure(DomainError.InvalidAlarm(AlarmField.CheckCode)), reRegister(plain.id, code))
+            assertEquals(Outcome.Failure(DomainError.NotFound("missing")), reRegister("missing", code))
+        }
 }

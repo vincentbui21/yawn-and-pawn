@@ -64,7 +64,10 @@ data class EmergencyRing(
  * - Call contract (Story 2.7): the call adapter (`CallDetector`) sends `CallStarted` again after every `ProcessRestored`
  *   and at every new ring while a call is active; the runtime pauses on `SoundPaused` / `PauseSound`. Until the session
  *   knows, a ring that starts during a call ([calls]) opens silent and without vibration, and [onCallOver] lets it ring
- *   if the call ends first.
+ *   if the call ends first. The emergency ring has no session, so it follows the call directly ([onEmergencyCall]).
+ *   Every ring start calls [onRing], so the call adapter follows it even when the wake service could not start. The
+ *   effects, [onCallOver] and [onEmergencyCall] run under one lock: a call ending on the main thread never restarts
+ *   a vibration that an effect on another thread just stopped.
  *
  * [session] reads the engine's current state (published before the effects run), for the ramp settings, the alarm time
  * and whether the state wants vibration. [now] reads the time ports. (One handler per session effect, hence many small
@@ -82,10 +85,15 @@ class WakeRuntime(
     private val onInitBilling: () -> Unit = {},
     /** Whether a phone call is in progress (Story 2.7); a ring that starts during one opens silent. */
     private val calls: CallState = NoCalls,
+    /** A ring (session or emergency) started or was re-applied: the call adapter follows it (Story 2.7). */
+    private val onRing: () -> Unit = {},
 ) : EffectRunner {
     private val player = outputs.player
     private val vibrator = outputs.vibrator
     private val notifier = outputs.notifier
+
+    /** Serializes the effects with the call adapter's calls ([onCallOver], [onEmergencyCall]). */
+    private val effectLock = Any()
 
     @Volatile
     private var serviceRunning = false
@@ -127,9 +135,9 @@ class WakeRuntime(
     val isServiceRunning: Boolean
         get() = serviceRunning
 
-    override suspend fun run(effect: SessionEffect) = guarded(effect) { runEffect(effect) }
+    override suspend fun run(effect: SessionEffect) = guarded(effect) { synchronized(effectLock) { runEffect(effect) } }
 
-    override suspend fun apply(effect: EntryEffect) = guarded(effect) { applyEffect(effect) }
+    override suspend fun apply(effect: EntryEffect) = guarded(effect) { synchronized(effectLock) { applyEffect(effect) } }
 
     private fun runEffect(effect: SessionEffect) {
         when (effect) {
@@ -235,16 +243,39 @@ class WakeRuntime(
     private fun AlarmFired.isFresh(now: TimeSnapshot): Boolean =
         now.wallMillis - scheduledAt.toEpochMilliseconds() < SessionReducer.NO_INTERACTION_TIMEOUT.inWholeMilliseconds
 
+    /** The player is held paused (a ring that opened during a call, or the session's call pause). */
+    val isRingHeld: Boolean
+        get() = player.isPaused
+
     /**
      * No call is in progress and the session is not paused for one (Story 2.7): a ring held silent because it started
-     * during a call that ended before the session paused rings now, with its vibration. Nothing otherwise.
+     * during a call that ended before the session paused rings now (focus, full gain) with its vibration. Nothing
+     * otherwise: the session state is read again under the effects' lock, so a state that just moved on (grace, an
+     * ended session) is never given its sound or vibration back.
      */
-    fun onCallOver() {
-        val ring = session() as? SessionState.Ring ?: return
-        if (ring.session.paused || emergency.value != null) return
-        player.resume()
-        if (EntryEffect.Vibrating in entryEffects(ring)) vibrator.start()
-    }
+    fun onCallOver() =
+        synchronized(effectLock) {
+            val ring = (session() as? SessionState.Ring)?.takeUnless { it.session.paused } ?: return@synchronized
+            if (emergency.value != null || !player.isPaused) return@synchronized
+            player.resume()
+            if (EntryEffect.Vibrating in entryEffects(ring)) vibrator.start()
+        }
+
+    /**
+     * The emergency ring follows the call itself (Story 2.7 review; it has no session to pause): silent and still during
+     * a call ([inCall]), ringing and vibrating again after it. Nothing when no emergency ring plays.
+     */
+    fun onEmergencyCall(inCall: Boolean) =
+        synchronized(effectLock) {
+            if (emergency.value == null) return@synchronized
+            if (inCall) {
+                player.pause()
+                vibrator.stop()
+            } else if (player.isPaused) {
+                player.resume()
+                vibrator.start()
+            }
+        }
 
     /** At app start with no session: a volume a crashed session left saved is put back (AD-5), unless a ring started. */
     fun restoreVolumeIfIdle() {
@@ -295,11 +326,14 @@ class WakeRuntime(
                     stopEmergency(STOPPED_BY_LIMIT)
                 }
         }
-        player.playDefault(volumePercent)
-        vibrator.start()
+        // During a call it opens silent and still, like a session ring; the call adapter rings it when the call ends.
+        val inCall = calls.inCall()
+        player.playDefault(volumePercent, paused = inCall)
+        if (!inCall) vibrator.start()
         notifier.show(alarmAt)
         ensureService()
         keepEmergencySlot()
+        onRing()
     }
 
     /**
@@ -399,6 +433,7 @@ class WakeRuntime(
         sound()
         newRing = false
         if (EntryEffect.Vibrating !in entryEffects(session())) vibrator.stop()
+        onRing()
     }
 
     private fun playSound(effect: EntryEffect.SoundAt) {

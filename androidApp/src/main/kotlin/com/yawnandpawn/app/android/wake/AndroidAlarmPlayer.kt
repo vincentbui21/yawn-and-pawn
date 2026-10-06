@@ -21,9 +21,11 @@ import kotlin.time.Duration.Companion.seconds
  *   alarm's volume ([AlarmVolume], which saves the user's own volume once); never continuously, so between those
  *   moments the user's change stays (Story 2.8). [stop] with `restoreVolume` puts the user's volume back at the end of
  *   the session.
- * - **Focus and calls (Story 2.7):** a ring requests audio focus ([AlarmAudioFocus]) and gives it back on release; a
- *   focus change never ducks or pauses it. Only the session pauses it for a call, and a ring that starts during a
- *   call opens silent ([play] with `paused`).
+ * - **Focus and calls (Story 2.7):** a ring requests audio focus ([AlarmAudioFocus]) and gives it back at [stop] (a
+ *   ring that starts over keeps it); a focus change never ducks or pauses it. Only the session pauses it for a call,
+ *   and a ring that starts during a call opens silent ([play] with `paused`) and asks for focus only when it resumes
+ *   (so the call's app does not lose focus to a silent alarm). A refused request is asked again at the next resume.
+ *   A resume after a call plays at full gain, with no ramp (the ramp's time is not spent in silence).
  * - **Ramp:** with "Gradually increase volume" on, the gain follows the pure `rampGain(elapsed, start, 30 s)`, updated
  *   about every 250 ms; off, the first frame plays at full gain. Elapsed time is monotonic.
  * - **Never silent:** a sound that cannot be opened, or fails during prepare or while ringing, is replaced in the same
@@ -142,12 +144,14 @@ class AndroidAlarmPlayer(
         }
     }
 
-    /** The emergency ring: the bundled default at [volumePercent], full gain at once. */
-    fun playDefault(volumePercent: Int) =
-        synchronized(lock) {
-            if (request?.soundRef == EMERGENCY_REF && playback != null) return@synchronized
-            startRingLocked(Request(EMERGENCY_REF, volumePercent, null), AlarmSound.Default)
-        }
+    /** The emergency ring: the bundled default at [volumePercent], full gain at once; silent with [paused] (a call). */
+    fun playDefault(
+        volumePercent: Int,
+        paused: Boolean = false,
+    ) = synchronized(lock) {
+        if (request?.soundRef == EMERGENCY_REF && playback != null) return@synchronized
+        startRingLocked(Request(EMERGENCY_REF, volumePercent, null), AlarmSound.Default, paused)
+    }
 
     /** After a crash in the wake flow (AD-12): the open sound becomes the default, keeping mute, pause and gain. */
     fun switchToDefault() =
@@ -196,6 +200,7 @@ class AndroidAlarmPlayer(
     fun stop(restoreVolume: Boolean) =
         synchronized(lock) {
             release()
+            focus?.abandon()
             if (restoreVolume) volume.restore()
         }
 
@@ -213,12 +218,13 @@ class AndroidAlarmPlayer(
         first: AlarmSound,
         paused: Boolean = false,
     ) {
+        // Focus stays held across a ring that starts over (released only at [stop]); one that opens paused asks at resume.
         release()
         request = wanted
         ringOn = true
         isPaused = paused
         onRingStart()
-        focus?.request()
+        if (!paused) focus?.request()
         volume.setForRing(wanted.volumePercent)
         rampStartedAt = monotonicClock.elapsedMillis()
         rampDone = wanted.rampStart == null
@@ -337,9 +343,17 @@ class AndroidAlarmPlayer(
         playback?.pause()
     }
 
+    /**
+     * After a call (Story 2.7): focus again (deferred, or refused during the call), the set volume at full gain with no
+     * ramp, and the ring-start timing of a ring that opened silent and is prepared (logged once per fire).
+     */
     private fun resumeLocked() {
         isPaused = false
+        focus?.request()
+        rampDone = true
+        applyGainLocked()
         playback?.start()
+        if (opening?.prepared == true) timings.stage(WakeStage.SoundStarted)
     }
 
     private fun applyGainLocked() {
@@ -366,8 +380,8 @@ class AndroidAlarmPlayer(
             }
     }
 
+    /** Ends the ring's sound; the audio focus is the caller's ([stop] gives it back). */
     private fun release() {
-        focus?.abandon()
         rampJob?.cancel()
         rampJob = null
         retryJob?.cancel()

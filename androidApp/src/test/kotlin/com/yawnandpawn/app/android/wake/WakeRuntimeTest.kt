@@ -86,6 +86,7 @@ class WakeRuntimeTest {
     private var now = TimeSnapshot(wallMillis = 1_000_000, elapsedMillis = 5_000, bootCount = 1)
     private var state: SessionState = SessionState.Idle
     private var inCall = false
+    private var rings = 0
     private val runtime =
         WakeRuntime(
             WakeOutputs(player, vibrator, notifier, volume, scheduler, crashReporter),
@@ -98,6 +99,7 @@ class WakeRuntimeTest {
                 object : CallState {
                     override fun inCall(): Boolean = inCall
                 },
+            onRing = { rings++ },
         )
 
     private val session: SessionData = aSession()
@@ -297,6 +299,86 @@ class WakeRuntimeTest {
         enter(SessionState.Snoozed(session.copy(snoozeEnd = Deadline.after(now, 9.minutes), interactionDeadline = null)))
         runtime.onCallOver()
         assertNull(player.sound)
+    }
+
+    @Test
+    fun `a call's end racing an effect that stops the vibration never restarts it (Story 2-7 review)`() {
+        val grace = SessionState.Grace(session)
+        var race = false
+        lateinit var effectThread: Thread
+        lateinit var raced: WakeRuntime
+        // The call's end reads the old Ringing state; meanwhile, on another thread, the engine publishes Grace and runs
+        // its effects. They must wait for the call's end to finish, so their vibrator stop comes last.
+        val readSession = {
+            val seen = state
+            if (race) {
+                race = false
+                effectThread =
+                    Thread {
+                        state = grace
+                        runBlocking { entryEffects(grace).forEach { raced.apply(it) } }
+                    }.apply { start() }
+                effectThread.join(RACE_WAIT_MILLIS)
+            }
+            seen
+        }
+        raced =
+            WakeRuntime(
+                WakeOutputs(player, vibrator, notifier, volume, scheduler, crashReporter),
+                starter,
+                CoroutineScope(dispatcher),
+                logger,
+                { now },
+                readSession,
+                calls =
+                    object : CallState {
+                        override fun inCall(): Boolean = inCall
+                    },
+            )
+        inCall = true
+        state = ringing
+        runBlocking { entryEffects(ringing).forEach { raced.apply(it) } }
+        inCall = false
+
+        race = true
+        raced.onCallOver()
+        effectThread.join()
+
+        assertFalse(vibrator.isVibrating, "grace does not vibrate")
+    }
+
+    @Test
+    fun `the emergency ring opens silent and still during a call and follows the call (Story 2-7 review)`() {
+        inCall = true
+
+        runtime.startEmergency(Instant.fromEpochMilliseconds(0), volumePercent = 60, cause = "commit failed")
+
+        val playback = checkNotNull(playbacks.current)
+        assertEquals(0, playback.started, "not one audible frame")
+        assertFalse(vibrator.isVibrating)
+        runtime.onEmergencyCall(inCall = false)
+        assertTrue(playback.playing)
+        assertTrue(vibrator.isVibrating)
+        runtime.onEmergencyCall(inCall = true)
+        assertFalse(playback.playing)
+        assertFalse(vibrator.isVibrating)
+        runtime.stopEmergency()
+        runtime.onEmergencyCall(inCall = false)
+        assertNull(player.sound, "nothing once the emergency ring stopped")
+    }
+
+    @Test
+    fun `every ring start, the emergency ring's too, makes the call adapter follow it (Story 2-7 review)`() {
+        enter(ringing)
+        assertTrue(rings > 0, "a session ring")
+        enter(SessionState.Idle)
+        runtime.endSession()
+        val before = rings
+
+        runtime.startEmergency(Instant.fromEpochMilliseconds(0), volumePercent = 60, cause = "commit failed")
+
+        assertEquals(before + 1, rings, "the emergency ring")
+        runtime.stopEmergency()
     }
 
     @Test
@@ -709,3 +791,6 @@ class WakeRuntimeTest {
         assertEquals(snoozeEnd.wallMillis, scheduler.armed[RequestCodes.SESSION_SLOT], "the snooze still ends")
     }
 }
+
+/** How long the racing effect thread may run before the call's end goes on (it waits for the lock when serialized). */
+private const val RACE_WAIT_MILLIS = 300L

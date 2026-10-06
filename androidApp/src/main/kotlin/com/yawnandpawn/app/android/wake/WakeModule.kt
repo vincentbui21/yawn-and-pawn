@@ -4,6 +4,7 @@ import android.media.AudioManager
 import com.yawnandpawn.app.android.call.AudioModeCallState
 import com.yawnandpawn.app.android.call.CallDetector
 import com.yawnandpawn.app.android.call.CallState
+import com.yawnandpawn.app.android.call.StuckCallGuard
 import com.yawnandpawn.app.android.crash.CrashlyticsSink
 import com.yawnandpawn.app.android.crash.FirebaseCrashReporter
 import com.yawnandpawn.app.android.crash.isFirebaseConfigured
@@ -36,9 +37,11 @@ fun wakeModule(): Module =
             if (isFirebaseConfigured(context)) FirebaseCrashReporter(CrashlyticsSink(context), get()) else NoOpCrashReporter(get())
         }
         single<SeedSource> { RandomSeedSource() }
-        // Calls (Story 2.7): the audio mode only, never telephony; the adapter runs while the wake service does.
+        // Calls (Story 2.7): the audio mode only, never telephony; the adapter runs while the wake service or a ring does.
+        // The runtime and the adapter share one StuckCallGuard (the 30-minute cap on a call pause).
         single<CallState> { AudioModeCallState(androidContext()) }
-        single { CallDetector(get(), get(), get(), get<WakeScope>()) }
+        single { StuckCallGuard(get()) }
+        single { CallDetector(get(), get(), get(), get<WakeScope>(), get(), get()) }
         single { WakeScope(get()) }
         single<PlaybackFactory> { MediaPlayerPlaybackFactory(androidContext()) }
         single<SoundResolver> { LibrarySoundResolver() }
@@ -69,6 +72,7 @@ fun wakeModule(): Module =
             )
         }
         single {
+            val koin = this
             WakeRuntime(
                 outputs = WakeOutputs(get(), get(), get(), get(), get(), get()),
                 starter = get(),
@@ -79,7 +83,9 @@ fun wakeModule(): Module =
                 timings = get(),
                 // AD-2 InitBilling (Story 2.4): looked up when it runs, as UnlockSignals depends on the engine.
                 onInitBilling = { get<UnlockSignals>().initialiseAfterUnlock() },
-                calls = get(),
+                calls = get<StuckCallGuard>(),
+                // Story 2.7: every ring start makes the call adapter follow it (looked up then: it depends on the runtime).
+                onRing = { koin.getOrNull<CallDetector>()?.follow() },
             )
         }
         // The first unlock after a boot (Story 2.4): UserUnlocked, billing and crash reporting.

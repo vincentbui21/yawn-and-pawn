@@ -21,17 +21,18 @@ class AlarmAudioFocus(
             .setOnAudioFocusChangeListener { change -> onChange(change) }
             .build()
 
+    /** Focus was granted and not given back; a refused request (during a call) is not held, so it is asked again. */
     @Volatile
-    private var held = false
+    var held = false
+        private set
 
     /** Requests focus for a ring; nothing while held. */
     fun request() {
         if (held) return
-        audio.requestAudioFocus(request)
-        held = true
+        held = audio.requestAudioFocus(request) == AudioManager.AUDIOFOCUS_REQUEST_GRANTED
     }
 
-    /** Gives focus back when the ring is released; nothing when not held. */
+    /** Gives focus back at the end of the session's ring; nothing when not held. */
     fun abandon() {
         if (!held) return
         audio.abandonAudioFocusRequest(request)

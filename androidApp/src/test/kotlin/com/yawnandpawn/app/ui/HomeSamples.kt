@@ -1,5 +1,6 @@
 package com.yawnandpawn.app.ui
 
+import com.yawnandpawn.app.ui.checks.CheckType
 import com.yawnandpawn.app.ui.format.Countdown
 import com.yawnandpawn.app.ui.format.Weekdays
 import com.yawnandpawn.app.ui.format.Weekends
@@ -67,4 +68,10 @@ object HomeSamples {
 
     /** A reliability setting is off (Story 1.19): "Alarms may not ring. Fix settings" with "Fix". */
     val reliability = one.copy(reliabilityProblem = true)
+
+    /** Story 3.13: the fallback replaced the QR/Barcode check 3 times this week: the info banner with "Re-register". */
+    val reRegister = one.copy(reregisterCheck = CheckType.QrBarcode)
+
+    /** Story 3.13 with a reliability setting off too: the reliability banner stays above the re-register one. */
+    val reRegisterUnderReliability = reliability.copy(reregisterCheck = CheckType.QrBarcode)
 }

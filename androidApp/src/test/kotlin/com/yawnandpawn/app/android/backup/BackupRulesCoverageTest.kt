@@ -17,6 +17,8 @@ import com.yawnandpawn.app.core.history.SessionHistoryRepository
 import com.yawnandpawn.app.core.session.ScheduleTestAlarm
 import com.yawnandpawn.app.core.session.SessionEvent
 import com.yawnandpawn.app.core.session.SessionState
+import com.yawnandpawn.app.core.stats.CheckKey
+import com.yawnandpawn.app.core.stats.ReRegisterDismissals
 import com.yawnandpawn.app.data.db.appDatabaseFile
 import com.yawnandpawn.app.data.db.runtimeDatabaseFile
 import com.yawnandpawn.app.data.settings.SettingsDataStore
@@ -67,6 +69,10 @@ class BackupRulesCoverageTest {
         app.awaitUntil("the session is recorded and Idle") { app.engine.state.value == SessionState.Idle }
         assertNotNull(assertIs<Outcome.Success<*>>(runBlocking { koin.get<SessionHistoryRepository>().find(sessionId) }).value)
         assertIs<Outcome.Success<*>>(runBlocking { koin.get<MissedNoteDismissals>().dismiss("missed-session") })
+        // The re-register banner dismissal (Story 3.13) lives in the same device-protected DataStore.
+        val reRegisterKey = CheckKey(alarmId, "QrBarcode")
+        val dismissedAt = Instant.parse("2027-03-08T06:10:00Z")
+        assertIs<Outcome.Success<*>>(runBlocking { koin.get<ReRegisterDismissals>().dismiss(reRegisterKey, dismissedAt) })
         assertIs<Outcome.Success<*>>(runBlocking { koin.get<ScheduleTestAlarm>()(AlarmDraft(time = LocalTime(8, 0))) })
         // The notification permission is asked once (Story 2.3 keeps that flag in device-protected preferences).
         val reliability = File(app.app.createDeviceProtectedStorageContext().dataDir, "shared_prefs/reliability.xml")

@@ -9,6 +9,9 @@ import com.yawnandpawn.app.core.history.MissedNoteDismissals
 import com.yawnandpawn.app.core.history.SessionHistoryRepository
 import com.yawnandpawn.app.core.log.Logger
 import com.yawnandpawn.app.core.session.ActiveSessionStore
+import com.yawnandpawn.app.core.stats.CheckRegistrations
+import com.yawnandpawn.app.core.stats.FallbackHistory
+import com.yawnandpawn.app.core.stats.ReRegisterDismissals
 import com.yawnandpawn.app.core.time.Clock
 import com.yawnandpawn.app.data.alarm.RoomAlarmRepository
 import com.yawnandpawn.app.data.alarm.RoomRequestCodeSequence
@@ -17,6 +20,7 @@ import com.yawnandpawn.app.data.db.RuntimeDatabase
 import com.yawnandpawn.app.data.history.RoomSessionHistoryRepository
 import com.yawnandpawn.app.data.session.RoomActiveSessionStore
 import com.yawnandpawn.app.data.settings.DataStoreMissedNoteDismissals
+import com.yawnandpawn.app.data.settings.DataStoreReRegisterDismissals
 import com.yawnandpawn.app.data.settings.SettingsDataStore
 import com.yawnandpawn.app.testing.FakeClock
 import com.yawnandpawn.app.testing.FakeLogger
@@ -45,6 +49,8 @@ class DataModuleTest {
             assertIs<RoomAlarmRepository>(koin.get<AlarmRepository>())
             assertIs<RoomRequestCodeSequence>(koin.get<RequestCodeSequence>())
             assertIs<RoomSessionHistoryRepository>(koin.get<SessionHistoryRepository>())
+            assertIs<RoomSessionHistoryRepository>(koin.get<FallbackHistory>())
+            assertSame(CheckRegistrations.None, koin.get<CheckRegistrations>())
             assertSame(database, koin.get<AppDatabase>())
         } finally {
             database.close()
@@ -76,6 +82,7 @@ class DataModuleTest {
         val app = koinApplication { modules(ports, dataModule) }
         val first = app.koin.get<MissedNoteDismissals>()
         assertIs<DataStoreMissedNoteDismissals>(first)
+        assertIs<DataStoreReRegisterDismissals>(app.koin.get<ReRegisterDismissals>())
         assertSame(app.koin.get<SettingsDataStore>(), app.koin.get<SettingsDataStore>())
         assertEquals(Outcome.Success(Unit), runBlocking { first.dismiss("s1") })
         app.close()

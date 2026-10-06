@@ -81,7 +81,10 @@ internal class CheckRules(
             val run =
                 fallback.copy(
                     totalFailedAttempts = session.checkRun.totalFailedAttempts,
-                    fallbackFrom = session.checkRun.currentEntry?.type?.id,
+                    fallbackFrom =
+                        session.checkRun.currentEntry
+                            ?.type
+                            ?.id,
                 )
             Transition(state.with(session.copy(checkRun = run)), listOf(SessionEffect.StartCheckStep(0)))
         } else {

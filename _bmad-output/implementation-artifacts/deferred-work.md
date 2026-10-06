@@ -249,3 +249,14 @@
   summary: (follow-up of the check-run consistency item) The fallback now has its own seeds, reset failed attempts and a `StartCheckStep` (Story 3.9). The policy input is `FallbackRequest(type, reason)`, open for the image matcher's error.
   evidence: Story 3.9 settles the fallback part; the matcher-error input stays for Story 7.7.
   status: matcher error assigned to Story 7.7.
+- source_spec: `_bmad-output/implementation-artifacts/spec-3-13-suggest-re-registering-after-3-fallbacks-in-7-days.md`
+  summary: Home's re-register banner (Story 3.13) is built and tested, but it stays hidden in production until Story 3.10 provides the QR/Barcode type, its stored registration and its registration screen.
+  evidence: |
+    - No camera check type exists before 3.10. So production binds `CheckRegistrations.None`, and `uiCheckType` maps no core type to `QrBarcode`. The rule and the banner are tested with the placeholder standing in for a camera check.
+    - "Re-register" opens the alarm's editor (`HomeEffect.OpenEditor(alarmId)`) instead of QR registration for that alarm, which does not exist yet.
+  status: |
+    Assigned to Story 3.10:
+    - Bind a `CheckRegistrations` that reads each alarm's QR/Barcode config, with its last registration time (`updated_at`).
+    - Map the new core type in `uiCheckType`.
+    - Point `HomeIntent.ReregisterClicked` at QR registration for that alarm.
+    - Check that saving a new code clears the banner. The rule already counts only fallbacks after the last registration.

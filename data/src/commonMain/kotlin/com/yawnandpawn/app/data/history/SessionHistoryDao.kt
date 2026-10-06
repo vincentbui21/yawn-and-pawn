@@ -30,6 +30,13 @@ abstract class SessionHistoryDao {
     @Query("SELECT * FROM session_history WHERE outcome = :outcome ORDER BY ended_at DESC LIMIT 1")
     abstract fun observeLatestWithOutcome(outcome: String): Flow<SessionHistoryEntity?>
 
+    /**
+     * The rows whose session used the fallback check for a known check (Story 3.13's re-register banner), newest first;
+     * emits again after every change. Fallbacks are rare (at most a few a week), so the set stays small.
+     */
+    @Query("SELECT * FROM session_history WHERE fallback_used = 1 AND fallback_from IS NOT NULL ORDER BY first_ring_at DESC")
+    abstract fun observeFallbacks(): Flow<List<SessionHistoryEntity>>
+
     /** Records a merge (Story 2.9); the same (session, alarm, scheduled time) again is ignored, keeping the first. */
     @Insert(onConflict = OnConflictStrategy.IGNORE)
     abstract suspend fun insertMerge(merge: SessionMergeEntity)

@@ -6,17 +6,20 @@ import com.yawnandpawn.app.core.history.SessionHistoryRepository
 import com.yawnandpawn.app.core.history.SessionHistoryRow
 import com.yawnandpawn.app.core.history.SessionMergeRow
 import com.yawnandpawn.app.core.history.SessionOutcome
+import com.yawnandpawn.app.core.stats.FallbackHistory
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
 import kotlin.coroutines.cancellation.CancellationException
 
 /**
  * [SessionHistoryRepository] over `session_history` in `app.db`. The only user of [SessionHistoryDao]'s writes; core's
- * `SessionRecorder` is its only caller of [upsert] (AD-18). Storage exceptions become `StorageFailure`.
+ * `SessionRecorder` is its only caller of [upsert] (AD-18). Storage exceptions become `StorageFailure`. Also Home's
+ * [FallbackHistory] (Story 3.13), a read only.
  */
 class RoomSessionHistoryRepository(
     private val dao: SessionHistoryDao,
-) : SessionHistoryRepository {
+) : SessionHistoryRepository,
+    FallbackHistory {
     override suspend fun upsert(row: SessionHistoryRow): Outcome<Unit, DomainError> = storage { dao.upsertRow(row.toEntity()) }
 
     // Row mapping runs inside storage { } too: an unreadable row (an unknown outcome) is a StorageFailure.
@@ -25,6 +28,9 @@ class RoomSessionHistoryRepository(
     // A read only. An unreadable row (or a failing database) throws into the flow; Home catches it.
     override fun observeLatestMissed(): Flow<SessionHistoryRow?> =
         dao.observeLatestWithOutcome(SessionOutcome.Missed.storedName()).map { it?.toRow() }
+
+    // A read only, like observeLatestMissed: an unreadable row throws into the flow and Home catches it.
+    override fun observeFallbacks(): Flow<List<SessionHistoryRow>> = dao.observeFallbacks().map { rows -> rows.map { it.toRow() } }
 
     // Story 2.9: insert or ignore, so a replayed merge leaves one row. SessionRecorder is the only caller.
     override suspend fun recordMerge(merge: SessionMergeRow): Outcome<Unit, DomainError> = storage { dao.insertMerge(merge.toEntity()) }

@@ -6,6 +6,7 @@ import com.yawnandpawn.app.core.history.SessionHistoryRepository
 import com.yawnandpawn.app.core.history.SessionHistoryRow
 import com.yawnandpawn.app.core.history.SessionMergeRow
 import com.yawnandpawn.app.core.history.SessionOutcome
+import com.yawnandpawn.app.core.stats.FallbackHistory
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.map
@@ -16,9 +17,11 @@ import kotlin.time.Instant
 /**
  * In-memory [SessionHistoryRepository] with the rules of `RoomSessionHistoryRepository`: one row per session id, an
  * upsert replaces it. Set [upsertFailure] or [findFailure] to make those calls fail (nothing changes). [upserts] lists
- * every successful upsert in order, so a test can tell a replayed write from a single one.
+ * every successful upsert in order, so a test can tell a replayed write from a single one. Also a [FallbackHistory].
  */
-class FakeSessionHistoryRepository : SessionHistoryRepository {
+class FakeSessionHistoryRepository :
+    SessionHistoryRepository,
+    FallbackHistory {
     private val stored = linkedMapOf<String, SessionHistoryRow>()
     private val written = mutableListOf<SessionHistoryRow>()
     private val changes = MutableStateFlow(0)
@@ -26,7 +29,7 @@ class FakeSessionHistoryRepository : SessionHistoryRepository {
     var upsertFailure: DomainError? = null
     var findFailure: DomainError? = null
 
-    /** Set to make [observeLatestMissed] throw it, like a failing database. */
+    /** Set to make [observeLatestMissed] and [observeFallbacks] throw it, like a failing database. */
     var observeFailure: Throwable? = null
 
     /** The stored rows, in the order their sessions were first written. */
@@ -73,6 +76,13 @@ class FakeSessionHistoryRepository : SessionHistoryRepository {
         changes.map {
             observeFailure?.let { throw it }
             stored.values.filter { it.outcome == SessionOutcome.Missed }.maxByOrNull { it.endedAt ?: Instant.DISTANT_PAST }
+        }
+
+    /** Like the Room query: the rows with a known fallback, newest first ring first, again after every upsert. */
+    override fun observeFallbacks(): Flow<List<SessionHistoryRow>> =
+        changes.map {
+            observeFailure?.let { throw it }
+            stored.values.filter { it.fallbackUsed && it.fallbackFrom != null }.sortedByDescending { it.firstRingAt }
         }
 }
 

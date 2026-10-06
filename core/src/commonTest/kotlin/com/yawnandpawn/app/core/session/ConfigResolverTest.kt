@@ -75,17 +75,20 @@ class ConfigResolverTest {
     @Test
     fun `the plan is the alarm's checks in its mode, in the given order (Story 3-5)`() {
         val hard = CheckEntry(CheckType.Math, Difficulty.Hard, count = 5)
-        listOf(CheckMode.Random, CheckMode.All).forEach { mode ->
-            val config =
-                ConfigResolver.resolve(
-                    alarm.copy(checkMode = mode),
-                    listOf(hard),
-                    GlobalSettings(),
-                    testMode = false,
-                    scheduledAt = SCHEDULED_AT,
-                )
+        val memory = CheckEntry(CheckType.MemorySequence(), Difficulty.Easy, count = 1)
+        listOf(listOf(hard, memory), listOf(memory, hard)).forEach { checks ->
+            listOf(CheckMode.Random, CheckMode.All).forEach { mode ->
+                val config =
+                    ConfigResolver.resolve(
+                        alarm.copy(checkMode = mode),
+                        checks,
+                        GlobalSettings(),
+                        testMode = false,
+                        scheduledAt = SCHEDULED_AT,
+                    )
 
-            assertEquals(CheckPlan(mode, listOf(hard)), config.checkPlan, "mode $mode")
+                assertEquals(CheckPlan(mode, checks), config.checkPlan, "mode $mode, order $checks")
+            }
         }
     }
 

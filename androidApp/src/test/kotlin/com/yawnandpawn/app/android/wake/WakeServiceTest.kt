@@ -36,6 +36,7 @@ import com.yawnandpawn.app.core.session.StoredSession
 import com.yawnandpawn.app.core.time.Deadline
 import com.yawnandpawn.app.testing.FakeActiveSessionStore
 import com.yawnandpawn.app.testing.FakeAlarmRepository
+import com.yawnandpawn.app.testing.FakeCheckConfigRepository
 import com.yawnandpawn.app.testing.aSession
 import com.yawnandpawn.app.testing.anAlarm
 import com.yawnandpawn.app.testing.checkConfigsOf
@@ -522,15 +523,37 @@ class WakeServiceTest {
     @Test
     fun `a ring freezes the alarm's checks in its mode, in position order (Story 3-5)`() {
         val app = WakeApp()
+        val memory = CheckEntry(CheckType.MemorySequence(), Difficulty.Easy, count = 1)
         val math = CheckEntry(CheckType.Math, Difficulty.Hard, count = 4)
         val alarm = alarmA.copy(checkMode = CheckMode.All)
         val checks = app.koin.get<CheckConfigRepository>()
-        assertEquals(Outcome.Success(Unit), runBlocking { checks.saveWithAlarm(alarm, checkConfigsOf(alarm.id, listOf(math))) })
+        // Stored out of position order (Math at position 1 first), so the order the plan keeps is the positions'.
+        val rows = checkConfigsOf(alarm.id, listOf(memory, math)).reversed()
+        assertEquals(Outcome.Success(Unit), runBlocking { checks.saveWithAlarm(alarm, rows) })
 
         app.ring(fired)
         app.awaitRinging()
 
-        assertEquals(CheckPlan(CheckMode.All, listOf(math)), (app.engine.state.value as SessionState.Ringing).session.config.checkPlan)
+        assertEquals(
+            CheckPlan(CheckMode.All, listOf(memory, math)),
+            (app.engine.state.value as SessionState.Ringing).session.config.checkPlan,
+        )
+    }
+
+    @Test
+    fun `checks that cannot be read still ring, with the default plan, and are logged (review fix)`() {
+        val failing = FakeCheckConfigRepository().apply { failure = DomainError.StorageFailure("disk I/O error") }
+        val app = WakeApp(checkConfigs = failing)
+        upsert(alarmA)
+
+        app.ring(fired)
+        app.awaitRinging()
+
+        assertEquals(ConfigResolver.defaultPlan(), (app.engine.state.value as SessionState.Ringing).session.config.checkPlan)
+        assertTrue(
+            app.logs().any { it == "OperationFailed operation=read alarm checks cause=storage failure: disk I/O error" },
+            "${app.logs()}",
+        )
     }
 
     @Test

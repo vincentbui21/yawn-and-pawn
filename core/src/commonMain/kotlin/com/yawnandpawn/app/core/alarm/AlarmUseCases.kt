@@ -191,9 +191,9 @@ class SetAlarmEnabled(
 }
 
 /**
- * Removes an alarm with its checks and then cancels its system alarm. `NotFound(id)` when there is no such alarm, and
- * nothing changes; a failed delete cancels nothing. The checks go first (in `app.db` the foreign key would remove them
- * with the alarm anyway), so a failure there leaves the alarm stored and armed.
+ * Removes an alarm with its checks in one transaction ([CheckConfigRepository.deleteWithAlarm]) and then cancels its
+ * system alarm. `NotFound(id)` when there is no such alarm, and nothing changes; a failed delete changes and cancels
+ * nothing, so the alarm stays stored with its checks and armed.
  */
 class DeleteAlarm(
     private val repository: AlarmRepository,
@@ -206,10 +206,7 @@ class DeleteAlarm(
         lock.withLock {
             sessionLock.whenIdle {
                 repository.get(id).flatMap { stored ->
-                    checkConfigRepository
-                        .deleteForAlarm(id)
-                        .flatMap { repository.delete(id) }
-                        .onSuccess { scheduling.cancel(stored.requestCode) }
+                    checkConfigRepository.deleteWithAlarm(id).onSuccess { scheduling.cancel(stored.requestCode) }
                 }
             }
         }

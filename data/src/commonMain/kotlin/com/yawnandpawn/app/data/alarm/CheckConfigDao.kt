@@ -10,14 +10,30 @@ import kotlinx.coroutines.flow.Flow
 /** Access to the `check_config` table, and the one transaction that stores an alarm with its checks. */
 @Dao
 abstract class CheckConfigDao {
-    @Query("SELECT * FROM check_config ORDER BY alarm_id ASC, position ASC")
-    abstract fun observeAll(): Flow<List<CheckConfigEntity>>
+    /** Every alarm with its checks, in one transaction; emits again after a change of either table. */
+    @Transaction
+    @Query("SELECT * FROM alarm")
+    abstract fun observeAlarmsWithChecks(): Flow<List<AlarmWithCheckRows>>
 
     @Query("SELECT * FROM check_config WHERE alarm_id = :alarmId ORDER BY position ASC")
     abstract suspend fun forAlarm(alarmId: String): List<CheckConfigEntity>
 
     @Query("DELETE FROM check_config WHERE alarm_id = :alarmId")
     abstract suspend fun deleteForAlarm(alarmId: String)
+
+    /** Rows deleted: 1, or 0 when there is no such alarm. */
+    @Query("DELETE FROM alarm WHERE id = :alarmId")
+    abstract suspend fun deleteAlarm(alarmId: String): Int
+
+    /**
+     * Deletes [alarmId]'s checks and then the alarm in one transaction (the foreign key would cascade anyway); returns
+     * the alarm rows deleted, 0 when there is no such alarm.
+     */
+    @Transaction
+    open suspend fun deleteAlarmWithChecks(alarmId: String): Int {
+        deleteForAlarm(alarmId)
+        return deleteAlarm(alarmId)
+    }
 
     @Insert
     abstract suspend fun insert(configs: List<CheckConfigEntity>)

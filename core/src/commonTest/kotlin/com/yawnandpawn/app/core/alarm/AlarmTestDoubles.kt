@@ -10,6 +10,7 @@ import com.yawnandpawn.app.core.time.Deadline
 import com.yawnandpawn.app.core.time.TimeZoneProvider
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.yield
 import kotlinx.datetime.TimeZone
@@ -94,7 +95,8 @@ internal class InMemoryCheckConfigs(
     val rows = MutableStateFlow<Map<String, List<CheckConfig>>>(emptyMap())
     var failure: DomainError.StorageFailure? = null
 
-    override fun observeAll(): Flow<Map<String, List<CheckConfig>>> = rows
+    override fun observeAlarmsWithChecks(): Flow<List<AlarmWithChecks>> =
+        combine(alarms.observeAll(), rows) { all, byAlarm -> all.map { AlarmWithChecks(it, byAlarm[it.id].orEmpty()) } }
 
     override suspend fun forAlarm(alarmId: String): Outcome<List<CheckConfig>, DomainError> {
         failure?.let { return Outcome.Failure(it) }
@@ -111,10 +113,11 @@ internal class InMemoryCheckConfigs(
         return stored
     }
 
-    override suspend fun deleteForAlarm(alarmId: String): Outcome<Unit, DomainError> {
+    override suspend fun deleteWithAlarm(alarmId: String): Outcome<Unit, DomainError> {
         failure?.let { return Outcome.Failure(it) }
-        rows.value -= alarmId
-        return Outcome.Success(Unit)
+        val deleted = alarms.delete(alarmId)
+        if (deleted is Outcome.Success) rows.value -= alarmId
+        return deleted
     }
 }
 

@@ -6,6 +6,7 @@ import androidx.sqlite.driver.AndroidSQLiteDriver
 import androidx.test.core.app.ApplicationProvider
 import com.yawnandpawn.app.core.alarm.Alarm
 import com.yawnandpawn.app.core.alarm.AlarmDraft
+import com.yawnandpawn.app.core.alarm.AlarmWithChecks
 import com.yawnandpawn.app.core.alarm.CheckConfig
 import com.yawnandpawn.app.core.alarm.orderedEntries
 import com.yawnandpawn.app.core.checks.CheckEntry
@@ -19,15 +20,22 @@ import com.yawnandpawn.app.data.db.AppDatabaseConstructor
 import com.yawnandpawn.app.testing.AlarmUseCasesFixture
 import com.yawnandpawn.app.testing.anAlarm
 import com.yawnandpawn.app.testing.checkConfigsOf
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.test.runTest
+import kotlinx.coroutines.withContext
+import kotlinx.coroutines.withTimeout
 import kotlinx.datetime.LocalTime
 import org.junit.After
 import org.junit.Test
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
+import java.util.Collections
 import kotlin.test.assertEquals
 import kotlin.test.assertIs
+import kotlin.test.assertTrue
 import kotlin.time.Duration.Companion.minutes
 
 /** Story 3.5: the `check_config` table, stored with its alarm in one transaction and removed with it. */
@@ -59,7 +67,7 @@ class RoomCheckConfigRepositoryTest {
 
             assertEquals(Outcome.Success(alarm), alarms.get("a"))
             assertEquals(Outcome.Success(rows), repository.forAlarm("a"))
-            assertEquals(mapOf("a" to rows), repository.observeAll().first())
+            assertEquals(listOf(AlarmWithChecks(alarm, rows)), repository.observeAlarmsWithChecks().first())
         }
 
     @Test
@@ -102,6 +110,37 @@ class RoomCheckConfigRepositoryTest {
         }
 
     @Test
+    fun `alarms and their checks are observed as one read, so a saved alarm never shows without its rows (review fix)`() =
+        runTest(timeout = TIMEOUT) {
+            val seen: MutableList<List<AlarmWithChecks>> = Collections.synchronizedList(mutableListOf())
+            val collecting = backgroundScope.launch(Dispatchers.Default) { repository.observeAlarmsWithChecks().collect { seen += it } }
+            withContext(Dispatchers.Default) { withTimeout(TIMEOUT) { while (seen.isEmpty()) delay(10) } }
+            val alarm = anAlarm(id = "a")
+            val rows = checkConfigsOf("a", listOf(math))
+
+            repository.saveWithAlarm(alarm, rows)
+            withContext(Dispatchers.Default) { withTimeout(TIMEOUT) { while (seen.last().isEmpty()) delay(10) } }
+            collecting.cancel()
+
+            assertEquals(listOf(AlarmWithChecks(alarm, rows)), seen.last())
+            assertTrue(seen.flatten().all { it.checks.isNotEmpty() }, "never the alarm without its rows: $seen")
+        }
+
+    @Test
+    fun `deleteWithAlarm removes the alarm and its rows together, and an unknown alarm is NotFound (review fix)`() =
+        runTest(timeout = TIMEOUT) {
+            repository.saveWithAlarm(anAlarm(id = "a"), checkConfigsOf("a", listOf(math)))
+            repository.saveWithAlarm(anAlarm(id = "b", requestCode = 1001), checkConfigsOf("b", listOf(math)))
+
+            assertEquals(Outcome.Success(Unit), repository.deleteWithAlarm("a"))
+
+            assertEquals(Outcome.Failure(DomainError.NotFound("a")), alarms.get("a"))
+            assertEquals(Outcome.Success(emptyList()), repository.forAlarm("a"))
+            assertEquals(Outcome.Success(checkConfigsOf("b", listOf(math))), repository.forAlarm("b"), "other alarms keep theirs")
+            assertEquals(Outcome.Failure(DomainError.NotFound("a")), repository.deleteWithAlarm("a"))
+        }
+
+    @Test
     fun `rows read back by position, and a row of an unknown type or difficulty is skipped`() =
         runTest(timeout = TIMEOUT) {
             val alarm = anAlarm(id = "a")
@@ -115,7 +154,7 @@ class RoomCheckConfigRepositoryTest {
             )
 
             assertEquals(Outcome.Success(listOf(row.copy(position = 2))), repository.forAlarm("a"))
-            assertEquals(mapOf("a" to listOf(row.copy(position = 2))), repository.observeAll().first())
+            assertEquals(listOf(AlarmWithChecks(alarm, listOf(row.copy(position = 2)))), repository.observeAlarmsWithChecks().first())
         }
 
     @Test
@@ -132,7 +171,7 @@ class RoomCheckConfigRepositoryTest {
             database.close()
 
             assertIs<DomainError.StorageFailure>(assertIs<Outcome.Failure<DomainError>>(repository.forAlarm("a")).error)
-            assertIs<DomainError.StorageFailure>(assertIs<Outcome.Failure<DomainError>>(repository.deleteForAlarm("a")).error)
+            assertIs<DomainError.StorageFailure>(assertIs<Outcome.Failure<DomainError>>(repository.deleteWithAlarm("a")).error)
             assertIs<DomainError.StorageFailure>(
                 assertIs<Outcome.Failure<DomainError>>(repository.saveWithAlarm(anAlarm(), emptyList())).error,
             )

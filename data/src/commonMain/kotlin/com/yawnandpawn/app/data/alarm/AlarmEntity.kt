@@ -52,7 +52,7 @@ data class AlarmEntity(
     /** Epoch milliseconds. */
     @ColumnInfo(name = "updated_at")
     val updatedAt: Long,
-    /** The core `CheckMode` name, `Random` or `All` (schema v5, Story 3.5). */
+    /** The core `CheckMode` name, `Random` or `All` (schema v6, Story 3.5). */
     @ColumnInfo(name = "check_mode", defaultValue = "Random")
     val checkMode: String = "Random",
 )

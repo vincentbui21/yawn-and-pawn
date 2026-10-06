@@ -10,7 +10,6 @@ import com.yawnandpawn.app.backupRules
 import com.yawnandpawn.app.core.alarm.Alarm
 import com.yawnandpawn.app.core.alarm.AlarmDraft
 import com.yawnandpawn.app.core.alarm.AlarmFired
-import com.yawnandpawn.app.core.alarm.CheckConfigRepository
 import com.yawnandpawn.app.core.alarm.SaveAlarm
 import com.yawnandpawn.app.core.error.Outcome
 import com.yawnandpawn.app.core.history.MissedNoteDismissals
@@ -60,9 +59,6 @@ class BackupRulesCoverageTest {
         runBlocking { app.engine.restore() }
         val saved = assertIs<Outcome.Success<*>>(runBlocking { koin.get<SaveAlarm>()(AlarmDraft(time = LocalTime(7, 0))) })
         val alarmId = (saved.value as Alarm).id
-        // Its check_config row is written above (Story 3.5). Until Story 3.2 brings the Math check screen and validator,
-        // the morning rings the default plan, which the placeholder answer completes.
-        runBlocking { koin.get<CheckConfigRepository>().deleteForAlarm(alarmId) }
         app.ring(AlarmFired(alarmId, Instant.parse("2027-03-08T06:00:00Z")))
         app.awaitRinging()
         val sessionId = (app.engine.state.value as SessionState.Ringing).session.sessionId

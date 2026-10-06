@@ -79,7 +79,7 @@ class HomeViewModelTest {
     private val missedNotes = MissedNotes(history, dismissals)
     private val probe = FakeReliabilityProbe()
     private val settings = FakeReliabilitySettings()
-    private val checkConfigs = FakeCheckConfigRepository()
+    private var checkConfigs = FakeCheckConfigRepository()
 
     /** The session the use cases' lock reads (Story 2.6); Idle unless a test starts one. */
     private val sessionState = MutableStateFlow<SessionState>(SessionState.Idle)
@@ -125,8 +125,10 @@ class HomeViewModelTest {
         return AlarmActions(alarms.setEnabled, alarms.delete, clock, logger)
     }
 
+    /** Home over [repository]'s alarms; [checkConfigs] then holds their checks. */
     private fun TestScope.home(repository: AlarmRepository): HomeViewModel {
-        val viewModel = HomeViewModel(repository, actions(repository), clock, zone, signal, missedNotes, probe, settings, checkConfigs)
+        checkConfigs = FakeCheckConfigRepository(repository)
+        val viewModel = HomeViewModel(checkConfigs, actions(repository), clock, zone, signal, missedNotes, probe, settings)
         backgroundScope.launch { viewModel.state.collect { } }
         return viewModel
     }
@@ -255,7 +257,7 @@ class HomeViewModelTest {
         }
 
     @Test
-    fun `cards follow the time of day with the stored fields and no checks, and update after a save`() =
+    fun `cards follow the time of day with the stored fields and the default check, and update after a save`() =
         runTest(dispatcher) {
             val weekdays = setOf(DayOfWeek.MONDAY, DayOfWeek.TUESDAY, DayOfWeek.WEDNESDAY, DayOfWeek.THURSDAY, DayOfWeek.FRIDAY)
             val repository = FakeAlarmRepository(listOf(alarm(1, LocalTime(22, 0), label = "Late", repeatDays = weekdays)))
@@ -263,33 +265,54 @@ class HomeViewModelTest {
 
             repository.upsert(alarm(2, LocalTime(6, 30), enabled = false))
 
+            val math = listOf(CheckType.Math)
             assertEquals(
                 listOf(
-                    AlarmCard(FakeIdGenerator.fakeUuid(2), LocalTime(6, 30), emptySet(), null, emptyList(), enabled = false),
-                    AlarmCard(FakeIdGenerator.fakeUuid(1), LocalTime(22, 0), weekdays, "Late", emptyList(), enabled = true),
+                    AlarmCard(FakeIdGenerator.fakeUuid(2), LocalTime(6, 30), emptySet(), null, math, enabled = false),
+                    AlarmCard(FakeIdGenerator.fakeUuid(1), LocalTime(22, 0), weekdays, "Late", math, enabled = true),
                 ),
                 viewModel.state.value.alarms,
             )
         }
 
     @Test
-    fun `a card shows its alarm's check icons, and follows a change of the checks (Story 3-5)`() =
+    fun `a card shows its alarm's check icons, the default one without rows, and follows a change of the checks (Story 3-5)`() =
         runTest(dispatcher) {
             val stored = alarm(1, LocalTime(7, 0))
             val other = alarm(2, LocalTime(8, 0))
             val repository = FakeAlarmRepository(listOf(stored, other))
+            val memory = CheckEntry(CoreCheckType.MemorySequence(), CoreDifficulty.Medium, 2)
             val math = CheckEntry(CoreCheckType.Math, CoreDifficulty.Medium, 3)
             val viewModel = home(repository)
             assertEquals(
-                listOf(emptyList<CheckType>(), emptyList()),
+                listOf(listOf(CheckType.Math), listOf(CheckType.Math)),
+                viewModel.state.value.alarms
+                    .map { it.checks },
+                "no rows: the default Math check, as the ring uses",
+            )
+
+            assertEquals(Outcome.Success(Unit), checkConfigs.saveWithAlarm(stored, checkConfigsOf(stored.id, listOf(memory, math))))
+
+            assertEquals(
+                listOf(listOf(CheckType.MemorySequence, CheckType.Math), listOf(CheckType.Math)),
                 viewModel.state.value.alarms
                     .map { it.checks },
             )
+        }
 
-            assertEquals(Outcome.Success(Unit), checkConfigs.saveWithAlarm(stored, checkConfigsOf(stored.id, listOf(math))))
+    @Test
+    fun `a failing read of the checks shows the load failure with Try again, as the alarms are one read (review fix)`() =
+        runTest(dispatcher) {
+            val viewModel = home(FakeAlarmRepository(listOf(alarm(1, LocalTime(7, 0)))))
+            checkConfigs.failure = DomainError.StorageFailure("closed")
+            viewModel.onIntent(HomeIntent.RetryLoad)
 
+            assertEquals(HomeUiState(loadFailed = true), viewModel.state.value)
+
+            checkConfigs.failure = null
+            viewModel.onIntent(HomeIntent.RetryLoad)
             assertEquals(
-                listOf(listOf(CheckType.Math), emptyList()),
+                listOf(listOf(CheckType.Math)),
                 viewModel.state.value.alarms
                     .map { it.checks },
             )
@@ -526,7 +549,7 @@ class HomeViewModelTest {
             assertEquals(0, signal.subscribers)
             val viewModel =
                 HomeViewModel(
-                    FakeAlarmRepository(),
+                    checkConfigs,
                     actions(FakeAlarmRepository()),
                     clock,
                     zone,
@@ -534,7 +557,6 @@ class HomeViewModelTest {
                     missedNotes,
                     probe,
                     settings,
-                    checkConfigs,
                 )
             val collector = launch { viewModel.state.collect { } }
             assertEquals(1, signal.subscribers)

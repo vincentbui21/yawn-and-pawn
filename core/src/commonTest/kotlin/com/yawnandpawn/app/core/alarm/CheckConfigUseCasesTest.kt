@@ -204,7 +204,7 @@ class CheckConfigUseCasesTest {
         }
 
     @Test
-    fun `delete removes the alarm's checks, and a failed check delete keeps the alarm armed`() =
+    fun `delete removes the alarm with its checks in one step, and a failed delete keeps both and the alarm armed`() =
         runTest {
             val kept = saved(draft.copy(time = LocalTime(8, 0)))
             val alarm = saved()
@@ -213,6 +213,7 @@ class CheckConfigUseCasesTest {
 
             assertEquals(Outcome.Failure(DomainError.StorageFailure("disk full")), delete(alarm.id))
             assertTrue(alarm.id in repository.alarms.value, "the alarm stays")
+            assertEquals(listOf(mathHard), rowsOf(alarm).orderedEntries(), "with its checks")
             assertEquals(emptyList(), scheduler.calls, "nothing cancelled")
 
             checkConfigs.failure = null
@@ -220,6 +221,20 @@ class CheckConfigUseCasesTest {
 
             assertNull(checkConfigs.rows.value[alarm.id])
             assertEquals(listOf(mathHard), rowsOf(kept).orderedEntries(), "other alarms keep theirs")
+        }
+
+    @Test
+    fun `when the alarm itself cannot be deleted its checks stay too (review fix, one transaction)`() =
+        runTest {
+            val alarm = saved()
+            repository.deleteFailure = DomainError.StorageFailure("locked")
+            scheduler.calls.clear()
+
+            assertEquals(Outcome.Failure(DomainError.StorageFailure("locked")), delete(alarm.id))
+
+            assertTrue(alarm.id in repository.alarms.value, "the alarm stays")
+            assertEquals(listOf(mathHard), rowsOf(alarm).orderedEntries(), "an armed alarm never loses its checks")
+            assertEquals(emptyList(), scheduler.calls, "nothing cancelled")
         }
 
     @Test

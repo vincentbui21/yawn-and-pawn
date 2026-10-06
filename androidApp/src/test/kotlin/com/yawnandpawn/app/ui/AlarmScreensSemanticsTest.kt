@@ -513,7 +513,7 @@ class AlarmScreensSemanticsTest {
         val repository = FakeAlarmRepository(listOf(anAlarm(time = LocalTime(6, 30))))
         val viewModel =
             HomeViewModel(
-                repository,
+                FakeCheckConfigRepository(repository),
                 actions(repository),
                 FakeClock(),
                 FakeTimeZoneProvider(),
@@ -521,7 +521,6 @@ class AlarmScreensSemanticsTest {
                 MissedNotes(FakeSessionHistoryRepository(), FakeMissedNoteDismissals()),
                 FakeReliabilityProbe(),
                 FakeReliabilitySettings(),
-                FakeCheckConfigRepository(),
             )
         withScreen(
             PpsThemeMode.Light,
@@ -581,7 +580,7 @@ class AlarmScreensSemanticsTest {
         val missedNotes = MissedNotes(FakeSessionHistoryRepository(), FakeMissedNoteDismissals())
         val viewModel =
             HomeViewModel(
-                repository,
+                FakeCheckConfigRepository(repository),
                 actions(repository),
                 FakeClock(),
                 FakeTimeZoneProvider(),
@@ -589,7 +588,6 @@ class AlarmScreensSemanticsTest {
                 missedNotes,
                 FakeReliabilityProbe(),
                 FakeReliabilitySettings(),
-                FakeCheckConfigRepository(),
             )
         var shown = false
         withScreen(

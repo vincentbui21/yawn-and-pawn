@@ -1,13 +1,23 @@
 package com.yawnandpawn.app.data.alarm
 
 import androidx.room3.ColumnInfo
+import androidx.room3.Embedded
 import androidx.room3.Entity
 import androidx.room3.ForeignKey
 import androidx.room3.Index
 import androidx.room3.PrimaryKey
+import androidx.room3.Relation
+
+/** An `alarm` row with its `check_config` rows, read in one query (Home's cards, Story 3.5 review). */
+data class AlarmWithCheckRows(
+    @Embedded
+    val alarm: AlarmEntity,
+    @Relation(parentColumns = ["id"], entityColumns = ["alarm_id"])
+    val checks: List<CheckConfigEntity>,
+)
 
 /**
- * Row of the `check_config` table in `app.db` (schema v5, Story 3.5): one check of an alarm. Deleting the alarm deletes
+ * Row of the `check_config` table in `app.db` (schema v6, Story 3.5): one check of an alarm. Deleting the alarm deletes
  * its rows (foreign key, cascade). [type] is the stable core `CheckType.id`, [difficulty] the `Difficulty` name.
  */
 @Entity(

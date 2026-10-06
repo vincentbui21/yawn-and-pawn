@@ -1,6 +1,7 @@
 package com.yawnandpawn.app.data.alarm
 
 import com.yawnandpawn.app.core.alarm.Alarm
+import com.yawnandpawn.app.core.alarm.AlarmWithChecks
 import com.yawnandpawn.app.core.alarm.CheckConfig
 import com.yawnandpawn.app.core.alarm.CheckConfigRepository
 import com.yawnandpawn.app.core.checks.CheckEntry
@@ -8,6 +9,7 @@ import com.yawnandpawn.app.core.checks.CheckType
 import com.yawnandpawn.app.core.checks.Difficulty
 import com.yawnandpawn.app.core.error.DomainError
 import com.yawnandpawn.app.core.error.Outcome
+import com.yawnandpawn.app.core.error.flatMap
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
 import kotlin.coroutines.cancellation.CancellationException
@@ -21,8 +23,10 @@ import kotlin.time.Instant
 class RoomCheckConfigRepository(
     private val dao: CheckConfigDao,
 ) : CheckConfigRepository {
-    override fun observeAll(): Flow<Map<String, List<CheckConfig>>> =
-        dao.observeAll().map { rows -> rows.mapNotNull { it.toConfig() }.groupBy { it.alarmId } }
+    override fun observeAlarmsWithChecks(): Flow<List<AlarmWithChecks>> =
+        dao.observeAlarmsWithChecks().map { rows ->
+            rows.map { row -> AlarmWithChecks(row.alarm.toAlarm(), row.checks.mapNotNull { it.toConfig() }.sortedBy { it.position }) }
+        }
 
     override suspend fun forAlarm(alarmId: String): Outcome<List<CheckConfig>, DomainError> =
         storage { dao.forAlarm(alarmId).mapNotNull { it.toConfig() } }
@@ -32,7 +36,10 @@ class RoomCheckConfigRepository(
         configs: List<CheckConfig>,
     ): Outcome<Unit, DomainError> = storage { dao.saveAlarmWithChecks(alarm.toEntity(), configs.map { it.toEntity() }) }
 
-    override suspend fun deleteForAlarm(alarmId: String): Outcome<Unit, DomainError> = storage { dao.deleteForAlarm(alarmId) }
+    override suspend fun deleteWithAlarm(alarmId: String): Outcome<Unit, DomainError> =
+        storage { dao.deleteAlarmWithChecks(alarmId) }.flatMap { deleted ->
+            if (deleted == 0) Outcome.Failure(DomainError.NotFound(alarmId)) else Outcome.Success(Unit)
+        }
 
     // As in RoomAlarmRepository: platform exceptions become StorageFailure at this boundary; cancellation propagates.
     @Suppress("TooGenericExceptionCaught")

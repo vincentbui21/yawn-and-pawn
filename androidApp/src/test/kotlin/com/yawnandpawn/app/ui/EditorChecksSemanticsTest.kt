@@ -1,5 +1,8 @@
 package com.yawnandpawn.app.ui
 
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.semantics.CustomAccessibilityAction
 import androidx.compose.ui.semantics.SemanticsActions
 import androidx.compose.ui.semantics.SemanticsProperties
@@ -20,6 +23,7 @@ import com.yawnandpawn.app.ui.checks.Difficulty
 import com.yawnandpawn.app.ui.editor.AlarmEditorScreen
 import com.yawnandpawn.app.ui.editor.CheckChip
 import com.yawnandpawn.app.ui.editor.EditorIntent
+import com.yawnandpawn.app.ui.editor.EditorPane
 import com.yawnandpawn.app.ui.editor.EditorUiState
 import com.yawnandpawn.app.ui.theme.PpsThemeMode
 import org.junit.Rule
@@ -113,6 +117,36 @@ class EditorChecksSemanticsTest {
     }
 
     @Test
+    fun `Math's stepper goes past 5 problems, its own range is 1 to 10 (review fix)`() {
+        listOf(5, 9).forEach { count ->
+            val checks = listOf(CheckChip(CheckType.Math, Difficulty.Hard, count))
+            val state = EditorCheckSamples.mathSetup.copy(form = EditorCheckSamples.mathSetup.form.copy(checks = checks))
+            editor(state) { composeRule.onNodeWithContentDescription("Raise Problems").assertIsEnabled() }
+        }
+    }
+
+    @Test
+    fun `Check setup keeps its content while it slides out after Back (review fix)`() {
+        var state by mutableStateOf(EditorCheckSamples.mathSetup)
+        withScreen(
+            PpsThemeMode.Light,
+            content = { AlarmEditorScreen(state = state, is24Hour = false, onIntent = { intents += it }) },
+        ) {
+            composeRule.onNodeWithContentDescription("Raise Problems").assertExists()
+            composeRule.mainClock.autoAdvance = false
+            // As the ViewModel leaves Check setup: the pane changes and the setup type is no longer set.
+            composeRule.runOnUiThread { state = state.copy(pane = EditorPane.WakeCheck, setupType = null) }
+            composeRule.mainClock.advanceTimeBy(HALF_TRANSITION_MILLIS)
+
+            composeRule.onNodeWithContentDescription("Raise Problems").assertExists()
+
+            composeRule.mainClock.autoAdvance = true
+            composeRule.waitForIdle()
+            composeRule.onNodeWithContentDescription("Raise Problems").assertDoesNotExist()
+        }
+    }
+
+    @Test
     fun `the Math check is a ticked checkbox`() {
         editor(EditorCheckSamples.oneCheck) {
             composeRule.onNode(isToggleable() and hasText("Math", substring = true)).assertIsOn()
@@ -121,5 +155,6 @@ class EditorChecksSemanticsTest {
 
     private companion object {
         const val MIN_TARGET = 48f
+        const val HALF_TRANSITION_MILLIS = 120L
     }
 }

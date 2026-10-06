@@ -4,11 +4,14 @@ import com.yawnandpawn.app.core.alarm.CheckConfig
 import com.yawnandpawn.app.core.alarm.RequestCodes
 import com.yawnandpawn.app.core.alarm.orderedEntries
 import com.yawnandpawn.app.core.checks.CheckEntry
+import com.yawnandpawn.app.core.error.DomainError
 import com.yawnandpawn.app.core.error.Outcome
+import com.yawnandpawn.app.core.log.LogEvent
 import com.yawnandpawn.app.core.session.ScheduleTestAlarm
 import com.yawnandpawn.app.testing.AlarmUseCasesFixture
 import com.yawnandpawn.app.testing.FakeAlarmRepository
 import com.yawnandpawn.app.testing.FakeAlarmScheduler
+import com.yawnandpawn.app.testing.FakeCheckConfigRepository
 import com.yawnandpawn.app.testing.FakeClock
 import com.yawnandpawn.app.testing.FakeLogger
 import com.yawnandpawn.app.testing.FakeNotificationPermission
@@ -25,6 +28,7 @@ import com.yawnandpawn.app.ui.checksetup.CheckSetupIntent
 import com.yawnandpawn.app.ui.home.AlarmActions
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.toList
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.test.StandardTestDispatcher
@@ -54,11 +58,13 @@ class AlarmEditorChecksTest {
     private val clock = FakeClock(Instant.parse("2027-03-03T06:00:00Z"))
     private val repository = FakeAlarmRepository()
     private val logger = FakeLogger()
+    private val checkRows = FakeCheckConfigRepository(repository)
     private val alarms =
         AlarmUseCasesFixture(
             repository = repository,
             clock = clock,
             requestCodes = FakeRequestCodeSequence(lastUsed = RequestCodes.FIRST_ALARM),
+            checkConfigs = checkRows,
         )
 
     private val math = CheckChip(CheckType.Math, Difficulty.Medium, 3)
@@ -259,5 +265,99 @@ class AlarmEditorChecksTest {
             assertEquals(listOf(math), EditorForm.DEFAULT_CHECKS)
             assertNull(viewModel.state.value.setupType)
             assertEquals(CheckConfig.DEFAULT_ENTRIES.single().count, math.count)
+        }
+
+    @Test
+    fun `a stored count outside the type's range opens as the nearest valid count (review fix)`() =
+        runTest(dispatcher) {
+            val rows = listOf(CheckEntry(CoreCheckType.Math, CoreDifficulty.Hard, 15))
+            checkRows.saveWithAlarm(anAlarm(id = "a"), checkConfigsOf("a", rows))
+
+            val viewModel = viewModel(alarmId = "a")
+            advanceUntilIdle()
+
+            assertEquals(listOf(CheckChip(CheckType.Math, Difficulty.Hard, 10)), viewModel.checks())
+        }
+
+    @Test
+    fun `a stored check the editor cannot show is left out explicitly, Back asks and Save stores what is shown (review fix)`() =
+        runTest(dispatcher) {
+            val rows =
+                listOf(
+                    CheckEntry(CoreCheckType.Placeholder, CoreDifficulty.Easy, 1),
+                    CheckEntry(CoreCheckType.Math, CoreDifficulty.Hard, 4),
+                )
+            checkRows.saveWithAlarm(anAlarm(id = "a"), checkConfigsOf("a", rows))
+            val viewModel = viewModel(alarmId = "a")
+            advanceUntilIdle()
+
+            assertEquals(listOf(CheckChip(CheckType.Math, Difficulty.Hard, 4)), viewModel.checks())
+            viewModel.onIntent(EditorIntent.BackRequested)
+            assertTrue(viewModel.state.value.showDiscardDialog, "the dropped check counts as a change")
+            viewModel.onIntent(EditorIntent.KeepEditing)
+
+            viewModel.onIntent(EditorIntent.SaveClicked)
+            advanceUntilIdle()
+
+            assertEquals(
+                listOf(CheckEntry(CoreCheckType.Math, CoreDifficulty.Hard, 4)),
+                (checkRows.forAlarm("a") as Outcome.Success).value.orderedEntries(),
+            )
+        }
+
+    @Test
+    fun `with only a check that has no core plugin Save shows Pick at least one check, not a save failure (review fix)`() =
+        runTest(dispatcher) {
+            val viewModel = viewModel(pickable = listOf(CheckType.Math, CheckType.QrBarcode))
+            val effects = effectsOf(viewModel)
+            viewModel.onIntent(EditorIntent.CheckToggled(CheckType.QrBarcode, selected = true))
+            viewModel.onIntent(EditorIntent.CheckToggled(CheckType.Math, selected = false))
+
+            viewModel.onIntent(EditorIntent.SaveClicked)
+            advanceUntilIdle()
+
+            assertEquals(
+                true,
+                viewModel.state.value.full
+                    ?.noCheckError,
+            )
+            assertTrue(repository.current.isEmpty(), "nothing stored")
+            assertEquals(emptyList(), effects, "no Couldn't save snackbar")
+        }
+
+    @Test
+    fun `the production editor offers the pickable checks in order (review fix)`() =
+        runTest(dispatcher) {
+            val viewModel =
+                AlarmEditorViewModel(
+                    alarmId = null,
+                    repository = repository,
+                    checkConfigs = alarms.checkConfigs,
+                    saveAlarm = alarms.save,
+                    clock = clock,
+                    timeZoneProvider = FakeTimeZoneProvider(),
+                    actions = AlarmActions(alarms.setEnabled, alarms.delete, clock, logger),
+                    soundLibrary = FakeSoundLibrary(),
+                    soundPreview = FakeSoundPreview(),
+                    notificationPermission = FakeNotificationPermission(),
+                    testAlarm = ScheduleTestAlarm(FakeAlarmScheduler(), FakeTestAlarmStore(), clock, logger),
+                )
+
+            assertEquals(
+                listOf(CheckType.Math, CheckType.WordUnscramble, CheckType.MemorySequence),
+                viewModel.state.value.full
+                    ?.types,
+            )
+        }
+
+    @Test
+    fun `checks that cannot be read close the editor with OpenFailed and are logged, never silent defaults (review fix)`() =
+        runTest(dispatcher) {
+            repository.upsert(anAlarm(id = "a"))
+            checkRows.failure = DomainError.StorageFailure("disk I/O error")
+            val viewModel = viewModel(alarmId = "a")
+
+            assertEquals(EditorEffect.OpenFailed, viewModel.effects.first())
+            assertEquals(listOf<LogEvent>(LogEvent.OperationFailed("open alarm", "storage failure: disk I/O error")), logger.events)
         }
 }

@@ -2,6 +2,7 @@ package com.yawnandpawn.app.testing
 
 import com.yawnandpawn.app.core.alarm.Alarm
 import com.yawnandpawn.app.core.alarm.AlarmRepository
+import com.yawnandpawn.app.core.alarm.AlarmWithChecks
 import com.yawnandpawn.app.core.alarm.CheckConfig
 import com.yawnandpawn.app.core.alarm.CheckConfigRepository
 import com.yawnandpawn.app.core.checks.CheckEntry
@@ -9,7 +10,7 @@ import com.yawnandpawn.app.core.error.DomainError
 import com.yawnandpawn.app.core.error.Outcome
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
-import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.combine
 import kotlin.time.Instant
 
 /**
@@ -29,10 +30,10 @@ class FakeCheckConfigRepository(
     val current: Map<String, List<CheckConfig>>
         get() = rows.value
 
-    override fun observeAll(): Flow<Map<String, List<CheckConfig>>> =
-        rows.map { byAlarm ->
+    override fun observeAlarmsWithChecks(): Flow<List<AlarmWithChecks>> =
+        combine(alarms.observeAll(), rows) { all, byAlarm ->
             failure?.let { error("storage failure: ${it.cause}") }
-            byAlarm
+            all.map { AlarmWithChecks(it, byAlarm[it.id].orEmpty()) }
         }
 
     override suspend fun forAlarm(alarmId: String): Outcome<List<CheckConfig>, DomainError> {
@@ -57,10 +58,11 @@ class FakeCheckConfigRepository(
         }
     }
 
-    override suspend fun deleteForAlarm(alarmId: String): Outcome<Unit, DomainError> {
+    override suspend fun deleteWithAlarm(alarmId: String): Outcome<Unit, DomainError> {
         failure?.let { return Outcome.Failure(it) }
-        rows.value -= alarmId
-        return Outcome.Success(Unit)
+        val deleted = alarms.delete(alarmId)
+        if (deleted is Outcome.Success) rows.value -= alarmId
+        return deleted
     }
 }
 

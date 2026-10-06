@@ -125,6 +125,9 @@ class AlarmEditorViewModel(
     /** The form as it was opened; any difference is an unsaved change. */
     private var initialForm = EditorForm()
 
+    /** The stored alarm held a check the form cannot show, so the form already differs from what is stored. */
+    private var changedOnOpen = false
+
     /** The stored alarm being edited, or the one a duplicate is prefilled from (its time names it in the delete dialog). */
     private var stored: Alarm? = null
 
@@ -301,7 +304,7 @@ class AlarmEditorViewModel(
                 else -> form
             }
         }
-        _state.update { if (it.form.checks.isEmpty()) it else it.copy(full = it.full?.copy(noCheckError = false)) }
+        _state.update { if (it.form.hasNoCoreCheck()) it else it.copy(full = it.full?.copy(noCheckError = false)) }
     }
 
     /** Check setup of [EditorUiState.setupType]: difficulty, count (within the type's range) and Back. */
@@ -401,6 +404,7 @@ class AlarmEditorViewModel(
                 stored = alarm
                 val form = alarm.toForm(checks)
                 initialForm = form
+                changedOnOpen = hasUnshownChecks(checks)
                 val custom = form.repeatDays.isNotEmpty() && form.repeatDays != Weekdays
                 _state.update {
                     it
@@ -436,11 +440,15 @@ class AlarmEditorViewModel(
         }
     }
 
+    /** No check a ring can run: none at all, or only checks without a core plugin, which a save would drop. */
+    private fun EditorForm.hasNoCoreCheck(): Boolean = checks.none { it.type.core != null }
+
     private fun save() {
         val current = _state.value
         if (current.isLoading || current.isSaving) return
-        // No check: "Pick at least one check." under the Wake-up check row and in its sub-screen; nothing is stored.
-        if (current.form.checks.isEmpty()) {
+        // No check (or only checks without a core plugin, which a save would drop): "Pick at least one check." under the
+        // Wake-up check row and in its sub-screen; nothing is stored.
+        if (current.form.hasNoCoreCheck()) {
             _state.update { it.copy(full = it.full?.copy(noCheckError = true)) }
             return
         }
@@ -548,7 +556,7 @@ class AlarmEditorViewModel(
         }
     }
 
-    private fun hasUnsavedChanges(): Boolean = _state.value.let { !it.isLoading && it.form != initialForm }
+    private fun hasUnsavedChanges(): Boolean = _state.value.let { !it.isLoading && (changedOnOpen || it.form != initialForm) }
 
     /** "Discard changes?" before [then]: Back closes the editor, Duplicate opens a new alarm prefilled from the stored one. */
     private fun askDiscard(then: AfterDiscard) {
@@ -705,16 +713,18 @@ private fun EditorUiState.withRings(
 }
 
 /**
- * The stored alarm and its [checks] as the form shows them; out-of-range stored values open as the nearest valid value,
- * and an alarm stored without checks opens with the default ones.
+ * The stored alarm and its [checks] as the form shows them; out-of-range stored values (a check's count included, within
+ * its type's range) open as the nearest valid value, and an alarm stored without checks opens with the default ones. A
+ * check the editor cannot show ([hasUnshownChecks]) is left out.
  */
 private fun Alarm.toForm(checks: List<CheckConfig>): EditorForm =
     EditorForm(
         checks =
             checks
                 .orderedEntries()
-                .mapNotNull { entry -> entry.type.toUi()?.let { CheckChip(it, entry.difficulty.toUi(), entry.count) } }
-                .ifEmpty { EditorForm.DEFAULT_CHECKS },
+                .mapNotNull { entry ->
+                    entry.type.toUi()?.let { CheckChip(it, entry.difficulty.toUi(), entry.count.coerceIn(entry.type.countRange)) }
+                }.ifEmpty { EditorForm.DEFAULT_CHECKS },
         checkMode = CheckMode.valueOf(checkMode.name),
         time = time,
         repeatDays = repeatDays,
@@ -728,6 +738,14 @@ private fun Alarm.toForm(checks: List<CheckConfig>): EditorForm =
         graceSeconds = graceSeconds.coerceIn(Alarm.GRACE_SECONDS_RANGE),
         vibrateInGrace = vibrateInGrace,
     )
+
+/**
+ * Whether [checks] hold a type the editor cannot show (no picker row; only the Epic 1 `Placeholder`, which no picker
+ * offers and `validateChecks` rejects, so it could never be saved back). The editor leaves it out of the form and
+ * counts that as an unsaved change, so the replacement is explicit: Back asks "Discard changes?" and Save stores the
+ * checks shown (Story 3.5 review).
+ */
+private fun hasUnshownChecks(checks: List<CheckConfig>): Boolean = checks.any { it.entry.type.toUi() == null }
 
 private fun <T> Set<T>.toggle(item: T): Set<T> = if (item in this) this - item else this + item
 

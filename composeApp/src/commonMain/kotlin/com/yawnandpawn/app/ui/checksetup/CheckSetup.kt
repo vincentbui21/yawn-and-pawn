@@ -209,7 +209,7 @@ private fun AboutCard(state: CheckSetupUiState) {
     note?.let { NoteInline(text = it, modifier = Modifier.padding(horizontal = spacing.cardPadding)) }
 }
 
-/** "Difficulty" Easy / Medium / Hard as radio rows, then the count `stepper` ("Problems", 1 to 5). */
+/** "Difficulty" Easy / Medium / Hard as radio rows, then the count `stepper` ("Problems", within the check's own range). */
 @Composable
 private fun DifficultyAndCount(
     state: CheckSetupUiState,

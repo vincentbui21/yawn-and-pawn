@@ -10,8 +10,7 @@ context:
   - '{project-root}/_bmad-output/implementation-artifacts/epic-3-context.md'
   - '{project-root}/_bmad-output/implementation-artifacts/spec-3-1-check-plugin-contract-and-the-math-generator-in-core.md'
   - '{project-root}/.claude/skills/pps-design/SKILL.md'
-warnings:
-  - 'depends-on-3.2: stacked on 3.1 (ad9736b). Merge only after Story 3.2, which brings the Math check screen. Without it, a ring that runs a configured Math plan cannot be answered on the wake screen.'
+warnings: []
 deferred: []
 ---
 
@@ -22,7 +21,7 @@ deferred: []
 **Problem:** Every alarm rings the same built-in plan. The user cannot pick checks, difficulty, count or the Random/All mode (FR-PWK-1..3), and Home shows no check icons.
 
 **Approach:**
-- **Storage:** add per-alarm check configuration in `:core` and `:data`. `app.db` goes from v4 to v5 with a `check_config` table and `alarm.check_mode`, and the migration gives every existing alarm one Math · Medium · 3 row.
+- **Storage:** add per-alarm check configuration in `:core` and `:data`. `app.db` goes from v5 to v6 (after Story 3.4's v5) with a `check_config` table and `alarm.check_mode`, and the migration gives every existing alarm one Math · Medium · 3 row.
 - **Use cases:** a `CheckConfigRepository` port. `SaveAlarm` stores the alarm and its checks in one transaction, `DuplicateAlarm` copies them and `DeleteAlarm` removes them, all under the session guard.
 - **Validation:** zero checks, the same type twice, a count outside the type's range, or a non-pickable type gives `InvalidAlarm(Checks)`.
 - **Plan:** `ConfigResolver` builds the frozen `CheckPlan` from the alarm's mode and checks.
@@ -50,7 +49,7 @@ deferred: []
 
 | Scenario | Input / State | Expected Output / Behavior | Error Handling |
 |----------|--------------|---------------------------|----------------|
-| Migrate | v4 db with 2 alarms | v5. Each alarm has `check_mode` Random and one Math · Medium · 3 row at position 0 | — |
+| Migrate | v5 db with 2 alarms | v6. Each alarm has `check_mode` Random and one Math · Medium · 3 row at position 0 | — |
 | Save new | draft with Math · Hard · 5, All | the alarm and 1 config row, written together | storage error → `StorageFailure`, nothing stored |
 | Save edit | Math kept, difficulty changed | the row keeps its id and `created_at`; `updated_at` = now | — |
 | Invalid | 0 checks / Math twice / count 11 / Placeholder | `InvalidAlarm(Checks)`, nothing stored | — |
@@ -71,7 +70,7 @@ deferred: []
 - **Resolver:** `core/.../core/session/SessionConfig.kt` -- `ConfigResolver.resolve(alarm, checks, ...)`.
 - **Data (`data/.../data/`):**
   - `alarm/`: `CheckConfigEntity`, `CheckConfigDao` (transactional save), `RoomCheckConfigRepository`, plus the `AlarmEntity` and mapping changes.
-  - `db/`: `AppDatabase` v5 and `MIGRATION_4_5`; `schemas/.../5.json`; `DataModule`.
+  - `db/`: `AppDatabase` v6 and `MIGRATION_5_6`; `schemas/.../6.json`; `DataModule`.
 - **Testing:** `testing/.../FakeCheckConfigRepository`.
 - **App wiring:** `androidApp`'s `YawnAndPawnApp` (Koin) and `WakeService` (reads the configs and resolves).
 - **UI (`composeApp/.../ui/`):**
@@ -85,7 +84,7 @@ deferred: []
 
 **Execution:**
 - Core model, validation, use cases and resolver, with tests (`AlarmUseCasesTest`, `CheckConfigTest`, `ConfigResolverTest`).
-- Data: entity, DAO, repository, the v5 migration and exported schema, with tests (`RoomCheckConfigRepositoryTest`, `AppDatabaseFactoryTest` v4→v5).
+- Data: entity, DAO, repository, the v6 migration and exported schema, with tests (`RoomCheckConfigRepositoryTest`, `AppDatabaseFactoryTest` v5→v6).
 - Wiring: Koin, `WakeService`, fakes and the scan test.
 - UI: the editor ViewModel (tested: add, remove, reorder, mode, validation, discard, load, save), the panes and Home icons.
 - Screenshots (Light, Dark and 200%): the Wake-up check sub-screen (one check, several in All mode, none with the error), the picker and Check setup.
@@ -112,23 +111,38 @@ deferred: []
 
 ## Review Triage Log
 
+### Review (2 reviewers, fast mode)
+
+Two reviewers read `dcd0fb8`. The story was rebased onto main after Stories 3.2 and 3.4 (lane 2 stack): `app.db` now goes v5→v6 (`MIGRATION_5_6`, `6.json`, migration test from v5 that keeps 3.4's `vibrate_in_grace`). `ConfigResolver.defaultPlan()` is 3.2's `CheckPlan.default()`, and `BackupRulesCoverageTest` no longer deletes the alarm's rows, because 3.2 answers Math. All thirteen findings are patches, fixed in `fix(3.5): review fixes`:
+
+- **patch (high): Delete took two transactions.** If the alarm delete failed after the rows were gone, the alarm stayed armed with no checks. `CheckConfigRepository.deleteWithAlarm` deletes the rows and the alarm in one DAO `@Transaction` (`CheckConfigDao.deleteAlarmWithChecks`; `NotFound` when there is no alarm), and `DeleteAlarm` uses it. Tested in `CheckConfigUseCasesTest`, where a failing alarm delete keeps the rows and the alarm stays armed, and in `RoomCheckConfigRepositoryTest`.
+- **patch: Check setup went blank while sliding out after Back.** The pane keeps the last setup it showed (`rememberLastNonNull`), so its content and title stay during the transition. Tested in `EditorChecksSemanticsTest` halfway through the transition.
+- **patch: a stored count outside the type's range opened unchanged.** `toForm` now uses `count.coerceIn(type.countRange)`, as the KDoc says (`AlarmEditorChecksTest`).
+- **patch: rows the editor cannot show were silently replaced.** Of the core types, only the Epic 1 `Placeholder` has no picker row, and validation rejects it, so it can never be written back. The editor leaves it out and counts that as an unsaved change: Back asks "Discard changes?" and Save stores the checks shown. This is documented on `hasUnshownChecks` and tested.
+- **patch: Home combined two flows.** A new card could show without its icons, or with old ones. `CheckConfigRepository.observeAlarmsWithChecks()` is now one Room `@Transaction` query with an `@Relation` (`AlarmWithCheckRows`), and `HomeViewModel` reads only that. Alarms and checks are one read, so a failure there shows the load failure with "Try again". Documented and tested in `HomeViewModelTest`; `RoomCheckConfigRepositoryTest` asserts that no emission has a saved alarm without its rows.
+- **patch: Save with only checks that have no core plugin showed a generic failure.** It now shows "Pick at least one check." (`AlarmEditorChecksTest`).
+- **patch: alarms without rows were handled differently in different places.** Home's card now shows the default check's icon, like the editor, Save's identical-alarm rule, Duplicate and the ring (`CheckPlan.default()`, Math · Medium · 3).
+- **patch: KDoc said "Problems, 1 to 5".** It now says the check's own range.
+- **tests:** the Math stepper is enabled at 5 and 9 (catches a return to 1..5). A ViewModel built without `pickable` offers Math, Word Unscramble and Memory Sequence in order. `WakeApp(checkConfigs = …)`: a failing check read still rings the default plan and logs `read alarm checks`. A failing check read on open gives `OpenFailed` and logs `open alarm`. The frozen-plan tests in `WakeServiceTest` and `ConfigResolverTest` store two entries out of insertion order.
+- **open owner question (not changed):** EXPERIENCE.md says the Check setup stepper goes "1 to 5". Each type keeps its own range (Math 1 to 10, owner-approved q10 defaults; Word and Memory 1 to 5). EXPERIENCE.md is approved copy, so it is left as it is. The owner should decide whether it should say "the check's range".
+
 ## Design Notes
 
 - **Why the configs are a separate port:** the AC asks for it, and the plan is not part of `Alarm`'s scheduling fields. The one transaction lives in `CheckConfigDao.saveAlarmWithChecks` (update or insert the alarm, then replace its rows), so `SaveAlarm` and `DuplicateAlarm` store through `CheckConfigRepository.saveWithAlarm`.
-- **Row ids:** `CheckConfig.idFor(alarmId, type)` = `<alarm id>:<type id>`, the same form the v5 migration writes. It is unique (a type appears once per alarm) and stable on edits, and it takes nothing from the `IdGenerator`, so alarm ids stay as they were. An edit keeps a staying type's `created_at`.
+- **Row ids:** `CheckConfig.idFor(alarmId, type)` = `<alarm id>:<type id>`, the same form the v6 migration writes. It is unique (a type appears once per alarm) and stable on edits, and it takes nothing from the `IdGenerator`, so alarm ids stay as they were. An edit keeps a staying type's `created_at`.
 - **Several checks:** only Math is pickable, so production cannot show several checks yet. The ViewModel takes a `pickable` list (default `PickableCheckTypes`) so that its tests cover add, reorder and All mode with two types. The "several" screenshot uses Word Unscramble the way 3.7 will show it.
 - **"Try it":** it stays visible and does nothing until Story 3.6 wires it (story AC).
 - **Test heap:** the androidApp unit tests get a 1 GB heap, the same change as `fix(3.3): review fixes`, since the default 512 MB ran out at the end of the gate.
 - **Full editor rows:** the production editor turns on only the Wake-up check row of `FullEditorSections` (`rows`), so quiet time, motivation and the fee ladder stay hidden until their stories. The preview keeps every row.
 - **For the owner:** EXPERIENCE.md says the count stepper goes "1 to 5", but q10 says Math counts 1–10 (core `countRange`). This story follows the story AC and uses the type's range.
 
-- **Before 3.2 (merge order):** on this base, a saved alarm rings its Math plan, which the placeholder wake screen cannot answer. `BackupRulesCoverageTest` therefore deletes its alarm's rows before the ring, and a comment says to remove that once 3.2 answers Math. An alarm stored without rows counts as having the default checks, both in the editor and in the identical-alarm check.
+- **Before 3.2 (merge order, resolved):** on its first base, a saved alarm rang a Math plan that the placeholder wake screen could not answer, so `BackupRulesCoverageTest` deleted its alarm's rows before the ring. In the lane 2 stack, 3.2 is on main, so that delete is gone. An alarm stored without rows counts as having the default checks everywhere: the editor, the identical-alarm check, Duplicate, Home's icons and the ring.
 - **Deferred:** the test alarm rings `ConfigResolver.defaultPlan()`, not the draft's checks (a follow-up once 3.2/3.6 can ring Math).
 
 ## Verification
 
 Results from the run (2026-10-06):
-- New tests: `CheckConfigUseCasesTest` (15), `ConfigResolverTest` (+2), `RoomCheckConfigRepositoryTest` (8), `AppDatabaseFactoryTest` (v5 schema and v4→v5 migration), `AlarmEditorChecksTest` (8), `HomeViewModelTest` (+1 icons), `WakeServiceTest` (+2 frozen plan), `EditorChecksSemanticsTest` (6), and `EditorChecksScreenshotTest` (16 new `editor_check*` baselines).
+- New tests: `CheckConfigUseCasesTest` (15), `ConfigResolverTest` (+2), `RoomCheckConfigRepositoryTest` (8), `AppDatabaseFactoryTest` (v6 schema and v5→v6 migration), `AlarmEditorChecksTest` (8), `HomeViewModelTest` (+1 icons), `WakeServiceTest` (+2 frozen plan), `EditorChecksSemanticsTest` (6), and `EditorChecksScreenshotTest` (16 new `editor_check*` baselines).
 - The session-guard test also checks that no check row changes during a session.
 
 **Commands:**

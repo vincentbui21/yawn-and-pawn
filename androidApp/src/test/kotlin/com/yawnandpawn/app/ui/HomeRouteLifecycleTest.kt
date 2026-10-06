@@ -60,7 +60,7 @@ class HomeRouteLifecycleTest {
         val probe = FakeReliabilityProbe(ReliabilityStatus.ALL_OK.copy(notificationsAllowed = false))
         val viewModel =
             HomeViewModel(
-                repository,
+                FakeCheckConfigRepository(repository),
                 AlarmActions(alarms.setEnabled, alarms.delete, alarms.clock, FakeLogger()),
                 FakeClock(),
                 FakeTimeZoneProvider(),
@@ -68,7 +68,6 @@ class HomeRouteLifecycleTest {
                 MissedNotes(FakeSessionHistoryRepository(), FakeMissedNoteDismissals()),
                 probe,
                 FakeReliabilitySettings(),
-                FakeCheckConfigRepository(),
             )
         val owner = TestOwner()
         withScreen(

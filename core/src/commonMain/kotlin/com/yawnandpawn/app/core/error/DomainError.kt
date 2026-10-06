@@ -35,4 +35,10 @@ sealed interface DomainError {
     data class SchedulerFailure(
         val cause: String,
     ) : DomainError
+
+    /**
+     * A wake session is active, so nothing the user owns may change (FR-SES-3, Story 2.6); nothing was written. Returned
+     * by `SessionLockGuard`. The app shows only "Alarm in progress" then, so no screen shows this error.
+     */
+    data object SessionActive : DomainError
 }

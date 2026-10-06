@@ -59,7 +59,7 @@ class PermissionAllowlistTest {
         val xml = manifest("""<uses-permission android:name="android.permission.READ_PHONE_STATE" />""")
 
         assertEquals(
-            listOf("release: uses-permission 'android.permission.READ_PHONE_STATE' is not in config/permission-allowlist.txt"),
+            listOf("release: uses-permission 'android.permission.READ_PHONE_STATE' is never allowed (device hostage, NFR-13)"),
             verify(xml, variant = "release"),
         )
     }
@@ -166,7 +166,133 @@ class PermissionAllowlistTest {
                 application = """<activity android:name=".Kiosk" android:lockTaskMode="if_whitelisted" />""",
             )
 
-        assertEquals(listOf("debug: activity '.Kiosk' sets android:lockTaskMode (device hostage, AD-5)"), verify(xml))
+        assertEquals(listOf("debug: activity '.Kiosk' sets android:lockTaskMode=\"if_whitelisted\" (device hostage, AD-5)"), verify(xml))
+    }
+
+    @Test
+    fun `every hostage permission fails even when it is on the allowlist (Story 2-11)`() {
+        val hostage =
+            listOf(
+                "SYSTEM_ALERT_WINDOW",
+                "READ_PHONE_STATE",
+                "REORDER_TASKS",
+                "DISABLE_KEYGUARD",
+                "PACKAGE_USAGE_STATS",
+                "KILL_BACKGROUND_PROCESSES",
+                "MANAGE_DEVICE_POLICY_LOCK_TASK",
+                "MANAGE_DEVICE_POLICY_APPS_CONTROL",
+            )
+        val permissive = allowlist + hostage.map(PermissionAllowlist::qualify)
+
+        hostage.forEach { permission ->
+            val xml = manifest("""<uses-permission android:name="android.permission.$permission" />""")
+
+            assertEquals(
+                listOf("debug: uses-permission 'android.permission.$permission' is never allowed (device hostage, NFR-13)"),
+                PermissionAllowlist.verify(permissive, listOf(VariantManifest("debug", xml))),
+                permission,
+            )
+        }
+    }
+
+    @Test
+    fun `an intent filter with CATEGORY_HOME fails naming the component (Story 2-11)`() {
+        val xml =
+            manifest(
+                body = "",
+                // One line: a multi-line block would change the manifest template's common indent.
+                application =
+                    """<activity android:name=".Launcher" android:exported="true"><intent-filter>""" +
+                        """<action android:name="android.intent.action.MAIN" />""" +
+                        """<category android:name="android.intent.category.HOME" />""" +
+                        """<category android:name="android.intent.category.DEFAULT" />""" +
+                        """</intent-filter></activity>""",
+            )
+
+        assertEquals(listOf("debug: activity '.Launcher' declares CATEGORY_HOME (posing as the launcher, NFR-13)"), verify(xml))
+    }
+
+    @Test
+    fun `an intent filter with CATEGORY_SECONDARY_HOME fails too (Story 2-11)`() {
+        val xml =
+            manifest(
+                body = "",
+                application =
+                    """<activity android:name=".Second" android:exported="true"><intent-filter>""" +
+                        """<action android:name="android.intent.action.MAIN" />""" +
+                        """<category android:name="android.intent.category.SECONDARY_HOME" />""" +
+                        """</intent-filter></activity>""",
+            )
+
+        assertEquals(
+            listOf("debug: activity '.Second' declares CATEGORY_SECONDARY_HOME (posing as the launcher, NFR-13)"),
+            verify(xml),
+        )
+    }
+
+    @Test
+    fun `looking the launcher up in queries passes (Story 2-11)`() {
+        val xml =
+            manifest(
+                body =
+                    """<queries><intent><action android:name="android.intent.action.MAIN" />""" +
+                        """<category android:name="android.intent.category.HOME" /></intent></queries>""",
+            )
+
+        assertEquals(emptyList(), verify(xml))
+    }
+
+    @Test
+    fun `any lock-task mode but the default fails, and normal passes (Story 2-11)`() {
+        val modes = listOf("never", "if_whitelisted", "always")
+
+        modes.forEach { mode ->
+            val xml = manifest(body = "", application = """<activity android:name=".Kiosk" android:lockTaskMode="$mode" />""")
+            assertEquals(1, verify(xml).size, mode)
+        }
+        val normal = manifest(body = "", application = """<activity android:name=".Own" android:lockTaskMode="normal" />""")
+        assertEquals(emptyList(), verify(normal))
+    }
+
+    @Test
+    fun `stopWithTask on the wake service fails, on another service it passes (Story 2-11)`() {
+        val wake =
+            manifest(
+                body = "",
+                application =
+                    """<service android:name="com.yawnandpawn.app.android.wake.WakeService" android:stopWithTask="true" />""",
+            )
+        val other = manifest(body = "", application = """<service android:name=".Sync" android:stopWithTask="true" />""")
+        val wakeDefault = manifest(body = "", application = """<service android:name=".android.wake.WakeService" />""")
+
+        assertEquals(
+            listOf(
+                "debug: service 'com.yawnandpawn.app.android.wake.WakeService' sets android:stopWithTask=\"true\" " +
+                    "(a swipe from Recents must never end the ring, NFR-13)",
+            ),
+            verify(wake),
+        )
+        assertEquals(emptyList(), verify(other))
+        assertEquals(emptyList(), verify(wakeDefault))
+    }
+
+    @Test
+    fun `stopWithTask on the wake service fails for a resource reference and passes only for false (Story 2-11)`() {
+        fun wake(value: String) =
+            manifest(
+                body = "",
+                application = """<service android:name=".android.wake.WakeService" android:stopWithTask="$value" />""",
+            )
+
+        assertEquals(
+            listOf(
+                "debug: service '.android.wake.WakeService' sets android:stopWithTask=\"@bool/stop\" " +
+                    "(a swipe from Recents must never end the ring, NFR-13)",
+            ),
+            verify(wake("@bool/stop")),
+        )
+        assertEquals(1, verify(wake("TRUE")).size)
+        assertEquals(emptyList(), verify(wake("false")))
     }
 
     @Test

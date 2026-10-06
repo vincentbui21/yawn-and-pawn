@@ -11,6 +11,7 @@ import com.yawnandpawn.app.core.history.SessionOutcome
 import com.yawnandpawn.app.core.log.LogEvent
 import com.yawnandpawn.app.core.reliability.ReliabilityItem
 import com.yawnandpawn.app.core.reliability.ReliabilityStatus
+import com.yawnandpawn.app.core.session.SessionState
 import com.yawnandpawn.app.testing.AlarmUseCasesFixture
 import com.yawnandpawn.app.testing.FakeAlarmRepository
 import com.yawnandpawn.app.testing.FakeClock
@@ -23,6 +24,7 @@ import com.yawnandpawn.app.testing.FakeRequestCodeSequence
 import com.yawnandpawn.app.testing.FakeSessionHistoryRepository
 import com.yawnandpawn.app.testing.FakeTimeChangeSignal
 import com.yawnandpawn.app.testing.FakeTimeZoneProvider
+import com.yawnandpawn.app.testing.aSession
 import com.yawnandpawn.app.testing.aSessionHistoryRow
 import com.yawnandpawn.app.testing.anAlarm
 import com.yawnandpawn.app.ui.format.Countdown
@@ -30,6 +32,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.awaitCancellation
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.toList
 import kotlinx.coroutines.launch
@@ -71,6 +74,9 @@ class HomeViewModelTest {
     private val probe = FakeReliabilityProbe()
     private val settings = FakeReliabilitySettings()
 
+    /** The session the use cases' lock reads (Story 2.6); Idle unless a test starts one. */
+    private val sessionState = MutableStateFlow<SessionState>(SessionState.Idle)
+
     @BeforeTest
     fun setUp() {
         Dispatchers.setMain(dispatcher)
@@ -100,7 +106,15 @@ class HomeViewModelTest {
     private fun actions(repository: AlarmRepository): AlarmActions {
         // The seeded alarms use codes from 1001 up, so the mark starts above them.
         val alarms =
-            AlarmUseCasesFixture(repository, clock, zone, ids, requestCodes = FakeRequestCodeSequence(lastUsed = 1999), lock = lock)
+            AlarmUseCasesFixture(
+                repository,
+                clock,
+                zone,
+                ids,
+                requestCodes = FakeRequestCodeSequence(lastUsed = 1999),
+                lock = lock,
+                sessionState = sessionState,
+            )
         return AlarmActions(alarms.setEnabled, alarms.delete, clock, logger)
     }
 
@@ -404,6 +418,27 @@ class HomeViewModelTest {
             assertEquals(1, viewModel.state.value.alarms.size)
             assertEquals(listOf<LogEvent>(LogEvent.OperationFailed("delete alarm", "storage failure: disk full")), logger.events)
             assertTrue(viewModel.state.value.saveFailed)
+        }
+
+    @Test
+    fun `a toggle or delete refused because a session just started is neither logged nor shown as Couldn't save (Story 2-6)`() =
+        runTest(dispatcher) {
+            val repository = FakeAlarmRepository(listOf(alarm(1, LocalTime(7, 0))))
+            val viewModel = home(repository)
+            viewModel.onIntent(HomeIntent.DeleteClicked(FakeIdGenerator.fakeUuid(1)))
+            // The alarm fires between the tap and the write.
+            sessionState.value = SessionState.Ringing(aSession())
+
+            viewModel.onIntent(HomeIntent.AlarmToggled(FakeIdGenerator.fakeUuid(1), enabled = false))
+            viewModel.onIntent(HomeIntent.DeleteConfirmed)
+
+            assertEquals(emptyList(), logger.events)
+            assertFalse(viewModel.state.value.saveFailed)
+            val card =
+                viewModel.state.value.alarms
+                    .single()
+            assertTrue(card.enabled, "the switch goes back to the stored value")
+            assertEquals(1, repository.current.size)
         }
 
     @Test

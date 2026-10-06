@@ -56,6 +56,8 @@ class BackupRulesCoverageTest {
     fun `after a full morning every app file is included or explicitly excluded in every rule section`() {
         val app = WakeApp()
         val koin = app.koin
+        // The alarms are editable once the stored session is restored (the session lock, Story 2.6).
+        runBlocking { app.engine.restore() }
         val saved = assertIs<Outcome.Success<*>>(runBlocking { koin.get<SaveAlarm>()(AlarmDraft(time = LocalTime(7, 0))) })
         val alarmId = (saved.value as Alarm).id
         app.ring(AlarmFired(alarmId, Instant.parse("2027-03-08T06:00:00Z")))

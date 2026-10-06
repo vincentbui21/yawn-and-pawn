@@ -4,7 +4,10 @@
 # A name without a dot is a platform permission: CAMERA means android.permission.CAMERA.
 # `#` starts a comment. The check also fails on SCHEDULE_EXACT_ALARM without
 # android:maxSdkVersion="32", on components protected by BIND_ACCESSIBILITY_SERVICE or
-# BIND_DEVICE_ADMIN, and on any android:lockTaskMode. Never add READ_PHONE_STATE or
+# BIND_DEVICE_ADMIN, on any android:lockTaskMode but "normal", on CATEGORY_HOME, on stopWithTask="true" for
+# WakeService, and on the hostage permissions whatever this list says (Story 2.11): SYSTEM_ALERT_WINDOW,
+# READ_PHONE_STATE, REORDER_TASKS, DISABLE_KEYGUARD, PACKAGE_USAGE_STATS, KILL_BACKGROUND_PROCESSES and
+# MANAGE_DEVICE_POLICY_*. Never add READ_PHONE_STATE or
 # SYSTEM_ALERT_WINDOW (no device hostage).
 
 # The app's own permissions (Story 1.2 list; later stories declare them as they need them)

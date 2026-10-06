@@ -119,6 +119,7 @@
 - source_spec: `_bmad-output/implementation-artifacts/spec-1-11-the-complete-wake-session-state-machine-in-core.md`
   summary: Call adapter contract: re-send CallStarted after ProcessRestored and whenever a new ring starts while a call is still active.
   evidence: The reducer clears the pause on restore and every new ring (after a snooze, a grant during a call, a merge) starts unpaused; Snoozed + CallStarted changes nothing (AD-2). Without the re-send the next ring plays over an ongoing call. Story 2.7 (pause for phone calls) must implement and test it.
+  status: resolved in Story 2.7. `CallDetector` reconciles the session with the audio mode on every state change, so a restore or a new ring during a call is paused again. A ring that starts mid-call opens silent until then. Tested in `CallDetectorTest` (restore during and after a call, ring during a call) and `WakeRuntimeTest`.
 - source_spec: `_bmad-output/implementation-artifacts/spec-1-11-the-complete-wake-session-state-machine-in-core.md`
   summary: AD-2 has a UserUnlocked row only for Ringing; unlocking during Grace, Loud or Snoozed leaves beforeFirstUnlock set for the whole session.
   evidence: Normative table (ARCHITECTURE-SPINE.md AD-2) row "Ringing (before first unlock) | UserUnlocked". The user usually unlocks while doing the check (Grace or Loud). Settle with Story 2.3 (ring before first unlock) via correct-course: add rows for Grace, Loud and Snoozed.
@@ -173,7 +174,10 @@
 - source_spec: `docs/spikes/S1.md`
   summary: The volume keys can turn the alarm stream down while the Play purchase sheet is on top; the wake runtime cannot intercept them then.
   evidence: Spike S1 runs U1 and L1: alarm stream went 16/16 → 1/16 from key presses with the sheet open, sound still playing.
-  status: assigned to Story 2.8 (volume keys) to decide: re-assert the alarm-stream volume while a purchase is in flight, or accept it; Epic 4 orchestration must keep the sound running under the sheet.
+  status: assigned to Story 2.8 (volume keys) to decide: re-assert the alarm-stream volume while a purchase is in flight, or accept it; Epic 4 orchestration must keep the sound running under the sheet. Decided in Story 2.8:
+    - The gap while the Play sheet is on top is accepted. Play's activity owns the keys then, and FR-SES-6 forbids re-applying the volume continuously.
+    - The volume is re-asserted once when the purchase flow hands the screen back. `WakeRuntime.reassertRingVolume()` sets the alarm stream to the ring's volume while the session rings loud (Ringing or Loud, not paused, no emergency ring) and does nothing otherwise. It is tested in `WakeRuntimeTest`; nothing calls it in Epic 2.
+    - Story 4.11 (purchase orchestration) must call it on every payment outcome that returns to ringing, including cancelled, error, offline, unlock cancelled and pending.
 - source_spec: `docs/spikes/S1.md`
   summary: Billing results can arrive very late: offline, the Play sheet shows an error and only reports a result when the user closes it (no timeout); declines arrive as BILLING_UNAVAILABLE; consume can fail transiently with SERVICE_UNAVAILABLE.
   evidence: Spike S1 runs N1u (USER_CANCELED after 200 s), N2u (NETWORK_ERROR), C1u (BILLING_UNAVAILABLE), L5 (consume SERVICE_UNAVAILABLE, retry OK).
@@ -219,3 +223,13 @@
   evidence: |
     - Rebase: Story 2.12 on main made `AppDatabase.SCHEMA_VERSION` the single source for `@Database(version = …)`. This stacked branch still has the literal and sets it to 4. On rebase, set `SCHEMA_VERSION = 4` and keep `MIGRATION_3_4`, `4.json` and the migration tests. `session_merge` lives inside `app.db`, which is backed up as a whole, so the backup rules need no change; `PpsBackupAgentTest` follows the constant.
     - Owner decision needed (low): the Story 2.9 AC says a real alarm during a test session is "merged like any other … outcome stays Test". Story 1.18's reviewed fix (2026-10-02) instead ends the test (recorded Test) and gives the real alarm its own session. Story 2.9 keeps the 1.18 rule, so a real morning is never recorded as a test; it only merges, with a `session_merge` row, when the test cannot be ended. If the owner prefers the AC wording, change it through correct-course.
+- source_spec: `_bmad-output/implementation-artifacts/spec-2-8-alarm-volume-and-volume-keys-on-the-wake-screen.md`
+  summary: With the screen turned off by the power button while the alarm rings, the wake screen is paused, so the volume keys lower the alarm stream directly. The gap is accepted: FR-SES-6 forbids re-applying the volume continuously, so only the next ring start or the grace end sets it again.
+  evidence: Story 2.8 review (2026-10-06): `VolumeKeyGate` swallows keys only while `WakeActivity` is resumed with window focus; the activity is paused with the screen off.
+  status: assigned to Story 2.13 (device check on the Oppo A96): confirm what the volume keys do with the screen off during a ring, and that the accessibility shortcut and headphone routing behave.
+- source_spec: `_bmad-output/implementation-artifacts/spec-2-11-no-hostage-guard-the-phone-stays-usable.md`
+  summary: Story 2.11 device check of the no-hostage guard, and the wake-screen opener seen from background code.
+  evidence: |
+    - The GMD test `PhoneStaysUsableTest` was removed in review: the CI managed device is an ATD API 34 image (likely without the Settings and Dialer apps), and main no longer has the UiAutomator dependency (removed with Story 2.5's notification-shade test). The host evidence is `NoHostageBackgroundTest` (5 heartbeat minutes in the background: no activity start, the alarm playing) and `WakeStatusTest`.
+    - The Koin-injected `WakeScreenOpener` (`AndroidWakeScreenOpener` in `android.screen`) could be called from background code, and `NoHostageApis` would not see it, since its start sits in `android.screen`. Low risk: its only caller is the "Back to alarm" tap.
+  status: assigned to Story 2.13 (phone checklist): while the alarm rings, press Home, then open Settings, then the dialer (no call), each for 10 s; the wake screen never comes back on its own and the alarm keeps playing throughout. The `WakeScreenOpener` point is noted for Story 2.13 or a later detekt rule (low).

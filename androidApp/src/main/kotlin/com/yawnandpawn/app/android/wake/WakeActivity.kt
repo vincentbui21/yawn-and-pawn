@@ -4,6 +4,7 @@ import android.content.Context
 import android.content.Intent
 import android.os.Build
 import android.os.Bundle
+import android.view.KeyEvent
 import android.view.WindowManager
 import androidx.activity.ComponentActivity
 import androidx.activity.OnBackPressedCallback
@@ -14,12 +15,14 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.input.pointer.pointerInput
 import com.yawnandpawn.app.android.ApplicationScope
+import com.yawnandpawn.app.android.screen.forwardsToWakeScreen
 import com.yawnandpawn.app.core.error.Outcome
 import com.yawnandpawn.app.core.log.WakeStage
 import com.yawnandpawn.app.core.session.CheckAnswer
@@ -27,6 +30,7 @@ import com.yawnandpawn.app.core.session.SessionEngine
 import com.yawnandpawn.app.core.session.SessionEvent
 import com.yawnandpawn.app.core.session.SessionState
 import com.yawnandpawn.app.core.session.SnoozeAvailabilityPolicy
+import com.yawnandpawn.app.core.session.UserLockState
 import com.yawnandpawn.app.core.time.TimeZoneProvider
 import com.yawnandpawn.app.ui.format.is24HourClock
 import com.yawnandpawn.app.ui.wake.PlaceholderStep
@@ -48,11 +52,15 @@ import kotlin.time.Duration.Companion.seconds
  *
  * It opens only from the ringing notification (its full-screen intent or a tap on it), never from the background. It
  * shows over the lock screen and turns the screen on (`setShowWhenLocked` / `setTurnScreenOn` on API 27+, window flags
- * on API 26), keeps the screen on, and Back does nothing (Home and Recents still work).
+ * on API 26), keeps the screen on, and Back does nothing (Home and Recents still work). While it is in front with focus
+ * and the alarm rings, the volume keys do nothing either ([VolumeKeyGate], Story 2.8), except the accessibility
+ * shortcut.
  *
  * It renders from in-memory state only, with no loading state and no repository call: the engine's `state` mapped by
  * [ringingUiState], with the snooze the [SnoozeAvailabilityPolicy] allows ("Prices not loaded yet",
- * or "Test · no charge" for a test session). The emergency ring shows its own alarm time. Opened just before the
+ * or "Test · no charge" for a test session, or "Unlock your phone to snooze" before the first unlock). The availability
+ * follows the live [UserLockState] too (Story 2.4), so an unlock re-renders the snooze control in place, without
+ * finishing or recreating the screen. The emergency ring shows its own alarm time. Opened just before the
  * session starts (the service posts the ringing notification first), it shows the notification's alarm time and waits.
  *
  * Every dispatch is launched on [ApplicationScope], outside composition and outside any engine effect:
@@ -72,9 +80,50 @@ class WakeActivity : ComponentActivity() {
     private val timeZones: TimeZoneProvider by inject()
     private val snoozePolicy: SnoozeAvailabilityPolicy by inject()
     private val timings: WakeTimings by inject()
+    private val userLock: UserLockState by inject()
+    private val unlockSignals: UnlockSignals by inject()
 
     /** "I'm up" was tapped before the session existed; replayed once it rings. */
     private var pendingImUp by mutableStateOf(false)
+
+    /**
+     * The volume keys do nothing while this screen is in front with focus and something rings (Story 2.8); the
+     * accessibility shortcut passes.
+     */
+    internal val volumeKeys = VolumeKeyGate(ringing = { forwardsToWakeScreen(engine.state.value, runtime.emergency.value) })
+
+    /**
+     * Resumed with the user unlocked is an unlock signal (Story 2.4), for example back from the PIN prompt of
+     * `requestDismissKeyguard`, or after an unlock while another screen was in front. The screen itself stays.
+     */
+    override fun onResume() {
+        super.onResume()
+        volumeKeys.resumed = true
+        if (userLock.isUserUnlocked()) unlockSignals.onScreenResumedUnlocked()
+    }
+
+    override fun onPause() {
+        volumeKeys.resumed = false
+        super.onPause()
+    }
+
+    // Resumed is not enough: with the notification shade down or in split screen the keys belong to the focused window.
+    override fun onWindowFocusChanged(hasFocus: Boolean) {
+        super.onWindowFocusChanged(hasFocus)
+        volumeKeys.focused = hasFocus
+    }
+
+    // The window's own volume handling runs only when the activity does not consume the key, so returning true here
+    // keeps the alarm stream where it is.
+    override fun onKeyDown(
+        keyCode: Int,
+        event: KeyEvent,
+    ): Boolean = volumeKeys.consumes(KeyEvent.ACTION_DOWN, keyCode, event.deviceId) || super.onKeyDown(keyCode, event)
+
+    override fun onKeyUp(
+        keyCode: Int,
+        event: KeyEvent,
+    ): Boolean = volumeKeys.consumes(KeyEvent.ACTION_UP, keyCode, event.deviceId) || super.onKeyUp(keyCode, event)
 
     override fun onCreate(savedInstanceState: Bundle?) {
         timings.stage(WakeStage.WakeScreenCreated)
@@ -94,6 +143,10 @@ class WakeActivity : ComponentActivity() {
         setContent {
             val state by engine.state.collectAsState()
             val emergency by runtime.emergency.collectAsState()
+            // Story 2.4: the lock state is part of the snooze availability, so an unlock re-renders the control in place.
+            // The availability below is never remembered (the policy reads live inputs: the lock state now, the
+            // catalogue and connectivity in Epic 4); keyed on this observed state, an unlock recomposes it.
+            val unlocked by remember { userLock.observe() }.collectAsState(initial = userLock.isUserUnlocked())
             // The full-screen intent can open the screen just before the session starts (the service posts the ringing
             // notification first): it waits for a session or an emergency ring, and closes only once that is over.
             val active = state.isRinging() || emergency != null
@@ -110,7 +163,7 @@ class WakeActivity : ComponentActivity() {
             val session = (state as? SessionState.Active)?.session
             val current =
                 emergency?.let { alarmOnlyRingingUiState(it.alarmAt, zone) }
-                    ?: session?.let { ringingUiState(it, snoozePolicy.availability(it), zone) }
+                    ?: session?.let { ringingUiState(it, key(unlocked) { snoozePolicy.availability(it) }, zone) }
                     ?: runtime.shownAlarmAt()?.let { alarmOnlyRingingUiState(it, zone) }
             // Once a session ends the screen keeps its last look until it closes, instead of flashing an empty surface.
             val last = remember { LastShown() }
@@ -174,17 +227,6 @@ class WakeActivity : ComponentActivity() {
         appScope.launch { events.forEach { engine.dispatch(it) } }
     }
 
-    private fun showOverLockScreen() {
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O_MR1) {
-            setShowWhenLocked(true)
-            setTurnScreenOn(true)
-        } else {
-            @Suppress("DEPRECATION")
-            window.addFlags(WindowManager.LayoutParams.FLAG_SHOW_WHEN_LOCKED or WindowManager.LayoutParams.FLAG_TURN_SCREEN_ON)
-        }
-        window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
-    }
-
     companion object {
         /** How often a placeholder answer whose dispatch failed is sent again. */
         val PLACEHOLDER_RETRY: Duration = 2.seconds
@@ -196,6 +238,18 @@ class WakeActivity : ComponentActivity() {
         /** A session the wake screen is for: ringing, quiet, loud or snoozed. */
         private fun SessionState.isRinging(): Boolean = this is SessionState.Ring || this is SessionState.Snoozed
     }
+}
+
+/** Shows the wake screen over the lock screen, turns the screen on and keeps it on. */
+private fun ComponentActivity.showOverLockScreen() {
+    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O_MR1) {
+        setShowWhenLocked(true)
+        setTurnScreenOn(true)
+    } else {
+        @Suppress("DEPRECATION")
+        window.addFlags(WindowManager.LayoutParams.FLAG_SHOW_WHEN_LOCKED or WindowManager.LayoutParams.FLAG_TURN_SCREEN_ON)
+    }
+    window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
 }
 
 /** The last Ringing state the screen showed; not snapshot state, so keeping it never recomposes. */

@@ -179,7 +179,7 @@ class AllowlistsPluginTest {
 
         assertTrue(
             result.output.contains(
-                "  - debug: uses-permission 'android.permission.READ_PHONE_STATE' is not in config/permission-allowlist.txt",
+                "  - debug: uses-permission 'android.permission.READ_PHONE_STATE' is never allowed (device hostage, NFR-13)",
             ),
         )
     }

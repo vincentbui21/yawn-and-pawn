@@ -19,6 +19,8 @@ class SessionJsonTest {
             paying = INTENT,
             noGraceThisRing = true,
             beforeFirstUnlock = true,
+            // Version 1 has no Direct Boot ring flag (Story 2.4): it takes beforeFirstUnlock.
+            directBootRing = true,
             paymentPending = true,
             declinedReuseProduct = PRODUCT,
             // Version 1 deadlines have no creation time (Story 2.2 added it): it decodes as 0.

@@ -58,6 +58,14 @@ yawn-and-pawn:
       - '**/data/src/**'
       - '**/androidApp/src/**'
     excludes: *testSources
+  # No device hostage (Story 2.11, NFR-13): no lock task, overlay, launcher, keyguard, telephony, media session, volume
+  # provider, audio rerouting, background activity start or Home/Recents/Power key override (includes Story 2.8's
+  # volume-key and routing bans). App UI modules only.
+  NoHostageApis:
+    active: true
+    includes:
+      - '**/androidApp/src/**'
+      - '**/composeApp/src/**'
 
 # Test source sets detekt's defaults do not know (androidHostTest, testDebug) are tests too.
 complexity:

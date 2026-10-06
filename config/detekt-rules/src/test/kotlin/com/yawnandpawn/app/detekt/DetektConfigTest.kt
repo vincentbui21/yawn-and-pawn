@@ -38,4 +38,13 @@ class DetektConfigTest {
         val expected = listOf("core", "data", "composeApp", "androidApp", "testing").map { "**/$it/src/**" }
         assertTrue(includes.containsAll(expected), "NoDirectTimeAccess.includes = $includes")
     }
+
+    @Test
+    fun `NoHostageApis is scoped to androidApp and composeApp`() {
+        val rule = (config["yawn-and-pawn"] as Map<*, *>)["NoHostageApis"] as Map<*, *>
+        val includes = (rule["includes"] as List<*>).toSet()
+
+        val expected = listOf("composeApp", "androidApp").map { "**/$it/src/**" }
+        assertTrue(includes.containsAll(expected), "NoHostageApis.includes = $includes")
+    }
 }

@@ -15,9 +15,12 @@ import com.yawnandpawn.app.core.error.DomainError
 import com.yawnandpawn.app.core.error.Outcome
 import com.yawnandpawn.app.core.id.IdGenerator
 import com.yawnandpawn.app.core.log.Logger
+import com.yawnandpawn.app.core.session.SessionLockGuard
+import com.yawnandpawn.app.core.session.SessionState
 import com.yawnandpawn.app.core.time.Clock
 import com.yawnandpawn.app.core.time.Deadline
 import com.yawnandpawn.app.core.time.TimeZoneProvider
+import kotlinx.coroutines.flow.MutableStateFlow
 import kotlin.time.Instant
 
 /** One call on [FakeAlarmScheduler], in the order it was made. */
@@ -158,10 +161,13 @@ class AlarmUseCasesFixture(
     val scheduler: AlarmScheduler = FakeAlarmScheduler(),
     val logger: Logger = FakeLogger(),
     val lock: AlarmWriteLock = AlarmWriteLock(),
+    /** The session state the use cases' [SessionLockGuard] reads (Story 2.6); Idle unless a test starts a session. */
+    val sessionState: MutableStateFlow<SessionState> = MutableStateFlow(SessionState.Idle),
 ) {
     val scheduling = AlarmScheduling(repository, scheduler, clock, timeZoneProvider, lock, logger)
-    val save = SaveAlarm(repository, ids, clock, lock, requestCodes, scheduling)
-    val setEnabled = SetAlarmEnabled(repository, clock, lock, scheduling)
-    val delete = DeleteAlarm(repository, lock, scheduling)
-    val duplicate = DuplicateAlarm(repository, ids, clock, lock, requestCodes, scheduling)
+    val sessionLock = SessionLockGuard(sessionState, restored = MutableStateFlow(true), emergency = MutableStateFlow(false))
+    val save = SaveAlarm(repository, ids, clock, lock, requestCodes, scheduling, sessionLock)
+    val setEnabled = SetAlarmEnabled(repository, clock, lock, scheduling, sessionLock)
+    val delete = DeleteAlarm(repository, lock, scheduling, sessionLock)
+    val duplicate = DuplicateAlarm(repository, ids, clock, lock, requestCodes, scheduling, sessionLock)
 }

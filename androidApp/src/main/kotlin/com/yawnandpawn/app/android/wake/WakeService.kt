@@ -9,9 +9,11 @@ import android.os.IBinder
 import com.yawnandpawn.app.android.AlarmFiredReceiver
 import com.yawnandpawn.app.android.ApplicationScope
 import com.yawnandpawn.app.android.alarmFiredOrNull
+import com.yawnandpawn.app.android.call.CallDetector
 import com.yawnandpawn.app.android.putAlarmFired
 import com.yawnandpawn.app.android.putRetrySince
 import com.yawnandpawn.app.android.retrySinceOrNull
+import com.yawnandpawn.app.android.screen.forwardsToWakeScreen
 import com.yawnandpawn.app.core.alarm.Alarm
 import com.yawnandpawn.app.core.alarm.AlarmFired
 import com.yawnandpawn.app.core.alarm.AlarmRepository
@@ -34,6 +36,7 @@ import com.yawnandpawn.app.core.session.SeedSource
 import com.yawnandpawn.app.core.session.SessionData
 import com.yawnandpawn.app.core.session.SessionEngine
 import com.yawnandpawn.app.core.session.SessionEvent
+import com.yawnandpawn.app.core.session.SessionLockGuard
 import com.yawnandpawn.app.core.session.SessionReducer
 import com.yawnandpawn.app.core.session.SessionSlotRearm
 import com.yawnandpawn.app.core.session.SessionState
@@ -44,6 +47,7 @@ import com.yawnandpawn.app.core.time.BootCounter
 import com.yawnandpawn.app.core.time.Clock
 import com.yawnandpawn.app.core.time.MonotonicClock
 import com.yawnandpawn.app.core.time.TimeSnapshot
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineExceptionHandler
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -77,6 +81,8 @@ import kotlin.time.Instant
  * - **Slot (Story 2.1):** the kill-recovery path; see [onSlot]. **Restore:** it loads the stored session
  *   (`SessionEngine.restore`).
  * - **Test:** it takes the pending test config and dispatches `TestAlarmFired` (Story 1.18).
+ * - A dispatch that may start a session (`AlarmFired`, `TestAlarmFired`) runs in [SessionLockGuard.startingSession], so
+ *   it never lands in the middle of a guarded alarm write (Story 2.6).
  * - **Repost** (the ringing notification's delete intent, Story 2.5): entering the foreground posts the notification
  *   again, without its full-screen intent unless the alarm rings (a snooze never opens the wake screen). An Idle engine
  *   (a new process) loads the stored session first, as a restore does; otherwise nothing is dispatched.
@@ -117,11 +123,20 @@ class WakeService :
     private val timings: WakeTimings by inject()
     private val rearm: SessionSlotRearm by inject()
     private val userLock: UserLockState by inject()
+    private val sessionLock: SessionLockGuard by inject()
+    private val unlockSignals: UnlockSignals by inject()
+    private val calls: CallDetector by inject()
 
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate + CoroutineExceptionHandler { _, e -> onCrash(e) })
     private val commands = Mutex()
     private var watching: Job? = null
     private var ticking: Job? = null
+
+    /** The unlock watch of a session before the first unlock (Story 2.4); null or done otherwise. */
+    private var unlockWatch: Job? = null
+
+    /** The ring whose unlock watch saw the unlock; that ring is not watched again. */
+    private var unlockSeenFor: UnlockRing? = null
     private var stopping = false
 
     /** The latest start, so a stop never ends a start that arrived after it (`stopSelfResult`). */
@@ -140,6 +155,8 @@ class WakeService :
         super.onCreate()
         timings.stage(WakeStage.ServiceCreated)
         runtime.onServiceStarted()
+        // Story 2.7: a call pauses the ring while the service runs.
+        calls.start()
     }
 
     override fun onStartCommand(
@@ -213,6 +230,7 @@ class WakeService :
 
     override fun onDestroy() {
         scope.cancel()
+        calls.stop()
         runtime.onServiceStopped()
         super.onDestroy()
     }
@@ -287,7 +305,8 @@ class WakeService :
             val merged = engine.dispatch(SessionEvent.OverlapAlarmFired(fired.alarmId, fired.scheduledAt))
             if (merged is Outcome.Failure) ringIfSilent("merge not saved: ${merged.error.diagnostic()}", fired)
         } else {
-            startSession(fired)
+            // After any guarded alarm write in flight, so a session never starts in the middle of one (Story 2.6).
+            sessionLock.startingSession { startSession(fired) }
         }
     }
 
@@ -408,7 +427,7 @@ class WakeService :
                 seeds = seedsFor(pending.checkPlan, locked),
                 beforeFirstUnlock = locked,
             )
-        val started = engine.dispatch(event)
+        val started = sessionLock.startingSession { engine.dispatch(event) }
         if (started is Outcome.Failure) {
             logger.log(LogEvent.OperationFailed.of("start test session", started.error))
             // Not lost: the config goes back, so a later test fire (or "Test alarm" again) still has it.
@@ -516,7 +535,55 @@ class WakeService :
             state.isOngoing() -> startTicking()
             emergency == null -> shutdown()
         }
+        watchUnlock(state)
     }
+
+    /**
+     * While a session before the first unlock runs (Story 2.4), listen for the unlock: [UserLockState.observe] registers a
+     * context receiver for `ACTION_USER_UNLOCKED` while collected (a manifest receiver never gets it) and unregisters it
+     * when this watch is cancelled, at the session's end or when the service stops. The unlock goes to [UnlockSignals].
+     *
+     * A watch that saw the unlock is done for its ring: Snoozed, Grace and Loud ignore `UserUnlocked` (AD-2), so it is
+     * not armed again while that ring lasts. A ring still before the first unlock after it (a new session, or a ring that
+     * somehow kept the flag) gets a fresh watch, and so does a ring whose watch was cancelled or failed. A failure of
+     * the watch is logged and never reaches [onCrash].
+     */
+    @Suppress("TooGenericExceptionCaught")
+    private fun watchUnlock(state: SessionState) {
+        val session = (state as? SessionState.Active)?.session
+        val ring = session?.takeIf { it.beforeFirstUnlock && state.isOngoing() }?.let { UnlockRing(it.sessionId, it.ringIndex) }
+        when {
+            ring == null -> {
+                unlockWatch?.cancel()
+                unlockWatch = null
+            }
+
+            unlockWatch?.isActive == true || unlockSeenFor == ring -> {
+                Unit
+            }
+
+            else -> {
+                unlockWatch =
+                    scope.launch {
+                        try {
+                            userLock.observe().first { it }
+                            unlockSeenFor = ring
+                            unlockSignals.onUnlocked()
+                        } catch (e: CancellationException) {
+                            throw e
+                        } catch (e: Exception) {
+                            logger.log(LogEvent.OperationFailed("watch the unlock", e::class.simpleName.orEmpty()))
+                        }
+                    }
+            }
+        }
+    }
+
+    /** The ring an unlock watch is for. */
+    private data class UnlockRing(
+        val sessionId: String,
+        val ringIndex: Int,
+    )
 
     private fun startTicking() {
         if (ticking?.isActive == true) return
@@ -557,6 +624,7 @@ class WakeService :
         if (stopping || commands.isLocked) return
         stopping = true
         ticking?.cancel()
+        unlockWatch?.cancel()
         runtime.endSession()
         stopForeground(STOP_FOREGROUND_REMOVE)
         stopSelfResult(lastStartId)

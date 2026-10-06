@@ -61,7 +61,7 @@ internal class SchedulingApp(
                 single { scope }
                 single<AlarmScheduler> { AndroidAlarmScheduler(androidContext(), get(), get(), get(), get()) }
                 single { AlarmScheduling(get(), get(), get(), get(), get(), get()) }
-                single { RearmOnFire(get(), get(), get(), get(), get(), get()) }
+                single { RearmOnFire(get(), get(), get(), get(), get()) }
                 // No service starts here (the tests read the start requests), so the receiver does not wait for one.
                 single<AlarmFiredHandler> {
                     WakeAlarmFiredHandler(

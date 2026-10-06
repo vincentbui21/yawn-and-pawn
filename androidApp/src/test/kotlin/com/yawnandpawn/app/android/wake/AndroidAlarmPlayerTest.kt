@@ -14,6 +14,7 @@ import com.yawnandpawn.app.android.sound.LibrarySoundResolver
 import com.yawnandpawn.app.awaitChildren
 import com.yawnandpawn.app.core.alarm.Alarm
 import com.yawnandpawn.app.core.log.LogEvent
+import com.yawnandpawn.app.core.log.WakeStage
 import com.yawnandpawn.app.testing.FakeLogger
 import com.yawnandpawn.app.testing.FakeMonotonicClock
 import kotlinx.coroutines.CoroutineScope
@@ -31,6 +32,7 @@ import org.robolectric.shadows.util.DataSource
 import java.io.IOException
 import kotlin.math.roundToInt
 import kotlin.test.assertEquals
+import kotlin.test.assertFalse
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
 import kotlin.time.Duration.Companion.seconds
@@ -156,7 +158,7 @@ class AndroidAlarmPlayerTest {
 
         player.mute()
         assertEquals(0f, player.gain)
-        player.unmute()
+        player.unmuteTo(80)
         assertEquals(1f, player.gain, "the grace window ends at the set volume")
         player.pause()
         assertTrue(!playback.playing && player.isPaused)
@@ -374,9 +376,9 @@ class AndroidAlarmPlayerTest {
         var ringingInHook: Boolean? = null
         lateinit var hooked: AndroidAlarmPlayer
         hooked =
-            AndroidAlarmPlayer(playbacks, resolver, volume, clock, CoroutineScope(dispatcher), logger) {
+            AndroidAlarmPlayer(playbacks, resolver, volume, clock, CoroutineScope(dispatcher), logger, onRingStart = {
                 ringingInHook = hooked.isRinging
-            }
+            })
 
         hooked.play(Alarm.DEFAULT_SOUND_REF, 80, gradual = false, rampStartPercent = 20)
 
@@ -486,5 +488,140 @@ class AndroidAlarmPlayerTest {
         assertTrue(player.isRinging)
         player.stop(restoreVolume = true)
         assertTrue(!player.isRinging)
+    }
+
+    @Test
+    fun `a ring holds alarm audio focus, never paused for ducking, and a focus change never touches it (Story 2-7)`() {
+        val changes = mutableListOf<Int>()
+        val focused =
+            AndroidAlarmPlayer(
+                playbacks,
+                resolver,
+                volume,
+                clock,
+                CoroutineScope(dispatcher),
+                logger,
+                focus = AlarmAudioFocus(audio) { changes += it },
+            )
+
+        focused.play(Alarm.DEFAULT_SOUND_REF, 80, gradual = false, rampStartPercent = 20)
+
+        val focusRequest = checkNotNull(shadowOf(audio).lastAudioFocusRequest)
+        val request = focusRequest.audioFocusRequest
+        assertEquals(AudioManager.AUDIOFOCUS_GAIN, request.focusGain)
+        assertEquals(AudioAttributes.USAGE_ALARM, request.audioAttributes.usage)
+        assertFalse(request.willPauseWhenDucked())
+        // Another app takes focus (music, video, navigation): the alarm plays on at full gain.
+        focusRequest.listener.onAudioFocusChange(AudioManager.AUDIOFOCUS_LOSS_TRANSIENT_CAN_DUCK)
+        focusRequest.listener.onAudioFocusChange(AudioManager.AUDIOFOCUS_LOSS)
+        val playback = checkNotNull(playbacks.current)
+        assertTrue(playback.playing)
+        assertEquals(1f, focused.gain)
+        assertFalse(focused.isPaused || focused.isMuted)
+        assertEquals(listOf(AudioManager.AUDIOFOCUS_LOSS_TRANSIENT_CAN_DUCK, AudioManager.AUDIOFOCUS_LOSS), changes)
+        focused.stop(restoreVolume = true)
+        assertEquals(request, shadowOf(audio).lastAbandonedAudioFocusRequest, "focus is given back at the end")
+    }
+
+    @Test
+    fun `a ring opened paused never starts its sound until it is resumed (Story 2-7)`() {
+        player.play(Alarm.DEFAULT_SOUND_REF, 80, gradual = false, rampStartPercent = 20, paused = true)
+        val playback = checkNotNull(playbacks.current)
+
+        assertEquals(0, playback.started)
+        player.play(Alarm.DEFAULT_SOUND_REF, 80, gradual = false, rampStartPercent = 20, paused = true)
+        assertEquals(0, playback.started, "the same request keeps it silent")
+        player.resume()
+        assertTrue(playback.playing)
+    }
+
+    private fun focusedPlayer(
+        focus: AlarmAudioFocus,
+        timings: WakeTimings = WakeTimings.None,
+    ) = AndroidAlarmPlayer(playbacks, resolver, volume, clock, CoroutineScope(dispatcher), logger, timings = timings, focus = focus)
+
+    @Test
+    fun `a ring opened paused for a call asks for focus only when it resumes (Story 2-7 review)`() {
+        val focus = AlarmAudioFocus(audio)
+        val focused = focusedPlayer(focus)
+
+        focused.play(Alarm.DEFAULT_SOUND_REF, 80, gradual = false, rampStartPercent = 20, paused = true)
+
+        assertNull(shadowOf(audio).lastAudioFocusRequest, "a silent ring never takes focus from the call")
+        assertFalse(focus.held)
+        focused.resume()
+        assertTrue(focus.held)
+        assertTrue(checkNotNull(playbacks.current).playing)
+        focused.stop(restoreVolume = true)
+    }
+
+    @Test
+    fun `a refused focus request is not held and is asked again at the next resume (Story 2-7 review)`() {
+        val focus = AlarmAudioFocus(audio)
+        val focused = focusedPlayer(focus)
+        shadowOf(audio).setNextFocusRequestResponse(AudioManager.AUDIOFOCUS_REQUEST_FAILED)
+
+        focused.play(Alarm.DEFAULT_SOUND_REF, 80, gradual = false, rampStartPercent = 20)
+
+        assertFalse(focus.held, "refused during a call")
+        assertTrue(checkNotNull(playbacks.current).playing, "the alarm plays on the alarm stream whatever the result")
+        focused.stop(restoreVolume = false)
+        assertNull(shadowOf(audio).lastAbandonedAudioFocusRequest, "nothing to give back")
+        shadowOf(audio).setNextFocusRequestResponse(AudioManager.AUDIOFOCUS_REQUEST_GRANTED)
+        focused.play(Alarm.DEFAULT_SOUND_REF, 80, gradual = false, rampStartPercent = 20, paused = true)
+        focused.resume()
+        assertTrue(focus.held, "asked again at the resume")
+        focused.stop(restoreVolume = true)
+    }
+
+    @Test
+    fun `a ring that starts over keeps its focus, which is given back only at the stop (Story 2-7 review)`() {
+        val focus = AlarmAudioFocus(audio)
+        val focused = focusedPlayer(focus)
+        focused.play(Alarm.DEFAULT_SOUND_REF, 80, gradual = false, rampStartPercent = 20)
+
+        focused.play("test:rain", 60, gradual = true, rampStartPercent = 20)
+        focused.playDefault(70)
+
+        assertNull(shadowOf(audio).lastAbandonedAudioFocusRequest, "other apps never get focus between two rings")
+        assertTrue(focus.held)
+        focused.stop(restoreVolume = true)
+        assertFalse(focus.held)
+        assertEquals(checkNotNull(shadowOf(audio).lastAudioFocusRequest).audioFocusRequest, shadowOf(audio).lastAbandonedAudioFocusRequest)
+    }
+
+    @Test
+    fun `a call's end resumes a gradual ring at full gain, whether it opened paused or paused mid-ramp (Story 2-7 review)`() {
+        player.play(Alarm.DEFAULT_SOUND_REF, 80, gradual = true, rampStartPercent = 20, paused = true)
+        advance(10.seconds)
+        player.resume()
+        assertEquals(1f, player.gain, "no ramp after a call")
+        assertEquals(1f, checkNotNull(playbacks.current).gains.last())
+        player.stop(restoreVolume = false)
+
+        play(gradual = true)
+        advance(5.seconds)
+        assertTrue(player.gain < 1f, "ramping")
+        player.pause()
+        advance(5.seconds)
+        player.resume()
+        advance(1.seconds)
+        assertEquals(1f, player.gain, "the set volume, gain 1, with no ramp")
+    }
+
+    @Test
+    fun `a ring opened paused logs its sound start at the first resume, once (Story 2-7 review)`() {
+        val timings = WakeTimings(now = { kotlin.time.Instant.fromEpochSeconds(10) }, logger = logger)
+        timings.fired(kotlin.time.Instant.fromEpochSeconds(9))
+        val focused = focusedPlayer(AlarmAudioFocus(audio), timings)
+
+        focused.play(Alarm.DEFAULT_SOUND_REF, 80, gradual = false, rampStartPercent = 20, paused = true)
+        assertTrue(logger.events.none { it is LogEvent.WakeTiming }, "prepared but silent: not started")
+        focused.resume()
+        focused.pause()
+        focused.resume()
+
+        assertEquals(listOf(LogEvent.WakeTiming(WakeStage.SoundStarted, 1_000)), logger.events.filterIsInstance<LogEvent.WakeTiming>())
+        focused.stop(restoreVolume = true)
     }
 }

@@ -434,7 +434,8 @@ class WakeServiceTest {
         assertIs<SessionState.Grace>(app.engine.state.value)
 
         shadowOf(Looper.getMainLooper()).idleFor(java.time.Duration.ofSeconds(21))
-        app.awaitUntil("the grace window ends") { app.engine.state.value is SessionState.Loud }
+        // The state is published before its effects run: wait for the unmute too.
+        app.awaitUntil("the grace window ends") { app.engine.state.value is SessionState.Loud && !app.player.isMuted }
 
         assertFalse(app.player.isMuted)
     }

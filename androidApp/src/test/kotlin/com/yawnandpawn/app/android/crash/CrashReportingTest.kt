@@ -1,5 +1,6 @@
 package com.yawnandpawn.app.android.crash
 
+import android.app.Application
 import android.content.Context
 import android.content.Intent
 import android.content.pm.ApplicationInfo
@@ -97,6 +98,29 @@ class CrashReportingTest {
 
         assertEquals(0, started)
         assertFalse(startup.started)
+    }
+
+    @Test
+    fun `start is idempotent - a missing configuration is logged once and a locked start waits with one receiver (Story 2_4)`() {
+        val unconfigured = FirebaseStartup(context, logger, configured = { false }, unlocked = { true }, initialize = {})
+        unconfigured.start()
+        unconfigured.start()
+        assertEquals(1, logger.events.size, "${logger.events}")
+
+        var started = 0
+        val locked = FirebaseStartup(context, logger, configured = { true }, unlocked = { false }, initialize = { started++ })
+        val unlockReceivers = {
+            shadowOf(context as Application).registeredReceivers.count { it.intentFilter.hasAction(Intent.ACTION_USER_UNLOCKED) }
+        }
+        val before = unlockReceivers()
+        locked.start()
+        locked.start()
+        assertEquals(before + 1, unlockReceivers())
+
+        context.sendBroadcast(Intent(Intent.ACTION_USER_UNLOCKED))
+        shadowOf(Looper.getMainLooper()).idle()
+        locked.start()
+        assertEquals(1, started)
     }
 
     @Test

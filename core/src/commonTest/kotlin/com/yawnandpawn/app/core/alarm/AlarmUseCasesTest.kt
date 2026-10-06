@@ -3,7 +3,11 @@ package com.yawnandpawn.app.core.alarm
 import com.yawnandpawn.app.core.error.DomainError
 import com.yawnandpawn.app.core.error.Outcome
 import com.yawnandpawn.app.core.error.valueOrNull
+import com.yawnandpawn.app.core.session.SessionLockGuard
+import com.yawnandpawn.app.core.session.SessionState
+import com.yawnandpawn.app.core.session.ringSession
 import kotlinx.coroutines.async
+import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.test.runTest
 import kotlinx.datetime.DayOfWeek
@@ -28,10 +32,14 @@ class AlarmUseCasesTest {
     private val sequence = InMemorySequence()
     private val scheduler = RecordingScheduler()
     private val scheduling = AlarmScheduling(repository, scheduler, clock, TestZone(TimeZone.UTC), lock, RecordingLogger())
-    private val save = SaveAlarm(repository, ids, clock, lock, sequence, scheduling)
-    private val setEnabled = SetAlarmEnabled(repository, clock, lock, scheduling)
-    private val delete = DeleteAlarm(repository, lock, scheduling)
-    private val duplicate = DuplicateAlarm(repository, ids, clock, lock, sequence, scheduling)
+    private val sessionState = MutableStateFlow<SessionState>(SessionState.Idle)
+    private val restored = MutableStateFlow(true)
+    private val emergency = MutableStateFlow(false)
+    private val sessionLock = SessionLockGuard(sessionState, restored, emergency)
+    private val save = SaveAlarm(repository, ids, clock, lock, sequence, scheduling, sessionLock)
+    private val setEnabled = SetAlarmEnabled(repository, clock, lock, scheduling, sessionLock)
+    private val delete = DeleteAlarm(repository, lock, scheduling, sessionLock)
+    private val duplicate = DuplicateAlarm(repository, ids, clock, lock, sequence, scheduling, sessionLock)
 
     private val draft = AlarmDraft(time = LocalTime(7, 0), repeatDays = setOf(DayOfWeek.MONDAY), label = "Gym")
 
@@ -388,5 +396,62 @@ class AlarmUseCasesTest {
             val alarm = saved()
 
             assertEquals(alarm, repository.get(alarm.id).valueOrNull())
+        }
+
+    @Test
+    fun `while a session is in progress or not restored every alarm use case returns SessionActive and writes nothing (Story 2-6)`() =
+        runTest {
+            val alarm = saved()
+            val before = stored()
+            val codeBefore = sequence.lastUsed
+            scheduler.calls.clear()
+            val active = ringSession()
+            val locks: List<Pair<String, () -> Unit>> =
+                listOf(
+                    SessionState.Ringing(active),
+                    SessionState.Grace(active),
+                    SessionState.Loud(active),
+                    SessionState.Snoozed(active),
+                ).map { state -> "$state" to { sessionState.value = state } } +
+                    listOf(
+                        "not restored" to {
+                            sessionState.value = SessionState.Idle
+                            restored.value = false
+                        },
+                        "emergency ring" to {
+                            restored.value = true
+                            emergency.value = true
+                        },
+                    )
+
+            locks.forEach { (name, lock) ->
+                lock()
+                val locked = Outcome.Failure(DomainError.SessionActive)
+                assertEquals(locked, save(draft), "save in $name")
+                assertEquals(locked, save(AlarmDraft(id = alarm.id, time = LocalTime(8, 0))), "edit in $name")
+                assertEquals(locked, setEnabled(alarm.id, enabled = false), "switch in $name")
+                assertEquals(locked, delete(alarm.id), "delete in $name")
+                assertEquals(locked, duplicate(alarm.id), "duplicate in $name")
+            }
+            emergency.value = false
+
+            assertEquals(before, stored(), "nothing stored")
+            assertEquals(codeBefore, sequence.lastUsed, "no request code allocated")
+            assertEquals(emptyList(), scheduler.calls, "nothing armed or cancelled")
+            // Back to Idle: the same calls work again.
+            sessionState.value = SessionState.Idle
+            assertIs<Outcome.Success<Alarm>>(setEnabled(alarm.id, enabled = false))
+        }
+
+    @Test
+    fun `a Completed or Missed session waiting for its history row does not lock the alarms (Story 2-6)`() =
+        runTest {
+            val alarm = saved()
+            val ended = ringSession()
+
+            sessionState.value = SessionState.Completed(ended)
+            assertIs<Outcome.Success<Alarm>>(setEnabled(alarm.id, enabled = false))
+            sessionState.value = SessionState.Missed(ended)
+            assertIs<Outcome.Success<Unit>>(delete(alarm.id))
         }
 }

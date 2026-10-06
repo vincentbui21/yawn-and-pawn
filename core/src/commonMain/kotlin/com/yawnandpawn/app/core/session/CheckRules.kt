@@ -42,13 +42,13 @@ internal class CheckRules(
 
     /**
      * Grace / Loud + FallbackRequested, when the policy allows it and it was not used: the fallback plan replaces the
-     * check, with the Direct Boot substitutions before the first unlock (Story 2.3).
+     * check, with the Direct Boot substitutions when the ring uses them (`directBootRing`, Stories 2.3 and 2.4).
      */
     fun onFallbackRequested(state: Ring): Transition? {
         val session = state.session
         val decision = fallbackPolicy.fallback(session)
         return if (state !is Ringing && !session.checkRun.fallbackUsed && decision is FallbackDecision.Allowed) {
-            val plan = if (session.beforeFirstUnlock) directBootPlan(decision.plan) else decision.plan
+            val plan = if (session.directBootRing) directBootPlan(decision.plan) else decision.plan
             val run = session.checkRun.copy(plan = plan, step = 0, fallbackUsed = true)
             Transition(state.with(session.copy(checkRun = run)), emptyList())
         } else {

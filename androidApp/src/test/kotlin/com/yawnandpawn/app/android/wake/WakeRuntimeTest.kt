@@ -11,6 +11,7 @@ import android.os.VibratorManager
 import androidx.test.core.app.ApplicationProvider
 import com.yawnandpawn.app.StopAppRule
 import com.yawnandpawn.app.android.ApplicationScope
+import com.yawnandpawn.app.android.call.CallState
 import com.yawnandpawn.app.android.sound.LibrarySoundResolver
 import com.yawnandpawn.app.awaitChildren
 import com.yawnandpawn.app.core.alarm.AlarmFired
@@ -84,6 +85,8 @@ class WakeRuntimeTest {
         }
     private var now = TimeSnapshot(wallMillis = 1_000_000, elapsedMillis = 5_000, bootCount = 1)
     private var state: SessionState = SessionState.Idle
+    private var inCall = false
+    private var rings = 0
     private val runtime =
         WakeRuntime(
             WakeOutputs(player, vibrator, notifier, volume, scheduler, crashReporter),
@@ -92,6 +95,11 @@ class WakeRuntimeTest {
             logger,
             { now },
             { state },
+            calls =
+                object : CallState {
+                    override fun inCall(): Boolean = inCall
+                },
+            onRing = { rings++ },
         )
 
     private val session: SessionData = aSession()
@@ -177,6 +185,200 @@ class WakeRuntimeTest {
         assertFalse(player.isMuted)
         assertEquals(1f, player.gain)
         assertTrue(vibrator.isVibrating)
+    }
+
+    @Test
+    fun `with vibrate in grace on the grace window keeps vibrating, and Loud vibrates again either way (Story 2-8)`() {
+        val inGrace = session.copy(config = session.config.copy(vibrateInGrace = true))
+        enter(SessionState.Ringing(inGrace))
+        run(SessionEffect.Mute)
+
+        enter(SessionState.Grace(inGrace))
+
+        assertTrue(player.isMuted)
+        assertTrue(vibrator.isVibrating, "vibrate in grace is on")
+        run(SessionEffect.UnmuteToVolume(80))
+        enter(SessionState.Loud(inGrace))
+        assertTrue(vibrator.isVibrating)
+    }
+
+    @Test
+    fun `the alarm stream is set at the ring start and the grace end, never in between, and the user volume comes back (Story 2-8)`() {
+        audio.setStreamVolume(AudioManager.STREAM_ALARM, 2, 0)
+        val setVolume = (audio.getStreamMaxVolume(AudioManager.STREAM_ALARM) * 0.8).roundToInt()
+
+        enter(ringing)
+        assertEquals(setVolume, alarmStream(), "ring start")
+        audio.setStreamVolume(AudioManager.STREAM_ALARM, 1, 0)
+        // A heartbeat or a tap re-runs the entry effects: the volume is not enforced.
+        enter(ringing)
+        assertEquals(1, alarmStream())
+        run(SessionEffect.Mute)
+        enter(SessionState.Grace(session))
+        assertEquals(1, alarmStream())
+
+        run(SessionEffect.UnmuteToVolume(80))
+        enter(SessionState.Loud(session))
+        assertEquals(setVolume, alarmStream(), "grace end")
+        assertEquals(1f, player.gain, "full gain once the grace window ends")
+        audio.setStreamVolume(AudioManager.STREAM_ALARM, 1, 0)
+        enter(SessionState.Loud(session))
+        assertEquals(1, alarmStream(), "not re-applied during Loud")
+
+        runtime.endSession()
+        assertEquals(2, alarmStream(), "the user's own volume is back")
+    }
+
+    @Test
+    fun `the purchase hand-back hook re-asserts the ring volume once, only while the session rings loud (Story 2-8)`() {
+        val setVolume = (audio.getStreamMaxVolume(AudioManager.STREAM_ALARM) * 0.8).roundToInt()
+        enter(ringing)
+        audio.setStreamVolume(AudioManager.STREAM_ALARM, 1, 0)
+
+        runtime.reassertRingVolume()
+
+        assertEquals(setVolume, alarmStream(), "ringing")
+        enter(SessionState.Loud(session))
+        audio.setStreamVolume(AudioManager.STREAM_ALARM, 1, 0)
+
+        runtime.reassertRingVolume()
+
+        assertEquals(setVolume, alarmStream(), "loud")
+        // Muted (grace), paused by a call or snoozed: nothing.
+        run(SessionEffect.Mute)
+        enter(SessionState.Grace(session))
+        audio.setStreamVolume(AudioManager.STREAM_ALARM, 1, 0)
+        runtime.reassertRingVolume()
+        assertEquals(1, alarmStream(), "grace")
+        run(SessionEffect.PauseSound)
+        enter(SessionState.Loud(session.copy(pausedAt = now)))
+        runtime.reassertRingVolume()
+        assertEquals(1, alarmStream(), "paused by a call")
+        enter(SessionState.Snoozed(session.copy(snoozeEnd = Deadline.after(now, 9.minutes), interactionDeadline = null)))
+        runtime.reassertRingVolume()
+        assertEquals(1, alarmStream(), "snoozed")
+    }
+
+    @Test
+    fun `a ring that starts during a call opens silent, never starts the sound and does not vibrate (Story 2-7)`() {
+        inCall = true
+
+        enter(ringing)
+
+        val playback = checkNotNull(playbacks.current)
+        assertEquals(0, playback.started, "not one audible frame")
+        assertTrue(player.isPaused)
+        assertFalse(vibrator.isVibrating)
+        // The heartbeat re-applies the entry effects: still silent while the call lasts.
+        enter(ringing)
+        assertEquals(0, playback.started)
+    }
+
+    @Test
+    fun `a call that ends before the session paused lets the held ring play and vibrate (Story 2-7)`() {
+        inCall = true
+        enter(ringing)
+        inCall = false
+
+        runtime.onCallOver()
+
+        assertEquals(1, checkNotNull(playbacks.current).started)
+        assertFalse(player.isPaused)
+        assertTrue(vibrator.isVibrating)
+    }
+
+    @Test
+    fun `onCallOver changes nothing while the session is paused for a call or snoozed (Story 2-7)`() {
+        enter(ringing)
+        run(SessionEffect.PauseSound)
+        enter(SessionState.Ringing(session.copy(pausedAt = now)))
+
+        runtime.onCallOver()
+
+        assertTrue(player.isPaused, "the session still pauses for the call")
+        enter(SessionState.Snoozed(session.copy(snoozeEnd = Deadline.after(now, 9.minutes), interactionDeadline = null)))
+        runtime.onCallOver()
+        assertNull(player.sound)
+    }
+
+    @Test
+    fun `a call's end racing an effect that stops the vibration never restarts it (Story 2-7 review)`() {
+        val grace = SessionState.Grace(session)
+        var race = false
+        lateinit var effectThread: Thread
+        lateinit var raced: WakeRuntime
+        // The call's end reads the old Ringing state; meanwhile, on another thread, the engine publishes Grace and runs
+        // its effects. They must wait for the call's end to finish, so their vibrator stop comes last.
+        val readSession = {
+            val seen = state
+            if (race) {
+                race = false
+                effectThread =
+                    Thread {
+                        state = grace
+                        runBlocking { entryEffects(grace).forEach { raced.apply(it) } }
+                    }.apply { start() }
+                effectThread.join(RACE_WAIT_MILLIS)
+            }
+            seen
+        }
+        raced =
+            WakeRuntime(
+                WakeOutputs(player, vibrator, notifier, volume, scheduler, crashReporter),
+                starter,
+                CoroutineScope(dispatcher),
+                logger,
+                { now },
+                readSession,
+                calls =
+                    object : CallState {
+                        override fun inCall(): Boolean = inCall
+                    },
+            )
+        inCall = true
+        state = ringing
+        runBlocking { entryEffects(ringing).forEach { raced.apply(it) } }
+        inCall = false
+
+        race = true
+        raced.onCallOver()
+        effectThread.join()
+
+        assertFalse(vibrator.isVibrating, "grace does not vibrate")
+    }
+
+    @Test
+    fun `the emergency ring opens silent and still during a call and follows the call (Story 2-7 review)`() {
+        inCall = true
+
+        runtime.startEmergency(Instant.fromEpochMilliseconds(0), volumePercent = 60, cause = "commit failed")
+
+        val playback = checkNotNull(playbacks.current)
+        assertEquals(0, playback.started, "not one audible frame")
+        assertFalse(vibrator.isVibrating)
+        runtime.onEmergencyCall(inCall = false)
+        assertTrue(playback.playing)
+        assertTrue(vibrator.isVibrating)
+        runtime.onEmergencyCall(inCall = true)
+        assertFalse(playback.playing)
+        assertFalse(vibrator.isVibrating)
+        runtime.stopEmergency()
+        runtime.onEmergencyCall(inCall = false)
+        assertNull(player.sound, "nothing once the emergency ring stopped")
+    }
+
+    @Test
+    fun `every ring start, the emergency ring's too, makes the call adapter follow it (Story 2-7 review)`() {
+        enter(ringing)
+        assertTrue(rings > 0, "a session ring")
+        enter(SessionState.Idle)
+        runtime.endSession()
+        val before = rings
+
+        runtime.startEmergency(Instant.fromEpochMilliseconds(0), volumePercent = 60, cause = "commit failed")
+
+        assertEquals(before + 1, rings, "the emergency ring")
+        runtime.stopEmergency()
     }
 
     @Test
@@ -589,3 +791,6 @@ class WakeRuntimeTest {
         assertEquals(snoozeEnd.wallMillis, scheduler.armed[RequestCodes.SESSION_SLOT], "the snooze still ends")
     }
 }
+
+/** How long the racing effect thread may run before the call's end goes on (it waits for the lock when serialized). */
+private const val RACE_WAIT_MILLIS = 300L

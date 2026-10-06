@@ -303,6 +303,8 @@ class AlarmEditorViewModel(
     }
 
     private suspend fun showFailure(error: DomainError) {
+        // A session started meanwhile (Story 2.6): the session lock closes the editor, nothing failed.
+        if (error == DomainError.SessionActive) return
         if (error is DomainError.InvalidAlarm) {
             _state.update { it.copy(fieldError = error.field) }
             // Only the label has its own message on the field; the other controls cannot produce an invalid value.
@@ -408,7 +410,7 @@ class AlarmEditorViewModel(
                         close()
                     } else {
                         _state.update { it.copy(isSaving = false) }
-                        _effects.send(EditorEffect.ShowSaveFailed)
+                        showFailure(result.errorOrNull() ?: return@launch)
                     }
                 }
             }

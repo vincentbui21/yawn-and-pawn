@@ -1,5 +1,6 @@
-package com.yawnandpawn.app.android.wake
+package com.yawnandpawn.app.android.screen
 
+import com.yawnandpawn.app.android.wake.EmergencyRing
 import com.yawnandpawn.app.core.session.SessionState
 import com.yawnandpawn.app.testing.aSession
 import org.junit.Test

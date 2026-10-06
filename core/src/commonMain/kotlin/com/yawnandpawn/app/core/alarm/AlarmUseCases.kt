@@ -5,6 +5,7 @@ import com.yawnandpawn.app.core.error.Outcome
 import com.yawnandpawn.app.core.error.flatMap
 import com.yawnandpawn.app.core.error.map
 import com.yawnandpawn.app.core.id.IdGenerator
+import com.yawnandpawn.app.core.session.SessionLockGuard
 import com.yawnandpawn.app.core.time.Clock
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
@@ -61,35 +62,38 @@ class SaveAlarm(
     private val lock: AlarmWriteLock,
     private val requestCodes: RequestCodeSequence,
     private val scheduling: AlarmScheduling,
+    private val sessionLock: SessionLockGuard,
 ) {
     suspend operator fun invoke(draft: AlarmDraft): Outcome<Alarm, DomainError> =
         lock.withLock {
-            val now = clock.nowMillis()
-            val id = draft.id
-            val base: Outcome<Alarm, DomainError> =
-                if (id == null) {
-                    val template = draft.toAlarm(id = idGenerator.newId(), requestCode = RequestCodes.FIRST_ALARM, createdAt = now)
-                    // Validate before allocating a code, so invalid input never touches storage.
-                    val invalid = validate(template)
-                    if (invalid != null) {
-                        Outcome.Failure(DomainError.InvalidAlarm(invalid))
-                    } else {
-                        // A new enabled alarm identical to a stored one switches that one on instead (owner decision
-                        // 2026-10-05). A new alarm saved off is stored as usual: it must not switch anything on.
-                        if (draft.enabled) {
-                            when (val same = identicalStored(template)) {
-                                is Outcome.Failure -> return@withLock same
-                                is Outcome.Success -> same.value?.let { return@withLock switchOn(it, now) }
+            sessionLock.whenIdle {
+                val now = clock.nowMillis()
+                val id = draft.id
+                val base: Outcome<Alarm, DomainError> =
+                    if (id == null) {
+                        val template = draft.toAlarm(id = idGenerator.newId(), requestCode = RequestCodes.FIRST_ALARM, createdAt = now)
+                        // Validate before allocating a code, so invalid input never touches storage.
+                        val invalid = validate(template)
+                        if (invalid != null) {
+                            Outcome.Failure(DomainError.InvalidAlarm(invalid))
+                        } else {
+                            // A new enabled alarm identical to a stored one switches that one on instead (owner decision
+                            // 2026-10-05). A new alarm saved off is stored as usual: it must not switch anything on.
+                            if (draft.enabled) {
+                                when (val same = identicalStored(template)) {
+                                    is Outcome.Failure -> return@whenIdle same
+                                    is Outcome.Success -> same.value?.let { return@whenIdle switchOn(it, now) }
+                                }
                             }
+                            requestCodes.next().map { code -> template.copy(requestCode = code) }
                         }
-                        requestCodes.next().map { code -> template.copy(requestCode = code) }
+                    } else {
+                        repository.get(id).map { stored -> draft.toAlarm(id, stored.requestCode, stored.createdAt) }
                     }
-                } else {
-                    repository.get(id).map { stored -> draft.toAlarm(id, stored.requestCode, stored.createdAt) }
-                }
-            base
-                .flatMap { alarm -> validateAndStore(repository, alarm.copy(updatedAt = now)) }
-                .onSuccess(scheduling::sync)
+                base
+                    .flatMap { alarm -> validateAndStore(repository, alarm.copy(updatedAt = now)) }
+                    .onSuccess(scheduling::sync)
+            }
         }
 
     /** The stored alarm that rings exactly like [alarm] ([hasSameSettingsAs]), or null; a failed read is returned. */
@@ -138,18 +142,21 @@ class SetAlarmEnabled(
     private val clock: Clock,
     private val lock: AlarmWriteLock,
     private val scheduling: AlarmScheduling,
+    private val sessionLock: SessionLockGuard,
 ) {
     suspend operator fun invoke(
         id: String,
         enabled: Boolean,
     ): Outcome<Alarm, DomainError> =
         lock.withLock {
-            repository
-                .get(id)
-                .flatMap { stored ->
-                    val changed = stored.copy(enabled = enabled, updatedAt = clock.nowMillis())
-                    repository.upsert(changed).map { changed }
-                }.onSuccess(scheduling::sync)
+            sessionLock.whenIdle {
+                repository
+                    .get(id)
+                    .flatMap { stored ->
+                        val changed = stored.copy(enabled = enabled, updatedAt = clock.nowMillis())
+                        repository.upsert(changed).map { changed }
+                    }.onSuccess(scheduling::sync)
+            }
         }
 }
 
@@ -161,11 +168,14 @@ class DeleteAlarm(
     private val repository: AlarmRepository,
     private val lock: AlarmWriteLock,
     private val scheduling: AlarmScheduling,
+    private val sessionLock: SessionLockGuard,
 ) {
     suspend operator fun invoke(id: String): Outcome<Unit, DomainError> =
         lock.withLock {
-            repository.get(id).flatMap { stored ->
-                repository.delete(id).onSuccess { scheduling.cancel(stored.requestCode) }
+            sessionLock.whenIdle {
+                repository.get(id).flatMap { stored ->
+                    repository.delete(id).onSuccess { scheduling.cancel(stored.requestCode) }
+                }
             }
         }
 }
@@ -182,18 +192,21 @@ class DuplicateAlarm(
     private val lock: AlarmWriteLock,
     private val requestCodes: RequestCodeSequence,
     private val scheduling: AlarmScheduling,
+    private val sessionLock: SessionLockGuard,
 ) {
     suspend operator fun invoke(id: String): Outcome<Alarm, DomainError> =
         lock.withLock {
-            repository
-                .get(id)
-                .flatMap { stored ->
-                    requestCodes.next().flatMap { code ->
-                        val now = clock.nowMillis()
-                        val copy = stored.copy(id = idGenerator.newId(), requestCode = code, createdAt = now, updatedAt = now)
-                        validateAndStore(repository, copy)
-                    }
-                }.onSuccess(scheduling::sync)
+            sessionLock.whenIdle {
+                repository
+                    .get(id)
+                    .flatMap { stored ->
+                        requestCodes.next().flatMap { code ->
+                            val now = clock.nowMillis()
+                            val copy = stored.copy(id = idGenerator.newId(), requestCode = code, createdAt = now, updatedAt = now)
+                            validateAndStore(repository, copy)
+                        }
+                    }.onSuccess(scheduling::sync)
+            }
         }
 }
 
@@ -212,4 +225,4 @@ private inline fun <T> Outcome<T, DomainError>.onSuccess(action: (T) -> Unit): O
 }
 
 /** Now, truncated to whole milliseconds: the precision `app.db` stores, so a saved alarm equals the stored one. */
-private fun Clock.nowMillis(): Instant = Instant.fromEpochMilliseconds(now().toEpochMilliseconds())
+internal fun Clock.nowMillis(): Instant = Instant.fromEpochMilliseconds(now().toEpochMilliseconds())

@@ -5,6 +5,8 @@ import com.yawnandpawn.app.ui.shell.AppTab
 
 // Back stack rules of the shell (Story 1.9). The stack is always [Alarms] or [Alarms, other tab], with at most the
 // editor on top; every change below keeps it that way, and a late or repeated call (a double tap) changes nothing.
+// During a session it is only [SessionInProgress] (Story 2.6): no tab is on top then, so the tab and editor calls below
+// change nothing.
 
 /** The nav-bar tab this route is, or `null` for a pushed screen (the editor). */
 val Route.tab: AppTab?
@@ -15,6 +17,7 @@ val Route.tab: AppTab?
             Route.Settings -> AppTab.Settings
             Route.You -> AppTab.You
             is Route.AlarmEditor -> null
+            Route.SessionInProgress -> null
         }
 
 /** The route of [this] tab. */
@@ -67,6 +70,27 @@ fun MutableList<NavKey>.replaceEditor(
     if (lastOrNull() != route) return
     removeAt(lastIndex)
     add(Route.AlarmEditor(alarmId = null, copyOf = copyOf))
+}
+
+/**
+ * The session lock (Story 2.6, FR-SES-3). While a session is [active], the whole stack is replaced by
+ * [Route.SessionInProgress]: an open editor (its draft and any sound preview with it) and every tab leave, and anything
+ * pushed later is replaced again. Once the session is over, a locked stack becomes Home ([Route.Alarms]). Otherwise
+ * nothing changes. True when the stack changed.
+ */
+fun MutableList<NavKey>.applySessionLock(active: Boolean): Boolean {
+    val locked = size == 1 && single() == Route.SessionInProgress
+    return when {
+        active && !locked -> replaceWith(Route.SessionInProgress)
+        !active && Route.SessionInProgress in this -> replaceWith(Route.Alarms)
+        else -> false
+    }
+}
+
+private fun MutableList<NavKey>.replaceWith(route: Route): Boolean {
+    clear()
+    add(route)
+    return true
 }
 
 /** Back: pops the top (a tab returns to Alarms); on the Alarms root it does nothing, and the system leaves the app. */

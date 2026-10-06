@@ -65,6 +65,7 @@ private fun startSession(
             firstRing = now,
             startedBeforeUnlock = beforeFirstUnlock,
             beforeFirstUnlock = beforeFirstUnlock,
+            directBootRing = beforeFirstUnlock,
             interactionDeadline = Deadline.after(now, SessionReducer.NO_INTERACTION_TIMEOUT),
         )
     return Transition(

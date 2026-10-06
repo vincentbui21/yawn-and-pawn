@@ -72,7 +72,9 @@ class SessionEngine internal constructor(
     private val current = MutableStateFlow<SessionState>(SessionState.Idle)
 
     /** The stored session has been loaded (or there was none); until then every call loads it first. */
-    private var restored = false
+    private var storeLoaded = false
+
+    private val restoredFlag = MutableStateFlow(false)
 
     /** The history effects go here, never to the runner. */
     private val history = EngineHistory(recorder, logger)
@@ -80,11 +82,18 @@ class SessionEngine internal constructor(
     /** The last committed state. The main app shows "Alarm in progress" from it (AD-11). */
     val state: StateFlow<SessionState> = current.asStateFlow()
 
+    /**
+     * True once the stored session is loaded and its state published in [state]. It is set after [state], so a reader
+     * that sees true here then reads the restored state there. Until then [state] is Idle only because nothing is
+     * loaded yet, so the session lock treats that as locked (Story 2.6). It stays false while loading fails.
+     */
+    val restored: StateFlow<Boolean> = restoredFlag.asStateFlow()
+
     /** Runs [event] through the reducer, commits, runs its effects, then any follow-up events now due. Returns the state. */
     suspend fun dispatch(event: SessionEvent): Outcome<SessionState, DomainError> =
         mutex.withLock {
             // Nothing is reduced before the stored session is loaded; a failed load is returned and retried next call.
-            if (!restored) load().let { if (!restored) return@withLock it }
+            if (!storeLoaded) load().let { if (!storeLoaded) return@withLock it }
             // AD-2 guard "history row written": a Recorded from outside never ends a session whose row is not written.
             // It only retries the write, and the engine reduces its own Recorded once that succeeds.
             if (event is SessionEvent.Recorded && history.pending(current.value)) return@withLock settleHistory(forNewAlarm = false)
@@ -104,7 +113,7 @@ class SessionEngine internal constructor(
      */
     suspend fun tick(): Outcome<SessionState, DomainError> =
         mutex.withLock {
-            if (!restored) load().let { if (!restored) return@withLock it }
+            if (!storeLoaded) load().let { if (!storeLoaded) return@withLock it }
             settleHistory(forNewAlarm = false)
         }
 
@@ -133,7 +142,8 @@ class SessionEngine internal constructor(
      * effects. An undecodable row is logged and cleared, and the engine stays Idle.
      * Once loaded, further calls return the current state and do nothing.
      */
-    suspend fun restore(): Outcome<SessionState, DomainError> = mutex.withLock { if (restored) Outcome.Success(current.value) else load() }
+    suspend fun restore(): Outcome<SessionState, DomainError> =
+        mutex.withLock { if (storeLoaded) Outcome.Success(current.value) else load() }
 
     private suspend fun load(): Outcome<SessionState, DomainError> =
         when (val loaded = store.load()) {
@@ -143,8 +153,12 @@ class SessionEngine internal constructor(
             }
 
             is Outcome.Success -> {
-                restored = true
-                restoreFrom(loaded.value)
+                storeLoaded = true
+                try {
+                    restoreFrom(loaded.value)
+                } finally {
+                    restoredFlag.value = true
+                }
             }
         }
 

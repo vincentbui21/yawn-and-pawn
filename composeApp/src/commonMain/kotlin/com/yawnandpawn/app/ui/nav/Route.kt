@@ -37,6 +37,13 @@ sealed interface Route : NavKey {
         val alarmId: String?,
         val copyOf: String? = null,
     ) : Route
+
+    /**
+     * The session lock (Story 2.6, FR-SES-3): while a wake session is active it is the whole back stack, showing only
+     * "Alarm in progress" with "Back to alarm" ([applySessionLock]). It is not a tab, so the nav capsule hides.
+     */
+    @Serializable
+    data object SessionInProgress : Route
 }
 
 /** Saves and restores the back stack: every [Route] is registered as a polymorphic [NavKey]. */

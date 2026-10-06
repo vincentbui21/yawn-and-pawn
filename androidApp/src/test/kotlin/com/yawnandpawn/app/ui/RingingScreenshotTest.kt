@@ -90,4 +90,28 @@ class RingingScreenshotTest {
     @Test
     @Config(fontScale = 2.0f)
     fun `before the first unlock at 200 percent`() = ringing("wake_ringing_locked_sunrise_font200", RingingSamples.lockedBeforeUnlock)
+
+    // Story 2.4: the same ring after the unlock (from wake_ringing_locked_*): the snooze control changes in place.
+    @Test
+    fun `after the unlock prices not loaded`() = ringing("wake_ringing_unlocked_prices_sunrise", RingingSamples.afterUnlockPricesNotLoaded)
+
+    @Test
+    @Config(fontScale = 2.0f)
+    fun `after the unlock prices not loaded at 200 percent`() =
+        ringing("wake_ringing_unlocked_prices_sunrise_font200", RingingSamples.afterUnlockPricesNotLoaded)
+
+    @Test
+    fun `after the unlock with a snooze on sale`() = ringing("wake_ringing_unlocked_snooze_sunrise", RingingSamples.afterUnlockSnooze)
+
+    @Test
+    @Config(fontScale = 2.0f)
+    fun `after the unlock with a snooze on sale at 200 percent`() =
+        ringing("wake_ringing_unlocked_snooze_sunrise_font200", RingingSamples.afterUnlockSnooze)
+
+    @Test
+    fun `paused for a phone call`() = ringing("wake_ringing_phone_call_sunrise", RingingSamples.phoneCall)
+
+    @Test
+    @Config(fontScale = 2.0f)
+    fun `paused for a phone call at 200 percent`() = ringing("wake_ringing_phone_call_sunrise_font200", RingingSamples.phoneCall)
 }

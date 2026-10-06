@@ -13,20 +13,47 @@ data class VariantManifest(
 )
 
 /**
- * NFR-4 / AD-5 (no device hostage): every requested permission must be in
- * `config/permission-allowlist.txt`; `SCHEDULE_EXACT_ALARM` must stop at API 32; no accessibility
- * service, device admin or lock-task mode. Pure functions; the Gradle task only gathers the input.
+ * NFR-4 / AD-5 / NFR-13 (no device hostage, Stories 1.2 and 2.11): every requested permission must be in
+ * `config/permission-allowlist.txt`; `SCHEDULE_EXACT_ALARM` must stop at API 32. Whatever the allowlist says, these
+ * always fail:
+ * - a hostage permission ([hostageRequests], or any `MANAGE_DEVICE_POLICY_*`);
+ * - a component or the application protected by `BIND_ACCESSIBILITY_SERVICE` or `BIND_DEVICE_ADMIN`;
+ * - an `<intent-filter>` with `CATEGORY_HOME` or `CATEGORY_SECONDARY_HOME` (posing as the launcher; a `<queries>`
+ *   intent only looks the launcher up and passes);
+ * - any `android:lockTaskMode` other than `normal`;
+ * - any `android:stopWithTask` on `WakeService` but `"false"`, resource references included (swiping the app away
+ *   must never end the ring's service).
+ *
+ * Pure functions; the Gradle task only gathers the input.
  */
 object PermissionAllowlist {
     private const val ANDROID_NS = "http://schemas.android.com/apk/res/android"
     private const val PLATFORM_PREFIX = "android.permission."
     private const val SCHEDULE_EXACT_ALARM = "android.permission.SCHEDULE_EXACT_ALARM"
     private const val EXACT_ALARM_MAX_SDK = "32"
+    private const val MANAGE_DEVICE_POLICY_PREFIX = "android.permission.MANAGE_DEVICE_POLICY_"
+    private const val LOCK_TASK_DEFAULT = "normal"
+    private const val WAKE_SERVICE = "WakeService"
 
+    private val launcherCategories = setOf("android.intent.category.HOME", "android.intent.category.SECONDARY_HOME")
     private val permissionTags = setOf("uses-permission", "uses-permission-sdk-23", "uses-permission-sdk-m")
     private val componentTags = setOf("activity", "activity-alias", "service", "receiver", "provider")
     private val hostagePermissions =
         setOf("android.permission.BIND_ACCESSIBILITY_SERVICE", "android.permission.BIND_DEVICE_ADMIN")
+
+    /** Permissions that would let the app hold the phone hostage (overlays, task control, call state, kill, keyguard). */
+    private val hostageRequests =
+        setOf(
+            "SYSTEM_ALERT_WINDOW",
+            "READ_PHONE_STATE",
+            "REORDER_TASKS",
+            "DISABLE_KEYGUARD",
+            "PACKAGE_USAGE_STATS",
+            "KILL_BACKGROUND_PROCESSES",
+        ).map(::qualify).toSet()
+
+    private fun isHostageRequest(permission: String): Boolean =
+        permission in hostageRequests || permission.startsWith(MANAGE_DEVICE_POLICY_PREFIX)
 
     /**
      * Allowlist entries, one permission per line; `#` starts a comment. Names without a dot are
@@ -65,7 +92,9 @@ object PermissionAllowlist {
             val tag = element.tagName
             val name = element.androidAttribute("name")
             if (tag in permissionTags) {
-                if (name !in allowlist) {
+                if (isHostageRequest(name)) {
+                    violations += "$variant: $tag '$name' is never allowed (device hostage, NFR-13)"
+                } else if (name !in allowlist) {
                     violations += "$variant: $tag '$name' is not in config/permission-allowlist.txt"
                 }
                 val maxSdk = element.androidAttribute("maxSdkVersion")
@@ -81,9 +110,40 @@ object PermissionAllowlist {
             if ((tag in componentTags || tag == "application") && permission in hostagePermissions) {
                 violations += "$variant: $tag '$name' is protected by '$permission' (device hostage, AD-5)"
             }
-            if (element.hasAttributeNS(ANDROID_NS, "lockTaskMode")) {
-                violations += "$variant: $tag '$name' sets android:lockTaskMode (device hostage, AD-5)"
-            }
+            violations += componentViolations(variant, element)
+        }
+        return violations
+    }
+
+    /** The launcher pose, lock-task mode and `stopWithTask` rules for [element] (Story 2.11). */
+    private fun componentViolations(
+        variant: String,
+        element: Element,
+    ): List<String> {
+        val tag = element.tagName
+        val name = element.androidAttribute("name")
+        val violations = mutableListOf<String>()
+        val lockTaskMode = element.androidAttribute("lockTaskMode")
+        if (element.hasAttributeNS(ANDROID_NS, "lockTaskMode") && lockTaskMode != LOCK_TASK_DEFAULT) {
+            violations += "$variant: $tag '$name' sets android:lockTaskMode=\"$lockTaskMode\" (device hostage, AD-5)"
+        }
+        // Only an <intent-filter> poses as the launcher; a <queries><intent> merely looks it up.
+        val inIntentFilter = (element.parentNode as? Element)?.tagName == "intent-filter"
+        if (tag == "category" && name in launcherCategories && inIntentFilter) {
+            val owner =
+                generateSequence(element.parentNode as? Element) { it.parentNode as? Element }
+                    .firstOrNull { it.tagName in componentTags }
+            val ownerTag = owner?.tagName ?: "intent-filter"
+            val ownerName = owner?.androidAttribute("name").orEmpty()
+            val category = "CATEGORY_" + name.substringAfterLast('.')
+            violations += "$variant: $ownerTag '$ownerName' declares $category (posing as the launcher, NFR-13)"
+        }
+        // Anything but a literal "false" (true, or a resource reference that may resolve to true) can end the ring.
+        val stopWithTask = element.androidAttribute("stopWithTask")
+        val stopsWithTask = stopWithTask.isNotEmpty() && stopWithTask != "false"
+        if (tag == "service" && stopsWithTask && name.substringAfterLast('.') == WAKE_SERVICE) {
+            violations += "$variant: service '$name' sets android:stopWithTask=\"$stopWithTask\" " +
+                "(a swipe from Recents must never end the ring, NFR-13)"
         }
         return violations
     }

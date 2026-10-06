@@ -6,6 +6,7 @@ import com.yawnandpawn.app.core.session.SnoozeAvailability
 import com.yawnandpawn.app.core.session.TierFeeLadder
 import com.yawnandpawn.app.core.session.UnavailableReason
 import com.yawnandpawn.app.core.session.nextOffer
+import com.yawnandpawn.app.core.time.TimeSnapshot
 import com.yawnandpawn.app.testing.FakeUserLockState
 import com.yawnandpawn.app.testing.aSession
 import com.yawnandpawn.app.testing.aSessionConfig
@@ -49,8 +50,27 @@ object RingingSamples {
     /** Before the first unlock: lock icon, "Unlock your phone to snooze" (TalkBack "Snooze unavailable, Unlock ..."). */
     val lockedBeforeUnlock: RingingUiState = session().let { ringingUiState(it, locked.availability(it), utc) }
 
+    /** Story 2.4: the same locked session after the user unlocked, with the Epic 1 policy: "Prices not loaded yet". */
+    val afterUnlockPricesNotLoaded: RingingUiState =
+        session().let { session ->
+            val lock = FakeUserLockState(unlocked = false)
+            val policy = NoBillingSnoozeAvailability(lock)
+            lock.unlock()
+            ringingUiState(session.copy(beforeFirstUnlock = true), policy.availability(session), utc)
+        }
+
+    /** Story 2.4: after the unlock with a policy that offers a snooze (fake, Epic 4's catalogue): "Snooze · {price}". */
+    val afterUnlockSnooze: RingingUiState =
+        session().copy(beforeFirstUnlock = true).let { session ->
+            ringingUiState(session, SnoozeAvailability.Available(TierFeeLadder.nextOffer(session)), utc) { Money.of(1, "USD") }
+        }
+
     /** A test alarm before the first unlock still says "Test · no charge". */
     val testAlarmLocked: RingingUiState = session(label = null, testMode = true).let { ringingUiState(it, locked.availability(it), utc) }
+
+    /** Story 2.7: the ring paused for a phone call, with the note "Paused for your call. Rings again when it ends.". */
+    val phoneCall: RingingUiState =
+        epic1(session().copy(pausedAt = TimeSnapshot(at.toEpochMilliseconds(), elapsedMillis = 0, bootCount = 1)))
 
     /** The enabled "Snooze · {price}" variant, preview only until billing (Epic 4). */
     val enabledSnooze: RingingUiState =

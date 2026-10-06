@@ -220,12 +220,51 @@ class DirectBootTest {
     fun `the fallback plan gets the substitutions before the first unlock`() {
         val grace = checkStates(ringSession()).first()
 
-        val locked = marking.reduce(grace.with(grace.session.copy(beforeFirstUnlock = true)), SessionEvent.FallbackRequested, T0).state
+        val locked =
+            marking
+                .reduce(
+                    grace.with(grace.session.copy(beforeFirstUnlock = true, directBootRing = true)),
+                    SessionEvent.FallbackRequested,
+                    T0,
+                ).state
         val unlocked = marking.reduce(grace, SessionEvent.FallbackRequested, T0).state
 
         assertEquals(LOCKED, locked.plan())
         assertEquals(FALLBACK_PLAN, unlocked.plan())
     }
+
+    @Test
+    fun `the fallback follows the ring's Direct Boot flag, also after an unlock earlier in the ring (Story 2_4 review)`() {
+        val grace = checkStates(ringSession()).first()
+        // The ring started locked and saw the unlock: its sound stays the default one, so its check stays locked too.
+        val unlockedInRing = grace.with(grace.session.copy(beforeFirstUnlock = false, directBootRing = true))
+
+        assertEquals(LOCKED, marking.reduce(unlockedInRing, SessionEvent.FallbackRequested, T0).state.plan())
+    }
+
+    @Test
+    fun `the ring after a snooze while still locked keeps the Direct Boot sound and check (Story 2_4 review)`() =
+        runTest {
+            val config = testConfig().copy(soundRef = systemSound)
+            val snoozed =
+                snoozedSession().copy(
+                    config = config,
+                    beforeFirstUnlock = true,
+                    directBootRing = true,
+                    startedBeforeUnlock = true,
+                )
+            store.commit(SessionState.Snoozed(snoozed))
+            val engine = engine()
+            engine.restore()
+            time.advanceBy(9.minutes)
+
+            val next = engine.dispatch(SessionEvent.SlotFired).session()
+
+            assertEquals(2, next.ringIndex)
+            assertTrue(next.beforeFirstUnlock)
+            assertTrue(next.directBootRing)
+            assertEquals(EntryEffect.SoundAt(Alarm.DEFAULT_SOUND_REF, 80), runner.entry.last { it is EntryEffect.SoundAt })
+        }
 
     @Test
     fun `snooze availability - test mode first, then before the first unlock while locked, then prices not loaded`() {
@@ -267,6 +306,63 @@ class DirectBootTest {
             afterReboot.dispatch(SessionEvent.ImUpTapped)
             afterReboot.dispatch(SessionEvent.CheckAnswerSubmitted(CheckAnswer.Placeholder))
             assertEquals(true, history.rows.getValue(restoredSession).directBoot, "only the restored ring was locked")
+        }
+
+    @Test
+    fun `an unlock while ringing lifts the lock flag but the substituted sound stays for this ring (Story 2_4)`() =
+        runTest {
+            val engine = engine()
+            engine.dispatch(alarmFired(testConfig().copy(soundRef = systemSound)))
+            lock.state.value = true
+            runner.ran.clear()
+
+            val after = engine.dispatch(SessionEvent.UserUnlocked).session()
+
+            assertFalse(after.beforeFirstUnlock)
+            assertTrue(after.directBootRing, "the current ring keeps the default sound")
+            assertTrue(after.startedBeforeUnlock, "history keeps direct_boot")
+            assertEquals(listOf(SessionEffect.LiftDirectBootSubstitutions, SessionEffect.InitBilling), runner.oneShot)
+            assertEquals(EntryEffect.SoundAt(Alarm.DEFAULT_SOUND_REF, 80), runner.entry.first())
+        }
+
+    @Test
+    fun `after the unlock the next ring (after a snooze) plays the chosen sound`() =
+        runTest {
+            val config = testConfig().copy(soundRef = systemSound)
+            val snoozed =
+                snoozedSession().copy(
+                    config = config,
+                    beforeFirstUnlock = true,
+                    directBootRing = true,
+                    startedBeforeUnlock = true,
+                )
+            store.commit(SessionState.Snoozed(snoozed))
+            lock.state.value = true
+            val engine = engine()
+            engine.restore()
+            time.advanceBy(9.minutes)
+
+            val next = engine.dispatch(SessionEvent.SlotFired).session()
+
+            assertEquals(2, next.ringIndex)
+            assertFalse(next.beforeFirstUnlock, "the live lock state, so the unlock is not waited for again")
+            assertFalse(next.directBootRing)
+            assertEquals(config.checkPlan, next.checkRun.plan, "the chosen check is back with the chosen sound")
+            assertEquals(EntryEffect.SoundAt(systemSound, 80), runner.entry.last { it is EntryEffect.SoundAt })
+        }
+
+    @Test
+    fun `an unlock in Grace has no AD-2 row - ignored and logged, nothing changes`() =
+        runTest {
+            val engine = engine()
+            engine.dispatch(alarmFired())
+            val grace =
+                assertIs<SessionState.Grace>(assertIs<Outcome.Success<SessionState>>(engine.dispatch(SessionEvent.ImUpTapped)).value)
+            lock.state.value = true
+            runner.ran.clear()
+
+            assertEquals(grace, assertIs<Outcome.Success<SessionState>>(engine.dispatch(SessionEvent.UserUnlocked)).value)
+            assertEquals(listOf<SessionEffect>(SessionEffect.LogIgnored("UserUnlocked", SESSION_ID)), runner.oneShot)
         }
 
     @Test

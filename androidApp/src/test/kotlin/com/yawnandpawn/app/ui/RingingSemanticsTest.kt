@@ -5,6 +5,7 @@ import android.provider.Settings
 import androidx.compose.ui.graphics.lerp
 import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.graphics.toPixelMap
+import androidx.compose.ui.semantics.LiveRegionMode
 import androidx.compose.ui.semantics.SemanticsActions
 import androidx.compose.ui.semantics.SemanticsProperties
 import androidx.compose.ui.semantics.getOrNull
@@ -12,6 +13,7 @@ import androidx.compose.ui.test.SemanticsNodeInteraction
 import androidx.compose.ui.test.captureToImage
 import androidx.compose.ui.test.getBoundsInRoot
 import androidx.compose.ui.test.hasClickAction
+import androidx.compose.ui.test.hasText
 import androidx.compose.ui.test.junit4.createEmptyComposeRule
 import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithText
@@ -258,6 +260,20 @@ class RingingSemanticsTest {
 
         assertEquals(first, later, "no pulse")
     }
+
+    @Test
+    fun `the phone call note shows verbatim and is announced politely (Story 2-7)`() =
+        ringing(RingingSamples.phoneCall) {
+            composeRule
+                .onNodeWithText("Paused for your call. Rings again when it ends.", useUnmergedTree = true)
+                .assertExists()
+            val note =
+                composeRule
+                    .onAllNodes(hasText("Paused for your call. Rings again when it ends."))
+                    .fetchSemanticsNodes()
+                    .single()
+            assertEquals(LiveRegionMode.Polite, note.config.getOrNull(SemanticsProperties.LiveRegion))
+        }
 
     private companion object {
         /** mdpi: one pixel per dp. */

@@ -179,4 +179,5 @@ fun DomainError.diagnostic(): String =
         is DomainError.StorageFailure -> "storage failure: $cause"
         DomainError.ExactAlarmNotPermitted -> "exact alarms not permitted"
         is DomainError.SchedulerFailure -> "scheduler failure: $cause"
+        DomainError.SessionActive -> "a session is active"
     }

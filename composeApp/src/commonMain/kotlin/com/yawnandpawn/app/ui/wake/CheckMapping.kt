@@ -138,7 +138,9 @@ private fun graceState(
         state is SessionState.Grace && graceEnd != null -> {
             val left = graceEnd.remaining(session.pausedAt ?: now).inWholeMilliseconds
             val seconds = ((left + MILLIS_PER_SECOND - 1) / MILLIS_PER_SECOND).toInt()
-            GraceState.Running(secondsLeft = seconds, totalSeconds = session.config.graceSeconds)
+            // A deadline that passed (for example while the process was dead, Story 3.4) shows the expired state at once;
+            // GraceElapsed then makes the alarm loud.
+            if (seconds > 0) GraceState.Running(secondsLeft = seconds, totalSeconds = session.config.graceSeconds) else GraceState.Expired
         }
 
         session.noGraceThisRing -> {

@@ -1,5 +1,7 @@
 package com.yawnandpawn.app.ui
 
+import androidx.compose.ui.semantics.SemanticsProperties
+import androidx.compose.ui.test.SemanticsMatcher
 import androidx.compose.ui.test.assertHeightIsAtLeast
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.assertWidthIsAtLeast
@@ -100,6 +102,57 @@ class CheckScreenshotTest {
     @Test
     @Config(fontScale = 2.0f)
     fun `Math last problem at 200 percent`() = check("wake_check_math_last_sunrise_font200", CheckSamples.lastProblem)
+
+    // Story 3.4: the quiet time (grace window) states of the header.
+    @Test
+    fun `grace at 20 s`() =
+        check("wake_check_grace_20s_sunrise", CheckSamples.grace20) {
+            composeRule.onNodeWithText("Quiet for 20s. Finish before it rings again.").assertExists()
+            composeRule.onNode(hasContentDescription("20 seconds left")).assertExists()
+            composeRule
+                .onNode(SemanticsMatcher.keyIsDefined(SemanticsProperties.LiveRegion) and hasContentDescription("20 seconds left"))
+                .assertDoesNotExist()
+        }
+
+    @Test
+    @Config(fontScale = 2.0f)
+    fun `grace at 20 s at 200 percent`() = check("wake_check_grace_20s_sunrise_font200", CheckSamples.grace20)
+
+    @Test
+    fun `grace at 5 s`() =
+        check("wake_check_grace_5s_sunrise", CheckSamples.grace5) {
+            composeRule.onNodeWithText("Quiet for 5s. Finish before it rings again.").assertExists()
+            // The polite announcement of UX-DR65 at 5 s.
+            composeRule
+                .onNode(SemanticsMatcher.keyIsDefined(SemanticsProperties.LiveRegion) and hasContentDescription("5 seconds left"))
+                .assertExists()
+        }
+
+    @Test
+    @Config(fontScale = 2.0f)
+    fun `grace at 5 s at 200 percent`() = check("wake_check_grace_5s_sunrise_font200", CheckSamples.grace5)
+
+    @Test
+    fun `grace paused for a call`() =
+        check("wake_check_grace_paused_sunrise", CheckSamples.gracePaused) {
+            composeRule.onNodeWithText("Quiet for 12s. Finish before it rings again.").assertExists()
+            composeRule.onNodeWithText("Paused for your call. Rings again when it ends.").assertExists()
+        }
+
+    @Test
+    @Config(fontScale = 2.0f)
+    fun `grace paused for a call at 200 percent`() = check("wake_check_grace_paused_sunrise_font200", CheckSamples.gracePaused)
+
+    @Test
+    fun `a ring without grace shows neither the countdown nor the expired line`() =
+        check("wake_check_no_grace_sunrise", CheckSamples.noGrace) {
+            composeRule.onNodeWithText("Time's up", substring = true).assertDoesNotExist()
+            composeRule.onNodeWithText("Quiet for", substring = true).assertDoesNotExist()
+        }
+
+    @Test
+    @Config(fontScale = 2.0f)
+    fun `a ring without grace at 200 percent`() = check("wake_check_no_grace_sunrise_font200", CheckSamples.noGrace)
 
     @Test
     @Config(qualifiers = "w360dp-h640dp", fontScale = 2.0f)

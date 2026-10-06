@@ -26,6 +26,8 @@ data class Alarm(
     val vibration: Boolean = true,
     val snoozeLengthMinutes: Int = DEFAULT_SNOOZE_LENGTH_MINUTES,
     val graceSeconds: Int = DEFAULT_GRACE_SECONDS,
+    /** "Vibrate during quiet time" (Story 3.4): vibration continues while the grace window mutes the alarm. */
+    val vibrateInGrace: Boolean = DEFAULT_VIBRATE_IN_GRACE,
     val requestCode: Int,
     val createdAt: Instant,
     val updatedAt: Instant,
@@ -40,6 +42,9 @@ data class Alarm(
         const val DEFAULT_RAMP_START_PERCENT = 20
         const val DEFAULT_SNOOZE_LENGTH_MINUTES = 9
         const val DEFAULT_GRACE_SECONDS = 20
+
+        /** Owner-approved default 2026-09-26: vibration continues during quiet time. */
+        const val DEFAULT_VIBRATE_IN_GRACE = true
         const val MAX_LABEL_LENGTH = 40
         val SNOOZE_LENGTHS_MINUTES: Set<Int> = setOf(5, 9, 10, 15)
         val GRACE_SECONDS_RANGE: IntRange = 15..30
@@ -68,8 +73,8 @@ val AlarmListOrder: Comparator<Alarm> =
 
 /**
  * True when [other] rings exactly like this alarm: every setting the user chooses is equal (time, repeat days, label,
- * sound, volume, gradual volume, vibration, snooze length, quiet time). The id, request code, on/off state, timestamps
- * and the ramp start (fixed, not a user setting) do not count. Saving a new alarm identical to a stored one switches
+ * sound, volume, gradual volume, vibration, snooze length, quiet time and its vibration). The id, request code, on/off
+ * state, timestamps and the ramp start (fixed, not a user setting) do not count. Saving a new alarm identical to a stored one switches
  * that one on instead of storing a second (owner decision 2026-10-05, like Samsung Clock). The check plan joins this
  * list once alarms store one (Epic 3).
  */
@@ -82,4 +87,5 @@ fun Alarm.hasSameSettingsAs(other: Alarm): Boolean =
         gradualVolume == other.gradualVolume &&
         vibration == other.vibration &&
         snoozeLengthMinutes == other.snoozeLengthMinutes &&
-        graceSeconds == other.graceSeconds
+        graceSeconds == other.graceSeconds &&
+        vibrateInGrace == other.vibrateInGrace

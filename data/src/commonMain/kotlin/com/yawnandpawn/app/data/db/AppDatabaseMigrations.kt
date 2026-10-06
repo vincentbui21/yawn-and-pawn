@@ -59,5 +59,17 @@ val MIGRATION_3_4: Migration =
         }
     }
 
+/**
+ * v4 to v5 (Story 3.4): adds `alarm.vibrate_in_grace` ("Vibrate during quiet time", per alarm), on for every stored alarm
+ * (owner-approved default 2026-09-26). Every other column and table is untouched. The SQL matches the exported `5.json`;
+ * Room checks it after migrating.
+ */
+val MIGRATION_4_5: Migration =
+    object : Migration(4, 5) {
+        override suspend fun migrate(connection: SQLiteConnection) {
+            connection.execSQL("ALTER TABLE `alarm` ADD COLUMN `vibrate_in_grace` INTEGER NOT NULL DEFAULT 1")
+        }
+    }
+
 /** Every migration of `app.db`, oldest first; `buildAppDatabase` registers them all. */
-val APP_DATABASE_MIGRATIONS: Array<Migration> = arrayOf(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4)
+val APP_DATABASE_MIGRATIONS: Array<Migration> = arrayOf(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5)

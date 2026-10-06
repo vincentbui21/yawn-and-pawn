@@ -45,6 +45,7 @@ data class GlobalSettings(
     val maxSnoozes: Int = DEFAULT_MAX_SNOOZES,
     val graceSeconds: Int = Alarm.DEFAULT_GRACE_SECONDS,
     val snoozeLengthMinutes: Int = Alarm.DEFAULT_SNOOZE_LENGTH_MINUTES,
+    /** The Settings default for new alarms (Epic 5); a session uses its alarm's own `vibrateInGrace` (Story 3.4). */
     val vibrateInGrace: Boolean = false,
 ) {
     companion object {
@@ -74,7 +75,7 @@ object ConfigResolver {
             maxSnoozes = globalSettings.maxSnoozes,
             snoozeLengthMinutes = alarm.snoozeLengthMinutes,
             graceSeconds = alarm.graceSeconds,
-            vibrateInGrace = globalSettings.vibrateInGrace,
+            vibrateInGrace = alarm.vibrateInGrace,
             volumePercent = alarm.volumePercent,
             gradualVolume = alarm.gradualVolume,
             // Fixed (owner decision 2026-09-27); alarms saved before Story 1.14 may hold min(20, volume).
@@ -103,7 +104,7 @@ object ConfigResolver {
             maxSnoozes = globalSettings.maxSnoozes,
             snoozeLengthMinutes = draft.snoozeLengthMinutes,
             graceSeconds = draft.graceSeconds,
-            vibrateInGrace = globalSettings.vibrateInGrace,
+            vibrateInGrace = draft.vibrateInGrace,
             volumePercent = draft.volumePercent,
             gradualVolume = draft.gradualVolume,
             rampStartPercent = Alarm.DEFAULT_RAMP_START_PERCENT,

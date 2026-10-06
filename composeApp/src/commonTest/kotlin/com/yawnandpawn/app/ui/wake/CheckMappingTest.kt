@@ -78,12 +78,19 @@ class CheckMappingTest {
     @Test
     fun `in grace the countdown reads the grace deadline, rounded up, and freezes during a call`() {
         val seconds =
-            listOf(0L, 1L, 999L, 1_000L, 6_000L, 19_001L, 20_000L, 25_000L).map { millis ->
+            listOf(0L, 1L, 999L, 1_000L, 6_000L, 19_001L).map { millis ->
                 (map(grace(), now = at(millis))?.grace as GraceState.Running).secondsLeft
             }
         val paused = grace().let { it.copy(session = it.session.copy(pausedAt = at(5_000))) }
 
-        assertEquals(listOf(20, 20, 20, 19, 14, 1, 0, 0), seconds)
+        assertEquals(listOf(20, 20, 20, 19, 14, 1), seconds)
+        assertEquals(
+            listOf(GraceState.Expired, GraceState.Expired),
+            listOf(20_000L, 25_000L).map {
+                map(grace(), now = at(it))?.grace
+            },
+            "passed: expired at once",
+        )
         assertEquals(GraceState.Running(secondsLeft = 15, totalSeconds = 20), map(paused, now = at(12_000))?.grace)
     }
 

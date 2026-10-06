@@ -157,11 +157,40 @@ class AppDatabaseFactoryTest {
                 assertEquals(Outcome.Success(Unit), history.recordMerge(merge))
                 assertEquals(Outcome.Success(listOf(merge)), history.merges(row.sessionId))
             }
-            assertEquals(4, userVersion())
+            assertEquals(AppDatabase.SCHEMA_VERSION, userVersion())
         }
 
     @Test
-    fun `a v1 database migrates through v2 and v3 to v4`() =
+    fun `the exported version 5 schema adds the alarm's quiet-time vibration, on by default`() {
+        assertTrue(schema(5).exists(), "exported schema missing: ${schema(5).absolutePath}")
+        val json = schema(5).readText()
+
+        assertTrue(json.contains("\"version\": 5"), "schema version 5")
+        assertEquals(listOf("alarm", "request_code_sequence", "session_history", "session_merge"), tableNames(json))
+        assertTrue(json.contains("`vibrate_in_grace` INTEGER NOT NULL DEFAULT 1"), "the new alarm column, on by default")
+    }
+
+    @Test
+    fun `migrating a v4 database keeps alarms, the code mark, history and merges, and turns quiet-time vibration on`() =
+        runTest {
+            val alarm = anAlarm(id = "a", requestCode = 1000)
+            val row = aSessionHistoryRow()
+            createDatabase(version = 4, alarms = listOf(alarm.copy(vibrateInGrace = false)), requestCodeMark = 1002, history = listOf(row))
+
+            withDatabase { database ->
+                val repository = RoomAlarmRepository(database.alarmDao())
+                assertEquals(Outcome.Success(listOf(alarm.copy(vibrateInGrace = true))), repository.listAll())
+                assertEquals(Outcome.Success(1003), RoomRequestCodeSequence(database.requestCodeSequenceDao()).next())
+                assertEquals(Outcome.Success(row), RoomSessionHistoryRepository(database.sessionHistoryDao()).find(row.sessionId))
+                // The new column is stored and read back per alarm.
+                assertEquals(Outcome.Success(Unit), repository.upsert(alarm.copy(vibrateInGrace = false)))
+                assertEquals(Outcome.Success(listOf(alarm.copy(vibrateInGrace = false))), repository.listAll())
+            }
+            assertEquals(5, userVersion())
+        }
+
+    @Test
+    fun `a v1 database migrates through every version to the current one`() =
         runTest {
             val alarm = anAlarm(id = "a", requestCode = 1005)
             createDatabase(version = 1, alarms = listOf(alarm))
@@ -171,20 +200,21 @@ class AppDatabaseFactoryTest {
                 assertEquals(0, database.sessionHistoryDao().count())
                 assertEquals(Outcome.Success(1006), RoomRequestCodeSequence(database.requestCodeSequenceDao()).next())
             }
-            assertEquals(4, userVersion())
+            assertEquals(AppDatabase.SCHEMA_VERSION, userVersion())
         }
 
     @Test
-    fun `a new database is created at version 4 with an empty session history and merge log`() =
+    fun `a new database is created at the current version with an empty session history and merge log`() =
         runTest {
             withDatabase { database -> assertEquals(0, database.sessionHistoryDao().count()) }
 
-            assertEquals(4, userVersion())
+            assertEquals(AppDatabase.SCHEMA_VERSION, userVersion())
         }
 
     @Test
     fun `the migrations cover every version step and nothing is destructive`() {
-        assertEquals(listOf(1 to 2, 2 to 3, 3 to 4), APP_DATABASE_MIGRATIONS.map { it.startVersion to it.endVersion })
+        assertEquals(listOf(1 to 2, 2 to 3, 3 to 4, 4 to 5), APP_DATABASE_MIGRATIONS.map { it.startVersion to it.endVersion })
+        assertEquals(5, AppDatabase.SCHEMA_VERSION)
     }
 
     @Test

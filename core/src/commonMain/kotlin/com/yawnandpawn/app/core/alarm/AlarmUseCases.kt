@@ -30,6 +30,7 @@ data class AlarmDraft(
     val vibration: Boolean = true,
     val snoozeLengthMinutes: Int = Alarm.DEFAULT_SNOOZE_LENGTH_MINUTES,
     val graceSeconds: Int = Alarm.DEFAULT_GRACE_SECONDS,
+    val vibrateInGrace: Boolean = Alarm.DEFAULT_VIBRATE_IN_GRACE,
 )
 
 /**
@@ -126,6 +127,7 @@ class SaveAlarm(
         vibration = vibration,
         snoozeLengthMinutes = snoozeLengthMinutes,
         graceSeconds = graceSeconds,
+        vibrateInGrace = vibrateInGrace,
         requestCode = requestCode,
         createdAt = createdAt,
         updatedAt = createdAt,

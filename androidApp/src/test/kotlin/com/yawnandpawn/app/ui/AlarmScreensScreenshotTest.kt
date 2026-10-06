@@ -4,9 +4,13 @@ import androidx.compose.material3.SnackbarDuration
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.remember
+import androidx.compose.ui.semantics.SemanticsProperties
+import androidx.compose.ui.test.SemanticsMatcher
+import androidx.compose.ui.test.assertIsOn
 import androidx.compose.ui.test.hasClickAction
 import androidx.compose.ui.test.hasText
 import androidx.compose.ui.test.isDialog
+import androidx.compose.ui.test.isToggleable
 import androidx.compose.ui.test.junit4.createEmptyComposeRule
 import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithText
@@ -137,6 +141,25 @@ class AlarmScreensScreenshotTest {
 
     @Test
     fun `Snooze sub-screen in Dark`() = editor("alarm_editor_snooze_dark", EditorSamples.snoozePane, PpsThemeMode.Dark)
+
+    @Test
+    @Config(fontScale = 2.0f)
+    fun `Quiet time sub-screen in Light at 200 percent`() = quietTime("alarm_editor_quiet_time_light_font200", PpsThemeMode.Light)
+
+    @Test
+    @Config(fontScale = 2.0f)
+    fun `Quiet time sub-screen in Dark at 200 percent`() = quietTime("alarm_editor_quiet_time_dark_font200", PpsThemeMode.Dark)
+
+    /** Story 3.4: the slider says its value as "{seconds} seconds", and the switch is on by default. */
+    private fun quietTime(
+        name: String,
+        mode: PpsThemeMode,
+    ) = withScreen(mode, content = { AlarmEditorScreen(state = EditorSamples.quietTimePane, is24Hour = false, onIntent = {}) }) {
+        composeRule.onNode(SemanticsMatcher.expectValue(SemanticsProperties.StateDescription, "25 seconds")).assertExists()
+        composeRule.onNode(hasText("Vibrate during quiet time")).assertExists()
+        composeRule.onNode(isToggleable()).assertIsOn()
+        capture(name)
+    }
 
     /** The narrowest supported phone width: the seven day chips stay on one line. */
     @Test

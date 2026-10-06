@@ -46,6 +46,14 @@ internal fun reduceEditor(
             state.copy(form = form.copy(vibration = intent.enabled))
         }
 
+        is EditorIntent.GraceChanged -> {
+            state.copy(form = form.copy(graceSeconds = intent.seconds))
+        }
+
+        is EditorIntent.VibrateInGraceToggled -> {
+            state.copy(form = form.copy(vibrateInGrace = intent.enabled))
+        }
+
         else -> {
             state.copy(full = full?.let { reduceFull(it, intent) }).let { reduceNavigation(it, intent) }
         }
@@ -58,14 +66,6 @@ private fun reduceFull(
     intent: EditorIntent,
 ): FullEditorSections =
     when (intent) {
-        is EditorIntent.GraceChanged -> {
-            full.copy(graceSeconds = intent.seconds)
-        }
-
-        is EditorIntent.VibrateInGraceToggled -> {
-            full.copy(vibrateInGrace = intent.enabled)
-        }
-
         is EditorIntent.CheckModeSelected -> {
             full.copy(checkMode = intent.mode)
         }

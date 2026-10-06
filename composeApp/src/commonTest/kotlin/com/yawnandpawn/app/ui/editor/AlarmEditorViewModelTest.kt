@@ -233,6 +233,7 @@ class AlarmEditorViewModelTest {
                     rampStartPercent = 10,
                     vibration = false,
                     soundRef = "builtin:birds",
+                    graceSeconds = 25,
                 ),
                 form,
             )
@@ -478,6 +479,51 @@ class AlarmEditorViewModelTest {
 
             assertFalse(viewModel.state.value.showDiscardDialog)
             assertEquals(listOf<EditorEffect>(EditorEffect.Close), effects)
+        }
+
+    @Test
+    fun `the Quiet time sub-screen edits the quiet time and its vibration, saved with Save (Story 3_4)`() =
+        runTest(dispatcher) {
+            repository.upsert(stored)
+            val viewModel = viewModel(stored.id)
+            advanceUntilIdle()
+            assertEquals(
+                25 to true,
+                viewModel.state.value.form
+                    .let { it.graceSeconds to it.vibrateInGrace },
+                "opens with the stored values",
+            )
+
+            viewModel.onIntent(EditorIntent.PaneOpened(EditorPane.QuietTime))
+            viewModel.onIntent(EditorIntent.GraceChanged(17))
+            viewModel.onIntent(EditorIntent.VibrateInGraceToggled(false))
+            assertEquals(EditorPane.QuietTime, viewModel.state.value.pane)
+            viewModel.onIntent(EditorIntent.GraceChanged(99))
+            assertEquals(30, viewModel.state.value.form.graceSeconds, "kept in 15 to 30 s")
+            viewModel.onIntent(EditorIntent.GraceChanged(17))
+            viewModel.onIntent(EditorIntent.SaveClicked)
+            advanceUntilIdle()
+
+            val saved = repository.current.single()
+            assertEquals(17 to false, saved.graceSeconds to saved.vibrateInGrace)
+        }
+
+    @Test
+    fun `a new alarm vibrates during its 20 s quiet time, and changing either asks to discard on Back`() =
+        runTest(dispatcher) {
+            val fresh = viewModel()
+            assertEquals(
+                20 to true,
+                fresh.state.value.form
+                    .let { it.graceSeconds to it.vibrateInGrace },
+            )
+
+            listOf(EditorIntent.GraceChanged(22), EditorIntent.VibrateInGraceToggled(false)).forEach { change ->
+                val viewModel = viewModel()
+                viewModel.onIntent(change)
+                viewModel.onIntent(EditorIntent.BackRequested)
+                assertTrue(viewModel.state.value.showDiscardDialog, "$change")
+            }
         }
 
     @Test

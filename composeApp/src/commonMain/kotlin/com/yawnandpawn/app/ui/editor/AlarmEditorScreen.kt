@@ -346,13 +346,14 @@ private fun RowsCard(
                 )
             }
             GroupDivider()
-            NavRow(
-                label = stringResource(Res.string.editor_quiet_time),
-                value = stringResource(Res.string.editor_grace_seconds, full.graceSeconds),
-                onClick = { onIntent(EditorIntent.PaneOpened(EditorPane.QuietTime)) },
-            )
-            GroupDivider()
         }
+        // Story 3.4: the quiet time is a stored alarm setting, so its row shows in every editor.
+        NavRow(
+            label = stringResource(Res.string.editor_quiet_time),
+            value = stringResource(Res.string.editor_grace_seconds, state.form.graceSeconds),
+            onClick = { onIntent(EditorIntent.PaneOpened(EditorPane.QuietTime)) },
+        )
+        GroupDivider()
         NavRow(
             label = stringResource(Res.string.editor_snooze),
             value = stringResource(Res.string.editor_snooze_minutes, state.form.snoozeLengthMinutes),

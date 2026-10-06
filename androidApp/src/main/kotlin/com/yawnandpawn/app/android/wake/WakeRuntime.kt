@@ -1,6 +1,7 @@
 package com.yawnandpawn.app.android.wake
 
 import android.app.Notification
+import com.yawnandpawn.app.android.call.CallState
 import com.yawnandpawn.app.core.alarm.Alarm
 import com.yawnandpawn.app.core.alarm.AlarmFired
 import com.yawnandpawn.app.core.alarm.AlarmScheduler
@@ -60,8 +61,10 @@ data class EmergencyRing(
  * - It never awaits `SessionEngine.dispatch` from inside [run] or [apply] (the engine's Mutex is held there and is not
  *   reentrant). Any event the runtime produces is launched on `ApplicationScope`, outside the effect; in Story 1.14 it
  *   produces none, and [WakeService] dispatches `ProcessRestored` after a crash.
- * - Call contract (Story 2.7): the runtime never detects calls. The call adapter sends `CallStarted` again after every
- *   `ProcessRestored` and at every new ring while a call is active; the runtime pauses on `SoundPaused` / `PauseSound`.
+ * - Call contract (Story 2.7): the call adapter (`CallDetector`) sends `CallStarted` again after every `ProcessRestored`
+ *   and at every new ring while a call is active; the runtime pauses on `SoundPaused` / `PauseSound`. Until the session
+ *   knows, a ring that starts during a call ([calls]) opens silent and without vibration, and [onCallOver] lets it ring
+ *   if the call ends first.
  *
  * [session] reads the engine's current state (published before the effects run), for the ramp settings, the alarm time
  * and whether the state wants vibration. [now] reads the time ports. (One handler per session effect, hence many small
@@ -77,6 +80,8 @@ class WakeRuntime(
     private val session: () -> SessionState,
     private val timings: WakeTimings = WakeTimings.None,
     private val onInitBilling: () -> Unit = {},
+    /** Whether a phone call is in progress (Story 2.7); a ring that starts during one opens silent. */
+    private val calls: CallState = NoCalls,
 ) : EffectRunner {
     private val player = outputs.player
     private val vibrator = outputs.vibrator
@@ -148,7 +153,8 @@ class WakeRuntime(
 
             EntryEffect.SoundOff -> silence()
 
-            EntryEffect.Vibrating -> vibrator.start()
+            // A ring that started during a call vibrates only once the session knows about the call (Story 2.7).
+            EntryEffect.Vibrating -> if (!calls.inCall()) vibrator.start()
 
             EntryEffect.HeartbeatSlotArmed -> keepHeartbeat()
 
@@ -228,6 +234,17 @@ class WakeRuntime(
 
     private fun AlarmFired.isFresh(now: TimeSnapshot): Boolean =
         now.wallMillis - scheduledAt.toEpochMilliseconds() < SessionReducer.NO_INTERACTION_TIMEOUT.inWholeMilliseconds
+
+    /**
+     * No call is in progress and the session is not paused for one (Story 2.7): a ring held silent because it started
+     * during a call that ended before the session paused rings now, with its vibration. Nothing otherwise.
+     */
+    fun onCallOver() {
+        val ring = session() as? SessionState.Ring ?: return
+        if (ring.session.paused || emergency.value != null) return
+        player.resume()
+        if (EntryEffect.Vibrating in entryEffects(ring)) vibrator.start()
+    }
 
     /** At app start with no session: a volume a crashed session left saved is put back (AD-5), unless a ring started. */
     fun restoreVolumeIfIdle() {
@@ -404,7 +421,10 @@ class WakeRuntime(
         val ring = ringConfig()
         // Decided only when a sound starts: a heartbeat (ArmSlot on SlotFired) while it plays must not change the request.
         if (starts) restoredRing = !newRing
-        player.play(effect.soundRef, effect.volumePercent, ring.gradual && !restoredRing, ring.rampStart)
+        // A ring that starts during a call opens silent and still until the session pauses or the call ends (Story 2.7).
+        val inCall = calls.inCall()
+        player.play(effect.soundRef, effect.volumePercent, ring.gradual && !restoredRing, ring.rampStart, paused = inCall)
+        if (inCall) vibrator.stop()
     }
 
     private fun clearEmergencyForSession() {
@@ -498,4 +518,9 @@ class WakeRuntime(
         private const val CRASHED = "the wake flow crashed before the session started"
         private const val FULL_PERCENT = 100
     }
+}
+
+/** No call detection (tests, and before the call adapter is wired): never in a call. */
+private object NoCalls : CallState {
+    override fun inCall(): Boolean = false
 }

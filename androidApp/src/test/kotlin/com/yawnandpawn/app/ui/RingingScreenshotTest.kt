@@ -107,4 +107,11 @@ class RingingScreenshotTest {
     @Config(fontScale = 2.0f)
     fun `after the unlock with a snooze on sale at 200 percent`() =
         ringing("wake_ringing_unlocked_snooze_sunrise_font200", RingingSamples.afterUnlockSnooze)
+
+    @Test
+    fun `paused for a phone call`() = ringing("wake_ringing_phone_call_sunrise", RingingSamples.phoneCall)
+
+    @Test
+    @Config(fontScale = 2.0f)
+    fun `paused for a phone call at 200 percent`() = ringing("wake_ringing_phone_call_sunrise_font200", RingingSamples.phoneCall)
 }

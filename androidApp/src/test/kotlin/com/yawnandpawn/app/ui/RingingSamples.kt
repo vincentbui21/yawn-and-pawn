@@ -6,6 +6,7 @@ import com.yawnandpawn.app.core.session.SnoozeAvailability
 import com.yawnandpawn.app.core.session.TierFeeLadder
 import com.yawnandpawn.app.core.session.UnavailableReason
 import com.yawnandpawn.app.core.session.nextOffer
+import com.yawnandpawn.app.core.time.TimeSnapshot
 import com.yawnandpawn.app.testing.FakeUserLockState
 import com.yawnandpawn.app.testing.aSession
 import com.yawnandpawn.app.testing.aSessionConfig
@@ -66,6 +67,10 @@ object RingingSamples {
 
     /** A test alarm before the first unlock still says "Test · no charge". */
     val testAlarmLocked: RingingUiState = session(label = null, testMode = true).let { ringingUiState(it, locked.availability(it), utc) }
+
+    /** Story 2.7: the ring paused for a phone call, with the note "Paused for your call. Rings again when it ends.". */
+    val phoneCall: RingingUiState =
+        epic1(session().copy(pausedAt = TimeSnapshot(at.toEpochMilliseconds(), elapsedMillis = 0, bootCount = 1)))
 
     /** The enabled "Snooze · {price}" variant, preview only until billing (Epic 4). */
     val enabledSnooze: RingingUiState =

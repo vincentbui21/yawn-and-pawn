@@ -31,6 +31,7 @@ import org.robolectric.shadows.util.DataSource
 import java.io.IOException
 import kotlin.math.roundToInt
 import kotlin.test.assertEquals
+import kotlin.test.assertFalse
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
 import kotlin.time.Duration.Companion.seconds
@@ -374,9 +375,9 @@ class AndroidAlarmPlayerTest {
         var ringingInHook: Boolean? = null
         lateinit var hooked: AndroidAlarmPlayer
         hooked =
-            AndroidAlarmPlayer(playbacks, resolver, volume, clock, CoroutineScope(dispatcher), logger) {
+            AndroidAlarmPlayer(playbacks, resolver, volume, clock, CoroutineScope(dispatcher), logger, onRingStart = {
                 ringingInHook = hooked.isRinging
-            }
+            })
 
         hooked.play(Alarm.DEFAULT_SOUND_REF, 80, gradual = false, rampStartPercent = 20)
 
@@ -486,5 +487,50 @@ class AndroidAlarmPlayerTest {
         assertTrue(player.isRinging)
         player.stop(restoreVolume = true)
         assertTrue(!player.isRinging)
+    }
+
+    @Test
+    fun `a ring holds alarm audio focus, never paused for ducking, and a focus change never touches it (Story 2-7)`() {
+        val changes = mutableListOf<Int>()
+        val focused =
+            AndroidAlarmPlayer(
+                playbacks,
+                resolver,
+                volume,
+                clock,
+                CoroutineScope(dispatcher),
+                logger,
+                focus = AlarmAudioFocus(audio) { changes += it },
+            )
+
+        focused.play(Alarm.DEFAULT_SOUND_REF, 80, gradual = false, rampStartPercent = 20)
+
+        val focusRequest = checkNotNull(shadowOf(audio).lastAudioFocusRequest)
+        val request = focusRequest.audioFocusRequest
+        assertEquals(AudioManager.AUDIOFOCUS_GAIN, request.focusGain)
+        assertEquals(AudioAttributes.USAGE_ALARM, request.audioAttributes.usage)
+        assertFalse(request.willPauseWhenDucked())
+        // Another app takes focus (music, video, navigation): the alarm plays on at full gain.
+        focusRequest.listener.onAudioFocusChange(AudioManager.AUDIOFOCUS_LOSS_TRANSIENT_CAN_DUCK)
+        focusRequest.listener.onAudioFocusChange(AudioManager.AUDIOFOCUS_LOSS)
+        val playback = checkNotNull(playbacks.current)
+        assertTrue(playback.playing)
+        assertEquals(1f, focused.gain)
+        assertFalse(focused.isPaused || focused.isMuted)
+        assertEquals(listOf(AudioManager.AUDIOFOCUS_LOSS_TRANSIENT_CAN_DUCK, AudioManager.AUDIOFOCUS_LOSS), changes)
+        focused.stop(restoreVolume = true)
+        assertEquals(request, shadowOf(audio).lastAbandonedAudioFocusRequest, "focus is given back at the end")
+    }
+
+    @Test
+    fun `a ring opened paused never starts its sound until it is resumed (Story 2-7)`() {
+        player.play(Alarm.DEFAULT_SOUND_REF, 80, gradual = false, rampStartPercent = 20, paused = true)
+        val playback = checkNotNull(playbacks.current)
+
+        assertEquals(0, playback.started)
+        player.play(Alarm.DEFAULT_SOUND_REF, 80, gradual = false, rampStartPercent = 20, paused = true)
+        assertEquals(0, playback.started, "the same request keeps it silent")
+        player.resume()
+        assertTrue(playback.playing)
     }
 }

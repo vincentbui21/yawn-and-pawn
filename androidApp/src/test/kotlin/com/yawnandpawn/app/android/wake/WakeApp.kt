@@ -8,6 +8,7 @@ import androidx.test.core.app.ApplicationProvider
 import com.yawnandpawn.app.YawnAndPawnApp
 import com.yawnandpawn.app.android.AndroidLogger
 import com.yawnandpawn.app.android.ApplicationScope
+import com.yawnandpawn.app.android.call.CallState
 import com.yawnandpawn.app.core.alarm.AlarmFired
 import com.yawnandpawn.app.core.alarm.AlarmRepository
 import com.yawnandpawn.app.core.crash.CrashReporter
@@ -59,6 +60,7 @@ internal class WakeApp(
     billing: Billing? = null,
     userLock: UserLockState? = null,
     serviceStartWait: Duration = Duration.ZERO,
+    calls: CallState? = null,
 ) {
     val app: YawnAndPawnApp = ApplicationProvider.getApplicationContext()
     val crashReporter = FakeCrashReporter()
@@ -84,6 +86,7 @@ internal class WakeApp(
                 testAlarms?.let { replaced -> single<TestAlarmStore> { replaced } }
                 billing?.let { replaced -> single<Billing> { replaced } }
                 userLock?.let { replaced -> single<UserLockState> { replaced } }
+                calls?.let { replaced -> single<CallState> { replaced } }
                 single { WakeServiceStarts(serviceStartWait) }
             },
         )

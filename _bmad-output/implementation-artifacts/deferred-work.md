@@ -119,6 +119,7 @@
 - source_spec: `_bmad-output/implementation-artifacts/spec-1-11-the-complete-wake-session-state-machine-in-core.md`
   summary: Call adapter contract: re-send CallStarted after ProcessRestored and whenever a new ring starts while a call is still active.
   evidence: The reducer clears the pause on restore and every new ring (after a snooze, a grant during a call, a merge) starts unpaused; Snoozed + CallStarted changes nothing (AD-2). Without the re-send the next ring plays over an ongoing call. Story 2.7 (pause for phone calls) must implement and test it.
+  status: resolved in Story 2.7. `CallDetector` reconciles the session with the audio mode on every state change, so a restore or a new ring during a call is paused again. A ring that starts mid-call opens silent until then. Tested in `CallDetectorTest` (restore during and after a call, ring during a call) and `WakeRuntimeTest`.
 - source_spec: `_bmad-output/implementation-artifacts/spec-1-11-the-complete-wake-session-state-machine-in-core.md`
   summary: AD-2 has a UserUnlocked row only for Ringing; unlocking during Grace, Loud or Snoozed leaves beforeFirstUnlock set for the whole session.
   evidence: Normative table (ARCHITECTURE-SPINE.md AD-2) row "Ringing (before first unlock) | UserUnlocked". The user usually unlocks while doing the check (Grace or Loud). Settle with Story 2.3 (ring before first unlock) via correct-course: add rows for Grace, Loud and Snoozed.

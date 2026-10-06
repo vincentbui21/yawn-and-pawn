@@ -9,6 +9,7 @@ import android.os.IBinder
 import com.yawnandpawn.app.android.AlarmFiredReceiver
 import com.yawnandpawn.app.android.ApplicationScope
 import com.yawnandpawn.app.android.alarmFiredOrNull
+import com.yawnandpawn.app.android.call.CallDetector
 import com.yawnandpawn.app.android.putAlarmFired
 import com.yawnandpawn.app.android.putRetrySince
 import com.yawnandpawn.app.android.retrySinceOrNull
@@ -124,6 +125,7 @@ class WakeService :
     private val userLock: UserLockState by inject()
     private val sessionLock: SessionLockGuard by inject()
     private val unlockSignals: UnlockSignals by inject()
+    private val calls: CallDetector by inject()
 
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate + CoroutineExceptionHandler { _, e -> onCrash(e) })
     private val commands = Mutex()
@@ -153,6 +155,8 @@ class WakeService :
         super.onCreate()
         timings.stage(WakeStage.ServiceCreated)
         runtime.onServiceStarted()
+        // Story 2.7: a call pauses the ring while the service runs.
+        calls.start()
     }
 
     override fun onStartCommand(
@@ -226,6 +230,7 @@ class WakeService :
 
     override fun onDestroy() {
         scope.cancel()
+        calls.stop()
         runtime.onServiceStopped()
         super.onDestroy()
     }

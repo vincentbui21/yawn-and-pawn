@@ -11,6 +11,7 @@ import android.os.VibratorManager
 import androidx.test.core.app.ApplicationProvider
 import com.yawnandpawn.app.StopAppRule
 import com.yawnandpawn.app.android.ApplicationScope
+import com.yawnandpawn.app.android.call.CallState
 import com.yawnandpawn.app.android.sound.LibrarySoundResolver
 import com.yawnandpawn.app.awaitChildren
 import com.yawnandpawn.app.core.alarm.AlarmFired
@@ -84,6 +85,7 @@ class WakeRuntimeTest {
         }
     private var now = TimeSnapshot(wallMillis = 1_000_000, elapsedMillis = 5_000, bootCount = 1)
     private var state: SessionState = SessionState.Idle
+    private var inCall = false
     private val runtime =
         WakeRuntime(
             WakeOutputs(player, vibrator, notifier, volume, scheduler, crashReporter),
@@ -92,6 +94,10 @@ class WakeRuntimeTest {
             logger,
             { now },
             { state },
+            calls =
+                object : CallState {
+                    override fun inCall(): Boolean = inCall
+                },
         )
 
     private val session: SessionData = aSession()
@@ -249,6 +255,48 @@ class WakeRuntimeTest {
         enter(SessionState.Snoozed(session.copy(snoozeEnd = Deadline.after(now, 9.minutes), interactionDeadline = null)))
         runtime.reassertRingVolume()
         assertEquals(1, alarmStream(), "snoozed")
+    }
+
+    @Test
+    fun `a ring that starts during a call opens silent, never starts the sound and does not vibrate (Story 2-7)`() {
+        inCall = true
+
+        enter(ringing)
+
+        val playback = checkNotNull(playbacks.current)
+        assertEquals(0, playback.started, "not one audible frame")
+        assertTrue(player.isPaused)
+        assertFalse(vibrator.isVibrating)
+        // The heartbeat re-applies the entry effects: still silent while the call lasts.
+        enter(ringing)
+        assertEquals(0, playback.started)
+    }
+
+    @Test
+    fun `a call that ends before the session paused lets the held ring play and vibrate (Story 2-7)`() {
+        inCall = true
+        enter(ringing)
+        inCall = false
+
+        runtime.onCallOver()
+
+        assertEquals(1, checkNotNull(playbacks.current).started)
+        assertFalse(player.isPaused)
+        assertTrue(vibrator.isVibrating)
+    }
+
+    @Test
+    fun `onCallOver changes nothing while the session is paused for a call or snoozed (Story 2-7)`() {
+        enter(ringing)
+        run(SessionEffect.PauseSound)
+        enter(SessionState.Ringing(session.copy(pausedAt = now)))
+
+        runtime.onCallOver()
+
+        assertTrue(player.isPaused, "the session still pauses for the call")
+        enter(SessionState.Snoozed(session.copy(snoozeEnd = Deadline.after(now, 9.minutes), interactionDeadline = null)))
+        runtime.onCallOver()
+        assertNull(player.sound)
     }
 
     @Test

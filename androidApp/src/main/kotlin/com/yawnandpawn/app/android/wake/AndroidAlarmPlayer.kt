@@ -21,6 +21,9 @@ import kotlin.time.Duration.Companion.seconds
  *   alarm's volume ([AlarmVolume], which saves the user's own volume once); never continuously, so between those
  *   moments the user's change stays (Story 2.8). [stop] with `restoreVolume` puts the user's volume back at the end of
  *   the session.
+ * - **Focus and calls (Story 2.7):** a ring requests audio focus ([AlarmAudioFocus]) and gives it back on release; a
+ *   focus change never ducks or pauses it. Only the session pauses it for a call, and a ring that starts during a
+ *   call opens silent ([play] with `paused`).
  * - **Ramp:** with "Gradually increase volume" on, the gain follows the pure `rampGain(elapsed, start, 30 s)`, updated
  *   about every 250 ms; off, the first frame plays at full gain. Elapsed time is monotonic.
  * - **Never silent:** a sound that cannot be opened, or fails during prepare or while ringing, is replaced in the same
@@ -50,6 +53,8 @@ class AndroidAlarmPlayer(
      * 1.17). It must not call back into the player.
      */
     private val onRingStart: () -> Unit = {},
+    /** The ring's audio focus (Story 2.7): requested when a ring opens, given back when it is released. */
+    private val focus: AlarmAudioFocus? = null,
 ) {
     /** What the session asked for; a different request starts the ring over. [rampStart] is null when there is no ramp. */
     private data class Request(
@@ -113,21 +118,27 @@ class AndroidAlarmPlayer(
 
     /**
      * Plays [soundRef] at [volumePercent] of the alarm stream, ramping from [rampStartPercent] of it when [gradual], and
-     * unmuted and unpaused. The same request again only unmutes and resumes; another one starts the ring over.
+     * unmuted. The same request again only unmutes and resumes; another one starts the ring over. With [paused] (a call
+     * is in progress, Story 2.7) the ring opens but stays silent: it never starts, so not one frame is audible, and the
+     * same request again keeps it paused.
      */
     fun play(
         soundRef: String,
         volumePercent: Int,
         gradual: Boolean,
         rampStartPercent: Int,
+        paused: Boolean = false,
     ) = synchronized(lock) {
         val wanted = Request(soundRef, volumePercent, if (gradual) rampStartPercent / PERCENT else null)
         isMuted = false
         if (playback != null && wanted == request) {
-            if (isPaused) resumeLocked()
+            when {
+                paused && !isPaused -> pauseLocked()
+                !paused && isPaused -> resumeLocked()
+            }
             applyGainLocked()
         } else {
-            startRingLocked(wanted, resolve(soundRef))
+            startRingLocked(wanted, resolve(soundRef), paused)
         }
     }
 
@@ -177,11 +188,7 @@ class AndroidAlarmPlayer(
         }
 
     /** A call: paused until [resume] (or the next [play]). */
-    fun pause() =
-        synchronized(lock) {
-            isPaused = true
-            playback?.pause()
-        }
+    fun pause() = synchronized(lock) { pauseLocked() }
 
     fun resume() = synchronized(lock) { if (isPaused) resumeLocked() }
 
@@ -204,11 +211,14 @@ class AndroidAlarmPlayer(
     private fun startRingLocked(
         wanted: Request,
         first: AlarmSound,
+        paused: Boolean = false,
     ) {
         release()
         request = wanted
         ringOn = true
+        isPaused = paused
         onRingStart()
+        focus?.request()
         volume.setForRing(wanted.volumePercent)
         rampStartedAt = monotonicClock.elapsedMillis()
         rampDone = wanted.rampStart == null
@@ -322,6 +332,11 @@ class AndroidAlarmPlayer(
         sound = null
     }
 
+    private fun pauseLocked() {
+        isPaused = true
+        playback?.pause()
+    }
+
     private fun resumeLocked() {
         isPaused = false
         playback?.start()
@@ -352,6 +367,7 @@ class AndroidAlarmPlayer(
     }
 
     private fun release() {
+        focus?.abandon()
         rampJob?.cancel()
         rampJob = null
         retryJob?.cancel()

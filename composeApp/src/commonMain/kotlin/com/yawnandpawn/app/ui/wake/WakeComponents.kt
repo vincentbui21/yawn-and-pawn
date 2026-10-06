@@ -292,7 +292,10 @@ private fun reasonText(reason: SnoozeUnavailableReason): String =
         },
     )
 
-/** A wake `note-inline` (Direct Boot notice, phone call pause). */
+/**
+ * A wake `note-inline` (Direct Boot notice, phone call pause). The call note comes and goes during a ring, so TalkBack
+ * announces it politely (Story 2.7).
+ */
 @Composable
 fun WakeNoteView(
     note: WakeNote,
@@ -306,7 +309,7 @@ fun WakeNoteView(
                     WakeNote.PhoneCall -> Res.string.wake_phone_call_note
                 },
             ),
-        modifier = modifier,
+        modifier = if (note == WakeNote.PhoneCall) modifier.semantics { liveRegion = LiveRegionMode.Polite } else modifier,
     )
 }
 

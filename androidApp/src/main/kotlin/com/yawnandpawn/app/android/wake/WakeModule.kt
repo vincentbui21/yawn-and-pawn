@@ -1,5 +1,9 @@
 package com.yawnandpawn.app.android.wake
 
+import android.media.AudioManager
+import com.yawnandpawn.app.android.call.AudioModeCallState
+import com.yawnandpawn.app.android.call.CallDetector
+import com.yawnandpawn.app.android.call.CallState
 import com.yawnandpawn.app.android.crash.CrashlyticsSink
 import com.yawnandpawn.app.android.crash.FirebaseCrashReporter
 import com.yawnandpawn.app.android.crash.isFirebaseConfigured
@@ -32,6 +36,9 @@ fun wakeModule(): Module =
             if (isFirebaseConfigured(context)) FirebaseCrashReporter(CrashlyticsSink(context), get()) else NoOpCrashReporter(get())
         }
         single<SeedSource> { RandomSeedSource() }
+        // Calls (Story 2.7): the audio mode only, never telephony; the adapter runs while the wake service does.
+        single<CallState> { AudioModeCallState(androidContext()) }
+        single { CallDetector(get(), get(), get(), get<WakeScope>()) }
         single { WakeScope(get()) }
         single<PlaybackFactory> { MediaPlayerPlaybackFactory(androidContext()) }
         single<SoundResolver> { LibrarySoundResolver() }
@@ -54,6 +61,11 @@ fun wakeModule(): Module =
                 get(),
                 timings = get(),
                 onRingStart = { koin.getOrNull<SoundPreview>()?.stop() },
+                // Story 2.7: a focus change goes to the call adapter (a call takes focus); it never ducks the ring.
+                focus =
+                    AlarmAudioFocus(androidContext().getSystemService(AudioManager::class.java)) { change ->
+                        koin.getOrNull<CallDetector>()?.onFocusChange(change)
+                    },
             )
         }
         single {
@@ -67,6 +79,7 @@ fun wakeModule(): Module =
                 timings = get(),
                 // AD-2 InitBilling (Story 2.4): looked up when it runs, as UnlockSignals depends on the engine.
                 onInitBilling = { get<UnlockSignals>().initialiseAfterUnlock() },
+                calls = get(),
             )
         }
         // The first unlock after a boot (Story 2.4): UserUnlocked, billing and crash reporting.

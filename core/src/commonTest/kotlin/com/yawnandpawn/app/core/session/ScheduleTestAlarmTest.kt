@@ -7,9 +7,11 @@ import com.yawnandpawn.app.core.alarm.RecordingLogger
 import com.yawnandpawn.app.core.alarm.RecordingScheduler
 import com.yawnandpawn.app.core.alarm.TestClock
 import com.yawnandpawn.app.core.checks.CheckAnswer
+import com.yawnandpawn.app.core.checks.CheckEntry
 import com.yawnandpawn.app.core.checks.CheckMode
 import com.yawnandpawn.app.core.checks.CheckPlan
 import com.yawnandpawn.app.core.checks.CheckType
+import com.yawnandpawn.app.core.checks.Difficulty
 import com.yawnandpawn.app.core.error.DomainError
 import com.yawnandpawn.app.core.error.Outcome
 import com.yawnandpawn.app.core.log.LogEvent
@@ -64,7 +66,7 @@ class ScheduleTestAlarmTest {
             assertEquals(false, config.vibration)
             assertEquals(5, config.snoozeLengthMinutes)
             assertEquals(25, config.graceSeconds)
-            assertEquals(CheckPlan.placeholder(), config.checkPlan)
+            assertEquals(CheckPlan(CheckMode.Random, listOf(CheckEntry(CheckType.Math, Difficulty.Medium, count = 3))), config.checkPlan)
         }
 
     @Test

@@ -259,14 +259,11 @@ class SessionConflictScenariosTest {
             "one session slot",
         ).triggerAtTime
 
-    /** "I'm up" if ringing, then every placeholder step answered: the session completes and is recorded. */
+    /** "I'm up" if ringing, then every item of the check answered: the session completes and is recorded. */
     private fun finish(): String {
         val sessionId = session().sessionId
         if (state() is SessionState.Ringing) app.dispatch(SessionEvent.ImUpTapped)
-        val stepsLeft =
-            session()
-                .checkRun.plan.entries.size - session().checkRun.step.entry
-        repeat(stepsLeft) { app.dispatch(SessionEvent.CheckAnswerSubmitted(CheckAnswer.Placeholder)) }
+        app.solveCheck()
         app.awaitUntil("the session is recorded and Idle") { state() == SessionState.Idle }
         return sessionId
     }

@@ -250,9 +250,8 @@ object PreviewSamples {
         CheckContent.Math(
             problemNumber = 1,
             problemCount = 2,
-            left = 47,
-            right = 38,
-            operator = MathOperator.Plus,
+            operands = listOf(47, 38),
+            operators = listOf(MathOperator.Plus),
             answer = "8",
         )
 
@@ -266,7 +265,14 @@ object PreviewSamples {
     val checkMathWrong =
         checkMath.copy(
             grace = GraceState.Expired,
-            content = mathProblem.copy(problemNumber = 2, left = 6, right = 7, operator = MathOperator.Times, answer = "", wrong = true),
+            content =
+                mathProblem.copy(
+                    problemNumber = 2,
+                    operands = listOf(6, 7),
+                    operators = listOf(MathOperator.Times),
+                    answer = "",
+                    wrong = true,
+                ),
         )
 
     val checkWord =

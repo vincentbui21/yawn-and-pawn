@@ -93,7 +93,7 @@ class SessionFakesTest {
         assertEquals(listOf<SessionEffect>(SessionEffect.ShowSnoozeConfirm(SnoozeOffer("snooze_usd_02", 1))), confirm.effects)
 
         state = reducer.reduce(state, SessionEvent.ImUpTapped, time.snapshot()).state
-        listOf(SessionEffect.WrongAnswerFeedback, null, SessionEffect.StopSound).forEach { first ->
+        listOf(SessionEffect.WrongAnswerFeedback, SessionEffect.StartCheckStep(1), SessionEffect.StopSound).forEach { first ->
             val transition = reducer.reduce(state, SessionEvent.CheckAnswerSubmitted(CheckAnswer.Placeholder), time.snapshot())
             assertEquals(first, transition.effects.firstOrNull())
             state = transition.state

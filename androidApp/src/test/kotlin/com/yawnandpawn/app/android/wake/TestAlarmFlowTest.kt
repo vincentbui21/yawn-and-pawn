@@ -106,6 +106,8 @@ class TestAlarmFlowTest {
         assertIs<SessionState.Ringing>(app.engine.state.value)
 
         composeRule.onNodeWithText("I'm up").performClick()
+        app.awaitUntil("the check starts") { app.engine.state.value is SessionState.Grace }
+        app.solveCheck()
         // Story 3.3: the test Success screen, then "Done" closes the wake screen.
         composeRule.awaitSuccess(app, "Test finished. Your alarm works.")
         composeRule.onNodeWithText("Done").performClick()

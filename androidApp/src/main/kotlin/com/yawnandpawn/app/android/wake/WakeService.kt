@@ -18,6 +18,7 @@ import com.yawnandpawn.app.core.alarm.Alarm
 import com.yawnandpawn.app.core.alarm.AlarmFired
 import com.yawnandpawn.app.core.alarm.AlarmRepository
 import com.yawnandpawn.app.core.checks.CheckAnswer
+import com.yawnandpawn.app.core.checks.Puzzle
 import com.yawnandpawn.app.core.crash.CrashReporter
 import com.yawnandpawn.app.core.error.DomainError
 import com.yawnandpawn.app.core.error.Outcome
@@ -28,6 +29,7 @@ import com.yawnandpawn.app.core.log.LogEvent
 import com.yawnandpawn.app.core.log.Logger
 import com.yawnandpawn.app.core.log.WakeStage
 import com.yawnandpawn.app.core.log.diagnostic
+import com.yawnandpawn.app.core.session.CheckRun
 import com.yawnandpawn.app.core.session.ConfigResolver
 import com.yawnandpawn.app.core.session.GlobalSettings
 import com.yawnandpawn.app.core.session.SessionData
@@ -336,14 +338,21 @@ class WakeService :
     }
 
     /**
-     * Ends the ringing test [test] through its normal end path (Epic 1's placeholder check: "I'm up", then the answer),
-     * so it reaches Completed, is recorded as Test and returns to Idle. Returns the state after: Idle, or the test still
-     * ringing when a step could not be saved (the real alarm then merges into it, so it still rings).
+     * Ends the ringing test [test] through its normal end path ("I'm up", then the right answer to each item of its
+     * check, Story 3.2), so it reaches Completed, is recorded as Test and returns to Idle. The service answers for the
+     * user only here: a test never charges and the real alarm needs the wake screen. Returns the state after: Idle, or
+     * the test still ringing when a step could not be saved (the real alarm then merges into it, so it still rings).
      */
     private suspend fun endTestSession(test: SessionState.Ring): SessionState {
         logger.log(LogEvent.OperationFailed("finish test session", "a real alarm rang; the test ends as Test"))
         if (test is SessionState.Ringing) engine.dispatch(SessionEvent.ImUpTapped)
-        engine.dispatch(SessionEvent.CheckAnswerSubmitted(CheckAnswer.Placeholder))
+        var answers = 0
+        var answer = (engine.state.value as? SessionState.Ring)?.session?.checkRun?.solution()
+        while (answer != null && answers < MAX_TEST_ANSWERS) {
+            answers++
+            val sent = engine.dispatch(SessionEvent.CheckAnswerSubmitted(answer))
+            answer = if (sent is Outcome.Success) (sent.value as? SessionState.Ring)?.session?.checkRun?.solution() else null
+        }
         return engine.state.value
     }
 
@@ -690,5 +699,23 @@ class WakeService :
 
         /** A session that rings or is snoozed: the service keeps running and ticking. */
         private fun SessionState.isOngoing(): Boolean = this is SessionState.Ring || this is SessionState.Snoozed
+
+        /** More answers than any plan has items (at most a few entries of 10): ending a test always stops. */
+        private const val MAX_TEST_ANSWERS = 100
+
+        /**
+         * The right answer to the current item of this run, from the entry's seed; null once the check is passed. Only
+         * [endTestSession] uses it: the screen never knows an answer, the engine validates it.
+         */
+        private fun CheckRun.solution(): CheckAnswer? {
+            val entry = currentEntry
+            val seed = seeds.getOrNull(step.entry)
+            val puzzle = if (entry == null || seed == null) null else entry.type.generate(seed, entry.difficulty, entry.count)
+            return when (puzzle) {
+                is Puzzle.Math -> puzzle.problems.getOrNull(step.item)?.let { CheckAnswer.Number(it.answer.toString()) }
+                Puzzle.Placeholder -> CheckAnswer.Placeholder
+                null -> null
+            }
+        }
     }
 }

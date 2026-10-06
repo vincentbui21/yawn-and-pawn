@@ -30,10 +30,19 @@ data class CheckPlan(
     val entries: List<CheckEntry>,
 ) {
     companion object {
+        /** Math · Medium · 3: the default entry (owner-approved default 2026-09-26) and the Direct Boot check (FR-ALM-11). */
+        val DEFAULT_ENTRY: CheckEntry = CheckEntry(CheckType.Math, Difficulty.Medium, count = CheckType.Math.defaultCount)
+
         /** The one entry of [placeholder]. */
         val PLACEHOLDER_ENTRY: CheckEntry = CheckEntry(CheckType.Placeholder, Difficulty.Medium, count = 1)
 
-        /** The Epic 1 plan that production alarms ring with until Story 3.2: one [CheckType.Placeholder] entry. */
+        /** The plan of every alarm and of the test alarm until per-alarm checks (Story 3.5): Random, one Math · Medium · 3. */
+        fun default(): CheckPlan = CheckPlan(CheckMode.Random, listOf(DEFAULT_ENTRY))
+
+        /**
+         * The Epic 1 plan: one [CheckType.Placeholder] entry, which "I'm up" alone passes. Since Story 3.2 no production
+         * code makes it; it remains for sessions stored by Epics 1–2 and for tests that are not about the check.
+         */
         fun placeholder(): CheckPlan = CheckPlan(CheckMode.All, listOf(PLACEHOLDER_ENTRY))
     }
 }

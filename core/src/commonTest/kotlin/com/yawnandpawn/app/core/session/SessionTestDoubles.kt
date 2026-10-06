@@ -130,9 +130,8 @@ internal fun reducer(
     fallback: FallbackDecision = FallbackDecision.Allowed(FALLBACK_PLAN),
 ): SessionReducer = SessionReducer(StubAvailability(availability), StubCheck(check), StubFallback(fallback))
 
-/** The reducer Epic 1 ships with. */
-internal fun productionReducer(): SessionReducer =
-    SessionReducer(NoBillingSnoozeAvailability(), PlaceholderCheckValidator, NoFallbackPolicy)
+/** The production reducer: the plugin validator (Story 3.2), no billing and no fallback yet. */
+internal fun productionReducer(): SessionReducer = SessionReducer(NoBillingSnoozeAvailability(), PluginCheckValidator, NoFallbackPolicy)
 
 internal fun ignored(
     state: SessionState,

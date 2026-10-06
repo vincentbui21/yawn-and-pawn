@@ -206,8 +206,10 @@
     <string name="fallback_link">Can't do this check?</string>
     <string name="camera_unavailable">Camera isn't available. Pick a fallback check.</string>
     <string name="math_progress">Problem %1$d of %2$d</string>
-    <string name="math_plus">%1$d plus %2$d</string>
-    <string name="math_times">%1$d times %2$d</string>
+    <!-- Math spoken form (EXPERIENCE.md Key strings: "plus" / "times"; "minus" for Easy a − b, listed for the owner). -->
+    <string name="math_word_plus">plus</string>
+    <string name="math_word_times">times</string>
+    <string name="math_word_minus">minus</string>
     <string name="math_delete_digit">Delete digit</string>
     <string name="math_answer">Answer %1$s</string>
     <string name="math_check">Check</string>

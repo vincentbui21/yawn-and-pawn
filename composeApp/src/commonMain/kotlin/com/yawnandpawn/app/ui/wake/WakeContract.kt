@@ -90,7 +90,8 @@ sealed interface GraceState {
     data object Expired : GraceState
 }
 
-enum class MathOperator { Plus, Times }
+/** An operator of a Math problem: "+", "×" and "−" on screen, "plus", "times" and "minus" for TalkBack. */
+enum class MathOperator { Plus, Times, Minus }
 
 enum class MemoryPhase { Watch, YourTurn }
 
@@ -100,12 +101,15 @@ enum class HouseHuntResult { None, Checking, Matched, NoMatch }
 sealed interface CheckContent {
     val type: CheckType
 
+    /**
+     * Problem [problemNumber] of [problemCount]: [operands] joined by [operators] (one fewer), for example `23 × 4 + 17`
+     * (Story 3.2: Medium and Hard have more than two operands). [answer] holds the digits typed so far.
+     */
     data class Math(
         val problemNumber: Int,
         val problemCount: Int,
-        val left: Int,
-        val right: Int,
-        val operator: MathOperator,
+        val operands: List<Int>,
+        val operators: List<MathOperator>,
         val answer: String = "",
         val wrong: Boolean = false,
     ) : CheckContent {
@@ -153,7 +157,8 @@ sealed interface CheckContent {
 
 /** A check screen: grace header, the check, and the footer (fallback link, snooze). */
 data class CheckUiState(
-    val grace: GraceState,
+    /** Null on a ring without a grace window (a merged ring): neither the countdown nor "Alarm's back on". */
+    val grace: GraceState?,
     val content: CheckContent,
     val snooze: SnoozeOffer,
     /** "Can't do this check?": at once when the camera is unavailable, else after 5 failed attempts. */

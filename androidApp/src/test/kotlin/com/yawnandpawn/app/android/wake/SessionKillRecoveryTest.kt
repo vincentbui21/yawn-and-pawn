@@ -12,7 +12,6 @@ import com.yawnandpawn.app.core.alarm.AlarmFired
 import com.yawnandpawn.app.core.alarm.AlarmRepository
 import com.yawnandpawn.app.core.alarm.AlarmScheduler
 import com.yawnandpawn.app.core.alarm.RequestCodes
-import com.yawnandpawn.app.core.checks.CheckAnswer
 import com.yawnandpawn.app.core.error.Outcome
 import com.yawnandpawn.app.core.history.SessionHistoryRepository
 import com.yawnandpawn.app.core.history.SessionHistoryRow
@@ -140,7 +139,7 @@ class SessionKillRecoveryTest {
         outcome: SessionOutcome = SessionOutcome.OnTime,
     ) {
         if (app.engine.state.value is SessionState.Ringing) app.dispatch(SessionEvent.ImUpTapped)
-        app.dispatch(SessionEvent.CheckAnswerSubmitted(CheckAnswer.Placeholder))
+        app.solveCheck()
         try {
             app.awaitUntil("the session ends") { app.engine.state.value == SessionState.Idle }
         } catch (e: AssertionError) {

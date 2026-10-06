@@ -19,7 +19,7 @@ import com.yawnandpawn.app.core.session.FallbackPolicy
 import com.yawnandpawn.app.core.session.FeeLadder
 import com.yawnandpawn.app.core.session.NoBillingSnoozeAvailability
 import com.yawnandpawn.app.core.session.NoFallbackPolicy
-import com.yawnandpawn.app.core.session.PlaceholderCheckValidator
+import com.yawnandpawn.app.core.session.PluginCheckValidator
 import com.yawnandpawn.app.core.session.SessionEngine
 import com.yawnandpawn.app.core.session.SessionRecorder
 import com.yawnandpawn.app.core.session.SessionReducer
@@ -75,7 +75,7 @@ class SessionWiringTest {
 
         assertIs<NoBillingSnoozeAvailability>(koin.get<SnoozeAvailabilityPolicy>())
         assertIs<AndroidUserLockState>(koin.get<UserLockState>())
-        assertSame(PlaceholderCheckValidator, koin.get<CheckValidator>())
+        assertSame(PluginCheckValidator, koin.get<CheckValidator>())
         assertSame(NoFallbackPolicy, koin.get<FallbackPolicy>())
         assertSame(TierFeeLadder, koin.get<FeeLadder>())
     }

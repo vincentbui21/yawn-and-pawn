@@ -81,9 +81,11 @@ class OneTimeAlarmFlowTest {
         assertEquals(once.id, ringing.session.config.alarmId)
         assertTrue(app.lastMediaPlayer().isReallyPlaying, "the sound plays")
 
-        // "I'm up" on the wake screen ends the Epic 1 session.
+        // "I'm up" on the wake screen, then the Math check (Story 3.2) solved, ends the session.
         val screen = Robolectric.buildActivity(WakeActivity::class.java).setup().get()
         composeRule.onNodeWithText("I'm up").performClick()
+        app.awaitUntil("the check starts") { app.engine.state.value is SessionState.Grace }
+        app.solveCheck()
         // Story 3.3: the Success screen for the session, then "Done" closes the wake screen.
         composeRule.awaitSuccess(app, "Up on time.")
         composeRule.onNodeWithText("Done").performClick()

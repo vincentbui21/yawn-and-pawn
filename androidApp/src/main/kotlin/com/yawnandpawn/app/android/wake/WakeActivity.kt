@@ -26,14 +26,18 @@ import com.yawnandpawn.app.android.screen.forwardsToWakeScreen
 import com.yawnandpawn.app.core.checks.CheckAnswer
 import com.yawnandpawn.app.core.error.Outcome
 import com.yawnandpawn.app.core.log.WakeStage
+import com.yawnandpawn.app.core.session.SessionData
 import com.yawnandpawn.app.core.session.SessionEngine
 import com.yawnandpawn.app.core.session.SessionEvent
 import com.yawnandpawn.app.core.session.SessionState
+import com.yawnandpawn.app.core.session.SnoozeAvailability
 import com.yawnandpawn.app.core.session.SnoozeAvailabilityPolicy
 import com.yawnandpawn.app.core.session.UserLockState
 import com.yawnandpawn.app.core.time.MonotonicClock
 import com.yawnandpawn.app.core.time.TimeZoneProvider
 import com.yawnandpawn.app.ui.format.is24HourClock
+import com.yawnandpawn.app.ui.wake.CheckScreen
+import com.yawnandpawn.app.ui.wake.CheckUiState
 import com.yawnandpawn.app.ui.wake.PlaceholderStep
 import com.yawnandpawn.app.ui.wake.RingingScreen
 import com.yawnandpawn.app.ui.wake.RingingUiState
@@ -46,12 +50,16 @@ import com.yawnandpawn.app.ui.wake.ringingUiState
 import com.yawnandpawn.app.ui.wake.successUiState
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
+import kotlinx.datetime.TimeZone
+import org.koin.android.ext.android.get
 import org.koin.android.ext.android.inject
 import kotlin.time.Duration
 import kotlin.time.Duration.Companion.seconds
 
 /**
- * The wake screen over the lock screen (AD-5): the approved Ringing screen (`ui/wake/RingingScreen`, Story 1.15).
+ * The wake screen over the lock screen (AD-5): the approved Ringing screen (`ui/wake/RingingScreen`, Story 1.15) and,
+ * in Grace or Loud on a Math entry, the approved Check screen (`ui/wake/CheckScreen`, Story 3.2, [WakeCheck]).
+ * Opened again from the notification or from "Back to alarm" after Home, it shows the current problem.
  *
  * It opens only from the ringing notification (its full-screen intent or a tap on it), never from the background. It
  * shows over the lock screen and turns the screen on (`setShowWhenLocked` / `setTurnScreenOn` on API 27+, window flags
@@ -70,9 +78,10 @@ import kotlin.time.Duration.Companion.seconds
  * - "I'm up" sends `UserInteracted`, then `ImUpTapped`. In the emergency ring it stops the ring instead. Tapped while
  *   the screen still waits for the session, it is kept and sent once the session (or an emergency ring) rings.
  * - Any other tap sends `UserInteracted`.
- * - Grace or Loud on the Epic 1 placeholder check step: the screen answers it (`CheckAnswerSubmitted(Placeholder)`), so
- *   "I'm up" alone ends the session; a failed dispatch is retried while the step is due. Epic 3 shows the real check
- *   here instead.
+ * - Number pad keys ([WakeCheck.onKey]): the typed digits live only on the screen; "Check" sends
+ *   `CheckAnswerSubmitted(Number)` and the engine decides. A new problem or a wrong answer clears the field.
+ * - Grace or Loud on a placeholder entry (only a session stored by Epics 1–2): the screen answers it
+ *   (`CheckAnswerSubmitted(Placeholder)`), so "I'm up" alone ends that session; a failed dispatch is retried while due.
  *
  * Once a session it showed completes (the engine's [SessionEngine.ended], since its `state` may skip from Completed to
  * Idle), it shows the basic Success screen for that session instead (Story 3.3): UI-only state keyed by `sessionId`,
@@ -90,6 +99,9 @@ class WakeActivity : ComponentActivity() {
     private val userLock: UserLockState by inject()
     private val unlockSignals: UnlockSignals by inject()
     private val monotonicClock: MonotonicClock by inject()
+
+    /** The Check screen's typed answer, grace clock and keys (Story 3.2). */
+    private val check by lazy { WakeCheck(get(), get(), get()) }
 
     /** "I'm up" was tapped before the session existed; replayed once it rings. */
     private var pendingImUp by mutableStateOf(false)
@@ -188,11 +200,12 @@ class WakeActivity : ComponentActivity() {
                 // Restored with a Success whose session this process no longer knows (it was killed): nothing to show.
                 if (end.successSessionId != null) LaunchedEffect(Unit) { finish() }
                 val zone = timeZones.current()
-                val session = (state as? SessionState.Active)?.session
+                val session = (state as? SessionState.Active)?.session?.takeIf { state.isRinging() }
+                val availability = session?.let { key(unlocked) { snoozePolicy.availability(it) } }
                 val current =
-                    emergency?.let { alarmOnlyRingingUiState(it.alarmAt, zone) }
-                        ?: session?.let { ringingUiState(it, key(unlocked) { snoozePolicy.availability(it) }, zone) }
-                        ?: runtime.shownAlarmAt()?.let { alarmOnlyRingingUiState(it, zone) }
+                    emergency?.let { WakeScreen.Ringing(alarmOnlyRingingUiState(it.alarmAt, zone)) }
+                        ?: sessionScreen(state, session, availability, zone, check)
+                        ?: runtime.shownAlarmAt()?.let { WakeScreen.Ringing(alarmOnlyRingingUiState(it, zone)) }
                 if (current != null) last.state = current
                 WakeContent(state = current ?: last.state, onIntent = ::onIntent, onInteracted = ::interacted)
             }
@@ -222,6 +235,8 @@ class WakeActivity : ComponentActivity() {
         when {
             // "Done" on Success: the session is already over, so it only closes the screen.
             intent == WakeIntent.DoneClicked -> finish()
+
+            WakeCheck.isKey(intent) -> check.onKey(intent, send = { send(*it.toTypedArray()) }, interacted = ::interacted)
 
             intent != WakeIntent.ImUpClicked -> interacted()
 
@@ -287,23 +302,50 @@ private fun ComponentActivity.showOverLockScreen() {
 
 /** The last Ringing state the screen showed; not snapshot state, so keeping it never recomposes. */
 private class LastShown {
-    var state: RingingUiState? = null
+    var state: WakeScreen? = null
 }
 
 /**
- * The Ringing screen for [state], or the plain Sunrise wake surface while there is nothing to show yet. A tap that no
- * action takes (the clock, the disabled snooze, empty space) is [onInteracted].
+ * The screen of a ringing or snoozed [session] (null otherwise): in Grace or Loud on a Math entry the Check screen
+ * (Story 3.2), whichever way the wake screen was opened; else its Ringing screen.
+ */
+@Composable
+private fun sessionScreen(
+    state: SessionState,
+    session: SessionData?,
+    availability: SnoozeAvailability?,
+    zone: TimeZone,
+    check: WakeCheck,
+): WakeScreen? {
+    if (session == null || availability == null) return null
+    return check.screen(state, availability)?.let(WakeScreen::Check) ?: WakeScreen.Ringing(ringingUiState(session, availability, zone))
+}
+
+/** What the wake screen shows: the Ringing screen, or the Check screen of a Math entry (Story 3.2). */
+private sealed interface WakeScreen {
+    data class Ringing(
+        val state: RingingUiState,
+    ) : WakeScreen
+
+    data class Check(
+        val state: CheckUiState,
+    ) : WakeScreen
+}
+
+/**
+ * The Ringing or Check screen for [state], or the plain Sunrise wake surface while there is nothing to show yet. A tap
+ * that no action takes (the clock, the disabled snooze, empty space) is [onInteracted].
  */
 @Composable
 private fun WakeContent(
-    state: RingingUiState?,
+    state: WakeScreen?,
     onIntent: (WakeIntent) -> Unit,
     onInteracted: () -> Unit,
 ) {
     val taps = Modifier.pointerInput(Unit) { detectTapGestures { onInteracted() } }
-    if (state == null) {
-        WakeSurface(modifier = taps) {}
-    } else {
-        RingingScreen(state = state, is24Hour = is24HourClock(), onIntent = onIntent, modifier = taps)
+    when (state) {
+        null -> WakeSurface(modifier = taps) {}
+        is WakeScreen.Ringing -> RingingScreen(state = state.state, is24Hour = is24HourClock(), onIntent = onIntent, modifier = taps)
+        is WakeScreen.Check -> CheckScreen(state = state.state, onIntent = onIntent, modifier = taps)
     }
 }

@@ -85,7 +85,7 @@ private fun CheckPreviewUiState.withMath(
         }
 
         WakeIntent.SubmitAnswer -> {
-            if (content.answer.toIntOrNull() == content.left + content.right) {
+            if (content.answer.toIntOrNull() == content.operands.sum()) {
                 copy(done = true)
             } else {
                 copy(content = content.copy(answer = "", wrong = true))

@@ -2,6 +2,9 @@
 
 package com.yawnandpawn.app.ui.wake
 
+import androidx.compose.animation.core.Animatable
+import androidx.compose.animation.core.KeyframesSpec
+import androidx.compose.animation.core.keyframes
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -22,6 +25,8 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -29,6 +34,10 @@ import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.graphics.PathEffect
 import androidx.compose.ui.graphics.drawOutline
 import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.hapticfeedback.HapticFeedbackType
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.semantics.LiveRegionMode
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.clearAndSetSemantics
@@ -57,9 +66,10 @@ import com.yawnandpawn.app.ui.resources.house_hunt_take_photo
 import com.yawnandpawn.app.ui.resources.math_answer
 import com.yawnandpawn.app.ui.resources.math_check
 import com.yawnandpawn.app.ui.resources.math_delete_digit
-import com.yawnandpawn.app.ui.resources.math_plus
 import com.yawnandpawn.app.ui.resources.math_progress
-import com.yawnandpawn.app.ui.resources.math_times
+import com.yawnandpawn.app.ui.resources.math_word_minus
+import com.yawnandpawn.app.ui.resources.math_word_plus
+import com.yawnandpawn.app.ui.resources.math_word_times
 import com.yawnandpawn.app.ui.resources.memory_progress
 import com.yawnandpawn.app.ui.resources.memory_tile
 import com.yawnandpawn.app.ui.resources.memory_watch
@@ -78,13 +88,15 @@ import com.yawnandpawn.app.ui.resources.word_shuffle
 import com.yawnandpawn.app.ui.resources.word_slot_empty
 import com.yawnandpawn.app.ui.resources.word_slot_filled
 import com.yawnandpawn.app.ui.theme.PpsTheme
+import org.jetbrains.compose.resources.StringResource
 import org.jetbrains.compose.resources.painterResource
 import org.jetbrains.compose.resources.stringResource
 
 /**
  * A check, always Sunrise: the grace header (`countdown-ring`), the check itself (scrolls at large font scales) and the
  * footer pinned in the thumb zone (`fallback-link` when offered, then `button-snooze`). The confirm sheet and payment
- * snackbars sit over it. Every value is fixed state; timers, camera and validation belong to later stories.
+ * snackbars sit over it. It renders [state] only: `WakeActivity` maps the session to it (Math since Story 3.2), and the
+ * engine validates every answer.
  */
 @Composable
 fun CheckScreen(
@@ -106,14 +118,20 @@ fun CheckScreen(
         },
     ) {
         val spacing = PpsTheme.spacing
+        // Math keeps its number pad out of the scrolling area (Story 3.2): at 200% font on a small phone only the problem
+        // scrolls, and "Check" stays on screen above the snooze control. Where everything fits, it looks the same.
+        val math = state.content as? CheckContent.Math
         Column(modifier = Modifier.fillMaxSize().wakeContentPadding()) {
-            Column(
-                modifier = Modifier.fillMaxWidth().weight(1f).verticalScroll(rememberScrollState()),
-                verticalArrangement = Arrangement.spacedBy(spacing.space4),
-            ) {
-                GraceHeader(grace = state.grace)
-                state.note?.let { WakeNoteView(note = it) }
-                CheckContentView(content = state.content, onIntent = onIntent)
+            Column(modifier = Modifier.fillMaxWidth().weight(1f), horizontalAlignment = Alignment.CenterHorizontally) {
+                Column(
+                    modifier = Modifier.fillMaxWidth().weight(1f, fill = math == null).verticalScroll(rememberScrollState()),
+                    verticalArrangement = Arrangement.spacedBy(spacing.space4),
+                ) {
+                    state.grace?.let { GraceHeader(grace = it) }
+                    state.note?.let { WakeNoteView(note = it) }
+                    if (math != null) MathProblem(math) else CheckContentView(content = state.content, onIntent = onIntent)
+                }
+                if (math != null) NumberPad(onIntent = onIntent, modifier = Modifier.padding(top = spacing.space3))
             }
             Column(
                 modifier = Modifier.fillMaxWidth().padding(top = spacing.space3),
@@ -172,54 +190,117 @@ private fun MathCheck(
     content: CheckContent.Math,
     onIntent: (WakeIntent) -> Unit,
 ) {
+    Column(verticalArrangement = Arrangement.spacedBy(PpsTheme.spacing.space3), horizontalAlignment = Alignment.CenterHorizontally) {
+        MathProblem(content)
+        NumberPad(onIntent = onIntent)
+    }
+}
+
+/**
+ * Math without its number pad: the progress line, the problem (a heading TalkBack reads in words, "23 times 4 plus 17")
+ * and the answer field, announced as "Answer {value}" whenever it changes. A wrong answer shakes the field for 200 ms
+ * (instant with animator duration scale 0) with an error haptic, and shows "Not quite. Try again.".
+ */
+@Composable
+private fun MathProblem(content: CheckContent.Math) {
     val colors = PpsTheme.colors
     val spacing = PpsTheme.spacing
     Column(verticalArrangement = Arrangement.spacedBy(spacing.space3), horizontalAlignment = Alignment.CenterHorizontally) {
         Row(modifier = Modifier.fillMaxWidth()) {
             ProgressLine(stringResource(Res.string.math_progress, content.problemNumber, content.problemCount))
         }
-        val symbol = if (content.operator == MathOperator.Plus) "+" else "×"
-        val spoken =
-            stringResource(
-                if (content.operator ==
-                    MathOperator.Plus
-                ) {
-                    Res.string.math_plus
-                } else {
-                    Res.string.math_times
-                },
-                content.left,
-                content.right,
-            )
+        val words = content.operators.map { stringResource(it.word) }
+        val spoken = joinedProblem(content.operands, words)
         Text(
-            text = "${content.left} $symbol ${content.right}",
+            text = joinedProblem(content.operands, content.operators.map { it.symbol }),
             modifier = Modifier.clearAndSetSemantics { contentDescription = spoken }.semantics { heading() },
             style = PpsTheme.typography.display,
             color = colors.text,
+            textAlign = TextAlign.Center,
         )
         val answerSpoken = stringResource(Res.string.math_answer, content.answer)
+        val shake = remember { Animatable(0f) }
+        val haptics = LocalHapticFeedback.current
+        val shakeDistance = with(LocalDensity.current) { spacing.space2.toPx() }
+        LaunchedEffect(content.wrong) {
+            if (content.wrong) {
+                haptics.performHapticFeedback(HapticFeedbackType.Reject)
+                shake.animateTo(0f, keyframes { shakeKeyframes(shakeDistance) })
+            }
+        }
         Box(
             modifier =
                 Modifier
                     .fillMaxWidth()
+                    .graphicsLayer { translationX = shake.value }
                     .heightIn(min = spacing.targetWake)
                     .clip(PpsTheme.shapes.sm)
                     .border(1.dp, if (content.wrong) colors.error else colors.outline, PpsTheme.shapes.sm)
-                    .clearAndSetSemantics { contentDescription = answerSpoken },
+                    .clearAndSetSemantics {
+                        contentDescription = answerSpoken
+                        liveRegion = LiveRegionMode.Polite
+                    },
             contentAlignment = Alignment.Center,
         ) {
             Text(text = content.answer, style = PpsTheme.typography.display, color = colors.text)
         }
         if (content.wrong) WrongAnswer()
-        NumberPad(onIntent = onIntent)
     }
 }
 
+/** The 200 ms shake of a wrong answer: left, right, left, right, back to rest. */
+private fun KeyframesSpec.KeyframesSpecConfig<Float>.shakeKeyframes(distance: Float) {
+    durationMillis = SHAKE_MILLIS
+    listOf(-distance, distance, -distance, distance).forEachIndexed { index, offset ->
+        offset at SHAKE_MILLIS * (index + 1) / (SHAKE_STEPS + 1)
+    }
+}
+
+private const val SHAKE_MILLIS = 200
+private const val SHAKE_STEPS = 4
+
+/** [operands] with [operators] between them, spaced: "23 × 4 + 17", or the same in words. */
+private fun joinedProblem(
+    operands: List<Int>,
+    operators: List<String>,
+): String =
+    buildString {
+        operands.forEachIndexed { index, operand ->
+            if (index > 0) append(' ').append(operators.getOrElse(index - 1) { "" }).append(' ')
+            append(operand)
+        }
+    }
+
+/** The sign on screen: the plus sign, the multiplication sign U+00D7 and the minus sign U+2212. */
+private val MathOperator.symbol: String
+    get() =
+        when (this) {
+            MathOperator.Plus -> "+"
+            MathOperator.Times -> "×"
+            MathOperator.Minus -> "−"
+        }
+
+/** The word TalkBack reads. */
+private val MathOperator.word: StringResource
+    get() =
+        when (this) {
+            MathOperator.Plus -> Res.string.math_word_plus
+            MathOperator.Times -> Res.string.math_word_times
+            MathOperator.Minus -> Res.string.math_word_minus
+        }
+
+/**
+ * The 3x3+1 `number-pad-key` grid (64 dp keys, 8 dp gaps): digits, backspace ("Delete digit") and "Check". Each tap
+ * gives a light haptic.
+ */
 @Composable
-private fun NumberPad(onIntent: (WakeIntent) -> Unit) {
+private fun NumberPad(
+    onIntent: (WakeIntent) -> Unit,
+    modifier: Modifier = Modifier,
+) {
     val spacing = PpsTheme.spacing
     val rows = listOf(listOf(1, 2, 3), listOf(4, 5, 6), listOf(7, 8, 9))
-    Column(verticalArrangement = Arrangement.spacedBy(spacing.space2)) {
+    Column(modifier = modifier, verticalArrangement = Arrangement.spacedBy(spacing.space2)) {
         rows.forEach { row ->
             Row(horizontalArrangement = Arrangement.spacedBy(spacing.space2)) {
                 row.forEach { digit -> PadKey(label = digit.toString(), onClick = { onIntent(WakeIntent.DigitTapped(digit)) }) }
@@ -243,14 +324,17 @@ private fun PadKey(
 ) {
     val colors = PpsTheme.colors
     val size = PpsTheme.spacing.targetWake
+    val haptics = LocalHapticFeedback.current
     Box(
         modifier =
             Modifier
                 .sizeIn(minWidth = size + PpsTheme.spacing.space6, minHeight = size)
                 .clip(PpsTheme.shapes.md)
                 .background(if (accent) colors.accent else colors.surfaceVariant)
-                .clickable(role = Role.Button, onClick = onClick)
-                .then(if (spoken != null) Modifier.semantics { contentDescription = spoken } else Modifier),
+                .clickable(role = Role.Button) {
+                    haptics.performHapticFeedback(HapticFeedbackType.KeyboardTap)
+                    onClick()
+                }.then(if (spoken != null) Modifier.semantics { contentDescription = spoken } else Modifier),
         contentAlignment = Alignment.Center,
     ) {
         if (label != null) {

@@ -95,6 +95,16 @@ class CameraFallbackPolicyTest {
     }
 
     @Test
+    fun `no fallback for a type outside the fallback choices, even when everything else allows it`() {
+        // Only Math counts as a camera check here, so the current Math entry qualifies and the Placeholder is no camera
+        // check: the fallback choices are the one clause that says no.
+        val mathCamera = CameraFallbackPolicy { it == CheckType.Math }
+        val onMath = ringSession(testConfig(checkPlan = CheckPlan(CheckMode.All, listOf(CheckPlan.DEFAULT_ENTRY))))
+
+        assertEquals(FallbackDecision.NotAllowed, mathCamera.fallback(onMath, request(CheckType.Placeholder)))
+    }
+
+    @Test
     fun `the link is offered exactly when Math would be allowed`() {
         assertTrue(policy.offers(cameraSession(), FallbackReason.CameraUnavailable))
         assertFalse(policy.offers(cameraSession(failedAttempts = 4), FallbackReason.FailedAttempts))

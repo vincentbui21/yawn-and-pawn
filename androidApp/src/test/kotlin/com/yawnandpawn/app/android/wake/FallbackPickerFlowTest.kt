@@ -5,6 +5,7 @@ import androidx.compose.ui.test.hasClickAction
 import androidx.compose.ui.test.hasContentDescription
 import androidx.compose.ui.test.hasText
 import androidx.compose.ui.test.junit4.createEmptyComposeRule
+import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.test.core.app.ActivityScenario
@@ -13,10 +14,13 @@ import com.yawnandpawn.app.core.checks.CheckPlan
 import com.yawnandpawn.app.core.checks.CheckType
 import com.yawnandpawn.app.core.session.CameraFallbackPolicy
 import com.yawnandpawn.app.core.session.FallbackDecision
+import com.yawnandpawn.app.core.session.FallbackReason
+import com.yawnandpawn.app.core.session.FallbackRequest
 import com.yawnandpawn.app.core.session.SessionEvent
 import com.yawnandpawn.app.core.session.SessionState
 import com.yawnandpawn.app.testing.FakeFallbackPolicy
 import com.yawnandpawn.app.testing.aSessionConfig
+import com.yawnandpawn.app.testing.wrongAnswer
 import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -26,6 +30,7 @@ import org.robolectric.annotation.GraphicsMode
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
 import kotlin.test.assertIs
+import kotlin.test.assertNotNull
 import kotlin.test.assertTrue
 
 /**
@@ -91,8 +96,40 @@ class FallbackPickerFlowTest {
             composeRule.onNodeWithText("Problem 1 of 6").assertExists()
             link().assertDoesNotExist()
             composeRule.onNodeWithText("Pick a fallback check").assertDoesNotExist()
+
+            val requests = policy.requests
+            assertTrue(requests.isNotEmpty())
+            assertTrue(requests.all { it.reason == FallbackReason.FailedAttempts }, "every request is for failed attempts: $requests")
+            assertEquals(FallbackRequest(CheckType.Math, FallbackReason.FailedAttempts), requests.last(), "the Math tap asks for Math")
         }
     }
+
+    @Test
+    fun `a picker closed because the fallback stopped being offered does not open again by itself`() {
+        val policy = FakeFallbackPolicy(FallbackDecision.Allowed(mathHard6))
+        val app = WakeApp(fallback = policy)
+        app.dispatch(
+            SessionEvent.AlarmFired("session-1", aSessionConfig().copy(checkPlan = CheckPlan.default()), beforeFirstUnlock = false),
+        )
+        ActivityScenario.launch<WakeActivity>(Intent(app.app, WakeActivity::class.java)).use {
+            composeRule.onNodeWithText("I'm up").performClick()
+            waitFor(app, "Grace") { app.engine.state.value is SessionState.Grace }
+            link().performClick()
+            composeRule.onNodeWithText("Pick a fallback check").assertExists()
+
+            // A wrong answer is a new state, so the screen asks the policy again.
+            policy.decision = FallbackDecision.NotAllowed
+            app.dispatch(SessionEvent.CheckAnswerSubmitted(assertNotNull(wrongAnswer(session(app).checkRun))))
+            waitFor(app, "the picker closes") { pickerTitles().isEmpty() }
+
+            policy.decision = FallbackDecision.Allowed(mathHard6)
+            app.dispatch(SessionEvent.CheckAnswerSubmitted(assertNotNull(wrongAnswer(session(app).checkRun))))
+            waitFor(app, "the link is back") { composeRule.onAllNodesWithText("Can't do this check?").fetchSemanticsNodes().isNotEmpty() }
+            assertTrue(pickerTitles().isEmpty(), "the picker stays closed until the link is tapped again")
+        }
+    }
+
+    private fun pickerTitles() = composeRule.onAllNodesWithText("Pick a fallback check").fetchSemanticsNodes()
 
     @Test
     fun `without an offered fallback there is no link`() {

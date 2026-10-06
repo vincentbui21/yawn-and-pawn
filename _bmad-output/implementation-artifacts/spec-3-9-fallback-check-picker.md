@@ -2,7 +2,7 @@
 title: 'Story 3.9: Fallback check picker'
 type: 'feature'
 created: '2026-10-06'
-status: 'in-progress'
+status: 'done'
 baseline_revision: '4e52a53'
 review_loop_iteration: 0
 followup_review_recommended: false
@@ -28,7 +28,7 @@ deferred: []
   - the camera is unavailable, or the entry failed at least 5 times.
 - **Camera test seam:** the policy asks "is this a camera check" through an injectable function, which defaults to the type's own `usesCamera` (coordinator decision 1(c)). `FakeCameraCheck` in `:testing` treats the placeholder as a camera check.
 - **Session:** `FallbackRequested(type, reason)` replaces the rest of the plan with one entry at Hard × 2 × the type's default count. The fallback gets its own seeds, no failed attempts and `StartCheckStep(0)`. Timers do not change. The plan stays for the session (`fallbackSource`, resolved again each ring), and `fallbackFrom` keeps the replaced type id for history.
-- **Wake screen:** it shows the approved `fallback-link` and `fallback-picker`. History writes `session_history.fallback_from`, in `app.db` v6.
+- **Wake screen:** it shows the approved `fallback-link` and `fallback-picker`. History writes `session_history.fallback_from`, in `app.db` v7 (v6 at first; renumbered after 3.5 at the rebase).
 
 ## Boundaries & Constraints
 
@@ -57,7 +57,7 @@ deferred: []
 | Denied | non-camera entry; already used; camera type chosen; type not a choice; Ringing; passed check | no change |
 | Next ring | fallback used, paid snooze, re-ring | the fallback again with ring 2's fallback seed, never the camera check |
 | Picker | link → picker → "Back to check" | the check again, no fallback; Back does nothing |
-| History | session that used the fallback | `fallback_used` true, `fallback_from` = replaced id; old rows keep null (v5 → v6) |
+| History | session that used the fallback | `fallback_used` true, `fallback_from` = replaced id; old rows keep null (v6 → v7) |
 
 </intent-contract>
 
@@ -76,7 +76,7 @@ deferred: []
 - **Tests:**
   - core: `CameraFallbackPolicyTest`, transition-table R12, `SessionRecorderTest`;
   - testing: `FakeCameraCheckTest`;
-  - data: the v5→v6 migration test;
+  - data: the v6→v7 migration test;
   - composeApp: `CheckMappingTest`;
   - androidApp: `FallbackPickerFlowTest` and `FallbackScreenshotTest`.
 
@@ -95,8 +95,13 @@ deferred: []
 
 ## Notes for the merge
 
-- **Schema:** `app.db` is v6 on this stack (`fallback_from`, v5→v6). It renumbers at the rebase: after Lane 2's 3.5 (v5→v6) it becomes v6→v7.
-- **Seeds:** the fallback seeds use this stack's `SeedDeriver.FALLBACK_BASE` and `CheckRun.seedKey`, which main renamed to `seed(..., fallback = true)` and `seedOf`. `totalFailedAttempts` (main) is not added here: the policy reads the entry's `failedAttempts`, as the AC says ("failedAttempts ≥ 5").
+Done at the rebase onto main `917bebc` (Stories 3.1–3.8):
+
+- **Schema:** `session_history.fallback_from` is `app.db` v7 (`MIGRATION_6_7`, `SCHEMA_VERSION = 7`, exported `7.json`, migration test from v6); 3.5's `check_config` stays v6.
+- **Seeds:** the fallback runs use main's `SeedDeriver.seed(..., fallback = true)` and `CheckRun.seedOf` (this stack's `FALLBACK_BASE`/`seedKey` are gone). Main's `fallbackSource`/`nextRingPlan` and `totalFailedAttempts` stay: the fallback keeps the session's total (history) and resets the entry's `failedAttempts`, which the policy reads, as the AC says ("failedAttempts ≥ 5").
+- **Choices:** `CheckType.fallbackChoices` is every pickable check (`CheckConfig.PICKABLE_TYPES`) without the camera, Math first: Math, Word Unscramble, Memory Sequence. The policy matches the choice by id, so the wake screen's numbered Memory Sequence (TalkBack on, `AccessibilityState`) is allowed and kept numbered. The picker screenshots now show the three cards, as the approved preview does.
+- **Screen:** the fallback link shows on the Math, Word and Memory check screens; `uiCheckType`/`coreCheckType` use main's `toUi()`/`core`. The fallback intents go through main's single in-order sender.
+- `CameraFallbackPolicy` and the `CameraUnavailable` reason path are unchanged for Story 3.10.
 
 ## Verification
 
@@ -112,4 +117,14 @@ Status: implemented in fast mode (one agent), waiting for review. Branch `story/
 
 **Residual risks:**
 - **Inert link:** the production link stays inert until 3.10 gives QR/Barcode `usesCamera = true`. The first real-device check of the whole flow is in 3.11 and 3.14.
-- **Schema:** `app.db` v6 renumbers at the rebase.
+- **Schema:** `app.db` v7 after the rebase (see "Notes for the merge").
+
+## Review (2 reviewers, fast mode)
+
+Two reviewers (adversarial and edge-case/verification) read `4899c12`. Nothing HIGH. Fixed in `fix(3.9): review fixes`:
+
+- **Picker reopening uninvited:** a picker left open when the fallback stopped being offered kept `pickerOpen` and popped up again on a later ring (e.g. the next ring after 5 failures). `WakeCheck.screen` now resets it once the fallback is not offered, and the picker renders only while open and offered. Test: `FallbackPickerFlowTest` (closes, then stays closed when offered again).
+- **Stale link tap:** a `FallbackLinkClicked` from a stale frame armed the picker for later. `onFallback` now takes the current state and opens only while `fallbackOffered`. Test: `WakeCheckTest`.
+- **Tests added:** the locked-ring fallback coming back as `FALLBACK_PLAN` on the unlocked next ring was already pinned by main's `DirectBootTest` (Story 3.1 review), so no second case was kept at the rebase; `CameraFallbackPolicyTest` has a case where only the `fallbackChoices` clause denies; `FallbackPickerFlowTest` asserts every policy request is `FailedAttempts` and the Math tap asks for Math.
+
+At the rebase the two `WakeCheck` fixes were merged into the 3.9 feature commit (main had rewritten `WakeCheck`); their tests stay in this commit. See "Notes for the merge".

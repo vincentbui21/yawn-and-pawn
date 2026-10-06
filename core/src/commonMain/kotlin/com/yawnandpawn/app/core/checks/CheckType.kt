@@ -2,6 +2,7 @@ package com.yawnandpawn.app.core.checks
 
 import com.yawnandpawn.app.core.checks.math.MathGenerator
 import com.yawnandpawn.app.core.checks.memory.MemoryGenerator
+import com.yawnandpawn.app.core.checks.qr.RegisteredCode
 import com.yawnandpawn.app.core.checks.word.WordBank
 import com.yawnandpawn.app.core.checks.word.WordGenerator
 import kotlinx.serialization.SerialName
@@ -72,6 +73,18 @@ sealed interface CheckType {
         position: Int,
         difficulty: Difficulty,
     ): Int = 0
+
+    /**
+     * The puzzle of [entry] for [seed]: [generate] from the entry's difficulty and count. A type with its own per-entry
+     * setting (QR/Barcode's registered code, Story 3.10) overrides it. Call it as `entry.puzzle(seed)`.
+     */
+    fun puzzle(
+        entry: CheckEntry,
+        seed: Long,
+    ): Puzzle = generate(seed, entry.difficulty, entry.count)
+
+    /** Whether [entry] has everything its puzzle needs; only QR/Barcode needs more than its type (a registered code). */
+    fun isReady(entry: CheckEntry): Boolean = true
 
     /**
      * Mental arithmetic (FR-PWK-5): `count` problems, each answered with a non-negative integer. Easy is `a + b` or
@@ -210,6 +223,48 @@ sealed interface CheckType {
     }
 
     /**
+     * Scan a registered barcode or QR code (FR-PWK-7, Story 3.10): the puzzle is the entry's [CheckEntry.code], one item,
+     * no difficulty (owner-approved default 2026-09-26: count fixed at 1). Only a [CheckAnswer.Code] of the same format and
+     * the same trimmed value (the same [RegisteredCode]) passes; any other code is [CheckResult.Wrong], a failed attempt.
+     * It needs the camera, so the fallback check may replace it, and the code lives in normal storage, so before the
+     * first unlock the Direct Boot check replaces it.
+     */
+    @Serializable
+    @SerialName("QrBarcode")
+    data object QrBarcode : CheckType {
+        override val id: String = "QrBarcode"
+        override val usesCamera: Boolean = true
+        override val directBootSafe: Boolean = false
+        override val hasDifficulty: Boolean = false
+        override val countRange: IntRange = 1..1
+        override val defaultCount: Int = 1
+
+        /** Without an entry there is no code: a puzzle that can never be passed. Rings use [puzzle]. */
+        override fun generate(
+            seed: Long,
+            difficulty: Difficulty,
+            count: Int,
+        ): Puzzle = Puzzle.Code(code = null)
+
+        override fun puzzle(
+            entry: CheckEntry,
+            seed: Long,
+        ): Puzzle = Puzzle.Code(entry.code)
+
+        override fun isReady(entry: CheckEntry): Boolean = entry.code != null
+
+        override fun validate(
+            puzzle: Puzzle,
+            position: Int,
+            answer: CheckAnswer,
+        ): CheckResult {
+            val code = (puzzle as? Puzzle.Code)?.code
+            val scanned = (answer as? CheckAnswer.Code)?.code
+            return if (code != null && position == 0 && scanned == code) CheckResult.Correct else CheckResult.Wrong
+        }
+    }
+
+    /**
      * The Epic 1 stand-in, where "I'm up" alone passes the check. No production plan holds it since Story 3.2, but sessions
      * stored by Epics 1–2 hold it (the wake screen still answers it), so it stays in the sealed hierarchy; it is not a
      * check a user can choose. Tests that are not about the check use it too.
@@ -250,7 +305,7 @@ sealed interface CheckType {
          * the JVM initializing a type (say [Math]) first initializes this interface, and an eager list would then hold
          * the half-initialized type as null.
          */
-        val all: List<CheckType> by lazy { listOf(Math, WordUnscramble, MemorySequence(), Placeholder) }
+        val all: List<CheckType> by lazy { listOf(Math, WordUnscramble, MemorySequence(), QrBarcode, Placeholder) }
 
         /**
          * The checks the Fallback check picker offers, in its order (FR-PWK-11, Story 3.9): every check a user may pick

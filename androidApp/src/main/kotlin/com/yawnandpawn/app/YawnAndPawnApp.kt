@@ -10,6 +10,7 @@ import com.yawnandpawn.app.android.UnavailableBilling
 import com.yawnandpawn.app.android.WordListLoader
 import com.yawnandpawn.app.android.androidTimeModule
 import com.yawnandpawn.app.android.crash.FirebaseStartup
+import com.yawnandpawn.app.android.qr.qrModule
 import com.yawnandpawn.app.android.reliability.reliabilityModule
 import com.yawnandpawn.app.android.screen.AndroidWakeScreenOpener
 import com.yawnandpawn.app.android.sound.soundModule
@@ -64,7 +65,7 @@ import org.koin.dsl.module
 /** Koin bindings of :androidApp (platform adapters, core wiring). Later stories add their bindings here. */
 val appModule =
     module {
-        includes(androidTimeModule, wakeModule(), soundModule(), reliabilityModule())
+        includes(androidTimeModule, wakeModule(), soundModule(), reliabilityModule(), qrModule())
         single<IdGenerator> { UuidV4IdGenerator() }
         single<Logger> { AndroidLogger() }
         single { ApplicationScope(get()) }

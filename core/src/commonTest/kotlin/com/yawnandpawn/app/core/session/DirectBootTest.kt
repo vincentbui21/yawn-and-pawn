@@ -7,6 +7,8 @@ import com.yawnandpawn.app.core.checks.CheckMode
 import com.yawnandpawn.app.core.checks.CheckPlan
 import com.yawnandpawn.app.core.checks.CheckType
 import com.yawnandpawn.app.core.checks.Difficulty
+import com.yawnandpawn.app.core.checks.qr.CodeFormat
+import com.yawnandpawn.app.core.checks.qr.RegisteredCode
 import com.yawnandpawn.app.core.error.Outcome
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -176,6 +178,19 @@ class DirectBootTest {
             "only the unsafe entry is swapped, in place, and the mode stays",
         )
         assertSame(mixed, DirectBootSubstitution.lockedPlan(mixed), "Math is Direct Boot safe")
+    }
+
+    @Test
+    fun `a QR-Barcode entry rings as Math before the first unlock and as itself after it (Story 3_10)`() {
+        val code = RegisteredCode.of(CodeFormat.QrCode, "kitchen")!!
+        val qr = CheckPlan(CheckMode.All, listOf(CheckEntry(CheckType.QrBarcode, Difficulty.Medium, 1, code = code)))
+        val reducer = SessionReducer(NoBillingSnoozeAvailability(lock), PluginCheckValidator, NoFallbackPolicy)
+
+        val locked = reducer.reduce(SessionState.Idle, alarmFired(testConfig(checkPlan = qr)), T0, userLocked = true).state
+        val unlocked = reducer.reduce(SessionState.Idle, alarmFired(testConfig(checkPlan = qr)), T0, userLocked = false).state
+
+        assertEquals(CheckPlan(CheckMode.All, listOf(DirectBootSubstitution.DIRECT_BOOT_CHECK)), locked.plan())
+        assertEquals(qr, unlocked.plan())
     }
 
     /** A reducer whose locked plan is [LOCKED]: every step counts as not Direct Boot safe (no such step exists yet). */

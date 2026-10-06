@@ -11,6 +11,8 @@ import com.yawnandpawn.app.core.checks.Puzzle
 import com.yawnandpawn.app.core.checks.SeedDeriver
 import com.yawnandpawn.app.core.checks.word.WordBank
 import com.yawnandpawn.app.core.checks.word.WordList
+import com.yawnandpawn.app.core.checks.qr.CodeFormat
+import com.yawnandpawn.app.core.checks.qr.RegisteredCode
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertIs
@@ -65,6 +67,21 @@ class CheckPluginSessionTest {
         val onLast = run.copy(step = StepPointer(1, 0))
         assertEquals(StepResult.ValidLast, PluginCheckValidator.validate(onLast, answerFor(hard, 202, 0)))
         assertEquals(StepResult.Invalid, PluginCheckValidator.validate(onLast, answerFor(hard, 303, 0)), "another seed's answer")
+    }
+
+    @Test
+    fun `a QR-Barcode entry passes with its registered code only, before or after another entry (Story 3_10)`() {
+        val code = RegisteredCode.of(CodeFormat.QrCode, "bathroom")!!
+        val qr = CheckEntry(CheckType.QrBarcode, Difficulty.Medium, 1, code = code)
+        val other = CheckAnswer.Code(RegisteredCode.of(CodeFormat.QrCode, "bedroom")!!)
+        val alone = CheckRun(CheckPlan(CheckMode.All, listOf(qr)), listOf(9L))
+        val first = CheckRun(CheckPlan(CheckMode.All, listOf(qr, hard)), listOf(9L, 10L))
+
+        assertEquals(StepResult.ValidLast, PluginCheckValidator.validate(alone, CheckAnswer.Code(code)))
+        assertEquals(StepResult.Invalid, PluginCheckValidator.validate(alone, other))
+        assertEquals(StepResult.ValidNext, PluginCheckValidator.validate(first, CheckAnswer.Code(code)))
+        assertEquals(alone, alone.withItemInPuzzle(), "one item")
+        assertEquals(StepPointer(0, 0), alone.copy(step = StepPointer(0, 3)).withItemInPuzzle().step, "past the end: the one item")
     }
 
     @Test

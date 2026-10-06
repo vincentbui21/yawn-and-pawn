@@ -149,10 +149,15 @@ sealed interface CheckContent {
         override val type: CheckType get() = CheckType.MemorySequence
     }
 
+    /**
+     * "Scan your code" with the viewfinder, or the camera-unavailable message. [wrongCode] shows "That's a different
+     * code. ..."; [wrongAttempts] (the failed attempts on the entry) keys its error haptic, so each different code buzzes.
+     */
     data class QrBarcode(
         val cameraAvailable: Boolean = true,
         val wrongCode: Boolean = false,
         val torchOn: Boolean = false,
+        val wrongAttempts: Int = 0,
     ) : CheckContent {
         override val type: CheckType get() = CheckType.QrBarcode
     }

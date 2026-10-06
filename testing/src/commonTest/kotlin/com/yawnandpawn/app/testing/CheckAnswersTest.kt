@@ -1,8 +1,11 @@
 package com.yawnandpawn.app.testing
 
 import com.yawnandpawn.app.core.checks.CheckAnswer
+import com.yawnandpawn.app.core.checks.CheckEntry
 import com.yawnandpawn.app.core.checks.CheckMode
 import com.yawnandpawn.app.core.checks.CheckPlan
+import com.yawnandpawn.app.core.checks.CheckType
+import com.yawnandpawn.app.core.checks.Difficulty
 import com.yawnandpawn.app.core.session.CheckRun
 import com.yawnandpawn.app.core.session.PluginCheckValidator
 import com.yawnandpawn.app.core.session.StepPointer
@@ -26,6 +29,19 @@ class CheckAnswersTest {
             listOf(StepResult.ValidNextItem, StepResult.ValidNextItem, StepResult.ValidLast).map { it to StepResult.Invalid },
             results,
         )
+    }
+
+    @Test
+    fun `a QR entry takes its registered code, the wrong answer is another code, and an entry without a code has none`() {
+        val entry = CheckEntry(CheckType.QrBarcode, Difficulty.Medium, 1, code = aRegisteredCode())
+        val qr = CheckRun(CheckPlan(CheckMode.All, listOf(entry)), listOf(7L))
+
+        assertEquals(CheckAnswer.Code(aRegisteredCode()), rightAnswer(qr))
+        assertEquals(StepResult.ValidLast, PluginCheckValidator.validate(qr, rightAnswer(qr)!!))
+        assertEquals(StepResult.Invalid, PluginCheckValidator.validate(qr, wrongAnswer(qr)!!))
+        val noCode = qr.copy(plan = CheckPlan(CheckMode.All, listOf(entry.copy(code = null))))
+        assertNull(rightAnswer(noCode))
+        assertNull(wrongAnswer(noCode))
     }
 
     @Test

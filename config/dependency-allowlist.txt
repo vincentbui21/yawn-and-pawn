@@ -276,3 +276,50 @@ org.jetbrains.kotlin:kotlin-android-extensions-runtime
 org.jetbrains.kotlin:kotlin-parcelize-runtime
 org.jetbrains.kotlin:kotlin-stdlib-jdk7
 org.jetbrains.kotlin:kotlin-stdlib-jdk8
+
+# CameraX 1.6.2 and bundled ML Kit barcode-scanning 17.3.0 (Story 3.10, the QR/Barcode check; Architecture Stack table).
+# Reviewed 2026-10-06. CameraX (Apache-2.0) shows the viewfinder and hands frames to the analyser; camera-view brings
+# camera-video, the viewfinder core, media3 container/muxer and the feature-combination query (Apache-2.0), which the app
+# never uses to record or store anything. ML Kit barcode-scanning is the BUNDLED model (the model ships in the APK, no
+# download through Play services; play-services-mlkit-barcode-scanning is the unbundled variant's API shim it depends on
+# but the bundled detector is used). ML Kit is under the ML Kit Terms of Service (Google APIs Terms); it processes frames
+# on device only. Its `common` module logs anonymous usage and performance events through the datatransport stack already
+# listed for Crashlytics: declared for the Epic 8 Data safety form (AD-15). Guava, failureaccess, Dagger, jakarta.inject,
+# auto-value annotations and j2objc annotations (Apache-2.0), jsr305 (BSD-3-Clause) and checker-qual (MIT) are their
+# compile-time annotation and support libraries; atomicfu and the Kotlin BOM come with them. None opens a network connection
+# except the usage logging named above.
+androidx.camera.featurecombinationquery:featurecombinationquery
+androidx.camera.viewfinder:viewfinder-core
+androidx.camera:camera-camera2
+androidx.camera:camera-camera2-pipe
+androidx.camera:camera-core
+androidx.camera:camera-lifecycle
+androidx.camera:camera-video
+androidx.camera:camera-view
+androidx.concurrent:concurrent-futures-ktx
+androidx.core:core-backported-fixes
+androidx.exifinterface:exifinterface
+androidx.media3:media3-common
+androidx.media3:media3-container
+androidx.media3:media3-muxer
+androidx.tracing:tracing-android
+androidx.tracing:tracing-ktx
+com.google.android.gms:play-services-base
+com.google.android.gms:play-services-mlkit-barcode-scanning
+com.google.android.odml:image
+com.google.auto.value:auto-value-annotations
+com.google.code.findbugs:jsr305
+com.google.dagger:dagger
+com.google.guava:failureaccess
+com.google.guava:guava
+com.google.j2objc:j2objc-annotations
+com.google.mlkit:barcode-scanning
+com.google.mlkit:barcode-scanning-common
+com.google.mlkit:common
+com.google.mlkit:vision-common
+com.google.mlkit:vision-interfaces
+jakarta.inject:jakarta.inject-api
+org.checkerframework:checker-qual
+org.jetbrains.kotlin:kotlin-bom
+org.jetbrains.kotlinx:atomicfu
+org.jetbrains.kotlinx:atomicfu-jvm

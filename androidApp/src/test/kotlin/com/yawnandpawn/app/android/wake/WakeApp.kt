@@ -31,6 +31,7 @@ import com.yawnandpawn.app.core.time.TimeSnapshot
 import com.yawnandpawn.app.restartKoin
 import com.yawnandpawn.app.testing.FakeCrashReporter
 import com.yawnandpawn.app.testing.rightAnswer
+import com.yawnandpawn.app.ui.qr.CodeScanner
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
 import org.koin.core.Koin
@@ -68,6 +69,7 @@ internal class WakeApp(
     policy: SnoozeAvailabilityPolicy? = null,
     checkConfigs: CheckConfigRepository? = null,
     fallback: FallbackPolicy? = null,
+    scanner: CodeScanner? = null,
 ) {
     val app: YawnAndPawnApp = ApplicationProvider.getApplicationContext()
     val crashReporter = FakeCrashReporter()
@@ -97,6 +99,7 @@ internal class WakeApp(
                 policy?.let { replaced -> single<SnoozeAvailabilityPolicy> { replaced } }
                 checkConfigs?.let { replaced -> single<CheckConfigRepository> { replaced } }
                 fallback?.let { replaced -> single<FallbackPolicy> { replaced } }
+                scanner?.let { replaced -> single<CodeScanner> { replaced } }
                 single { WakeServiceStarts(serviceStartWait) }
             },
         )

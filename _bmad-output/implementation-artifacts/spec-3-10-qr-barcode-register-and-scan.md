@@ -2,7 +2,7 @@
 title: 'Story 3.10: QR/Barcode: register a code and scan it to stop the alarm'
 type: 'feature'
 created: '2026-10-06'
-status: 'ready'
+status: 'done'
 baseline_revision: 'cef47fa'
 review_loop_iteration: 0
 followup_review_recommended: false
@@ -70,17 +70,17 @@ deferred: []
 - `composeApp/.../components/ViewfinderColors.kt`: `ViewfinderPlaceholder` draws `LocalViewfinderFeed` under the overlay when one is provided.
 - `androidApp/.../qr/` (new): `CameraXCodeScanner`, `CodeAnalyzer`, `MlKitFrameDecoder`, `AndroidCameraPermission` and `QrModule`. `MainActivity` attaches the permission launcher. `WakeCheck`/`WakeActivity` add the QR branch. The manifest adds `CAMERA` and `uses-feature camera required=false`.
 - `data/.../checks/CheckCodeColumns.kt` (new): the `code_format`/`code_value` mapping. `AppDatabaseMigrations.kt`: `MIGRATION_7_8` (placeholder, not registered; see Rebase notes).
-- `:testing`: `FakeCodeScanner`, `FakeCameraPermission`, `aRegisteredCode`, `qrEntry`.
+- Tests: `:testing` gets `aRegisteredCode` and a QR `rightAnswer`/`wrongAnswer`. The `:androidApp` host tests get `FakeCodeScanner` and `FakeCameraPermission`, because `:testing` is JVM-only. Also `QrCheckScreenTest`, `CodeAnalyzerTest`, `AndroidCameraPermissionTest`, `QrScreenshotTest`, `QrScanningTest` and `QrCheckMappingTest` (composeApp), and `CheckCodeMigrationTest` (data).
 
 ## Tasks & Acceptance
 
 **Execution:**
-- [ ] Core type, fingerprint, entry code, resolver safety; `CheckTypeTest`, `QrBarcodeCheckTest`, `Sha256Test`, `PlanResolverTest`, and a `CheckPluginSessionTest` QR case.
-- [ ] Scanner port, frame filter, repeat gate, registration model, QR mapping; tests in `composeApp` commonTest.
-- [ ] CameraX + ML Kit scanner, analyser wrapper, permission port, Koin, manifest, allowlist.
-- [ ] Wake QR check in `WakeCheck`/`WakeActivity`; `QrCheckScreenTest` (Robolectric with `FakeCodeScanner`).
-- [ ] Data column mapping and the placeholder migration with tests.
-- [ ] Roborazzi: wake QR (scanning, wrong, camera unavailable) in Sunrise and registration (scanning, detected, camera unavailable) in Light and Dark, at 100% and 200%.
+- [x] Core type, fingerprint, entry code, resolver safety; `CheckTypeTest`, `QrBarcodeCheckTest` (including the SHA-256 vectors), `DirectBootTest`, `PlanResolverTest`, and a `CheckPluginSessionTest` QR case.
+- [x] Scanner port, frame filter, repeat gate, registration model, QR mapping; tests in `composeApp` commonTest.
+- [x] CameraX + ML Kit scanner, analyser wrapper, permission port, Koin, manifest, allowlist.
+- [x] Wake QR check in `WakeCheck`/`WakeActivity`; `QrCheckScreenTest` (Robolectric with `FakeCodeScanner`).
+- [x] Data column mapping and the placeholder migration with tests.
+- [x] Roborazzi: wake QR (scanning, wrong, camera unavailable) in Sunrise and registration (scanning, detected, camera unavailable) in Light and Dark, at 100% and 200%.
 
 **Acceptance Criteria:**
 - Given the build, when CameraX 1.6.2 and bundled ML Kit barcode-scanning 17.3.0 are added, then the allowlist lists every resolved artifact with its reason, the merged manifests pass the permission allowlist, and the bundled model is used.
@@ -92,16 +92,16 @@ deferred: []
 
 ## pps-design Done checklist
 
-- [ ] Only tokens from `DESIGN.md` used.
-- [ ] Light, Dark (registration) and Sunrise (wake) in screenshots at 100% and 200%.
-- [ ] Every colour pair is in the contrast table (approved `check-qr*` and `qr-*` states, no new pair).
-- [ ] Touch targets ≥ 48 dp (torch 48 dp); wake snooze 64 dp unchanged.
-- [ ] 200% font and TalkBack: the viewfinder reads "Camera viewfinder. Point at your code.", the header is a heading, and the wrong code and camera-unavailable lines are polite live regions.
-- [ ] Reduced motion: no new animation.
-- [ ] Copy verbatim from EXPERIENCE.md Key strings (no new strings).
-- [ ] State rows: scanning, detected, wrong, camera unavailable. Watchdog and Direct Boot are 3.11.
-- [ ] "I'm up" and snooze unchanged.
-- [ ] Previews exist (`check-qr*`, `qr-*`, unchanged); new Roborazzi baselines added.
+- [x] Only tokens from `DESIGN.md` used.
+- [x] Light, Dark (registration) and Sunrise (wake) in screenshots at 100% and 200%.
+- [x] Every colour pair is in the contrast table (approved `check-qr*` and `qr-*` states, no new pair).
+- [x] Touch targets ≥ 48 dp (torch 48 dp); wake snooze 64 dp unchanged.
+- [x] 200% font and TalkBack: the viewfinder reads "Camera viewfinder. Point at your code.", the header is a heading, and the wrong code and camera-unavailable lines are polite live regions.
+- [x] Reduced motion: no new animation.
+- [x] Copy verbatim from EXPERIENCE.md Key strings (no new strings).
+- [x] State rows: scanning, detected, wrong, camera unavailable. Watchdog and Direct Boot are 3.11.
+- [x] "I'm up" and snooze unchanged.
+- [x] Previews exist (`check-qr*`, `qr-*`, unchanged); new Roborazzi baselines added.
 
 ## Design Notes
 
@@ -137,3 +137,21 @@ Stories 3.5 to 3.9 land before this story. When rebasing:
 **Commands:**
 - `./gradlew qualityGate :androidApp:assembleDebugAndroidTest --no-daemon` -- expected: BUILD SUCCESSFUL.
 - `git status --porcelain androidApp/src/test/screenshots/preview` -- expected: empty.
+
+## Auto Run Result
+
+Status: implemented in fast mode (one agent), waiting for review. The branch is `story/3-10-qr-barcode-register-and-scan`, on `main` (`cef47fa`), without Stories 3.5 to 3.9 (see Rebase notes).
+
+**Verification:**
+- `./gradlew qualityGate :androidApp:assembleDebugAndroidTest --no-daemon` gives BUILD SUCCESSFUL (22 min), with the Kover gates passing (core, session, checks).
+- `git status --porcelain androidApp/src/test/screenshots/preview` is empty.
+- There are 18 new Roborazzi baselines (`wake_check_qr_*` in Sunrise, `qr_registration_*` in Light and Dark, each at 100% and 200%).
+- No androidTest uses the camera. Real scanning is human-verify in Story 3.14.
+
+**Residual risks:**
+- **Real camera unproven on the host:** the CameraX binding, the ML Kit model, the torch and real-world lighting are only verified on a device (3.14). The no-frame watchdog, mid-scan errors and release on pause come in 3.11.
+- **EAN-13 vs UPC-A:** the same printed code may be read in either format. With the epic's exact format match, a code read the other way is a wrong code.
+- **ML Kit usage logging** goes through datatransport (Data safety form, Epic 8). ML Kit's init provider also runs at app start.
+- **APK size:** the bundled model and CameraX add native libraries (`libbarhopper_v3.so` and others).
+- **Placeholder migration:** `MIGRATION_7_8` is not registered until 3.5 and 3.9 are in. The real `check_config` migration test lands with the rebase.
+- **The printable QR row** is hidden in the app (`printable = false`) until Epic 7.

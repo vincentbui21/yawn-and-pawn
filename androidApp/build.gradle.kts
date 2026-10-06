@@ -140,6 +140,13 @@ dependencies {
     // Story 1.19: Crashlytics behind the core CrashReporter port; started only after the user unlocks. No Analytics.
     implementation(platform(libs.firebase.bom))
     implementation(libs.firebase.crashlytics)
+    // Story 3.10: the QR/Barcode check. CameraX shows the viewfinder and feeds frames to the bundled ML Kit barcode
+    // model (on device, no model download through Play services); no frame is ever stored.
+    implementation(libs.camerax.core)
+    implementation(libs.camerax.camera2)
+    implementation(libs.camerax.lifecycle)
+    implementation(libs.camerax.view)
+    implementation(libs.mlkit.barcode.scanning)
 
     testImplementation(project(":testing"))
     testImplementation(libs.kotlin.test)

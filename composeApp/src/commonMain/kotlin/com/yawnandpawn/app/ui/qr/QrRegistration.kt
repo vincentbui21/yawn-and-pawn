@@ -95,12 +95,14 @@ sealed interface QrIntent {
  * "QR/Barcode"; the `viewfinder` in a glass card with the square guide and the torch ("Scan a code to use this check."
  * under it) or, once a code is found, the guide's check with "Use this code" (filled) and "Scan again"; then "Make a
  * printable QR". Without a camera: "Camera isn't available." with "Fix", and the printable QR.
+ * [printable] shows "Make a printable QR" (FR-PWK-13): the design preview shows it; the app hides it until Epic 7 builds it.
  */
 @Composable
 fun QrRegistrationScreen(
     state: QrRegistrationUiState,
     onIntent: (QrIntent) -> Unit,
     modifier: Modifier = Modifier,
+    printable: Boolean = true,
 ) {
     val spacing = PpsTheme.spacing
     SubScreen(
@@ -143,12 +145,14 @@ fun QrRegistrationScreen(
                 }
             }
         }
-        GroupCard {
-            NavRow(
-                label = stringResource(Res.string.qr_printable),
-                value = stringResource(Res.string.qr_printable_body),
-                onClick = { onIntent(QrIntent.PrintableClicked) },
-            )
+        if (printable) {
+            GroupCard {
+                NavRow(
+                    label = stringResource(Res.string.qr_printable),
+                    value = stringResource(Res.string.qr_printable_body),
+                    onClick = { onIntent(QrIntent.PrintableClicked) },
+                )
+            }
         }
     }
 }

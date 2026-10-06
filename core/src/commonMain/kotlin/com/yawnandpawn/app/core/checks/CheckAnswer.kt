@@ -1,5 +1,6 @@
 package com.yawnandpawn.app.core.checks
 
+import com.yawnandpawn.app.core.checks.qr.RegisteredCode
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 
@@ -38,5 +39,15 @@ sealed interface CheckAnswer {
     @SerialName("Tile")
     data class Tile(
         val number: Int,
+    ) : CheckAnswer
+
+    /**
+     * A code the camera saw in 3 frames in a row ([CheckType.QrBarcode]), as its [RegisteredCode]: the scanner turns the
+     * raw value into the fingerprint before it sends anything, so the raw content never reaches the engine.
+     */
+    @Serializable
+    @SerialName("Code")
+    data class Code(
+        val code: RegisteredCode,
     ) : CheckAnswer
 }

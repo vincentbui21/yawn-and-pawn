@@ -176,10 +176,10 @@ internal fun SessionData.usableRun(): CheckRun = checkRun.usable(sessionId, ring
 private fun mathPuzzle(run: CheckRun): Puzzle.Math? {
     val entry = run.currentEntry?.takeIf { it.type == CheckType.Math }
     val seed = run.seeds.getOrNull(run.step.entry)
-    return if (entry == null || seed == null) null else entry.type.generate(seed, entry.difficulty, entry.count) as? Puzzle.Math
+    return if (entry == null || seed == null) null else entry.puzzle(seed) as? Puzzle.Math
 }
 
-private fun graceState(
+internal fun graceState(
     state: SessionState,
     session: SessionData,
     now: TimeSnapshot,

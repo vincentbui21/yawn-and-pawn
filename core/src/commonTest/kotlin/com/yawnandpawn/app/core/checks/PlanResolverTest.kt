@@ -1,5 +1,7 @@
 package com.yawnandpawn.app.core.checks
 
+import com.yawnandpawn.app.core.checks.qr.CodeFormat
+import com.yawnandpawn.app.core.checks.qr.RegisteredCode
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertSame
@@ -51,5 +53,21 @@ class PlanResolverTest {
     fun `a Random plan with one entry or none resolves to itself in All mode`() {
         assertEquals(CheckPlan(CheckMode.All, listOf(math)), PlanResolver.resolve(CheckPlan(CheckMode.Random, listOf(math)), 5))
         assertEquals(CheckPlan(CheckMode.All, emptyList()), PlanResolver.resolve(CheckPlan(CheckMode.Random, emptyList()), 5))
+    }
+
+    @Test
+    fun `a QR-Barcode entry without a code rings as the default entry, one with a code as itself (Story 3_10)`() {
+        val code = RegisteredCode.of(CodeFormat.QrCode, "hallway")!!
+        val ready = CheckEntry(CheckType.QrBarcode, Difficulty.Medium, 1, code = code)
+        val bare = ready.copy(code = null)
+
+        assertEquals(
+            CheckPlan(CheckMode.All, listOf(math, CheckPlan.DEFAULT_ENTRY, ready)),
+            PlanResolver.resolve(CheckPlan(CheckMode.All, listOf(math, bare, ready)), 1),
+        )
+        val random = CheckPlan(CheckMode.Random, listOf(bare))
+        assertEquals(CheckPlan(CheckMode.All, listOf(CheckPlan.DEFAULT_ENTRY)), PlanResolver.resolve(random, 9))
+        val withCode = CheckPlan(CheckMode.All, listOf(ready))
+        assertSame(withCode, PlanResolver.resolve(withCode, 9))
     }
 }

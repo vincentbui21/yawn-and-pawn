@@ -101,6 +101,17 @@ val MIGRATION_5_6: Migration =
         }
     }
 
+/**
+ * v6 to v7 (Story 3.9): adds the nullable `session_history.fallback_from`, the check type id the fallback check replaced.
+ * Stored rows keep null (no fallback recorded). The SQL matches the exported `7.json`; Room checks it after migrating.
+ */
+val MIGRATION_6_7: Migration =
+    object : Migration(6, 7) {
+        override suspend fun migrate(connection: SQLiteConnection) {
+            connection.execSQL("ALTER TABLE `session_history` ADD COLUMN `fallback_from` TEXT")
+        }
+    }
+
 /** Every migration of `app.db`, oldest first; `buildAppDatabase` registers them all. */
 val APP_DATABASE_MIGRATIONS: Array<Migration> =
-    arrayOf(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6)
+    arrayOf(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6, MIGRATION_6_7)

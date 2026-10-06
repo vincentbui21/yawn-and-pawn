@@ -1,9 +1,12 @@
 package com.yawnandpawn.app.core.session
 
 import com.yawnandpawn.app.core.checks.CheckAnswer
+import com.yawnandpawn.app.core.checks.CheckEntry
+import com.yawnandpawn.app.core.checks.CheckMode
 import com.yawnandpawn.app.core.checks.CheckPlan
 import com.yawnandpawn.app.core.checks.CheckResult
 import com.yawnandpawn.app.core.checks.CheckType
+import com.yawnandpawn.app.core.checks.Difficulty
 
 /** The next snooze on sale: Play product [productId] (`snooze_usd_NN`, AD-7) for snooze [snoozeNumber] of the session. */
 data class SnoozeOffer(
@@ -92,12 +95,80 @@ sealed interface FallbackDecision {
     data object NotAllowed : FallbackDecision
 }
 
+/** Why the Fallback check picker was offered (FR-PWK-11, Story 3.9). */
+enum class FallbackReason {
+    /** The camera or its permission cannot be used (missing permission, camera error, no frame within 5 s). */
+    CameraUnavailable,
+
+    /** The camera works, but the check failed at least [CameraFallbackPolicy.FAILED_ATTEMPTS] times. */
+    FailedAttempts,
+}
+
 /**
- * Decides [FallbackDecision] for the session (for example after 5 failed matches or a matcher error). Pure. It counts
- * the session-wide `CheckRun.totalFailedAttempts`, not the per-entry `failedAttempts` that key restart seeds.
+ * The fallback the user asked for: [type] for [reason]. A class, not two parameters, so a later input (the image
+ * matcher's error, Story 7.7) joins it without changing every policy.
  */
+data class FallbackRequest(
+    val type: CheckType,
+    val reason: FallbackReason,
+)
+
+/** Decides [FallbackDecision] for the session and [request]. Pure. */
 fun interface FallbackPolicy {
-    fun fallback(session: SessionData): FallbackDecision
+    fun fallback(
+        session: SessionData,
+        request: FallbackRequest,
+    ): FallbackDecision
+}
+
+/**
+ * Whether the fallback is offered now for [reason]: the policy would allow Math, which is always a fallback choice. The
+ * wake screen shows "Can't do this check?" exactly then (Story 3.9).
+ */
+fun FallbackPolicy.offers(
+    session: SessionData,
+    reason: FallbackReason,
+): Boolean = fallback(session, FallbackRequest(CheckType.Math, reason)) is FallbackDecision.Allowed
+
+/**
+ * The production [FallbackPolicy] (FR-PWK-11, Story 3.9). The fallback is allowed only when:
+ * - the current entry is a camera check ([usesCamera]);
+ * - it was not used yet this session;
+ * - the chosen type is one of [CheckType.fallbackChoices] by id (never a camera check; either Memory Sequence variant);
+ * - the camera is unavailable ([FallbackReason.CameraUnavailable]), or the entry failed at least [FAILED_ATTEMPTS] times.
+ *
+ * The fallback plan is one entry of the chosen type at Hard with twice its default count (owner-approved default
+ * 2026-09-26). [usesCamera] asks whether a type is a camera check; it is the type's own flag in production, and tests
+ * pass one that treats a stand-in as a camera check (`FakeCameraCheck`), until Story 3.10 adds the first camera type.
+ * The type is kept as asked, so the wake screen's numbered Memory Sequence (TalkBack on) stays numbered.
+ */
+class CameraFallbackPolicy(
+    private val usesCamera: (CheckType) -> Boolean = CheckType::usesCamera,
+) : FallbackPolicy {
+    override fun fallback(
+        session: SessionData,
+        request: FallbackRequest,
+    ): FallbackDecision {
+        val run = session.checkRun
+        val current = run.currentEntry?.type
+        val allowed =
+            current != null &&
+                usesCamera(current) &&
+                !run.fallbackUsed &&
+                CheckType.fallbackChoices.any { it.id == request.type.id } &&
+                !usesCamera(request.type) &&
+                (request.reason == FallbackReason.CameraUnavailable || run.failedAttempts >= FAILED_ATTEMPTS)
+        return if (allowed) FallbackDecision.Allowed(fallbackPlan(request.type)) else FallbackDecision.NotAllowed
+    }
+
+    companion object {
+        /** Failed attempts on a working camera after which the fallback is offered. */
+        const val FAILED_ATTEMPTS = 5
+
+        /** One entry of [type] at Hard with twice its default count (Math 6), within the type's range. */
+        fun fallbackPlan(type: CheckType): CheckPlan =
+            CheckPlan(CheckMode.All, listOf(CheckEntry(type, Difficulty.Hard, (2 * type.defaultCount).coerceIn(type.countRange))))
+    }
 }
 
 /**
@@ -160,11 +231,6 @@ object PluginCheckValidator : CheckValidator {
             CheckResult.Wrong -> StepResult.Invalid
             CheckResult.WrongRestart -> StepResult.InvalidRestart
         }
-}
-
-/** The Epic 1 production [FallbackPolicy]: no fallback check exists yet. */
-object NoFallbackPolicy : FallbackPolicy {
-    override fun fallback(session: SessionData): FallbackDecision = FallbackDecision.NotAllowed
 }
 
 /**

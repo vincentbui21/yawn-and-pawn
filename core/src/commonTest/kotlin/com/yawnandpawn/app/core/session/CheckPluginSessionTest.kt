@@ -112,7 +112,7 @@ class CheckPluginSessionTest {
 
     @Test
     fun `a damaged row with fewer seeds than entries still checks answers with seeds derived from the session (Story 3_1 review)`() {
-        val reducer = SessionReducer(StubAvailability(SnoozeAvailability.Available(OFFER)), PluginCheckValidator, NoFallbackPolicy)
+        val reducer = SessionReducer(StubAvailability(SnoozeAvailability.Available(OFFER)), PluginCheckValidator, CameraFallbackPolicy())
         val seeds = ringSeeds(1, 2)
         val damaged = ringSession(testConfig(checkPlan = plan)).copy(checkRun = CheckRun(plan, seeds.take(1), StepPointer(1, 0)))
         val from = SessionState.Loud(damaged)
@@ -127,7 +127,7 @@ class CheckPluginSessionTest {
 
     @Test
     fun `a damaged row whose item is past the end of its puzzle is checked on the last item, as the screen shows it (Story 3_2 review)`() {
-        val reducer = SessionReducer(StubAvailability(SnoozeAvailability.Available(OFFER)), PluginCheckValidator, NoFallbackPolicy)
+        val reducer = SessionReducer(StubAvailability(SnoozeAvailability.Available(OFFER)), PluginCheckValidator, CameraFallbackPolicy())
         val seeds = listOf(101L, 202L)
         val damaged = ringSession(testConfig(checkPlan = plan)).copy(checkRun = CheckRun(plan, seeds, StepPointer(0, 5)))
         val usable = damaged.checkRun.usable(damaged.sessionId, damaged.ringIndex)
@@ -190,7 +190,7 @@ class CheckPluginSessionTest {
         assertEquals(2, ring2.totalFailedAttempts, "the next ring keeps the session's count")
         send(SessionEvent.ImUpTapped, minute = 10)
         send(SessionEvent.CheckAnswerSubmitted(answerFor(easy, ringSeeds(2, 2)[0], 0, offset = 1)), minute = 10)
-        val fallback = send(SessionEvent.FallbackRequested, minute = 10)
+        val fallback = send(FALLBACK_REQUEST, minute = 10)
         assertEquals(true to 3, fallback.fallbackUsed to fallback.totalFailedAttempts, "the fallback keeps it")
     }
 
@@ -222,12 +222,13 @@ class CheckPluginSessionTest {
 
         send(SessionEvent.AlarmFired(sessionId, testConfig(checkPlan = plan), beforeFirstUnlock = false))
         send(SessionEvent.ImUpTapped)
-        val ring1 = send(SessionEvent.FallbackRequested)
+        val ring1 = send(FALLBACK_REQUEST)
         send(SessionEvent.PurchaseGranted(PRODUCT, TOKEN, PurchaseVerdict.Grant))
         val ring2 = send(SessionEvent.SlotFired, minute = 10)
 
-        assertEquals(CheckRun.forRing(randomFallback, sessionId, 1, fallback = true), ring1)
-        assertEquals(CheckRun.forRing(randomFallback, sessionId, 2, fallback = true), ring2)
+        // The run keeps the replaced check for history (Story 3.9).
+        assertEquals(CheckRun.forRing(randomFallback, sessionId, 1, fallback = true).copy(fallbackFrom = "Math"), ring1)
+        assertEquals(CheckRun.forRing(randomFallback, sessionId, 2, fallback = true).copy(fallbackFrom = "Math"), ring2)
         assertNotEquals(ring1.plan, ring2.plan, "the fallback picks again")
         assertEquals(randomFallback, ring2.fallbackSource)
     }
@@ -236,7 +237,7 @@ class CheckPluginSessionTest {
 
     @Test
     fun `a Math session runs to Completed through wrong answers, items, entries and a restore`() {
-        val reducer = SessionReducer(StubAvailability(SnoozeAvailability.Available(OFFER)), PluginCheckValidator, NoFallbackPolicy)
+        val reducer = SessionReducer(StubAvailability(SnoozeAvailability.Available(OFFER)), PluginCheckValidator, CameraFallbackPolicy())
         var state: SessionState = SessionState.Idle
 
         fun send(
@@ -279,7 +280,7 @@ class CheckPluginSessionTest {
     fun `a wrong Memory tap restarts only the current round with a new seed, and the session completes (Story 3-8)`() {
         val memory = CheckEntry(CheckType.MemorySequence(), Difficulty.Easy, count = 2)
         val memoryPlan = CheckPlan(CheckMode.All, listOf(memory))
-        val reducer = SessionReducer(StubAvailability(SnoozeAvailability.Available(OFFER)), PluginCheckValidator, NoFallbackPolicy)
+        val reducer = SessionReducer(StubAvailability(SnoozeAvailability.Available(OFFER)), PluginCheckValidator, CameraFallbackPolicy())
         var state: SessionState = SessionState.Idle
 
         fun run(): CheckRun = assertIs<SessionState.Active>(state).session.checkRun
@@ -343,7 +344,7 @@ class CheckPluginSessionTest {
             (0 until 100).map { "session-$it" }.first { id ->
                 CheckRun.forRing(random, id, 1).plan != CheckRun.forRing(random, id, 2).plan
             }
-        val reducer = SessionReducer(StubAvailability(SnoozeAvailability.Available(OFFER)), PluginCheckValidator, NoFallbackPolicy)
+        val reducer = SessionReducer(StubAvailability(SnoozeAvailability.Available(OFFER)), PluginCheckValidator, CameraFallbackPolicy())
 
         val ringing = reducer.reduce(SessionState.Idle, SessionEvent.AlarmFired(sessionId, testConfig(checkPlan = random), false), T0).state
         val ring1 = assertIs<SessionState.Ringing>(ringing).session.checkRun

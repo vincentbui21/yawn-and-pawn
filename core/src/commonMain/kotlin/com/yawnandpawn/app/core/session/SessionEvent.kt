@@ -1,6 +1,7 @@
 package com.yawnandpawn.app.core.session
 
 import com.yawnandpawn.app.core.checks.CheckAnswer
+import com.yawnandpawn.app.core.checks.CheckType
 import kotlin.time.Instant
 
 /**
@@ -144,8 +145,14 @@ sealed interface SessionEvent {
         val answer: CheckAnswer,
     ) : UserEvent
 
-    /** The user asked for the fallback check (FR-PWK-11). */
-    data object FallbackRequested : UserEvent
+    /**
+     * The user picked [type] in the Fallback check picker (FR-PWK-11, Story 3.9), offered for [reason]. The
+     * `FallbackPolicy` decides whether it replaces the check.
+     */
+    data class FallbackRequested(
+        val type: CheckType,
+        val reason: FallbackReason,
+    ) : UserEvent
 
     /** The user tapped Snooze. */
     data object SnoozeTapped : UserEvent

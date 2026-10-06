@@ -30,6 +30,7 @@ import com.yawnandpawn.app.testing.aSession
 import com.yawnandpawn.app.testing.aSessionHistoryRow
 import com.yawnandpawn.app.testing.anAlarm
 import com.yawnandpawn.app.testing.checkConfigsOf
+import com.yawnandpawn.app.testing.noReRegisterSuggestions
 import com.yawnandpawn.app.ui.checks.CheckType
 import com.yawnandpawn.app.ui.format.Countdown
 import kotlinx.coroutines.Dispatchers
@@ -81,6 +82,9 @@ class HomeViewModelTest {
     private val settings = FakeReliabilitySettings()
     private var checkConfigs = FakeCheckConfigRepository()
 
+    // Story 3.13 has its own test (HomeReRegisterBannerTest); here nothing is registered, as in production before 3.10.
+    private val reRegister = noReRegisterSuggestions(clock)
+
     /** The session the use cases' lock reads (Story 2.6); Idle unless a test starts one. */
     private val sessionState = MutableStateFlow<SessionState>(SessionState.Idle)
 
@@ -128,7 +132,7 @@ class HomeViewModelTest {
     /** Home over [repository]'s alarms; [checkConfigs] then holds their checks. */
     private fun TestScope.home(repository: AlarmRepository): HomeViewModel {
         checkConfigs = FakeCheckConfigRepository(repository)
-        val viewModel = HomeViewModel(checkConfigs, actions(repository), clock, zone, signal, missedNotes, probe, settings)
+        val viewModel = HomeViewModel(checkConfigs, actions(repository), clock, zone, signal, missedNotes, probe, settings, reRegister)
         backgroundScope.launch { viewModel.state.collect { } }
         return viewModel
     }
@@ -557,6 +561,7 @@ class HomeViewModelTest {
                     missedNotes,
                     probe,
                     settings,
+                    reRegister,
                 )
             val collector = launch { viewModel.state.collect { } }
             assertEquals(1, signal.subscribers)

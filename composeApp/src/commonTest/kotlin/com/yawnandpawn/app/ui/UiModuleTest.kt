@@ -11,6 +11,8 @@ import com.yawnandpawn.app.core.reliability.ReliabilitySettings
 import com.yawnandpawn.app.core.session.ScheduleTestAlarm
 import com.yawnandpawn.app.core.sound.SoundLibrary
 import com.yawnandpawn.app.core.sound.SoundPreview
+import com.yawnandpawn.app.core.stats.CheckRegistrations
+import com.yawnandpawn.app.core.stats.ReRegisterSuggestions
 import com.yawnandpawn.app.core.time.Clock
 import com.yawnandpawn.app.core.time.TimeChangeSignal
 import com.yawnandpawn.app.core.time.TimeZoneProvider
@@ -22,6 +24,7 @@ import com.yawnandpawn.app.testing.FakeClock
 import com.yawnandpawn.app.testing.FakeLogger
 import com.yawnandpawn.app.testing.FakeMissedNoteDismissals
 import com.yawnandpawn.app.testing.FakeNotificationPermission
+import com.yawnandpawn.app.testing.FakeReRegisterDismissals
 import com.yawnandpawn.app.testing.FakeReliabilityProbe
 import com.yawnandpawn.app.testing.FakeReliabilitySettings
 import com.yawnandpawn.app.testing.FakeSessionHistoryRepository
@@ -86,6 +89,9 @@ class UiModuleTest {
                     factory { get<AlarmUseCasesFixture>().delete }
                     factory { get<AlarmUseCasesFixture>().duplicate }
                     single { MissedNotes(FakeSessionHistoryRepository(), FakeMissedNoteDismissals()) }
+                    single {
+                        ReRegisterSuggestions(FakeSessionHistoryRepository(), CheckRegistrations.None, FakeReRegisterDismissals(), get())
+                    }
                     single { ScheduleTestAlarm(FakeAlarmScheduler(), FakeTestAlarmStore(), get(), get()) }
                 }
             val koin = koinApplication { modules(ports, uiModule) }.koin

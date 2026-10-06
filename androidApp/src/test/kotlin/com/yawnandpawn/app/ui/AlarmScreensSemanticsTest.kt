@@ -46,6 +46,7 @@ import com.yawnandpawn.app.testing.FakeTestAlarmStore
 import com.yawnandpawn.app.testing.FakeTimeChangeSignal
 import com.yawnandpawn.app.testing.FakeTimeZoneProvider
 import com.yawnandpawn.app.testing.anAlarm
+import com.yawnandpawn.app.testing.noReRegisterSuggestions
 import com.yawnandpawn.app.ui.editor.AlarmEditorRoute
 import com.yawnandpawn.app.ui.editor.AlarmEditorScreen
 import com.yawnandpawn.app.ui.editor.AlarmEditorViewModel
@@ -487,6 +488,33 @@ class AlarmScreensSemanticsTest {
     }
 
     @Test
+    fun `the re-register banner sits below the reliability banner, and Re-register and Dismiss are 48 dp targets`() {
+        val intents = mutableListOf<HomeIntent>()
+        home(HomeSamples.reRegisterUnderReliability, onIntent = { intents += it }) {
+            val reliability = composeRule.onNodeWithText("Alarms may not ring. Fix settings").fetchSemanticsNode()
+            val reRegister =
+                composeRule.onNodeWithText("Fallback check used 3 times this week. Re-register your QR/Barcode?").fetchSemanticsNode()
+            assertTrue(reliability.boundsInRoot.bottom <= reRegister.boundsInRoot.top, "the reliability banner stays above")
+            val action = composeRule.onNode(hasText("Re-register") and hasClickAction())
+            val close = composeRule.onNode(hasContentDescription("Dismiss") and hasClickAction())
+            listOf(action, close).forEach { assertMinTouchTarget(it.fetchSemanticsNode()) }
+
+            action.performClick()
+            close.performClick()
+
+            assertEquals(listOf(HomeIntent.ReregisterClicked, HomeIntent.ReregisterDismissed), intents)
+        }
+    }
+
+    @Test
+    @Config(fontScale = 2.0f)
+    fun `Home with both banners at 200 percent font scale meets the accessibility floor`() =
+        home(HomeSamples.reRegisterUnderReliability) {
+            composeRule.onNodeWithText("Fallback check used 3 times this week. Re-register your QR/Barcode?").assertExists()
+            assertAccessibilityFloor(minControls = 8)
+        }
+
+    @Test
     fun `while the alarms load Home shows neither the empty state nor a list`() =
         home(HomeSamples.loading) {
             composeRule.onNodeWithText("Yawn & Pawn").assertExists()
@@ -521,6 +549,7 @@ class AlarmScreensSemanticsTest {
                 MissedNotes(FakeSessionHistoryRepository(), FakeMissedNoteDismissals()),
                 FakeReliabilityProbe(),
                 FakeReliabilitySettings(),
+                noReRegisterSuggestions(),
             )
         withScreen(
             PpsThemeMode.Light,
@@ -588,6 +617,7 @@ class AlarmScreensSemanticsTest {
                 missedNotes,
                 FakeReliabilityProbe(),
                 FakeReliabilitySettings(),
+                noReRegisterSuggestions(),
             )
         var shown = false
         withScreen(

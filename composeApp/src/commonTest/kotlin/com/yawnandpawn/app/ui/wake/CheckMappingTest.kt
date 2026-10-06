@@ -18,6 +18,7 @@ import com.yawnandpawn.app.testing.aSessionConfig
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertIs
+import kotlin.test.assertNotNull
 import kotlin.test.assertNull
 import kotlin.time.Duration.Companion.seconds
 
@@ -180,5 +181,31 @@ class CheckMappingTest {
         assertEquals(checkPosition(state), checkPosition(SessionState.Loud(state.session)))
         assertNull(checkPosition(SessionState.Ringing(state.session)))
         assertNull(checkPosition(grace(session().let { it.copy(checkRun = it.checkRun.copy(step = StepPointer(1, 0))) })))
+    }
+
+    @Test
+    fun `the picker lists the core fallback choices that have a screen, Math first (Story 3_9)`() {
+        assertEquals(
+            FallbackPickerUiState(
+                options =
+                    listOf(
+                        com.yawnandpawn.app.ui.checks.CheckType.Math,
+                        com.yawnandpawn.app.ui.checks.CheckType.WordUnscramble,
+                        com.yawnandpawn.app.ui.checks.CheckType.MemorySequence,
+                    ),
+            ),
+            fallbackPickerUiState(),
+            "the pickable checks without the camera, Math first",
+        )
+        assertEquals(com.yawnandpawn.app.ui.checks.CheckType.Math, uiCheckType(CheckType.Math))
+        assertNull(uiCheckType(CheckType.Placeholder), "the stand-in has no screen")
+        assertEquals(CheckType.Math, coreCheckType(com.yawnandpawn.app.ui.checks.CheckType.Math))
+        assertNull(coreCheckType(com.yawnandpawn.app.ui.checks.CheckType.QrBarcode), "no core plugin before Story 3.10")
+    }
+
+    @Test
+    fun `every camera check has a screen, so the re-register banner can name it (Story 3_13)`() {
+        // Story 3.10 adds the QR/Barcode core type: this then also pins it to UiCheckType.QrBarcode.
+        CheckType.all.filter { it.usesCamera }.forEach { assertNotNull(uiCheckType(it), "$it has no screen") }
     }
 }

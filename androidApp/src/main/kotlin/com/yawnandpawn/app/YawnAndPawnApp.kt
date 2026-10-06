@@ -33,12 +33,12 @@ import com.yawnandpawn.app.core.id.UuidV4IdGenerator
 import com.yawnandpawn.app.core.log.Logger
 import com.yawnandpawn.app.core.session.ActiveSessionStore
 import com.yawnandpawn.app.core.session.Billing
+import com.yawnandpawn.app.core.session.CameraFallbackPolicy
 import com.yawnandpawn.app.core.session.CheckValidator
 import com.yawnandpawn.app.core.session.EffectRunner
 import com.yawnandpawn.app.core.session.FallbackPolicy
 import com.yawnandpawn.app.core.session.FeeLadder
 import com.yawnandpawn.app.core.session.NoBillingSnoozeAvailability
-import com.yawnandpawn.app.core.session.NoFallbackPolicy
 import com.yawnandpawn.app.core.session.PluginCheckValidator
 import com.yawnandpawn.app.core.session.ScheduleTestAlarm
 import com.yawnandpawn.app.core.session.SessionEngine
@@ -51,6 +51,7 @@ import com.yawnandpawn.app.core.session.SnoozeAvailabilityPolicy
 import com.yawnandpawn.app.core.session.StoredSession
 import com.yawnandpawn.app.core.session.TierFeeLadder
 import com.yawnandpawn.app.core.session.UserLockState
+import com.yawnandpawn.app.core.stats.ReRegisterSuggestions
 import com.yawnandpawn.app.data.dataModule
 import com.yawnandpawn.app.ui.nav.WakeScreenOpener
 import com.yawnandpawn.app.ui.uiModule
@@ -95,7 +96,7 @@ val appModule =
         single<AccessibilityState> { AndroidAccessibilityState(androidContext()) }
         single<SnoozeAvailabilityPolicy> { NoBillingSnoozeAvailability(get()) }
         single<CheckValidator> { PluginCheckValidator }
-        single<FallbackPolicy> { NoFallbackPolicy }
+        single<FallbackPolicy> { CameraFallbackPolicy() }
         single<FeeLadder> { TierFeeLadder }
         single { SessionReducer(get(), get(), get()) }
         single<EffectRunner> { get<WakeRuntime>() }
@@ -105,6 +106,8 @@ val appModule =
         single { SessionRecorder(get()) }
         // Home's missed note (Story 1.16): the latest Missed history row, unless dismissed (settings DataStore).
         single { MissedNotes(get(), get()) }
+        // Home's re-register banner (Story 3.13): 3 fallbacks for a camera check in 7 days, unless dismissed since.
+        single { ReRegisterSuggestions(get(), get(), get(), get()) }
         single { SessionEngine(get(), get(), get(), get(), get(), get(), get(), get(), userLock = get()) }
         // The session lock (Story 2.6): until the stored session is restored, and while a ring, a snooze or the emergency
         // ring is in progress, the alarm use cases refuse to write and the app shows only "Alarm in progress", whose

@@ -34,6 +34,7 @@ enum class SessionOutcome {
  * @property checkTypes the stable type names of the check steps (`CheckType.id`), in order.
  * @property timeToCompleteMs from the first ring to the end, for a completed session; null otherwise.
  * @property fallbackUsed the fallback check replaced the plan (FR-PWK-11).
+ * @property fallbackFrom the id (`CheckType.id`) of the check the fallback replaced (Story 3.9); null without a fallback.
  * @property directBoot the session started before the first unlock after a boot.
  * @property outcome how it ended; null while it runs.
  */
@@ -49,6 +50,7 @@ data class SessionHistoryRow(
     val fallbackUsed: Boolean,
     val directBoot: Boolean,
     val outcome: SessionOutcome?,
+    val fallbackFrom: String? = null,
 )
 
 /**

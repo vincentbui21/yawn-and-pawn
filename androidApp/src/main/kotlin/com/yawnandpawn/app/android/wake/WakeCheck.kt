@@ -8,7 +8,10 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.produceState
 import androidx.compose.runtime.setValue
+import com.yawnandpawn.app.core.checks.AccessibilityState
 import com.yawnandpawn.app.core.checks.CheckAnswer
+import com.yawnandpawn.app.core.session.FallbackPolicy
+import com.yawnandpawn.app.core.session.FallbackReason
 import com.yawnandpawn.app.core.session.SessionEvent
 import com.yawnandpawn.app.core.session.SessionState
 import com.yawnandpawn.app.core.session.SnoozeAvailability
@@ -19,10 +22,13 @@ import com.yawnandpawn.app.core.time.TimeSnapshot
 import com.yawnandpawn.app.ui.wake.CheckInput
 import com.yawnandpawn.app.ui.wake.CheckPosition
 import com.yawnandpawn.app.ui.wake.CheckUiState
+import com.yawnandpawn.app.ui.wake.FallbackPickerUiState
 import com.yawnandpawn.app.ui.wake.MemoryInput
 import com.yawnandpawn.app.ui.wake.WakeIntent
 import com.yawnandpawn.app.ui.wake.WordAnswer
 import com.yawnandpawn.app.ui.wake.checkPosition
+import com.yawnandpawn.app.ui.wake.coreCheckType
+import com.yawnandpawn.app.ui.wake.fallbackPickerUiState
 import com.yawnandpawn.app.ui.wake.mathCheckUiState
 import com.yawnandpawn.app.ui.wake.memoryCheckUiState
 import com.yawnandpawn.app.ui.wake.memoryRound
@@ -37,12 +43,21 @@ import kotlin.time.Duration.Companion.milliseconds
  * with an empty field), the grace countdown's clock and the number pad keys; and the Memory Sequence round with its
  * playback and tiles (Story 3.8). The engine decides every answer; the screen follows its next state (a new problem or
  * round, or more failed attempts for a wrong answer).
+ *
+ * The fallback (Story 3.9): "Can't do this check?" shows while the [fallbackPolicy] offers it and the fallback was not
+ * used; the link opens the Fallback check picker, a card sends `FallbackRequested(type, reason)`, and "Back to check"
+ * closes it without using the fallback. The picker closes by itself once the fallback is no longer offered. With
+ * TalkBack on ([accessibility]) a picked Memory Sequence is its numbered variant, as a frozen plan would hold it.
  */
 internal class WakeCheck(
     private val clock: Clock,
     private val monotonicClock: MonotonicClock,
     private val bootCounter: BootCounter,
+    fallbackPolicy: FallbackPolicy,
+    accessibility: AccessibilityState,
 ) {
+    private val fallback = WakeFallback(fallbackPolicy, accessibility, FALLBACK_REASON)
+
     private var input by mutableStateOf(CheckInput())
 
     /** The Memory Sequence round on screen and its playback (Story 3.8). */
@@ -77,9 +92,45 @@ internal class WakeCheck(
             delay(wait)
             if (memory.playback == playback) memory = memory.ticked()
         }
-        return mathCheckUiState(state, availability, now, shown)
-            ?: memoryCheckUiState(state, availability, now, shownMemory)
-            ?: wordCheckUiState(state, availability, now, shownWord)
+        val offered = fallback.offered(state)
+        // A picker left open when the fallback stops being offered is closed for good, so it never pops up uninvited later
+        // (for example on the next ring, once the fallback is offered again).
+        SideEffect { if (!offered) fallback.pickerOpen = false }
+        return (
+            mathCheckUiState(state, availability, now, shown)
+                ?: memoryCheckUiState(state, availability, now, shownMemory)
+                ?: wordCheckUiState(state, availability, now, shownWord)
+        )?.copy(showFallbackLink = offered)
+    }
+
+    /** The Fallback check picker while it is open and the fallback is still offered for [state]; else null. */
+    fun picker(state: SessionState): FallbackPickerUiState? =
+        if (fallback.pickerOpen &&
+            fallback.offered(state)
+        ) {
+            fallbackPickerUiState()
+        } else {
+            null
+        }
+
+    /**
+     * The fallback intents: the link opens the picker while the fallback is offered for the current [state] (a tap from
+     * a stale frame does not), a card asks for that check ([send]), the close button goes back to the check. Each is
+     * also a user interaction ([interacted]).
+     */
+    fun onFallback(
+        intent: WakeIntent,
+        state: SessionState,
+        send: (List<SessionEvent>) -> Unit,
+        interacted: () -> Unit,
+    ) {
+        val chosen = (intent as? WakeIntent.FallbackChosen)?.let { coreCheckType(it.type) }?.let(fallback::asFrozen)
+        fallback.pickerOpen = intent == WakeIntent.FallbackLinkClicked && fallback.offered(state)
+        if (chosen != null) {
+            send(listOf(SessionEvent.UserInteracted, SessionEvent.FallbackRequested(chosen, FALLBACK_REASON)))
+        } else {
+            interacted()
+        }
     }
 
     /** The Word Unscramble item and its letters as the screen shows them for the engine's [state]. */
@@ -181,6 +232,16 @@ internal class WakeCheck(
     companion object {
         /** How often the grace countdown reads the clock; the seconds shown round up, so a quarter second is exact enough. */
         val GRACE_TICK: Duration = 250.milliseconds
+
+        /**
+         * Why the fallback is offered: until the camera check reports its camera state (Stories 3.10 and 3.11), only after
+         * 5 failed attempts.
+         */
+        val FALLBACK_REASON: FallbackReason = FallbackReason.FailedAttempts
+
+        /** The fallback intents this class handles. */
+        fun isFallback(intent: WakeIntent): Boolean =
+            intent == WakeIntent.FallbackLinkClicked || intent is WakeIntent.FallbackChosen || intent == WakeIntent.FallbackPickerClosed
 
         /** The number pad keys this class handles. */
         fun isKey(intent: WakeIntent): Boolean =

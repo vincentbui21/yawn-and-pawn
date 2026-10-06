@@ -66,7 +66,7 @@ class SessionUnmatchedPairsTest {
             SessionEvent.PurchasePending,
             SessionEvent.ImUpTapped,
             SessionEvent.CheckAnswerSubmitted(CheckAnswer.Placeholder),
-            SessionEvent.FallbackRequested,
+            FALLBACK_REQUEST,
             SessionEvent.SnoozeTapped,
             SessionEvent.PayConfirmed(INTENT),
             SessionEvent.ReuseAccepted(PRODUCT, TOKEN),

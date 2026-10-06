@@ -56,6 +56,12 @@ class HomeScreenshotTest {
             composeRule.onNodeWithText("Your 6:00 AM alarm stopped after 30 minutes. Logged as missed.").assertExists()
             composeRule.onNode(hasContentDescription("Dismiss") and hasClickAction()).assertExists()
         }
+        // Story 3.13: the re-register banner, verbatim from EXPERIENCE.md, with "Re-register" and its close icon.
+        if (state.reregisterCheck != null) {
+            composeRule.onNodeWithText("Fallback check used 3 times this week. Re-register your QR/Barcode?").assertExists()
+            composeRule.onNode(hasText("Re-register") and hasClickAction()).assertExists()
+            composeRule.onNode(hasContentDescription("Dismiss") and hasClickAction()).assertExists()
+        }
         longPressTime?.let { time ->
             composeRule.onNode(hasText(time) and hasClickAction()).performTouchInput { longClick() }
             composeRule.onNodeWithText("Duplicate").assertExists()
@@ -174,4 +180,29 @@ class HomeScreenshotTest {
     @Test
     @Config(fontScale = 2.0f)
     fun `missed note in Light at 200 percent`() = home("home_missed_note_light_font200", HomeSamples.missedNote, PpsThemeMode.Light)
+
+    // Story 3.13: the re-register banner, alone and under the reliability banner.
+
+    @Test
+    fun `re-register banner in Light`() = home("home_reregister_light", HomeSamples.reRegister, PpsThemeMode.Light)
+
+    @Test
+    fun `re-register banner in Dark`() = home("home_reregister_dark", HomeSamples.reRegister, PpsThemeMode.Dark)
+
+    @Test
+    @Config(fontScale = 2.0f)
+    fun `re-register banner in Light at 200 percent`() = home("home_reregister_light_font200", HomeSamples.reRegister, PpsThemeMode.Light)
+
+    @Test
+    fun `re-register under the reliability banner in Light`() =
+        home("home_reregister_reliability_light", HomeSamples.reRegisterUnderReliability, PpsThemeMode.Light)
+
+    @Test
+    fun `re-register under the reliability banner in Dark`() =
+        home("home_reregister_reliability_dark", HomeSamples.reRegisterUnderReliability, PpsThemeMode.Dark)
+
+    @Test
+    @Config(fontScale = 2.0f)
+    fun `re-register under the reliability banner in Light at 200 percent`() =
+        home("home_reregister_reliability_light_font200", HomeSamples.reRegisterUnderReliability, PpsThemeMode.Light)
 }

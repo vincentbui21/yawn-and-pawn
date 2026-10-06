@@ -21,6 +21,7 @@ import com.yawnandpawn.app.testing.FakeReliabilitySettings
 import com.yawnandpawn.app.testing.FakeSessionHistoryRepository
 import com.yawnandpawn.app.testing.FakeTimeChangeSignal
 import com.yawnandpawn.app.testing.FakeTimeZoneProvider
+import com.yawnandpawn.app.testing.noReRegisterSuggestions
 import com.yawnandpawn.app.ui.home.AlarmActions
 import com.yawnandpawn.app.ui.home.HomeRoute
 import com.yawnandpawn.app.ui.home.HomeViewModel
@@ -68,6 +69,7 @@ class HomeRouteLifecycleTest {
                 MissedNotes(FakeSessionHistoryRepository(), FakeMissedNoteDismissals()),
                 probe,
                 FakeReliabilitySettings(),
+                noReRegisterSuggestions(),
             )
         val owner = TestOwner()
         withScreen(

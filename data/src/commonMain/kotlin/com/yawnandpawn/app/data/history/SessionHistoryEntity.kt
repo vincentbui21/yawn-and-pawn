@@ -37,4 +37,7 @@ data class SessionHistoryEntity(
     val directBoot: Boolean,
     @ColumnInfo(name = "outcome")
     val outcome: String?,
+    /** The `CheckType.id` the fallback check replaced (schema v6, Story 3.9); null without a fallback. */
+    @ColumnInfo(name = "fallback_from")
+    val fallbackFrom: String?,
 )

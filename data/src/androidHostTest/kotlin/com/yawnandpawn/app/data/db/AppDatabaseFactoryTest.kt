@@ -275,12 +275,41 @@ class AppDatabaseFactoryTest {
         }
 
     @Test
+    fun `the exported version 7 schema adds the nullable fallback_from to session history`() {
+        assertTrue(schema(7).exists(), "exported schema missing: ${schema(7).absolutePath}")
+        val json = schema(7).readText()
+
+        assertTrue(json.contains("\"version\": 7"), "schema version 7")
+        assertEquals(listOf("alarm", "request_code_sequence", "session_history", "session_merge", "check_config"), tableNames(json))
+        assertTrue(json.contains("`fallback_from` TEXT,"), "nullable: rows without a fallback keep null")
+        assertTrue(json.contains("`check_mode` TEXT NOT NULL DEFAULT 'Random'"), "Story 3.5's column is kept")
+    }
+
+    @Test
+    fun `migrating a v6 database keeps history without a fallback and then stores the replaced check (Story 3-9)`() =
+        runTest {
+            val alarm = anAlarm(id = "a", requestCode = 1000)
+            val row = aSessionHistoryRow()
+            createDatabase(version = 6, alarms = listOf(alarm), requestCodeMark = 1002, history = listOf(row))
+
+            withDatabase { database ->
+                assertEquals(Outcome.Success(listOf(alarm)), RoomAlarmRepository(database.alarmDao()).listAll())
+                val history = RoomSessionHistoryRepository(database.sessionHistoryDao())
+                assertEquals(Outcome.Success(row), history.find(row.sessionId), "fallback_from stays null")
+                val withFallback = row.copy(sessionId = "session-2", fallbackUsed = true, fallbackFrom = "QrBarcode")
+                assertEquals(Outcome.Success(Unit), history.upsert(withFallback))
+                assertEquals(Outcome.Success(withFallback), history.find("session-2"))
+            }
+            assertEquals(7, userVersion())
+        }
+
+    @Test
     fun `the migrations cover every version step and nothing is destructive`() {
         assertEquals(
-            listOf(1 to 2, 2 to 3, 3 to 4, 4 to 5, 5 to 6),
+            listOf(1 to 2, 2 to 3, 3 to 4, 4 to 5, 5 to 6, 6 to 7),
             APP_DATABASE_MIGRATIONS.map { it.startVersion to it.endVersion },
         )
-        assertEquals(6, AppDatabase.SCHEMA_VERSION)
+        assertEquals(7, AppDatabase.SCHEMA_VERSION)
     }
 
     @Test

@@ -161,6 +161,31 @@ class RoomSessionHistoryRepositoryTest {
         }
 
     @Test
+    fun `the fallback rows are those with a replaced check, newest first ring first, and an open collection sees a new one`() =
+        runTest {
+            val older = aSessionHistoryRow(sessionId = "older").copy(fallbackUsed = true, fallbackFrom = "QrBarcode")
+            val newer = older.copy(sessionId = "newer", firstRingAt = DEFAULT_FAKE_INSTANT + 1.days)
+            repository.upsert(older)
+            repository.upsert(newer)
+            repository.upsert(aSessionHistoryRow(sessionId = "no-fallback"))
+            repository.upsert(aSessionHistoryRow(sessionId = "unknown-source").copy(fallbackUsed = true, fallbackFrom = null))
+            // A replaced check without the fallback flag is no fallback row.
+            repository.upsert(aSessionHistoryRow(sessionId = "not-used").copy(fallbackUsed = false, fallbackFrom = "QrBarcode"))
+            // A Test session is returned: the rule in Kotlin leaves it out (Story 3.13), not the query.
+            val test = older.copy(sessionId = "test", firstRingAt = DEFAULT_FAKE_INSTANT - 1.days, outcome = SessionOutcome.Test)
+            repository.upsert(test)
+            val seen = MutableStateFlow<List<String>?>(null)
+            backgroundScope.launch(Dispatchers.Default) {
+                repository.observeFallbacks().collect { rows -> seen.value = rows.map { it.sessionId } }
+            }
+
+            assertEquals(listOf(newer, older, test), repository.observeFallbacks().first())
+            withContext(Dispatchers.Default) { withTimeout(WAIT) { seen.first { it == listOf("newer", "older", "test") } } }
+            repository.upsert(older.copy(sessionId = "newest", firstRingAt = DEFAULT_FAKE_INSTANT + 2.days))
+            withContext(Dispatchers.Default) { withTimeout(WAIT) { seen.first { it == listOf("newest", "newer", "older", "test") } } }
+        }
+
+    @Test
     fun `a replayed merge keeps one row with the first merge time`() =
         runTest {
             val merge = SessionMergeRow("s", "alarm-b", DEFAULT_FAKE_INSTANT, mergedAt = DEFAULT_FAKE_INSTANT + 5.seconds)

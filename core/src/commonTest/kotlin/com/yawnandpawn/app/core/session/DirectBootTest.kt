@@ -43,7 +43,7 @@ class DirectBootTest {
 
     private fun engine(policy: SnoozeAvailabilityPolicy = NoBillingSnoozeAvailability(lock)) =
         SessionEngine(
-            SessionReducer(policy, PluginCheckValidator, NoFallbackPolicy),
+            SessionReducer(policy, PluginCheckValidator, CameraFallbackPolicy()),
             store,
             runner,
             SessionRecorder(history),
@@ -232,7 +232,7 @@ class DirectBootTest {
     fun `a fallback taken while locked comes back unsubstituted on the ring after the unlock (Story 3_1 review)`() {
         val grace = checkStates(ringSession()).first()
         val lockedGrace = grace.with(grace.session.copy(beforeFirstUnlock = true, directBootRing = true))
-        val lockedFallback = assertIs<SessionState.Active>(marking.reduce(lockedGrace, SessionEvent.FallbackRequested, T0).state).session
+        val lockedFallback = assertIs<SessionState.Active>(marking.reduce(lockedGrace, FALLBACK_REQUEST, T0).state).session
         assertEquals(LOCKED to FALLBACK_PLAN, lockedFallback.checkRun.plan to lockedFallback.checkRun.fallbackSource)
         val snoozed = snoozedSession().copy(checkRun = lockedFallback.checkRun.restart(), beforeFirstUnlock = true)
 
@@ -252,10 +252,10 @@ class DirectBootTest {
             marking
                 .reduce(
                     grace.with(grace.session.copy(beforeFirstUnlock = true, directBootRing = true)),
-                    SessionEvent.FallbackRequested,
+                    FALLBACK_REQUEST,
                     T0,
                 ).state
-        val unlocked = marking.reduce(grace, SessionEvent.FallbackRequested, T0).state
+        val unlocked = marking.reduce(grace, FALLBACK_REQUEST, T0).state
 
         assertEquals(LOCKED, locked.plan())
         assertEquals(FALLBACK_PLAN, unlocked.plan())
@@ -267,7 +267,7 @@ class DirectBootTest {
         // The ring started locked and saw the unlock: its sound stays the default one, so its check stays locked too.
         val unlockedInRing = grace.with(grace.session.copy(beforeFirstUnlock = false, directBootRing = true))
 
-        assertEquals(LOCKED, marking.reduce(unlockedInRing, SessionEvent.FallbackRequested, T0).state.plan())
+        assertEquals(LOCKED, marking.reduce(unlockedInRing, FALLBACK_REQUEST, T0).state.plan())
     }
 
     @Test

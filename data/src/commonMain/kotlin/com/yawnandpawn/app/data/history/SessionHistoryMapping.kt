@@ -26,6 +26,7 @@ internal fun SessionHistoryRow.toEntity(): SessionHistoryEntity {
         fallbackUsed = fallbackUsed,
         directBoot = directBoot,
         outcome = outcome?.storedName(),
+        fallbackFrom = fallbackFrom,
     )
 }
 
@@ -43,6 +44,7 @@ internal fun SessionHistoryEntity.toRow(): SessionHistoryRow =
         fallbackUsed = fallbackUsed,
         directBoot = directBoot,
         outcome = outcome?.let { sessionOutcomeOf(it) },
+        fallbackFrom = fallbackFrom,
     )
 
 /** The stable stored name of [this] outcome. */

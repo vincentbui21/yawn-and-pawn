@@ -1,13 +1,13 @@
 package com.yawnandpawn.app.core.session
 
 import com.yawnandpawn.app.core.checks.CheckAnswer
+import com.yawnandpawn.app.core.checks.CheckType
 import com.yawnandpawn.app.core.checks.SeedDeriver
 import com.yawnandpawn.app.core.session.SessionEffect.ArmSlot
 import com.yawnandpawn.app.core.session.SessionEvent.AlarmFired
 import com.yawnandpawn.app.core.session.SessionEvent.CallEnded
 import com.yawnandpawn.app.core.session.SessionEvent.CallStarted
 import com.yawnandpawn.app.core.session.SessionEvent.CheckAnswerSubmitted
-import com.yawnandpawn.app.core.session.SessionEvent.FallbackRequested
 import com.yawnandpawn.app.core.session.SessionEvent.ImUpTapped
 import com.yawnandpawn.app.core.session.SessionEvent.PayConfirmed
 import com.yawnandpawn.app.core.session.SessionEvent.SnoozeTapped
@@ -429,23 +429,39 @@ internal val ROW_CASES: Map<String, List<RowExample>> =
         "R12 Grace|Loud+FallbackRequested" to
             checkStates(onSecondEntry).map { from ->
                 val touched = from.session.touched(N)
-                // The fallback plan's own seeds (fallback flag); the entry's failed attempts stay until Story 3.9 decides.
-                // Story 3.1 review: the run keeps the unresolved fallback plan for later rings and the session's total.
+                // Story 3.9: the fallback plan's own seeds, no failed attempts on its first entry, the plan kept for later
+                // rings, the replaced check kept for history, and the first fallback entry shown. Timers are unchanged.
                 val fallbackRun =
                     CheckRun(
                         FALLBACK_PLAN,
                         ringSeeds(1, 3, fallback = true),
-                        failedAttempts = 5,
+                        failedAttempts = 0,
                         fallbackUsed = true,
                         fallbackSource = FALLBACK_PLAN,
                         totalFailedAttempts = 7,
+                        fallbackFrom = "Placeholder",
                     )
+                val policy = StubFallback(FallbackDecision.Allowed(FALLBACK_PLAN))
                 RowExample(
                     name = from.kind,
                     from = from,
-                    event = FallbackRequested,
+                    event = FALLBACK_REQUEST,
                     now = N,
-                    expected = Transition(from.with(touched.copy(checkRun = fallbackRun)), emptyList()),
+                    expected = Transition(from.with(touched.copy(checkRun = fallbackRun)), listOf(SessionEffect.StartCheckStep(0))),
+                    reducer =
+                        SessionReducer(
+                            StubAvailability(SnoozeAvailability.Available(OFFER)),
+                            StubCheck(StepResult.ValidLast),
+                            policy,
+                        ),
+                    also = { _, _ ->
+                        val asked = listOf(FallbackRequest(CheckType.Math, FallbackReason.CameraUnavailable))
+                        kotlin.test.assertEquals(
+                            asked.toSet(),
+                            policy.requests.toSet(),
+                            "the policy decides on the picked type and the reason",
+                        )
+                    },
                 )
             },
         "R13 Ringing|Grace|Loud+SnoozeTapped" to
@@ -617,7 +633,7 @@ internal val ROW_CASES: Map<String, List<RowExample>> =
             checkStates().map { from ->
                 RowExample("${from.kind} ImUpTapped again", from, ImUpTapped, N, Transition(from.touchedAt(N), emptyList()))
             } +
-            listOf(CheckAnswerSubmitted(CheckAnswer.Placeholder), FallbackRequested).map { event ->
+            listOf(CheckAnswerSubmitted(CheckAnswer.Placeholder), FALLBACK_REQUEST).map { event ->
                 val from = Ringing(ringSession())
                 RowExample("Ringing $event before the check", from, event, N, Transition(from.touchedAt(N), emptyList()))
             } +
@@ -639,7 +655,7 @@ internal val ROW_CASES: Map<String, List<RowExample>> =
                     RowExample(
                         "${from.kind} fallback not allowed",
                         from,
-                        FallbackRequested,
+                        FALLBACK_REQUEST,
                         N,
                         Transition(from.touchedAt(N), emptyList()),
                         reducer = reducer(fallback = FallbackDecision.NotAllowed),
@@ -647,7 +663,7 @@ internal val ROW_CASES: Map<String, List<RowExample>> =
                     RowExample(
                         "${from.kind} fallback already used",
                         used,
-                        FallbackRequested,
+                        FALLBACK_REQUEST,
                         N,
                         Transition(used.touchedAt(N), emptyList()),
                     ),

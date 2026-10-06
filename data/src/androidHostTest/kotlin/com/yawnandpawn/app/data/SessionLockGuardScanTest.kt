@@ -373,7 +373,7 @@ class SessionLockGuardScanTest {
          * and "Delete all data" use cases (Epics 4 and 5) are checked as use cases wherever they live in `:core`; a
          * package that also holds other writers the user drives (a repository facade, a dismissal) is added here.
          */
-        val FULL_PACKAGES = listOf("alarm", "history")
+        val FULL_PACKAGES = listOf("alarm", "history", "stats")
 
         /** The writers allowed to write during a session, and why. */
         val ALLOWED =
@@ -386,6 +386,8 @@ class SessionLockGuardScanTest {
                 // Dismissing Home's missed note changes no alarm, fee or history row, so it may run during a session
                 // (Home is behind the lock then anyway).
                 "MissedNotes" to "display state only",
+                // Dismissing Home's re-register banner (Story 3.13), likewise: a display state, in the settings DataStore.
+                "ReRegisterSuggestions" to "display state only",
                 // "Test alarm" (Story 1.18): stores the pending test config and arms the test code. The editor that
                 // offers it is closed by the lock, and a test that fires during a session is ignored by the engine
                 // (TestAlarmFired while active, AD-2), so it changes nothing the user owns.

@@ -270,6 +270,61 @@ class DirectBootTest {
         }
 
     @Test
+    fun `an unlock while ringing lifts the lock flag but the substituted sound stays for this ring (Story 2_4)`() =
+        runTest {
+            val engine = engine()
+            engine.dispatch(alarmFired(testConfig().copy(soundRef = systemSound)))
+            lock.state.value = true
+            runner.ran.clear()
+
+            val after = engine.dispatch(SessionEvent.UserUnlocked).session()
+
+            assertFalse(after.beforeFirstUnlock)
+            assertTrue(after.directBootRing, "the current ring keeps the default sound")
+            assertTrue(after.startedBeforeUnlock, "history keeps direct_boot")
+            assertEquals(listOf(SessionEffect.LiftDirectBootSubstitutions, SessionEffect.InitBilling), runner.oneShot)
+            assertEquals(EntryEffect.SoundAt(Alarm.DEFAULT_SOUND_REF, 80), runner.entry.first())
+        }
+
+    @Test
+    fun `after the unlock the next ring (after a snooze) plays the chosen sound`() =
+        runTest {
+            val config = testConfig().copy(soundRef = systemSound)
+            val snoozed =
+                snoozedSession().copy(
+                    config = config,
+                    beforeFirstUnlock = true,
+                    directBootRing = true,
+                    startedBeforeUnlock = true,
+                )
+            store.commit(SessionState.Snoozed(snoozed))
+            lock.state.value = true
+            val engine = engine()
+            engine.restore()
+            time.advanceBy(9.minutes)
+
+            val next = engine.dispatch(SessionEvent.SlotFired).session()
+
+            assertEquals(2, next.ringIndex)
+            assertFalse(next.directBootRing)
+            assertEquals(EntryEffect.SoundAt(systemSound, 80), runner.entry.last { it is EntryEffect.SoundAt })
+        }
+
+    @Test
+    fun `an unlock in Grace has no AD-2 row - ignored and logged, nothing changes`() =
+        runTest {
+            val engine = engine()
+            engine.dispatch(alarmFired())
+            val grace =
+                assertIs<SessionState.Grace>(assertIs<Outcome.Success<SessionState>>(engine.dispatch(SessionEvent.ImUpTapped)).value)
+            lock.state.value = true
+            runner.ran.clear()
+
+            assertEquals(grace, assertIs<Outcome.Success<SessionState>>(engine.dispatch(SessionEvent.UserUnlocked)).value)
+            assertEquals(listOf<SessionEffect>(SessionEffect.LogIgnored("UserUnlocked", SESSION_ID)), runner.oneShot)
+        }
+
+    @Test
     fun `the unlocked default port says unlocked`() =
         runTest {
             assertTrue(UserLockState.Unlocked.isUserUnlocked())

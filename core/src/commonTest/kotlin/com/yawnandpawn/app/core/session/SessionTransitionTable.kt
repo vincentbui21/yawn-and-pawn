@@ -157,6 +157,7 @@ internal val ROW_CASES: Map<String, List<RowExample>> =
                         firstRing = N,
                         startedBeforeUnlock = locked,
                         beforeFirstUnlock = locked,
+                        directBootRing = locked,
                         interactionDeadline = Deadline.after(N, 30.minutes),
                     )
                 RowExample(

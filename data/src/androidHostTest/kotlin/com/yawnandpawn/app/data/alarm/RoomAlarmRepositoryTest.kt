@@ -46,7 +46,7 @@ class RoomAlarmRepositoryTest {
 
     @Test
     fun `an inserted alarm reads back with every field intact`() =
-        runTest {
+        runTest(timeout = ROOM_IO_TIMEOUT) {
             val alarm =
                 anAlarm(
                     time = LocalTime(6, 45, 30, 123_456_789),
@@ -72,7 +72,7 @@ class RoomAlarmRepositoryTest {
 
     @Test
     fun `a one-time alarm without a label reads back with no repeat days and no label`() =
-        runTest {
+        runTest(timeout = ROOM_IO_TIMEOUT) {
             val alarm = anAlarm()
 
             repository.upsert(alarm)
@@ -82,7 +82,7 @@ class RoomAlarmRepositoryTest {
 
     @Test
     fun `upserting an existing id updates the row and keeps a single alarm`() =
-        runTest {
+        runTest(timeout = ROOM_IO_TIMEOUT) {
             val original = anAlarm(time = LocalTime(7, 0))
             repository.upsert(original)
             val edited = original.copy(time = LocalTime(8, 15), label = "Later", updatedAt = DEFAULT_FAKE_INSTANT + 1.minutes)
@@ -94,7 +94,7 @@ class RoomAlarmRepositoryTest {
 
     @Test
     fun `deleting removes the alarm and a missing id is NotFound`() =
-        runTest {
+        runTest(timeout = ROOM_IO_TIMEOUT) {
             val keep = anAlarm(id = "keep", requestCode = 1000)
             val remove = anAlarm(id = "remove", requestCode = 1001)
             repository.upsert(keep)
@@ -108,7 +108,7 @@ class RoomAlarmRepositoryTest {
 
     @Test
     fun `observeAll orders by time of day, then creation time, and emits after each change`() =
-        runTest {
+        runTest(timeout = ROOM_IO_TIMEOUT) {
             repository.upsert(anAlarm(id = "22:00", time = LocalTime(22, 0), requestCode = 1000))
             repository.upsert(anAlarm(id = "06:30", time = LocalTime(6, 30), requestCode = 1001))
             repository.upsert(anAlarm(id = "07:15", time = LocalTime(7, 15), requestCode = 1002))
@@ -140,7 +140,7 @@ class RoomAlarmRepositoryTest {
 
     @Test
     fun `a second alarm with the same request code is rejected as a storage failure`() =
-        runTest {
+        runTest(timeout = ROOM_IO_TIMEOUT) {
             val first = anAlarm(id = "first", requestCode = 1000)
             repository.upsert(first)
 
@@ -152,7 +152,7 @@ class RoomAlarmRepositoryTest {
 
     @Test
     fun `editing an alarm onto another alarm's request code is rejected and changes nothing`() =
-        runTest {
+        runTest(timeout = ROOM_IO_TIMEOUT) {
             val first = anAlarm(id = "first", requestCode = 1000)
             val second = anAlarm(id = "second", requestCode = 1001)
             repository.upsert(first)
@@ -166,7 +166,7 @@ class RoomAlarmRepositoryTest {
 
     @Test
     fun `the unique index rejects a duplicate request code at the table level`() =
-        runTest {
+        runTest(timeout = ROOM_IO_TIMEOUT) {
             dao.insert(anAlarm(id = "first", requestCode = 1000).toEntity())
 
             assertFailsWith<Exception> { dao.insert(anAlarm(id = "second", requestCode = 1000).toEntity()) }
@@ -174,7 +174,7 @@ class RoomAlarmRepositoryTest {
 
     @Test
     fun `a closed database is a storage failure, not an exception`() =
-        runTest {
+        runTest(timeout = ROOM_IO_TIMEOUT) {
             database.close()
 
             assertIs<Outcome.Failure<DomainError>>(repository.get("a"))
@@ -185,7 +185,7 @@ class RoomAlarmRepositoryTest {
 
     @Test
     fun `on a closed database SaveAlarm and DuplicateAlarm return a storage failure instead of throwing`() =
-        runTest {
+        runTest(timeout = ROOM_IO_TIMEOUT) {
             val alarm = anAlarm()
             repository.upsert(alarm)
             val alarms =
@@ -203,7 +203,7 @@ class RoomAlarmRepositoryTest {
 
     @Test
     fun `a corrupt row is a storage failure on get and listAll`() =
-        runTest {
+        runTest(timeout = ROOM_IO_TIMEOUT) {
             dao.insert(anAlarm(id = "corrupt").toEntity().copy(timeNanoOfDay = -1))
 
             assertIs<DomainError.StorageFailure>(assertIs<Outcome.Failure<DomainError>>(repository.get("corrupt")).error)
@@ -212,7 +212,7 @@ class RoomAlarmRepositoryTest {
 
     @Test
     fun `listAll returns the same order as observeAll`() =
-        runTest {
+        runTest(timeout = ROOM_IO_TIMEOUT) {
             repository.upsert(anAlarm(id = "22:00", time = LocalTime(22, 0), requestCode = 1000))
             repository.upsert(anAlarm(id = "06:30", time = LocalTime(6, 30), requestCode = 1001))
 
@@ -222,7 +222,7 @@ class RoomAlarmRepositoryTest {
 
     @Test
     fun `the core use cases work end to end over Room`() =
-        runTest {
+        runTest(timeout = ROOM_IO_TIMEOUT) {
             val save =
                 AlarmUseCasesFixture(
                     repository = repository,
@@ -236,3 +236,10 @@ class RoomAlarmRepositoryTest {
             assertEquals(listOf(second, first), stored())
         }
 }
+
+/**
+ * runTest's default 1-minute limit counts real time, and these tests do real Room IO: under a loaded gate run (many
+ * Gradle workers on a company laptop) one of them once ran past it. A generous limit keeps them deterministic; a hang
+ * still fails.
+ */
+private val ROOM_IO_TIMEOUT = 5.minutes

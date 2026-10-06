@@ -76,6 +76,7 @@ class WakeRuntime(
     private val now: () -> TimeSnapshot,
     private val session: () -> SessionState,
     private val timings: WakeTimings = WakeTimings.None,
+    private val onInitBilling: () -> Unit = {},
 ) : EffectRunner {
     private val player = outputs.player
     private val vibrator = outputs.vibrator
@@ -130,6 +131,7 @@ class WakeRuntime(
             is SessionEffect.StartWakeRuntime -> startRuntime()
             is SessionEffect.ArmSlot -> armSlotForRing(effect.at)
             SessionEffect.CancelSlot -> cancelSlot()
+            SessionEffect.InitBilling -> onInitBilling()
             is SessionEffect.ClearRuntimeSession -> endSession()
             is SessionEffect.LogIgnored -> logger.log(LogEvent.SessionEventIgnored(effect.eventType, effect.sessionId))
             else -> if (!runSound(effect)) logger.log(LogEvent.SessionEffectLogged(typeName(effect), entry = false))

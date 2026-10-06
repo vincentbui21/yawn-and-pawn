@@ -65,6 +65,10 @@ fun wakeModule(): Module =
                 now = { TimeSnapshot.of(get(), get(), get()) },
                 session = { get<SessionEngine>().state.value },
                 timings = get(),
+                // AD-2 InitBilling (Story 2.4): looked up when it runs, as UnlockSignals depends on the engine.
+                onInitBilling = { get<UnlockSignals>().initialiseAfterUnlock() },
             )
         }
+        // The first unlock after a boot (Story 2.4): UserUnlocked, billing and crash reporting.
+        single { UnlockSignals(get(), get(), get(), get()) }
     }

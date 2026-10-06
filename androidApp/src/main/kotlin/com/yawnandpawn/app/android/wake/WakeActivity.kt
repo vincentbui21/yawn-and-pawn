@@ -29,6 +29,7 @@ import com.yawnandpawn.app.core.session.SessionEngine
 import com.yawnandpawn.app.core.session.SessionEvent
 import com.yawnandpawn.app.core.session.SessionState
 import com.yawnandpawn.app.core.session.SnoozeAvailabilityPolicy
+import com.yawnandpawn.app.core.session.UserLockState
 import com.yawnandpawn.app.core.time.TimeZoneProvider
 import com.yawnandpawn.app.ui.format.is24HourClock
 import com.yawnandpawn.app.ui.wake.PlaceholderStep
@@ -56,7 +57,9 @@ import kotlin.time.Duration.Companion.seconds
  *
  * It renders from in-memory state only, with no loading state and no repository call: the engine's `state` mapped by
  * [ringingUiState], with the snooze the [SnoozeAvailabilityPolicy] allows ("Prices not loaded yet",
- * or "Test · no charge" for a test session). The emergency ring shows its own alarm time. Opened just before the
+ * or "Test · no charge" for a test session, or "Unlock your phone to snooze" before the first unlock). The availability
+ * follows the live [UserLockState] too (Story 2.4), so an unlock re-renders the snooze control in place, without
+ * finishing or recreating the screen. The emergency ring shows its own alarm time. Opened just before the
  * session starts (the service posts the ringing notification first), it shows the notification's alarm time and waits.
  *
  * Every dispatch is launched on [ApplicationScope], outside composition and outside any engine effect:
@@ -76,6 +79,8 @@ class WakeActivity : ComponentActivity() {
     private val timeZones: TimeZoneProvider by inject()
     private val snoozePolicy: SnoozeAvailabilityPolicy by inject()
     private val timings: WakeTimings by inject()
+    private val userLock: UserLockState by inject()
+    private val unlockSignals: UnlockSignals by inject()
 
     /** "I'm up" was tapped before the session existed; replayed once it rings. */
     private var pendingImUp by mutableStateOf(false)
@@ -86,9 +91,14 @@ class WakeActivity : ComponentActivity() {
      */
     internal val volumeKeys = VolumeKeyGate(ringing = { forwardsToWakeScreen(engine.state.value, runtime.emergency.value) })
 
+    /**
+     * Resumed with the user unlocked is an unlock signal (Story 2.4), for example back from the PIN prompt of
+     * `requestDismissKeyguard`, or after an unlock while another screen was in front. The screen itself stays.
+     */
     override fun onResume() {
         super.onResume()
         volumeKeys.resumed = true
+        if (userLock.isUserUnlocked()) unlockSignals.onUnlocked()
     }
 
     override fun onPause() {
@@ -132,6 +142,8 @@ class WakeActivity : ComponentActivity() {
         setContent {
             val state by engine.state.collectAsState()
             val emergency by runtime.emergency.collectAsState()
+            // Story 2.4: the lock state is part of the snooze availability, so an unlock re-renders the control in place.
+            val unlocked by remember { userLock.observe() }.collectAsState(initial = userLock.isUserUnlocked())
             // The full-screen intent can open the screen just before the session starts (the service posts the ringing
             // notification first): it waits for a session or an emergency ring, and closes only once that is over.
             val active = state.isRinging() || emergency != null
@@ -148,7 +160,7 @@ class WakeActivity : ComponentActivity() {
             val session = (state as? SessionState.Active)?.session
             val current =
                 emergency?.let { alarmOnlyRingingUiState(it.alarmAt, zone) }
-                    ?: session?.let { ringingUiState(it, snoozePolicy.availability(it), zone) }
+                    ?: session?.let { ringingUiState(it, remember(it, unlocked) { snoozePolicy.availability(it) }, zone) }
                     ?: runtime.shownAlarmAt()?.let { alarmOnlyRingingUiState(it, zone) }
             // Once a session ends the screen keeps its last look until it closes, instead of flashing an empty surface.
             val last = remember { LastShown() }

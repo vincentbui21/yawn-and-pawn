@@ -20,6 +20,7 @@ import com.yawnandpawn.app.core.session.SessionEngine
 import com.yawnandpawn.app.core.session.SessionEvent
 import com.yawnandpawn.app.core.session.SessionState
 import com.yawnandpawn.app.core.session.TestAlarmStore
+import com.yawnandpawn.app.core.session.UserLockState
 import com.yawnandpawn.app.core.time.Clock
 import com.yawnandpawn.app.core.time.MonotonicClock
 import com.yawnandpawn.app.core.time.TimeSnapshot
@@ -56,6 +57,7 @@ internal class WakeApp(
     monotonic: MonotonicClock? = null,
     testAlarms: TestAlarmStore? = null,
     billing: Billing? = null,
+    userLock: UserLockState? = null,
     serviceStartWait: Duration = Duration.ZERO,
 ) {
     val app: YawnAndPawnApp = ApplicationProvider.getApplicationContext()
@@ -81,6 +83,7 @@ internal class WakeApp(
                 monotonic?.let { replaced -> single<MonotonicClock> { replaced } }
                 testAlarms?.let { replaced -> single<TestAlarmStore> { replaced } }
                 billing?.let { replaced -> single<Billing> { replaced } }
+                userLock?.let { replaced -> single<UserLockState> { replaced } }
                 single { WakeServiceStarts(serviceStartWait) }
             },
         )

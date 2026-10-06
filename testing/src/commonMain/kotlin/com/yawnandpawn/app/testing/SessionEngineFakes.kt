@@ -137,6 +137,14 @@ class FakeBilling(
         return result
     }
 
+    /** How often [init] was called (Story 2.4: once per unlock signal path, idempotent in the real adapter). */
+    var initCalls: Int = 0
+        private set
+
+    override fun init() {
+        initCalls++
+    }
+
     companion object {
         /** A `PurchaseGranted` that the reconciler granted for [productId] with [token], restarting the check with [seeds]. */
         fun grants(

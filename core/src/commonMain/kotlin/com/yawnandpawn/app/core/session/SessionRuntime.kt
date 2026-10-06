@@ -82,7 +82,7 @@ private fun soundOf(session: SessionData): EntryEffect =
     if (session.paused) {
         EntryEffect.SoundPaused
     } else {
-        EntryEffect.SoundAt(DirectBootSubstitution.apply(session.config, session.beforeFirstUnlock).soundRef, session.config.volumePercent)
+        EntryEffect.SoundAt(DirectBootSubstitution.apply(session.config, session.directBootRing).soundRef, session.config.volumePercent)
     }
 
 private fun ringing(

@@ -81,6 +81,12 @@ data class PurchaseIntent(
 fun interface Billing {
     /** Launches the purchase of [intent] and returns its result as the event to dispatch. */
     suspend fun launch(intent: PurchaseIntent): SessionEvent.PurchaseEvent
+
+    /**
+     * Connects to Play Billing after the user's first unlock (AD-15, Story 2.4); never before it. Idempotent. A no-op
+     * until Epic 4 brings the real adapter.
+     */
+    fun init() = Unit
 }
 
 /** Port for the persisted purchase intents (AD-7, `runtime.db` in Epic 4). */

@@ -99,8 +99,11 @@ sealed interface SessionState {
  * @property ringIndex 1 for the first ring, +1 for each ring after a snooze or a merge.
  * @property paying the purchase in flight, if any; cleared on restore (billing is never relaunched).
  * @property noGraceThisRing this ring started from a merged alarm, so "I'm up" goes straight to [SessionState.Loud].
- * @property beforeFirstUnlock this ring rings before the first unlock since boot (Direct Boot substitutions apply). Set
+ * @property beforeFirstUnlock this ring rings before the first unlock since boot and has not seen the unlock yet. Set
  * from the lock state when a ring starts, is restored or follows a snooze (Story 2.3), and cleared by `UserUnlocked`.
+ * @property directBootRing this ring uses the Direct Boot substitutions, the default sound and the Direct Boot check
+ * plan (Story 2.4). Set with [beforeFirstUnlock] when a ring starts, is restored or follows a snooze,
+ * but kept for the rest of the ring when the user unlocks, so the sound and the check do not change under the user.
  * @property paymentPending Play reported a pending payment; cleared by a later grant.
  * @property declinedReuseProduct the product whose stranded payment the user declined to reuse.
  * @property graceEnd when the grace window ends (Grace only).
@@ -128,6 +131,7 @@ data class SessionData(
     val paying: PurchaseIntentId? = null,
     val noGraceThisRing: Boolean = false,
     val beforeFirstUnlock: Boolean = false,
+    val directBootRing: Boolean = false,
     val paymentPending: Boolean = false,
     val declinedReuseProduct: String? = null,
     val graceEnd: Deadline? = null,

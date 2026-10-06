@@ -122,11 +122,15 @@ class WakeService :
     private val rearm: SessionSlotRearm by inject()
     private val userLock: UserLockState by inject()
     private val sessionLock: SessionLockGuard by inject()
+    private val unlockSignals: UnlockSignals by inject()
 
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate + CoroutineExceptionHandler { _, e -> onCrash(e) })
     private val commands = Mutex()
     private var watching: Job? = null
     private var ticking: Job? = null
+
+    /** The unlock watch of a session before the first unlock (Story 2.4); null or done otherwise. */
+    private var unlockWatch: Job? = null
     private var stopping = false
 
     /** The latest start, so a stop never ends a start that arrived after it (`stopSelfResult`). */
@@ -522,6 +526,31 @@ class WakeService :
             state.isOngoing() -> startTicking()
             emergency == null -> shutdown()
         }
+        watchUnlock(state)
+    }
+
+    /**
+     * While a session before the first unlock runs (Story 2.4), listen for the unlock: [UserLockState.observe] registers a
+     * context receiver for `ACTION_USER_UNLOCKED` while collected (a manifest receiver never gets it) and unregisters it
+     * when this watch is cancelled, at the session's end or when the service stops. The unlock goes to [UnlockSignals].
+     */
+    private fun watchUnlock(state: SessionState) {
+        val locked = state is SessionState.Active && state.session.beforeFirstUnlock && state.isOngoing()
+        when {
+            !locked -> {
+                unlockWatch?.cancel()
+                unlockWatch = null
+            }
+
+            // One unlock per boot: once seen, the signal is not sent again (Grace and Loud ignore it, AD-2).
+            unlockWatch == null -> {
+                unlockWatch =
+                    scope.launch {
+                        userLock.observe().first { it }
+                        unlockSignals.onUnlocked()
+                    }
+            }
+        }
     }
 
     private fun startTicking() {
@@ -563,6 +592,7 @@ class WakeService :
         if (stopping || commands.isLocked) return
         stopping = true
         ticking?.cancel()
+        unlockWatch?.cancel()
         runtime.endSession()
         stopForeground(STOP_FOREGROUND_REMOVE)
         stopSelfResult(lastStartId)

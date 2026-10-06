@@ -33,10 +33,21 @@ class SeedDeriverTest {
                 SeedDeriver.seed("session-1", 1, 1, 0),
                 SeedDeriver.seed("session-1", 1, 0, 1),
                 SeedDeriver.seed("session-1", 1, SeedDeriver.PICK, 0),
-                SeedDeriver.seed("session-1", 1, SeedDeriver.FALLBACK_BASE, 0),
+                SeedDeriver.seed("session-1", 1, 0, 0, fallback = true),
             )
 
         assertEquals(seeds.size, seeds.toSet().size, "$seeds")
+        assertEquals(seeds.first(), SeedDeriver.seed("session-1", 1, 0, 0, fallback = false), "the flag off is the plan seed")
+    }
+
+    @Test
+    fun `fallback seeds never repeat plan seeds, also for plans of a thousand entries and more (Story 3_1 review)`() {
+        // With the old fallback key 1000 + i, plan entry 999 had the fallback pick's seed and entry 1000 + i fallback entry i's.
+        val keys = (SeedDeriver.PICK..2_100)
+        val plan = keys.map { SeedDeriver.seed("session-1", 1, it, 0) }
+        val fallback = keys.map { SeedDeriver.seed("session-1", 1, it, 0, fallback = true) }
+
+        assertEquals(plan.size + fallback.size, (plan + fallback).toSet().size)
     }
 
     @Test
@@ -45,8 +56,11 @@ class SeedDeriverTest {
             buildList {
                 repeat(50) { session ->
                     for (ring in 1..6) {
-                        for (entry in listOf(SeedDeriver.PICK, 0, 1, 2, 3, SeedDeriver.FALLBACK_BASE - 1, SeedDeriver.FALLBACK_BASE)) {
-                            for (attempt in 0..3) add(SeedDeriver.seed("uuid-$session", ring, entry, attempt))
+                        for (entry in listOf(SeedDeriver.PICK, 0, 1, 2, 3, 999, 1_000)) {
+                            for (attempt in 0..3) {
+                                add(SeedDeriver.seed("uuid-$session", ring, entry, attempt))
+                                add(SeedDeriver.seed("uuid-$session", ring, entry, attempt, fallback = true))
+                            }
                         }
                     }
                 }

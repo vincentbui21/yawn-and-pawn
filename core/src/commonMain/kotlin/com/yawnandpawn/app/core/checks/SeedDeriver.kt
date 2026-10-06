@@ -5,22 +5,25 @@ package com.yawnandpawn.app.core.checks
  * so a restored session derives the same puzzles and nothing in `:core` draws random numbers.
  *
  * Keys of [seed]'s `entryIndex`: entry `i` of a ring's plan is `i`, and the Random pick of the plan is [PICK]. A fallback
- * plan adds [FALLBACK_BASE] to both, so its seeds never repeat the plan's. `attempt` is 0 for the first puzzle of an
- * entry in a ring, and the failed-attempt count for a puzzle started over (`CheckResult.WrongRestart`).
+ * plan uses the same keys with `fallback` true, a separate hashed field, so its seeds never repeat the plan's whatever
+ * the plan's size. `attempt` is 0 for the first puzzle of an entry in a ring, and the entry's failed-attempt count for a
+ * puzzle started over (`CheckResult.WrongRestart`).
  */
 object SeedDeriver {
     /** The `entryIndex` key of the seed that picks the entry of a Random plan. */
     const val PICK = -1
 
-    /** Added to every key of a fallback plan (FR-PWK-11). */
-    const val FALLBACK_BASE = 1_000
-
-    /** The seed of [entryIndex] in ring [ringIndex] of session [sessionId], for [attempt]. FNV-1a, then SplitMix64's mix. */
+    /**
+     * The seed of [entryIndex] in ring [ringIndex] of session [sessionId], for [attempt], in the [fallback] plan
+     * (FR-PWK-11) or not. FNV-1a, then SplitMix64's mix. The fallback flag adds one byte to the hashed input only when
+     * true, so every plan seed stays what it was, and a fallback input is never a plan input (it is one byte longer).
+     */
     fun seed(
         sessionId: String,
         ringIndex: Int,
         entryIndex: Int,
         attempt: Int,
+        fallback: Boolean = false,
     ): Long {
         var hash = FNV_OFFSET
         for (char in sessionId) {
@@ -32,9 +35,12 @@ object SeedDeriver {
                 hash = (hash xor ((value ushr shift) and BYTE_MASK).toLong()) * FNV_PRIME
             }
         }
+        if (fallback) hash = (hash xor FALLBACK_FLAG) * FNV_PRIME
         return mix64(hash)
     }
 
+    /** The extra byte hashed into a fallback seed. */
+    private const val FALLBACK_FLAG = 1L
     private const val BYTE_MASK = 0xFF
     private const val FNV_PRIME = 0x100000001b3L
 

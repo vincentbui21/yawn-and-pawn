@@ -61,9 +61,10 @@ private fun ringImmediately(
 /**
  * A new ring after a snooze or a merge at [now]: Ringing(ringIndex + 1) with a fresh 30-minute interaction deadline.
  * It is before the first unlock exactly when [userLocked] (Story 2.3). Its check run starts again from the session's
- * own plan (the fallback plan once used, else the frozen config's), resolved for the new ring with the new ring's seeds
- * (AD-9: a Random plan can pick another type), with the Direct Boot substitutions while locked, so a ring after the
- * unlock gets the chosen check back.
+ * own unresolved plan (the fallback's `fallbackSource` once used, else the frozen config's), resolved for the new ring
+ * with the new ring's seeds (AD-9: a Random plan, or a Random fallback, can pick another type), with the Direct Boot
+ * substitutions only while locked, so a ring after the unlock gets the chosen check back. The session's
+ * `totalFailedAttempts` carry over.
  */
 private class NextRing(
     private val now: TimeSnapshot,
@@ -74,10 +75,12 @@ private class NextRing(
         session: SessionData,
         noGrace: Boolean,
     ): SessionState.Ringing {
-        val fallback = session.checkRun.fallbackUsed
-        val plan = if (fallback) session.checkRun.plan else session.config.checkPlan
+        val last = session.checkRun
         val ringIndex = session.ringIndex + 1
-        val run = CheckRun.forRing(plan, session.sessionId, ringIndex, fallback)
+        val run =
+            CheckRun
+                .forRing(last.nextRingPlan(session.config.checkPlan), session.sessionId, ringIndex, last.fallbackUsed)
+                .copy(totalFailedAttempts = last.totalFailedAttempts)
         return SessionState.Ringing(
             session.withoutTimers().copy(checkRun = run).newRing(userLocked, directBootPlan).copy(
                 ringIndex = ringIndex,

@@ -92,7 +92,10 @@ sealed interface FallbackDecision {
     data object NotAllowed : FallbackDecision
 }
 
-/** Decides [FallbackDecision] for the session (for example after 5 failed matches or a matcher error). Pure. */
+/**
+ * Decides [FallbackDecision] for the session (for example after 5 failed matches or a matcher error). Pure. It counts
+ * the session-wide `CheckRun.totalFailedAttempts`, not the per-entry `failedAttempts` that key restart seeds.
+ */
 fun interface FallbackPolicy {
     fun fallback(session: SessionData): FallbackDecision
 }
@@ -139,7 +142,8 @@ object PlaceholderCheckValidator : CheckValidator {
  *   [StepResult.ValidLast] on the last entry;
  * - [CheckResult.Wrong] → [StepResult.Invalid]; [CheckResult.WrongRestart] → [StepResult.InvalidRestart].
  *
- * A run with no current entry or no seed for it (a passed check, a damaged row) is [StepResult.Invalid]; it never throws.
+ * A run with no current entry or no seed for it is [StepResult.Invalid]; it never throws. The reducer derives the seeds
+ * a damaged row is missing from the session coordinates before it validates, so only a passed check gets there.
  * Story 3.2 wires it in place of [PlaceholderCheckValidator].
  */
 object PluginCheckValidator : CheckValidator {

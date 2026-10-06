@@ -221,11 +221,27 @@ class DirectBootTest {
         assertEquals(LOCKED, locked.plan())
         assertEquals(TWO_STEPS, unlocked.plan(), "the chosen check is back")
         val fallback = snoozed.copy(checkRun = snoozed.checkRun.copy(plan = FALLBACK_PLAN, fallbackUsed = true))
-        assertEquals(
-            FALLBACK_PLAN,
-            marking.reduce(SessionState.Snoozed(fallback), SessionEvent.SlotFired, at(10.minutes), userLocked = false).state.plan(),
-            "a used fallback stays",
-        )
+        val ring2 = marking.reduce(SessionState.Snoozed(fallback), SessionEvent.SlotFired, at(10.minutes), userLocked = false).state
+        assertEquals(FALLBACK_PLAN, ring2.plan(), "a used fallback stays")
+        val ring2Run = assertIs<SessionState.Active>(ring2).session.checkRun
+        assertTrue(ring2Run.fallbackUsed)
+        assertEquals(ringSeeds(2, 3, fallback = true), ring2Run.seeds)
+    }
+
+    @Test
+    fun `a fallback taken while locked comes back unsubstituted on the ring after the unlock (Story 3_1 review)`() {
+        val grace = checkStates(ringSession()).first()
+        val lockedGrace = grace.with(grace.session.copy(beforeFirstUnlock = true, directBootRing = true))
+        val lockedFallback = assertIs<SessionState.Active>(marking.reduce(lockedGrace, SessionEvent.FallbackRequested, T0).state).session
+        assertEquals(LOCKED to FALLBACK_PLAN, lockedFallback.checkRun.plan to lockedFallback.checkRun.fallbackSource)
+        val snoozed = snoozedSession().copy(checkRun = lockedFallback.checkRun.restart(), beforeFirstUnlock = true)
+
+        val unlocked = marking.reduce(SessionState.Snoozed(snoozed), SessionEvent.SlotFired, at(10.minutes), userLocked = false).state
+        val stillLocked = marking.reduce(SessionState.Snoozed(snoozed), SessionEvent.SlotFired, at(10.minutes), userLocked = true).state
+
+        assertEquals(FALLBACK_PLAN, unlocked.plan(), "the locked substitutes are not kept")
+        assertEquals(LOCKED, stillLocked.plan())
+        assertEquals(FALLBACK_PLAN, assertIs<SessionState.Active>(unlocked).session.checkRun.fallbackSource)
     }
 
     @Test

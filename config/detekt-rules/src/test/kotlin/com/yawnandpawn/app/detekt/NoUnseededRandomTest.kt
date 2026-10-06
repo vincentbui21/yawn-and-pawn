@@ -47,6 +47,18 @@ class NoUnseededRandomTest {
                 "import java.security.SecureRandom\nfun a() = 1",
                 "import java.util.concurrent.ThreadLocalRandom\nfun a() = 1",
                 "import kotlin.random.Random as R\nfun a() = 1",
+                "fun a() = listOf(1, 2).shuffled(Random)",
+                "fun a() = (1..10).random(kotlin.random.Random)",
+                "fun a() = listOf(1, 2).shuffled(random = Random)",
+                "fun a() = listOf(1, 2).shuffled(Random.Default)",
+                "fun a() = listOf(1, 2).shuffled(Random.Companion)",
+                "fun a() = Random::nextInt",
+                "fun a() = kotlin.random.Random::nextLong",
+                "fun a() = ThreadLocalRandom::current",
+                "fun a() = java.util.UUID.randomUUID()",
+                "fun a() = UUID.randomUUID().toString()",
+                "fun a(list: MutableList<Int>) = java.util.Collections.shuffle(list)",
+                "fun a(list: MutableList<Int>) = Collections.shuffle(list)",
             )
         val packages = listOf("com.yawnandpawn.app.core.checks", "com.yawnandpawn.app.core.checks.math", "com.yawnandpawn.app.core.session")
         packages.forEach { pkg ->
@@ -65,6 +77,13 @@ class NoUnseededRandomTest {
                 "fun a(r: SeededRandom) = r.nextInt(1..9)",
                 "import kotlin.random.Random\nfun a(seed: Long) = Random(seed)",
                 "class SeededRandom { fun nextInt(range: IntRange) = range.first }",
+                "fun a(list: MutableList<Int>, seed: Long) = java.util.Collections.shuffle(list, java.util.Random(seed))",
+                "fun a(seed: Long) = listOf(1, 2).shuffled(Random(seed))",
+                "fun a(r: SeededRandom) = listOf(1, 2).map(r::nextBoolean)",
+                "fun a(list: MutableList<Int>) = list.shuffle(SeededRandom(1).asKotlin())",
+                "fun a(id: String) = UUID.fromString(id)",
+                "fun a() = CheckPlan(CheckMode.Random, emptyList())",
+                "fun a() = listOf(CheckMode.Random).map(CheckMode.Random::equals)",
             )
         allowed.forEach { code -> assertEquals(0, findings(code).size, code) }
     }

@@ -68,6 +68,14 @@ class SessionJsonTest {
     }
 
     @Test
+    fun `a fallback run keeps its source plan and the session's failed attempts through the format (Story 3_1 review)`() {
+        val run = full.checkRun.copy(fallbackSource = CheckPlan(CheckMode.Random, TWO_STEPS.entries), totalFailedAttempts = 9)
+        val state = SessionState.Loud(full.copy(checkRun = run))
+
+        assertEquals(StoredSession.Found(state), SessionJson.decode(SessionJson.encode(state)))
+    }
+
+    @Test
     fun `the committed version 1 row of every active state decodes to that state`() {
         activeStates.forEach { state ->
             val name = state::class.simpleName!!

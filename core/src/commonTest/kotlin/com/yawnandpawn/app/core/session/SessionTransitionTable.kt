@@ -145,16 +145,38 @@ private fun failedAttemptIn(
 ): Transition {
     val session = if (touched) from.session.touched(now) else from.session
     val run = session.checkRun
-    return Transition(from.with(session.copy(checkRun = run.copy(failedAttempts = run.failedAttempts + 1))), listOf(feedback))
+    // Story 3.1 review: the session-wide count goes up with the entry's.
+    val counted = run.copy(failedAttempts = run.failedAttempts + 1, totalFailedAttempts = run.totalFailedAttempts + 1)
+    return Transition(from.with(session.copy(checkRun = counted)), listOf(feedback))
 }
 
 private val twoStepSession = ringSession(testConfig(checkPlan = TWO_STEPS))
 
-/** A two-entry session on its second entry after 5 failed attempts (the fallback row). */
-private val onSecondEntry = twoStepSession.copy(checkRun = twoStepSession.checkRun.copy(step = StepPointer(1, 0), failedAttempts = 5))
+/** A two-entry session on its second entry after 5 failed attempts on it and 7 in the session (the fallback row). */
+private val onSecondEntry =
+    twoStepSession.copy(checkRun = twoStepSession.checkRun.copy(step = StepPointer(1, 0), failedAttempts = 5, totalFailedAttempts = 7))
 
-/** A two-entry session on item 2 of entry 1 with 2 failed attempts, so pointer moves and resets show. */
-private val progressed = twoStepSession.copy(checkRun = twoStepSession.checkRun.copy(step = StepPointer(0, 1), failedAttempts = 2))
+/**
+ * A two-entry session on item 2 of entry 1 with 2 failed attempts on it and 4 in the session, so pointer moves and
+ * resets show.
+ */
+private val progressed =
+    twoStepSession.copy(checkRun = twoStepSession.checkRun.copy(step = StepPointer(0, 1), failedAttempts = 2, totalFailedAttempts = 4))
+
+/** [progressed] after the fallback: item 2 of fallback entry 2, with the fallback seeds (Story 3.1 review). */
+private val progressedFallback =
+    twoStepSession.copy(
+        checkRun =
+            CheckRun(
+                plan = FALLBACK_PLAN,
+                seeds = ringSeeds(1, 3, fallback = true),
+                step = StepPointer(1, 1),
+                failedAttempts = 2,
+                fallbackUsed = true,
+                fallbackSource = FALLBACK_PLAN,
+                totalFailedAttempts = 4,
+            ),
+    )
 
 internal val ROW_CASES: Map<String, List<RowExample>> =
     mapOf(
@@ -356,6 +378,7 @@ internal val ROW_CASES: Map<String, List<RowExample>> =
                                                 seeds = listOf(restartSeed, touched.checkRun.seeds[1]),
                                                 step = StepPointer(0, 0),
                                                 failedAttempts = 3,
+                                                totalFailedAttempts = 5,
                                             ),
                                     ),
                                 ),
@@ -363,6 +386,33 @@ internal val ROW_CASES: Map<String, List<RowExample>> =
                             ),
                         reducer = reducer(check = StepResult.InvalidRestart),
                     ),
+                )
+            } +
+            // Story 3.1 review: a restart on entry 1 of the fallback run re-derives only that entry's seed, with the fallback flag.
+            checkStates(progressedFallback).map { from ->
+                val touched = from.session.touched(N)
+                val seeds = touched.checkRun.seeds
+                RowExample(
+                    name = "${from.kind} fallback restart on entry 1",
+                    from = from,
+                    event = CheckAnswerSubmitted(CheckAnswer.Placeholder),
+                    now = N,
+                    expected =
+                        Transition(
+                            from.with(
+                                touched.copy(
+                                    checkRun =
+                                        touched.checkRun.copy(
+                                            seeds = listOf(seeds[0], SeedDeriver.seed(SESSION_ID, 1, 1, 3, fallback = true), seeds[2]),
+                                            step = StepPointer(1, 0),
+                                            failedAttempts = 3,
+                                            totalFailedAttempts = 5,
+                                        ),
+                                ),
+                            ),
+                            listOf(SessionEffect.WrongAnswerFeedback),
+                        ),
+                    reducer = reducer(check = StepResult.InvalidRestart),
                 )
             },
         "R11 Grace|Loud+CheckAnswerSubmitted valid, last" to
@@ -379,8 +429,17 @@ internal val ROW_CASES: Map<String, List<RowExample>> =
         "R12 Grace|Loud+FallbackRequested" to
             checkStates(onSecondEntry).map { from ->
                 val touched = from.session.touched(N)
-                // The fallback plan's own seeds (fallback keys); the failed attempts stay until Story 3.9 decides.
-                val fallbackRun = CheckRun(FALLBACK_PLAN, ringSeeds(1, 3, fallback = true), failedAttempts = 5, fallbackUsed = true)
+                // The fallback plan's own seeds (fallback flag); the entry's failed attempts stay until Story 3.9 decides.
+                // Story 3.1 review: the run keeps the unresolved fallback plan for later rings and the session's total.
+                val fallbackRun =
+                    CheckRun(
+                        FALLBACK_PLAN,
+                        ringSeeds(1, 3, fallback = true),
+                        failedAttempts = 5,
+                        fallbackUsed = true,
+                        fallbackSource = FALLBACK_PLAN,
+                        totalFailedAttempts = 7,
+                    )
                 RowExample(
                     name = from.kind,
                     from = from,

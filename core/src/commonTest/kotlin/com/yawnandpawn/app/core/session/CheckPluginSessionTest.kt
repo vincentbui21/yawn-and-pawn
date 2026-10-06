@@ -82,9 +82,9 @@ class CheckPluginSessionTest {
         assertEquals(CheckRun(plan, ringSeeds(2, 2)), all)
 
         val fallback = CheckRun.forRing(plan, SESSION_ID, ringIndex = 2, fallback = true)
-        assertEquals(CheckRun(plan, ringSeeds(2, 2, fallback = true), fallbackUsed = true), fallback)
-        assertEquals(listOf(SeedDeriver.FALLBACK_BASE, SeedDeriver.FALLBACK_BASE + 1), listOf(0, 1).map(fallback::seedKey))
-        assertEquals(listOf(0, 1), listOf(0, 1).map(all::seedKey))
+        assertEquals(CheckRun(plan, ringSeeds(2, 2, fallback = true), fallbackUsed = true, fallbackSource = plan), fallback)
+        assertEquals(SeedDeriver.seed(SESSION_ID, 2, 1, 3, fallback = true), fallback.seedOf(SESSION_ID, 2, 1, 3))
+        assertEquals(SeedDeriver.seed(SESSION_ID, 2, 1, 3), all.seedOf(SESSION_ID, 2, 1, 3))
 
         val random = CheckRun.forRing(plan.copy(mode = CheckMode.Random), SESSION_ID, ringIndex = 1)
         assertEquals(CheckMode.All, random.plan.mode)
@@ -98,15 +98,123 @@ class CheckPluginSessionTest {
 
     @Test
     fun `a new plan keeps the item while the current entry stays, a restart drops all progress`() {
-        val run = CheckRun(plan, listOf(1L, 2L), step = StepPointer(0, 1), failedAttempts = 3)
+        val run = CheckRun(plan, listOf(1L, 2L), step = StepPointer(0, 1), failedAttempts = 3, totalFailedAttempts = 7)
 
         assertSame(run, run.withPlan(plan))
         val sameCurrent = plan.copy(entries = listOf(easy, CheckPlan.PLACEHOLDER_ENTRY))
         assertEquals(run.copy(plan = sameCurrent), run.withPlan(sameCurrent))
         val newCurrent = plan.copy(entries = listOf(CheckPlan.PLACEHOLDER_ENTRY, hard))
         assertEquals(run.copy(plan = newCurrent, step = StepPointer(0, 0)), run.withPlan(newCurrent))
-        assertEquals(run.copy(step = StepPointer(0, 0), failedAttempts = 0), run.restart())
+        assertEquals(run.copy(step = StepPointer(0, 0), failedAttempts = 0), run.restart(), "the session's total stays")
     }
+
+    @Test
+    fun `a damaged row with fewer seeds than entries still checks answers with seeds derived from the session (Story 3_1 review)`() {
+        val reducer = SessionReducer(StubAvailability(SnoozeAvailability.Available(OFFER)), PluginCheckValidator, NoFallbackPolicy)
+        val seeds = ringSeeds(1, 2)
+        val damaged = ringSession(testConfig(checkPlan = plan)).copy(checkRun = CheckRun(plan, seeds.take(1), StepPointer(1, 0)))
+        val from = SessionState.Loud(damaged)
+
+        val wrong = reducer.reduce(from, SessionEvent.CheckAnswerSubmitted(answerFor(hard, seeds[1], 0, offset = 1)), T0).state
+        assertEquals(seeds, assertIs<SessionState.Loud>(wrong).session.checkRun.seeds, "the missing seed is derived and kept")
+        val done = reducer.reduce(from, SessionEvent.CheckAnswerSubmitted(answerFor(hard, seeds[1], 0)), T0).state
+        assertIs<SessionState.Completed>(done)
+        val matched = reducer.reduce(from, SessionEvent.ImageMatchCompleted(matched = true), T0).state
+        assertEquals(seeds, assertIs<SessionState.Loud>(matched).session.checkRun.seeds, "an image match is checked the same way")
+    }
+
+    @Test
+    fun `a restart with no seed slot for the entry still starts the item over (Story 3_1 review)`() {
+        val run = CheckRun(plan, listOf(1L, 2L), step = StepPointer(2, 1), failedAttempts = 1, totalFailedAttempts = 4)
+        val from = SessionState.Loud(ringSession(testConfig(checkPlan = plan)).copy(checkRun = run))
+
+        val next = reducer(check = StepResult.InvalidRestart).reduce(from, SessionEvent.CheckAnswerSubmitted(CheckAnswer.Placeholder), T0)
+
+        assertEquals(
+            run.copy(step = StepPointer(2, 0), failedAttempts = 2, totalFailedAttempts = 5),
+            assertIs<SessionState.Loud>(next.state).session.checkRun,
+        )
+    }
+
+    @Test
+    fun `the session's failed attempts are counted over entries, rings and the fallback (Story 3_1 review)`() {
+        val fallbackPlan = CheckPlan(CheckMode.All, listOf(hard))
+        val reducer =
+            SessionReducer(
+                StubAvailability(SnoozeAvailability.Available(OFFER)),
+                PluginCheckValidator,
+                StubFallback(FallbackDecision.Allowed(fallbackPlan)),
+            )
+        var state: SessionState = SessionState.Idle
+
+        fun send(
+            event: SessionEvent,
+            minute: Int = 0,
+        ): CheckRun =
+            reducer
+                .reduce(state, event, at(minute.minutes))
+                .also { state = it.state }
+                .state
+                .let(::runOf)
+
+        send(SessionEvent.AlarmFired(SESSION_ID, testConfig(checkPlan = plan), beforeFirstUnlock = false))
+        send(SessionEvent.ImUpTapped)
+        val seeds = ringSeeds(1, 2)
+        send(SessionEvent.CheckAnswerSubmitted(answerFor(easy, seeds[0], 0, offset = 1)))
+        send(SessionEvent.CheckAnswerSubmitted(answerFor(easy, seeds[0], 0)))
+        val nextEntry = send(SessionEvent.CheckAnswerSubmitted(answerFor(easy, seeds[0], 1)))
+        assertEquals(0 to 1, nextEntry.failedAttempts to nextEntry.totalFailedAttempts, "the entry's count resets, the session's does not")
+        assertEquals(1 to 2, send(SessionEvent.ImageMatchFailed).let { it.failedAttempts to it.totalFailedAttempts })
+
+        val snoozed = send(SessionEvent.PurchaseGranted(PRODUCT, TOKEN, PurchaseVerdict.Grant))
+        assertEquals(0 to 2, snoozed.failedAttempts to snoozed.totalFailedAttempts)
+        val ring2 = send(SessionEvent.SlotFired, minute = 10)
+        assertEquals(2, ring2.totalFailedAttempts, "the next ring keeps the session's count")
+        send(SessionEvent.ImUpTapped, minute = 10)
+        send(SessionEvent.CheckAnswerSubmitted(answerFor(easy, ringSeeds(2, 2)[0], 0, offset = 1)), minute = 10)
+        val fallback = send(SessionEvent.FallbackRequested, minute = 10)
+        assertEquals(true to 3, fallback.fallbackUsed to fallback.totalFailedAttempts, "the fallback keeps it")
+    }
+
+    @Test
+    fun `the ring after a snooze resolves a Random fallback again and keeps it as the source (Story 3_1 review)`() {
+        val randomFallback = CheckPlan(CheckMode.Random, listOf(easy, hard, CheckPlan.PLACEHOLDER_ENTRY))
+        val sessionId =
+            (0 until 100).map { "session-$it" }.first { id ->
+                val (ring1, ring2) = listOf(1, 2).map { CheckRun.forRing(randomFallback, id, it, fallback = true).plan }
+                ring1 != ring2
+            }
+        val reducer =
+            SessionReducer(
+                StubAvailability(SnoozeAvailability.Available(OFFER)),
+                PluginCheckValidator,
+                StubFallback(FallbackDecision.Allowed(randomFallback)),
+            )
+        var state: SessionState = SessionState.Idle
+
+        fun send(
+            event: SessionEvent,
+            minute: Int = 0,
+        ): CheckRun =
+            reducer
+                .reduce(state, event, at(minute.minutes))
+                .also { state = it.state }
+                .state
+                .let(::runOf)
+
+        send(SessionEvent.AlarmFired(sessionId, testConfig(checkPlan = plan), beforeFirstUnlock = false))
+        send(SessionEvent.ImUpTapped)
+        val ring1 = send(SessionEvent.FallbackRequested)
+        send(SessionEvent.PurchaseGranted(PRODUCT, TOKEN, PurchaseVerdict.Grant))
+        val ring2 = send(SessionEvent.SlotFired, minute = 10)
+
+        assertEquals(CheckRun.forRing(randomFallback, sessionId, 1, fallback = true), ring1)
+        assertEquals(CheckRun.forRing(randomFallback, sessionId, 2, fallback = true), ring2)
+        assertNotEquals(ring1.plan, ring2.plan, "the fallback picks again")
+        assertEquals(randomFallback, ring2.fallbackSource)
+    }
+
+    private fun runOf(state: SessionState): CheckRun = assertIs<SessionState.Active>(state).session.checkRun
 
     @Test
     fun `a Math session runs to Completed through wrong answers, items, entries and a restore`() {

@@ -5,9 +5,11 @@ import dev.detekt.api.Entity
 import dev.detekt.api.Finding
 import dev.detekt.api.Rule
 import org.jetbrains.kotlin.psi.KtCallExpression
+import org.jetbrains.kotlin.psi.KtCallableReferenceExpression
 import org.jetbrains.kotlin.psi.KtDotQualifiedExpression
 import org.jetbrains.kotlin.psi.KtElement
 import org.jetbrains.kotlin.psi.KtImportDirective
+import org.jetbrains.kotlin.psi.KtValueArgument
 
 /**
  * The packages where a puzzle must follow from its seed (AD-9, Story 3.1): the check plugins and the session that stores
@@ -20,7 +22,10 @@ internal val SEEDED_PACKAGES = listOf("com.yawnandpawn.app.core.checks", "com.ya
  * - any member of the `Random` companion (`Random.nextInt()`, `Random.Default`, `kotlin.random.Random.nextLong()`);
  * - `Random()` and `SecureRandom()` without a seed, `ThreadLocalRandom.current()`;
  * - `random()`, `randomOrNull()`, `shuffled()` and `shuffle()` without a generator argument (they use `Random.Default`;
- *   this also covers `Math.random()` and `Uuid.random()`);
+ *   this also covers `Math.random()` and `Uuid.random()`), `UUID.randomUUID()`, and `Collections.shuffle(list)`
+ *   without a generator;
+ * - the `Random` companion passed as a value (`shuffled(Random)`, `random(kotlin.random.Random)`) and callable
+ *   references to its functions or `ThreadLocalRandom`'s (`Random::nextInt`);
  * - imports of `Random`'s companion members, `java.util.Random`, `java.security.SecureRandom`,
  *   `java.util.concurrent.ThreadLocalRandom`, and `kotlin.random.Random` under another name.
  *
@@ -41,7 +46,30 @@ class NoUnseededRandom(
         super.visitCallExpression(expression)
         val name = expression.calleeExpression?.text ?: return
         val noArguments = expression.valueArguments.isEmpty() && expression.lambdaArguments.isEmpty()
-        if (noArguments && (name in unseededCalls || name in unseededConstructors)) reportIfSeeded(expression, "$name()")
+        val collectionsShuffle =
+            name == "shuffle" &&
+                expression.valueArguments.size == 1 &&
+                (expression.parent as? KtDotQualifiedExpression)?.receiverExpression?.text?.isName("Collections") == true
+        when {
+            noArguments && (name in unseededCalls || name in unseededConstructors) -> reportIfSeeded(expression, "$name()")
+            name == "randomUUID" -> reportIfSeeded(expression, "$name()")
+            collectionsShuffle -> reportIfSeeded(expression, "Collections.shuffle(list)")
+        }
+    }
+
+    /** The `Random` companion (`Random.Default`) passed as the generator: `shuffled(Random)`, `random(random = Random)`. */
+    override fun visitArgument(argument: KtValueArgument) {
+        super.visitArgument(argument)
+        // `Random.Default` and `Random.Companion` are already reported as members of the companion.
+        val value = argument.getArgumentExpression()?.text ?: return
+        if (value in randomCompanion) reportIfSeeded(argument, value)
+    }
+
+    /** A function of the `Random` companion or of `ThreadLocalRandom` passed as a value: `Random::nextInt`. */
+    override fun visitCallableReferenceExpression(expression: KtCallableReferenceExpression) {
+        super.visitCallableReferenceExpression(expression)
+        val receiver = expression.receiverExpression?.text?.removeSuffix(".Companion") ?: return
+        if (receiver in randomCompanion || receiver in threadLocalRandom) reportIfSeeded(expression, expression.text)
     }
 
     override fun visitImportDirective(importDirective: KtImportDirective) {
@@ -77,6 +105,11 @@ class NoUnseededRandom(
 
         /** Generators that seed themselves when built without arguments. */
         val unseededConstructors = setOf("Random", "SecureRandom")
+
+        /** The `Random` companion as a value, by its exact spelling: `CheckMode.Random` and other `Random`s are not it. */
+        val randomCompanion = setOf("Random", "kotlin.random.Random")
+
+        val threadLocalRandom = setOf("ThreadLocalRandom", "java.util.concurrent.ThreadLocalRandom")
 
         val bannedImports = setOf("java.util.Random", "java.security.SecureRandom", "java.util.concurrent.ThreadLocalRandom")
     }

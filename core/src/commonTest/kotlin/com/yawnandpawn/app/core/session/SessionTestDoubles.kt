@@ -42,7 +42,7 @@ internal fun ringSeeds(
     ringIndex: Int,
     size: Int,
     fallback: Boolean = false,
-): List<Long> = List(size) { SeedDeriver.seed(SESSION_ID, ringIndex, (if (fallback) 1_000 else 0) + it, 0) }
+): List<Long> = List(size) { SeedDeriver.seed(SESSION_ID, ringIndex, it, 0, fallback) }
 
 internal fun testConfig(
     testMode: Boolean = false,

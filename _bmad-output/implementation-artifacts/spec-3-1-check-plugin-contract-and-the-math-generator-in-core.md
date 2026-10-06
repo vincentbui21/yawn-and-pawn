@@ -2,15 +2,16 @@
 title: 'Story 3.1: Check plugin contract and the Math generator in core'
 type: 'feature'
 created: '2026-10-06'
-status: 'in-progress'
+status: 'done'
 baseline_revision: '10582a6'
-review_loop_iteration: 0
+review_loop_iteration: 1
 followup_review_recommended: false
 context:
   - '{project-root}/_bmad-output/implementation-artifacts/epic-3-context.md'
   - '{project-root}/_bmad-output/implementation-artifacts/spec-1-11-the-complete-wake-session-state-machine-in-core.md'
 warnings: []
-deferred: []
+deferred:
+  - 'Reducer-level item reset on a locked restore when the Direct Boot substitution replaces the current entry: add it with the first type that is not Direct Boot safe (Story 3.10).'
 ---
 
 <intent-contract>
@@ -87,7 +88,8 @@ Reshape the plan and run:
 ## Design Notes
 
 - The plugin result is named `CheckResult` because the session `StepResult` keeps the AD-2 row mapping. `CheckResult.WrongRestart` carries no seed: a plugin does not know the session coordinates. The reducer derives the new seed with `SeedDeriver.seed(sessionId, ringIndex, entryKey, attempt = failedAttempts)`, so seeds still come only from `SeedDeriver`.
-- Seed keys: entry `i` uses `i`, and the Random pick uses `-1`. Fallback plans use `1000 + i` and pick with `999`, so a fallback never reuses the plan's seeds (part of the 3.9 deferred item).
+- Seed keys: entry `i` uses `i`, and the Random pick uses `-1`. Fallback plans use the same keys with `fallback = true`, a separate hashed field (one extra byte, hashed only when true), so a fallback never reuses the plan's seeds whatever the plan's size, and every plan seed keeps its pinned value (part of the 3.9 deferred item).
+- `CheckRun.fallbackSource` keeps the fallback plan as the policy gave it. Each later ring resolves it again, with the live lock state's substitution. `CheckRun.totalFailedAttempts` counts every failed attempt of the session for the `FallbackPolicy` and history. The per-entry `failedAttempts` still keys restart seeds. Both fields have defaults, so stored rows still decode.
 - `CheckType.Placeholder` is the Epic 1 stand-in, moved into the sealed hierarchy so that production plans and stored sessions keep working. Story 3.2 removes it from production plans.
 - The resolved plan of a run is a `CheckPlan` in `All` mode. `generate` coerces `count` into `countRange`, so a stored plan never makes the wake flow throw.
 
@@ -96,6 +98,27 @@ Reshape the plan and run:
 **Commands:**
 - `./gradlew qualityGate` -- expected: BUILD SUCCESSFUL.
 - `git status --porcelain androidApp/src/test/screenshots/preview` -- expected: empty.
+
+### Review (2 reviewers, fast mode)
+
+Two reviewers read the first commit. Their findings were triaged as follows. All the patches are in `fix(3.1): review fixes`.
+
+- **patch: the ring after a fallback reused the resolved plan.** `NextRing` passed the run's resolved and possibly Direct-Boot-substituted plan to `CheckRun.forRing`. A Random fallback never picked again, and an unlocked ring kept the locked substitutes. The run now keeps `fallbackSource`, and each ring resolves it again. The Direct Boot substitution follows the live lock state. A row stored without the field falls back to `plan`.
+- **patch: fallback seed keys could collide with plan keys.** With 999 or more entries, plan entry 999 had the fallback pick's key. Plan entry `1000 + i` had fallback entry `i`'s key. `SeedDeriver.seed` now takes `fallback: Boolean`, which hashes one extra byte only when it is true. This removes `FALLBACK_BASE`, and the pinned plan seeds are unchanged.
+- **patch: a damaged row failed every answer.** When a run has fewer seeds than entries, the reducer now derives the missing seeds from the session coordinates (`withMissingSeeds`, attempt 0) before it validates. An `InvalidRestart` with no seed slot still starts the item over.
+- **patch: there was no session-wide failed-attempt count.** `CheckRun.totalFailedAttempts` is never reset. It carries over entries, snoozes, rings and the fallback, and it is for the `FallbackPolicy` (3.9) and history. The per-entry `failedAttempts` still keys restart seeds.
+- **patch: `NoUnseededRandom` missed some forms.** It now also reports these:
+  - the `Random` companion passed as a value (`shuffled(Random)`, `random(kotlin.random.Random)`);
+  - callable references (`Random::nextInt`, `ThreadLocalRandom::current`);
+  - `UUID.randomUUID()`;
+  - `Collections.shuffle(list)` without a generator.
+
+  The value and reference forms match only the exact spellings `Random` and `kotlin.random.Random`, so `CheckMode.Random` is not reported.
+- **patch: verification gaps.**
+  - `DirectBootTest` checks that the ring after a fallback snooze keeps `fallbackUsed` and the ring-2 fallback seeds.
+  - The AD-2 R10 row has a new example: a restart on entry 1 of a fallback run. Only `seeds[1]` is re-derived, with the fallback flag.
+  - The R10 and R12 examples, the `progressed` fixture and the `onSecondEntry` fixture now carry `totalFailedAttempts`, and R12 also carries `fallbackSource`.
+- **defer:** the reducer-level item reset for a locked restore where the Direct Boot substitution replaces the current entry. Add it, with its reducer test, together with the first check type that is not Direct Boot safe (Story 3.10). Until then, no entry is ever replaced.
 
 ## Auto Run Result
 
@@ -112,6 +135,8 @@ Status: implemented in fast mode (one agent), waiting for review. Branch `story/
 - **Rename:** `WakeFakes.kt` is renamed to `FakeCrashReporter.kt` (ktlint filename rule, after `FakeSeedSource` left).
 
 **Verification:** `./gradlew qualityGate` gives BUILD SUCCESSFUL (16m 38s). Kover reports `core.checks` at 99.3% line coverage, and `koverVerifySession` passes. The preview baselines are unchanged.
+
+**Review fixes:** the triage log above lists them. After the fixes, `./gradlew qualityGate` gives BUILD SUCCESSFUL (20m 27s, `--no-daemon`, because a shared daemon kept loading the old detekt rule jar). `koverVerifyChecks`, `koverVerifySession` and the root `koverVerify` pass. `git status --porcelain androidApp/src/test/screenshots/preview` is empty.
 
 **Residual risks:**
 - The pinned seed and puzzle tests (`SeedDeriverTest`, `CheckTypeTest`) make any change to the derivation or the generator a deliberate test change, because stored sessions depend on both.

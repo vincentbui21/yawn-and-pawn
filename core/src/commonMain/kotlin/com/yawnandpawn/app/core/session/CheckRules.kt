@@ -21,7 +21,13 @@ internal class CheckRules(
         state: Ring,
         answer: CheckAnswer,
         now: TimeSnapshot,
-    ): Transition? = if (state is Ringing) null else answered(state, validator.validate(state.session.checkRun, answer), now)
+    ): Transition? =
+        if (state is Ringing) {
+            null
+        } else {
+            val seeded = state.withAllSeeds()
+            answered(seeded, validator.validate(seeded.session.checkRun, answer), now)
+        }
 
     /** Grace / Loud + ImageMatchCompleted (matched) counts as a valid answer; no match or a matcher error is a failed attempt. */
     fun onImageMatch(
@@ -35,13 +41,23 @@ internal class CheckRules(
             }
 
             event is SessionEvent.ImageMatchCompleted && event.matched -> {
-                answered(state, validator.validate(state.session.checkRun, CheckAnswer.ImageMatched), now)
+                val seeded = state.withAllSeeds()
+                answered(seeded, validator.validate(seeded.session.checkRun, CheckAnswer.ImageMatched), now)
             }
 
             else -> {
                 failedAttempt(state, SessionEffect.ShowRetryPrompt)
             }
         }
+
+    /**
+     * [Ring] with a seed for every entry of its run: a damaged row with fewer seeds than entries gets the missing ones
+     * from the session coordinates, so the validator does not fail every answer on it.
+     */
+    private fun Ring.withAllSeeds(): Ring {
+        val run = session.checkRun.withMissingSeeds(session.sessionId, session.ringIndex)
+        return if (run === session.checkRun) this else with(session.copy(checkRun = run))
+    }
 
     /**
      * Grace / Loud + FallbackRequested, when the policy allows it and it was not used: the fallback plan, resolved for
@@ -56,8 +72,9 @@ internal class CheckRules(
                 CheckRun.forRing(decision.plan, session.sessionId, session.ringIndex, fallback = true) { plan ->
                     if (session.directBootRing) directBootPlan(plan) else plan
                 }
-            // Story 3.9 decides whether the fallback also resets the failed attempts.
-            val run = fallback.copy(failedAttempts = session.checkRun.failedAttempts)
+            // Story 3.9 decides whether the fallback also resets the entry's failed attempts; the session's total stays.
+            val run =
+                fallback.copy(failedAttempts = session.checkRun.failedAttempts, totalFailedAttempts = session.checkRun.totalFailedAttempts)
             Transition(state.with(session.copy(checkRun = run)), emptyList())
         } else {
             null
@@ -110,8 +127,9 @@ internal class CheckRules(
     ): Transition = Transition(state.with(state.session.copy(checkRun = run)), emptyList())
 
     /**
-     * One more failed attempt on the current entry. With [restart] the entry's puzzle starts over at its first item with
-     * a new seed from [SeedDeriver], keyed by the new failed-attempt count, so each restart gets another puzzle.
+     * One more failed attempt on the current entry and in the session. With [restart] the entry's puzzle starts over at
+     * its first item with a new seed from [SeedDeriver], keyed by the entry's new failed-attempt count, so each restart
+     * gets another puzzle (with no seed slot for the entry, only the item starts over).
      */
     private fun failedAttempt(
         state: Ring,
@@ -121,16 +139,22 @@ internal class CheckRules(
         val session = state.session
         val run = session.checkRun
         val attempts = run.failedAttempts + 1
-        val counted = run.copy(failedAttempts = attempts)
+        val counted = run.copy(failedAttempts = attempts, totalFailedAttempts = run.totalFailedAttempts + 1)
+        val entry = run.step.entry
         val next =
-            if (restart && run.step.entry in run.seeds.indices) {
-                val seed = SeedDeriver.seed(session.sessionId, session.ringIndex, run.seedKey(run.step.entry), attempts)
-                counted.copy(
-                    seeds = run.seeds.toMutableList().also { it[run.step.entry] = seed },
-                    step = run.step.copy(item = 0),
-                )
-            } else {
-                counted
+            when {
+                !restart -> {
+                    counted
+                }
+
+                entry in run.seeds.indices -> {
+                    val seed = run.seedOf(session.sessionId, session.ringIndex, entry, attempts)
+                    counted.copy(seeds = run.seeds.toMutableList().also { it[entry] = seed }, step = run.step.copy(item = 0))
+                }
+
+                else -> {
+                    counted.copy(step = run.step.copy(item = 0))
+                }
             }
         return Transition(state.with(session.copy(checkRun = next)), listOf(feedback))
     }

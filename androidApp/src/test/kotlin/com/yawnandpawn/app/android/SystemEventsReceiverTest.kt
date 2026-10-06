@@ -8,6 +8,7 @@ import com.yawnandpawn.app.core.alarm.SaveAlarm
 import com.yawnandpawn.app.core.error.DomainError
 import com.yawnandpawn.app.core.error.Outcome
 import com.yawnandpawn.app.core.session.ActiveSessionStore
+import com.yawnandpawn.app.core.session.SessionEngine
 import com.yawnandpawn.app.core.session.SessionSlotRearm
 import com.yawnandpawn.app.core.session.SessionState
 import com.yawnandpawn.app.core.session.StoredSession
@@ -53,6 +54,13 @@ class SystemEventsReceiverTest {
     private fun store(vararg alarms: com.yawnandpawn.app.core.alarm.Alarm) =
         runBlocking { alarms.forEach { assertEquals(Outcome.Success(Unit), app.repository.upsert(it)) } }
 
+    /** Saves [draft] in the app, once the stored session is restored (the alarms are editable then, Story 2.6). */
+    private fun save(draft: AlarmDraft) =
+        runBlocking {
+            app.koin.get<SessionEngine>().restore()
+            app.koin.get<SaveAlarm>()(draft)
+        }
+
     private fun broadcast(action: String) {
         app.app.sendBroadcast(Intent(action).setPackage(app.app.packageName))
         app.awaitWork()
@@ -76,7 +84,7 @@ class SystemEventsReceiverTest {
 
     @Test
     fun `an enabled alarm saved in the app arms exactly one alarm clock at its next occurrence`() {
-        runBlocking { assertIs<Outcome.Success<*>>(app.koin.get<SaveAlarm>()(AlarmDraft(time = LocalTime(7, 0)))) }
+        assertIs<Outcome.Success<*>>(save(AlarmDraft(time = LocalTime(7, 0))))
 
         assertEquals(mapOf(1000 to berlin("2027-03-03T07:00").toEpochMilliseconds()), app.armed())
     }
@@ -116,7 +124,7 @@ class SystemEventsReceiverTest {
 
     @Test
     fun `a zone change from Berlin to New York re-arms the alarm at 07 00 New York time`() {
-        runBlocking { app.koin.get<SaveAlarm>()(AlarmDraft(time = LocalTime(7, 0))) }
+        save(AlarmDraft(time = LocalTime(7, 0)))
         assertEquals(mapOf(1000 to berlin("2027-03-03T07:00").toEpochMilliseconds()), app.armed())
 
         app.setZone("America/New_York")

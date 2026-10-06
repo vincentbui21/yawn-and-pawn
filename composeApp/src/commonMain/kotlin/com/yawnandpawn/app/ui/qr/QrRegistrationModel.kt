@@ -66,11 +66,15 @@ class QrRegistrationModel(
         state = state.copy(cameraUnavailable = !granted)
     }
 
-    /** What the scanner reports: a stable code pauses on it, unless one is already waiting; a dead camera is unavailable. */
+    /**
+     * What the scanner reports: a stable code pauses on it, unless one is already waiting; a dead camera is unavailable.
+     * Only a code alone in view is offered (Story 3.10 review): with two codes in view it keeps scanning until the user
+     * shows one, so the wrong one is never registered (no new string: the guide "Scan a code" stays).
+     */
     fun onScan(event: ScanEvent) {
         when (event) {
             is ScanEvent.Detected -> {
-                val code = event.result.code
+                val code = event.single?.code
                 if (found == null && code != null && state.step == QrScanStep.Scanning) {
                     found = code
                     state = state.copy(step = QrScanStep.Detected)
@@ -135,11 +139,15 @@ fun QrRegistrationRoute(
     val back by rememberUpdatedState(onBack)
     val model = remember(permission) { QrRegistrationModel(permission, onCodeChosen = { chosen(it) }, onBack = { back() }) }
     LaunchedEffect(model, resumed) { model.onShown() }
+    // One feed while the camera can be used (Story 3.10 review): the torch is read inside it, so a toggle never rebinds.
+    val scanning = model.scanning
     val feed: (@Composable BoxScope.() -> Unit)? =
-        if (model.scanning) {
-            { scanner.Feed(torchOn = model.torchOn, onEvent = model::onScan) }
-        } else {
-            null
+        remember(scanner, model, scanning) {
+            if (scanning) {
+                { scanner.Feed(torchOn = model.torchOn, onEvent = model::onScan) }
+            } else {
+                null
+            }
         }
     CompositionLocalProvider(LocalViewfinderFeed provides feed) {
         QrRegistrationScreen(state = model.state, onIntent = model::onIntent, modifier = modifier, printable = false)

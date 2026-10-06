@@ -40,10 +40,12 @@ class QrScanningTest {
 
         assertNull(frames.frame(listOf(a)))
         assertNull(frames.frame(listOf(a, b)), "the code followed is still in the frame")
-        assertEquals(a, frames.frame(listOf(b, a)))
-        assertNull(frames.frame(listOf(a)), "the streak starts again once reported")
+        assertEquals(ScanEvent.Detected(listOf(a), others = true), frames.frame(listOf(b, a)), "b is in view, not stable yet")
+        assertNull(frames.frame(listOf(a)), "the streak goes on; a's next report is at 6 frames")
         assertNull(frames.frame(listOf(a)))
-        assertEquals(a, frames.frame(listOf(a)))
+        assertEquals(ScanEvent.Detected(listOf(a)), frames.frame(listOf(a)))
+        repeat(2) { assertNull(frames.frame(listOf(a))) }
+        assertEquals(ScanEvent.Detected(listOf(a)), frames.frame(listOf(a)), "held still: every 3 frames, for good")
     }
 
     @Test
@@ -57,8 +59,23 @@ class QrScanningTest {
         assertNull(frames.frame(listOf(a)))
         assertNull(frames.frame(listOf(b)), "another code")
         assertNull(frames.frame(listOf(b)))
-        assertEquals(b, frames.frame(listOf(b)))
+        assertEquals(ScanEvent.Detected(b), frames.frame(listOf(b)))
         assertNull(frames.frame(listOf(ScanResult(CodeFormat.Aztec, "hallway"))), "the same text in another format is another code")
+    }
+
+    @Test
+    fun `each code in view has its own streak, so a second code is never starved by the first`() {
+        val frames = ConsecutiveFrames()
+
+        assertNull(frames.frame(listOf(a)))
+        assertNull(frames.frame(listOf(a, b)))
+        val first = frames.frame(listOf(a, b))
+        assertEquals(ScanEvent.Detected(listOf(a), others = true), first)
+        assertNull(first!!.single, "two codes in view: none can be picked")
+        val both = frames.frame(listOf(b, a))
+        assertEquals(ScanEvent.Detected(listOf(b, a)), both, "b is stable too, a frame later")
+        assertNull(both!!.single)
+        assertEquals(a, ScanEvent.Detected(a).single, "one code alone in view")
     }
 
     @Test
@@ -80,6 +97,13 @@ class QrScanningTest {
         assertEquals("ScanResult(QrCode)", a.toString())
         assertEquals(RegisteredCode.of(CodeFormat.QrCode, "kitchen"), a.code)
         assertNull(ScanResult(CodeFormat.QrCode, "  ").code)
+
+        val bytes = byteArrayOf(0, -1, 32, 10)
+        val binary = ScanResult.ofBytes(CodeFormat.QrCode, bytes)
+        assertEquals(RegisteredCode.ofBytes(CodeFormat.QrCode, bytes), binary.code, "a binary code: its bytes, untrimmed")
+        assertEquals(binary, ScanResult.ofBytes(CodeFormat.QrCode, bytes.copyOf()), "the same bytes are the same scan")
+        assertEquals("ScanResult(QrCode)", binary.toString())
+        assertNull(ScanResult.ofBytes(CodeFormat.QrCode, ByteArray(0)).code)
     }
 
     @Test
@@ -109,6 +133,9 @@ class QrScanningTest {
 
             model.onScan(ScanEvent.Detected(ScanResult(CodeFormat.QrCode, " ")))
             assertEquals(QrScanStep.Scanning, model.state.step, "a blank code is never offered")
+            model.onScan(ScanEvent.Detected(listOf(a, b)))
+            model.onScan(ScanEvent.Detected(listOf(a), others = true))
+            assertEquals(QrScanStep.Scanning, model.state.step, "two codes in view: it waits until one code is shown")
             model.onScan(ScanEvent.Detected(a))
             model.onScan(ScanEvent.Detected(b))
             assertEquals(QrScanStep.Detected, model.state.step)

@@ -171,12 +171,15 @@ class QrCheckScreenTest {
             imUp(app)
             composeRule.onNodeWithText("Camera isn't available. Pick a fallback check.").assertExists()
             composeRule.onNode(hasContentDescription("Camera viewfinder. Point at your code.")).assertDoesNotExist()
+            // 3.9 hook: flip in 3.9 to assertExists (the fallback link shows at once when the camera is unavailable).
+            composeRule.onNodeWithText("Can't do this check?").assertDoesNotExist()
             assertFalse(scanner.running)
+            assertEquals(0, scanner.starts)
         }
     }
 
     @Test
-    fun `a camera that cannot start shows the same message`() {
+    fun `a camera that fails while scanning shows the same message and is released`() {
         val scanner = FakeCodeScanner()
         val app = WakeApp(scanner = scanner)
         ringQr(app, assertNotNull(RegisteredCode.of(toothpaste.format, toothpaste.rawValue)))
@@ -185,7 +188,54 @@ class QrCheckScreenTest {
             scanner.fail()
             composeRule.waitForIdle()
             composeRule.onNodeWithText("Camera isn't available. Pick a fallback check.").assertExists()
+            // 3.9 hook: flip in 3.9 to assertExists (the fallback link shows at once when the camera is unavailable).
+            composeRule.onNodeWithText("Can't do this check?").assertDoesNotExist()
             assertFalse(scanner.running, "the camera is released")
+        }
+    }
+
+    @Test
+    fun `the camera starts once, through the grace countdown's redraws and into Loud`() {
+        val scanner = FakeCodeScanner()
+        val app = WakeApp(scanner = scanner)
+        ringQr(app, assertNotNull(RegisteredCode.of(toothpaste.format, toothpaste.rawValue)))
+        launch(app).use {
+            imUp(app)
+            repeat(5) {
+                ShadowSystemClock.advanceBy(java.time.Duration.ofSeconds(1))
+                composeRule.mainClock.advanceTimeBy(1_000)
+                composeRule.waitForIdle()
+            }
+            composeRule.onNodeWithText("Scan your code").assertExists()
+            assertEquals(1, scanner.starts, "the countdown redraws every second; the camera is not rebound")
+
+            ShadowSystemClock.advanceBy(java.time.Duration.ofSeconds(20))
+            app.dispatch(SessionEvent.GraceElapsed)
+            app.awaitUntil("Loud") {
+                composeRule.waitForIdle()
+                app.engine.state.value is SessionState.Loud
+            }
+            composeRule.onNodeWithText("Scan your code").assertExists()
+            assertTrue(scanner.running)
+            assertEquals(1, scanner.starts, "grace running out to Loud keeps the same camera")
+        }
+    }
+
+    @Test
+    fun `with two codes in view the registered one is submitted, and the other never counts as a failed attempt`() {
+        val scanner = FakeCodeScanner()
+        val app = WakeApp(scanner = scanner)
+        ringQr(app, assertNotNull(RegisteredCode.of(toothpaste.format, toothpaste.rawValue)))
+        launch(app).use {
+            imUp(app)
+            // The cereal is seen first, so it is stable one frame before the toothpaste: it is not submitted.
+            scanner.frames(1, cereal)
+            scanner.frames(2, cereal, toothpaste)
+            composeRule.waitForIdle()
+            app.dispatch(SessionEvent.UserInteracted)
+            assertEquals(0, run(app).failedAttempts, "another code next to one not yet stable is never submitted")
+            scanner.frames(1, cereal, toothpaste)
+            composeRule.awaitSuccess(app, "Up on time.")
         }
     }
 

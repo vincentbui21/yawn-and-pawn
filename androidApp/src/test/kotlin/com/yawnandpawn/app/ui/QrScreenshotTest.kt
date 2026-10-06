@@ -90,7 +90,10 @@ class QrScreenshotTest {
 
     @Test
     @Config(fontScale = 2.0f)
-    fun `wake QR check with a different code at 200 percent`() = wake("wake_check_qr_wrong_sunrise_font200", wrong)
+    fun `wake QR check with a different code at 200 percent`() =
+        wake("wake_check_qr_wrong_sunrise_font200", wrong) {
+            composeRule.onNodeWithText("That's a different code. Scan your registered one.").assertExists()
+        }
 
     @Test
     fun `wake QR check without the camera`() =
@@ -101,7 +104,10 @@ class QrScreenshotTest {
 
     @Test
     @Config(fontScale = 2.0f)
-    fun `wake QR check without the camera at 200 percent`() = wake("wake_check_qr_camera_unavailable_sunrise_font200", unavailable)
+    fun `wake QR check without the camera at 200 percent`() =
+        wake("wake_check_qr_camera_unavailable_sunrise_font200", unavailable) {
+            composeRule.onNodeWithText("Camera isn't available. Pick a fallback check.").assertExists()
+        }
 
     @Test
     fun `registration scanning, light and dark`() {

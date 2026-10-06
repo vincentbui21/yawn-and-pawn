@@ -79,11 +79,63 @@ class QrBarcodeCheckTest {
         assertEquals(CheckResult.Correct, qr.validate(puzzle, 0, scan("4006381333931")))
         assertEquals(CheckResult.Correct, qr.validate(puzzle, 0, scan(" 4006381333931 ")), "trimmed")
         assertEquals(CheckResult.Wrong, qr.validate(puzzle, 0, scan("5901234123457")), "another code")
-        assertEquals(CheckResult.Wrong, qr.validate(puzzle, 0, scan("4006381333931", CodeFormat.UpcA)), "another format")
+        assertEquals(CheckResult.Wrong, qr.validate(puzzle, 0, scan("4006381333931", CodeFormat.Code128)), "another format")
+        assertEquals(CheckResult.Wrong, qr.validate(puzzle, 0, scan("4006381333931", CodeFormat.UpcA)), "not a UPC-A shape")
         assertEquals(CheckResult.Wrong, qr.validate(puzzle, 1, scan("4006381333931")), "no second item")
         assertEquals(CheckResult.Wrong, qr.validate(puzzle, 0, CheckAnswer.Number("4006381333931")), "typed digits")
         assertEquals(CheckResult.Wrong, qr.validate(Puzzle.Placeholder, 0, scan("4006381333931")), "another puzzle")
     }
+
+    @Test
+    fun `EAN-13, UPC-A and UPC-E are one family, so the same printed code passes however it is read`() {
+        val upcA = RegisteredCode.of(CodeFormat.UpcA, "012345678905")!!
+        val asUpcA = entry.copy(code = upcA).puzzle(1)
+
+        assertEquals(RegisteredCode.of(CodeFormat.Ean13, "0012345678905"), upcA, "UPC-A is stored as its EAN-13")
+        assertEquals(CodeFormat.Ean13, upcA.format)
+        assertEquals(CheckResult.Correct, qr.validate(asUpcA, 0, scan("0012345678905")), "registered UPC-A, scanned EAN-13")
+        assertEquals(CheckResult.Correct, qr.validate(puzzle(code), 0, scan("4006381333931")))
+        assertEquals(CheckResult.Wrong, qr.validate(asUpcA, 0, scan("012345678906", CodeFormat.UpcA)), "another UPC-A")
+
+        // UPC-E 01234565 is UPC-A 012345000065 (the four expansion rules, by the sixth digit).
+        val upcE = RegisteredCode.of(CodeFormat.UpcE, "01234565")!!
+        assertEquals(RegisteredCode.of(CodeFormat.UpcA, "012345000065"), upcE)
+        assertEquals(CheckResult.Correct, qr.validate(puzzle(upcE), 0, scan("0012345000065")), "registered UPC-E, scanned EAN-13")
+        assertEquals("012345000065", RetailCodes.upcAOfUpcE("0123456"), "no check digit: computed")
+        assertEquals("012345000065", RetailCodes.upcAOfUpcE("123456"), "neither: number system 0, check digit computed")
+        assertEquals("112345000062", RetailCodes.upcAOfUpcE("1123456"), "number system 1")
+        assertEquals("012000003455", RetailCodes.upcAOfUpcE("01234505"), "sixth digit 0 to 2")
+        assertEquals("012300000455", RetailCodes.upcAOfUpcE("01234535"), "sixth digit 3")
+        assertEquals("012340000055", RetailCodes.upcAOfUpcE("01234545"), "sixth digit 4")
+        assertNull(RetailCodes.upcAOfUpcE("21234565"), "number system 0 or 1 only")
+        assertNull(RetailCodes.upcAOfUpcE("0123456".dropLast(2)), "too short")
+        assertNull(RetailCodes.upcAOfUpcE("0123456A"), "digits only")
+        assertEquals(CodeFormat.UpcE to "ABC", RetailCodes.normalised(CodeFormat.UpcE, "ABC"), "a malformed value is kept")
+        assertEquals(CodeFormat.UpcA to "12345", RetailCodes.normalised(CodeFormat.UpcA, "12345"))
+        assertEquals(CodeFormat.Ean8 to "96385074", RetailCodes.normalised(CodeFormat.Ean8, "96385074"), "EAN-8 stays itself")
+    }
+
+    @Test
+    fun `a binary code with no text is fingerprinted from its bytes`() {
+        val bytes = byteArrayOf(0, -1, 10, 32)
+        val binary = RegisteredCode.ofBytes(CodeFormat.QrCode, bytes)!!
+
+        assertEquals(RegisteredCode(CodeFormat.QrCode, Sha256.hex(bytes)), binary)
+        assertEquals(binary, RegisteredCode.ofBytes(CodeFormat.QrCode, bytes.copyOf()), "the same bytes, the same code")
+        assertNotEquals(binary, RegisteredCode.ofBytes(CodeFormat.QrCode, byteArrayOf(0, -1, 10)), "bytes are not trimmed")
+        assertNull(RegisteredCode.ofBytes(CodeFormat.QrCode, ByteArray(0)))
+        assertEquals(CheckResult.Correct, qr.validate(puzzle(binary), 0, CheckAnswer.Code(binary)))
+    }
+
+    @Test
+    fun `every format encodes as its stored name`() {
+        CodeFormat.entries.forEach { format ->
+            assertEquals("\"${format.storedName}\"", SessionJson.json.encodeToString(CodeFormat.serializer(), format))
+            assertEquals(format, SessionJson.json.decodeFromString(CodeFormat.serializer(), "\"${format.storedName}\""))
+        }
+    }
+
+    private fun puzzle(code: RegisteredCode): Puzzle = entry.copy(code = code).puzzle(1)
 
     @Test
     fun `an entry without a code is not ready and can never be passed`() {

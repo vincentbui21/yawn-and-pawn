@@ -16,7 +16,9 @@ import org.robolectric.RobolectricTestRunner
 import java.io.File
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
+import kotlin.test.assertNotNull
 import kotlin.test.assertNull
+import kotlin.test.assertTrue
 
 /**
  * Story 3.10: the registered code's columns. Story 3.5's `check_config` is not on this base yet, so the migration runs on
@@ -69,10 +71,29 @@ class CheckCodeMigrationTest {
             )
         }
 
+    /**
+     * Tripwire (Story 3.10 review): the code columns are never silently skipped on rebase. While the latest exported
+     * `app.db` schema has no `check_config` (this base), the migration is a placeholder and not registered. Once Story
+     * 3.5's table is in the latest schema, it must have `code_format` and `code_value`, and this migration (renumbered to
+     * the next free version) must be registered; otherwise QR entries would lose their code and ring as Math.
+     */
     @Test
-    fun `the migration is a placeholder until Story 3_5's table lands`() {
-        assertEquals(7 to 8, MIGRATION_7_8.startVersion to MIGRATION_7_8.endVersion)
-        assertFalse(MIGRATION_7_8 in APP_DATABASE_MIGRATIONS, "registered only on rebase, with the next free number")
+    fun `the code columns are in the latest schema and migrated as soon as check_config is`() {
+        val schemas = File("schemas/com.yawnandpawn.app.data.db.AppDatabase")
+        val latest = schemas.listFiles { file -> file.extension == "json" }.orEmpty().maxByOrNull { it.nameWithoutExtension.toInt() }
+        val schema = assertNotNull(latest, "the exported schemas in ${schemas.absolutePath}").readText()
+        val table = schema.substringAfter("\"tableName\": \"check_config\"", missingDelimiterValue = "")
+
+        if (table.isEmpty()) {
+            assertEquals(7 to 8, MIGRATION_7_8.startVersion to MIGRATION_7_8.endVersion)
+            assertFalse(MIGRATION_7_8 in APP_DATABASE_MIGRATIONS, "registered only on rebase, with the next free number")
+            return
+        }
+        val columns = table.substringBefore("\"tableName\"")
+        listOf("code_format", "code_value").forEach { column ->
+            assertTrue("\"columnName\": \"$column\"" in columns, "${latest.name}: check_config has no $column (Story 3.10 rebase notes)")
+        }
+        assertTrue(MIGRATION_7_8 in APP_DATABASE_MIGRATIONS, "register the Story 3.10 code-columns migration (rebase notes)")
     }
 
     @Test

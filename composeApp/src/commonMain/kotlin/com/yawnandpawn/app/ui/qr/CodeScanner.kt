@@ -7,26 +7,58 @@ import com.yawnandpawn.app.core.checks.qr.RegisteredCode
 /**
  * A code the scanner read (Story 3.10): its [format] and [rawValue]. The raw value lives only in memory, between the
  * analyser and [code]; it is never logged ([toString] leaves it out), sent to the engine or stored.
+ *
+ * A code with no text, such as a binary QR, is [binary]: [rawValue] then holds its bytes, one char (0 to 255) per byte
+ * ([ofBytes]), and [code] fingerprints those bytes (Story 3.10 review), so it can be registered and scanned too.
  */
 data class ScanResult(
     val format: CodeFormat,
     val rawValue: String,
+    val binary: Boolean = false,
 ) {
     /** The code as the check stores and compares it, or null for a blank value. */
     val code: RegisteredCode?
-        get() = RegisteredCode.of(format, rawValue)
+        get() =
+            if (binary) {
+                RegisteredCode.ofBytes(format, ByteArray(rawValue.length) { rawValue[it].code.toByte() })
+            } else {
+                RegisteredCode.of(format, rawValue)
+            }
 
     override fun toString(): String = "ScanResult($format)"
+
+    companion object {
+        private const val BYTE_MASK = 0xFF
+
+        /** A code with no text, read as [bytes]. */
+        fun ofBytes(
+            format: CodeFormat,
+            bytes: ByteArray,
+        ): ScanResult = ScanResult(format, bytes.joinToString("") { (it.toInt() and BYTE_MASK).toChar().toString() }, binary = true)
+    }
 }
 
 /** What a running [CodeScanner] reports. */
 sealed interface ScanEvent {
-    /** The same code was seen in [ConsecutiveFrames.REQUIRED] frames in a row. */
+    /**
+     * Codes seen in [ConsecutiveFrames.REQUIRED] frames in a row: [results] holds every such code in view, in frame
+     * order, and [others] says another code is in view but not stable yet (Story 3.10 review: per-code streaks).
+     */
     data class Detected(
-        val result: ScanResult,
-    ) : ScanEvent
+        val results: List<ScanResult>,
+        val others: Boolean = false,
+    ) : ScanEvent {
+        constructor(result: ScanResult) : this(listOf(result))
 
-    /** The camera cannot be used: the permission is missing, or the camera could not be started (Story 3.10). */
+        /** The one code in view, stable, or null when several codes are in view (none of them can be picked safely). */
+        val single: ScanResult?
+            get() = results.singleOrNull()?.takeIf { !others }
+    }
+
+    /**
+     * The camera cannot be used: the permission is missing, the camera could not be started or failed (in use, disabled
+     * by policy or the privacy toggle when the system refuses it, a fatal error), or every frame fails to decode.
+     */
     data object CameraUnavailable : ScanEvent
 }
 
@@ -46,7 +78,7 @@ interface CodeScanner {
      * The camera feed for a viewfinder, while it is in composition: it starts the camera, lights the torch while
      * [torchOn], reports each stable code and a camera that cannot be used through [onEvent] (on the main thread), and
      * releases the camera when it leaves composition. It reports [ScanEvent.CameraUnavailable] at once without the
-     * permission, and never asks for it.
+     * permission, and never asks for it. It never throws: every failure is [ScanEvent.CameraUnavailable].
      */
     @Composable
     fun Feed(
@@ -57,31 +89,25 @@ interface CodeScanner {
 
 /**
  * The 3-frames rule (Story 3.10): a code counts only once the same code is seen in [required] analysed frames in a row,
- * so a half-read or passing code is never submitted. Each frame passes every code it holds; a frame without the code
- * being followed starts over. Once a code is reported its streak starts again, so a code held still is reported every
- * [required] frames (the [RepeatGate] decides what is submitted). Not thread-safe: one analyser thread feeds it.
+ * so a half-read or passing code is never submitted. Each code in view has its own streak (Story 3.10 review), so a
+ * second code in view is never starved by the first; a code missing from a frame starts over. A report is due each time
+ * a code's streak reaches a multiple of [required] (a code held still is reported every [required] frames; the
+ * [RepeatGate] decides what is submitted), and it lists every stable code in view. Not thread-safe: one analyser thread
+ * feeds it.
  */
 class ConsecutiveFrames(
     private val required: Int = REQUIRED,
 ) {
-    private var candidate: ScanResult? = null
-    private var streak = 0
+    private var streaks: Map<ScanResult, Int> = emptyMap()
 
-    /** The code to report after this frame's [codes], or null. */
-    fun frame(codes: List<ScanResult>): ScanResult? {
-        val followed = candidate?.takeIf { it in codes }
-        if (followed == null) {
-            candidate = codes.firstOrNull()
-            streak = if (candidate == null) 0 else 1
-        } else {
-            streak++
-        }
-        return if (streak >= required) {
-            streak = 0
-            candidate
-        } else {
-            null
-        }
+    /** The report after this frame's [codes], or null when none is due. */
+    fun frame(codes: List<ScanResult>): ScanEvent.Detected? {
+        val inView = codes.distinct()
+        // Bounded: after the first `required` frames a streak cycles through required + 1 .. 2 × required.
+        streaks = inView.associateWith { (streaks[it] ?: 0).let { s -> if (s < 2 * required) s + 1 else required + 1 } }
+        if (streaks.values.none { it % required == 0 }) return null
+        val stable = inView.filter { streaks.getValue(it) >= required }
+        return ScanEvent.Detected(stable, others = stable.size < inView.size)
     }
 
     companion object {

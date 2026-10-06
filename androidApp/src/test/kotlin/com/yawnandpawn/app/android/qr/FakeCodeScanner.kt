@@ -31,6 +31,10 @@ internal class FakeCodeScanner(
     var torchOn: Boolean = false
         private set
 
+    /** How many times a camera was started (bound), as the CameraX scanner binds it once per feed in composition. */
+    var starts = 0
+        private set
+
     override fun cameraPermitted(): Boolean = permitted
 
     @Composable
@@ -45,20 +49,21 @@ internal class FakeCodeScanner(
             return
         }
         DisposableEffect(Unit) {
+            starts++
             listener = { events(it) }
             onDispose { listener = null }
         }
     }
 
-    /** [count] analysed frames that each hold [codes]; a stable code reaches the feed's listener. */
+    /** [count] analysed frames that each hold [codes]; a due report of stable codes reaches the feed's listener. */
     fun frames(
         count: Int,
         vararg codes: ScanResult,
     ) {
-        repeat(count) { consecutive.frame(codes.toList())?.let { emit(ScanEvent.Detected(it)) } }
+        repeat(count) { consecutive.frame(codes.toList())?.let(::emit) }
     }
 
-    /** CameraX could not start. */
+    /** The running camera failed (the real scanner's failures are in `CameraXCodeScannerTest`). */
     fun fail() = emit(ScanEvent.CameraUnavailable)
 
     private fun emit(event: ScanEvent) = checkNotNull(listener) { "no camera feed is running" }.invoke(event)

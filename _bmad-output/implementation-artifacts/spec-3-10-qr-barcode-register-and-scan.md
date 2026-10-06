@@ -4,7 +4,7 @@ type: 'feature'
 created: '2026-10-06'
 status: 'done'
 baseline_revision: 'cef47fa'
-review_loop_iteration: 0
+review_loop_iteration: 1
 followup_review_recommended: false
 context:
   - '{project-root}/_bmad-output/implementation-artifacts/epic-3-context.md'
@@ -12,7 +12,9 @@ context:
   - '{project-root}/_bmad-output/implementation-artifacts/spec-3-2-solve-math-to-stop-the-alarm.md'
 warnings:
   - 'Built on main (cef47fa) without Stories 3.5-3.9, which land first. Their touch points are thin and marked `// 3.5 hook`, `// 3.6 hook` and `// 3.9 hook`; see Rebase notes.'
-deferred: []
+deferred:
+  - 'Camera privacy toggle on a phone that mutes the camera (black frames, no error): no public API reads the toggle; Story 3.11 watchdog and the 3.14 device checklist (see Review).'
+  - 'Torch toggle state after screen off/on (low, optional review item): Story 3.11.'
 ---
 
 <intent-contract>
@@ -54,8 +56,11 @@ deferred: []
 | Wake match | Grace or Loud on a QR entry, the registered code is scanned | `CheckAnswerSubmitted(Code)` gives `Correct`, which completes the entry (Success) | — |
 | Wrong code | another code | "That's a different code. Scan your registered one.", error haptic, failed attempts +1 | the same code within 2 s is not submitted again |
 | Same format, padded | " 123 " registered as "123" | `Correct` (the value is trimmed) | — |
-| Other format | the same value as EAN-13 vs UPC-A | `Wrong` (epic: the same format) | Risk, see the device checklist in 3.14 |
-| No camera at wake | permission missing, or CameraX cannot bind | "Camera isn't available. Pick a fallback check." immediately; the link comes with 3.9 | no frame is analysed |
+| Retail family | registered as UPC-A (or UPC-E), read as EAN-13 | `Correct`: UPC-A and UPC-E are compared as their EAN-13 (review) | — |
+| Other format | the same value as QR vs Code 128 | `Wrong` (epic: the same format) | — |
+| Two codes in view | the registered code and another one | the registered code is submitted; another code is submitted only when it is the one code in view (review) | registration waits until one code is in view |
+| Binary code | a QR with no text (bytes only) | fingerprinted from its bytes (review) | — |
+| No camera at wake | permission missing; CameraX cannot bind; any setup step throws; the camera state errors (in use, disabled, fatal); 10 frames in a row fail to decode | "Camera isn't available. Pick a fallback check." immediately; the link comes with 3.9 | logged, released, never thrown |
 | Unpassable entry | a QR entry with no code reaches a ring | resolved to Math · Medium · 3 | — |
 | Before first unlock | a QR entry | `directBootSafe = false`, so the existing substitution gives Math · Medium · 3 | — |
 
@@ -113,10 +118,10 @@ deferred: []
 - **Camera feed slot.** `LocalViewfinderFeed` lets the scanning screen draw the live `PreviewView` inside the approved `ViewfinderPlaceholder`. Nothing else in the composables changed, and previews and screenshots keep the placeholder surface.
 - **Registration asks once.** If the permission is missing when registration opens, it asks once. After a denial, "Camera isn't available." with "Fix" stays, and each resume (back from the settings) only reads the permission again.
 - **Unpassable entries.** `PlanResolver` turns a QR entry without a code into Math · Medium · 3. `SaveAlarm` should never let one through (a 3.5 hook), but a damaged row must not leave an alarm that cannot be stopped.
-- **Format match is exact (epic).** ML Kit can read the same printed code as EAN-13 or as UPC-A, depending on the frame. This is a risk for the device checklist (3.14). Normalising UPC-A to EAN-13 is a possible follow-up.
+- **Format match is exact (epic), except the retail family (review).** ML Kit can read the same printed code as EAN-13 or as UPC-A, depending on the frame, so `RegisteredCode.of` turns UPC-A into its EAN-13 (a leading 0) and expands UPC-E to UPC-A, then EAN-13, before hashing; the stored format is then `EAN_13`. Every other format matches only itself.
 - **`CheckType.all` is a getter.** `CheckType` now has default methods, so on the JVM the first type to initialise also initialises the interface. A stored list would then hold that type as null, which the tests caught.
 
-**Data safety (AD-15, for Epic 8):** ML Kit's `com.google.mlkit:common` logs anonymous usage and performance events through Google's datatransport stack (`com.google.android.datatransport:*`, already on the allowlist for Crashlytics). No image or code content is sent. Bundled ML Kit also adds `MlKitInitProvider` and `MlKitComponentDiscoveryService` to the merged manifest.
+**Data safety (AD-15, for Epic 8):** ML Kit's `com.google.mlkit:common` logs anonymous usage and performance events through Google's datatransport stack (`com.google.android.datatransport:*`, already on the allowlist for Crashlytics). No image or code content is sent. Bundled ML Kit also adds `MlKitInitProvider` and `MlKitComponentDiscoveryService` to the merged manifest; the provider is removed (review), and `MlKitFrameDecoder.create` starts ML Kit when a scanner first starts. R8: the ML Kit AARs ship their own consumer keep rules (`UsedBy*` annotations, the bundled model's protos and native methods), so the minified release needs no extra rule; a release scan stays on the 3.14 device checklist.
 
 **Licences:** CameraX, camera-video, viewfinder-core, media3 container/muxer, concurrent-futures, exifinterface, tracing, Guava, failureaccess, Dagger, jakarta.inject, auto-value annotations, j2objc annotations and atomicfu are Apache-2.0. jsr305 is BSD-3-Clause and checker-qual is MIT. ML Kit (`barcode-scanning`, `common`, `vision-*`, `play-services-mlkit-barcode-scanning`, `odml:image`) and `play-services-base` come under the ML Kit / Google APIs Terms of Service, which are proprietary and free to use.
 
@@ -130,7 +135,10 @@ Stories 3.5 to 3.9 land before this story. When rebasing:
 - **"Try it" (3.6, `// 3.6 hook`):** the QR preview provides `LocalViewfinderFeed` with `scanner.Feed(...)` and compares `RegisteredCode` with the draft's code in the preview, sending no engine event.
 - **Generators (3.7, 3.8):** a new caller should use `entry.puzzle(seed)`, not `entry.type.generate(seed, entry.difficulty, entry.count)`. New types need nothing more: `puzzle`/`isReady` have defaults. Add a `Puzzle.Code` branch to any new exhaustive `when` on `Puzzle`.
 - **Fallback (3.9, `// 3.9 hook`):** `qrCheckUiState` leaves `showFallbackLink` false. Feed `cameraAvailable == false` (from `WakeCheck`) into 3.9's `CameraFallbackPolicy` as `FallbackRequested(type, CameraUnavailable)`, so the link shows at once on the camera-unavailable message. `CheckType.QrBarcode.usesCamera` is true, so the policy already treats it as a camera check.
-- **WakeCheck/WakeActivity:** 3.7 and 3.8 add their own `…CheckUiState` to `WakeCheck.screen`. Keep the `?: qrCheckUiState(...)` link in that chain, and the `LocalViewfinderFeed` provider around `WakeContent`.
+- **WakeCheck/WakeActivity:** 3.7 and 3.8 add their own `…CheckUiState` to `WakeCheck.screen`. Keep the `?: qrCheckUiState(...)` link in that chain, and the `LocalViewfinderFeed` provider around `WakeContent`, with the feed remembered on `check.showsCamera(...)` (review: it must not be rebuilt on each grace redraw).
+- **Tripwires (review):** `CheckCodeMigrationTest` fails once the latest exported `app.db` schema has `check_config` without `code_format`/`code_value`, or without the code migration in `APP_DATABASE_MIGRATIONS` (rename `MIGRATION_7_8` there too). `QrRebaseTripwireTest` (`:androidApp`) fails while any `3.5 hook` marker is left once `object CheckRegistry` exists, or any `3.9 hook` marker once `class CameraFallbackPolicy` exists. Wire each hook, then delete its marker; `QrCheckScreenTest`'s fallback-link `assertDoesNotExist` lines are marked too and flip to `assertExists` in 3.9.
+- **3.9 policy input (review):** `ScanEvent.CameraUnavailable` now also covers a camera-state error after binding, a setup step that throws and 10 failed decodes in a row; all reach `WakeCheck.cameraFailed`, which 3.9's policy reads as `CameraUnavailable`.
+- **Retail family (review):** a code registered as UPC-A or UPC-E is stored with format `EAN_13` (see Design Notes); 3.5's "Code saved" row and any format display must not assume the format the user scanned.
 
 ## Verification
 
@@ -150,8 +158,35 @@ Status: implemented in fast mode (one agent), waiting for review. The branch is 
 
 **Residual risks:**
 - **Real camera unproven on the host:** the CameraX binding, the ML Kit model, the torch and real-world lighting are only verified on a device (3.14). The no-frame watchdog, mid-scan errors and release on pause come in 3.11.
-- **EAN-13 vs UPC-A:** the same printed code may be read in either format. With the epic's exact format match, a code read the other way is a wrong code.
-- **ML Kit usage logging** goes through datatransport (Data safety form, Epic 8). ML Kit's init provider also runs at app start.
+- **EAN-13 vs UPC-A:** fixed in review (one retail family).
+- **ML Kit usage logging** goes through datatransport (Data safety form, Epic 8). ML Kit's init provider no longer runs at app start (review).
 - **APK size:** the bundled model and CameraX add native libraries (`libbarhopper_v3.so` and others).
 - **Placeholder migration:** `MIGRATION_7_8` is not registered until 3.5 and 3.9 are in. The real `check_config` migration test lands with the rebase.
 - **The printable QR row** is hidden in the app (`printable = false`) until Epic 7.
+
+## Review (2 reviewers, fast mode)
+
+Edge-case and verification-gap reviewers on `a61a569` + `a74616c`. Alarm safety first: the camera must never leave the user stuck or crash the process that hosts `WakeService`. Every item was fixed with a test (`fix(3.10): review fixes`):
+
+1. **Camera errors after binding** (in use, max in use, disabled, fatal, DND, stream config): `CameraXCodeScanner` observes the camera state on the main thread; an ending error (`cameraErrorEnds`) is logged, the camera released and `CameraUnavailable` reported at once. `CameraXCodeScannerTest`.
+2. **Camera privacy toggle (Android 12+):** no public API reads it (`SensorPrivacyManager` only has `supportsSensorToggle`, checked against `android.jar` 37; `isSensorPrivacyEnabled` is a system API). When the system refuses the open, it is `ERROR_CAMERA_DISABLED` and fix 1 covers it. On a phone that mutes the camera instead (black frames, no error), a "dark or never decoded for N s" heuristic was rejected: a dark bedroom or a covered lens would hide the viewfinder and torch, and covering the lens would become a way round the QR check. Deferred to the 3.11 watchdog and the 3.14 device checklist (API 31-37).
+3. **ML Kit failing repeatedly:** a failed frame (`done(null)`, or a decoder that throws) is no longer "no code"; 10 in a row are logged and reported as `CameraUnavailable`. R8: the ML Kit AARs ship their consumer keep rules (Data safety note).
+4. **Setup outside the try:** the decoder, executor, use cases, analyser and binding all run inside it, catching `Throwable` (cancellation is rethrown); the release steps run each on its own and never throw.
+5. **Retail family and binary codes:** `RegisteredCode.of` normalises UPC-A and UPC-E to EAN-13; `RegisteredCode.ofBytes` fingerprints a code with no text (`ScanResult.ofBytes`). Core tests.
+6. **Per-code streaks:** `ConsecutiveFrames` keeps a streak per code and reports every stable code in view (`ScanEvent.Detected(results, others)`). The wake check submits the registered code when it is among them, and a different code only when it is the one code in view (the engine still decides). Registration offers a code only when it is alone in view (no new string: the user shows one code).
+7. **ML Kit at every cold start:** `MlKitInitProvider` is removed from the manifest; `MlKitFrameDecoder.create` calls `MlKitContext.initializeIfNeeded`. `QrManifestTest`.
+8. **Real scanner host test:** `CameraXCodeScannerTest` runs the real `CameraXCodeScanner` with a fake `CameraStarter` and decoder: a model that throws (also an `Error`), a binding that fails, camera-state errors, failed decodes, and no permission (one `CameraUnavailable`, no `PreviewView`, ML Kit never started).
+9. **Tripwires:** see Rebase notes (`CheckCodeMigrationTest`, `QrRebaseTripwireTest`); `SaveAlarm` and the picker/registry now carry `3.5 hook` markers too.
+10. **Error haptic:** `QrCheckHapticTest` (attempts 1 then 2 give two `Reject`; no wrong code gives none).
+11. **Finish once:** `CodeAnalyzer` finishes each frame exactly once (`AtomicBoolean`) and catches `Throwable` around the decoder.
+12. **`MlKitFrameDecoder` tests:** no image gives `done(emptyList())` once; a failed task gives `done(null)` and counts toward fix 3.
+13. **Storage scan:** banned words extended (`File(`, `outputStream`, `Bitmap`, `println`), no raw value in a `logger.log` line, and the scan covers `composeApp/.../ui/qr` and `WakeCheck.kt`; the storage diff with a lambda decoder (which could not fail) was dropped.
+14. **Camera rebinding:** the wake feed is remembered on `check.showsCamera(...)` and reads the torch inside it (registration too). `QrCheckScreenTest`: I'm up, 5 s of countdown, grace runs out to Loud, one camera start.
+15. **Merged manifest:** no `com.google.mlkit.vision.DEPENDENCIES` (bundled model), `uses-feature android.hardware.camera` not required, and `MainActivity` never asks for `CAMERA` at start. `QrManifestTest`.
+16. **Serial names pinned:** every `CodeFormat` encodes as `"<storedName>"`.
+17. **Test session auto-answer:** a QR test session is answered with its own code and ends as Test when a real alarm rings (`TestAlarmFlowTest`).
+18. **Fallback link:** `QrCheckScreenTest` asserts it does not exist yet, marked to flip in 3.9.
+
+Renamed and strengthened: "a camera that fails while scanning shows the same message and is released" (the real bind failure is in `CameraXCodeScannerTest`), "no scanner source can write a frame or a code to storage or the log", and the 200% wake screenshots assert the wrong-code and camera-unavailable lines. No baseline changed.
+
+Deferred: the camera privacy toggle on phones that mute the camera (item 2), and the optional torch state after screen off/on (3.11).

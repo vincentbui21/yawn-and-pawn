@@ -24,5 +24,8 @@ interface CameraPermission {
  *
  * 3.5 hook: the Check picker's toggle of a camera type calls this before it selects the card, and sets
  * `CheckPickerUiState.cameraUnavailable` from the result.
+ *
+ * 3.5 hook: add `CheckType.QrBarcode` to `PICKABLE_TYPES` and to `CheckRegistry` (the wake composable is `CheckScreen`'s
+ * QR check through `qrCheckUiState`).
  */
 suspend fun CameraPermission.allowsCameraCheck(): Boolean = isGranted() || request()

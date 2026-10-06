@@ -1,8 +1,10 @@
 package com.yawnandpawn.app.android.qr
 
+import android.content.Context
 import androidx.annotation.OptIn
 import androidx.camera.core.ExperimentalGetImage
 import androidx.camera.core.ImageProxy
+import com.google.mlkit.common.sdkinternal.MlKitContext
 import com.google.mlkit.vision.barcode.BarcodeScanner
 import com.google.mlkit.vision.barcode.BarcodeScannerOptions
 import com.google.mlkit.vision.barcode.BarcodeScanning
@@ -15,35 +17,54 @@ import com.yawnandpawn.app.ui.qr.ScanResult
  * The [FrameDecoder] of the bundled ML Kit barcode model (Story 3.10): the model ships in the APK
  * (`com.google.mlkit:barcode-scanning`), so it works offline with no download through Play services. Every format is
  * read; the frame is passed to ML Kit in memory and never stored. [close] releases the model.
+ *
+ * A frame without an image has no code (`done(emptyList())`); a failed ML Kit task is a failed frame (`done(null)`), so
+ * `CodeAnalyzer` notices a model that keeps failing (Story 3.10 review). [inputOf] turns the frame into ML Kit's input
+ * (replaced in tests, which have no camera image).
  */
 class MlKitFrameDecoder(
-    private val scanner: BarcodeScanner =
-        BarcodeScanning.getClient(BarcodeScannerOptions.Builder().setBarcodeFormats(Barcode.FORMAT_ALL_FORMATS).build()),
-) : FrameDecoder,
-    AutoCloseable {
-    @OptIn(ExperimentalGetImage::class)
+    private val scanner: BarcodeScanner,
+    private val inputOf: (ImageProxy) -> InputImage? = ::mediaInput,
+) : CloseableFrameDecoder {
     override fun decode(
         frame: ImageProxy,
-        done: (List<ScanResult>) -> Unit,
+        done: (List<ScanResult>?) -> Unit,
     ) {
-        val image = frame.image
-        if (image == null) {
+        val input = inputOf(frame)
+        if (input == null) {
             done(emptyList())
             return
         }
         scanner
-            .process(InputImage.fromMediaImage(image, frame.imageInfo.rotationDegrees))
+            .process(input)
             .addOnCompleteListener { task ->
-                val codes = if (task.isSuccessful) task.result.orEmpty().mapNotNull(::scanResultOf) else emptyList()
-                done(codes)
+                done(if (task.isSuccessful) task.result.orEmpty().mapNotNull(::scanResultOf) else null)
             }
     }
 
     override fun close() = scanner.close()
 
     companion object {
-        /** The code ML Kit read, or null without a raw value. */
-        fun scanResultOf(barcode: Barcode): ScanResult? = barcode.rawValue?.let { ScanResult(formatOf(barcode.format), it) }
+        /**
+         * The decoder of the bundled model. ML Kit is started here, when a scanner first starts, not by its init provider
+         * at every app start (removed in the manifest, Story 3.10 review): an alarm's cold start never waits for it.
+         */
+        fun create(context: Context): MlKitFrameDecoder {
+            MlKitContext.initializeIfNeeded(context.applicationContext)
+            val options = BarcodeScannerOptions.Builder().setBarcodeFormats(Barcode.FORMAT_ALL_FORMATS).build()
+            return MlKitFrameDecoder(BarcodeScanning.getClient(options))
+        }
+
+        @OptIn(ExperimentalGetImage::class)
+        private fun mediaInput(frame: ImageProxy): InputImage? =
+            frame.image?.let { InputImage.fromMediaImage(it, frame.imageInfo.rotationDegrees) }
+
+        /** The code ML Kit read: its text, or its bytes for a code with no text (a binary QR); null with neither. */
+        fun scanResultOf(barcode: Barcode): ScanResult? {
+            val format = formatOf(barcode.format)
+            return barcode.rawValue?.let { ScanResult(format, it) }
+                ?: barcode.rawBytes?.takeIf { it.isNotEmpty() }?.let { ScanResult.ofBytes(format, it) }
+        }
 
         /** ML Kit's `Barcode.FORMAT_*` as the stored [CodeFormat]. */
         fun formatOf(format: Int): CodeFormat = FORMATS[format] ?: CodeFormat.Unknown

@@ -610,7 +610,8 @@ class WakeServiceTest {
 
         failNextLoad.compareAndSet(false, true)
         app.ring(fired)
-        app.awaitUntil("the merge is handled") { app.logs().any { it.startsWith("SessionEffectLogged type=RecordMergedOccurrence") } }
+        // Story 2.9: the merge is recorded as a session_merge row (it is no longer only logged).
+        assertEquals(alarmA.id, app.awaitMerges(stored.session.sessionId).single().alarmId)
 
         assertEquals(stored.session.sessionId, assertIs<SessionState.Ringing>(app.engine.state.value).session.sessionId)
         assertEquals(1, app.mediaPlayers.size, "one player")

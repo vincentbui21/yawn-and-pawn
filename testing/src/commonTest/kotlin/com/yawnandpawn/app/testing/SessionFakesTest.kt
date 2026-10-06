@@ -2,9 +2,12 @@ package com.yawnandpawn.app.testing
 
 import com.yawnandpawn.app.core.checks.CheckAnswer
 import com.yawnandpawn.app.core.checks.CheckPlan
+import com.yawnandpawn.app.core.checks.CheckType
 import com.yawnandpawn.app.core.session.CheckRun
 import com.yawnandpawn.app.core.session.ConfigResolver
 import com.yawnandpawn.app.core.session.FallbackDecision
+import com.yawnandpawn.app.core.session.FallbackReason
+import com.yawnandpawn.app.core.session.FallbackRequest
 import com.yawnandpawn.app.core.session.GlobalSettings
 import com.yawnandpawn.app.core.session.SessionData
 import com.yawnandpawn.app.core.session.SessionEffect
@@ -72,13 +75,15 @@ class SessionFakesTest {
     }
 
     @Test
-    fun `FakeFallbackPolicy returns its decision and counts calls`() {
+    fun `FakeFallbackPolicy returns its decision and keeps the requests`() {
         val fallback = FakeFallbackPolicy()
-        assertEquals(FallbackDecision.NotAllowed, fallback.fallback(session()))
+        val request = FallbackRequest(CheckType.Math, FallbackReason.FailedAttempts)
+        assertEquals(FallbackDecision.NotAllowed, fallback.fallback(session(), request))
         val plan = CheckPlan.placeholder()
         fallback.decision = FallbackDecision.Allowed(plan)
-        assertEquals(FallbackDecision.Allowed(plan), fallback.fallback(session()))
+        assertEquals(FallbackDecision.Allowed(plan), fallback.fallback(session(), request))
         assertEquals(2, fallback.calls)
+        assertEquals(listOf(request, request), fallback.requests)
     }
 
     @Test

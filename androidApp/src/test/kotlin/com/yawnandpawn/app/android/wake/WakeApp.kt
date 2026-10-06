@@ -18,6 +18,7 @@ import com.yawnandpawn.app.core.history.SessionHistoryRepository
 import com.yawnandpawn.app.core.history.SessionMergeRow
 import com.yawnandpawn.app.core.session.ActiveSessionStore
 import com.yawnandpawn.app.core.session.Billing
+import com.yawnandpawn.app.core.session.FallbackPolicy
 import com.yawnandpawn.app.core.session.SessionEngine
 import com.yawnandpawn.app.core.session.SessionEvent
 import com.yawnandpawn.app.core.session.SessionState
@@ -66,6 +67,7 @@ internal class WakeApp(
     calls: CallState? = null,
     policy: SnoozeAvailabilityPolicy? = null,
     checkConfigs: CheckConfigRepository? = null,
+    fallback: FallbackPolicy? = null,
 ) {
     val app: YawnAndPawnApp = ApplicationProvider.getApplicationContext()
     val crashReporter = FakeCrashReporter()
@@ -94,6 +96,7 @@ internal class WakeApp(
                 calls?.let { replaced -> single<CallState> { replaced } }
                 policy?.let { replaced -> single<SnoozeAvailabilityPolicy> { replaced } }
                 checkConfigs?.let { replaced -> single<CheckConfigRepository> { replaced } }
+                fallback?.let { replaced -> single<FallbackPolicy> { replaced } }
                 single { WakeServiceStarts(serviceStartWait) }
             },
         )

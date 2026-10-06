@@ -60,22 +60,30 @@ internal class CheckRules(
     }
 
     /**
-     * Grace / Loud + FallbackRequested, when the policy allows it and it was not used: the fallback plan, resolved for
-     * this ring with the fallback seeds, replaces the check, with the Direct Boot substitutions when the ring uses them
-     * (`directBootRing`, Stories 2.3 and 2.4).
+     * Grace / Loud + FallbackRequested(type, reason), when the policy allows it and it was not used (Story 3.9): the
+     * fallback plan, resolved for this ring with its own seeds, replaces the rest of the check, with the Direct Boot
+     * substitutions when the ring uses them (`directBootRing`, Stories 2.3 and 2.4). Its first entry starts with no failed
+     * attempts and is shown ([SessionEffect.StartCheckStep]). Timers are unchanged: no new grace window starts. The run
+     * keeps the replaced check's id for history (`fallback_from`).
      */
-    fun onFallbackRequested(state: Ring): Transition? {
+    fun onFallbackRequested(
+        state: Ring,
+        event: SessionEvent.FallbackRequested,
+    ): Transition? {
         val session = state.session
-        val decision = fallbackPolicy.fallback(session)
+        val decision = fallbackPolicy.fallback(session, FallbackRequest(event.type, event.reason))
         return if (state !is Ringing && !session.checkRun.fallbackUsed && decision is FallbackDecision.Allowed) {
             val fallback =
                 CheckRun.forRing(decision.plan, session.sessionId, session.ringIndex, fallback = true) { plan ->
                     if (session.directBootRing) directBootPlan(plan) else plan
                 }
-            // Story 3.9 decides whether the fallback also resets the entry's failed attempts; the session's total stays.
+            // The fallback's first entry starts with no failed attempts; the session's total stays (history).
             val run =
-                fallback.copy(failedAttempts = session.checkRun.failedAttempts, totalFailedAttempts = session.checkRun.totalFailedAttempts)
-            Transition(state.with(session.copy(checkRun = run)), emptyList())
+                fallback.copy(
+                    totalFailedAttempts = session.checkRun.totalFailedAttempts,
+                    fallbackFrom = session.checkRun.currentEntry?.type?.id,
+                )
+            Transition(state.with(session.copy(checkRun = run)), listOf(SessionEffect.StartCheckStep(0)))
         } else {
             null
         }

@@ -241,3 +241,11 @@
   summary: A compact grace header on small phones at large font scales, so the Math problem is not pushed below the fold.
   evidence: On 360 × 640 dp at 200% font the grace header fills the scrolling area of the Check screen; the problem is below it and must be scrolled to. "Check" and snooze stay on screen (screenshot `wake_check_math_hard_sunrise_w360_h640_font200`).
   status: deferred to version 2 (after launch) by owner decision 2026-10-06.
+- source_spec: `_bmad-output/implementation-artifacts/spec-3-9-fallback-check-picker.md`
+  summary: The Fallback check picker has no snooze control in its footer, although the Story 3.9 acceptance criteria ask for one.
+  evidence: Decided 2026-10-06 (coordinator): keep the approved `fallback-picker` screen (preview baseline) as it is, without a footer. Snooze is unavailable until billing (Epic 4), so the picker loses nothing today; while it is open, Grace keeps counting and Loud keeps ringing.
+  status: assigned to Epic 4 (the first snooze story that makes snooze available on wake screens): decide whether the picker gets the same `button-snooze` footer as the Check screen, and update the preview baseline if so.
+- source_spec: `_bmad-output/implementation-artifacts/spec-1-11-the-complete-wake-session-state-machine-in-core.md`
+  summary: (follow-up of the check-run consistency item) The fallback now has its own seeds, reset failed attempts and a `StartCheckStep` (Story 3.9). The policy input is `FallbackRequest(type, reason)`, open for the image matcher's error.
+  evidence: Story 3.9 settles the fallback part; the matcher-error input stays for Story 7.7.
+  status: matcher error assigned to Story 7.7.

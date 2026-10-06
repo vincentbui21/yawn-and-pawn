@@ -75,12 +75,13 @@ private class NextRing(
         session: SessionData,
         noGrace: Boolean,
     ): SessionState.Ringing {
-        val last = session.checkRun
+        val previous = session.checkRun
         val ringIndex = session.ringIndex + 1
+        // The fallback stays for the session (Story 3.9): the next ring resolves it again, with new fallback seeds.
         val run =
             CheckRun
-                .forRing(last.nextRingPlan(session.config.checkPlan), session.sessionId, ringIndex, last.fallbackUsed)
-                .copy(totalFailedAttempts = last.totalFailedAttempts)
+                .forRing(previous.nextRingPlan(session.config.checkPlan), session.sessionId, ringIndex, previous.fallbackUsed)
+                .copy(totalFailedAttempts = previous.totalFailedAttempts, fallbackFrom = previous.fallbackFrom)
         return SessionState.Ringing(
             session.withoutTimers().copy(checkRun = run).newRing(userLocked, directBootPlan).copy(
                 ringIndex = ringIndex,

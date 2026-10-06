@@ -33,12 +33,12 @@ import com.yawnandpawn.app.core.id.UuidV4IdGenerator
 import com.yawnandpawn.app.core.log.Logger
 import com.yawnandpawn.app.core.session.ActiveSessionStore
 import com.yawnandpawn.app.core.session.Billing
+import com.yawnandpawn.app.core.session.CameraFallbackPolicy
 import com.yawnandpawn.app.core.session.CheckValidator
 import com.yawnandpawn.app.core.session.EffectRunner
 import com.yawnandpawn.app.core.session.FallbackPolicy
 import com.yawnandpawn.app.core.session.FeeLadder
 import com.yawnandpawn.app.core.session.NoBillingSnoozeAvailability
-import com.yawnandpawn.app.core.session.NoFallbackPolicy
 import com.yawnandpawn.app.core.session.PluginCheckValidator
 import com.yawnandpawn.app.core.session.ScheduleTestAlarm
 import com.yawnandpawn.app.core.session.SessionEngine
@@ -95,7 +95,7 @@ val appModule =
         single<AccessibilityState> { AndroidAccessibilityState(androidContext()) }
         single<SnoozeAvailabilityPolicy> { NoBillingSnoozeAvailability(get()) }
         single<CheckValidator> { PluginCheckValidator }
-        single<FallbackPolicy> { NoFallbackPolicy }
+        single<FallbackPolicy> { CameraFallbackPolicy() }
         single<FeeLadder> { TierFeeLadder }
         single { SessionReducer(get(), get(), get()) }
         single<EffectRunner> { get<WakeRuntime>() }

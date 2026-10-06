@@ -2,8 +2,10 @@ package com.yawnandpawn.app.android.wake
 
 import com.yawnandpawn.app.core.checks.CheckAnswer
 import com.yawnandpawn.app.core.session.SessionEvent
+import com.yawnandpawn.app.testing.FakeAccessibilityState
 import com.yawnandpawn.app.testing.FakeBootCounter
 import com.yawnandpawn.app.testing.FakeClock
+import com.yawnandpawn.app.testing.FakeFallbackPolicy
 import com.yawnandpawn.app.testing.FakeMonotonicClock
 import com.yawnandpawn.app.ui.wake.CheckPosition
 import com.yawnandpawn.app.ui.wake.WakeIntent
@@ -12,7 +14,7 @@ import kotlin.test.assertEquals
 
 /** Story 3.2 review: the number pad keys of [WakeCheck] against the engine's position, between two recompositions. */
 class WakeCheckTest {
-    private val check = WakeCheck(FakeClock(), FakeMonotonicClock(), FakeBootCounter())
+    private val check = WakeCheck(FakeClock(), FakeMonotonicClock(), FakeBootCounter(), FakeFallbackPolicy(), FakeAccessibilityState())
     private val sent = mutableListOf<SessionEvent>()
     private var interactions = 0
 

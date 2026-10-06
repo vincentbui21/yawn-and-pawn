@@ -243,13 +243,16 @@ class SessionRecorderTest {
         runTest {
             val math = CheckEntry(CheckType.Math, Difficulty.Hard, count = 6)
             val plan = CheckPlan(CheckMode.All, listOf(math, CheckPlan.PLACEHOLDER_ENTRY, math))
-            val run = CheckRun(plan, listOf(1L, 2L, 3L), step = StepPointer(3, 0), fallbackUsed = true)
+            val run = CheckRun(plan, listOf(1L, 2L, 3L), step = StepPointer(3, 0), fallbackUsed = true, fallbackFrom = "QrBarcode")
 
             recorder.recordEnd(endedAfter(3.minutes).copy(checkRun = run), SessionEnd.Completed, SCHEDULED_AT)
 
             val row = history.rows.getValue(SESSION_ID)
             assertEquals(listOf("Math", "Placeholder", "Math"), row.checkTypes)
             assertTrue(row.fallbackUsed)
+            assertEquals("QrBarcode", row.fallbackFrom, "the replaced check (Story 3.9)")
+            recorder.recordEnd(endedAfter(3.minutes), SessionEnd.Completed, SCHEDULED_AT)
+            assertEquals(null, history.rows.getValue(SESSION_ID).fallbackFrom, "no fallback, nothing replaced")
         }
 
     @Test

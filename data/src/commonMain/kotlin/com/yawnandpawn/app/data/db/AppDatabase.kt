@@ -19,7 +19,8 @@ import com.yawnandpawn.app.data.history.SessionMergeEntity
  * `request_code_sequence`, the request-code high-water mark ([MIGRATION_1_2]); version 3 (Story 1.13) adds
  * `session_history` ([MIGRATION_2_3]); version 4 (Story 2.9) adds `session_merge` ([MIGRATION_3_4]); version 5 (Story
  * 3.4) adds `alarm.vibrate_in_grace` ([MIGRATION_4_5]); version 6 (Story 3.5) adds `check_config` and `alarm.check_mode`
- * ([MIGRATION_5_6]). There is no destructive migration fallback; restoring a newer file onto an older install is
+ * ([MIGRATION_5_6]); version 7 (Story 3.9) adds `session_history.fallback_from` ([MIGRATION_6_7]). There is no
+ * destructive migration fallback; restoring a newer file onto an older install is
  * covered by `docs/decisions/db-downgrade.md`.
  */
 @Database(
@@ -51,7 +52,7 @@ abstract class AppDatabase : RoomDatabase() {
          * The `app.db` schema this build knows: the `@Database` version, and the limit `PpsBackupAgent` checks a restored
          * file against (Room cannot open a newer one, `docs/decisions/db-downgrade.md`).
          */
-        const val SCHEMA_VERSION = 6
+        const val SCHEMA_VERSION = 7
     }
 }
 

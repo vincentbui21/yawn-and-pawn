@@ -74,11 +74,6 @@ class SessionPoliciesTest {
     }
 
     @Test
-    fun `the Epic 1 fallback policy never allows a fallback`() {
-        assertEquals(FallbackDecision.NotAllowed, NoFallbackPolicy.fallback(ringSession()))
-    }
-
-    @Test
     fun `the tier ladder maps base tier and snooze number to snooze_usd_NN, capped at 50`() {
         assertEquals(SnoozeOffer("snooze_usd_01", 1), TierFeeLadder.offer(baseFeeTier = 1, snoozeNumber = 1))
         assertEquals(SnoozeOffer("snooze_usd_04", 2), TierFeeLadder.offer(baseFeeTier = 3, snoozeNumber = 2))

@@ -46,7 +46,7 @@ internal class RingRules(
             when (event) {
                 SessionEvent.ImUpTapped -> imUp(reset, now)
                 is SessionEvent.CheckAnswerSubmitted -> checks.onAnswer(reset, event.answer, now)
-                SessionEvent.FallbackRequested -> checks.onFallbackRequested(reset)
+                is SessionEvent.FallbackRequested -> checks.onFallbackRequested(reset, event)
                 SessionEvent.SnoozeTapped -> purchases.onSnoozeTapped(reset)
                 is SessionEvent.PayConfirmed -> purchases.onPayConfirmed(reset, event.intentId)
                 is SessionEvent.ReuseAccepted -> purchases.onPaidSnooze(reset, event.token, now)

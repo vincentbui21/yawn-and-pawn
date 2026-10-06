@@ -38,6 +38,8 @@ import com.yawnandpawn.app.core.time.TimeZoneProvider
 import com.yawnandpawn.app.ui.format.is24HourClock
 import com.yawnandpawn.app.ui.wake.CheckScreen
 import com.yawnandpawn.app.ui.wake.CheckUiState
+import com.yawnandpawn.app.ui.wake.FallbackPickerScreen
+import com.yawnandpawn.app.ui.wake.FallbackPickerUiState
 import com.yawnandpawn.app.ui.wake.PlaceholderStep
 import com.yawnandpawn.app.ui.wake.RingingScreen
 import com.yawnandpawn.app.ui.wake.RingingUiState
@@ -65,7 +67,8 @@ import kotlin.time.Duration.Companion.seconds
  * The wake screen over the lock screen (AD-5): the approved Ringing screen (`ui/wake/RingingScreen`, Story 1.15) and,
  * in Grace or Loud on a Math or Memory Sequence entry, the approved Check screen (`ui/wake/CheckScreen`, Stories 3.2
  * and 3.8, [WakeCheck]).
- * Opened again from the notification or from "Back to alarm" after Home, it shows the current problem.
+ * Opened again from the notification or from "Back to alarm" after Home, it shows the current problem. While the
+ * fallback is offered, "Can't do this check?" opens the Fallback check picker (Story 3.9, [WakeCheck]).
  *
  * It opens only from the ringing notification (its full-screen intent or a tap on it), never from the background. It
  * shows over the lock screen and turns the screen on (`setShowWhenLocked` / `setTurnScreenOn` on API 27+, window flags
@@ -111,7 +114,7 @@ class WakeActivity : ComponentActivity() {
     private val monotonicClock: MonotonicClock by inject()
 
     /** The Check screen's typed answer, grace clock and keys (Story 3.2). */
-    private val check by lazy { WakeCheck(get(), get(), get()) }
+    private val check by lazy { WakeCheck(get(), get(), get(), get(), get()) }
 
     /** Keeps the events [send] dispatches in order. */
     private val dispatchOrder = Mutex()
@@ -262,6 +265,11 @@ class WakeActivity : ComponentActivity() {
                 check.onKey(intent, checkPosition(engine.state.value), send = { send(*it.toTypedArray()) }, interacted = ::interacted)
             }
 
+            // Story 3.9: the fallback link, a fallback check card, or "Back to check".
+            WakeCheck.isFallback(intent) -> {
+                check.onFallback(intent, engine.state.value, send = { send(*it.toTypedArray()) }, interacted = ::interacted)
+            }
+
             // Story 3.8: a Memory Sequence tile.
             intent is WakeIntent.TileTapped -> {
                 check.onTile(intent.tile, engine.state.value, send = { send(*it.toTypedArray()) }, interacted = ::interacted)
@@ -363,7 +371,8 @@ private class LastShown {
 }
 
 /**
- * The screen of a ringing or snoozed [session] (null otherwise): in Grace or Loud on a Math entry the Check screen
+ * The screen of a ringing or snoozed [session] (null otherwise): the Fallback check picker while open (Story 3.9); in
+ * Grace or Loud on a check entry the Check screen
  * (Story 3.2), whichever way the wake screen was opened; else its Ringing screen.
  */
 @Composable
@@ -375,10 +384,16 @@ private fun sessionScreen(
     check: WakeCheck,
 ): WakeScreen? {
     if (session == null || availability == null) return null
-    return check.screen(state, availability)?.let(WakeScreen::Check) ?: WakeScreen.Ringing(ringingUiState(session, availability, zone))
+    val checkScreen = check.screen(state, availability)
+    return check.picker(state)?.let(WakeScreen::Fallback)
+        ?: checkScreen?.let(WakeScreen::Check)
+        ?: WakeScreen.Ringing(ringingUiState(session, availability, zone))
 }
 
-/** What the wake screen shows: the Ringing screen, or the Check screen of a Math entry (Story 3.2). */
+/**
+ * What the wake screen shows: the Ringing screen, the Check screen of a Math entry (Story 3.2), or the Fallback check
+ * picker (Story 3.9).
+ */
 private sealed interface WakeScreen {
     data class Ringing(
         val state: RingingUiState,
@@ -386,6 +401,10 @@ private sealed interface WakeScreen {
 
     data class Check(
         val state: CheckUiState,
+    ) : WakeScreen
+
+    data class Fallback(
+        val state: FallbackPickerUiState,
     ) : WakeScreen
 }
 
@@ -404,5 +423,6 @@ private fun WakeContent(
         null -> WakeSurface(modifier = taps) {}
         is WakeScreen.Ringing -> RingingScreen(state = state.state, is24Hour = is24HourClock(), onIntent = onIntent, modifier = taps)
         is WakeScreen.Check -> CheckScreen(state = state.state, onIntent = onIntent, modifier = taps)
+        is WakeScreen.Fallback -> FallbackPickerScreen(state = state.state, onIntent = onIntent, modifier = taps)
     }
 }

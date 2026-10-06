@@ -25,8 +25,9 @@ data class StepPointer(
  * @property fallbackSource the fallback plan as the `FallbackPolicy` gave it, before it was resolved and substituted:
  * each later ring resolves it again (a Random fallback picks again, an unlocked ring drops the Direct Boot
  * substitutions). Null before the fallback, and in a run stored before it was kept (the next ring then reuses [plan]).
- * @property totalFailedAttempts every failed attempt of the session, on every entry and ring, never reset: what the
- * `FallbackPolicy` (Story 3.9) and history read, unlike [failedAttempts].
+ * @property totalFailedAttempts every failed attempt of the session, on every entry and ring, never reset: what history
+ * reads. The `FallbackPolicy` (Story 3.9) reads the entry's [failedAttempts], as its AC says.
+ * @property fallbackFrom the id of the check the fallback replaced (history `fallback_from`, Story 3.9); null before.
  */
 @Serializable
 data class CheckRun(
@@ -37,6 +38,7 @@ data class CheckRun(
     val fallbackUsed: Boolean = false,
     val fallbackSource: CheckPlan? = null,
     val totalFailedAttempts: Int = 0,
+    val fallbackFrom: String? = null,
 ) {
     /** The entry the user is on, or null once every entry is passed. */
     val currentEntry: CheckEntry?

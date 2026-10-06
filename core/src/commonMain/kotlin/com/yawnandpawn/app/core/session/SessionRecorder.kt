@@ -118,6 +118,7 @@ class SessionRecorder(
                     .map { it.type.id },
             timeToCompleteMs = null,
             fallbackUsed = session.checkRun.fallbackUsed,
+            fallbackFrom = session.checkRun.fallbackFrom,
             directBoot = session.startedBeforeUnlock,
             outcome = outcome,
         )

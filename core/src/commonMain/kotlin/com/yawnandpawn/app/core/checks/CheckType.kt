@@ -251,5 +251,11 @@ sealed interface CheckType {
          * the half-initialized type as null.
          */
         val all: List<CheckType> by lazy { listOf(Math, WordUnscramble, MemorySequence(), Placeholder) }
+
+        /**
+         * The checks the Fallback check picker offers, in its order (FR-PWK-11, Story 3.9): every check a user may pick
+         * (`CheckConfig.PICKABLE_TYPES`) that needs no camera, Math first. Lazy for the same reason as [all].
+         */
+        val fallbackChoices: List<CheckType> by lazy { all.filter { it != Placeholder && !it.usesCamera } }
     }
 }

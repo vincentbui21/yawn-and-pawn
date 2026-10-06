@@ -3,6 +3,7 @@ package com.yawnandpawn.app.core.session
 import com.yawnandpawn.app.core.checks.CheckAnswer
 import com.yawnandpawn.app.core.checks.CheckMode
 import com.yawnandpawn.app.core.checks.CheckPlan
+import com.yawnandpawn.app.core.checks.CheckType
 import com.yawnandpawn.app.core.checks.SeedDeriver
 import com.yawnandpawn.app.core.time.Deadline
 import com.yawnandpawn.app.core.time.TimeSnapshot
@@ -33,6 +34,9 @@ internal val NEW_SEEDS = listOf(11L, 12L)
 internal val SCHEDULED_AT: Instant = Instant.parse("2027-03-03T06:00:00Z")
 internal val TWO_STEPS = CheckPlan(CheckMode.All, List(2) { CheckPlan.PLACEHOLDER_ENTRY })
 internal val FALLBACK_PLAN = CheckPlan(CheckMode.All, List(3) { CheckPlan.PLACEHOLDER_ENTRY })
+
+/** The user picks Math in the Fallback check picker, offered because the camera is unavailable (Story 3.9). */
+internal val FALLBACK_REQUEST = SessionEvent.FallbackRequested(CheckType.Math, FallbackReason.CameraUnavailable)
 
 /**
  * The first seeds of the [size] entries of ring [ringIndex] of [SESSION_ID] (the fallback keys with [fallback]), spelled
@@ -120,7 +124,15 @@ internal class StubCheck(
 internal class StubFallback(
     var decision: FallbackDecision,
 ) : FallbackPolicy {
-    override fun fallback(session: SessionData): FallbackDecision = decision
+    val requests = mutableListOf<FallbackRequest>()
+
+    override fun fallback(
+        session: SessionData,
+        request: FallbackRequest,
+    ): FallbackDecision {
+        requests += request
+        return decision
+    }
 }
 
 /** A reducer whose guards all pass unless told otherwise. */
@@ -131,7 +143,8 @@ internal fun reducer(
 ): SessionReducer = SessionReducer(StubAvailability(availability), StubCheck(check), StubFallback(fallback))
 
 /** The production reducer: the plugin validator (Story 3.2), no billing and no fallback yet. */
-internal fun productionReducer(): SessionReducer = SessionReducer(NoBillingSnoozeAvailability(), PluginCheckValidator, NoFallbackPolicy)
+internal fun productionReducer(): SessionReducer =
+    SessionReducer(NoBillingSnoozeAvailability(), PluginCheckValidator, CameraFallbackPolicy())
 
 internal fun ignored(
     state: SessionState,

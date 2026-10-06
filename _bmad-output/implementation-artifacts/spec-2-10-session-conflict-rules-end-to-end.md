@@ -44,7 +44,7 @@ Billing is not wired until Epic 4, so its results are dispatched the way the ada
 | 3 Overlap | During Loud; during Snoozed | Merged with nothing changed; re-rings now, no fee, I'm up → Loud | — |
 | 4 Call in Grace | Call for 2 min | Grace frozen; resumes with 15 s left | — |
 | 5 Reboot or death | Phone off through the snooze end; then death while paying | Rings at once; restored with a fresh timer, `paying` cleared, no billing relaunch | — |
-| 6 Before the first unlock | System sound while locked | Default sound, BeforeFirstUnlock; the unlock makes snooze Available in place; plan and sound stay for the ring | — |
+| 6 Before the first unlock | System sound while locked | Default sound, BeforeFirstUnlock; the unlock changes snooze in place (to "Prices not loaded yet" until Epic 4 brings a catalogue); plan and sound stay for the ring (the plan check can only fail from Epic 3) | — |
 | Call during payment | Grace + paying + call | Grace and timeout shifted by the call; `paying` kept until the result | — |
 | Overlap during a call | Paused ring + alarm B | Merged; still paused until the call ends | — |
 | Reboot while paused | Call over by the reboot | Restored ringing, not paused | — |
@@ -78,7 +78,25 @@ Billing is not wired until Epic 4, so its results are dispatched the way the ada
 
 ## Spec Change Log
 
+- Review fixes: the scenario 6 row now names the production outcome after the unlock (`Unavailable(CatalogueNotLoaded)`, "Prices not loaded yet") instead of "Available". The availability comes from the real `NoBillingSnoozeAvailability` wiring, not from a test fake. The row also says the plan check can only fail from Epic 3.
+
 ## Review Triage Log
+
+### Review (2 reviewers, fast mode)
+
+Two reviewers read the first commit. Their findings were triaged as follows; all are fixed in `test(2.10): review fixes`, with no production change.
+
+- **patch: scenario 1's volume check could not fail.** The stream was never lowered. The test now lowers `STREAM_ALARM` during Grace and asserts that the grace end restores the set volume and full player gain.
+- **patch: the locked-overlap sound check could not fail.** A's default sound was already `AlarmSound.Default`. A now uses a system ringtone and B a built-in sound, so neither a fall-through to A's sound nor a switch to B's sound passes.
+- **patch: `FakeBilling.launched` is never written.** Billing is not wired until Epic 4, so the fake stays empty whatever the engine does. The assertion now checks the log (`SessionEffectLogged type=LaunchBilling`) in this suite, `MergeDuringSessionTest`, `DirectBootRingTest` and `TestAlarmFlowTest`. Scenario 5 first checks that the confirm did log it.
+- **patch: `kill(reboot = false)` reset `BOOT_COUNT`.** A new `WakeApp` resets it to 1. `kill` now keeps the current boot count, so a same-boot death is truly the same boot.
+- **patch: the reboot left the old process's alarms in place.** `kill(reboot = true)` now cancels every scheduled alarm before `BOOT_COMPLETED` and asserts that the boot re-armed the session slot (wall now + 1 s). `deliverSlot` asserts the start action is `WakeService.ACTION_SLOT`.
+- **patch: scenario 6 read availability from the test's own fake.** It now runs the production policy and asserts the engine's `beforeFirstUnlock` before and after the unlock. The "substituted plan stays" assertion is kept and labelled: it cannot fail until Epic 3 adds a check step that is not Direct Boot safe.
+- **patch: three more checks.**
+  - Before the reboot-while-paused kill, `runtime.db` holds a paused ring.
+  - After the Snoozed merge re-ring, the session keeps alarm A's config.
+  - The early slot after the clock change goes through the receiver and the service. The test asserts the engine ignored it, the snooze stayed, and the slot is still armed at new wall time + 6 min.
+- **defer:** real-device behaviour (OEM boot and volume handling) stays with Story 2.13's checklist.
 
 ## Auto Run Result
 
@@ -89,5 +107,7 @@ Status: done. Fast mode, one agent, no separate review pass. Branch `story/2-10-
 **Files changed:** `SessionConflictScenariosTest.kt` (new), `WakeApp.kt` (policy override), this spec, `sprint-status.yaml` (2.10 done).
 
 **Verification:** `./gradlew qualityGate` passes (BUILD SUCCESSFUL, 5m 42s). `androidApp:testDebugUnitTest` ran in full: 76 result files, no failures. The Kover gates are green. `git status --porcelain androidApp/src/test/screenshots/preview` is empty.
+
+**Review fixes (rebased onto main 99099b5):** the review fixes are in the triage log above. After them, `./gradlew qualityGate :androidApp:assembleDebugAndroidTest` passes (BUILD SUCCESSFUL, 6m 20s), the 12 scenarios still pass, and the preview baselines are unchanged.
 
 **Residual risks:** the scenarios dispatch billing results directly, because no billing adapter exists until Epic 4. Real devices are covered by Story 2.13's checklist.

@@ -110,7 +110,7 @@ class TestAlarmFlowTest {
         app.awaitUntil("the ring stops") { app.player.sound == null }
 
         assertEquals(SessionOutcome.Test, history.rows.single().outcome)
-        assertEquals(emptyList(), billing.launched, "no billing call in test mode")
+        assertTrue(app.logs().none { "LaunchBilling" in it }, "no billing call in test mode")
     }
 
     @Test

@@ -100,7 +100,10 @@ class SessionConflictScenariosTest {
             id = "alarm-b",
             requestCode = 1001,
             repeatDays = DayOfWeek.entries.toSet(),
-        ).copy(snoozeLengthMinutes = 20, graceSeconds = 60)
+        ).copy(snoozeLengthMinutes = 20, graceSeconds = 60, soundRef = "builtin:birdsong")
+
+    /** A sound that needs normal storage (the media provider): replaced by the default before the first unlock. */
+    private val systemSound = "system:Morning|content://media/internal/audio/media/7"
     private val audio: AudioManager get() = app.app.getSystemService(AudioManager::class.java)
 
     @After
@@ -109,8 +112,22 @@ class SessionConflictScenariosTest {
     }
 
     /** A process over the same storage, the same phone clocks and the same billing. */
-    private fun newProcess(userLock: UserLockState? = lock) =
-        WakeApp(clock = clock, monotonic = monotonic, billing = billing, userLock = userLock, policy = policy, testAlarms = testAlarms)
+    private fun newProcess(
+        userLock: UserLockState? = lock,
+        snoozePolicy: SnoozeAvailabilityPolicy? = policy,
+    ) = WakeApp(
+        clock = clock,
+        monotonic = monotonic,
+        billing = billing,
+        userLock = userLock,
+        policy = snoozePolicy,
+        testAlarms = testAlarms,
+    )
+
+    private fun bootCount(): Int = Settings.Global.getInt(app.app.contentResolver, Settings.Global.BOOT_COUNT, 1)
+
+    /** Billing is not wired before Epic 4: the runtime only logs `LaunchBilling`, so the log is what can fail. */
+    private fun billingLaunched(): Boolean = app.logs().any { "LaunchBilling" in it }
 
     // ----- driving the phone -----
 
@@ -195,10 +212,16 @@ class SessionConflictScenariosTest {
         app.app.sendBroadcast(slot())
         idle()
         val start = assertNotNull(shadowOf(app.app).nextStartedService, "the slot starts the wake service")
+        assertEquals(WakeService.ACTION_SLOT, start.action, "a slot start")
         return running?.withIntent(start)?.startCommand(0, 9) ?: app.startService(start)
     }
 
-    /** The process dies (no cleanup) and a new one boots; [reboot] also restarts the phone, which was off for [off]. */
+    /**
+     * The process dies (no cleanup) and a new one boots on the same boot (the same `BOOT_COUNT`, which a new [WakeApp]
+     * would reset). With [reboot] the phone also restarted after being off for [off]: the system cleared every alarm, the
+     * boot count moved on, the elapsed clock restarted, and `BOOT_COMPLETED` re-armed the session slot (checked: at once,
+     * wall now + 1 s, for the ringing or overdue sessions these scenarios reboot).
+     */
     private fun kill(
         service: ServiceController<WakeService>,
         reboot: Boolean = false,
@@ -206,16 +229,32 @@ class SessionConflictScenariosTest {
     ) {
         service.destroy()
         shadowOf(app.app).clearStartedServices()
-        app = newProcess()
+        val boot = bootCount()
         if (reboot) {
-            clock.advanceBy(off)
-            monotonic.reboot()
-            monotonic.advanceBy(30.seconds)
-            Settings.Global.putInt(app.app.contentResolver, Settings.Global.BOOT_COUNT, 2)
-            app.app.sendBroadcast(Intent(Intent.ACTION_BOOT_COMPLETED).setPackage(app.app.packageName))
-            idle()
+            val alarmManager = app.app.getSystemService(AlarmManager::class.java)
+            shadowOf(alarmManager).scheduledAlarms.toList().forEach { scheduled -> scheduled.operation?.let(alarmManager::cancel) }
         }
+        app = newProcess()
+        if (!reboot) {
+            Settings.Global.putInt(app.app.contentResolver, Settings.Global.BOOT_COUNT, boot)
+            return
+        }
+        clock.advanceBy(off)
+        monotonic.reboot()
+        monotonic.advanceBy(30.seconds)
+        Settings.Global.putInt(app.app.contentResolver, Settings.Global.BOOT_COUNT, boot + 1)
+        app.app.sendBroadcast(Intent(Intent.ACTION_BOOT_COMPLETED).setPackage(app.app.packageName))
+        idle()
+        assertEquals(clock.now().toEpochMilliseconds() + 1_000, slotTrigger(), "BOOT_COMPLETED re-armed the slot at once")
     }
+
+    private fun slotTrigger(): Long =
+        assertNotNull(
+            shadowOf(app.app.getSystemService(AlarmManager::class.java)).scheduledAlarms.singleOrNull {
+                shadowOf(it.operation).requestCode == RequestCodes.SESSION_SLOT
+            },
+            "one session slot",
+        ).triggerAtTime
 
     /** "I'm up" if ringing, then every placeholder step answered: the session completes and is recorded. */
     private fun finish(): String {
@@ -260,13 +299,17 @@ class SessionConflictScenariosTest {
         imUpToGrace()
         app.dispatch(SessionEvent.SnoozeTapped, SessionEvent.PayConfirmed(PurchaseIntentId("intent-1")))
         assertEquals(PurchaseIntentId("intent-1"), session().paying)
+        // During the grace window the alarm stream is turned down (the volume keys while another screen is in front).
+        audio.setStreamVolume(AudioManager.STREAM_ALARM, 1, 0)
+        assertFalse(alarmStreamAtSetVolume())
 
         graceToLoud()
 
         assertEquals(PurchaseIntentId("intent-1"), session().paying, "the payment is still in flight")
         assertFalse(app.player.isMuted)
         assertTrue(app.lastMediaPlayer().isReallyPlaying)
-        assertTrue(alarmStreamAtSetVolume(), "full set volume")
+        assertTrue(alarmStreamAtSetVolume(), "the grace end puts the stream back at the set volume")
+        assertEquals(1f, app.player.gain, "full gain")
         app.dispatch(SessionEvent.PurchaseCancelled)
         assertIs<SessionState.Loud>(state())
         assertNull(session().paying)
@@ -318,7 +361,8 @@ class SessionConflictScenariosTest {
         assertEquals(2, session().ringIndex)
         assertTrue(session().noGraceThisRing)
         assertEquals(1, session().snoozesGranted, "no fee")
-        assertEquals(emptyList(), billing.launched)
+        assertEquals(alarmA.id, session().config.alarmId, "the session keeps alarm A's frozen config")
+        assertFalse(billingLaunched(), "no payment for the merge")
         app.dispatch(SessionEvent.ImUpTapped)
         assertIs<SessionState.Loud>(state(), "no grace window")
         assertRecorded(finish(), SessionOutcome.Snoozed, snoozes = 1, merged = listOf(alarmB.id, alarmB.id))
@@ -353,6 +397,7 @@ class SessionConflictScenariosTest {
         assertEquals(2, session().ringIndex, "the snooze end passed while the phone was off: it rings at once")
         app.dispatch(SessionEvent.SnoozeTapped, SessionEvent.PayConfirmed(PurchaseIntentId("intent-2")))
         assertEquals(PurchaseIntentId("intent-2"), session().paying)
+        assertTrue(billingLaunched(), "the confirm launched billing (logged until Epic 4)")
         val before = session().interactionDeadline
 
         // Process death during the payment: restored with paying cleared, billing never relaunched, a fresh timer.
@@ -362,28 +407,34 @@ class SessionConflictScenariosTest {
         app.awaitRinging()
         assertNull(session().paying)
         assertTrue(session().interactionDeadline != before, "a fresh 30-minute timer")
-        assertEquals(emptyList(), billing.launched, "billing is never relaunched")
+        assertFalse(billingLaunched(), "billing is never relaunched (this process's log)")
         assertRecorded(finish(), SessionOutcome.Snoozed, snoozes = 1)
     }
 
     @Test
     fun `6 before the first unlock - default sound and a locked snooze, then the unlock opens snooze in place and the plan stays`() {
         lock.unlocked = false
-        store(alarmA.copy(soundRef = "system:Morning|content://media/internal/audio/media/7"))
+        // The production policy wiring (NoBillingSnoozeAvailability over the app's UserLockState), not this test's fake.
+        app = newProcess(snoozePolicy = null)
+        store(alarmA.copy(soundRef = systemSound))
         app.ring(AlarmFired(alarmA.id, scheduledAt))
         app.awaitRinging()
         assertEquals(AlarmSound.Default, app.player.sound, "default sound before the unlock")
+        assertTrue(session().beforeFirstUnlock, "the engine marked the ring before the first unlock")
         val locked = app.koin.get<SnoozeAvailabilityPolicy>().availability(session())
         assertEquals(SnoozeAvailability.Unavailable(UnavailableReason.BeforeFirstUnlock), locked, "Unlock your phone to snooze")
         val plan = session().checkRun.plan
 
         lock.unlock()
         app.koin.get<UnlockSignals>().onUnlocked()
-        app.awaitUntil("the unlock is applied") { !session().beforeFirstUnlock }
+        app.awaitUntil("the engine applied the unlock") { !session().beforeFirstUnlock }
 
-        assertIs<SnoozeAvailability.Available>(app.koin.get<SnoozeAvailabilityPolicy>().availability(session()), "snooze changes in place")
+        // Epic 2 has no catalogue: in place, "Unlock your phone to snooze" becomes "Prices not loaded yet".
+        val unlocked = app.koin.get<SnoozeAvailabilityPolicy>().availability(session())
+        assertEquals(SnoozeAvailability.Unavailable(UnavailableReason.CatalogueNotLoaded), unlocked, "snooze changes in place")
         assertTrue(session().directBootRing, "the substitutions stay for this ring")
-        assertEquals(plan, session().checkRun.plan)
+        // Cannot fail before Epic 3: the Placeholder step is Direct Boot safe, so no step is substituted yet.
+        assertEquals(plan, session().checkRun.plan, "the substituted plan stays (meaningful from Epic 3)")
         assertEquals(AlarmSound.Default, app.player.sound, "the sound is not switched mid-ring")
         assertEquals(1, billing.initCalls)
         assertRecorded(finish(), SessionOutcome.OnTime, snoozes = 0, directBoot = true)
@@ -432,6 +483,9 @@ class SessionConflictScenariosTest {
     fun `a reboot while paused for a call that is over by then rings again`() {
         val service = ringA()
         phoneCall(on = true)
+        val stored = runBlocking { app.koin.get<ActiveSessionStore>().load() }
+        val storedState = assertIs<StoredSession.Found>(assertIs<Outcome.Success<StoredSession>>(stored).value).state
+        assertTrue(assertIs<SessionState.Ringing>(storedState).session.paused, "runtime.db holds the paused ring")
         phoneMode(AudioManager.MODE_NORMAL)
         kill(service, reboot = true, off = 5.minutes)
 
@@ -452,13 +506,15 @@ class SessionConflictScenariosTest {
         clock.advanceBy(2.hours)
         app.app.sendBroadcast(Intent(Intent.ACTION_TIME_CHANGED).setPackage(app.app.packageName))
         idle()
-        val slotAlarm =
-            shadowOf(app.app.getSystemService(AlarmManager::class.java)).scheduledAlarms.single {
-                shadowOf(it.operation).requestCode == RequestCodes.SESSION_SLOT
-            }
-        assertEquals(clock.now().toEpochMilliseconds() + 6.minutes.inWholeMilliseconds, slotAlarm.triggerAtTime, "new wall time + 6 min")
-        app.dispatch(SessionEvent.SlotFired)
+        val sixMinutesOn = clock.now().toEpochMilliseconds() + 6.minutes.inWholeMilliseconds
+        assertEquals(sixMinutesOn, slotTrigger(), "new wall time + 6 min")
+        // The slot fires early anyway (the phone acted on the old trigger): through its receiver and the service.
+        val ignoredSlot: () -> Int = { app.logs().count { it.startsWith("SessionEventIgnored type=SlotFired") } }
+        val ignoredBefore = ignoredSlot()
+        deliverSlot(service)
+        app.awaitUntil("the engine ignored the early slot") { ignoredSlot() > ignoredBefore }
         assertIs<SessionState.Snoozed>(state(), "an early slot does not end the snooze")
+        assertEquals(sixMinutesOn, slotTrigger(), "the slot is armed again at new wall time + 6 min")
 
         pass(6.minutes)
         deliverSlot(service)
@@ -489,7 +545,10 @@ class SessionConflictScenariosTest {
     @Test
     fun `an alarm during a ring before the first unlock merges into it and the ring keeps its Direct Boot sound`() {
         lock.unlocked = false
-        val service = ringA()
+        // A's own sound needs normal storage (so the ring plays the default); B's built-in sound must never take over.
+        store(alarmA.copy(soundRef = systemSound), alarmB)
+        val service = app.ring(AlarmFired(alarmA.id, scheduledAt))
+        app.awaitRinging()
         assertEquals(AlarmSound.Default, app.player.sound)
 
         service.withIntent(WakeService.alarmIntent(app.app, AlarmFired(alarmB.id, scheduledAt + 1.minutes))).startCommand(0, 2)

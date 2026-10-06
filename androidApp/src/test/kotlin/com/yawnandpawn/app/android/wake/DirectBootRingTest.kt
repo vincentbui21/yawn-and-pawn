@@ -208,7 +208,7 @@ class DirectBootRingTest {
             koin.get<SnoozeAvailabilityPolicy>().availability(ringing.session),
         )
         assertFalse(firebase.started, "Firebase waits for the unlock")
-        assertEquals(emptyList(), billing.launched, "no billing while locked")
+        assertTrue(ShadowLog.getLogsForTag(AndroidLogger.TAG).none { "LaunchBilling" in it.msg }, "no billing while locked")
         assertEquals(emptyList<String>(), LockedStorageContextImpl.touched.toList(), "no credential-protected storage was touched")
     }
 

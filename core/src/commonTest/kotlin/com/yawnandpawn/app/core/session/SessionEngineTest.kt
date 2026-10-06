@@ -541,7 +541,7 @@ class SessionEngineTest {
             assertTrue(store.commits.any { it.kind == "Completed" }, "the Completed state was committed")
 
             // A new session rings: the last ending stays until that one ends, here Missed after 30 minutes.
-            engine.dispatch(SessionEvent.AlarmFired("session-2", testConfig(), SEEDS, beforeFirstUnlock = false))
+            engine.dispatch(SessionEvent.AlarmFired("session-2", testConfig(), beforeFirstUnlock = false))
             assertEquals(completed, engine.ended.value, "a ring changes nothing")
             time.advanceBy(30.minutes)
             assertEquals(Outcome.Success(SessionState.Idle), engine.dispatch(SessionEvent.SlotFired))

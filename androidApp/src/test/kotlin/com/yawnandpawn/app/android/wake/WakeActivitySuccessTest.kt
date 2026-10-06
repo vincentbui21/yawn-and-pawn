@@ -55,7 +55,7 @@ class WakeActivitySuccessTest {
         sessionId: String = "session-1",
         testMode: Boolean = false,
     ) {
-        app.dispatch(SessionEvent.AlarmFired(sessionId, aSessionConfig(testMode = testMode), listOf(1L), beforeFirstUnlock = false))
+        app.dispatch(SessionEvent.AlarmFired(sessionId, aSessionConfig(testMode = testMode), beforeFirstUnlock = false))
         assertIs<SessionState.Ringing>(app.engine.state.value)
     }
 

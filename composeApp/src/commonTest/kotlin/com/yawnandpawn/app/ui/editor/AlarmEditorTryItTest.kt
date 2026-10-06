@@ -2,12 +2,12 @@ package com.yawnandpawn.app.ui.editor
 
 import com.yawnandpawn.app.core.alarm.RequestCodes
 import com.yawnandpawn.app.core.checks.Puzzle
-import com.yawnandpawn.app.core.error.Outcome
 import com.yawnandpawn.app.core.session.ScheduleTestAlarm
 import com.yawnandpawn.app.testing.AlarmUseCasesFixture
 import com.yawnandpawn.app.testing.FakeAccessibilityState
 import com.yawnandpawn.app.testing.FakeAlarmRepository
 import com.yawnandpawn.app.testing.FakeAlarmScheduler
+import com.yawnandpawn.app.testing.FakeCheckConfigRepository
 import com.yawnandpawn.app.testing.FakeClock
 import com.yawnandpawn.app.testing.FakeLogger
 import com.yawnandpawn.app.testing.FakeNotificationPermission
@@ -52,12 +52,14 @@ class AlarmEditorTryItTest {
     private val scheduler = FakeAlarmScheduler()
     private val testAlarmScheduler = FakeAlarmScheduler()
     private val testStore = FakeTestAlarmStore()
+    private val checkRows = FakeCheckConfigRepository(repository)
     private val alarms =
         AlarmUseCasesFixture(
             repository = repository,
             clock = clock,
             requestCodes = FakeRequestCodeSequence(lastUsed = RequestCodes.FIRST_ALARM),
             scheduler = scheduler,
+            checkConfigs = checkRows,
         )
     private val seed = 7L
     private val accessibility = FakeAccessibilityState()
@@ -93,15 +95,18 @@ class AlarmEditorTryItTest {
             },
         )
 
-    /** The editor on Math's Check setup at [difficulty], then "Try it". */
-    private fun tryingMath(difficulty: Difficulty): AlarmEditorViewModel =
+    /** The editor on Math's Check setup at [difficulty] and 5 problems. */
+    private fun settingUpMath(difficulty: Difficulty): AlarmEditorViewModel =
         viewModel().apply {
             onIntent(EditorIntent.PaneOpened(EditorPane.WakeCheck))
             onIntent(EditorIntent.CheckSetupClicked(CheckType.Math))
             onIntent(EditorIntent.CheckSetup(CheckSetupIntent.DifficultySelected(difficulty)))
             onIntent(EditorIntent.CheckSetup(CheckSetupIntent.CountChanged(5)))
-            onIntent(EditorIntent.CheckSetup(CheckSetupIntent.TryItClicked))
         }
+
+    /** The editor on Math's Check setup at [difficulty], then "Try it". */
+    private fun tryingMath(difficulty: Difficulty): AlarmEditorViewModel =
+        settingUpMath(difficulty).apply { onIntent(EditorIntent.CheckSetup(CheckSetupIntent.TryItClicked)) }
 
     private fun answer(difficulty: Difficulty): Int =
         (CoreCheckType.Math.generate(seed, CoreDifficulty.valueOf(difficulty.name), count = 1) as Puzzle.Math).problems.single().answer
@@ -128,8 +133,10 @@ class AlarmEditorTryItTest {
     @Test
     fun `a wrong answer shows the wrong state, the right one shows the done state, and Done returns to Check setup`() =
         runTest(dispatcher) {
-            val viewModel = tryingMath(Difficulty.Medium)
+            val viewModel = settingUpMath(Difficulty.Medium)
+            // The form as it was before Try it started (review fix): the preview must not change it.
             val form = viewModel.state.value.form
+            viewModel.onIntent(EditorIntent.CheckSetup(CheckSetupIntent.TryItClicked))
 
             viewModel.type(answer(Difficulty.Medium) + 1)
             viewModel.onIntent(EditorIntent.TryIt(WakeIntent.SubmitAnswer))
@@ -200,17 +207,21 @@ class AlarmEditorTryItTest {
         }
 
     @Test
-    fun `Back from the preview returns to Check setup, then the Wake-up check, without asking to discard`() =
+    fun `Back from the preview returns to Check setup, then the Wake-up check, with the form as it was before Try it`() =
         runTest(dispatcher) {
-            val viewModel = tryingMath(Difficulty.Easy)
+            val viewModel = settingUpMath(Difficulty.Easy)
+            val form = viewModel.state.value.form
+            viewModel.onIntent(EditorIntent.CheckSetup(CheckSetupIntent.TryItClicked))
             viewModel.type(4)
 
             viewModel.onIntent(EditorIntent.BackRequested)
             assertEquals(EditorPane.CheckSetup, viewModel.state.value.pane)
+            assertNull(viewModel.state.value.tryIt, "the preview and its typed answer are gone")
+            assertEquals(form, viewModel.state.value.form, "the practice answer never reaches the form")
             viewModel.onIntent(EditorIntent.BackRequested)
 
             assertEquals(EditorPane.WakeCheck, viewModel.state.value.pane)
-            assertFalse(viewModel.state.value.showDiscardDialog)
+            assertEquals(form, viewModel.state.value.form)
         }
 
     @Test
@@ -225,7 +236,7 @@ class AlarmEditorTryItTest {
             viewModel.onIntent(EditorIntent.TryIt(WakeIntent.DigitTapped(1)))
             assertNull(viewModel.state.value.tryIt, "no preview is running")
             assertTrue(repository.current.isEmpty(), "no alarm stored")
-            assertEquals(Outcome.Success(emptyList()), alarms.checkConfigs.forAlarm("any"), "no check stored")
+            assertTrue(checkRows.current.isEmpty(), "no check stored, for any alarm")
             assertEquals(emptyList(), scheduler.calls, "nothing scheduled")
             assertEquals(emptyList(), testAlarmScheduler.calls, "no test alarm armed")
             assertNull(testStore.pending, "no test ring stored")

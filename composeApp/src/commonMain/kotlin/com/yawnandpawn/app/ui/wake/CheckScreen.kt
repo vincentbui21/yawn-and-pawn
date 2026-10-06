@@ -3,6 +3,7 @@
 package com.yawnandpawn.app.ui.wake
 
 import androidx.compose.animation.core.Animatable
+import androidx.compose.animation.core.AnimationVector1D
 import androidx.compose.animation.core.KeyframesSpec
 import androidx.compose.animation.core.keyframes
 import androidx.compose.foundation.background
@@ -280,15 +281,7 @@ private fun MathProblem(content: CheckContent.Math) {
             textAlign = TextAlign.Center,
         )
         val answerSpoken = stringResource(Res.string.math_answer, content.answer)
-        val shake = remember { Animatable(0f) }
-        val haptics = LocalHapticFeedback.current
-        val shakeDistance = with(LocalDensity.current) { spacing.space2.toPx() }
-        LaunchedEffect(content.wrong) {
-            if (content.wrong) {
-                haptics.performHapticFeedback(HapticFeedbackType.Reject)
-                shake.animateTo(0f, keyframes { shakeKeyframes(shakeDistance) })
-            }
-        }
+        val shake = rememberWrongShake(content.wrong)
         Box(
             modifier =
                 Modifier
@@ -307,6 +300,27 @@ private fun MathProblem(content: CheckContent.Math) {
         }
         if (content.wrong) WrongAnswer()
     }
+}
+
+/**
+ * The horizontal offset of a wrong answer's 200 ms shake (instant with animator duration scale 0), with the error haptic,
+ * each time [wrong] turns true. When [wrong] clears during the shake (a key tapped right after a wrong answer), the
+ * field snaps back to rest instead of staying offset (Story 3.6 review).
+ */
+@Composable
+internal fun rememberWrongShake(wrong: Boolean): Animatable<Float, AnimationVector1D> {
+    val shake = remember { Animatable(0f) }
+    val haptics = LocalHapticFeedback.current
+    val distance = with(LocalDensity.current) { PpsTheme.spacing.space2.toPx() }
+    LaunchedEffect(wrong) {
+        if (wrong) {
+            haptics.performHapticFeedback(HapticFeedbackType.Reject)
+            shake.animateTo(0f, keyframes { shakeKeyframes(distance) })
+        } else {
+            shake.snapTo(0f)
+        }
+    }
+    return shake
 }
 
 /** The 200 ms shake of a wrong answer: left, right, left, right, back to rest. */

@@ -190,7 +190,8 @@ fun AlarmEditorScreen(
 
                     // "Try it" (Story 3.6): the approved Sunrise preview, full screen, over the editor's own state.
                     EditorPane.TryIt -> {
-                        state.tryIt?.let { tryIt ->
+                        // The last preview, so it slides out with its content after Done or Back (Story 3.6 review).
+                        rememberLastNonNull(state.tryIt)?.let { tryIt ->
                             CheckPreviewScreen(
                                 state = tryIt,
                                 onIntent = { onIntent(EditorIntent.TryIt(it)) },

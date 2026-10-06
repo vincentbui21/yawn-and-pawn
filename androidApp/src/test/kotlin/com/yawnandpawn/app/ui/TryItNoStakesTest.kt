@@ -5,6 +5,7 @@ import androidx.compose.ui.semantics.SemanticsProperties
 import androidx.compose.ui.test.SemanticsMatcher
 import androidx.compose.ui.test.isHeading
 import androidx.compose.ui.test.junit4.createEmptyComposeRule
+import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import com.yawnandpawn.app.StopAppRule
@@ -84,6 +85,66 @@ class TryItNoStakesTest {
         assertEquals(null, app.runtime.emergency.value)
     }
 
+    @Test
+    fun `Back in Try it returns to Check setup and drops the practice answer (Story 3-6 review fix)`() {
+        val app = WakeApp()
+        val viewModel = app.koin.get<AlarmEditorViewModel> { parametersOf(AlarmEditorArgs(alarmId = null)) }
+
+        withScreen(PpsThemeMode.Light, content = {
+            AlarmEditorRoute(alarmId = null, onClose = {}, onOpenFailed = {}, onOpenCopy = {}, viewModel = viewModel)
+        }) {
+            composeRule.onNodeWithText("Wake-up check").performClick()
+            composeRule.onNodeWithText("Medium · 3 problems").performClick()
+            composeRule.onNodeWithText("Try it").performClick()
+            composeRule.waitForIdle()
+            tap(7)
+            composeRule.onNodeWithContentDescription("Answer 7").assertExists()
+
+            composeRule.onNodeWithContentDescription("Back").performClick()
+            composeRule.waitForIdle()
+
+            composeRule.onNodeWithText("Problems").assertExists()
+            composeRule.onNodeWithText("Check").assertDoesNotExist()
+            composeRule.onNodeWithContentDescription("Answer 7").assertDoesNotExist()
+        }
+        assertEquals(SessionState.Idle, app.engine.state.value, "no session")
+    }
+
+    @Test
+    fun `a digit typed during the wrong-answer shake leaves the answer field at rest (Story 3-6 review fix)`() {
+        val app = WakeApp()
+        val viewModel = app.koin.get<AlarmEditorViewModel> { parametersOf(AlarmEditorArgs(alarmId = null)) }
+
+        withScreen(PpsThemeMode.Light, content = {
+            AlarmEditorRoute(alarmId = null, onClose = {}, onOpenFailed = {}, onOpenCopy = {}, viewModel = viewModel)
+        }) {
+            composeRule.onNodeWithText("Wake-up check").performClick()
+            composeRule.onNodeWithText("Medium · 3 problems").performClick()
+            composeRule.onNodeWithText("Try it").performClick()
+            composeRule.waitForIdle()
+            tap(0)
+            val rest =
+                composeRule
+                    .onNodeWithContentDescription("Answer 0")
+                    .fetchSemanticsNode()
+                    .boundsInRoot.left
+
+            composeRule.mainClock.autoAdvance = false
+            composeRule.onNodeWithText("Check").performClick()
+            composeRule.mainClock.advanceTimeBy(MID_SHAKE_MILLIS)
+            composeRule.onNodeWithText("1").performClick()
+            composeRule.mainClock.advanceTimeBy(FRAMES_MILLIS)
+
+            val left =
+                composeRule
+                    .onNodeWithContentDescription("Answer 1")
+                    .fetchSemanticsNode()
+                    .boundsInRoot.left
+            assertEquals(rest, left, "the field is back at rest, not left mid-shake")
+            composeRule.mainClock.autoAdvance = true
+        }
+    }
+
     private fun tap(value: Int) = value.toString().forEach { digit -> composeRule.onNodeWithText(digit.toString()).performClick() }
 
     /** "23 times 4 plus 17" worked out, times before plus and minus. */
@@ -109,5 +170,13 @@ class TryItNoStakesTest {
             i += 2
         }
         return sum + sign * term
+    }
+
+    private companion object {
+        /** Inside the 200 ms shake. */
+        const val MID_SHAKE_MILLIS = 60L
+
+        /** A few frames, far less than the rest of the shake. */
+        const val FRAMES_MILLIS = 50L
     }
 }

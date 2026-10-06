@@ -10,8 +10,7 @@ context:
   - '{project-root}/_bmad-output/implementation-artifacts/epic-3-context.md'
   - '{project-root}/_bmad-output/implementation-artifacts/spec-3-5-choose-the-checks-for-each-alarm.md'
   - '{project-root}/.claude/skills/pps-design/SKILL.md'
-warnings:
-  - 'shares-3.2-ui: the Math presentation changes of Story 3.2 (f88e4f6) are applied verbatim to the same files: CheckContent.Math operand and operator lists, Minus, nullable grace, the shake and haptics, the pinned pad, math_word_* strings, and the preview samples. Merged in either order, the identical hunks fold together; if 3.2 changes them in review, take 3.2''s version.'
+warnings: []
 deferred: []
 ---
 
@@ -91,6 +90,16 @@ deferred: []
 ## Spec Change Log
 
 ## Review Triage Log
+
+### Review (2 reviewers, fast mode)
+
+Two reviewers read `98934c1`. In the lane 2 stack, the story sits on main after Story 3.2, so its copies of 3.2's Math presentation were dropped in favour of main's versions (`CheckScreen`, `WakeContract`, `strings.xml`, the preview samples). Only the heading fix stays: `heading()` inside the same `clearAndSetSemantics` block. All five findings are patches, fixed in `fix(3.6): review fixes`:
+
+- **patch: closing Try it showed a blank frame.** `tryIt = null` arrived while the pane was still sliding out. The pane now keeps the last preview it showed (`rememberLastNonNull`, the same helper as 3.5's Check setup fix).
+- **patch: a digit tapped within 200 ms of a wrong Check left the field off-centre.** The shake was cancelled halfway. The shared `rememberWrongShake` now snaps the field back to rest when `wrong` clears; the review fixes of Stories 3.7 and 3.8 use it for Word and Memory too. `TryItNoStakesTest` taps a digit mid-shake and checks that the field is back at rest.
+- **test:** Try it, a typed digit, then the "Back" button: Check setup ("Problems") is back, and the preview and its answer are gone (`TryItNoStakesTest`).
+- **test:** `AlarmEditorTryItTest` no longer has assertions that cannot fail. It captures the form before Try it starts, compares it after Back and Done, and checks the fake repository's rows for every alarm.
+- **heading fix:** kept on top of main's 3.2 `CheckScreen`.
 
 ## Design Notes
 

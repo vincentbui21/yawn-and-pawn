@@ -1,10 +1,10 @@
 package com.yawnandpawn.app.testing
 
+import com.yawnandpawn.app.core.checks.CheckPlan
 import com.yawnandpawn.app.core.error.DomainError
 import com.yawnandpawn.app.core.error.Outcome
 import com.yawnandpawn.app.core.session.ActiveSessionStore
 import com.yawnandpawn.app.core.session.Billing
-import com.yawnandpawn.app.core.session.CheckPlan
 import com.yawnandpawn.app.core.session.CheckRun
 import com.yawnandpawn.app.core.session.EffectRunner
 import com.yawnandpawn.app.core.session.EntryEffect
@@ -146,17 +146,15 @@ class FakeBilling(
     }
 
     companion object {
-        /** A `PurchaseGranted` that the reconciler granted for [productId] with [token], restarting the check with [seeds]. */
+        /** A `PurchaseGranted` that the reconciler granted for [productId] with [token]. */
         fun grants(
             productId: String,
             token: String = "token-1",
-            seeds: List<Long> = listOf(1L),
         ): SessionEvent.PurchaseGranted =
             SessionEvent.PurchaseGranted(
                 productId = productId,
                 token = PurchaseToken(token),
                 verdict = PurchaseVerdict.Grant,
-                seeds = seeds,
             )
     }
 }

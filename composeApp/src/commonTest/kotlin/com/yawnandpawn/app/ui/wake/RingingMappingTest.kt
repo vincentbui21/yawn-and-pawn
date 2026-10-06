@@ -1,9 +1,14 @@
 package com.yawnandpawn.app.ui.wake
 
-import com.yawnandpawn.app.core.session.CheckPlan
+import com.yawnandpawn.app.core.checks.CheckEntry
+import com.yawnandpawn.app.core.checks.CheckMode
+import com.yawnandpawn.app.core.checks.CheckPlan
+import com.yawnandpawn.app.core.checks.CheckType
+import com.yawnandpawn.app.core.checks.Difficulty
 import com.yawnandpawn.app.core.session.NoBillingSnoozeAvailability
 import com.yawnandpawn.app.core.session.SessionState
 import com.yawnandpawn.app.core.session.SnoozeAvailability
+import com.yawnandpawn.app.core.session.StepPointer
 import com.yawnandpawn.app.core.session.UnavailableReason
 import com.yawnandpawn.app.core.time.TimeSnapshot
 import com.yawnandpawn.app.testing.aSession
@@ -146,10 +151,13 @@ class RingingMappingTest {
 
     @Test
     fun `no placeholder step is due once every step is passed`() {
-        val passed = aSession().let { it.copy(checkRun = it.checkRun.copy(step = 1)) }
-        val empty = aSession().let { it.copy(checkRun = it.checkRun.copy(plan = CheckPlan(emptyList()))) }
+        val passed = aSession().let { it.copy(checkRun = it.checkRun.copy(step = StepPointer(1, 0))) }
+        val empty = aSession().let { it.copy(checkRun = it.checkRun.copy(plan = CheckPlan(CheckMode.All, emptyList()))) }
+        val math = CheckPlan(CheckMode.All, listOf(CheckEntry(CheckType.Math, Difficulty.Medium, count = 3)))
+        val realCheck = aSession().let { it.copy(checkRun = it.checkRun.copy(plan = math)) }
 
         assertNull(placeholderStepDue(SessionState.Loud(passed)))
         assertNull(placeholderStepDue(SessionState.Grace(empty)))
+        assertNull(placeholderStepDue(SessionState.Grace(realCheck)), "a real check is not answered for the user")
     }
 }

@@ -1,5 +1,6 @@
 package com.yawnandpawn.app.core.session
 
+import com.yawnandpawn.app.core.checks.CheckPlan
 import com.yawnandpawn.app.core.time.Deadline
 import com.yawnandpawn.app.core.time.TimeSnapshot
 
@@ -17,12 +18,12 @@ internal fun idleRow(
 ): Transition? =
     when (event) {
         is SessionEvent.AlarmFired -> {
-            event.config?.let { startSession(event.sessionId, it, event.seeds, event.beforeFirstUnlock || userLocked, now, directBootPlan) }
+            event.config?.let { startSession(event.sessionId, it, event.beforeFirstUnlock || userLocked, now, directBootPlan) }
         }
 
         is SessionEvent.TestAlarmFired -> {
             val config = event.config.copy(testMode = true)
-            startSession(event.sessionId, config, event.seeds, event.beforeFirstUnlock || userLocked, now, directBootPlan)
+            startSession(event.sessionId, config, event.beforeFirstUnlock || userLocked, now, directBootPlan)
         }
 
         else -> {
@@ -48,7 +49,6 @@ internal fun endedRow(
 private fun startSession(
     sessionId: String,
     config: SessionConfig,
-    seeds: List<Long>,
     beforeFirstUnlock: Boolean,
     now: TimeSnapshot,
     directBootPlan: (CheckPlan) -> CheckPlan,
@@ -59,9 +59,9 @@ private fun startSession(
             config = config,
             ringIndex = 1,
             snoozesGranted = 0,
-            // Before the first unlock the first check plan has the Direct Boot substitutions (Story 2.3); the wake service
-            // takes the seeds for that substituted plan, one per step.
-            checkRun = CheckRun(plan = if (beforeFirstUnlock) directBootPlan(config.checkPlan) else config.checkPlan, seeds = seeds),
+            // The plan resolved for ring 1 with its seeds (AD-9); before the first unlock with the Direct Boot
+            // substitutions (Story 2.3).
+            checkRun = CheckRun.forRing(config.checkPlan, sessionId, ringIndex = 1) { if (beforeFirstUnlock) directBootPlan(it) else it },
             firstRing = now,
             startedBeforeUnlock = beforeFirstUnlock,
             beforeFirstUnlock = beforeFirstUnlock,

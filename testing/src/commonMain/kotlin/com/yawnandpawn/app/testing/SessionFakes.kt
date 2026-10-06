@@ -1,6 +1,6 @@
 package com.yawnandpawn.app.testing
 
-import com.yawnandpawn.app.core.session.CheckAnswer
+import com.yawnandpawn.app.core.checks.CheckAnswer
 import com.yawnandpawn.app.core.session.CheckRun
 import com.yawnandpawn.app.core.session.CheckValidator
 import com.yawnandpawn.app.core.session.FallbackDecision
@@ -60,7 +60,7 @@ class FakeSnoozeAvailability(
 
 /**
  * [CheckValidator] under test control: returns the queued results in order ([willReturn]), then [default]. Use
- * [StepResult.Invalid], [StepResult.ValidNext] or [StepResult.ValidLast]. Every answer is kept in [answers].
+ * any [StepResult]. Every answer is kept in [answers].
  */
 class FakeCheck(
     var default: StepResult = StepResult.ValidLast,

@@ -1,5 +1,6 @@
 package com.yawnandpawn.app.core.session
 
+import com.yawnandpawn.app.core.checks.CheckPlan
 import com.yawnandpawn.app.core.session.SessionState.Grace
 import com.yawnandpawn.app.core.session.SessionState.Loud
 import com.yawnandpawn.app.core.session.SessionState.Ring
@@ -48,7 +49,7 @@ internal class RingRules(
                 SessionEvent.FallbackRequested -> checks.onFallbackRequested(reset)
                 SessionEvent.SnoozeTapped -> purchases.onSnoozeTapped(reset)
                 is SessionEvent.PayConfirmed -> purchases.onPayConfirmed(reset, event.intentId)
-                is SessionEvent.ReuseAccepted -> purchases.onPaidSnooze(reset, event.token, event.seeds, now)
+                is SessionEvent.ReuseAccepted -> purchases.onPaidSnooze(reset, event.token, now)
                 is SessionEvent.ReuseDeclined -> purchases.onReuseDeclined(reset, event.productId)
                 SessionEvent.UserInteracted -> null
             }
@@ -62,7 +63,7 @@ internal class RingRules(
     ): Transition? {
         if (state !is Ringing) return null
         val session = state.session
-        val startStep = SessionEffect.StartCheckStep(session.checkRun.step)
+        val startStep = SessionEffect.StartCheckStep(session.checkRun.step.entry)
         return if (session.noGraceThisRing) {
             Transition(Loud(session), listOf(startStep))
         } else {

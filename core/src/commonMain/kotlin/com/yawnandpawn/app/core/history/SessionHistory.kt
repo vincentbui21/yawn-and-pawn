@@ -31,7 +31,7 @@ enum class SessionOutcome {
  * @property firstRingAt when the session's first ring started (wall time).
  * @property endedAt when the session ended (wall time); null while it runs.
  * @property snoozeCount paid snoozes granted.
- * @property checkTypes the stable type names of the check steps (`CheckStep.typeName`), in order.
+ * @property checkTypes the stable type names of the check steps (`CheckType.id`), in order.
  * @property timeToCompleteMs from the first ring to the end, for a completed session; null otherwise.
  * @property fallbackUsed the fallback check replaced the plan (FR-PWK-11).
  * @property directBoot the session started before the first unlock after a boot.

@@ -1,5 +1,7 @@
 package com.yawnandpawn.app.core.session
 
+import com.yawnandpawn.app.core.checks.CheckAnswer
+import com.yawnandpawn.app.core.checks.SeedDeriver
 import com.yawnandpawn.app.core.session.SessionEffect.ArmSlot
 import com.yawnandpawn.app.core.session.SessionEvent.AlarmFired
 import com.yawnandpawn.app.core.session.SessionEvent.CallEnded
@@ -86,7 +88,10 @@ private fun heartbeatAt(now: TimeSnapshot) = ArmSlot(Deadline.after(now, 60.seco
 
 private fun SessionState.Ring.touchedAt(now: TimeSnapshot): SessionState.Ring = with(session.touched(now))
 
-/** Snoozed after a paid snooze at [now]: the check restarts with [NEW_SEEDS], the slot is armed at the snooze end. */
+/**
+ * Snoozed after a paid snooze at [now]: the check progress is dropped (the next ring resolves new seeds), the slot is
+ * armed at the snooze end.
+ */
 private fun grantedFrom(
     session: SessionData,
     now: TimeSnapshot,
@@ -95,7 +100,7 @@ private fun grantedFrom(
     val snoozed =
         session.noTimers().copy(
             snoozesGranted = session.snoozesGranted + 1,
-            checkRun = session.checkRun.copy(seeds = NEW_SEEDS, step = 0, failedAttempts = 0),
+            checkRun = session.checkRun.copy(step = StepPointer(0, 0), failedAttempts = 0),
             paying = null,
             paymentPending = false,
             snoozeEnd = snoozeEnd,
@@ -103,7 +108,7 @@ private fun grantedFrom(
     return Transition(Snoozed(snoozed), listOf(SessionEffect.StopSound, ArmSlot(snoozeEnd), SessionEffect.Consume(TOKEN)))
 }
 
-/** The next ring after the snooze of [snoozedSession], at [now]. */
+/** The next ring after the snooze of [snoozedSession], at [now]: the plan resolved again with ring 2's seeds. */
 private fun nextRing(
     now: TimeSnapshot,
     noGrace: Boolean,
@@ -111,6 +116,7 @@ private fun nextRing(
     Ringing(
         snoozedSession().noTimers().copy(
             ringIndex = 2,
+            checkRun = CheckRun(snoozedSession().config.checkPlan, ringSeeds(2, 1)),
             noGraceThisRing = noGrace,
             interactionDeadline = Deadline.after(now, 30.minutes),
         ),
@@ -121,7 +127,9 @@ private fun completedFrom(
     now: TimeSnapshot,
 ): Transition =
     Transition(
-        Completed(session.noTimers().copy(checkRun = session.checkRun.copy(step = session.checkRun.step + 1), ended = now)),
+        Completed(
+            session.noTimers().copy(checkRun = session.checkRun.copy(step = StepPointer(session.checkRun.step.entry + 1, 0)), ended = now),
+        ),
         listOf(
             SessionEffect.StopSound,
             SessionEffect.CancelSlot,
@@ -137,10 +145,38 @@ private fun failedAttemptIn(
 ): Transition {
     val session = if (touched) from.session.touched(now) else from.session
     val run = session.checkRun
-    return Transition(from.with(session.copy(checkRun = run.copy(failedAttempts = run.failedAttempts + 1))), listOf(feedback))
+    // Story 3.1 review: the session-wide count goes up with the entry's.
+    val counted = run.copy(failedAttempts = run.failedAttempts + 1, totalFailedAttempts = run.totalFailedAttempts + 1)
+    return Transition(from.with(session.copy(checkRun = counted)), listOf(feedback))
 }
 
 private val twoStepSession = ringSession(testConfig(checkPlan = TWO_STEPS))
+
+/** A two-entry session on its second entry after 5 failed attempts on it and 7 in the session (the fallback row). */
+private val onSecondEntry =
+    twoStepSession.copy(checkRun = twoStepSession.checkRun.copy(step = StepPointer(1, 0), failedAttempts = 5, totalFailedAttempts = 7))
+
+/**
+ * A two-entry session on item 2 of entry 1 with 2 failed attempts on it and 4 in the session, so pointer moves and
+ * resets show.
+ */
+private val progressed =
+    twoStepSession.copy(checkRun = twoStepSession.checkRun.copy(step = StepPointer(0, 1), failedAttempts = 2, totalFailedAttempts = 4))
+
+/** [progressed] after the fallback: item 2 of fallback entry 2, with the fallback seeds (Story 3.1 review). */
+private val progressedFallback =
+    twoStepSession.copy(
+        checkRun =
+            CheckRun(
+                plan = FALLBACK_PLAN,
+                seeds = ringSeeds(1, 3, fallback = true),
+                step = StepPointer(1, 1),
+                failedAttempts = 2,
+                fallbackUsed = true,
+                fallbackSource = FALLBACK_PLAN,
+                totalFailedAttempts = 4,
+            ),
+    )
 
 internal val ROW_CASES: Map<String, List<RowExample>> =
     mapOf(
@@ -153,7 +189,7 @@ internal val ROW_CASES: Map<String, List<RowExample>> =
                         config = config,
                         ringIndex = 1,
                         snoozesGranted = 0,
-                        checkRun = CheckRun(config.checkPlan, SEEDS),
+                        checkRun = CheckRun(config.checkPlan, ringSeeds(1, 1)),
                         firstRing = N,
                         startedBeforeUnlock = locked,
                         beforeFirstUnlock = locked,
@@ -163,7 +199,7 @@ internal val ROW_CASES: Map<String, List<RowExample>> =
                 RowExample(
                     name = "before first unlock = $locked",
                     from = Idle,
-                    event = AlarmFired(SESSION_ID, config, SEEDS, beforeFirstUnlock = locked),
+                    event = AlarmFired(SESSION_ID, config, beforeFirstUnlock = locked),
                     now = N,
                     expected =
                         Transition(
@@ -183,7 +219,7 @@ internal val ROW_CASES: Map<String, List<RowExample>> =
                     RowExample(
                         name = "test mode is forced and snooze is unavailable",
                         from = Idle,
-                        event = SessionEvent.TestAlarmFired(SESSION_ID, editorValues, SEEDS, beforeFirstUnlock = false),
+                        event = SessionEvent.TestAlarmFired(SESSION_ID, editorValues, beforeFirstUnlock = false),
                         now = N,
                         expected =
                             Transition(
@@ -193,7 +229,7 @@ internal val ROW_CASES: Map<String, List<RowExample>> =
                                         config = config,
                                         ringIndex = 1,
                                         snoozesGranted = 0,
-                                        checkRun = CheckRun(config.checkPlan, SEEDS),
+                                        checkRun = CheckRun(config.checkPlan, ringSeeds(1, 1)),
                                         firstRing = N,
                                         interactionDeadline = Deadline.after(N, 30.minutes),
                                     ),
@@ -284,27 +320,99 @@ internal val ROW_CASES: Map<String, List<RowExample>> =
                     expected = Transition(Loud(ringSession()), listOf(SessionEffect.UnmuteToVolume(80), SessionEffect.StrongHaptic)),
                 ),
             ),
+        // Story 3.1: the plugin results ItemCorrect (ValidNextItem) and Correct on an entry that is not the last (ValidNext)
+        // both map onto this row; the entry's failed attempts reset only when the entry advances.
         "R09 Grace|Loud+CheckAnswerSubmitted valid, not last" to
-            checkStates(twoStepSession).map { from ->
+            checkStates(progressed).flatMap { from ->
                 val touched = from.session.touched(N)
-                RowExample(
-                    name = from.kind,
-                    from = from,
-                    event = CheckAnswerSubmitted(CheckAnswer.Placeholder),
-                    now = N,
-                    expected = Transition(from.with(touched.copy(checkRun = touched.checkRun.copy(step = 1))), emptyList()),
-                    reducer = reducer(check = StepResult.ValidNext),
+                listOf(
+                    RowExample(
+                        name = "${from.kind} next entry",
+                        from = from,
+                        event = CheckAnswerSubmitted(CheckAnswer.Placeholder),
+                        now = N,
+                        expected =
+                            Transition(
+                                from.with(touched.copy(checkRun = touched.checkRun.copy(step = StepPointer(1, 0), failedAttempts = 0))),
+                                emptyList(),
+                            ),
+                        reducer = reducer(check = StepResult.ValidNext),
+                    ),
+                    RowExample(
+                        name = "${from.kind} next item",
+                        from = from,
+                        event = CheckAnswerSubmitted(CheckAnswer.Placeholder),
+                        now = N,
+                        expected =
+                            Transition(from.with(touched.copy(checkRun = touched.checkRun.copy(step = StepPointer(0, 2)))), emptyList()),
+                        reducer = reducer(check = StepResult.ValidNextItem),
+                    ),
                 )
             },
+        // Story 3.1: Wrong (Invalid) and WrongRestart (InvalidRestart) both map onto this row; a restart also starts the
+        // entry over at its first item with a new seed from SeedDeriver, keyed by the new failed-attempt count.
         "R10 Grace|Loud+CheckAnswerSubmitted invalid" to
-            checkStates().map { from ->
+            checkStates(progressed).flatMap { from ->
+                val touched = from.session.touched(N)
+                val restartSeed = SeedDeriver.seed(SESSION_ID, 1, 0, 3)
+                listOf(
+                    RowExample(
+                        name = from.kind,
+                        from = from,
+                        event = CheckAnswerSubmitted(CheckAnswer.Placeholder),
+                        now = N,
+                        expected = failedAttemptIn(from, N, touched = true, feedback = SessionEffect.WrongAnswerFeedback),
+                        reducer = reducer(check = StepResult.Invalid),
+                    ),
+                    RowExample(
+                        name = "${from.kind} restart",
+                        from = from,
+                        event = CheckAnswerSubmitted(CheckAnswer.Placeholder),
+                        now = N,
+                        expected =
+                            Transition(
+                                from.with(
+                                    touched.copy(
+                                        checkRun =
+                                            touched.checkRun.copy(
+                                                seeds = listOf(restartSeed, touched.checkRun.seeds[1]),
+                                                step = StepPointer(0, 0),
+                                                failedAttempts = 3,
+                                                totalFailedAttempts = 5,
+                                            ),
+                                    ),
+                                ),
+                                listOf(SessionEffect.WrongAnswerFeedback),
+                            ),
+                        reducer = reducer(check = StepResult.InvalidRestart),
+                    ),
+                )
+            } +
+            // Story 3.1 review: a restart on entry 1 of the fallback run re-derives only that entry's seed, with the fallback flag.
+            checkStates(progressedFallback).map { from ->
+                val touched = from.session.touched(N)
+                val seeds = touched.checkRun.seeds
                 RowExample(
-                    name = from.kind,
+                    name = "${from.kind} fallback restart on entry 1",
                     from = from,
                     event = CheckAnswerSubmitted(CheckAnswer.Placeholder),
                     now = N,
-                    expected = failedAttemptIn(from, N, touched = true, feedback = SessionEffect.WrongAnswerFeedback),
-                    reducer = reducer(check = StepResult.Invalid),
+                    expected =
+                        Transition(
+                            from.with(
+                                touched.copy(
+                                    checkRun =
+                                        touched.checkRun.copy(
+                                            seeds = listOf(seeds[0], SeedDeriver.seed(SESSION_ID, 1, 1, 3, fallback = true), seeds[2]),
+                                            step = StepPointer(1, 0),
+                                            failedAttempts = 3,
+                                            totalFailedAttempts = 5,
+                                        ),
+                                ),
+                            ),
+                            listOf(SessionEffect.WrongAnswerFeedback),
+                        ),
+                    reducer = reducer(check = StepResult.InvalidRestart),
                 )
             },
         "R11 Grace|Loud+CheckAnswerSubmitted valid, last" to
@@ -319,9 +427,19 @@ internal val ROW_CASES: Map<String, List<RowExample>> =
                 )
             },
         "R12 Grace|Loud+FallbackRequested" to
-            checkStates(twoStepSession.copy(checkRun = twoStepSession.checkRun.copy(step = 1, failedAttempts = 5))).map { from ->
+            checkStates(onSecondEntry).map { from ->
                 val touched = from.session.touched(N)
-                val fallbackRun = touched.checkRun.copy(plan = FALLBACK_PLAN, step = 0, fallbackUsed = true)
+                // The fallback plan's own seeds (fallback flag); the entry's failed attempts stay until Story 3.9 decides.
+                // Story 3.1 review: the run keeps the unresolved fallback plan for later rings and the session's total.
+                val fallbackRun =
+                    CheckRun(
+                        FALLBACK_PLAN,
+                        ringSeeds(1, 3, fallback = true),
+                        failedAttempts = 5,
+                        fallbackUsed = true,
+                        fallbackSource = FALLBACK_PLAN,
+                        totalFailedAttempts = 7,
+                    )
                 RowExample(
                     name = from.kind,
                     from = from,
@@ -362,11 +480,11 @@ internal val ROW_CASES: Map<String, List<RowExample>> =
                 )
             },
         "R16 Ringing|Grace|Loud+ReuseAccepted" to
-            ringStates().map { from ->
+            ringStates(progressed).map { from ->
                 RowExample(
                     name = from.kind,
                     from = from,
-                    event = SessionEvent.ReuseAccepted(PRODUCT, TOKEN, NEW_SEEDS),
+                    event = SessionEvent.ReuseAccepted(PRODUCT, TOKEN),
                     now = N,
                     expected = grantedFrom(from.session, N),
                 )
@@ -390,7 +508,7 @@ internal val ROW_CASES: Map<String, List<RowExample>> =
                 twoStepSession.copy(
                     paying = INTENT,
                     paymentPending = true,
-                    checkRun = twoStepSession.checkRun.copy(step = 1, failedAttempts = 2),
+                    checkRun = twoStepSession.checkRun.copy(step = StepPointer(1), failedAttempts = 2),
                 ),
                 twoStepSession,
             ).flatMap { session ->
@@ -398,7 +516,7 @@ internal val ROW_CASES: Map<String, List<RowExample>> =
                     RowExample(
                         name = "${from.kind} paying = ${session.paying}",
                         from = from,
-                        event = SessionEvent.PurchaseGranted(PRODUCT, TOKEN, PurchaseVerdict.Grant, NEW_SEEDS),
+                        event = SessionEvent.PurchaseGranted(PRODUCT, TOKEN, PurchaseVerdict.Grant),
                         now = N,
                         expected = grantedFrom(from.session, N),
                     )
@@ -439,6 +557,7 @@ internal val ROW_CASES: Map<String, List<RowExample>> =
             },
         "R21 Grace|Loud+ImageMatchCompleted matched" to
             checkStates(twoStepSession).flatMap { from ->
+                val next = StepPointer(1, 0)
                 listOf(
                     RowExample(
                         name = "${from.kind} last step",
@@ -453,7 +572,11 @@ internal val ROW_CASES: Map<String, List<RowExample>> =
                         from = from,
                         event = SessionEvent.ImageMatchCompleted(matched = true),
                         now = N,
-                        expected = Transition(from.with(from.session.copy(checkRun = from.session.checkRun.copy(step = 1))), emptyList()),
+                        expected =
+                            Transition(
+                                from.with(from.session.copy(checkRun = from.session.checkRun.copy(step = next))),
+                                emptyList(),
+                            ),
                         reducer = reducer(check = StepResult.ValidNext),
                     ),
                 )

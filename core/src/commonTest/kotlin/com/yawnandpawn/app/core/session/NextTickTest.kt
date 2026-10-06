@@ -19,7 +19,7 @@ class NextTickTest {
     private val reducer = reducer(check = StepResult.ValidNext)
 
     private fun firstRing(): SessionState =
-        reducer.reduce(SessionState.Idle, SessionEvent.AlarmFired(SESSION_ID, testConfig(), SEEDS, beforeFirstUnlock = false), T0).state
+        reducer.reduce(SessionState.Idle, SessionEvent.AlarmFired(SESSION_ID, testConfig(), beforeFirstUnlock = false), T0).state
 
     @Test
     fun `a ring ticks when its 30-minute interaction deadline is due, and at once after it`() {

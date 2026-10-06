@@ -1,5 +1,11 @@
 package com.yawnandpawn.app.core.session
 
+import com.yawnandpawn.app.core.checks.CheckAnswer
+import com.yawnandpawn.app.core.checks.CheckEntry
+import com.yawnandpawn.app.core.checks.CheckMode
+import com.yawnandpawn.app.core.checks.CheckPlan
+import com.yawnandpawn.app.core.checks.CheckType
+import com.yawnandpawn.app.core.checks.Difficulty
 import com.yawnandpawn.app.core.error.DomainError
 import com.yawnandpawn.app.core.error.Outcome
 import com.yawnandpawn.app.core.history.SessionHistoryRow
@@ -235,12 +241,14 @@ class SessionRecorderTest {
     @Test
     fun `the end row has the check types of the plan that was run and whether the fallback replaced it`() =
         runTest {
-            val run = CheckRun(FALLBACK_PLAN, SEEDS, step = 3, fallbackUsed = true)
+            val math = CheckEntry(CheckType.Math, Difficulty.Hard, count = 6)
+            val plan = CheckPlan(CheckMode.All, listOf(math, CheckPlan.PLACEHOLDER_ENTRY, math))
+            val run = CheckRun(plan, listOf(1L, 2L, 3L), step = StepPointer(3, 0), fallbackUsed = true)
 
             recorder.recordEnd(endedAfter(3.minutes).copy(checkRun = run), SessionEnd.Completed, SCHEDULED_AT)
 
             val row = history.rows.getValue(SESSION_ID)
-            assertEquals(List(3) { "Placeholder" }, row.checkTypes)
+            assertEquals(listOf("Math", "Placeholder", "Math"), row.checkTypes)
             assertTrue(row.fallbackUsed)
         }
 
@@ -269,18 +277,12 @@ class SessionRecorderTest {
         }
 
     @Test
-    fun `every check step type name is unique, non-empty and has no comma`() {
-        // Exhaustive when: a new CheckStep subtype fails to compile here until it is added to the list.
-        val every: List<CheckStep> =
-            listOf<CheckStep>(CheckStep.Placeholder).onEach { step ->
-                when (step) {
-                    CheckStep.Placeholder -> Unit
-                }
-            }
-        val names = every.map { it.typeName }
+    fun `every check type id is unique, non-empty, has no comma and never changes`() {
+        val names = CheckType.all.map { it.id }
 
         assertEquals(names.size, names.toSet().size, "unique: $names")
         assertTrue(names.all { it.isNotEmpty() && ',' !in it }, "non-empty and comma-free: $names")
-        assertEquals("Placeholder", CheckStep.Placeholder.typeName)
+        // Stored in session history: a changed id would split a type's history in two.
+        assertEquals(listOf("Math", "Placeholder"), names)
     }
 }

@@ -1,5 +1,9 @@
 package com.yawnandpawn.app.core.session
 
+import com.yawnandpawn.app.core.checks.CheckAnswer
+import com.yawnandpawn.app.core.checks.CheckMode
+import com.yawnandpawn.app.core.checks.CheckPlan
+import com.yawnandpawn.app.core.checks.CheckType
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
@@ -56,7 +60,7 @@ class SessionPoliciesTest {
         assertEquals(StepResult.ValidNext, PlaceholderCheckValidator.validate(CheckRun(TWO_STEPS, SEEDS), CheckAnswer.Placeholder))
         assertEquals(
             StepResult.ValidLast,
-            PlaceholderCheckValidator.validate(CheckRun(TWO_STEPS, SEEDS, step = 1), CheckAnswer.Placeholder),
+            PlaceholderCheckValidator.validate(CheckRun(TWO_STEPS, SEEDS, step = StepPointer(1, 0)), CheckAnswer.Placeholder),
         )
     }
 
@@ -64,8 +68,8 @@ class SessionPoliciesTest {
     fun `the placeholder validator rejects other answers and a run past its last step`() {
         val run = CheckRun(CheckPlan.placeholder(), SEEDS)
         assertEquals(StepResult.Invalid, PlaceholderCheckValidator.validate(run, CheckAnswer.ImageMatched))
-        val finished = run.copy(step = 1)
-        assertNull(finished.currentStep)
+        val finished = run.copy(step = StepPointer(1, 0))
+        assertNull(finished.currentEntry)
         assertEquals(StepResult.Invalid, PlaceholderCheckValidator.validate(finished, CheckAnswer.Placeholder))
     }
 
@@ -110,9 +114,9 @@ class SessionPoliciesTest {
     fun `a test session never snoozes from a grant or a reused payment and never consumes`() {
         val test = ringSession(testConfig(testMode = true))
         ringStates(test).forEach { from ->
-            val grant = SessionEvent.PurchaseGranted(PRODUCT, TOKEN, PurchaseVerdict.Grant, NEW_SEEDS)
+            val grant = SessionEvent.PurchaseGranted(PRODUCT, TOKEN, PurchaseVerdict.Grant)
             assertEquals(ignored(from, grant), reducer().reduce(from, grant, at(5.minutes)), from.kind)
-            val reuse = SessionEvent.ReuseAccepted(PRODUCT, TOKEN, NEW_SEEDS)
+            val reuse = SessionEvent.ReuseAccepted(PRODUCT, TOKEN)
             val touchedOnly = Transition(from.with(from.session.touched(at(5.minutes))), emptyList())
             assertEquals(touchedOnly, reducer().reduce(from, reuse, at(5.minutes)), from.kind)
         }
@@ -121,7 +125,7 @@ class SessionPoliciesTest {
     @Test
     fun `a purchase token never shows its value`() {
         assertEquals("PurchaseToken(redacted)", TOKEN.toString())
-        assertFalse("token-1" in SessionEvent.PurchaseGranted(PRODUCT, TOKEN, PurchaseVerdict.Grant, SEEDS).toString())
+        assertFalse("token-1" in SessionEvent.PurchaseGranted(PRODUCT, TOKEN, PurchaseVerdict.Grant).toString())
         assertEquals(PurchaseToken("token-1"), TOKEN)
         assertEquals(PurchaseToken("token-1").hashCode(), TOKEN.hashCode())
         assertNotEquals(PurchaseToken("token-2"), TOKEN)
@@ -133,7 +137,7 @@ class SessionPoliciesTest {
         val reducer = productionReducer()
         val config = testConfig()
         var state: SessionState = SessionState.Idle
-        state = reducer.reduce(state, SessionEvent.AlarmFired(SESSION_ID, config, SEEDS, beforeFirstUnlock = false), T0).state
+        state = reducer.reduce(state, SessionEvent.AlarmFired(SESSION_ID, config, beforeFirstUnlock = false), T0).state
         assertEquals(emptyList(), reducer.reduce(state, SessionEvent.SnoozeTapped, T0).effects, "snooze is never offered in Epic 1")
         state = reducer.reduce(state, SessionEvent.ImUpTapped, at(1.minutes)).state
         assertIs<SessionState.Grace>(state)

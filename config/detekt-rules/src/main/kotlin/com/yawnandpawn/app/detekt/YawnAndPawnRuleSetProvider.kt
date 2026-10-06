@@ -21,6 +21,7 @@ class YawnAndPawnRuleSetProvider : RuleSetProvider {
                 RuleName("NoInexactAlarm") to ::NoInexactAlarm,
                 RuleName("CredentialStorageAccess") to ::CredentialStorageAccess,
                 RuleName("NoHostageApis") to ::NoHostageApis,
+                RuleName("NoUnseededRandom") to ::NoUnseededRandom,
             ),
         )
 }

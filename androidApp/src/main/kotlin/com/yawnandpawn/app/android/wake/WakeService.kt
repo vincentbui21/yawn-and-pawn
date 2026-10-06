@@ -17,6 +17,7 @@ import com.yawnandpawn.app.android.screen.forwardsToWakeScreen
 import com.yawnandpawn.app.core.alarm.Alarm
 import com.yawnandpawn.app.core.alarm.AlarmFired
 import com.yawnandpawn.app.core.alarm.AlarmRepository
+import com.yawnandpawn.app.core.checks.CheckAnswer
 import com.yawnandpawn.app.core.crash.CrashReporter
 import com.yawnandpawn.app.core.error.DomainError
 import com.yawnandpawn.app.core.error.Outcome
@@ -27,12 +28,8 @@ import com.yawnandpawn.app.core.log.LogEvent
 import com.yawnandpawn.app.core.log.Logger
 import com.yawnandpawn.app.core.log.WakeStage
 import com.yawnandpawn.app.core.log.diagnostic
-import com.yawnandpawn.app.core.session.CheckAnswer
-import com.yawnandpawn.app.core.session.CheckPlan
 import com.yawnandpawn.app.core.session.ConfigResolver
-import com.yawnandpawn.app.core.session.DirectBootSubstitution
 import com.yawnandpawn.app.core.session.GlobalSettings
-import com.yawnandpawn.app.core.session.SeedSource
 import com.yawnandpawn.app.core.session.SessionData
 import com.yawnandpawn.app.core.session.SessionEngine
 import com.yawnandpawn.app.core.session.SessionEvent
@@ -76,8 +73,9 @@ import kotlin.time.Instant
  *   ring-start timing ([WakeTimings]).
  * - **Alarm:** while a session rings or is snoozed it dispatches `OverlapAlarmFired` (unless the fire is not merged, see
  *   [mergeIgnoredBecause]); otherwise it reads the alarm and
- *   dispatches `AlarmFired` with a new session id, the config resolved now (`GlobalSettings` defaults until Epic 5), seeds
- *   from the [SeedSource] and whether the phone is still locked since boot. A deleted alarm rings nothing.
+ *   dispatches `AlarmFired` with a new session id, the config resolved now (`GlobalSettings` defaults until Epic 5)
+ *   and whether the phone is still locked since boot (the reducer derives the check seeds, AD-9). A deleted alarm rings
+ *   nothing.
  * - **Slot (Story 2.1):** the kill-recovery path; see [onSlot]. **Restore:** it loads the stored session
  *   (`SessionEngine.restore`).
  * - **Test:** it takes the pending test config and dispatches `TestAlarmFired` (Story 1.18).
@@ -111,7 +109,6 @@ class WakeService :
     private val runtime: WakeRuntime by inject()
     private val repository: AlarmRepository by inject()
     private val ids: IdGenerator by inject()
-    private val seeds: SeedSource by inject()
     private val testAlarms: TestAlarmStore by inject()
     private val crashReporter: CrashReporter by inject()
     private val clock: Clock by inject()
@@ -367,7 +364,6 @@ class WakeService :
             SessionEvent.AlarmFired(
                 sessionId = ids.newId(),
                 config = config,
-                seeds = seedsFor(config.checkPlan, locked),
                 beforeFirstUnlock = locked,
             )
         when (val started = engine.dispatch(event)) {
@@ -384,12 +380,6 @@ class WakeService :
             }
         }
     }
-
-    /** Seeds for the plan the first ring really runs: before the first unlock, with the Direct Boot substitutions (Story 2.3). */
-    private fun seedsFor(
-        plan: CheckPlan,
-        locked: Boolean,
-    ): List<Long> = seeds.seedsFor(DirectBootSubstitution.plan(plan, locked))
 
     private fun alarmUnreadable(
         fired: AlarmFired,
@@ -424,7 +414,6 @@ class WakeService :
             SessionEvent.TestAlarmFired(
                 sessionId = ids.newId(),
                 config = pending,
-                seeds = seedsFor(pending.checkPlan, locked),
                 beforeFirstUnlock = locked,
             )
         val started = sessionLock.startingSession { engine.dispatch(event) }

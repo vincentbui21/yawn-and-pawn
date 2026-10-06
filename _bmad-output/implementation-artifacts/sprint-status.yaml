@@ -75,8 +75,8 @@ development_status:
   2-13-epic-2-escape-attempts-checklist-on-the-device-matrix: done  # 2026-10-06 Oppo A96 run; owner-only items deferred to v2 by owner decision (story-2-13-epic-2-escape-attempts-checklist.md)
   epic-2-retrospective: optional
 
-  epic-3: backlog
-  3-1-check-plugin-contract-and-the-math-generator-in-core: backlog
+  epic-3: in-progress
+  3-1-check-plugin-contract-and-the-math-generator-in-core: done  # PR 2026-10-06 (Epic 3 auto-run, fast mode)
   3-2-solve-math-to-stop-the-alarm: backlog
   3-3-success-screen-after-the-check-basic: backlog
   3-4-grace-window-with-the-countdown-ring: backlog

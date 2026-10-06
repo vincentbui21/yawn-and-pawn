@@ -1,5 +1,9 @@
 package com.yawnandpawn.app.core.session
 
+import com.yawnandpawn.app.core.checks.CheckAnswer
+import com.yawnandpawn.app.core.checks.CheckMode
+import com.yawnandpawn.app.core.checks.CheckPlan
+import com.yawnandpawn.app.core.checks.SeedDeriver
 import com.yawnandpawn.app.core.time.Deadline
 import com.yawnandpawn.app.core.time.TimeSnapshot
 import kotlin.time.Duration
@@ -27,8 +31,18 @@ internal val TOKEN = PurchaseToken("token-1")
 internal val SEEDS = listOf(7L)
 internal val NEW_SEEDS = listOf(11L, 12L)
 internal val SCHEDULED_AT: Instant = Instant.parse("2027-03-03T06:00:00Z")
-internal val TWO_STEPS = CheckPlan(listOf(CheckStep.Placeholder, CheckStep.Placeholder))
-internal val FALLBACK_PLAN = CheckPlan(listOf(CheckStep.Placeholder, CheckStep.Placeholder, CheckStep.Placeholder))
+internal val TWO_STEPS = CheckPlan(CheckMode.All, List(2) { CheckPlan.PLACEHOLDER_ENTRY })
+internal val FALLBACK_PLAN = CheckPlan(CheckMode.All, List(3) { CheckPlan.PLACEHOLDER_ENTRY })
+
+/**
+ * The first seeds of the [size] entries of ring [ringIndex] of [SESSION_ID] (the fallback keys with [fallback]), spelled
+ * out from [SeedDeriver] rather than through `CheckRun.forRing`, so a test of the reducer can catch a wrong key.
+ */
+internal fun ringSeeds(
+    ringIndex: Int,
+    size: Int,
+    fallback: Boolean = false,
+): List<Long> = List(size) { SeedDeriver.seed(SESSION_ID, ringIndex, it, 0, fallback) }
 
 internal fun testConfig(
     testMode: Boolean = false,
@@ -61,7 +75,7 @@ internal fun ringSession(config: SessionConfig = testConfig()): SessionData =
         config = config,
         ringIndex = 1,
         snoozesGranted = 0,
-        checkRun = CheckRun(plan = config.checkPlan, seeds = SEEDS),
+        checkRun = CheckRun(plan = config.checkPlan, seeds = ringSeeds(1, config.checkPlan.entries.size)),
         interactionDeadline = Deadline.after(T0, 30.minutes),
     )
 

@@ -48,7 +48,7 @@ class WakeVolumeKeysTest {
     private fun open(): ActivityController<WakeActivity> =
         Robolectric.buildActivity(WakeActivity::class.java).setup().windowFocusChanged(true)
 
-    private fun WakeApp.ring() = dispatch(SessionEvent.AlarmFired("session-1", aSessionConfig(), listOf(1L), beforeFirstUnlock = false))
+    private fun WakeApp.ring() = dispatch(SessionEvent.AlarmFired("session-1", aSessionConfig(), beforeFirstUnlock = false))
 
     /** Whether the activity itself consumes a volume down press (down and up). */
     private fun ActivityController<WakeActivity>.consumesVolumeDown(): List<Boolean> =

@@ -1,5 +1,6 @@
 package com.yawnandpawn.app.core.session
 
+import com.yawnandpawn.app.core.checks.CheckPlan
 import com.yawnandpawn.app.core.time.TimeSnapshot
 import kotlin.time.Duration
 import kotlin.time.Duration.Companion.minutes

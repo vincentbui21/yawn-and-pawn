@@ -40,6 +40,13 @@ class DetektConfigTest {
     }
 
     @Test
+    fun `NoUnseededRandom is scoped to core`() {
+        val rule = (config["yawn-and-pawn"] as Map<*, *>)["NoUnseededRandom"] as Map<*, *>
+
+        assertEquals(listOf("**/core/src/**"), rule["includes"])
+    }
+
+    @Test
     fun `NoHostageApis is scoped to androidApp and composeApp`() {
         val rule = (config["yawn-and-pawn"] as Map<*, *>)["NoHostageApis"] as Map<*, *>
         val includes = (rule["includes"] as List<*>).toSet()

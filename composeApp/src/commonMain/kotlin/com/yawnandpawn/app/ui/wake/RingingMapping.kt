@@ -1,6 +1,6 @@
 package com.yawnandpawn.app.ui.wake
 
-import com.yawnandpawn.app.core.session.CheckStep
+import com.yawnandpawn.app.core.checks.CheckType
 import com.yawnandpawn.app.core.session.SessionData
 import com.yawnandpawn.app.core.session.SessionState
 import com.yawnandpawn.app.core.session.SnoozeAvailability
@@ -113,7 +113,7 @@ data class PlaceholderStep(
 )
 
 /**
- * The Epic 1 placeholder check step [state] waits for, or null: Grace or Loud with a `CheckStep.Placeholder` current
+ * The Epic 1 placeholder check step [state] waits for, or null: Grace or Loud with a `CheckType.Placeholder` current
  * step. The wake screen answers it with `CheckAnswer.Placeholder`, so "I'm up" alone ends the session; Epic 3 shows
  * the real check instead.
  */
@@ -125,6 +125,6 @@ fun placeholderStepDue(state: SessionState): PlaceholderStep? {
             else -> null
         }
     return session
-        ?.takeIf { it.checkRun.currentStep == CheckStep.Placeholder }
-        ?.let { PlaceholderStep(it.sessionId, it.ringIndex, it.checkRun.step) }
+        ?.takeIf { it.checkRun.currentEntry?.type == CheckType.Placeholder }
+        ?.let { PlaceholderStep(it.sessionId, it.ringIndex, it.checkRun.step.entry) }
 }

@@ -119,8 +119,20 @@ class CheckMappingTest {
         assertNull(map(SessionState.Idle))
         assertNull(map(grace(session(CheckPlan.placeholder()))))
         assertNull(map(grace(session().let { it.copy(checkRun = it.checkRun.copy(step = StepPointer(1, 0))) })))
-        assertNull(map(grace(session(item = 3))))
-        assertNull(map(grace(session().let { it.copy(checkRun = it.checkRun.copy(seeds = emptyList())) })))
+    }
+
+    @Test
+    fun `a damaged row still shows the problem the engine checks - a missing seed derived again, an item past the end on the last`() {
+        val pastTheEnd = assertIs<CheckContent.Math>(map(grace(session(item = 3, seed = 77)))?.content)
+        val last = (CheckType.Math.generate(77, Difficulty.Medium, 3) as Puzzle.Math).problems[2]
+        assertEquals(3, pastTheEnd.problemNumber)
+        assertEquals(last.operands, pastTheEnd.operands)
+
+        val unseeded = grace(session().let { it.copy(checkRun = it.checkRun.copy(seeds = emptyList())) })
+        val run = unseeded.session.checkRun.usable(unseeded.session.sessionId, unseeded.session.ringIndex)
+        val derived = (CheckType.Math.generate(run.seeds.single(), Difficulty.Medium, 3) as Puzzle.Math).problems[0]
+        assertEquals(derived.operands, assertIs<CheckContent.Math>(map(unseeded)?.content).operands)
+        assertEquals(run.seeds.single(), checkPosition(unseeded)?.seed, "the position follows the derived seed")
     }
 
     @Test

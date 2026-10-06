@@ -342,16 +342,23 @@ class WakeService :
      * check, Story 3.2), so it reaches Completed, is recorded as Test and returns to Idle. The service answers for the
      * user only here: a test never charges and the real alarm needs the wake screen. Returns the state after: Idle, or
      * the test still ringing when a step could not be saved (the real alarm then merges into it, so it still rings).
+     * It answers only in Grace or Loud, and stops as soon as an answer does not move the check on: a failed "I'm up"
+     * (still Ringing) or a failed answer sends nothing more (Story 3.2 review).
      */
     private suspend fun endTestSession(test: SessionState.Ring): SessionState {
         logger.log(LogEvent.OperationFailed("finish test session", "a real alarm rang; the test ends as Test"))
         if (test is SessionState.Ringing) engine.dispatch(SessionEvent.ImUpTapped)
         var answers = 0
-        var answer = (engine.state.value as? SessionState.Ring)?.session?.checkRun?.solution()
-        while (answer != null && answers < MAX_TEST_ANSWERS) {
+        var run = engine.state.value.checkingRun()
+        while (run != null && answers < MAX_TEST_ANSWERS) {
+            val answer = run.solution() ?: break
             answers++
-            val sent = engine.dispatch(SessionEvent.CheckAnswerSubmitted(answer))
-            answer = if (sent is Outcome.Success) (sent.value as? SessionState.Ring)?.session?.checkRun?.solution() else null
+            engine.dispatch(SessionEvent.CheckAnswerSubmitted(answer))
+            val before = run
+            run =
+                engine.state.value
+                    .checkingRun()
+                    ?.takeIf { it != before }
         }
         return engine.state.value
     }
@@ -702,6 +709,10 @@ class WakeService :
 
         /** More answers than any plan has items (at most a few entries of 10): ending a test always stops. */
         private const val MAX_TEST_ANSWERS = 100
+
+        /** The run this state waits on an answer for: Grace or Loud (not Ringing, where answers are ignored); else null. */
+        private fun SessionState.checkingRun(): CheckRun? =
+            (this as? SessionState.Ring)?.takeIf { it !is SessionState.Ringing }?.session?.checkRun
 
         /**
          * The right answer to the current item of this run, from the entry's seed; null once the check is passed. Only

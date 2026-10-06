@@ -2,6 +2,8 @@ package com.yawnandpawn.app.android.wake
 
 import android.app.NotificationManager
 import android.content.Intent
+import androidx.compose.ui.semantics.SemanticsProperties
+import androidx.compose.ui.semantics.getOrNull
 import androidx.compose.ui.test.hasClickAction
 import androidx.compose.ui.test.hasContentDescription
 import androidx.compose.ui.test.hasText
@@ -10,19 +12,23 @@ import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.test.core.app.ActivityScenario
 import com.yawnandpawn.app.StopAppRule
+import com.yawnandpawn.app.android.ApplicationScope
 import com.yawnandpawn.app.core.alarm.AlarmFired
 import com.yawnandpawn.app.core.alarm.AlarmRepository
 import com.yawnandpawn.app.core.checks.CheckAnswer
 import com.yawnandpawn.app.core.checks.CheckPlan
+import com.yawnandpawn.app.core.error.DomainError
 import com.yawnandpawn.app.core.error.Outcome
 import com.yawnandpawn.app.core.session.CheckRun
 import com.yawnandpawn.app.core.session.SessionEvent
 import com.yawnandpawn.app.core.session.SessionState
 import com.yawnandpawn.app.core.session.StepPointer
+import com.yawnandpawn.app.testing.FakeSessionHistoryRepository
 import com.yawnandpawn.app.testing.aSessionConfig
 import com.yawnandpawn.app.testing.anAlarm
 import com.yawnandpawn.app.testing.rightAnswer
 import com.yawnandpawn.app.testing.wrongAnswer
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
 import org.junit.Rule
 import org.junit.Test
@@ -101,7 +107,10 @@ class MathCheckScreenTest {
                 }
             }
 
-            waitFor(app, "the session ends") { app.engine.state.value == SessionState.Idle }
+            // Story 3.3: the Success screen, and "Done" closes the wake screen.
+            composeRule.awaitSuccess(app, "Up on time.")
+            composeRule.onNodeWithText("Done").performClick()
+            composeRule.waitForIdle()
             scenario.onActivity { assertEquals(true, it.isFinishing, "the wake screen closes") }
         }
     }
@@ -114,8 +123,12 @@ class MathCheckScreenTest {
             composeRule.onNodeWithText("I'm up").performClick()
             waitFor(app, "Grace") { app.engine.state.value is SessionState.Grace }
 
+            val before = assertIs<SessionState.Active>(app.engine.state.value).session.interactionDeadline
+            ShadowSystemClock.advanceBy(java.time.Duration.ofSeconds(2))
             key("Check").performClick()
-            composeRule.waitForIdle()
+            waitFor(app, "the empty Check reached the engine") {
+                assertIs<SessionState.Active>(app.engine.state.value).session.interactionDeadline != before
+            }
             assertEquals(0, run(app).failedAttempts, "an empty field submits nothing")
 
             val wrong = assertNotNull(wrongAnswer(run(app)))
@@ -185,6 +198,61 @@ class MathCheckScreenTest {
         }
     }
 
+    /** The seconds of the "Quiet for {n}s. …" grace header on screen, or null when it is not shown. */
+    private fun quietSeconds(): Int? =
+        composeRule
+            .onAllNodes(hasText("Quiet for", substring = true))
+            .fetchSemanticsNodes()
+            .firstNotNullOfOrNull { node ->
+                node.config
+                    .getOrNull(SemanticsProperties.Text)
+                    ?.joinToString { it.text }
+                    ?.let { QUIET.find(it) }
+                    ?.groupValues
+                    ?.get(1)
+                    ?.toInt()
+            }
+
+    @Test
+    fun `the grace countdown counts down live on the screen`() {
+        val app = WakeApp()
+        ringMath(app)
+        launch(app).use {
+            composeRule.onNodeWithText("I'm up").performClick()
+            waitFor(app, "Grace") { app.engine.state.value is SessionState.Grace }
+            assertEquals(20, quietSeconds())
+
+            ShadowSystemClock.advanceBy(java.time.Duration.ofSeconds(6))
+            composeRule.mainClock.advanceTimeBy(WakeCheck.GRACE_TICK.inWholeMilliseconds * 2)
+            waitFor(app, "the countdown moved") { quietSeconds()?.let { it in 13..14 } == true }
+            assertIs<SessionState.Grace>(app.engine.state.value)
+        }
+    }
+
+    @Test
+    fun `a check that ends Missed keeps its Check screen until the wake screen closes, never the Ringing screen (Story 3_2 review)`() {
+        // The history row cannot be written, so the session stays Missed. No service runs to end it, so the ringing
+        // notification stays posted: the moment between Missed and the service's endSession, held still.
+        val history = FakeSessionHistoryRepository().apply { upsertFailure = DomainError.StorageFailure("disk full") }
+        val app = WakeApp(history = history)
+        ringMath(app)
+        app.koin.get<WakeNotifier>().show(mathConfig.scheduledAt)
+        launch(app).use {
+            composeRule.onNodeWithText("I'm up").performClick()
+            waitFor(app, "Grace") { app.engine.state.value is SessionState.Grace }
+            composeRule.onNodeWithText("Problem 1 of 3").assertExists()
+
+            ShadowSystemClock.advanceBy(java.time.Duration.ofMinutes(31))
+            val tick = app.koin.get<ApplicationScope>().launch { app.engine.tick() }
+            app.awaitUntil("the tick runs") { tick.isCompleted }
+            waitFor(app, "Missed") { app.engine.state.value is SessionState.Missed }
+            assertNotNull(app.runtime.shownAlarmAt(), "the ringing notification is still posted")
+
+            composeRule.onNodeWithText("Problem 1 of 3").assertExists()
+            composeRule.onNodeWithText("I'm up").assertDoesNotExist()
+        }
+    }
+
     @Test
     fun `a session stored with the placeholder check still ends with I'm up alone`() {
         val app = WakeApp()
@@ -193,5 +261,9 @@ class MathCheckScreenTest {
             composeRule.onNodeWithText("I'm up").performClick()
             waitFor(app, "the placeholder answered") { app.engine.state.value == SessionState.Idle }
         }
+    }
+
+    private companion object {
+        val QUIET = Regex("""Quiet for (\d+)s""")
     }
 }

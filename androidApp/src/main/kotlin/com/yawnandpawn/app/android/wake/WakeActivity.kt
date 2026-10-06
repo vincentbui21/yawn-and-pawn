@@ -45,6 +45,7 @@ import com.yawnandpawn.app.ui.wake.SuccessScreen
 import com.yawnandpawn.app.ui.wake.WakeIntent
 import com.yawnandpawn.app.ui.wake.WakeSurface
 import com.yawnandpawn.app.ui.wake.alarmOnlyRingingUiState
+import com.yawnandpawn.app.ui.wake.checkPosition
 import com.yawnandpawn.app.ui.wake.placeholderStepDue
 import com.yawnandpawn.app.ui.wake.ringingUiState
 import com.yawnandpawn.app.ui.wake.successUiState
@@ -202,10 +203,17 @@ class WakeActivity : ComponentActivity() {
                 val zone = timeZones.current()
                 val session = (state as? SessionState.Active)?.session?.takeIf { state.isRinging() }
                 val availability = session?.let { key(unlocked) { snoozePolicy.availability(it) } }
+                // The notification's alarm time only stands in while the screen waits for its first session: once one
+                // was shown, an ended session (Missed, or Completed before Success shows, with the notification still
+                // posted) keeps its last screen, so a check never flips back to the Ringing screen (Story 3.2 review).
                 val current =
                     emergency?.let { WakeScreen.Ringing(alarmOnlyRingingUiState(it.alarmAt, zone)) }
                         ?: sessionScreen(state, session, availability, zone, check)
-                        ?: runtime.shownAlarmAt()?.let { WakeScreen.Ringing(alarmOnlyRingingUiState(it, zone)) }
+                        ?: runtime
+                            .shownAlarmAt()
+                            ?.takeIf { !last.sessionShown }
+                            ?.let { WakeScreen.Ringing(alarmOnlyRingingUiState(it, zone)) }
+                if (session != null) last.sessionShown = true
                 if (current != null) last.state = current
                 WakeContent(state = current ?: last.state, onIntent = ::onIntent, onInteracted = ::interacted)
             }
@@ -234,18 +242,30 @@ class WakeActivity : ComponentActivity() {
     private fun onIntent(intent: WakeIntent) {
         when {
             // "Done" on Success: the session is already over, so it only closes the screen.
-            intent == WakeIntent.DoneClicked -> finish()
+            intent == WakeIntent.DoneClicked -> {
+                finish()
+            }
 
-            WakeCheck.isKey(intent) -> check.onKey(intent, send = { send(*it.toTypedArray()) }, interacted = ::interacted)
+            WakeCheck.isKey(intent) -> {
+                check.onKey(intent, checkPosition(engine.state.value), send = { send(*it.toTypedArray()) }, interacted = ::interacted)
+            }
 
-            intent != WakeIntent.ImUpClicked -> interacted()
+            intent != WakeIntent.ImUpClicked -> {
+                interacted()
+            }
 
-            runtime.emergency.value != null -> runtime.stopEmergency()
+            runtime.emergency.value != null -> {
+                runtime.stopEmergency()
+            }
 
             // No session yet (the screen opened just before it): the engine would ignore ImUpTapped, so keep the tap.
-            engine.state.value == SessionState.Idle -> pendingImUp = true
+            engine.state.value == SessionState.Idle -> {
+                pendingImUp = true
+            }
 
-            else -> send(SessionEvent.UserInteracted, SessionEvent.ImUpTapped)
+            else -> {
+                send(SessionEvent.UserInteracted, SessionEvent.ImUpTapped)
+            }
         }
     }
 
@@ -300,9 +320,13 @@ private fun ComponentActivity.showOverLockScreen() {
     window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
 }
 
-/** The last Ringing state the screen showed; not snapshot state, so keeping it never recomposes. */
+/**
+ * The last screen shown, and whether it ever showed a session ([sessionShown]); not snapshot state, so keeping it never
+ * recomposes.
+ */
 private class LastShown {
     var state: WakeScreen? = null
+    var sessionShown: Boolean = false
 }
 
 /**

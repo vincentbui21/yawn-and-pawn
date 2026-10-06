@@ -16,6 +16,7 @@ import com.yawnandpawn.app.core.time.Clock
 import com.yawnandpawn.app.core.time.MonotonicClock
 import com.yawnandpawn.app.core.time.TimeSnapshot
 import com.yawnandpawn.app.ui.wake.CheckInput
+import com.yawnandpawn.app.ui.wake.CheckPosition
 import com.yawnandpawn.app.ui.wake.CheckUiState
 import com.yawnandpawn.app.ui.wake.WakeIntent
 import com.yawnandpawn.app.ui.wake.checkPosition
@@ -43,27 +44,37 @@ internal class WakeCheck(
         availability: SnoozeAvailability,
     ): CheckUiState? {
         val now by graceClock(running = state is SessionState.Grace)
-        val shown = input.following(checkPosition(state))
+        val shown = inputAt(checkPosition(state))
         SideEffect { input = shown }
         return mathCheckUiState(state, availability, now, shown)
     }
 
+    /** The typed answer as the screen shows it at the engine's [position]. */
+    internal fun inputAt(position: CheckPosition?): CheckInput = input.following(position)
+
     /**
-     * A `number-pad-key`: a digit or backspace edits the typed answer (at most 5 digits); "Check" submits it as
-     * `CheckAnswerSubmitted`, and does nothing while the field is empty. Every key also sends `UserInteracted`, through
-     * [send] or [interacted].
+     * A `number-pad-key` at the engine's current [position]: a digit or backspace edits the typed answer (at most 5
+     * digits); "Check" submits it as `CheckAnswerSubmitted` and clears the field, and does nothing while the field is
+     * empty. Every key also sends `UserInteracted`, through [send] or [interacted].
+     *
+     * The input moves to [position] first, so a key tapped after the engine moved on, before the screen recomposed, is
+     * typed into the new problem rather than dropped (Story 3.2 review). The field is cleared on submit, so a second
+     * "Check" before the next problem shows sends nothing instead of the same digits against it.
      */
     fun onKey(
         intent: WakeIntent,
+        position: CheckPosition?,
         send: (List<SessionEvent>) -> Unit,
         interacted: () -> Unit,
     ) {
-        val typed = input
-        when (intent) {
-            is WakeIntent.DigitTapped -> input = typed.typed(intent.digit)
-            WakeIntent.DeleteDigit -> input = typed.deleted()
-            else -> Unit
-        }
+        val typed = inputAt(position)
+        input =
+            when (intent) {
+                is WakeIntent.DigitTapped -> typed.typed(intent.digit)
+                WakeIntent.DeleteDigit -> typed.deleted()
+                WakeIntent.SubmitAnswer -> typed.copy(digits = "")
+                else -> typed
+            }
         if (intent == WakeIntent.SubmitAnswer && typed.digits.isNotEmpty()) {
             send(listOf(SessionEvent.UserInteracted, SessionEvent.CheckAnswerSubmitted(CheckAnswer.Number(typed.digits))))
         } else {

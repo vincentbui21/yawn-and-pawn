@@ -10,6 +10,7 @@ import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.FlowRow
@@ -121,30 +122,72 @@ fun CheckScreen(
         // Math keeps its number pad out of the scrolling area (Story 3.2): at 200% font on a small phone only the problem
         // scrolls, and "Check" stays on screen above the snooze control. Where everything fits, it looks the same.
         val math = state.content as? CheckContent.Math
-        Column(modifier = Modifier.fillMaxSize().wakeContentPadding()) {
-            Column(modifier = Modifier.fillMaxWidth().weight(1f), horizontalAlignment = Alignment.CenterHorizontally) {
-                Column(
-                    modifier = Modifier.fillMaxWidth().weight(1f, fill = math == null).verticalScroll(rememberScrollState()),
-                    verticalArrangement = Arrangement.spacedBy(spacing.space4),
-                ) {
-                    state.grace?.let { GraceHeader(grace = it) }
-                    state.note?.let { WakeNoteView(note = it) }
-                    if (math != null) MathProblem(math) else CheckContentView(content = state.content, onIntent = onIntent)
+        BoxWithConstraints(modifier = Modifier.fillMaxSize().wakeContentPadding()) {
+            // In a short window (landscape, split screen) the pad and the footer alone would not fit: the pad scrolls with
+            // the problem instead, so "Check" can always be reached, and snooze stays pinned (Story 3.2 review).
+            if (math != null && maxHeight < MIN_PINNED_PAD_HEIGHT) {
+                Column(modifier = Modifier.fillMaxSize()) {
+                    Column(
+                        modifier = Modifier.fillMaxWidth().weight(1f).verticalScroll(rememberScrollState()),
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                    ) {
+                        Column(modifier = Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(spacing.space4)) {
+                            CheckHeader(state)
+                            MathProblem(math)
+                        }
+                        NumberPad(onIntent = onIntent, modifier = Modifier.padding(top = spacing.space3))
+                    }
+                    CheckFooter(state, onIntent)
                 }
-                if (math != null) NumberPad(onIntent = onIntent, modifier = Modifier.padding(top = spacing.space3))
-            }
-            Column(
-                modifier = Modifier.fillMaxWidth().padding(top = spacing.space3),
-                horizontalAlignment = Alignment.CenterHorizontally,
-                verticalArrangement = Arrangement.spacedBy(spacing.space2),
-            ) {
-                state.message?.let { WakeSnackbar(message = it) }
-                if (state.showFallbackLink) {
-                    PpsTextButton(text = stringResource(Res.string.fallback_link), onClick = { onIntent(WakeIntent.FallbackLinkClicked) })
+            } else {
+                Column(modifier = Modifier.fillMaxSize()) {
+                    Column(modifier = Modifier.fillMaxWidth().weight(1f), horizontalAlignment = Alignment.CenterHorizontally) {
+                        Column(
+                            modifier = Modifier.fillMaxWidth().weight(1f, fill = math == null).verticalScroll(rememberScrollState()),
+                            verticalArrangement = Arrangement.spacedBy(spacing.space4),
+                        ) {
+                            CheckHeader(state)
+                            if (math != null) MathProblem(math) else CheckContentView(content = state.content, onIntent = onIntent)
+                        }
+                        if (math != null) NumberPad(onIntent = onIntent, modifier = Modifier.padding(top = spacing.space3))
+                    }
+                    CheckFooter(state, onIntent)
                 }
-                SnoozeButton(offer = state.snooze, onClick = { onIntent(WakeIntent.SnoozeClicked) })
             }
         }
+    }
+}
+
+/**
+ * The height under which the Math number pad scrolls with the problem: the 4-row pad (280 dp), the footer at 200% font
+ * and a line of the problem. Every phone in portrait has more, so its pinned pad is unchanged.
+ */
+private val MIN_PINNED_PAD_HEIGHT = 480.dp
+
+/** The grace header and the phone-call note above the check. */
+@Composable
+private fun CheckHeader(state: CheckUiState) {
+    state.grace?.let { GraceHeader(grace = it) }
+    state.note?.let { WakeNoteView(note = it) }
+}
+
+/** The footer in the thumb zone: the payment message, the `fallback-link` when offered, then `button-snooze`. */
+@Composable
+private fun CheckFooter(
+    state: CheckUiState,
+    onIntent: (WakeIntent) -> Unit,
+) {
+    val spacing = PpsTheme.spacing
+    Column(
+        modifier = Modifier.fillMaxWidth().padding(top = spacing.space3),
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.spacedBy(spacing.space2),
+    ) {
+        state.message?.let { WakeSnackbar(message = it) }
+        if (state.showFallbackLink) {
+            PpsTextButton(text = stringResource(Res.string.fallback_link), onClick = { onIntent(WakeIntent.FallbackLinkClicked) })
+        }
+        SnoozeButton(offer = state.snooze, onClick = { onIntent(WakeIntent.SnoozeClicked) })
     }
 }
 

@@ -9,6 +9,7 @@ import androidx.compose.ui.test.hasText
 import androidx.compose.ui.test.junit4.createEmptyComposeRule
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.onRoot
+import androidx.compose.ui.test.performScrollTo
 import androidx.compose.ui.unit.dp
 import com.github.takahirom.roborazzi.captureRoboImage
 import com.yawnandpawn.app.StopAppRule
@@ -27,7 +28,8 @@ import org.robolectric.annotation.GraphicsMode
 /**
  * Story 3.2 screenshots of the Math Check screen as `WakeActivity` maps it ([CheckSamples]), always Sunrise, at 100% and
  * 200% font scale: Grace, Loud after grace, a wrong answer and the last problem. On a 360 × 640 dp phone at 200% the
- * problem scrolls, but "Check" and the snooze control stay on screen, and every key is at least 64 dp.
+ * problem scrolls, but "Check" and the snooze control stay on screen, and every key is at least 64 dp. In a 640 × 360 dp
+ * window (landscape) the pad scrolls with the problem and snooze stays on screen.
  */
 @RunWith(RobolectricTestRunner::class)
 @GraphicsMode(GraphicsMode.Mode.NATIVE)
@@ -108,4 +110,21 @@ class CheckScreenshotTest {
     @Config(qualifiers = "w360dp-h640dp", fontScale = 2.0f)
     fun `the wrong answer on a 360 x 640 phone at 200 percent keeps the keys and snooze on screen`() =
         check("wake_check_math_wrong_sunrise_w360_h640_font200", CheckSamples.wrong) { keysAndSnoozeOnScreen() }
+
+    /** A short window: the pad scrolls with the problem, so "Check" can be reached, and snooze stays pinned on screen. */
+    private fun checkReachableAndSnoozeOnScreen() {
+        composeRule.onNode(hasContentDescription("Snooze unavailable, prices not loaded yet")).assertIsDisplayed()
+        key("Check").performScrollTo().assertIsDisplayed()
+        composeRule.onNode(hasContentDescription("Snooze unavailable, prices not loaded yet")).assertIsDisplayed()
+    }
+
+    @Test
+    @Config(qualifiers = "w640dp-h360dp")
+    fun `in landscape the pad scrolls so Check can be reached, and snooze stays on screen`() =
+        check("wake_check_math_grace_sunrise_w640_h360", CheckSamples.grace) { checkReachableAndSnoozeOnScreen() }
+
+    @Test
+    @Config(qualifiers = "w640dp-h360dp", fontScale = 2.0f)
+    fun `in landscape at 200 percent Check can still be reached, and snooze stays on screen`() =
+        check("wake_check_math_grace_sunrise_w640_h360_font200", CheckSamples.grace) { checkReachableAndSnoozeOnScreen() }
 }

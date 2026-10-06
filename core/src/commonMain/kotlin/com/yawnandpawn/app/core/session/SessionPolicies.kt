@@ -128,7 +128,8 @@ class NoBillingSnoozeAvailability(
  * - [CheckResult.Wrong] → [StepResult.Invalid]; [CheckResult.WrongRestart] → [StepResult.InvalidRestart].
  *
  * A run with no current entry or no seed for it is [StepResult.Invalid]; it never throws. The reducer derives the seeds
- * a damaged row is missing from the session coordinates before it validates, so only a passed check gets there.
+ * a damaged row is missing from the session coordinates before it validates, so only a passed check gets there. An item
+ * outside the entry's puzzle is checked on the nearest item ([CheckRun.withItemInPuzzle]), so the last one passes it.
  * A [CheckType.Placeholder] entry of a session stored by Epics 1–2 passes with the placeholder answer.
  */
 object PluginCheckValidator : CheckValidator {
@@ -141,7 +142,9 @@ object PluginCheckValidator : CheckValidator {
         return if (entry == null || seed == null) {
             StepResult.Invalid
         } else {
-            val result = entry.type.validate(entry.type.generate(seed, entry.difficulty, entry.count), run.step.item, answer)
+            // A damaged row's item past the end is checked on the last item, as the wake screen shows it (Story 3.2).
+            val item = run.withItemInPuzzle().step.item
+            val result = entry.type.validate(entry.type.generate(seed, entry.difficulty, entry.count), item, answer)
             stepResultOf(result, lastEntry = run.step.entry >= run.plan.entries.lastIndex)
         }
     }

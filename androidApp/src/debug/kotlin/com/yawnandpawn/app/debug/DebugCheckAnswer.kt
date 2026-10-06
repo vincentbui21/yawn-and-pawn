@@ -19,7 +19,8 @@ object DebugCheckAnswer {
                 ?.getOrNull<SessionEngine>()
                 ?.state
                 ?.value
-        val run = ((state as? SessionState.Grace)?.session ?: (state as? SessionState.Loud)?.session)?.checkRun
+        val session = (state as? SessionState.Grace)?.session ?: (state as? SessionState.Loud)?.session
+        val run = session?.checkRun?.usable(session.sessionId, session.ringIndex)
         val entry = run?.currentEntry
         val seed = run?.seeds?.getOrNull(run.step.entry)
         val puzzle = if (entry == null || seed == null) null else entry.type.generate(seed, entry.difficulty, entry.count) as? Puzzle.Math

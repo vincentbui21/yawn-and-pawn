@@ -2,6 +2,7 @@ package com.yawnandpawn.app.ui.wake
 
 import com.yawnandpawn.app.core.checks.CheckType
 import com.yawnandpawn.app.core.checks.Puzzle
+import com.yawnandpawn.app.core.session.CheckRun
 import com.yawnandpawn.app.core.session.SessionData
 import com.yawnandpawn.app.core.session.SessionState
 import com.yawnandpawn.app.core.session.SnoozeAvailability
@@ -22,10 +23,13 @@ data class CheckPosition(
     val failedAttempts: Int,
 )
 
-/** The position [state] waits on: Grace or Loud with a check entry left; null otherwise. */
+/**
+ * The position [state] waits on: Grace or Loud with a check entry left; null otherwise. It is read from the
+ * [usable run][CheckRun.usable], the one the engine checks answers on.
+ */
 fun checkPosition(state: SessionState): CheckPosition? {
     val session = (state as? SessionState.Grace)?.session ?: (state as? SessionState.Loud)?.session ?: return null
-    val run = session.checkRun
+    val run = session.usableRun()
     return run.currentEntry?.let {
         CheckPosition(
             session.sessionId,
@@ -78,7 +82,9 @@ data class CheckInput(
 /**
  * The Check screen for [state] when its current entry is a Math check (Story 3.2), else null (the Ringing screen stays,
  * for example on the placeholder entry of a session stored by Epics 1–2). Pure:
- * - the problem comes from the entry's seed through the core plugin, so a restored session shows the same problem;
+ * - the problem comes from the entry's seed through the core plugin, so a restored session shows the same problem. A
+ *   damaged row (a missing seed, an item past the end) shows the problem of its [usable run][CheckRun.usable], the one
+ *   the engine checks, so the alarm can still be stopped;
  * - in Grace the countdown is read from the grace `Deadline` at [now] (frozen at the pause during a call); in Loud after
  *   a grace window "Time's up. Alarm's back on until you finish."; a ring without grace shows neither;
  * - the footer's snooze is the same [snoozeOffer] the Ringing screen shows, and the phone-call note as there.
@@ -91,8 +97,9 @@ fun mathCheckUiState(
     priceOf: PriceLookup = NoPrices,
 ): CheckUiState? {
     val session = (state as? SessionState.Grace)?.session ?: (state as? SessionState.Loud)?.session
-    val puzzle = session?.let(::mathPuzzle)
-    val item = session?.checkRun?.step?.item ?: 0
+    val run = session?.usableRun()
+    val puzzle = run?.let(::mathPuzzle)
+    val item = run?.step?.item ?: 0
     val problem = puzzle?.problems?.getOrNull(item)
     if (session == null || puzzle == null || problem == null) return null
     return CheckUiState(
@@ -111,9 +118,11 @@ fun mathCheckUiState(
     )
 }
 
-/** The puzzle of [session]'s current entry from the entry's seed, when it is a Math entry. */
-private fun mathPuzzle(session: SessionData): Puzzle.Math? {
-    val run = session.checkRun
+/** This session's run as the engine checks answers on it ([CheckRun.usable]). */
+private fun SessionData.usableRun(): CheckRun = checkRun.usable(sessionId, ringIndex)
+
+/** The puzzle of [run]'s current entry from the entry's seed, when it is a Math entry. */
+private fun mathPuzzle(run: CheckRun): Puzzle.Math? {
     val entry = run.currentEntry?.takeIf { it.type == CheckType.Math }
     val seed = run.seeds.getOrNull(run.step.entry)
     return if (entry == null || seed == null) null else entry.type.generate(seed, entry.difficulty, entry.count) as? Puzzle.Math

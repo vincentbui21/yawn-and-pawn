@@ -199,7 +199,7 @@ class WakeActivityTest {
     }
 
     @Test
-    fun `I'm up ends the session on time, answering the placeholder, stopping sound and notification and closing the screen`() {
+    fun `I'm up ends the session on time, answering the placeholder, stopping sound and notification and showing Success`() {
         val history = FakeSessionHistoryRepository()
         val app = WakeApp(history = history)
         ringing(app)
@@ -210,13 +210,14 @@ class WakeActivityTest {
         val activity = Robolectric.buildActivity(WakeActivity::class.java).setup().get()
         imUp().performClick()
 
-        // The compose clock drives the recomposition that answers the placeholder step.
-        composeRule.waitUntil(timeoutMillis = 10_000) { app.engine.state.value == SessionState.Idle && activity.isFinishing }
+        // The compose clock drives the recomposition that answers the placeholder step; Success follows (Story 3.3).
+        composeRule.awaitSuccess(app, "Up on time.")
         // The engine publishes Idle before its end effects run: wait for them too.
         app.awaitUntil("the runtime stopped the ring") { app.player.sound == null && notifications.size() == 0 }
         assertNull(app.player.sound, "no sound")
         assertEquals(0, notifications.size(), "no notification")
         assertEquals(SessionOutcome.OnTime, history.rows.single().outcome)
+        assertFalse(activity.isFinishing, "Success stays until Done")
     }
 
     @Test
@@ -267,16 +268,16 @@ class WakeActivityTest {
     }
 
     @Test
-    fun `opened on a quiet placeholder step it answers it and the session ends`() {
+    fun `opened on a quiet placeholder step it answers it and the session ends with Success`() {
         val app = WakeApp()
         ringing(app)
         app.dispatch(SessionEvent.ImUpTapped)
         assertIs<SessionState.Grace>(app.engine.state.value)
 
-        val activity = Robolectric.buildActivity(WakeActivity::class.java).setup().get()
+        Robolectric.buildActivity(WakeActivity::class.java).setup().get()
 
         app.awaitUntil("the session ends") { app.engine.state.value == SessionState.Idle }
-        composeRule.waitUntil(timeoutMillis = 5_000) { activity.isFinishing }
+        composeRule.awaitSuccess(app, "Up on time.")
     }
 
     @Test
@@ -289,12 +290,12 @@ class WakeActivityTest {
         store.inner.commitFailure = DomainError.StorageFailure("disk full")
         val callsBefore = store.calls.get()
 
-        val activity = Robolectric.buildActivity(WakeActivity::class.java).setup().get()
+        Robolectric.buildActivity(WakeActivity::class.java).setup().get()
         composeRule.waitUntil(timeoutMillis = 10_000) { store.calls.get() > callsBefore }
         assertIs<SessionState.Grace>(app.engine.state.value, "the failed answer changed nothing")
         store.inner.commitFailure = null
 
-        composeRule.waitUntil(timeoutMillis = 10_000) { app.engine.state.value == SessionState.Idle && activity.isFinishing }
+        composeRule.awaitSuccess(app, "Up on time.")
         assertTrue(store.calls.get() > callsBefore + 1, "answered again after the failure")
     }
 
@@ -311,21 +312,21 @@ class WakeActivityTest {
         assertFalse(activity.isFinishing, "it waits for the session")
         app.dispatch(SessionEvent.AlarmFired("session-1", aSessionConfig(), beforeFirstUnlock = false))
 
-        composeRule.waitUntil(timeoutMillis = 10_000) { app.engine.state.value == SessionState.Idle && activity.isFinishing }
+        composeRule.awaitSuccess(app, "Up on time.")
     }
 
     @Test
-    fun `opened on a restored loud placeholder step it answers it and the session ends`() {
+    fun `opened on a restored loud placeholder step it answers it and the session ends with Success`() {
         val loud = SessionState.Loud(aSession(sessionId = "session-loud"))
         val app = WakeApp(store = FakeActiveSessionStore(loud))
         val restore = app.koin.get<ApplicationScope>().launch { app.engine.restore() }
         app.awaitUntil("the session is restored") { restore.isCompleted }
         assertIs<SessionState.Loud>(app.engine.state.value)
 
-        val activity = Robolectric.buildActivity(WakeActivity::class.java).setup().get()
+        Robolectric.buildActivity(WakeActivity::class.java).setup().get()
 
         app.awaitUntil("the session ends") { app.engine.state.value == SessionState.Idle }
-        composeRule.waitUntil(timeoutMillis = 5_000) { activity.isFinishing }
+        composeRule.awaitSuccess(app, "Up on time.")
     }
 
     @Test
@@ -358,7 +359,7 @@ class WakeActivityTest {
     }
 
     @Test
-    fun `opened by the full-screen intent before the session starts it waits, shows the session and closes when it ends`() {
+    fun `opened by the full-screen intent before the session starts it waits, shows the session and Success when it ends`() {
         val app = WakeApp()
 
         val activity = Robolectric.buildActivity(WakeActivity::class.java).setup().get()
@@ -369,7 +370,7 @@ class WakeActivityTest {
 
         // The screen answers the placeholder step itself.
         app.dispatch(SessionEvent.ImUpTapped)
-        composeRule.waitUntil(timeoutMillis = 5_000) { activity.isFinishing }
+        composeRule.awaitSuccess(app, "Up on time.")
     }
 }
 

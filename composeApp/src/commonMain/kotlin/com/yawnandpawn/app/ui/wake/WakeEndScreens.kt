@@ -13,9 +13,16 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.hapticfeedback.HapticFeedbackType
+import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.semantics.LiveRegionMode
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.heading
@@ -101,15 +108,20 @@ fun FallbackPickerScreen(
  * with a 1.5 s confetti celebration and one success haptic (owner decisions 2026-09-28),
  * after a snooze "You're up. That's what counts." with the amount paid, a test "Test finished. Your alarm works.",
  * then "Done" (64 dp, thumb zone).
+ *
+ * [basic] is the production screen until Epic 6 (Story 3.3): no celebration (no count-up, no confetti), one success
+ * haptic for every kind (once, even across an activity recreation), and "Done" as a 72 dp `button-wake-primary`.
  */
 @Composable
 fun SuccessScreen(
     state: SuccessUiState,
     onIntent: (WakeIntent) -> Unit,
     modifier: Modifier = Modifier,
+    basic: Boolean = false,
 ) {
     // On time only: the celebration (count-up, confetti, one success haptic); after a snooze or a test, none.
-    val celebration = if (state.kind is SuccessKind.OnTime) rememberCelebration() else null
+    val celebration = if (state.kind is SuccessKind.OnTime && !basic) rememberCelebration() else null
+    if (basic) SuccessHapticOnce()
     WakeSurface(modifier = modifier, overlay = { celebration?.let { Confetti(it) } }) {
         val colors = PpsTheme.colors
         val spacing = PpsTheme.spacing
@@ -133,11 +145,13 @@ fun SuccessScreen(
 
                         is SuccessKind.AfterSnooze -> {
                             Headline(stringResource(Res.string.success_after_snooze))
-                            Text(
-                                text = stringResource(Res.string.success_paid_this_morning, formatMoney(kind.paidThisMorning)),
-                                style = PpsTheme.typography.body,
-                                color = colors.textSecondary,
-                            )
+                            kind.paidThisMorning?.let { paid ->
+                                Text(
+                                    text = stringResource(Res.string.success_paid_this_morning, formatMoney(paid)),
+                                    style = PpsTheme.typography.body,
+                                    color = colors.textSecondary,
+                                )
+                            }
                         }
 
                         SuccessKind.Test -> {
@@ -147,7 +161,20 @@ fun SuccessScreen(
                     if (state.pendingNotUsed) NoteInline(text = stringResource(Res.string.success_pending_not_used))
                 }
             }
-            WakePrimaryButton(text = stringResource(Res.string.success_done), onClick = { onIntent(WakeIntent.DoneClicked) }, hero = false)
+            WakePrimaryButton(text = stringResource(Res.string.success_done), onClick = { onIntent(WakeIntent.DoneClicked) }, hero = basic)
+        }
+    }
+}
+
+/** The success haptic pattern, once per screen: a saved flag keeps a recreated activity from playing it again. */
+@Composable
+private fun SuccessHapticOnce() {
+    val haptics = LocalHapticFeedback.current
+    var played by rememberSaveable { mutableStateOf(false) }
+    LaunchedEffect(Unit) {
+        if (!played) {
+            played = true
+            haptics.performHapticFeedback(HapticFeedbackType.Confirm)
         }
     }
 }

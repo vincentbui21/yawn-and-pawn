@@ -170,9 +170,9 @@ sealed interface SuccessKind {
         val streakDays: Int,
     ) : SuccessKind
 
-    /** After at least one paid snooze. */
+    /** After at least one paid snooze; [paidThisMorning] null shows no "{paid} paid this morning" line (Money is Epic 4). */
     data class AfterSnooze(
-        val paidThisMorning: Money,
+        val paidThisMorning: Money?,
     ) : SuccessKind
 
     /** A test alarm. */

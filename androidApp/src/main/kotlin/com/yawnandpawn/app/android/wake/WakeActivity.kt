@@ -36,11 +36,13 @@ import com.yawnandpawn.app.ui.format.is24HourClock
 import com.yawnandpawn.app.ui.wake.PlaceholderStep
 import com.yawnandpawn.app.ui.wake.RingingScreen
 import com.yawnandpawn.app.ui.wake.RingingUiState
+import com.yawnandpawn.app.ui.wake.SuccessScreen
 import com.yawnandpawn.app.ui.wake.WakeIntent
 import com.yawnandpawn.app.ui.wake.WakeSurface
 import com.yawnandpawn.app.ui.wake.alarmOnlyRingingUiState
 import com.yawnandpawn.app.ui.wake.placeholderStepDue
 import com.yawnandpawn.app.ui.wake.ringingUiState
+import com.yawnandpawn.app.ui.wake.successUiState
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import org.koin.android.ext.android.inject
@@ -71,7 +73,11 @@ import kotlin.time.Duration.Companion.seconds
  *   "I'm up" alone ends the session; a failed dispatch is retried while the step is due. Epic 3 shows the real check
  *   here instead.
  *
- * It finishes once a session (or emergency ring) it showed is over: Idle, Completed or Missed, with no emergency ring.
+ * Once a session it showed completes (the engine's [SessionEngine.ended], since its `state` may skip from Completed to
+ * Idle), it shows the basic Success screen for that session instead (Story 3.3): UI-only state keyed by `sessionId`,
+ * while the engine records the session and goes Idle in the background. Success closes on "Done", after
+ * [SUCCESS_TIMEOUT], or when the screen is left (Home), so the next app open shows Home. A new ring replaces it. Any
+ * other end (Missed, an emergency ring stopped) finishes the screen.
  */
 class WakeActivity : ComponentActivity() {
     private val engine: SessionEngine by inject()
@@ -85,6 +91,9 @@ class WakeActivity : ComponentActivity() {
 
     /** "I'm up" was tapped before the session existed; replayed once it rings. */
     private var pendingImUp by mutableStateOf(false)
+
+    /** When the screen shows Success and when it closes (Story 3.3); made in [onCreate]. */
+    private lateinit var end: WakeScreenEnd
 
     /**
      * The volume keys do nothing while this screen is in front with focus and something rings (Story 2.8); the
@@ -129,6 +138,7 @@ class WakeActivity : ComponentActivity() {
         timings.stage(WakeStage.WakeScreenCreated)
         enableEdgeToEdge()
         super.onCreate(savedInstanceState)
+        end = WakeScreenEnd(this, ended = { engine.ended.value })
         showOverLockScreen()
         // A restore entry point (Story 2.1): opened after a kill, the screen takes over the stored session and shows the
         // same step from memory (nothing when the engine already holds it).
@@ -150,25 +160,32 @@ class WakeActivity : ComponentActivity() {
             // The full-screen intent can open the screen just before the session starts (the service posts the ringing
             // notification first): it waits for a session or an emergency ring, and closes only once that is over.
             val active = state.isRinging() || emergency != null
-            var seen by remember { mutableStateOf(false) }
-            LaunchedEffect(active) {
-                if (active) {
-                    seen = true
-                } else if (seen) {
-                    finish()
-                }
-            }
+            val ringingSessionId = (state as? SessionState.Active)?.takeIf { it.isRinging() }?.session?.sessionId
+            LaunchedEffect(active, ringingSessionId) { end.follow(active, ringingSessionId) }
             SessionAnswers(state, emergency != null)
-            val zone = timeZones.current()
-            val session = (state as? SessionState.Active)?.session
-            val current =
-                emergency?.let { alarmOnlyRingingUiState(it.alarmAt, zone) }
-                    ?: session?.let { ringingUiState(it, key(unlocked) { snoozePolicy.availability(it) }, zone) }
-                    ?: runtime.shownAlarmAt()?.let { alarmOnlyRingingUiState(it, zone) }
             // Once a session ends the screen keeps its last look until it closes, instead of flashing an empty surface.
             val last = remember { LastShown() }
-            if (current != null) last.state = current
-            WakeContent(state = current ?: last.state, onIntent = ::onIntent, onInteracted = ::interacted)
+            val success = end.success()
+            if (success != null) {
+                key(success.sessionId) {
+                    SuccessScreen(state = successUiState(success), onIntent = ::onIntent, basic = true)
+                    LaunchedEffect(Unit) {
+                        delay(SUCCESS_TIMEOUT)
+                        finish()
+                    }
+                }
+            } else {
+                // Restored with a Success whose session this process no longer knows (it was killed): nothing to show.
+                if (end.successSessionId != null) LaunchedEffect(Unit) { finish() }
+                val zone = timeZones.current()
+                val session = (state as? SessionState.Active)?.session
+                val current =
+                    emergency?.let { alarmOnlyRingingUiState(it.alarmAt, zone) }
+                        ?: session?.let { ringingUiState(it, key(unlocked) { snoozePolicy.availability(it) }, zone) }
+                        ?: runtime.shownAlarmAt()?.let { alarmOnlyRingingUiState(it, zone) }
+                if (current != null) last.state = current
+                WakeContent(state = current ?: last.state, onIntent = ::onIntent, onInteracted = ::interacted)
+            }
         }
     }
 
@@ -193,6 +210,9 @@ class WakeActivity : ComponentActivity() {
 
     private fun onIntent(intent: WakeIntent) {
         when {
+            // "Done" on Success: the session is already over, so it only closes the screen.
+            intent == WakeIntent.DoneClicked -> finish()
+
             intent != WakeIntent.ImUpClicked -> interacted()
 
             runtime.emergency.value != null -> runtime.stopEmergency()
@@ -230,6 +250,9 @@ class WakeActivity : ComponentActivity() {
     companion object {
         /** How often a placeholder answer whose dispatch failed is sent again. */
         val PLACEHOLDER_RETRY: Duration = 2.seconds
+
+        /** Success closes by itself after this long without "Done" (owner-approved default 2026-09-26). */
+        val SUCCESS_TIMEOUT: Duration = 60.seconds
 
         /** The intent of the ringing notification. */
         fun intent(context: Context): Intent =

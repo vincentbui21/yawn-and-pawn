@@ -526,6 +526,43 @@ class SessionEngineTest {
             )
         }
 
+    @Test
+    fun `ended keeps a Completed session after Recorded makes the engine Idle, until the next session ends (Story 3-3)`() =
+        runTest {
+            val engine = engine()
+            engine.dispatch(alarmFired)
+            engine.dispatch(SessionEvent.ImUpTapped)
+            assertNull(engine.ended.value, "nothing ended yet")
+
+            assertEquals(Outcome.Success(SessionState.Idle), engine.dispatch(SessionEvent.CheckAnswerSubmitted(CheckAnswer.Placeholder)))
+
+            val completed = assertIs<SessionState.Completed>(engine.ended.value)
+            assertEquals(SESSION_ID, completed.session.sessionId)
+            assertTrue(store.commits.any { it.kind == "Completed" }, "the Completed state was committed")
+
+            // A new session rings: the last ending stays until that one ends, here Missed after 30 minutes.
+            engine.dispatch(SessionEvent.AlarmFired("session-2", testConfig(), SEEDS, beforeFirstUnlock = false))
+            assertEquals(completed, engine.ended.value, "a ring changes nothing")
+            time.advanceBy(30.minutes)
+            assertEquals(Outcome.Success(SessionState.Idle), engine.dispatch(SessionEvent.SlotFired))
+
+            assertEquals("session-2", assertIs<SessionState.Missed>(engine.ended.value).session.sessionId)
+        }
+
+    @Test
+    fun `a failed Completed commit leaves ended untouched`() =
+        runTest {
+            val engine = engine()
+            engine.dispatch(alarmFired)
+            engine.dispatch(SessionEvent.ImUpTapped)
+            store.commitFailure = DomainError.StorageFailure("disk full")
+
+            engine.dispatch(SessionEvent.CheckAnswerSubmitted(CheckAnswer.Placeholder))
+
+            assertIs<SessionState.Grace>(engine.state.value)
+            assertNull(engine.ended.value)
+        }
+
     /** What the runner gets of [transition]'s one-shot effects: everything but the history start, which the recorder writes. */
     private fun runnerEffects(transition: Transition): List<SessionEffect> =
         transition.effects.filter { it !is SessionEffect.RecordSessionStart }

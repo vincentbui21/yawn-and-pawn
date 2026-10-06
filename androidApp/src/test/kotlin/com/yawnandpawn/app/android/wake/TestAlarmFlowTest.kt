@@ -106,7 +106,10 @@ class TestAlarmFlowTest {
         assertIs<SessionState.Ringing>(app.engine.state.value)
 
         composeRule.onNodeWithText("I'm up").performClick()
-        composeRule.waitUntil(timeoutMillis = 10_000) { app.engine.state.value == SessionState.Idle && screen.isFinishing }
+        // Story 3.3: the test Success screen, then "Done" closes the wake screen.
+        composeRule.awaitSuccess(app, "Test finished. Your alarm works.")
+        composeRule.onNodeWithText("Done").performClick()
+        composeRule.waitUntil(timeoutMillis = 5_000) { screen.isFinishing }
         app.awaitUntil("the ring stops") { app.player.sound == null }
 
         assertEquals(SessionOutcome.Test, history.rows.single().outcome)

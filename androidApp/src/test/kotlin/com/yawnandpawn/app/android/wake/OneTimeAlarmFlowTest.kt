@@ -84,7 +84,10 @@ class OneTimeAlarmFlowTest {
         // "I'm up" on the wake screen ends the Epic 1 session.
         val screen = Robolectric.buildActivity(WakeActivity::class.java).setup().get()
         composeRule.onNodeWithText("I'm up").performClick()
-        composeRule.waitUntil(timeoutMillis = 10_000) { app.engine.state.value == SessionState.Idle && screen.isFinishing }
+        // Story 3.3: the Success screen for the session, then "Done" closes the wake screen.
+        composeRule.awaitSuccess(app, "Up on time.")
+        composeRule.onNodeWithText("Done").performClick()
+        composeRule.waitUntil(timeoutMillis = 5_000) { screen.isFinishing }
         app.awaitUntil("the ring stops") { app.player.sound == null }
 
         assertEquals(false, runBlocking { repository.get(once.id).valueOrNull()?.enabled }, "the one-time alarm is off")

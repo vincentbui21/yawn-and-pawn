@@ -76,6 +76,8 @@ class SessionEngine internal constructor(
 
     private val restoredFlag = MutableStateFlow(false)
 
+    private val endedFlag = MutableStateFlow<SessionState.Active?>(null)
+
     /** The history effects go here, never to the runner. */
     private val history = EngineHistory(recorder, logger)
 
@@ -88,6 +90,14 @@ class SessionEngine internal constructor(
      * loaded yet, so the session lock treats that as locked (Story 2.6). It stays false while loading fails.
      */
     val restored: StateFlow<Boolean> = restoredFlag.asStateFlow()
+
+    /**
+     * The last session that ended in this process: its Completed or Missed state, kept after `Recorded` makes [state]
+     * Idle. [state] publishes Completed and Idle in one call, so a collector may only see Idle; this is set before
+     * [state], so a reader that sees the session gone there reads how it ended here (Story 3.3: the Success screen). In
+     * memory only, never stored; null until a session ends.
+     */
+    val ended: StateFlow<SessionState.Active?> = endedFlag.asStateFlow()
 
     /** Runs [event] through the reducer, commits, runs its effects, then any follow-up events now due. Returns the state. */
     suspend fun dispatch(event: SessionEvent): Outcome<SessionState, DomainError> =
@@ -215,7 +225,9 @@ class SessionEngine internal constructor(
                 logger.log(LogEvent.OperationFailed.of(COMMIT, committed.error))
                 committed
             } else {
-                current.value = transition.state
+                val next = transition.state
+                if (next is SessionState.Completed || next is SessionState.Missed) endedFlag.value = next
+                current.value = next
                 oneShot.filterNot { it.isHistory() }.forEach { effect -> guarded(effect) { effects.run(effect) } }
                 applyEntryEffects(transition.state, now)
                 // The start row is written after the effects (device test round 1): the sound never waits for it.

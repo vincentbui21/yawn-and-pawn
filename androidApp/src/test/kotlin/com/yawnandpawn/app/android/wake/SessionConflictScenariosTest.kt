@@ -12,14 +12,15 @@ import com.yawnandpawn.app.core.alarm.Alarm
 import com.yawnandpawn.app.core.alarm.AlarmFired
 import com.yawnandpawn.app.core.alarm.AlarmRepository
 import com.yawnandpawn.app.core.alarm.RequestCodes
+import com.yawnandpawn.app.core.checks.CheckAnswer
+import com.yawnandpawn.app.core.checks.CheckMode
+import com.yawnandpawn.app.core.checks.CheckPlan
+import com.yawnandpawn.app.core.checks.SeedDeriver
 import com.yawnandpawn.app.core.error.Outcome
 import com.yawnandpawn.app.core.history.SessionHistoryRepository
 import com.yawnandpawn.app.core.history.SessionHistoryRow
 import com.yawnandpawn.app.core.history.SessionOutcome
 import com.yawnandpawn.app.core.session.ActiveSessionStore
-import com.yawnandpawn.app.core.session.CheckAnswer
-import com.yawnandpawn.app.core.session.CheckPlan
-import com.yawnandpawn.app.core.session.CheckStep
 import com.yawnandpawn.app.core.session.PurchaseIntentId
 import com.yawnandpawn.app.core.session.PurchaseToken
 import com.yawnandpawn.app.core.session.PurchaseVerdict
@@ -28,6 +29,7 @@ import com.yawnandpawn.app.core.session.SessionEvent
 import com.yawnandpawn.app.core.session.SessionState
 import com.yawnandpawn.app.core.session.SnoozeAvailability
 import com.yawnandpawn.app.core.session.SnoozeAvailabilityPolicy
+import com.yawnandpawn.app.core.session.StepPointer
 import com.yawnandpawn.app.core.session.StoredSession
 import com.yawnandpawn.app.core.session.UnavailableReason
 import com.yawnandpawn.app.core.session.UserLockState
@@ -52,6 +54,7 @@ import org.robolectric.android.controller.ServiceController
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
 import kotlin.test.assertIs
+import kotlin.test.assertNotEquals
 import kotlin.test.assertNotNull
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
@@ -175,10 +178,10 @@ class SessionConflictScenariosTest {
         app.awaitUntil("Loud") { state() is SessionState.Loud }
     }
 
-    private fun grantSnooze(seeds: List<Long> = listOf(42L, 43L)) {
+    private fun grantSnooze() {
         val offer = (policy.availability(session()) as SnoozeAvailability.Available).offer
         val token = PurchaseToken("token-${session().snoozesGranted}")
-        app.dispatch(SessionEvent.PurchaseGranted(offer.productId, token, PurchaseVerdict.Grant, seeds))
+        app.dispatch(SessionEvent.PurchaseGranted(offer.productId, token, PurchaseVerdict.Grant))
         assertIs<SessionState.Snoozed>(state())
     }
 
@@ -262,7 +265,7 @@ class SessionConflictScenariosTest {
         if (state() is SessionState.Ringing) app.dispatch(SessionEvent.ImUpTapped)
         val stepsLeft =
             session()
-                .checkRun.plan.steps.size - session().checkRun.step
+                .checkRun.plan.entries.size - session().checkRun.step.entry
         repeat(stepsLeft) { app.dispatch(SessionEvent.CheckAnswerSubmitted(CheckAnswer.Placeholder)) }
         app.awaitUntil("the session is recorded and Idle") { state() == SessionState.Idle }
         return sessionId
@@ -322,24 +325,27 @@ class SessionConflictScenariosTest {
         store(alarmA)
         val twoSteps =
             aSessionConfig(alarmId = alarmA.id, scheduledAt = scheduledAt)
-                .copy(checkPlan = CheckPlan(listOf(CheckStep.Placeholder, CheckStep.Placeholder)))
-        app.dispatch(SessionEvent.AlarmFired("session-2", twoSteps, listOf(1L, 2L), beforeFirstUnlock = false))
+                .copy(checkPlan = CheckPlan(CheckMode.All, List(2) { CheckPlan.PLACEHOLDER_ENTRY }))
+        app.dispatch(SessionEvent.AlarmFired("session-2", twoSteps, beforeFirstUnlock = false))
         val service = app.startService(assertNotNull(shadowOf(app.app).nextStartedService))
         app.awaitRinging()
         imUpToGrace()
         app.dispatch(SessionEvent.CheckAnswerSubmitted(CheckAnswer.Placeholder))
         graceToLoud()
-        assertEquals(1, session().checkRun.step, "Loud at step 2")
+        assertEquals(StepPointer(1, 0), session().checkRun.step, "Loud at step 2")
+        val ring1Seeds = session().checkRun.seeds
 
-        grantSnooze(seeds = listOf(42L, 43L))
+        grantSnooze()
 
         assertNull(app.player.sound, "sound off")
-        assertEquals(0, session().checkRun.step, "check progress discarded")
-        assertEquals(listOf(42L, 43L), session().checkRun.seeds, "new seeds")
+        assertEquals(StepPointer(0, 0), session().checkRun.step, "check progress discarded")
         pass(9.minutes)
         deliverSlot(service)
         app.awaitRinging()
         assertEquals(2, session().ringIndex)
+        val ring2Seeds = List(2) { SeedDeriver.seed("session-2", 2, it, 0) }
+        assertEquals(ring2Seeds, session().checkRun.seeds, "the next ring has new seeds (Story 3.1)")
+        assertNotEquals(ring1Seeds, ring2Seeds)
         imUpToGrace()
         assertRecorded(finish(), SessionOutcome.Snoozed, snoozes = 1)
     }

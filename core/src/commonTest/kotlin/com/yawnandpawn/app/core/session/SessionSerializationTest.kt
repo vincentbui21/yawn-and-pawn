@@ -1,5 +1,10 @@
 package com.yawnandpawn.app.core.session
 
+import com.yawnandpawn.app.core.checks.CheckEntry
+import com.yawnandpawn.app.core.checks.CheckMode
+import com.yawnandpawn.app.core.checks.CheckPlan
+import com.yawnandpawn.app.core.checks.CheckType
+import com.yawnandpawn.app.core.checks.Difficulty
 import com.yawnandpawn.app.core.time.Deadline
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -11,10 +16,17 @@ class SessionSerializationTest {
 
     /** Every optional field set, so the round trip covers all of them. */
     private val full =
-        ringSession(testConfig(checkPlan = TWO_STEPS)).copy(
+        ringSession(testConfig(checkPlan = MIXED)).copy(
             ringIndex = 3,
             snoozesGranted = 2,
-            checkRun = CheckRun(TWO_STEPS, NEW_SEEDS, step = 1, failedAttempts = 4, fallbackUsed = true),
+            checkRun =
+                CheckRun(
+                    MIXED.copy(mode = CheckMode.All),
+                    NEW_SEEDS,
+                    step = StepPointer(1, 2),
+                    failedAttempts = 4,
+                    fallbackUsed = true,
+                ),
             paying = INTENT,
             noGraceThisRing = true,
             beforeFirstUnlock = true,
@@ -49,5 +61,11 @@ class SessionSerializationTest {
         val encoded = json.encodeToString(SessionState.serializer(), SessionState.Snoozed(ringSession()))
         assertEquals(true, "\"type\":\"Snoozed\"" in encoded, encoded)
         assertEquals(true, "2027-03-03T06:00:00Z" in encoded, encoded)
+    }
+
+    private companion object {
+        /** A Random plan with a Math entry, so the round trip covers the plugin types. */
+        val MIXED =
+            CheckPlan(CheckMode.Random, listOf(CheckEntry(CheckType.Math, Difficulty.Hard, count = 4), CheckPlan.PLACEHOLDER_ENTRY))
     }
 }

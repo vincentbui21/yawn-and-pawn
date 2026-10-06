@@ -16,9 +16,9 @@ import com.yawnandpawn.app.android.sound.LibrarySoundResolver
 import com.yawnandpawn.app.awaitChildren
 import com.yawnandpawn.app.core.alarm.AlarmFired
 import com.yawnandpawn.app.core.alarm.RequestCodes
+import com.yawnandpawn.app.core.checks.CheckAnswer
 import com.yawnandpawn.app.core.error.DomainError
 import com.yawnandpawn.app.core.log.LogEvent
-import com.yawnandpawn.app.core.session.CheckAnswer
 import com.yawnandpawn.app.core.session.PurchaseOutcome
 import com.yawnandpawn.app.core.session.SessionData
 import com.yawnandpawn.app.core.session.SessionEffect

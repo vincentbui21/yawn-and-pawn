@@ -1,6 +1,12 @@
 package com.yawnandpawn.app.core.session
 
 import com.yawnandpawn.app.core.alarm.Alarm
+import com.yawnandpawn.app.core.checks.CheckAnswer
+import com.yawnandpawn.app.core.checks.CheckEntry
+import com.yawnandpawn.app.core.checks.CheckMode
+import com.yawnandpawn.app.core.checks.CheckPlan
+import com.yawnandpawn.app.core.checks.CheckType
+import com.yawnandpawn.app.core.checks.Difficulty
 import kotlinx.datetime.LocalTime
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -50,7 +56,7 @@ class ConfigResolverTest {
                 rampStartPercent = 20,
                 soundRef = "builtin:birds",
                 vibration = false,
-                checkPlan = CheckPlan(listOf(CheckStep.Placeholder)),
+                checkPlan = CheckPlan(CheckMode.All, listOf(CheckEntry(CheckType.Placeholder, Difficulty.Medium, count = 1))),
             ),
             ConfigResolver.resolve(alarm, settings, testMode = false, scheduledAt = SCHEDULED_AT),
         )

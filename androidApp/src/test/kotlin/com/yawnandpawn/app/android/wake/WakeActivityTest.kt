@@ -86,7 +86,7 @@ class WakeActivityTest {
         app: WakeApp,
         testMode: Boolean = false,
     ) {
-        app.dispatch(SessionEvent.AlarmFired("session-1", aSessionConfig(testMode = testMode), listOf(1L), beforeFirstUnlock = false))
+        app.dispatch(SessionEvent.AlarmFired("session-1", aSessionConfig(testMode = testMode), beforeFirstUnlock = false))
         assertIs<SessionState.Ringing>(app.engine.state.value)
     }
 
@@ -309,7 +309,7 @@ class WakeActivityTest {
         composeRule.waitForIdle()
         assertEquals(SessionState.Idle, app.engine.state.value, "no session yet")
         assertFalse(activity.isFinishing, "it waits for the session")
-        app.dispatch(SessionEvent.AlarmFired("session-1", aSessionConfig(), listOf(1L), beforeFirstUnlock = false))
+        app.dispatch(SessionEvent.AlarmFired("session-1", aSessionConfig(), beforeFirstUnlock = false))
 
         composeRule.waitUntil(timeoutMillis = 10_000) { app.engine.state.value == SessionState.Idle && activity.isFinishing }
     }

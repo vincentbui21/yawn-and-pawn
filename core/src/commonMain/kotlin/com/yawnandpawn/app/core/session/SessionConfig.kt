@@ -2,6 +2,7 @@ package com.yawnandpawn.app.core.session
 
 import com.yawnandpawn.app.core.alarm.Alarm
 import com.yawnandpawn.app.core.alarm.AlarmDraft
+import com.yawnandpawn.app.core.checks.CheckPlan
 import kotlinx.serialization.Serializable
 import kotlin.time.Instant
 

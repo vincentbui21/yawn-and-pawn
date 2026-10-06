@@ -1,5 +1,9 @@
 package com.yawnandpawn.app.core.session
 
+import com.yawnandpawn.app.core.checks.CheckAnswer
+import com.yawnandpawn.app.core.checks.CheckMode
+import com.yawnandpawn.app.core.checks.CheckPlan
+import com.yawnandpawn.app.core.checks.CheckType
 import com.yawnandpawn.app.core.error.DomainError
 import com.yawnandpawn.app.core.error.Outcome
 import com.yawnandpawn.app.core.history.SessionHistoryRow
@@ -36,7 +40,7 @@ class SessionEngineHistoryTest {
         sessionReducer: SessionReducer = reducer,
     ) = SessionEngine(sessionReducer, store, effects, SessionRecorder(history), time.clock, time.monotonicClock, time.bootCounter, logger)
 
-    private val alarmFired = SessionEvent.AlarmFired(SESSION_ID, testConfig(), SEEDS, beforeFirstUnlock = false)
+    private val alarmFired = SessionEvent.AlarmFired(SESSION_ID, testConfig(), beforeFirstUnlock = false)
 
     private fun Outcome<SessionState, DomainError>.state(): SessionState = assertIs<Outcome.Success<SessionState>>(this).value
 
@@ -78,7 +82,7 @@ class SessionEngineHistoryTest {
         runTest {
             assertEquals(
                 expectedStartRow,
-                startRowOf(SessionEvent.TestAlarmFired(SESSION_ID, testConfig(), SEEDS, beforeFirstUnlock = true)),
+                startRowOf(SessionEvent.TestAlarmFired(SESSION_ID, testConfig(), beforeFirstUnlock = true)),
             )
         }
 
@@ -150,7 +154,7 @@ class SessionEngineHistoryTest {
     fun `a test session is recorded as Test`() =
         runTest {
             val engine = engine()
-            engine.dispatch(SessionEvent.TestAlarmFired(SESSION_ID, testConfig(), SEEDS, beforeFirstUnlock = false))
+            engine.dispatch(SessionEvent.TestAlarmFired(SESSION_ID, testConfig(), beforeFirstUnlock = false))
             engine.dispatch(SessionEvent.ImUpTapped)
 
             assertEquals(Outcome.Success(SessionState.Idle), engine.dispatch(SessionEvent.CheckAnswerSubmitted(CheckAnswer.Placeholder)))
@@ -295,7 +299,7 @@ class SessionEngineHistoryTest {
         return assertIs<SessionState.Completed>(engine.dispatch(SessionEvent.CheckAnswerSubmitted(CheckAnswer.Placeholder)).state())
     }
 
-    private val nextAlarm = SessionEvent.AlarmFired("session-2", testConfig(), SEEDS, beforeFirstUnlock = false)
+    private val nextAlarm = SessionEvent.AlarmFired("session-2", testConfig(), beforeFirstUnlock = false)
 
     @Test
     fun `a new alarm behind an unwritten ended session retries the write, records it and rings`() =

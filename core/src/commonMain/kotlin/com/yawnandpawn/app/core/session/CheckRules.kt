@@ -1,5 +1,8 @@
 package com.yawnandpawn.app.core.session
 
+import com.yawnandpawn.app.core.checks.CheckAnswer
+import com.yawnandpawn.app.core.checks.CheckPlan
+import com.yawnandpawn.app.core.checks.SeedDeriver
 import com.yawnandpawn.app.core.session.SessionState.Ring
 import com.yawnandpawn.app.core.session.SessionState.Ringing
 import com.yawnandpawn.app.core.time.TimeSnapshot
@@ -13,7 +16,7 @@ internal class CheckRules(
     private val fallbackPolicy: FallbackPolicy,
     private val directBootPlan: (CheckPlan) -> CheckPlan = DirectBootSubstitution::lockedPlan,
 ) {
-    /** Grace / Loud + CheckAnswerSubmitted: advance, count a wrong answer, or complete on the last step. */
+    /** Grace / Loud + CheckAnswerSubmitted: advance, count a wrong answer, or complete on the last item of the last entry. */
     fun onAnswer(
         state: Ring,
         answer: CheckAnswer,
@@ -41,15 +44,20 @@ internal class CheckRules(
         }
 
     /**
-     * Grace / Loud + FallbackRequested, when the policy allows it and it was not used: the fallback plan replaces the
-     * check, with the Direct Boot substitutions when the ring uses them (`directBootRing`, Stories 2.3 and 2.4).
+     * Grace / Loud + FallbackRequested, when the policy allows it and it was not used: the fallback plan, resolved for
+     * this ring with the fallback seeds, replaces the check, with the Direct Boot substitutions when the ring uses them
+     * (`directBootRing`, Stories 2.3 and 2.4).
      */
     fun onFallbackRequested(state: Ring): Transition? {
         val session = state.session
         val decision = fallbackPolicy.fallback(session)
         return if (state !is Ringing && !session.checkRun.fallbackUsed && decision is FallbackDecision.Allowed) {
-            val plan = if (session.directBootRing) directBootPlan(decision.plan) else decision.plan
-            val run = session.checkRun.copy(plan = plan, step = 0, fallbackUsed = true)
+            val fallback =
+                CheckRun.forRing(decision.plan, session.sessionId, session.ringIndex, fallback = true) { plan ->
+                    if (session.directBootRing) directBootPlan(plan) else plan
+                }
+            // Story 3.9 decides whether the fallback also resets the failed attempts.
+            val run = fallback.copy(failedAttempts = session.checkRun.failedAttempts)
             Transition(state.with(session.copy(checkRun = run)), emptyList())
         } else {
             null
@@ -63,18 +71,29 @@ internal class CheckRules(
     ): Transition {
         val session = state.session
         val run = session.checkRun
+        val step = run.step
         return when (result) {
+            StepResult.ValidNextItem -> {
+                advanced(state, run.copy(step = step.copy(item = step.item + 1)))
+            }
+
             StepResult.ValidNext -> {
-                Transition(state.with(session.copy(checkRun = run.copy(step = run.step + 1))), emptyList())
+                advanced(state, run.copy(step = StepPointer(entry = step.entry + 1), failedAttempts = 0))
             }
 
             StepResult.Invalid -> {
                 failedAttempt(state, SessionEffect.WrongAnswerFeedback)
             }
 
+            StepResult.InvalidRestart -> {
+                failedAttempt(state, SessionEffect.WrongAnswerFeedback, restart = true)
+            }
+
             StepResult.ValidLast -> {
                 Transition(
-                    SessionState.Completed(session.withoutTimers().copy(checkRun = run.copy(step = run.step + 1), ended = now)),
+                    SessionState.Completed(
+                        session.withoutTimers().copy(checkRun = run.copy(step = StepPointer(entry = step.entry + 1)), ended = now),
+                    ),
                     listOf(
                         SessionEffect.StopSound,
                         SessionEffect.CancelSlot,
@@ -85,11 +104,34 @@ internal class CheckRules(
         }
     }
 
+    private fun advanced(
+        state: Ring,
+        run: CheckRun,
+    ): Transition = Transition(state.with(state.session.copy(checkRun = run)), emptyList())
+
+    /**
+     * One more failed attempt on the current entry. With [restart] the entry's puzzle starts over at its first item with
+     * a new seed from [SeedDeriver], keyed by the new failed-attempt count, so each restart gets another puzzle.
+     */
     private fun failedAttempt(
         state: Ring,
         feedback: SessionEffect,
+        restart: Boolean = false,
     ): Transition {
-        val run = state.session.checkRun
-        return Transition(state.with(state.session.copy(checkRun = run.copy(failedAttempts = run.failedAttempts + 1))), listOf(feedback))
+        val session = state.session
+        val run = session.checkRun
+        val attempts = run.failedAttempts + 1
+        val counted = run.copy(failedAttempts = attempts)
+        val next =
+            if (restart && run.step.entry in run.seeds.indices) {
+                val seed = SeedDeriver.seed(session.sessionId, session.ringIndex, run.seedKey(run.step.entry), attempts)
+                counted.copy(
+                    seeds = run.seeds.toMutableList().also { it[run.step.entry] = seed },
+                    step = run.step.copy(item = 0),
+                )
+            } else {
+                counted
+            }
+        return Transition(state.with(session.copy(checkRun = next)), listOf(feedback))
     }
 }

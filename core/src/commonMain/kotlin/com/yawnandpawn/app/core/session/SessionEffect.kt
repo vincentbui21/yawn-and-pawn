@@ -85,7 +85,7 @@ sealed interface SessionEffect {
     /** The call ended: resume the sound. */
     data object ResumeSound : SessionEffect
 
-    /** Show check step [stepIndex] of the current plan. */
+    /** Show entry [stepIndex] of the ring's resolved check plan, at the run's current item. */
     data class StartCheckStep(
         val stepIndex: Int,
     ) : SessionEffect

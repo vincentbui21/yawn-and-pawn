@@ -1,6 +1,8 @@
 package com.yawnandpawn.app.core.session
 
 import com.yawnandpawn.app.core.alarm.Alarm
+import com.yawnandpawn.app.core.checks.CheckEntry
+import com.yawnandpawn.app.core.checks.CheckPlan
 import com.yawnandpawn.app.core.sound.SoundRef
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.flowOf
@@ -30,14 +32,14 @@ interface UserLockState {
  * back unchanged. Before the first unlock:
  * - a sound that is not a built-in one ([SoundRef.BuiltIn]) becomes the default built-in sound: a system ringtone needs
  *   the media provider, which is not available before the first unlock;
- * - every check step that is not [isDirectBootSafe] becomes [DIRECT_BOOT_CHECK].
+ * - every check entry whose type is not `directBootSafe` becomes [DIRECT_BOOT_CHECK].
  *
  * The frozen `SessionConfig` is never rewritten: the ring's sound and its first check plan are derived from it, so the
  * fee tier, max snoozes and snooze length always stay as they were frozen.
  */
 object DirectBootSubstitution {
-    /** The check a ring before the first unlock gets for a step that needs normal storage; Epic 3 makes it Math. */
-    val DIRECT_BOOT_CHECK: CheckStep = CheckStep.Placeholder
+    /** The check a ring before the first unlock gets for an entry that needs normal storage; Story 3.2 makes it Math. */
+    val DIRECT_BOOT_CHECK: CheckEntry = CheckPlan.PLACEHOLDER_ENTRY
 
     fun apply(
         config: SessionConfig,
@@ -50,28 +52,14 @@ object DirectBootSubstitution {
     }
 
     /**
-     * The check plan a ring runs: with [beforeFirstUnlock] the [lockedPlan], else [plan] unchanged. The wake service
-     * takes the first ring's seeds for it; the reducer applies it to each ring that starts, is restored or follows a
-     * snooze while locked, and to the fallback plan.
-     */
-    fun plan(
-        plan: CheckPlan,
-        beforeFirstUnlock: Boolean,
-    ): CheckPlan = if (beforeFirstUnlock) lockedPlan(plan) else plan
-
-    /**
-     * [plan] before the first unlock: each step that is not Direct Boot safe ([isSafe]) becomes [DIRECT_BOOT_CHECK], one
-     * for one, so a check run's step index and seeds stay valid. Every step is safe until Epic 3, so tests pass [isSafe].
+     * [plan] before the first unlock: each entry whose type is not Direct Boot safe ([isSafe]) becomes
+     * [DIRECT_BOOT_CHECK], one for one, so a check run's pointer and seeds stay valid. The reducer applies it to the
+     * resolved plan of each ring that starts, is restored or follows a snooze while locked, and to the fallback plan.
+     * Every type is safe until the camera check (Story 3.10), so tests pass [isSafe].
      */
     internal fun lockedPlan(
         plan: CheckPlan,
-        isSafe: (CheckStep) -> Boolean = CheckStep::isDirectBootSafe,
-    ): CheckPlan = if (plan.steps.all(isSafe)) plan else CheckPlan(plan.steps.map { if (isSafe(it)) it else DIRECT_BOOT_CHECK })
+        isSafe: (CheckEntry) -> Boolean = { it.type.directBootSafe },
+    ): CheckPlan =
+        if (plan.entries.all(isSafe)) plan else plan.copy(entries = plan.entries.map { if (isSafe(it)) it else DIRECT_BOOT_CHECK })
 }
-
-/** The step runs before the first unlock: it needs no credential-protected storage or media. */
-val CheckStep.isDirectBootSafe: Boolean
-    get() =
-        when (this) {
-            CheckStep.Placeholder -> true
-        }

@@ -24,11 +24,11 @@ import com.yawnandpawn.app.android.ApplicationScope
 import com.yawnandpawn.app.android.screen.AndroidWakeScreenOpener
 import com.yawnandpawn.app.android.wake.WakeActivity
 import com.yawnandpawn.app.awaitChildren
+import com.yawnandpawn.app.core.checks.CheckAnswer
 import com.yawnandpawn.app.core.error.DomainError
 import com.yawnandpawn.app.core.history.SessionHistoryRepository
 import com.yawnandpawn.app.core.reliability.ReliabilityProbe
 import com.yawnandpawn.app.core.session.ActiveSessionStore
-import com.yawnandpawn.app.core.session.CheckAnswer
 import com.yawnandpawn.app.core.session.SessionEngine
 import com.yawnandpawn.app.core.session.SessionEvent
 import com.yawnandpawn.app.core.session.SessionJson
@@ -172,7 +172,7 @@ class SessionLockScreenTest {
             composeRule.onNodeWithText("Save").assertExists()
             preview.play(SoundRef.BuiltIn("bell"), volumePercent = 50)
 
-            dispatch(SessionEvent.AlarmFired("session-1", aSessionConfig(), listOf(1L), beforeFirstUnlock = false))
+            dispatch(SessionEvent.AlarmFired("session-1", aSessionConfig(), beforeFirstUnlock = false))
 
             assertLocked()
             assertEquals(1, preview.stops, "the editor's preview stopped with it")

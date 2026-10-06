@@ -57,7 +57,7 @@ internal class PurchaseRules(
             }
 
             is SessionEvent.PurchaseGranted -> {
-                if (event.verdict == PurchaseVerdict.Grant) onPaidSnooze(state, event.token, event.seeds, now) else null
+                if (event.verdict == PurchaseVerdict.Grant) onPaidSnooze(state, event.token, now) else null
             }
 
             SessionEvent.PurchaseFailed -> {
@@ -78,19 +78,17 @@ internal class PurchaseRules(
     fun onPaidSnooze(
         state: Ring,
         token: PurchaseToken,
-        seeds: List<Long>,
         now: TimeSnapshot,
-    ): Transition? = if (state.session.config.testMode) null else snoozed(state, token, seeds, now)
+    ): Transition? = if (state.session.config.testMode) null else snoozed(state, token, now)
 
     /**
-     * A snooze was paid for (a grant, or a reused stranded payment [token]): the sound stops, the check restarts with
-     * [seeds], `snoozesGranted` goes up and the slot is armed at the snooze end. Snooze time never counts toward the
-     * interaction timeout, so the ring timers are cleared.
+     * A snooze was paid for (a grant, or a reused stranded payment [token]): the sound stops, the check progress is
+     * dropped (the next ring resolves the plan again with new seeds), `snoozesGranted` goes up and the slot is armed at
+     * the snooze end. Snooze time never counts toward the interaction timeout, so the ring timers are cleared.
      */
     private fun snoozed(
         state: Ring,
         token: PurchaseToken,
-        seeds: List<Long>,
         now: TimeSnapshot,
     ): Transition {
         val session = state.session
@@ -98,7 +96,7 @@ internal class PurchaseRules(
         val snoozed =
             session.withoutTimers().copy(
                 snoozesGranted = session.snoozesGranted + 1,
-                checkRun = session.checkRun.restart(seeds),
+                checkRun = session.checkRun.restart(),
                 paying = null,
                 paymentPending = false,
                 snoozeEnd = snoozeEnd,

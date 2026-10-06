@@ -114,8 +114,8 @@ class SessionRecorder(
             endedAt = endedAt,
             snoozeCount = session.snoozesGranted,
             checkTypes =
-                session.checkRun.plan.steps
-                    .map { it.typeName },
+                session.checkRun.plan.entries
+                    .map { it.type.id },
             timeToCompleteMs = null,
             fallbackUsed = session.checkRun.fallbackUsed,
             directBoot = session.startedBeforeUnlock,

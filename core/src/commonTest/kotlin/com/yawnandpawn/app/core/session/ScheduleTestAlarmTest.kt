@@ -6,6 +6,10 @@ import com.yawnandpawn.app.core.alarm.Call
 import com.yawnandpawn.app.core.alarm.RecordingLogger
 import com.yawnandpawn.app.core.alarm.RecordingScheduler
 import com.yawnandpawn.app.core.alarm.TestClock
+import com.yawnandpawn.app.core.checks.CheckAnswer
+import com.yawnandpawn.app.core.checks.CheckMode
+import com.yawnandpawn.app.core.checks.CheckPlan
+import com.yawnandpawn.app.core.checks.CheckType
 import com.yawnandpawn.app.core.error.DomainError
 import com.yawnandpawn.app.core.error.Outcome
 import com.yawnandpawn.app.core.log.LogEvent

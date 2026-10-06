@@ -1,9 +1,9 @@
 package com.yawnandpawn.app.testing
 
+import com.yawnandpawn.app.core.checks.CheckAnswer
 import com.yawnandpawn.app.core.error.DomainError
 import com.yawnandpawn.app.core.error.Outcome
 import com.yawnandpawn.app.core.history.SessionOutcome
-import com.yawnandpawn.app.core.session.CheckAnswer
 import com.yawnandpawn.app.core.session.EntryEffect
 import com.yawnandpawn.app.core.session.PurchaseIntent
 import com.yawnandpawn.app.core.session.PurchaseIntentId
@@ -164,7 +164,7 @@ class SessionEngineFakesTest {
             val config = aSessionConfig()
             val sessionId = "session-1"
 
-            engine.dispatch(SessionEvent.AlarmFired(sessionId, config, listOf(1L), beforeFirstUnlock = false))
+            engine.dispatch(SessionEvent.AlarmFired(sessionId, config, beforeFirstUnlock = false))
             assertEquals(listOf<SessionOutcome?>(null), history.rows.map { it.outcome }, "the start row")
             engine.dispatch(SessionEvent.SnoozeTapped)
             engine.dispatch(SessionEvent.PayConfirmed(PurchaseIntentId("intent-1")))

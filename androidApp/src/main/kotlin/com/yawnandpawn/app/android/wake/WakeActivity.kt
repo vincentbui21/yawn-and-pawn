@@ -23,9 +23,9 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.input.pointer.pointerInput
 import com.yawnandpawn.app.android.ApplicationScope
 import com.yawnandpawn.app.android.screen.forwardsToWakeScreen
+import com.yawnandpawn.app.core.checks.CheckAnswer
 import com.yawnandpawn.app.core.error.Outcome
 import com.yawnandpawn.app.core.log.WakeStage
-import com.yawnandpawn.app.core.session.CheckAnswer
 import com.yawnandpawn.app.core.session.SessionEngine
 import com.yawnandpawn.app.core.session.SessionEvent
 import com.yawnandpawn.app.core.session.SessionState

@@ -1,9 +1,8 @@
 package com.yawnandpawn.app.testing
 
-import com.yawnandpawn.app.core.session.CheckAnswer
-import com.yawnandpawn.app.core.session.CheckPlan
+import com.yawnandpawn.app.core.checks.CheckAnswer
+import com.yawnandpawn.app.core.checks.CheckPlan
 import com.yawnandpawn.app.core.session.CheckRun
-import com.yawnandpawn.app.core.session.CheckStep
 import com.yawnandpawn.app.core.session.ConfigResolver
 import com.yawnandpawn.app.core.session.FallbackDecision
 import com.yawnandpawn.app.core.session.GlobalSettings
@@ -65,7 +64,7 @@ class SessionFakesTest {
     fun `FakeCheck returns queued results in order, then the default, and records answers`() {
         val check = FakeCheck(default = StepResult.Invalid)
         check.willReturn(StepResult.ValidNext, StepResult.ValidLast)
-        val run = CheckRun(CheckPlan(listOf(CheckStep.Placeholder)), listOf(1L))
+        val run = CheckRun(CheckPlan.placeholder(), listOf(1L))
         val results = List(3) { check.validate(run, CheckAnswer.Placeholder) }
         assertEquals(listOf(StepResult.ValidNext, StepResult.ValidLast, StepResult.Invalid), results)
         assertEquals(List(3) { CheckAnswer.Placeholder }, check.answers)
@@ -75,7 +74,7 @@ class SessionFakesTest {
     fun `FakeFallbackPolicy returns its decision and counts calls`() {
         val fallback = FakeFallbackPolicy()
         assertEquals(FallbackDecision.NotAllowed, fallback.fallback(session()))
-        val plan = CheckPlan(listOf(CheckStep.Placeholder))
+        val plan = CheckPlan.placeholder()
         fallback.decision = FallbackDecision.Allowed(plan)
         assertEquals(FallbackDecision.Allowed(plan), fallback.fallback(session()))
         assertEquals(2, fallback.calls)
@@ -87,7 +86,7 @@ class SessionFakesTest {
         check.willReturn(StepResult.Invalid, StepResult.ValidNext)
         val reducer = SessionReducer(FakeSnoozeAvailability(), check, FakeFallbackPolicy())
         var state: SessionState =
-            reducer.reduce(SessionState.Idle, SessionEvent.AlarmFired("session-1", config, listOf(1L), false), time.snapshot()).state
+            reducer.reduce(SessionState.Idle, SessionEvent.AlarmFired("session-1", config, false), time.snapshot()).state
 
         time.advanceBy(1.minutes)
         val confirm = reducer.reduce(state, SessionEvent.SnoozeTapped, time.snapshot())
@@ -100,6 +99,6 @@ class SessionFakesTest {
             state = transition.state
         }
         assertIs<SessionState.Completed>(state)
-        assertEquals(1, state.session.checkRun.failedAttempts)
+        assertEquals(0, state.session.checkRun.failedAttempts, "reset when the entry advanced")
     }
 }

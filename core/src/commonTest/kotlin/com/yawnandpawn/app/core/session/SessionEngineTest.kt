@@ -1,5 +1,9 @@
 package com.yawnandpawn.app.core.session
 
+import com.yawnandpawn.app.core.checks.CheckAnswer
+import com.yawnandpawn.app.core.checks.CheckMode
+import com.yawnandpawn.app.core.checks.CheckPlan
+import com.yawnandpawn.app.core.checks.CheckType
 import com.yawnandpawn.app.core.error.DomainError
 import com.yawnandpawn.app.core.error.Outcome
 import com.yawnandpawn.app.core.history.SessionHistoryRow
@@ -36,7 +40,7 @@ class SessionEngineTest {
         sessionReducer: SessionReducer = reducer,
     ) = SessionEngine(sessionReducer, store, effects, SessionRecorder(history), time.clock, time.monotonicClock, time.bootCounter, logger)
 
-    private val alarmFired = SessionEvent.AlarmFired(SESSION_ID, testConfig(), SEEDS, beforeFirstUnlock = false)
+    private val alarmFired = SessionEvent.AlarmFired(SESSION_ID, testConfig(), beforeFirstUnlock = false)
 
     private fun Outcome<SessionState, DomainError>.state(): SessionState = assertIs<Outcome.Success<SessionState>>(this).value
 
@@ -481,7 +485,7 @@ class SessionEngineTest {
             assertTrue(SessionEffect.ShowSnoozeConfirm(OFFER) in runner.ran)
             assertEquals(INTENT, engine.dispatch(SessionEvent.PayConfirmed(INTENT)).session().paying)
             assertTrue(runner.ran.any { it is SessionEffect.LaunchBilling })
-            val grant = SessionEvent.PurchaseGranted(PRODUCT, TOKEN, PurchaseVerdict.Grant, NEW_SEEDS)
+            val grant = SessionEvent.PurchaseGranted(PRODUCT, TOKEN, PurchaseVerdict.Grant)
             val snoozed = assertIs<SessionState.Snoozed>(engine.dispatch(grant).state())
             assertEquals(1, snoozed.session.snoozesGranted)
 

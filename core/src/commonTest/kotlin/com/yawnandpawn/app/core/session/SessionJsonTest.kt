@@ -1,9 +1,15 @@
 package com.yawnandpawn.app.core.session
 
+import com.yawnandpawn.app.core.checks.CheckEntry
+import com.yawnandpawn.app.core.checks.CheckMode
+import com.yawnandpawn.app.core.checks.CheckPlan
+import com.yawnandpawn.app.core.checks.CheckType
+import com.yawnandpawn.app.core.checks.Difficulty
 import com.yawnandpawn.app.core.time.Deadline
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertIs
+import kotlin.test.assertNull
 import kotlin.test.assertTrue
 import kotlin.time.Duration.Companion.minutes
 import kotlin.time.Duration.Companion.seconds
@@ -15,7 +21,7 @@ class SessionJsonTest {
         ringSession(testConfig(checkPlan = TWO_STEPS)).copy(
             ringIndex = 3,
             snoozesGranted = 2,
-            checkRun = CheckRun(TWO_STEPS, NEW_SEEDS, step = 1, failedAttempts = 4, fallbackUsed = true),
+            checkRun = CheckRun(TWO_STEPS, NEW_SEEDS, step = StepPointer(1, 0), failedAttempts = 4, fallbackUsed = true),
             paying = INTENT,
             noGraceThisRing = true,
             beforeFirstUnlock = true,
@@ -98,8 +104,85 @@ class SessionJsonTest {
         }
     }
 
+    @Test
+    fun `the committed version 2 row of every active state decodes to that state`() {
+        val math = CheckEntry(CheckType.Math, Difficulty.Hard, count = 4)
+        val v2Session =
+            full.copy(
+                config = full.config.copy(checkPlan = CheckPlan(CheckMode.Random, listOf(math, CheckPlan.PLACEHOLDER_ENTRY))),
+                checkRun = CheckRun(CheckPlan(CheckMode.All, listOf(math)), listOf(11L), step = StepPointer(0, 2), failedAttempts = 4),
+            )
+        listOf(
+            SessionState.Ringing(v2Session),
+            SessionState.Grace(v2Session),
+            SessionState.Loud(v2Session),
+            SessionState.Snoozed(v2Session),
+            SessionState.Completed(v2Session),
+            SessionState.Missed(v2Session),
+        ).forEach { state ->
+            val name = state::class.simpleName!!
+            val row = """{"type":"$name","session":$SESSION_V2}}"""
+            assertEquals(StoredSession.Found(state), SessionJson.decode(row), name)
+            assertEquals(StoredSession.Found(state), SessionJson.decode(SessionJson.encode(state)), "$name round trip")
+        }
+    }
+
+    @Test
+    fun `a pending test config stored by version 1 decodes with its steps as placeholder entries`() {
+        assertEquals(testConfig(checkPlan = TWO_STEPS), SessionJson.decodeConfig(CONFIG_V1))
+        val config = testConfig(checkPlan = CheckPlan(CheckMode.Random, listOf(CheckEntry(CheckType.Math, Difficulty.Easy, count = 10))))
+        assertEquals(config, SessionJson.decodeConfig(SessionJson.encodeConfig(config)))
+        assertNull(SessionJson.decodeConfig("""{"checkPlan":{"steps":[]}}"""))
+    }
+
+    @Test
+    fun `a version 1 row with a damaged check stays unreadable`() {
+        listOf(
+            v1("Loud").replace(""""step":1""", """"step":"one""""),
+            v1("Loud").replace(""""steps":[{"type":"Placeholder"},{"type":"Placeholder"}]}}""", """"steps":"none"}}"""),
+            v1(
+                "Loud",
+            ).replace(
+                """{"steps":[{"type":"Placeholder"},{"type":"Placeholder"}]},""" + "\"seeds\"",
+                """{"steps":[{"type":"Dozing"}]},"seeds"""",
+            ),
+        ).forEach { text ->
+            assertTrue(text != v1("Loud"), "the fixture was changed")
+            assertIs<StoredSession.Unreadable>(SessionJson.decode(text), text)
+        }
+    }
+
     private companion object {
         const val IDLE_V1 = """{"type":"Idle"}"""
+
+        /** The config of every v1 fixture, as version 1 wrote it (also the stored pending test ring). */
+        const val CONFIG_V1 =
+            """{"alarmId":"alarm-1","label":"Work",""" +
+                """"scheduledAt":"2027-03-03T06:00:00Z","testMode":false,"baseFeeTier":1,"maxSnoozes":5,""" +
+                """"snoozeLengthMinutes":9,"graceSeconds":20,"vibrateInGrace":false,"volumePercent":80,""" +
+                """"gradualVolume":true,"rampStartPercent":20,"soundRef":"builtin:default","vibration":true,""" +
+                """"checkPlan":{"steps":[{"type":"Placeholder"},{"type":"Placeholder"}]}}"""
+
+        /**
+         * The session of every v2 fixture (Story 3.1): the plan as mode and entries, the run's step as a pointer. Otherwise
+         * as [SESSION_V1].
+         */
+        const val SESSION_V2 =
+            """{"sessionId":"session-1","config":{"alarmId":"alarm-1","label":"Work",""" +
+                """"scheduledAt":"2027-03-03T06:00:00Z","testMode":false,"baseFeeTier":1,"maxSnoozes":5,""" +
+                """"snoozeLengthMinutes":9,"graceSeconds":20,"vibrateInGrace":false,"volumePercent":80,""" +
+                """"gradualVolume":true,"rampStartPercent":20,"soundRef":"builtin:default","vibration":true,""" +
+                """"checkPlan":{"mode":"Random","entries":[{"type":{"type":"Math"},"difficulty":"Hard","count":4},""" +
+                """{"type":{"type":"Placeholder"},"difficulty":"Medium","count":1}]}},"ringIndex":3,""" +
+                """"snoozesGranted":2,"checkRun":{"plan":{"mode":"All","entries":""" +
+                """[{"type":{"type":"Math"},"difficulty":"Hard","count":4}]},""" +
+                """"seeds":[11],"step":{"entry":0,"item":2},"failedAttempts":4,"fallbackUsed":false},"paying":"intent-1",""" +
+                """"noGraceThisRing":true,"beforeFirstUnlock":true,"paymentPending":true,""" +
+                """"declinedReuseProduct":"snooze_usd_01",""" +
+                """"graceEnd":{"wallMillis":1800000020000,"elapsedMillis":1020000,"bootCount":3},""" +
+                """"interactionDeadline":{"wallMillis":1800001800000,"elapsedMillis":2800000,"bootCount":3},""" +
+                """"snoozeEnd":{"wallMillis":1800000540000,"elapsedMillis":1540000,"bootCount":3},""" +
+                """"pausedAt":{"wallMillis":1800000060000,"elapsedMillis":1060000,"bootCount":3}"""
 
         /** The session every v1 fixture holds: all fields, as version 1 wrote them (defaults included). */
         const val SESSION_V1 =

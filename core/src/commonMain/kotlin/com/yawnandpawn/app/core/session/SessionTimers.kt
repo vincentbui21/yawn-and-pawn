@@ -1,5 +1,6 @@
 package com.yawnandpawn.app.core.session
 
+import com.yawnandpawn.app.core.checks.CheckPlan
 import com.yawnandpawn.app.core.time.Deadline
 import com.yawnandpawn.app.core.time.TimeSnapshot
 import kotlin.time.Duration
@@ -37,19 +38,18 @@ internal fun durationBetween(
  * when the user is locked now ([userLocked]), so a ring after the unlock plays the chosen sound again. The per-ring
  * `directBootRing` (Story 2.4) takes the same lock state, so the ring's sound and its check plan agree, and an unlock
  * later in the ring changes neither. `startedBeforeUnlock` only goes from false to true (history `direct_boot`).
- * Locked, [plan] (by default the current one) gets the Direct Boot substitutions, step for step, so the run's step index
- * and seeds stay valid.
+ * Locked, the run's plan gets the Direct Boot substitutions, entry for entry, so the run's pointer and seeds stay valid
+ * (a substituted current entry starts again at its first item).
  */
 internal fun SessionData.newRing(
     userLocked: Boolean,
     directBootPlan: (CheckPlan) -> CheckPlan,
-    plan: CheckPlan = checkRun.plan,
 ): SessionData =
     copy(
         beforeFirstUnlock = userLocked,
         directBootRing = userLocked,
         startedBeforeUnlock = startedBeforeUnlock || userLocked,
-        checkRun = checkRun.copy(plan = if (userLocked) directBootPlan(plan) else plan),
+        checkRun = if (userLocked) checkRun.withPlan(directBootPlan(checkRun.plan)) else checkRun,
     )
 
 /** No ring timers left: grace, interaction, snooze and pause cleared. */

@@ -26,7 +26,7 @@ class SessionTimelineTest {
 
     /** A session that started ringing at [T0]. */
     private fun firstRing(): SessionState =
-        reducer.reduce(SessionState.Idle, SessionEvent.AlarmFired(SESSION_ID, testConfig(), SEEDS, beforeFirstUnlock = false), T0).state
+        reducer.reduce(SessionState.Idle, SessionEvent.AlarmFired(SESSION_ID, testConfig(), beforeFirstUnlock = false), T0).state
 
     private fun SessionState.after(
         event: SessionEvent,
@@ -171,7 +171,7 @@ class SessionTimelineTest {
             firstRing()
                 .after(SessionEvent.ImUpTapped, at(10.minutes))
                 .after(SessionEvent.GraceElapsed, at(10.minutes + 20.seconds))
-                .after(SessionEvent.PurchaseGranted(PRODUCT, TOKEN, PurchaseVerdict.Grant, NEW_SEEDS), at(11.minutes))
+                .after(SessionEvent.PurchaseGranted(PRODUCT, TOKEN, PurchaseVerdict.Grant), at(11.minutes))
         assertIs<Snoozed>(snoozed)
         assertEquals(emptyList(), dueEvents(snoozed, at(45.minutes)), "nothing is due while snoozed")
         val rang = snoozed.after(SessionEvent.SlotFired, at(20.minutes))
@@ -214,7 +214,7 @@ class SessionTimelineTest {
         val pending = reducer.reduce(paying, SessionEvent.PurchasePending, at(2.minutes)).state as Ringing
         assertTrue(pending.session.paymentPending)
         assertNull(pending.session.paying)
-        val granted = reducer.reduce(pending, SessionEvent.PurchaseGranted(PRODUCT, TOKEN, PurchaseVerdict.Grant, NEW_SEEDS), at(4.minutes))
+        val granted = reducer.reduce(pending, SessionEvent.PurchaseGranted(PRODUCT, TOKEN, PurchaseVerdict.Grant), at(4.minutes))
         val snoozed = assertIs<Snoozed>(granted.state)
         assertFalse(snoozed.session.paymentPending)
         assertEquals(1, snoozed.session.snoozesGranted)

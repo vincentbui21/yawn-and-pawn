@@ -20,8 +20,6 @@ import com.yawnandpawn.app.core.session.FeeLadder
 import com.yawnandpawn.app.core.session.NoBillingSnoozeAvailability
 import com.yawnandpawn.app.core.session.NoFallbackPolicy
 import com.yawnandpawn.app.core.session.PlaceholderCheckValidator
-import com.yawnandpawn.app.core.session.RandomSeedSource
-import com.yawnandpawn.app.core.session.SeedSource
 import com.yawnandpawn.app.core.session.SessionEngine
 import com.yawnandpawn.app.core.session.SessionRecorder
 import com.yawnandpawn.app.core.session.SessionReducer
@@ -66,7 +64,6 @@ class SessionWiringTest {
         } else {
             assertIs<NoOpCrashReporter>(koin.get<CrashReporter>())
         }
-        assertIs<RandomSeedSource>(koin.get<SeedSource>())
         assertIs<UnavailableBilling>(koin.get<Billing>())
         assertSame(koin.get<SessionRecorder>(), koin.get<SessionRecorder>())
         assertIs<RoomSessionHistoryRepository>(koin.get<SessionHistoryRepository>())

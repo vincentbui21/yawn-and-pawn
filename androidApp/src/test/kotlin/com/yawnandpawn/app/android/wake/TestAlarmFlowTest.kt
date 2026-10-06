@@ -116,7 +116,7 @@ class TestAlarmFlowTest {
     @Test
     fun `a test fire while a session rings is ignored and logged, and the session is unchanged`() {
         val app = app()
-        app.dispatch(SessionEvent.AlarmFired("session-1", aSessionConfig(), listOf(1L), beforeFirstUnlock = false))
+        app.dispatch(SessionEvent.AlarmFired("session-1", aSessionConfig(), beforeFirstUnlock = false))
         val before = app.engine.state.value
         testAlarms.pending = aSessionConfig(label = "test", testMode = true)
 

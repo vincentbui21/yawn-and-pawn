@@ -1,5 +1,6 @@
 package com.yawnandpawn.app.core.session
 
+import com.yawnandpawn.app.core.checks.CheckPlan
 import com.yawnandpawn.app.core.time.Deadline
 import com.yawnandpawn.app.core.time.TimeSnapshot
 
@@ -59,9 +60,10 @@ private fun ringImmediately(
 
 /**
  * A new ring after a snooze or a merge at [now]: Ringing(ringIndex + 1) with a fresh 30-minute interaction deadline.
- * It is before the first unlock exactly when [userLocked] (Story 2.3). Its check plan is the session's own (the
- * fallback plan once used, else the frozen config's) with the Direct Boot substitutions while locked, so a ring after
- * the unlock gets the chosen check back.
+ * It is before the first unlock exactly when [userLocked] (Story 2.3). Its check run starts again from the session's
+ * own plan (the fallback plan once used, else the frozen config's), resolved for the new ring with the new ring's seeds
+ * (AD-9: a Random plan can pick another type), with the Direct Boot substitutions while locked, so a ring after the
+ * unlock gets the chosen check back.
  */
 private class NextRing(
     private val now: TimeSnapshot,
@@ -72,10 +74,13 @@ private class NextRing(
         session: SessionData,
         noGrace: Boolean,
     ): SessionState.Ringing {
-        val plan = if (session.checkRun.fallbackUsed) session.checkRun.plan else session.config.checkPlan
+        val fallback = session.checkRun.fallbackUsed
+        val plan = if (fallback) session.checkRun.plan else session.config.checkPlan
+        val ringIndex = session.ringIndex + 1
+        val run = CheckRun.forRing(plan, session.sessionId, ringIndex, fallback)
         return SessionState.Ringing(
-            session.withoutTimers().newRing(userLocked, directBootPlan, plan).copy(
-                ringIndex = session.ringIndex + 1,
+            session.withoutTimers().copy(checkRun = run).newRing(userLocked, directBootPlan).copy(
+                ringIndex = ringIndex,
                 noGraceThisRing = noGrace,
                 paying = null,
                 interactionDeadline = Deadline.after(now, SessionReducer.NO_INTERACTION_TIMEOUT),

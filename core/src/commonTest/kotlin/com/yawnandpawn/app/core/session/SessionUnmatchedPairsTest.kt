@@ -1,5 +1,9 @@
 package com.yawnandpawn.app.core.session
 
+import com.yawnandpawn.app.core.checks.CheckAnswer
+import com.yawnandpawn.app.core.checks.CheckMode
+import com.yawnandpawn.app.core.checks.CheckPlan
+import com.yawnandpawn.app.core.checks.CheckType
 import com.yawnandpawn.app.core.session.SessionEvent.CallEnded
 import com.yawnandpawn.app.core.session.SessionEvent.CallStarted
 import com.yawnandpawn.app.core.session.SessionState.Completed
@@ -37,9 +41,9 @@ class SessionUnmatchedPairsTest {
     /** The 26 AD-2 events, plus guard-failing variants. */
     private val events: List<SessionEvent> =
         listOf(
-            SessionEvent.AlarmFired(SESSION_ID, testConfig(), SEEDS, beforeFirstUnlock = false),
-            SessionEvent.AlarmFired(SESSION_ID, config = null, seeds = SEEDS, beforeFirstUnlock = false),
-            SessionEvent.TestAlarmFired(SESSION_ID, testConfig(), SEEDS, beforeFirstUnlock = false),
+            SessionEvent.AlarmFired(SESSION_ID, testConfig(), beforeFirstUnlock = false),
+            SessionEvent.AlarmFired(SESSION_ID, config = null, beforeFirstUnlock = false),
+            SessionEvent.TestAlarmFired(SESSION_ID, testConfig(), beforeFirstUnlock = false),
             SessionEvent.SlotFired,
             SessionEvent.ProcessRestored,
             SessionEvent.OverlapAlarmFired("alarm-2", SCHEDULED_AT),
@@ -55,8 +59,8 @@ class SessionUnmatchedPairsTest {
             SessionEvent.ImageMatchFailed,
             SessionEvent.ReuseOffered(PRODUCT, PurchaseVerdict.OfferReuse),
             SessionEvent.ReuseOffered(PRODUCT, PurchaseVerdict.Ignore),
-            SessionEvent.PurchaseGranted(PRODUCT, TOKEN, PurchaseVerdict.Grant, NEW_SEEDS),
-            SessionEvent.PurchaseGranted(PRODUCT, TOKEN, PurchaseVerdict.ConsumeOnly, NEW_SEEDS),
+            SessionEvent.PurchaseGranted(PRODUCT, TOKEN, PurchaseVerdict.Grant),
+            SessionEvent.PurchaseGranted(PRODUCT, TOKEN, PurchaseVerdict.ConsumeOnly),
             SessionEvent.PurchaseFailed,
             SessionEvent.PurchaseCancelled,
             SessionEvent.PurchasePending,
@@ -65,7 +69,7 @@ class SessionUnmatchedPairsTest {
             SessionEvent.FallbackRequested,
             SessionEvent.SnoozeTapped,
             SessionEvent.PayConfirmed(INTENT),
-            SessionEvent.ReuseAccepted(PRODUCT, TOKEN, NEW_SEEDS),
+            SessionEvent.ReuseAccepted(PRODUCT, TOKEN),
             SessionEvent.ReuseDeclined(PRODUCT),
             SessionEvent.UserInteracted,
         )
@@ -103,7 +107,7 @@ class SessionUnmatchedPairsTest {
 
     @Test
     fun `AlarmFired without a config (alarm missing or disabled) leaves Idle with only LogIgnored`() {
-        val event = SessionEvent.AlarmFired(SESSION_ID, config = null, seeds = SEEDS, beforeFirstUnlock = false)
+        val event = SessionEvent.AlarmFired(SESSION_ID, config = null, beforeFirstUnlock = false)
         assertEquals(Transition(Idle, listOf(SessionEffect.LogIgnored("AlarmFired", SESSION_ID))), reducer().reduce(Idle, event, now))
     }
 
@@ -137,7 +141,7 @@ class SessionUnmatchedPairsTest {
     @Test
     fun `an ignored event logs only its type and the session id, never the alarm label or sound`() {
         val ringing = Ringing(ringSession())
-        val event = SessionEvent.AlarmFired("session-2", testConfig(), SEEDS, beforeFirstUnlock = false)
+        val event = SessionEvent.AlarmFired("session-2", testConfig(), beforeFirstUnlock = false)
         val transition = reducer().reduce(ringing, event, now)
         assertEquals(Transition(ringing, listOf(SessionEffect.LogIgnored("AlarmFired", "session-2"))), transition)
         val logged = transition.effects.single().toString()

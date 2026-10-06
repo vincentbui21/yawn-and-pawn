@@ -59,6 +59,7 @@ class NoPrintlnInCoreTest {
                 "NoInexactAlarm",
                 "CredentialStorageAccess",
                 "NoHostageApis",
+                "NoUnseededRandom",
             ),
             ruleSet.rules.keys.map { it.value },
         )

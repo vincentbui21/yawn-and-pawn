@@ -10,8 +10,6 @@ import com.yawnandpawn.app.android.crash.FirebaseCrashReporter
 import com.yawnandpawn.app.android.crash.isFirebaseConfigured
 import com.yawnandpawn.app.android.sound.LibrarySoundResolver
 import com.yawnandpawn.app.core.crash.CrashReporter
-import com.yawnandpawn.app.core.session.RandomSeedSource
-import com.yawnandpawn.app.core.session.SeedSource
 import com.yawnandpawn.app.core.session.SessionEngine
 import com.yawnandpawn.app.core.sound.SoundPreview
 import com.yawnandpawn.app.core.time.Clock
@@ -36,7 +34,6 @@ fun wakeModule(): Module =
             val context = androidContext()
             if (isFirebaseConfigured(context)) FirebaseCrashReporter(CrashlyticsSink(context), get()) else NoOpCrashReporter(get())
         }
-        single<SeedSource> { RandomSeedSource() }
         // Calls (Story 2.7): the audio mode only, never telephony; the adapter runs while the wake service or a ring does.
         // The runtime and the adapter share one StuckCallGuard (the 30-minute cap on a call pause).
         single<CallState> { AudioModeCallState(androidContext()) }

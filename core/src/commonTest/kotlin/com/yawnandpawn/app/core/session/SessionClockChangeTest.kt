@@ -248,7 +248,7 @@ class SessionClockChangeTest {
         }
 
     private companion object {
-        val ALARM_FIRED = SessionEvent.AlarmFired(SESSION_ID, testConfig(), SEEDS, beforeFirstUnlock = false)
+        val ALARM_FIRED = SessionEvent.AlarmFired(SESSION_ID, testConfig(), beforeFirstUnlock = false)
 
         fun Outcome<SessionState, *>.state(): SessionState = assertIs<Outcome.Success<SessionState>>(this).value
     }

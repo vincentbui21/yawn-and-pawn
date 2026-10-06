@@ -1,5 +1,6 @@
 package com.yawnandpawn.app.core.session
 
+import com.yawnandpawn.app.core.checks.CheckAnswer
 import kotlin.time.Instant
 
 /**
@@ -27,7 +28,7 @@ enum class PurchaseVerdict {
 
 /**
  * The AD-2 event set: everything that can happen to a wake session. Events are facts in the past tense. Inputs the
- * reducer cannot compute purely (session id, resolved config, check seeds, purchase intent id, reconciler verdict) are
+ * reducer cannot compute purely (session id, resolved config, purchase intent id, reconciler verdict) are
  * filled in by `SessionEngine` (Story 1.12) before dispatch.
  *
  * Distinct from [com.yawnandpawn.app.core.alarm.AlarmFired], the scheduler's fire of a stored alarm.
@@ -40,7 +41,6 @@ sealed interface SessionEvent {
     data class AlarmFired(
         val sessionId: String,
         val config: SessionConfig?,
-        val seeds: List<Long>,
         val beforeFirstUnlock: Boolean,
     ) : SessionEvent
 
@@ -48,7 +48,6 @@ sealed interface SessionEvent {
     data class TestAlarmFired(
         val sessionId: String,
         val config: SessionConfig,
-        val seeds: List<Long>,
         val beforeFirstUnlock: Boolean,
     ) : SessionEvent
 
@@ -115,12 +114,14 @@ sealed interface SessionEvent {
         val verdict: PurchaseVerdict,
     ) : PurchaseEvent
 
-    /** A purchase of [productId] arrived; it grants a snooze when [verdict] is [PurchaseVerdict.Grant]. [seeds] restart the check. */
+    /**
+     * A purchase of [productId] arrived; it grants a snooze when [verdict] is [PurchaseVerdict.Grant]. The check starts
+     * over at the next ring, with that ring's seeds.
+     */
     data class PurchaseGranted(
         val productId: String,
         val token: PurchaseToken,
         val verdict: PurchaseVerdict,
-        val seeds: List<Long>,
     ) : PurchaseEvent
 
     /** The purchase failed. */
@@ -154,11 +155,10 @@ sealed interface SessionEvent {
         val intentId: PurchaseIntentId,
     ) : UserEvent
 
-    /** The user accepted reusing the stranded payment [token] for [productId]; [seeds] restart the check. */
+    /** The user accepted reusing the stranded payment [token] for [productId]; the check starts over at the next ring. */
     data class ReuseAccepted(
         val productId: String,
         val token: PurchaseToken,
-        val seeds: List<Long>,
     ) : UserEvent
 
     /** The user declined reusing the stranded payment for [productId]. */

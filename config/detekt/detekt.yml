@@ -66,6 +66,12 @@ yawn-and-pawn:
     includes:
       - '**/androidApp/src/**'
       - '**/composeApp/src/**'
+  # Puzzles follow only from SeedDeriver seeds (AD-9, Story 3.1): no unseeded random in the core.checks and core.session
+  # packages (checked inside the rule), so a restored session shows the same puzzle.
+  NoUnseededRandom:
+    active: true
+    includes:
+      - '**/core/src/**'
 
 # Test source sets detekt's defaults do not know (androidHostTest, testDebug) are tests too.
 complexity:

@@ -14,12 +14,12 @@ import com.yawnandpawn.app.android.crash.FirebaseStartup
 import com.yawnandpawn.app.awaitChildren
 import com.yawnandpawn.app.core.alarm.AlarmFired
 import com.yawnandpawn.app.core.alarm.AlarmRepository
+import com.yawnandpawn.app.core.checks.CheckAnswer
 import com.yawnandpawn.app.core.error.DomainError
 import com.yawnandpawn.app.core.error.Outcome
 import com.yawnandpawn.app.core.log.LogEvent
 import com.yawnandpawn.app.core.session.ActiveSessionStore
 import com.yawnandpawn.app.core.session.Billing
-import com.yawnandpawn.app.core.session.CheckAnswer
 import com.yawnandpawn.app.core.session.PurchaseIntent
 import com.yawnandpawn.app.core.session.SessionEvent
 import com.yawnandpawn.app.core.session.SessionState
@@ -105,7 +105,7 @@ class UnlockDuringRingTest {
 
     /** A session that rings before the first unlock, dispatched straight to the engine (no service). */
     private fun lockedSession(app: WakeApp) {
-        app.dispatch(SessionEvent.AlarmFired("session-1", aSessionConfig(), listOf(1L), beforeFirstUnlock = true))
+        app.dispatch(SessionEvent.AlarmFired("session-1", aSessionConfig(), beforeFirstUnlock = true))
         assertTrue(assertIs<SessionState.Ringing>(app.engine.state.value).session.beforeFirstUnlock)
     }
 
@@ -186,7 +186,7 @@ class UnlockDuringRingTest {
     fun `unlocking while the wake screen is in front changes the snooze in place, without finishing or recreating the screen`() {
         val lock = FakeUserLockState(unlocked = false)
         val app = WakeApp(billing = billing, userLock = lock)
-        app.dispatch(SessionEvent.AlarmFired("session-1", aSessionConfig(), listOf(1L), beforeFirstUnlock = true))
+        app.dispatch(SessionEvent.AlarmFired("session-1", aSessionConfig(), beforeFirstUnlock = true))
         val scenario = ActivityScenario.launch<WakeActivity>(Intent(app.app, WakeActivity::class.java))
         composeRule.onNodeWithContentDescription("Snooze unavailable, Unlock your phone to snooze").assertExists()
         var before: WakeActivity? = null
@@ -208,7 +208,7 @@ class UnlockDuringRingTest {
     fun `the wake screen resumed with the user unlocked is an unlock signal`() {
         val lock = FakeUserLockState(unlocked = false)
         val app = WakeApp(billing = billing, userLock = lock)
-        app.dispatch(SessionEvent.AlarmFired("session-1", aSessionConfig(), listOf(1L), beforeFirstUnlock = true))
+        app.dispatch(SessionEvent.AlarmFired("session-1", aSessionConfig(), beforeFirstUnlock = true))
         val scenario = ActivityScenario.launch<WakeActivity>(Intent(app.app, WakeActivity::class.java))
         lock.unlock()
 

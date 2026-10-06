@@ -2,8 +2,8 @@
 title: 'Story 3.7: Word Unscramble check'
 type: 'feature'
 created: '2026-10-06'
-status: 'blocked'
-baseline_revision: '98934c1'
+status: 'done'
+baseline_revision: '9b5a38b'
 review_loop_iteration: 0
 followup_review_recommended: false
 context:
@@ -12,7 +12,7 @@ context:
   - '{project-root}/_bmad-output/implementation-artifacts/spec-3-6-try-it-previews-for-every-check.md'
   - '{project-root}/.claude/skills/pps-design/SKILL.md'
 warnings:
-  - 'blocked-owner-decision: PRD Q10 (word-list source and offensive-word filter) is still open. The AC needs a bundled list with a recorded source and licence, and a blocklist "reviewed by the owner". Neither exists, and docs/decisions/q10-check-parameters.md does not exist on main. See "Owner decisions needed".'
+  - 'stacked-on-3.8: built on Story 3.8 (9b5a38b, in review) so CheckType, CheckRegistry and CheckScreen change in one line. The wake renderer hook is option 1: WordInput.kt holds wordRound(state) and WordInput, for 3.2'''s WakeCheck (merged on main as 80f9433) to call.'
 deferred: []
 ---
 
@@ -59,47 +59,63 @@ deferred: []
 
 </intent-contract>
 
-## Owner decisions needed (blocking)
+## Owner decisions (2026-10-06)
 
-PRD Q10 left the word list's source and the offensive-word filter open ("revisit before the check-type stories"). The AC requires both. Please choose:
+PRD Q10's word-list item is resolved and recorded in `docs/decisions/q10-check-parameters.md` (new):
 
-1. **The source of `words_en.txt`.** A list is needed with ≥ 300 words in each of 4–5, 6–7 and 8–10 letters. The words must be common, so a half-asleep user is never stuck on an obscure one (3.14 checklist item 4).
-   - **A. A curated list we write ourselves** (project-owned, CC0). About 1,000 everyday words. It has no licence questions and no obscure words, and the owner reviews the full list, which doubles as the sensitivity review. **Recommended.**
-   - **B. SCOWL "size 35" (en_US)**, filtered by length and the blocklist. SCOWL's licence is permissive (MIT-like, with the attribution notice copied into `docs/licenses`). It needs a one-time download from wordlist.aspell.net, and some words at 8–10 letters are less common.
-   - **C. ENABLE / ENABLE2K** (public domain). It has many obscure and archaic words. Not recommended for this check.
-2. **The blocklist `config/word-blocklist.txt`.** Offensive and sensitive words (slurs, profanity, sexual, violence and self-harm, drugs, and possibly religion, politics and body or medical terms). With A, the blocklist guards future edits, and the owner reviews the list itself. With B, I draft a blocklist and the owner reviews it before merge.
-3. **Anagrams:** confirm that "any listed word with exactly the same letters" is accepted (the AC says yes). This matters only for the source chosen.
-4. **Where the decision is recorded:** `docs/decisions/q10-check-parameters.md` is not on main yet. 3.7 creates it with the Q10 word-list resolution (plus the already approved count ranges), unless another story owns it.
+1. **Source: option A.** A list of everyday English words drafted for the project by Claude (1,414 words: 494 Easy, 515 Medium, 405 Hard), project-owned. The owner approved it without reviewing it ("just proceed"), so the drafting itself served as the sensitivity review. See `docs/checks/WORDS.md`.
+2. **Blocklist:** `config/word-blocklist.txt`, by category (profanity, sexual and body, violence and weapons, death and self-harm, drugs and alcohol, hate, crime and politics, religion). `checkWordList` enforces it.
+3. **Anagrams:** any listed word with exactly the same letters is accepted, in any case.
 
-## Code Map (planned)
+## Code Map
 
 - **Core (`core/.../checks/`):**
-  - `word/WordList.kt`: the buckets (4–5, 6–7, 8–10) and the anagram index (sorted letters to words).
-  - `word/WordGenerator.kt`: the distinct seeded picks and the scramble, retried with the next `SeededRandom` draw until it is neither the word nor a listed word. A word whose every permutation is listed is excluded from the bucket.
-  - `CheckType.kt`: `WordUnscramble(list)` with id `WordUnscramble`, `countRange` 1..5, default 2, and `hasDifficulty`. It is a data class built with the list, so equality and serialization go by id; the decision is recorded in the spec.
-  - `Puzzle.Word(words, scrambles)` and `CheckAnswer.Word(text)`.
-- **Assets and gate:**
+  - `word/WordList.kt`: `WordList` (lowercase a–z, sorted buckets, the anagram index) and `WordBank`, the process-wide list that the app installs at start (`:core` does no I/O).
+  - `word/WordGenerator.kt`: distinct seeded picks with a seeded Fisher–Yates scramble. A scramble that is the word or a listed word is drawn again (up to 64 times); a word without one is skipped.
+  - `CheckType.WordUnscramble`: a data object; generate and validate go through `WordBank`. Also `Puzzle.Word` and `CheckAnswer.Word`.
+- **Asset and gate:**
   - `androidApp/src/main/assets/words_en.txt`.
-  - `WordListLoader` in the androidApp wiring, with the list read once at start.
-  - `build-logic`: the `checkWordList` task and its fixtures; `qualityGate` gains `checkWordList`.
+  - `android/WordListLoader.kt`, called from `YawnAndPawnApp.onCreate` before Koin.
+  - `build-logic/.../WordList.kt`: `WordListRules`, `CheckWordListTask` and the plugin `yawnandpawn.word-list`. The root build configures it, and `qualityGate` depends on `checkWordList`.
   - `config/word-blocklist.txt`, `docs/checks/WORDS.md` and `docs/decisions/q10-check-parameters.md`.
-- **UI (composeApp):** a `wordCheckUiState` mapping, `CheckInput` with letters for the wake screen (the 3.2 pattern), a `WordTrial` in `CheckRegistry`, and `PickableCheckTypes`, which then includes Word Unscramble.
-- **Tests:**
-  - `WordCheckTest`: pinned seeds, 10,000 seeds per difficulty for the lengths, distinctness, scramble ≠ word and not listed, anagram and case validation.
-  - `CheckWordListTaskTest`: one fixture per failure.
-  - Wake mapping and Try it tests.
-  - Roborazzi: Easy, Hard (wrapped), wrong, and the preview, in Sunrise at 100% and 200%, plus a semantics test that Shuffle, Clear and snooze are on screen.
+- **UI (`composeApp`):**
+  - `ui/wake/WordInput.kt`: `WordRound` / `wordRound(state)` for 3.2's `WakeCheck`, and `WordInput` (the pool order, the slots, Shuffle and Clear, all pure).
+  - `ui/checks/WordTrial.kt`, registered in `CheckRegistry`; the UI maps Word to the core type.
+  - `CheckScreen.WordCheck`:
+    - a shake with the error haptic on a wrong word;
+    - a light haptic per tile tap;
+    - a polite live region with the answer so far (inside the progress line's Box, so no layout change);
+    - "Shuffle" and "Clear" pinned under the scrolling area on the Check screen, like Math's pad (unchanged where everything fits).
 
-## Dependency note
+## Design Notes
 
-The wake-screen half follows 3.2's mapping (`CheckPosition` / `CheckInput` / `mathCheckUiState` in PR #33), which is not on this stack. I would add the Word mapping next to it in a new `WordCheckMapping.kt` to avoid conflicts. The WakeActivity hook that renders it lands only once 3.2 is merged; until then the Word check works in "Try it", and 3.2's renderer ignores a non-Math entry. The alternative is to wait for 3.2 to merge and stack on main.
+- **Why a `WordBank` and not a list inside the type:** `CheckType` is serialized into stored sessions by id. A type that holds 1,400 words cannot be (and must not be) stored, so the list is installed once per process, before any ring or preview. A Direct Boot start reads the same asset.
+- **Changing the list later** changes the words an existing seed picks. A stored session then shows a different current word, which is harmless (WORDS.md says so).
+- **Memory fix carried here:** in 3.8, the numbered-variant announcement sat in a `spacedBy` column, so it added a gap while watching. It now sits in a Box with the phase text, the same way Word does it.
 
 ## pps-design Done checklist
 
-To be ticked when it is implemented, after the owner decisions above.
+- [x] Only tokens from `DESIGN.md` used (no raw hex, no new radii, no new font sizes): the approved `letter-tile`, slots and text buttons; the shake is `space2`.
+- [x] Light, Dark (and Sunrise where relevant) checked with previews / screenshots: wake and Try it are always Sunrise; Roborazzi on 360 × 640 dp at 100% and 200%.
+- [x] Every colour pair used is in the `DESIGN.md` contrast table: no new pairs (`check-word`).
+- [x] Touch targets ≥ 48 dp; wake actions ≥ 64 dp: `letter-tile` is 48 dp (UX-DR: letter tiles 48 dp); snooze unchanged.
+- [x] Works at 200% font scale and with TalkBack; outcome glyphs present: on 360 × 640 at 200%, "Shuffle", "Clear" and snooze are displayed (test). "Letter {letter}", "Slot {n}, empty / {letter}" and the answer so far are announced (test). No outcome glyphs on this screen.
+- [x] Reduced-motion path works: the shake is a Compose animation (instant at scale 0); there is no other motion.
+- [x] Copy matches `EXPERIENCE.md > Voice and Tone` (no em dashes, no filler, strings in resources): existing resources only; `CopyRulesTest` passes.
+- [x] Every state row in `EXPERIENCE.md > State Patterns` for this surface is handled: playing, a wrong word (cleared slots, "Not quite. Try again.", shake), and solved.
+- [x] "I'm up" is the most prominent wake action; snooze is visible, plain and priced: the check footer keeps the approved snooze control (on screen at 200%, test).
+- [x] Compose `@Preview`s for each state (light/dark/Sunrise, empty/error) exist; screenshot tests updated (Paparazzi or Roborazzi): `check-word` and `try-it-word` unchanged (95 preview baselines verified), plus the 8 new `wake_check_word_*` / `try_it_word_*` screenshots.
 
 ## Verification
 
-**Commands (planned):**
+Results from the run (2026-10-06):
+- Tests:
+  - `WordCheckTest` (core): 10,000 seeds per difficulty, pinned picks, anagram and case validation, and an empty bank.
+  - `WordListTest` (build-logic): one fixture per failure, plus the task on a fixture project.
+  - `WordTrialTest`: tiles, trial and wake mapping.
+  - `WordListLoaderTest`: the asset installed at start, and readable from the device-protected context.
+  - `WordCheckScreenshotTest`: 8 screenshots and a TalkBack test.
+
+**Commands:**
 - `./gradlew checkWordList qualityGate` -- expected: BUILD SUCCESSFUL.
 - `git status --porcelain androidApp/src/test/screenshots/preview` -- expected: empty.

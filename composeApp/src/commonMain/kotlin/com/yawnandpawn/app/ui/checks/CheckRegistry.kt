@@ -37,9 +37,10 @@ interface CheckTrial {
  */
 object CheckRegistry {
     /** A "Try it" of each registered check at its difficulty, with one item, from the seed; [accessible]: TalkBack on. */
-    private val trials: Map<CheckType, (difficulty: Difficulty, seed: Long, accessible: Boolean) -> CheckTrial> =
+    private val trials: Map<CheckType, (difficulty: Difficulty, seed: Long, accessible: Boolean) -> CheckTrial?> =
         mapOf(
             CheckType.Math to { difficulty, seed, _ -> MathTrial.start(difficulty, seed) },
+            CheckType.WordUnscramble to { difficulty, seed, _ -> WordTrial.start(difficulty, seed) },
             CheckType.MemorySequence to { difficulty, seed, accessible -> MemoryTrial.start(difficulty, seed, numbered = accessible) },
         )
 

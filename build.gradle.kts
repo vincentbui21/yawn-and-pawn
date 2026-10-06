@@ -20,6 +20,7 @@ plugins {
     id("yawnandpawn.verify-core-dependencies")
     id("yawnandpawn.allowlists")
     id("yawnandpawn.sound-loudness")
+    id("yawnandpawn.word-list")
     id("yawnandpawn.design-tokens")
 }
 
@@ -45,6 +46,15 @@ soundLoudness {
     // The time-wheel tick (12 ms, about -12 dBFS) is a deliberately quiet UI sound.
     exemptSounds.from("composeApp/src/androidMain/res/raw/wheel_tick.wav")
     pythonScript.set(layout.projectDirectory.file("tools/sounds/measure_loudness.py"))
+}
+
+// ---------------------------------------------------------------------------------------------
+// Word list (Story 3.7, plugin yawnandpawn.word-list from build-logic): `checkWordList` (qualityGate) fails unless the
+// bundled Word Unscramble list is lowercase a-z, unique, 4-10 letters, off the blocklist, with 300 words per group.
+// ---------------------------------------------------------------------------------------------
+wordList {
+    wordList.set(layout.projectDirectory.file("androidApp/src/main/assets/words_en.txt"))
+    blocklist.set(layout.projectDirectory.file("config/word-blocklist.txt"))
 }
 
 // ---------------------------------------------------------------------------------------------
@@ -154,6 +164,8 @@ tasks.register("qualityGate") {
         ":androidApp:checkDependencyAllowlist",
         ":androidApp:checkPermissionAllowlist",
         "checkSoundLoudness",
+        // Story 3.7: the Word Unscramble list is clean (a-z, unique, 4-10 letters, not blocklisted, 300 per group).
+        "checkWordList",
         // Story 1.18: no debug-only code (fire hook, design preview, theme showcase) in the release build.
         ":androidApp:checkReleaseContent",
     )

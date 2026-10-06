@@ -2,6 +2,8 @@ package com.yawnandpawn.app.core.checks
 
 import com.yawnandpawn.app.core.checks.math.MathGenerator
 import com.yawnandpawn.app.core.checks.memory.MemoryGenerator
+import com.yawnandpawn.app.core.checks.word.WordBank
+import com.yawnandpawn.app.core.checks.word.WordGenerator
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 
@@ -108,6 +110,48 @@ sealed interface CheckType {
     }
 
     /**
+     * Word Unscramble (FR-PWK-8): `count` distinct words of 4–5, 6–7 or 8–10 letters by difficulty from the installed
+     * [WordBank] list, each shown scrambled (never as itself or as another listed word). The target word, or any listed
+     * word with exactly the same letters, is right, in any case (owner decision 2026-10-06). The list is a bundled
+     * asset, readable before the first unlock, so it is Direct Boot safe.
+     */
+    @Serializable
+    @SerialName("WordUnscramble")
+    data object WordUnscramble : CheckType {
+        override val id: String = "WordUnscramble"
+        override val usesCamera: Boolean = false
+        override val directBootSafe: Boolean = true
+        override val hasDifficulty: Boolean = true
+        override val countRange: IntRange = 1..5
+        override val defaultCount: Int = 2
+
+        override fun generate(
+            seed: Long,
+            difficulty: Difficulty,
+            count: Int,
+        ): Puzzle {
+            val words = WordGenerator.words(seed, difficulty, count.coerceIn(countRange), WordBank.current)
+            return Puzzle.Word(words.map { it.first }, words.map { it.second })
+        }
+
+        override fun validate(
+            puzzle: Puzzle,
+            position: Int,
+            answer: CheckAnswer,
+        ): CheckResult {
+            val words = (puzzle as? Puzzle.Word)?.words.orEmpty()
+            val target = words.getOrNull(position)
+            val text = (answer as? CheckAnswer.Word)?.text?.lowercase()
+            val right = target != null && text != null && (text == target || text in WordBank.current.anagramsOf(target))
+            return when {
+                !right -> CheckResult.Wrong
+                position == words.lastIndex -> CheckResult.Correct
+                else -> CheckResult.ItemCorrect
+            }
+        }
+    }
+
+    /**
      * Memory Sequence (FR-PWK-4): `count` rounds of 4, 6 or 8 lit tiles by difficulty, repeated tap by tap. Hard uses a
      * 4×4 grid. The [numbered] variant (TalkBack on when the ring's plan is frozen) always uses 3×3 with the same lengths
      * and shows every tile's number. Every tap is one item; a wrong tap restarts the current round with a new sequence.
@@ -206,6 +250,6 @@ sealed interface CheckType {
          * the JVM initializing a type (say [Math]) first initializes this interface, and an eager list would then hold
          * the half-initialized type as null.
          */
-        val all: List<CheckType> by lazy { listOf(Math, MemorySequence(), Placeholder) }
+        val all: List<CheckType> by lazy { listOf(Math, WordUnscramble, MemorySequence(), Placeholder) }
     }
 }

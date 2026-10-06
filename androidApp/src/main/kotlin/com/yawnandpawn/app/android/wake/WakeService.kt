@@ -752,6 +752,7 @@ class WakeService :
             return when (puzzle) {
                 is Puzzle.Math -> puzzle.problems.getOrNull(step.item)?.let { CheckAnswer.Number(it.answer.toString()) }
                 is Puzzle.Memory -> puzzle.taps.getOrNull(step.item)?.let { CheckAnswer.Tile(it) }
+                is Puzzle.Word -> puzzle.words.getOrNull(step.item)?.let { CheckAnswer.Word(it) }
                 Puzzle.Placeholder -> CheckAnswer.Placeholder
                 null -> null
             }

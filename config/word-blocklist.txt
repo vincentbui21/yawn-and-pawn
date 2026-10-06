@@ -1,0 +1,116 @@
+# Word Unscramble blocklist (Story 3.7, NFR-10). `checkWordList` fails when androidApp/src/main/assets/words_en.txt
+# lists any of these words. The list itself is hand-curated everyday words (docs/checks/WORDS.md); this file guards
+# later edits. One word per line, lowercase; `#` starts a comment. Add a word here before it can ever be listed.
+
+# Profanity and insults
+arse
+bastard
+bitch
+bloody
+bollocks
+crap
+damn
+dick
+dumb
+fuck
+hell
+idiot
+jerk
+moron
+piss
+prick
+shit
+stupid
+sucker
+twat
+wanker
+
+# Sexual and body
+anal
+boob
+boobs
+breast
+erotic
+naked
+nipple
+nude
+orgasm
+penis
+porn
+semen
+sexual
+sexy
+slut
+vagina
+whore
+
+# Violence, weapons and war
+assault
+behead
+bomb
+bullet
+corpse
+gunfire
+grenade
+gunman
+hostage
+kill
+killer
+massacre
+murder
+pistol
+rifle
+shotgun
+slaughter
+stab
+terror
+torture
+violent
+warfare
+weapon
+
+# Death and self-harm
+cancer
+coffin
+death
+dying
+funeral
+grave
+hanging
+overdose
+suicide
+tumor
+
+# Drugs, alcohol and tobacco
+alcohol
+beer
+cigar
+cocaine
+drunk
+heroin
+liquor
+opium
+vodka
+whiskey
+wine
+
+# Hate, crime and politics
+abuse
+crime
+nazi
+racism
+racist
+rape
+slave
+slavery
+thief
+victim
+
+# Religion
+bible
+church
+devil
+gospel
+heaven
+prayer
+satan

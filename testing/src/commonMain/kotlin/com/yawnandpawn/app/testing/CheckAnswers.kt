@@ -7,8 +7,8 @@ import com.yawnandpawn.app.core.session.CheckRun
 
 /**
  * The right answer to the current item of [run], as a user would give it: the number of a Math problem, the next tile of
- * a Memory round, the placeholder answer of a placeholder entry; null once every entry is passed (or without a seed).
- * Tests only: the app never knows the answer outside the validator.
+ * a Memory round, the word of a Word item, the placeholder answer of a placeholder entry; null once every entry is passed
+ * (or without a seed). Tests only: the app never knows the answer outside the validator.
  */
 fun rightAnswer(run: CheckRun): CheckAnswer? {
     val entry = run.currentEntry
@@ -19,6 +19,7 @@ fun rightAnswer(run: CheckRun): CheckAnswer? {
         when (val puzzle = entry.type.generate(seed, entry.difficulty, entry.count)) {
             is Puzzle.Math -> puzzle.problems.getOrNull(run.step.item)?.let { CheckAnswer.Number(it.answer.toString()) }
             is Puzzle.Memory -> puzzle.taps.getOrNull(run.step.item)?.let { CheckAnswer.Tile(it) }
+            is Puzzle.Word -> puzzle.words.getOrNull(run.step.item)?.let { CheckAnswer.Word(it) }
             Puzzle.Placeholder -> CheckAnswer.Placeholder.takeIf { entry.type == CheckType.Placeholder }
         }
     }

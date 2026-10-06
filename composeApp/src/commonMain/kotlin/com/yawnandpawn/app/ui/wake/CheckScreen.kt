@@ -122,6 +122,8 @@ fun CheckScreen(
         // Math keeps its number pad out of the scrolling area (Story 3.2): at 200% font on a small phone only the problem
         // scrolls, and "Check" stays on screen above the snooze control. Where everything fits, it looks the same.
         val math = state.content as? CheckContent.Math
+        // Word Unscramble keeps "Shuffle" and "Clear" out of the scrolling area the same way (Story 3.7).
+        val word = state.content as? CheckContent.WordUnscramble
         BoxWithConstraints(modifier = Modifier.fillMaxSize().wakeContentPadding()) {
             // In a short window (landscape, split screen) the pad and the footer alone would not fit: the pad scrolls with
             // the problem instead, so "Check" can always be reached, and snooze stays pinned (Story 3.2 review).
@@ -143,13 +145,24 @@ fun CheckScreen(
                 Column(modifier = Modifier.fillMaxSize()) {
                     Column(modifier = Modifier.fillMaxWidth().weight(1f), horizontalAlignment = Alignment.CenterHorizontally) {
                         Column(
-                            modifier = Modifier.fillMaxWidth().weight(1f, fill = math == null).verticalScroll(rememberScrollState()),
+                            modifier =
+                                Modifier
+                                    .fillMaxWidth()
+                                    .weight(1f, fill = math == null && word == null)
+                                    .verticalScroll(rememberScrollState()),
                             verticalArrangement = Arrangement.spacedBy(spacing.space4),
                         ) {
                             CheckHeader(state)
-                            if (math != null) MathProblem(math) else CheckContentView(content = state.content, onIntent = onIntent)
+                            when {
+                                math != null -> MathProblem(math)
+                                word != null -> WordCheck(word, onIntent, withActions = false)
+                                else -> CheckContentView(content = state.content, onIntent = onIntent)
+                            }
                         }
                         if (math != null) NumberPad(onIntent = onIntent, modifier = Modifier.padding(top = spacing.space3))
+                        if (word != null) {
+                            WordActions(onIntent = onIntent, modifier = Modifier.fillMaxWidth().padding(top = spacing.space4))
+                        }
                     }
                     CheckFooter(state, onIntent)
                 }
@@ -407,12 +420,38 @@ private fun PadKey(
 private fun WordCheck(
     content: CheckContent.WordUnscramble,
     onIntent: (WakeIntent) -> Unit,
+    withActions: Boolean = true,
 ) {
-    val colors = PpsTheme.colors
     val spacing = PpsTheme.spacing
+    val haptics = LocalHapticFeedback.current
+    val shake = remember { Animatable(0f) }
+    val shakeDistance = with(LocalDensity.current) { spacing.space2.toPx() }
+    // Story 3.7: a wrong word shakes the slots with the error haptic, as the other checks do.
+    LaunchedEffect(content.wrong) {
+        if (content.wrong) {
+            haptics.performHapticFeedback(HapticFeedbackType.Reject)
+            shake.animateTo(0f, keyframes { shakeKeyframes(shakeDistance) })
+        }
+    }
+    // Each tile tap: a light haptic before the intent.
+    val tap: (WakeIntent) -> Unit = { intent ->
+        if (intent is WakeIntent.LetterTapped ||
+            intent is WakeIntent.SlotTapped
+        ) {
+            haptics.performHapticFeedback(HapticFeedbackType.KeyboardTap)
+        }
+        onIntent(intent)
+    }
     Column(verticalArrangement = Arrangement.spacedBy(spacing.space4)) {
-        ProgressLine(stringResource(Res.string.word_progress, content.wordNumber, content.wordCount))
-        FlowRow(horizontalArrangement = Arrangement.spacedBy(spacing.space2), verticalArrangement = Arrangement.spacedBy(spacing.space2)) {
+        Box {
+            ProgressLine(stringResource(Res.string.word_progress, content.wordNumber, content.wordCount))
+            AnswerSoFar(content.slots)
+        }
+        FlowRow(
+            modifier = Modifier.graphicsLayer { translationX = shake.value },
+            horizontalArrangement = Arrangement.spacedBy(spacing.space2),
+            verticalArrangement = Arrangement.spacedBy(spacing.space2),
+        ) {
             content.slots.forEachIndexed { index, letter ->
                 val spoken =
                     if (letter == null) {
@@ -420,7 +459,7 @@ private fun WordCheck(
                     } else {
                         stringResource(Res.string.word_slot_filled, index + 1, letter.toString())
                     }
-                LetterTile(letter = letter, spoken = spoken, dashed = letter == null, onClick = { onIntent(WakeIntent.SlotTapped(index)) })
+                LetterTile(letter = letter, spoken = spoken, dashed = letter == null, onClick = { tap(WakeIntent.SlotTapped(index)) })
             }
         }
         if (content.wrong) WrongAnswer()
@@ -431,17 +470,41 @@ private fun WordCheck(
                         letter = letter,
                         spoken = stringResource(Res.string.word_letter, letter.toString()),
                         dashed = false,
-                        onClick = { onIntent(WakeIntent.LetterTapped(index)) },
+                        onClick = { tap(WakeIntent.LetterTapped(index)) },
                     )
                 }
             }
         }
-        Row(horizontalArrangement = Arrangement.spacedBy(spacing.space2)) {
-            PpsTextButton(text = stringResource(Res.string.word_shuffle), onClick = { onIntent(WakeIntent.ShuffleLetters) })
-            PpsTextButton(text = stringResource(Res.string.word_clear), onClick = {
-                onIntent(WakeIntent.ClearLetters)
-            }, contentColor = colors.accentText)
-        }
+        if (withActions) WordActions(onIntent = onIntent)
+    }
+}
+
+/** The answer so far for TalkBack, announced after each move: no visual, and no extra gap where it sits (Story 3.7). */
+@Composable
+private fun AnswerSoFar(slots: List<Char?>) {
+    slots.filterNotNull().takeIf { it.isNotEmpty() }?.let { placed ->
+        Box(
+            Modifier.clearAndSetSemantics {
+                contentDescription = placed.joinToString(" ")
+                liveRegion = LiveRegionMode.Polite
+            },
+        )
+    }
+}
+
+/** "Shuffle" and "Clear", start-aligned. On the Check screen they are pinned under the scrolling area (Story 3.7). */
+@Composable
+private fun WordActions(
+    onIntent: (WakeIntent) -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    Row(modifier = modifier, horizontalArrangement = Arrangement.spacedBy(PpsTheme.spacing.space2)) {
+        PpsTextButton(text = stringResource(Res.string.word_shuffle), onClick = { onIntent(WakeIntent.ShuffleLetters) })
+        PpsTextButton(
+            text = stringResource(Res.string.word_clear),
+            onClick = { onIntent(WakeIntent.ClearLetters) },
+            contentColor = PpsTheme.colors.accentText,
+        )
     }
 }
 
@@ -511,20 +574,23 @@ private fun MemoryCheck(
         Row(
             modifier = Modifier.fillMaxWidth(),
         ) { ProgressLine(stringResource(Res.string.memory_progress, content.round, content.roundCount)) }
-        Text(
-            text = stringResource(if (watching) Res.string.memory_watch else Res.string.memory_your_turn),
-            modifier = Modifier.semantics { liveRegion = LiveRegionMode.Polite },
-            style = PpsTheme.typography.headline,
-            color = colors.text,
-        )
-        // The sequence as numbers for TalkBack, announced once per round before the input (no visual).
-        content.announced?.takeIf { watching && content.numbered }?.let { tiles ->
-            Box(
-                Modifier.clearAndSetSemantics {
-                    contentDescription = tiles.joinToString(", ")
-                    liveRegion = LiveRegionMode.Polite
-                },
+        Box {
+            Text(
+                text = stringResource(if (watching) Res.string.memory_watch else Res.string.memory_your_turn),
+                modifier = Modifier.semantics { liveRegion = LiveRegionMode.Polite },
+                style = PpsTheme.typography.headline,
+                color = colors.text,
             )
+            // The sequence as numbers for TalkBack, announced once per round before the input (no visual, and no extra
+            // gap in the column).
+            content.announced?.takeIf { watching && content.numbered }?.let { tiles ->
+                Box(
+                    Modifier.clearAndSetSemantics {
+                        contentDescription = tiles.joinToString(", ")
+                        liveRegion = LiveRegionMode.Polite
+                    },
+                )
+            }
         }
         if (content.wrong) WrongAnswer()
         Column(

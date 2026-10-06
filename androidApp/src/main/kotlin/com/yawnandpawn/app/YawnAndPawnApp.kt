@@ -7,6 +7,7 @@ import com.yawnandpawn.app.android.AndroidLogger
 import com.yawnandpawn.app.android.AndroidUserLockState
 import com.yawnandpawn.app.android.ApplicationScope
 import com.yawnandpawn.app.android.UnavailableBilling
+import com.yawnandpawn.app.android.WordListLoader
 import com.yawnandpawn.app.android.androidTimeModule
 import com.yawnandpawn.app.android.crash.FirebaseStartup
 import com.yawnandpawn.app.android.reliability.reliabilityModule
@@ -24,6 +25,7 @@ import com.yawnandpawn.app.core.alarm.RearmOnFire
 import com.yawnandpawn.app.core.alarm.SaveAlarm
 import com.yawnandpawn.app.core.alarm.SetAlarmEnabled
 import com.yawnandpawn.app.core.checks.AccessibilityState
+import com.yawnandpawn.app.core.checks.word.WordBank
 import com.yawnandpawn.app.core.error.valueOrNull
 import com.yawnandpawn.app.core.history.MissedNotes
 import com.yawnandpawn.app.core.id.IdGenerator
@@ -131,6 +133,8 @@ open class YawnAndPawnApp : Application() {
 
     override fun onCreate() {
         super.onCreate()
+        // The Word Unscramble list (Story 3.7), before any ring, restore or preview can make a Word puzzle.
+        WordBank.install(WordListLoader.load(this))
         val koin =
             startKoin {
                 androidContext(this@YawnAndPawnApp)

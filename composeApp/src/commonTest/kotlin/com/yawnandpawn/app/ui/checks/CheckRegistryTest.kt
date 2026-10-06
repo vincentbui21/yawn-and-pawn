@@ -1,6 +1,8 @@
 package com.yawnandpawn.app.ui.checks
 
 import com.yawnandpawn.app.core.checks.Puzzle
+import com.yawnandpawn.app.core.checks.word.WordBank
+import com.yawnandpawn.app.core.checks.word.WordList
 import com.yawnandpawn.app.ui.wake.CheckContent
 import com.yawnandpawn.app.ui.wake.WakeIntent
 import kotlin.test.Test
@@ -27,10 +29,12 @@ class CheckRegistryTest {
 
     @Test
     fun `every check the pickers offer has a registered Try it, and the pickers offer only those`() {
+        // Word Unscramble needs the app's word list; here a small one.
+        WordBank.install(WordList(listOf("apple", "stone", "garden", "listen", "airplane", "notebook")))
         assertTrue(PickableCheckTypes.isNotEmpty())
         PickableCheckTypes.forEach { type -> assertNotNull(CheckRegistry.startTrial(type, Difficulty.Medium, seed), "$type") }
         assertTrue(CheckRegistry.types.containsAll(PickableCheckTypes))
-        assertEquals(listOf(CheckType.Math, CheckType.MemorySequence), PickableCheckTypes)
+        assertEquals(listOf(CheckType.Math, CheckType.WordUnscramble, CheckType.MemorySequence), PickableCheckTypes)
     }
 
     @Test

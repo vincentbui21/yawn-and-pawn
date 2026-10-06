@@ -17,12 +17,13 @@ class CheckTypeTest {
             CheckType.all.map { type ->
                 when (type) {
                     CheckType.Math -> "Math"
+                    CheckType.WordUnscramble -> "WordUnscramble"
                     is CheckType.MemorySequence -> "MemorySequence"
                     CheckType.Placeholder -> "Placeholder"
                 }
             }
 
-        assertEquals(listOf("Math", "MemorySequence", "Placeholder"), listed)
+        assertEquals(listOf("Math", "WordUnscramble", "MemorySequence", "Placeholder"), listed)
         assertEquals(listed, CheckType.all.map { it.id })
     }
 
@@ -37,6 +38,7 @@ class CheckTypeTest {
         assertEquals(
             mapOf(
                 "Math" to listOf(false, true, true, 1..10, 3),
+                "WordUnscramble" to listOf(false, true, true, 1..5, 2),
                 "MemorySequence" to listOf(false, true, true, 1..5, 2),
                 "Placeholder" to listOf(false, true, false, 1..1, 1),
             ),

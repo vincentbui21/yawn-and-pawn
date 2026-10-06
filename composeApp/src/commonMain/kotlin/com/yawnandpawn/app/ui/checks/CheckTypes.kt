@@ -123,13 +123,14 @@ val CheckType.icon: DrawableResource
             CheckType.HouseHunt -> Res.drawable.symbol_house
         }
 
-/** The core plugin of this check (AD-9), or null while its story has not added one (Math, Memory Sequence so far). */
+/** The core plugin of this check (AD-9), or null while its story has not added one (the camera checks so far). */
 val CheckType.core: CoreCheckType?
     get() =
         when (this) {
             CheckType.Math -> CoreCheckType.Math
+            CheckType.WordUnscramble -> CoreCheckType.WordUnscramble
             CheckType.MemorySequence -> CoreCheckType.MemorySequence()
-            CheckType.WordUnscramble, CheckType.QrBarcode, CheckType.HouseHunt -> null
+            CheckType.QrBarcode, CheckType.HouseHunt -> null
         }
 
 /**

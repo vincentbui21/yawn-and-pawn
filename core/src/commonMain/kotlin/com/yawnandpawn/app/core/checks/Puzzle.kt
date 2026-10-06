@@ -38,6 +38,20 @@ sealed interface Puzzle {
             get() = rounds.flatten()
     }
 
+    /**
+     * The words of a [CheckType.WordUnscramble] puzzle (lowercase) and the scrambled letters shown for each, in order.
+     * Each word is one item.
+     */
+    @Serializable
+    @SerialName("Word")
+    data class Word(
+        val words: List<String>,
+        val scrambles: List<String>,
+    ) : Puzzle {
+        override val size: Int
+            get() = words.size
+    }
+
     /** The puzzle of the [CheckType.Placeholder] stand-in: one item, answered by "I'm up". */
     @Serializable
     @SerialName("Placeholder")

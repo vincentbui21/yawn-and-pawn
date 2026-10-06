@@ -391,7 +391,7 @@ class WakeService :
                     emptyList()
                 }
             }
-        // TalkBack on at the fire: this ring's Memory Sequence uses the numbered variant (Story 3.8).
+        // TalkBack on at the fire: the session's Memory Sequence uses the numbered variant, frozen for its snooze re-rings too (Story 3.8).
         val accessible = accessibility.isScreenReaderOn()
         val config =
             ConfigResolver.resolve(

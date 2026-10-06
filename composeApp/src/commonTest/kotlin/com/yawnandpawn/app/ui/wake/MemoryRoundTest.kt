@@ -12,7 +12,10 @@ import com.yawnandpawn.app.core.session.StepPointer
 import com.yawnandpawn.app.testing.aSession
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertFalse
+import kotlin.test.assertNotNull
 import kotlin.test.assertNull
+import kotlin.test.assertTrue
 import kotlin.time.Duration
 import kotlin.time.Duration.Companion.milliseconds
 
@@ -67,7 +70,54 @@ class MemoryRoundTest {
         assertEquals(round, memoryRound(SessionState.Grace(session)))
         assertNull(memoryRound(SessionState.Ringing(session)))
         assertNull(memoryRound(SessionState.Loud(aSession())), "a Math entry")
-        assertNull(memoryRound(SessionState.Loud(session.copy(checkRun = CheckRun(plan, emptyList())))), "no seed")
+        // A damaged row without the seed shows the round of the usable run, the one the engine checks taps on.
+        val damaged = session.copy(checkRun = CheckRun(plan, emptyList()))
+        val usable = damaged.checkRun.usable(damaged.sessionId, damaged.ringIndex)
+        val expected = memoryRound(memory, memory.generate(usable.seeds.single(), Difficulty.Hard, 2), 0)
+        assertEquals(expected, memoryRound(SessionState.Loud(damaged)), "no stored seed")
+    }
+
+    private fun position(
+        item: Int,
+        seed: Long = 1L,
+        failedAttempts: Int = 0,
+    ) = CheckPosition("s", ringIndex = 0, entry = 0, item = item, seed = seed, failedAttempts = failedAttempts)
+
+    private val round1 = MemoryRound(1, 2, listOf(3, 7, 1, 9), 0, 3, numbered = false)
+    private val round2 = MemoryRound(2, 2, listOf(2, 4, 6, 8), 0, 3, numbered = false)
+
+    @Test
+    fun `the wake screen's Memory input plays each round once and keeps it while the user taps through it`() {
+        val start = MemoryInput().following(position(0), round1)
+        assertEquals(MemoryPlayback(round1.sequence), start.playback)
+        assertNull(start.tapped(3), "no taps while it plays")
+
+        var played = start
+        while (played.playback!!.playing) played = played.ticked()
+        val tapped = assertNotNull(played.tapped(3))
+        assertEquals(3, tapped.playback?.litTile)
+
+        val next = tapped.following(position(1), round1.copy(tapsMade = 1))
+        assertEquals(tapped.playback, next.playback, "a right tap does not replay the round")
+        assertEquals(MemoryPlayback(round2.sequence), next.following(position(4), round2).playback, "a new round plays")
+    }
+
+    @Test
+    fun `a wrong tap plays the new sequence with Not quite until it is the user's turn again`() {
+        var input = MemoryInput().following(position(2), round1.copy(tapsMade = 2))
+        while (input.playback!!.playing) input = input.ticked()
+        val restarted = round1.copy(sequence = listOf(5, 1, 5, 2))
+
+        input = input.following(position(0, seed = 2L, failedAttempts = 1), restarted)
+
+        assertTrue(input.wrong)
+        assertEquals(MemoryPlayback(restarted.sequence), input.playback)
+        while (input.playback!!.playing) {
+            assertTrue(input.wrong, "while the new sequence plays")
+            input = input.ticked()
+        }
+        assertFalse(input.wrong)
+        assertEquals(MemoryInput(), MemoryInput().following(null, null), "no Memory entry")
     }
 
     @Test

@@ -1,6 +1,7 @@
 package com.yawnandpawn.app.android.wake
 
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.State
 import androidx.compose.runtime.getValue
@@ -18,17 +19,21 @@ import com.yawnandpawn.app.core.time.TimeSnapshot
 import com.yawnandpawn.app.ui.wake.CheckInput
 import com.yawnandpawn.app.ui.wake.CheckPosition
 import com.yawnandpawn.app.ui.wake.CheckUiState
+import com.yawnandpawn.app.ui.wake.MemoryInput
 import com.yawnandpawn.app.ui.wake.WakeIntent
 import com.yawnandpawn.app.ui.wake.checkPosition
 import com.yawnandpawn.app.ui.wake.mathCheckUiState
+import com.yawnandpawn.app.ui.wake.memoryCheckUiState
+import com.yawnandpawn.app.ui.wake.memoryRound
 import kotlinx.coroutines.delay
 import kotlin.time.Duration
 import kotlin.time.Duration.Companion.milliseconds
 
 /**
  * The Check screen part of [WakeActivity] (Story 3.2): the digits typed so far (UI only, so a recreated screen starts
- * with an empty field), the grace countdown's clock and the number pad keys. The engine decides every answer; the
- * screen follows its next state (a new problem, or more failed attempts for a wrong answer).
+ * with an empty field), the grace countdown's clock and the number pad keys; and the Memory Sequence round with its
+ * playback and tiles (Story 3.8). The engine decides every answer; the screen follows its next state (a new problem or
+ * round, or more failed attempts for a wrong answer).
  */
 internal class WakeCheck(
     private val clock: Clock,
@@ -37,20 +42,62 @@ internal class WakeCheck(
 ) {
     private var input by mutableStateOf(CheckInput())
 
-    /** The Check screen for [state] with [availability] for its snooze, or null when [state] waits on no Math entry. */
+    /** The Memory Sequence round on screen and its playback (Story 3.8). */
+    private var memory by mutableStateOf(MemoryInput())
+    /**
+     * The Check screen for [state] with [availability] for its snooze, or null when [state] waits on no Math or Memory
+     * Sequence entry.
+     */
     @Composable
     fun screen(
         state: SessionState,
         availability: SnoozeAvailability,
     ): CheckUiState? {
         val now by graceClock(running = state is SessionState.Grace)
-        val shown = inputAt(checkPosition(state))
-        SideEffect { input = shown }
-        return mathCheckUiState(state, availability, now, shown)
+        val position = checkPosition(state)
+        val shown = inputAt(position)
+        val shownMemory = memoryAt(state)
+        SideEffect {
+            input = shown
+            memory = shownMemory
+        }
+        // The sequence plays by itself: each step after its delay (350 ms lit, 150 ms gap), then the brief tap light.
+        val playback = shownMemory.playback
+        LaunchedEffect(playback) {
+            val wait = playback?.nextTick ?: return@LaunchedEffect
+            delay(wait)
+            if (memory.playback == playback) memory = memory.ticked()
+        }
+        return mathCheckUiState(state, availability, now, shown) ?: memoryCheckUiState(state, availability, now, shownMemory)
     }
 
     /** The typed answer as the screen shows it at the engine's [position]. */
     internal fun inputAt(position: CheckPosition?): CheckInput = input.following(position)
+
+    /** The Memory round and playback as the screen shows them for the engine's [state]. */
+    internal fun memoryAt(state: SessionState): MemoryInput = memory.following(checkPosition(state), memoryRound(state))
+
+    /**
+     * A `memory-tile` tapped on the engine's [state] (Story 3.8): on the user's turn it lights briefly and is sent as
+     * `UserInteracted` + `CheckAnswerSubmitted(Tile)`; the engine decides (a wrong tap restarts the round with a new
+     * sequence, which [screen] then plays). While the sequence plays a tap only counts as interaction, through
+     * [interacted].
+     */
+    fun onTile(
+        tile: Int,
+        state: SessionState,
+        send: (List<SessionEvent>) -> Unit,
+        interacted: () -> Unit,
+    ) {
+        val current = memoryAt(state)
+        val tapped = current.tapped(tile)
+        memory = tapped ?: current
+        if (tapped == null) {
+            interacted()
+        } else {
+            send(listOf(SessionEvent.UserInteracted, SessionEvent.CheckAnswerSubmitted(CheckAnswer.Tile(tile))))
+        }
+    }
 
     /**
      * A `number-pad-key` at the engine's current [position]: a digit or backspace edits the typed answer (at most 5

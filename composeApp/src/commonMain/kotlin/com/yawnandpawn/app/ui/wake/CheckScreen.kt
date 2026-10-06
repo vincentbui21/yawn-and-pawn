@@ -575,15 +575,7 @@ private fun MemoryCheck(
     val colors = PpsTheme.colors
     val spacing = PpsTheme.spacing
     val watching = content.phase == MemoryPhase.Watch
-    val haptics = LocalHapticFeedback.current
-    val shake = remember { Animatable(0f) }
-    val shakeDistance = with(LocalDensity.current) { spacing.space2.toPx() }
-    LaunchedEffect(content.wrong) {
-        if (content.wrong) {
-            haptics.performHapticFeedback(HapticFeedbackType.Reject)
-            shake.animateTo(0f, keyframes { shakeKeyframes(shakeDistance) })
-        }
-    }
+    val shake = rememberWrongShake(content.wrong)
     Column(verticalArrangement = Arrangement.spacedBy(spacing.space3), horizontalAlignment = Alignment.CenterHorizontally) {
         Row(
             modifier = Modifier.fillMaxWidth(),
@@ -595,11 +587,11 @@ private fun MemoryCheck(
                 style = PpsTheme.typography.headline,
                 color = colors.text,
             )
-            // The sequence as numbers for TalkBack, announced once per round before the input (no visual, and no extra
-            // gap in the column).
+            // The sequence as numbers for TalkBack, announced once per round before the input: no visual, no extra gap
+            // in the column, and the size of the phase line, since a 0x0 node never reaches TalkBack (Story 3.8 review).
             content.announced?.takeIf { watching && content.numbered }?.let { tiles ->
                 Box(
-                    Modifier.clearAndSetSemantics {
+                    Modifier.matchParentSize().clearAndSetSemantics {
                         contentDescription = tiles.joinToString(", ")
                         liveRegion = LiveRegionMode.Polite
                     },

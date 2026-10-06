@@ -6,7 +6,8 @@ import com.yawnandpawn.app.core.checks.AccessibilityState
 
 /**
  * [AccessibilityState] from the system: a screen reader is on when accessibility is enabled with touch exploration (how
- * TalkBack runs). Read when needed, never cached, so turning TalkBack on applies to the next ring.
+ * TalkBack runs). Read at each alarm fire (and by the editor), never cached, so turning TalkBack on applies to the next
+ * session; a session keeps the plan frozen at its fire, snooze re-rings included.
  */
 class AndroidAccessibilityState(
     context: Context,

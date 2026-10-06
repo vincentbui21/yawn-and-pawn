@@ -12,7 +12,6 @@ context:
   - '{project-root}/_bmad-output/implementation-artifacts/spec-3-6-try-it-previews-for-every-check.md'
   - '{project-root}/.claude/skills/pps-design/SKILL.md'
 warnings:
-  - 'wake-screen-after-3.2: the Memory wake mapping is pure and lives in its own files (MemoryRound.kt, MemoryPlayback.kt). It plugs into 3.2''s WakeCheck renderer (PR #33) after 3.2 merges. Until then Memory works in "Try it" only, and the wake screen shows nothing new.'
   - 'core-contract-addition: CheckType gains restartFrom(position, difficulty) (default 0), so a wrong tap restarts only the current round (FR-PWK-4), not the whole entry. CheckRules uses it on InvalidRestart. This is additive, with no new AD-2 rows, and every existing type keeps restarting at item 0.'
 deferred: []
 ---
@@ -38,14 +37,14 @@ deferred: []
 
 **Always:**
 - **Seeds:** every choice goes through `SeededRandom` (3.1 contract, `NoUnseededRandom`). The id `MemorySequence` is stable for both variants (history `check_types`).
-- **Variant on storage:** stored configs never hold the numbered variant; it is chosen per ring.
+- **Variant on storage:** stored configs never hold the numbered variant; it is chosen when the alarm fires and frozen with the plan for the whole session (snooze re-rings reuse it; review fix of the wording).
 - **Strings (existing resources only):** "Watch the sequence", "Your turn", "Round {n} of {count}", "Tile {number}", "Rounds", "Uses numbered tiles with TalkBack." and "Not quite. Try again.". The announced sequence is digits joined by ", " (no words).
 - **Sizes:** tiles ≥ 64 dp on every grid, also 4×4 on a 360 dp phone. The preview baselines stay unchanged (new parameters default to the approved look).
 - **Timing:** playback keeps its timing with animator duration scale 0 (state changes, no animation).
 
 **Never:**
 - No new AD-2 rows and no new strings.
-- No WakeActivity change (that comes after 3.2).
+- No WakeActivity change before 3.2 (after the rebase onto 3.2, the review fixes wire Memory into `WakeCheck`).
 - No camera.
 - No change to Math's restart (item 0).
 
@@ -106,6 +105,17 @@ deferred: []
 ## Spec Change Log
 
 ## Review Triage Log
+
+### Review (2 reviewers, fast mode)
+
+Two reviewers read `9b5a38b`. In the lane 2 stack, the story sits on main after Story 3.2. `CheckType`'s `restartFrom` and `all by lazy` sit alongside main's 3.1 fixes, and the reducer's restart line uses main's `seedOf` and `totalFailedAttempts`, moving the item to `restartFrom`. Memory is now wired into the real wake screen (the old wake-screen-after-3.2 warning is removed). Fixed in `fix(3.8): review fixes`:
+
+- **wired (was deferred until 3.2):** `WakeCheck` shows Memory on the wake screen. A `MemoryInput` is keyed to the engine's position and round. It plays a round once, keeps the playback while the user taps through it, and after a wrong tap (more failed attempts, a new seed) plays the new sequence with "Not quite. Try again.". Each `TileTapped` sends `UserInteracted` + `CheckAnswerSubmitted(Tile(n))`, and `WakeActivity` keeps check answers in order (a fair `Mutex`, started undispatched), so quick taps reach the engine one after the other. `memoryRound(state)` reads the usable run, as Math does. `MemoryWakeCheckTest` (Robolectric, the real app) solves a Memory check on the wake screen, and a wrong tap restarts the round with a new sequence. `MemoryRoundTest` covers `MemoryInput`.
+- **patch: the numbered announcement was a 0x0 node.** TalkBack never reached it. It now fills the phase line's `Box` (`matchParentSize`), so it has a real size and adds no gap. The grid no longer moves when the sequence starts or ends (the coordinator's note from 3.7: the announcement and the phase text share one `Box`). Approved screenshots are unchanged apart from that gap. Tests: a polite live region with a non-zero size, and the grid's top stays put.
+- **patch: the TalkBack note went stale.** The editor reads TalkBack again when it opens the Wake-up check, Check setup or "Try it", so the notes and the preview agree (`AlarmEditorTryItTest`).
+- **wording:** the numbered variant is frozen when the alarm fires and kept for the whole session, snooze re-rings included. The KDoc (`ConfigResolver.resolve`, `AndroidAccessibilityState`, `WakeService`) and this spec now say so instead of "per ring".
+- **tests:** `MemoryTrialTest`: after a wrong tap, the replayed round is the derived seed's round (not the failed one), and tapping it solves the trial. `EditorChecksSemanticsTest`: with TalkBack on, the Wake-up check shows "Uses numbered tiles with TalkBack." on the Memory row. `WakeServiceTest`: with accessibility on but touch exploration off, the plan keeps `MemorySequence(numbered = false)`.
+- The wrong-tap shake uses 3.6's shared `rememberWrongShake`, which snaps back to rest if `wrong` clears mid-shake.
 
 ## Design Notes
 

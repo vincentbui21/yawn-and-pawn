@@ -49,8 +49,12 @@ import com.yawnandpawn.app.ui.wake.checkPosition
 import com.yawnandpawn.app.ui.wake.placeholderStepDue
 import com.yawnandpawn.app.ui.wake.ringingUiState
 import com.yawnandpawn.app.ui.wake.successUiState
+import kotlinx.coroutines.CoroutineStart
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
+import kotlinx.coroutines.yield
 import kotlinx.datetime.TimeZone
 import org.koin.android.ext.android.get
 import org.koin.android.ext.android.inject
@@ -59,7 +63,8 @@ import kotlin.time.Duration.Companion.seconds
 
 /**
  * The wake screen over the lock screen (AD-5): the approved Ringing screen (`ui/wake/RingingScreen`, Story 1.15) and,
- * in Grace or Loud on a Math entry, the approved Check screen (`ui/wake/CheckScreen`, Story 3.2, [WakeCheck]).
+ * in Grace or Loud on a Math or Memory Sequence entry, the approved Check screen (`ui/wake/CheckScreen`, Stories 3.2
+ * and 3.8, [WakeCheck]).
  * Opened again from the notification or from "Back to alarm" after Home, it shows the current problem.
  *
  * It opens only from the ringing notification (its full-screen intent or a tap on it), never from the background. It
@@ -81,7 +86,8 @@ import kotlin.time.Duration.Companion.seconds
  * - Any other tap sends `UserInteracted`.
  * - Number pad keys ([WakeCheck.onKey]): the typed digits live only on the screen; "Check" sends
  *   `CheckAnswerSubmitted(Number)` and the engine decides. A new problem or a wrong answer clears the field.
- * - Grace or Loud on a placeholder entry (only a session stored by Epics 1–2): the screen answers it
+ * - Memory tiles ([WakeCheck.onTile], Story 3.8): on the user's turn each tap sends `CheckAnswerSubmitted(Tile)`; a
+ *   wrong one makes the engine restart the round with a new sequence, which plays again. Answers keep their order. * - Grace or Loud on a placeholder entry (only a session stored by Epics 1–2): the screen answers it
  *   (`CheckAnswerSubmitted(Placeholder)`), so "I'm up" alone ends that session; a failed dispatch is retried while due.
  *
  * Once a session it showed completes (the engine's [SessionEngine.ended], since its `state` may skip from Completed to
@@ -103,6 +109,9 @@ class WakeActivity : ComponentActivity() {
 
     /** The Check screen's typed answer, grace clock and keys (Story 3.2). */
     private val check by lazy { WakeCheck(get(), get(), get()) }
+
+    /** Keeps the events [send] dispatches in order. */
+    private val dispatchOrder = Mutex()
 
     /** "I'm up" was tapped before the session existed; replayed once it rings. */
     private var pendingImUp by mutableStateOf(false)
@@ -250,6 +259,10 @@ class WakeActivity : ComponentActivity() {
                 check.onKey(intent, checkPosition(engine.state.value), send = { send(*it.toTypedArray()) }, interacted = ::interacted)
             }
 
+            // Story 3.8: a Memory Sequence tile.
+            intent is WakeIntent.TileTapped -> {
+                check.onTile(intent.tile, engine.state.value, send = { send(*it.toTypedArray()) }, interacted = ::interacted)
+            }
             intent != WakeIntent.ImUpClicked -> {
                 interacted()
             }
@@ -288,8 +301,19 @@ class WakeActivity : ComponentActivity() {
         if (runtime.emergency.value == null) send(SessionEvent.UserInteracted)
     }
 
+    /**
+     * Sends [events] in the order the taps came: quick taps (Memory tiles, Story 3.8) must reach the engine one after the
+     * other. Each send starts on the caller's thread and queues on [dispatchOrder], which is fair (first come, first
+     * served).
+     */
     private fun send(vararg events: SessionEvent) {
-        appScope.launch { events.forEach { engine.dispatch(it) } }
+        appScope.launch(start = CoroutineStart.UNDISPATCHED) {
+            dispatchOrder.withLock {
+                // The order is fixed once the lock is taken; the dispatch itself runs on the scope's thread, not the main one.
+                yield()
+                events.forEach { engine.dispatch(it) }
+            }
+        }
     }
 
     companion object {

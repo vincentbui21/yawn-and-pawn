@@ -147,6 +147,15 @@ class EditorChecksSemanticsTest {
     }
 
     @Test
+    fun `with TalkBack on, the Wake-up check sub-screen notes numbered tiles on the Memory row (Story 3-8 review fix)`() {
+        val base = EditorCheckSamples.oneCheck
+        val talkBack = base.copy(full = base.full?.copy(types = listOf(CheckType.Math, CheckType.MemorySequence), talkBackOn = true))
+        editor(talkBack) {
+            composeRule.onNodeWithText("Uses numbered tiles with TalkBack.", substring = true).assertExists()
+        }
+    }
+
+    @Test
     fun `the Math check is a ticked checkbox`() {
         editor(EditorCheckSamples.oneCheck) {
             composeRule.onNode(isToggleable() and hasText("Math", substring = true)).assertIsOn()

@@ -188,6 +188,7 @@ class AlarmEditorViewModel(
             is EditorIntent.PaneOpened -> {
                 if (intent.pane != EditorPane.Sound) sounds.stopPreview()
                 _state.update { if (it.isLoading) it else it.copy(pane = intent.pane) }
+                if (intent.pane == EditorPane.WakeCheck) refreshTalkBack()
             }
 
             is EditorIntent.RepeatChosen -> {
@@ -274,6 +275,7 @@ class AlarmEditorViewModel(
 
             is EditorIntent.CheckSetupClicked -> {
                 _state.update { if (it.isLoading) it else it.copy(pane = EditorPane.CheckSetup, setupType = intent.type) }
+                refreshTalkBack()
             }
 
             is EditorIntent.CheckSetup -> {
@@ -343,10 +345,21 @@ class AlarmEditorViewModel(
         val chip =
             _state.value.form.checks
                 .firstOrNull { it.type == type } ?: return
-        // TalkBack on: the accessible variant (Memory Sequence's numbered tiles, Story 3.8).
-        val started = CheckRegistry.startTrial(type, chip.difficulty, previewSeed(), accessibility.isScreenReaderOn()) ?: return
+        // TalkBack on: the accessible variant (Memory Sequence's numbered tiles, Story 3.8); the notes follow the same read.
+        val talkBackOn = refreshTalkBack()
+        val started = CheckRegistry.startTrial(type, chip.difficulty, previewSeed(), talkBackOn) ?: return
         _state.update { it.copy(pane = EditorPane.TryIt) }
         showTrial(started)
+    }
+
+    /**
+     * Reads TalkBack again into the Wake-up check and Check setup notes ("Uses numbered tiles with TalkBack."), so they
+     * and "Try it" agree after TalkBack was turned on or off while the editor was open (Story 3.8 review); returns it.
+     */
+    private fun refreshTalkBack(): Boolean {
+        val on = accessibility.isScreenReaderOn()
+        _state.update { it.copy(full = it.full?.copy(talkBackOn = on)) }
+        return on
     }
 
     /** A tap in the preview: "Done" returns to Check setup, anything else goes to the trial. */

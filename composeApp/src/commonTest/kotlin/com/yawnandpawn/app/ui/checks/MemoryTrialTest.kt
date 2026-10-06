@@ -75,6 +75,35 @@ class MemoryTrialTest {
         assertSame(again, again.onIntent(WakeIntent.DigitTapped(1)), "taps Memory does not use")
     }
 
+    /** The tiles lit while the sequence plays, in order, and the trial on the user's turn. */
+    private fun CheckTrial.watched(): Pair<List<Int>, CheckTrial> {
+        val lit = mutableListOf<Int>()
+        var trial = this
+        while (trial.memory().phase == MemoryPhase.Watch) {
+            trial.memory().litTile?.let { lit += it }
+            trial = trial.tick()
+        }
+        return lit to trial
+    }
+
+    @Test
+    fun `after a wrong tap the replayed round is the next seed's, not the old one, and tapping it solves the trial (review fix)`() {
+        val tiles = sequence(Difficulty.Medium)
+        val wrongTile = (1..9).first { it != tiles[0] }
+        val (first, ready) = MemoryTrial.start(Difficulty.Medium, seed).watched()
+        assertEquals(tiles, first)
+
+        val (replayed, again) = ready.onIntent(WakeIntent.TileTapped(wrongTile)).watched()
+
+        val nextSeed = seed * 6364136223846793005L + 1442695040888963407L
+        val expected = (CoreCheckType.MemorySequence().generate(nextSeed, Difficulty.Medium.toCore(), 1) as Puzzle.Memory).rounds.single()
+        assertEquals(expected, replayed, "the round from the derived seed")
+        assertTrue(replayed != tiles, "a new sequence, not the one that was failed")
+        var trial = again
+        replayed.forEach { tile -> trial = trial.onIntent(WakeIntent.TileTapped(tile)) }
+        assertTrue(trial.state.done)
+    }
+
     @Test
     fun `with TalkBack on it is the numbered 3x3 that announces its round`() {
         val trial = CheckRegistry.startTrial(CheckType.MemorySequence, Difficulty.Hard, seed, accessible = true)!!

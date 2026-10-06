@@ -1,5 +1,10 @@
 package com.yawnandpawn.app.ui
 
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.semantics.LiveRegionMode
+import androidx.compose.ui.semantics.SemanticsProperties
 import androidx.compose.ui.test.getBoundsInRoot
 import androidx.compose.ui.test.junit4.createEmptyComposeRule
 import androidx.compose.ui.test.onAllNodesWithContentDescription
@@ -155,7 +160,23 @@ class MemoryCheckScreenshotTest {
         val watching = content(Difficulty.Easy, numbered = true)
         withScreen(PpsThemeMode.Light, content = { CheckScreen(state = check(watching), onIntent = {}) }) {
             val spoken = watching.announced!!.joinToString(", ")
-            assertEquals(1, composeRule.onAllNodesWithContentDescription(spoken).fetchSemanticsNodes().size)
+            val node = composeRule.onAllNodesWithContentDescription(spoken).fetchSemanticsNodes().single()
+            // Review fix: a polite live region with a real size (a 0x0 node never reaches TalkBack).
+            assertEquals(LiveRegionMode.Polite, node.config[SemanticsProperties.LiveRegion])
+            assertTrue(node.boundsInRoot.width > 0f && node.boundsInRoot.height > 0f, "${node.boundsInRoot}")
+        }
+    }
+
+    @Test
+    fun `the grid stays in place when the numbered sequence starts and ends (review fix)`() {
+        var shown by mutableStateOf(content(Difficulty.Easy, numbered = true))
+        withScreen(PpsThemeMode.Light, content = { CheckScreen(state = check(shown), onIntent = {}) }) {
+            val watchingTop = composeRule.onNodeWithContentDescription("Tile 1").getBoundsInRoot().top
+
+            composeRule.runOnUiThread { shown = content(Difficulty.Easy, frame = 8, numbered = true) }
+            composeRule.onNodeWithText("Your turn").assertExists()
+
+            assertEquals(watchingTop, composeRule.onNodeWithContentDescription("Tile 1").getBoundsInRoot().top)
         }
     }
 }

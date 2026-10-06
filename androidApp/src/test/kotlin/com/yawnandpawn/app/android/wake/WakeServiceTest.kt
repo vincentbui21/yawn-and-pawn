@@ -588,6 +588,27 @@ class WakeServiceTest {
         assertEquals(memory.copy(type = CheckType.MemorySequence(numbered = true)), entry)
     }
 
+    @Test
+    fun `accessibility on without touch exploration keeps Memory Sequence plain (Story 3-8 review fix)`() {
+        val app = WakeApp()
+        val memory = CheckEntry(CheckType.MemorySequence(), Difficulty.Hard, count = 2)
+        val checks = app.koin.get<CheckConfigRepository>()
+        assertEquals(Outcome.Success(Unit), runBlocking { checks.saveWithAlarm(alarmA, checkConfigsOf(alarmA.id, listOf(memory))) })
+        shadowOf(app.app.getSystemService(AccessibilityManager::class.java)).apply {
+            setEnabled(true)
+            setTouchExplorationEnabled(false)
+        }
+
+        app.ring(fired)
+        app.awaitRinging()
+
+        val entry =
+            (app.engine.state.value as SessionState.Ringing)
+                .session.config.checkPlan.entries
+                .single()
+        assertEquals(CheckType.MemorySequence(numbered = false), entry.type, "another accessibility service is not TalkBack")
+    }
+
     private fun slot(app: WakeApp): ShadowAlarmManager.ScheduledAlarm? =
         shadowOf(app.app.getSystemService(AlarmManager::class.java)).scheduledAlarms.singleOrNull {
             shadowOf(it.operation).requestCode == RequestCodes.SESSION_SLOT

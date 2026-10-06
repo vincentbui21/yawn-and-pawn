@@ -39,20 +39,68 @@ fun memoryRound(
 
 /**
  * The Memory round [state] waits on: Grace or Loud with a Memory Sequence entry current. Its puzzle comes from the
- * entry's seed through the core plugin, so a restored session shows the same round. For 3.2's wake renderer.
+ * entry's seed through the core plugin, so a restored session shows the same round. It is read from the
+ * [usable run][com.yawnandpawn.app.core.session.CheckRun.usable], the one the engine checks taps on.
  */
 fun memoryRound(state: SessionState): MemoryRound? {
-    val run = ((state as? SessionState.Grace)?.session ?: (state as? SessionState.Loud)?.session)?.checkRun
+    val run = ((state as? SessionState.Grace)?.session ?: (state as? SessionState.Loud)?.session)?.usableRun()
     val entry = run?.currentEntry
     val type = entry?.type as? CheckType.MemorySequence
     val seed = run?.seeds?.getOrNull(run.step.entry)
-    return if (entry == null || type == null ||
-        seed == null
-    ) {
+    return if (entry == null || type == null || seed == null) {
         null
     } else {
         memoryRound(type, type.generate(seed, entry.difficulty, entry.count), run.step.item)
     }
+}
+
+/**
+ * The Memory Sequence round on the wake screen (Story 3.8), UI only: the engine's [position] and [round], its
+ * [playback], and [wrong] after a wrong tap until the new sequence has played. [following] the engine's next position
+ * keeps the playback within a round (a right tap moves the item on), plays a round from the start when a new one begins
+ * (also after a restore), and plays the new sequence with "Not quite. Try again." when the failed attempts went up (a
+ * wrong tap restarts the round with a new seed). The UI never decides correctness.
+ */
+data class MemoryInput(
+    val position: CheckPosition? = null,
+    val round: MemoryRound? = null,
+    val playback: MemoryPlayback? = null,
+    val wrong: Boolean = false,
+) {
+    /** This input at the engine's [next] position, waiting on [nextRound]. */
+    fun following(
+        next: CheckPosition?,
+        nextRound: MemoryRound?,
+    ): MemoryInput {
+        val current = position
+        val sameEntry = next.isSameEntryAs(current)
+        return when {
+            next == null || nextRound == null -> {
+                MemoryInput(next)
+            }
+
+            sameEntry && next.failedAttempts > (current?.failedAttempts ?: 0) -> {
+                MemoryInput(next, nextRound, MemoryPlayback(nextRound.sequence), wrong = true)
+            }
+
+            sameEntry && next.seed == current?.seed && nextRound.round == round?.round -> {
+                copy(position = next, round = nextRound)
+            }
+
+            else -> {
+                MemoryInput(next, nextRound, MemoryPlayback(nextRound.sequence))
+            }
+        }
+    }
+
+    /** The playback's next step; "Not quite. Try again." goes once the new sequence has played. */
+    fun ticked(): MemoryInput {
+        val next = playback?.tick() ?: return this
+        return copy(playback = next, wrong = wrong && next.playing)
+    }
+
+    /** [tile] tapped: it lights briefly, or null when taps are ignored (the sequence plays, or no round). */
+    fun tapped(tile: Int): MemoryInput? = playback?.takeUnless { it.playing }?.let { copy(playback = it.tapped(tile)) }
 }
 
 /** What the Memory check shows for [round] as [playback] plays it, with the wrong-tap message while [wrong]. Pure. */

@@ -207,6 +207,50 @@ class AlarmEditorTryItTest {
         }
 
     @Test
+    fun `TalkBack turned on or off while the editor is open reaches the notes and Try it alike (Story 3-8 review fix)`() =
+        runTest(dispatcher) {
+            val viewModel = viewModel()
+            viewModel.onIntent(EditorIntent.CheckToggled(CheckType.MemorySequence, selected = true))
+            assertEquals(
+                false,
+                viewModel.state.value.full
+                    ?.talkBackOn,
+            )
+
+            accessibility.screenReaderOn = true
+            viewModel.onIntent(EditorIntent.PaneOpened(EditorPane.WakeCheck))
+            assertEquals(
+                true,
+                viewModel.state.value.full
+                    ?.talkBackOn,
+                "the picker note",
+            )
+            viewModel.onIntent(EditorIntent.CheckSetupClicked(CheckType.MemorySequence))
+            assertEquals(
+                true,
+                viewModel.state.value
+                    .checkSetupState()
+                    ?.talkBackOn,
+                "the Check setup note",
+            )
+
+            accessibility.screenReaderOn = false
+            viewModel.onIntent(EditorIntent.CheckSetup(CheckSetupIntent.TryItClicked))
+            assertFalse(
+                (
+                    viewModel.state.value.tryIt
+                        ?.content as CheckContent.MemorySequence
+                ).numbered,
+            )
+            assertEquals(
+                false,
+                viewModel.state.value.full
+                    ?.talkBackOn,
+                "the notes agree with Try it",
+            )
+        }
+
+    @Test
     fun `Back from the preview returns to Check setup, then the Wake-up check, with the form as it was before Try it`() =
         runTest(dispatcher) {
             val viewModel = settingUpMath(Difficulty.Easy)

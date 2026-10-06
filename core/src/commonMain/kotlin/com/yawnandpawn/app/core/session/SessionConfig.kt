@@ -65,7 +65,7 @@ object ConfigResolver {
      * The config for a session ringing [alarm] at [scheduledAt]; [testMode] for the test alarm. The check plan is the
      * alarm's [checks] (its `check_config` rows, sorted by position) in its `checkMode` (Story 3.5); an alarm without
      * checks rings the [defaultPlan]. With [accessible] (TalkBack on at the fire, Story 3.8) its Memory Sequence entries
-     * use the numbered variant for this ring.
+     * use the numbered variant for the whole session: the plan is frozen at the fire, and snooze re-rings reuse it.
      */
     fun resolve(
         alarm: Alarm,

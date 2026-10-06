@@ -485,7 +485,10 @@ private fun LetterTile(
 
 /**
  * Memory Sequence: "Watch the sequence" (input disabled, the lit tile in accent) or "Your turn", "Round {n} of {count}",
- * and the 3x3 `memory-tile` grid (64 dp, "Tile {number}"; numbers shown on every tile in the TalkBack variant).
+ * and the `memory-tile` grid ("Tile {number}"; numbers shown on every tile in the TalkBack variant): 3x3 with 84 dp
+ * tiles, or 4x4 on Hard with 64 dp tiles so it fits a 360 dp phone (Story 3.8). The TalkBack variant announces the
+ * round's tiles as numbers ("3, 7, 1, 9") while it watches. A tap gives a light haptic; a wrong tap shakes the grid for
+ * 200 ms with an error haptic and shows "Not quite. Try again." while the new sequence plays.
  */
 @Composable
 private fun MemoryCheck(
@@ -495,6 +498,15 @@ private fun MemoryCheck(
     val colors = PpsTheme.colors
     val spacing = PpsTheme.spacing
     val watching = content.phase == MemoryPhase.Watch
+    val haptics = LocalHapticFeedback.current
+    val shake = remember { Animatable(0f) }
+    val shakeDistance = with(LocalDensity.current) { spacing.space2.toPx() }
+    LaunchedEffect(content.wrong) {
+        if (content.wrong) {
+            haptics.performHapticFeedback(HapticFeedbackType.Reject)
+            shake.animateTo(0f, keyframes { shakeKeyframes(shakeDistance) })
+        }
+    }
     Column(verticalArrangement = Arrangement.spacedBy(spacing.space3), horizontalAlignment = Alignment.CenterHorizontally) {
         Row(
             modifier = Modifier.fillMaxWidth(),
@@ -505,40 +517,66 @@ private fun MemoryCheck(
             style = PpsTheme.typography.headline,
             color = colors.text,
         )
+        // The sequence as numbers for TalkBack, announced once per round before the input (no visual).
+        content.announced?.takeIf { watching && content.numbered }?.let { tiles ->
+            Box(
+                Modifier.clearAndSetSemantics {
+                    contentDescription = tiles.joinToString(", ")
+                    liveRegion = LiveRegionMode.Polite
+                },
+            )
+        }
         if (content.wrong) WrongAnswer()
-        Column(verticalArrangement = Arrangement.spacedBy(spacing.space2)) {
-            for (row in 0 until GRID) {
+        Column(
+            modifier = Modifier.graphicsLayer { translationX = shake.value },
+            verticalArrangement = Arrangement.spacedBy(spacing.space2),
+        ) {
+            val grid = content.gridSize
+            for (row in 0 until grid) {
                 Row(horizontalArrangement = Arrangement.spacedBy(spacing.space2)) {
-                    for (column in 1..GRID) {
-                        val tile = row * GRID + column
-                        val lit = tile == content.litTile
-                        val spoken = stringResource(Res.string.memory_tile, tile)
-                        Box(
-                            modifier =
-                                Modifier
-                                    .size(spacing.targetWake + spacing.space5)
-                                    .clip(PpsTheme.shapes.md)
-                                    .background(if (lit) colors.accent else colors.surface)
-                                    .border(1.dp, colors.outline, PpsTheme.shapes.md)
-                                    .clickable(enabled = !watching, role = Role.Button) { onIntent(WakeIntent.TileTapped(tile)) }
-                                    .semantics {
-                                        contentDescription = spoken
-                                        if (watching) disabled()
-                                    },
-                            contentAlignment = Alignment.Center,
-                        ) {
-                            if (content.numbered || lit) {
-                                Text(
-                                    text = tile.toString(),
-                                    modifier = Modifier.clearAndSetSemantics { },
-                                    style = PpsTheme.typography.title,
-                                    color = if (lit) colors.onAccent else colors.text,
-                                )
-                            }
-                        }
-                    }
+                    for (column in 1..grid) MemoryTile(content, tile = row * grid + column, onIntent = onIntent)
                 }
             }
+        }
+    }
+}
+
+/** One `memory-tile`: lit in accent with its number, numbered in the TalkBack variant, disabled while the sequence plays. */
+@Composable
+private fun MemoryTile(
+    content: CheckContent.MemorySequence,
+    tile: Int,
+    onIntent: (WakeIntent) -> Unit,
+) {
+    val colors = PpsTheme.colors
+    val spacing = PpsTheme.spacing
+    val haptics = LocalHapticFeedback.current
+    val watching = content.phase == MemoryPhase.Watch
+    val lit = tile == content.litTile
+    val spoken = stringResource(Res.string.memory_tile, tile)
+    Box(
+        modifier =
+            Modifier
+                .size(if (content.gridSize > SMALL_GRID) spacing.targetWake else spacing.targetWake + spacing.space5)
+                .clip(PpsTheme.shapes.md)
+                .background(if (lit) colors.accent else colors.surface)
+                .border(1.dp, colors.outline, PpsTheme.shapes.md)
+                .clickable(enabled = !watching, role = Role.Button) {
+                    haptics.performHapticFeedback(HapticFeedbackType.KeyboardTap)
+                    onIntent(WakeIntent.TileTapped(tile))
+                }.semantics {
+                    contentDescription = spoken
+                    if (watching) disabled()
+                },
+        contentAlignment = Alignment.Center,
+    ) {
+        if (content.numbered || lit) {
+            Text(
+                text = tile.toString(),
+                modifier = Modifier.clearAndSetSemantics { },
+                style = PpsTheme.typography.title,
+                color = if (lit) colors.onAccent else colors.text,
+            )
         }
     }
 }
@@ -660,6 +698,7 @@ private fun CameraUnavailable() {
     )
 }
 
-private const val GRID = 3
+/** The 3x3 Memory Sequence grid; 4x4 tiles are smaller. */
+private const val SMALL_GRID = 3
 private const val DASH = 8f
 private val GHOST_SIZE = 72.dp

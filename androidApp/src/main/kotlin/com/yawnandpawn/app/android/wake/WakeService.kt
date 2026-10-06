@@ -19,6 +19,7 @@ import com.yawnandpawn.app.core.alarm.AlarmFired
 import com.yawnandpawn.app.core.alarm.AlarmRepository
 import com.yawnandpawn.app.core.alarm.CheckConfigRepository
 import com.yawnandpawn.app.core.alarm.orderedEntries
+import com.yawnandpawn.app.core.checks.AccessibilityState
 import com.yawnandpawn.app.core.checks.CheckAnswer
 import com.yawnandpawn.app.core.checks.Puzzle
 import com.yawnandpawn.app.core.crash.CrashReporter
@@ -125,6 +126,7 @@ class WakeService :
     private val timings: WakeTimings by inject()
     private val rearm: SessionSlotRearm by inject()
     private val userLock: UserLockState by inject()
+    private val accessibility: AccessibilityState by inject()
     private val sessionLock: SessionLockGuard by inject()
     private val unlockSignals: UnlockSignals by inject()
     private val calls: CallDetector by inject()
@@ -389,7 +391,17 @@ class WakeService :
                     emptyList()
                 }
             }
-        val config = ConfigResolver.resolve(alarm, checks, GlobalSettings(), testMode = false, scheduledAt = fired.scheduledAt)
+        // TalkBack on at the fire: this ring's Memory Sequence uses the numbered variant (Story 3.8).
+        val accessible = accessibility.isScreenReaderOn()
+        val config =
+            ConfigResolver.resolve(
+                alarm,
+                checks,
+                GlobalSettings(),
+                testMode = false,
+                scheduledAt = fired.scheduledAt,
+                accessible = accessible,
+            )
         val locked = !userLock.isUserUnlocked()
         val event =
             SessionEvent.AlarmFired(
@@ -739,6 +751,7 @@ class WakeService :
             val puzzle = if (entry == null || seed == null) null else entry.type.generate(seed, entry.difficulty, entry.count)
             return when (puzzle) {
                 is Puzzle.Math -> puzzle.problems.getOrNull(step.item)?.let { CheckAnswer.Number(it.answer.toString()) }
+                is Puzzle.Memory -> puzzle.taps.getOrNull(step.item)?.let { CheckAnswer.Tile(it) }
                 Puzzle.Placeholder -> CheckAnswer.Placeholder
                 null -> null
             }

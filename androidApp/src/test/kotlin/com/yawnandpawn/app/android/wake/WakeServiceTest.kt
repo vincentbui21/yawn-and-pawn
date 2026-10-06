@@ -9,6 +9,7 @@ import android.media.AudioAttributes
 import android.media.AudioManager
 import android.os.Looper
 import android.os.UserManager
+import android.view.accessibility.AccessibilityManager
 import com.yawnandpawn.app.StopAppRule
 import com.yawnandpawn.app.android.AlarmFiredReceiver
 import com.yawnandpawn.app.android.ApplicationScope
@@ -541,6 +542,27 @@ class WakeServiceTest {
         app.awaitRinging()
 
         assertEquals(ConfigResolver.defaultPlan(), (app.engine.state.value as SessionState.Ringing).session.config.checkPlan)
+    }
+
+    @Test
+    fun `with TalkBack on at the fire, the ring freezes Memory Sequence as its numbered variant (Story 3-8)`() {
+        val app = WakeApp()
+        val memory = CheckEntry(CheckType.MemorySequence(), Difficulty.Hard, count = 2)
+        val checks = app.koin.get<CheckConfigRepository>()
+        assertEquals(Outcome.Success(Unit), runBlocking { checks.saveWithAlarm(alarmA, checkConfigsOf(alarmA.id, listOf(memory))) })
+        shadowOf(app.app.getSystemService(AccessibilityManager::class.java)).apply {
+            setEnabled(true)
+            setTouchExplorationEnabled(true)
+        }
+
+        app.ring(fired)
+        app.awaitRinging()
+
+        val entry =
+            (app.engine.state.value as SessionState.Ringing)
+                .session.config.checkPlan.entries
+                .single()
+        assertEquals(memory.copy(type = CheckType.MemorySequence(numbered = true)), entry)
     }
 
     private fun slot(app: WakeApp): ShadowAlarmManager.ScheduledAlarm? =

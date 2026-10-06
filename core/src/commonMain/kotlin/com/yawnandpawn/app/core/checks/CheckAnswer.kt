@@ -25,4 +25,11 @@ sealed interface CheckAnswer {
     data class Number(
         val digits: String,
     ) : CheckAnswer
+
+    /** One tile tapped on a [CheckType.MemorySequence] grid, numbered from 1 row by row. */
+    @Serializable
+    @SerialName("Tile")
+    data class Tile(
+        val number: Int,
+    ) : CheckAnswer
 }

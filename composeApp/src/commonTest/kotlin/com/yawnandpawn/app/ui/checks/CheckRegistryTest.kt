@@ -30,7 +30,7 @@ class CheckRegistryTest {
         assertTrue(PickableCheckTypes.isNotEmpty())
         PickableCheckTypes.forEach { type -> assertNotNull(CheckRegistry.startTrial(type, Difficulty.Medium, seed), "$type") }
         assertTrue(CheckRegistry.types.containsAll(PickableCheckTypes))
-        assertEquals(listOf(CheckType.Math), PickableCheckTypes)
+        assertEquals(listOf(CheckType.Math, CheckType.MemorySequence), PickableCheckTypes)
     }
 
     @Test

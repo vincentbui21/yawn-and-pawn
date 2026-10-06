@@ -112,7 +112,13 @@ internal fun EditorSubScreen(
 internal fun EditorUiState.checkSetupState(): CheckSetupUiState? {
     val chip = form.checks.firstOrNull { it.type == setupType } ?: return null
     val range = chip.type.core?.countRange ?: (CheckSetupUiState.MIN_COUNT..CheckSetupUiState.MAX_COUNT)
-    return CheckSetupUiState(type = chip.type, difficulty = chip.difficulty, count = chip.count, countRange = range)
+    return CheckSetupUiState(
+        type = chip.type,
+        difficulty = chip.difficulty,
+        count = chip.count,
+        countRange = range,
+        talkBackOn = full?.talkBackOn == true,
+    )
 }
 
 private fun EditorPane.title(): StringResource =
@@ -200,6 +206,7 @@ private fun WakeCheckPane(
                 noCheckError = full.noCheckError,
                 qrCodeSaved = full.qrCodeSaved,
                 houseHuntPhotos = full.houseHuntPhotos,
+                talkBackOn = full.talkBackOn,
                 types = full.types,
             ),
         onIntent = { intent ->

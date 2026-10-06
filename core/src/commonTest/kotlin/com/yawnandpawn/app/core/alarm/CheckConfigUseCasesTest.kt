@@ -48,7 +48,7 @@ class CheckConfigUseCasesTest {
     fun `a new alarm starts with Random Math Medium 3`() {
         assertEquals(listOf(CheckEntry(CheckType.Math, Difficulty.Medium, 3)), AlarmDraft(time = LocalTime(7, 0)).checks)
         assertEquals(CheckMode.Random, AlarmDraft(time = LocalTime(7, 0)).checkMode)
-        assertEquals(listOf<CheckType>(CheckType.Math), CheckConfig.PICKABLE_TYPES)
+        assertEquals(listOf(CheckType.Math, CheckType.MemorySequence()), CheckConfig.PICKABLE_TYPES)
     }
 
     @Test

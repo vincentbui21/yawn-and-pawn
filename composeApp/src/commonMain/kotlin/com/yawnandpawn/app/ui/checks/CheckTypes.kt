@@ -123,16 +123,20 @@ val CheckType.icon: DrawableResource
             CheckType.HouseHunt -> Res.drawable.symbol_house
         }
 
-/** The core plugin of this check (AD-9), or null while its story has not added one (only Math so far). */
+/** The core plugin of this check (AD-9), or null while its story has not added one (Math, Memory Sequence so far). */
 val CheckType.core: CoreCheckType?
     get() =
         when (this) {
             CheckType.Math -> CoreCheckType.Math
-            CheckType.WordUnscramble, CheckType.MemorySequence, CheckType.QrBarcode, CheckType.HouseHunt -> null
+            CheckType.MemorySequence -> CoreCheckType.MemorySequence()
+            CheckType.WordUnscramble, CheckType.QrBarcode, CheckType.HouseHunt -> null
         }
 
-/** The UI check of a core plugin, or null for one a user never sees (the Epic 1 placeholder). */
-fun CoreCheckType.toUi(): CheckType? = CheckType.entries.firstOrNull { it.core == this }
+/**
+ * The UI check of a core plugin, by its stable id (so both Memory Sequence variants are Memory Sequence), or null for
+ * one a user never sees (the Epic 1 placeholder).
+ */
+fun CoreCheckType.toUi(): CheckType? = CheckType.entries.firstOrNull { it.core?.id == id }
 
 fun Difficulty.toCore(): CoreDifficulty = CoreDifficulty.valueOf(name)
 

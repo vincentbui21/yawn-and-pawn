@@ -12,6 +12,7 @@ import com.yawnandpawn.app.core.alarm.CheckConfigRepository
 import com.yawnandpawn.app.core.alarm.SaveAlarm
 import com.yawnandpawn.app.core.alarm.nextOccurrence
 import com.yawnandpawn.app.core.alarm.orderedEntries
+import com.yawnandpawn.app.core.checks.AccessibilityState
 import com.yawnandpawn.app.core.checks.CheckEntry
 import com.yawnandpawn.app.core.error.DomainError
 import com.yawnandpawn.app.core.error.Outcome
@@ -38,8 +39,10 @@ import com.yawnandpawn.app.ui.format.Weekdays
 import com.yawnandpawn.app.ui.format.countdownOf
 import com.yawnandpawn.app.ui.home.AlarmActions
 import com.yawnandpawn.app.ui.wake.WakeIntent
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.channels.Channel
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -97,7 +100,12 @@ class AlarmEditorViewModel(
     private val pickable: List<CheckType> = PickableCheckTypes,
     /** The seed of each "Try it" (Story 3.6): random in the app (a practice run, not a session), fixed in tests. */
     private val previewSeed: () -> Long = { Random.nextLong() },
+    /** TalkBack (Story 3.8): the Memory Sequence note and its numbered "Try it". */
+    private val accessibility: AccessibilityState = AccessibilityState { false },
 ) : ViewModel() {
+    /** The pending tick of the running preview (Memory's playback). */
+    private var trialTicks: Job? = null
+
     /** The running "Try it" preview, if any (Story 3.6). */
     private var trial: CheckTrial? = null
 
@@ -106,7 +114,7 @@ class AlarmEditorViewModel(
             EditorUiState(
                 isNew = alarmId == null,
                 isLoading = alarmId != null || copyOf != null,
-                full = wakeCheckOnly(pickable),
+                full = wakeCheckOnly(pickable, talkBackOn = accessibility.isScreenReaderOn()),
             ).withChecks(),
         )
     val state: StateFlow<EditorUiState> = _state.asStateFlow()
@@ -332,9 +340,10 @@ class AlarmEditorViewModel(
         val chip =
             _state.value.form.checks
                 .firstOrNull { it.type == type } ?: return
-        val started = CheckRegistry.startTrial(type, chip.difficulty, previewSeed()) ?: return
-        trial = started
-        _state.update { it.copy(pane = EditorPane.TryIt, tryIt = started.state) }
+        // TalkBack on: the accessible variant (Memory Sequence's numbered tiles, Story 3.8).
+        val started = CheckRegistry.startTrial(type, chip.difficulty, previewSeed(), accessibility.isScreenReaderOn()) ?: return
+        _state.update { it.copy(pane = EditorPane.TryIt) }
+        showTrial(started)
     }
 
     /** A tap in the preview: "Done" returns to Check setup, anything else goes to the trial. */
@@ -344,13 +353,31 @@ class AlarmEditorViewModel(
             closeTryIt()
             return
         }
-        val next = current.onIntent(intent)
+        showTrial(current.onIntent(intent))
+    }
+
+    /**
+     * Shows [next] and, when it changes by itself (Memory's playback, Story 3.8), ticks it after its delay on this
+     * ViewModel's scope: virtual time in tests, and cancelled by the next change or by leaving the preview.
+     */
+    private fun showTrial(next: CheckTrial) {
+        if (next === trial) return
         trial = next
         _state.update { it.copy(tryIt = next.state) }
+        trialTicks?.cancel()
+        trialTicks =
+            next.nextTick?.let { wait ->
+                viewModelScope.launch {
+                    delay(wait)
+                    if (trial === next) showTrial(next.tick())
+                }
+            }
     }
 
     /** Back or "Done": Check setup again, with the form as it was. */
     private fun closeTryIt() {
+        trialTicks?.cancel()
+        trialTicks = null
         trial = null
         _state.update { it.copy(pane = EditorPane.CheckSetup, tryIt = null) }
     }
@@ -643,8 +670,10 @@ private fun EditorForm.toDraft(alarmId: String?): AlarmDraft =
  * The production editor's full-editor rows (Story 3.5): only the Wake-up check, offering [pickable] (the Quiet time row
  * shows in every editor, Story 3.4); motivation and the fee ladder wait for their stories.
  */
-private fun wakeCheckOnly(pickable: List<CheckType>): FullEditorSections =
-    FullEditorSections(rows = setOf(EditorPane.WakeCheck), types = pickable)
+private fun wakeCheckOnly(
+    pickable: List<CheckType>,
+    talkBackOn: Boolean,
+): FullEditorSections = FullEditorSections(rows = setOf(EditorPane.WakeCheck), types = pickable, talkBackOn = talkBackOn)
 
 /** The Wake-up check row and sub-screen show the form's checks and mode. */
 private fun EditorUiState.withChecks(): EditorUiState = copy(full = full?.copy(checks = form.checks, checkMode = form.checkMode))

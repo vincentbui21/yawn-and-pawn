@@ -203,6 +203,8 @@ data class FullEditorSections(
     val rows: Set<EditorPane> = setOf(EditorPane.WakeCheck, EditorPane.QuietTime, EditorPane.Motivation),
     /** The checks the Wake-up check sub-screen lists: every one in the preview, the pickable ones in the app. */
     val types: List<CheckType> = CheckType.entries,
+    /** TalkBack is on (Story 3.8): Memory Sequence says "Uses numbered tiles with TalkBack." in the picker and its setup. */
+    val talkBackOn: Boolean = false,
 )
 
 /** Everything the user can do in the editor. */

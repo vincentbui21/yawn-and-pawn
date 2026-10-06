@@ -1,6 +1,7 @@
 package com.yawnandpawn.app.core.checks
 
 import com.yawnandpawn.app.core.checks.math.MathGenerator
+import com.yawnandpawn.app.core.checks.memory.MemoryGenerator
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 
@@ -61,6 +62,16 @@ sealed interface CheckType {
     ): CheckResult
 
     /**
+     * Where a [CheckResult.WrongRestart] at item [position] starts again, at [difficulty]: item 0 (the whole puzzle) unless
+     * the type restarts a part of it (Memory Sequence: the current round, FR-PWK-4). The reducer moves the pointer there
+     * with a new seed.
+     */
+    fun restartFrom(
+        position: Int,
+        difficulty: Difficulty,
+    ): Int = 0
+
+    /**
      * Mental arithmetic (FR-PWK-5): `count` problems, each answered with a non-negative integer. Easy is `a + b` or
      * `a − b`, Medium `a × b + c`, Hard `a × b + c × d` (owner-approved default 2026-09-26).
      */
@@ -93,6 +104,64 @@ sealed interface CheckType {
                 position == problems.lastIndex -> CheckResult.Correct
                 else -> CheckResult.ItemCorrect
             }
+        }
+    }
+
+    /**
+     * Memory Sequence (FR-PWK-4): `count` rounds of 4, 6 or 8 lit tiles by difficulty, repeated tap by tap. Hard uses a
+     * 4×4 grid. The [numbered] variant (TalkBack on when the ring's plan is frozen) always uses 3×3 with the same lengths
+     * and shows every tile's number. Every tap is one item; a wrong tap restarts the current round with a new sequence.
+     * Both variants have the id `MemorySequence`; only a ring's frozen plan ever holds the numbered one.
+     */
+    @Serializable
+    @SerialName("MemorySequence")
+    data class MemorySequence(
+        val numbered: Boolean = false,
+    ) : CheckType {
+        override val id: String get() = ID
+        override val usesCamera: Boolean get() = false
+        override val directBootSafe: Boolean get() = true
+        override val hasDifficulty: Boolean get() = true
+        override val countRange: IntRange get() = COUNT_RANGE
+        override val defaultCount: Int get() = DEFAULT_COUNT
+
+        override fun generate(
+            seed: Long,
+            difficulty: Difficulty,
+            count: Int,
+        ): Puzzle {
+            val grid = MemoryGenerator.gridSize(difficulty, numbered)
+            return Puzzle.Memory(grid, MemoryGenerator.rounds(seed, difficulty, grid, count.coerceIn(countRange)))
+        }
+
+        override fun validate(
+            puzzle: Puzzle,
+            position: Int,
+            answer: CheckAnswer,
+        ): CheckResult {
+            val taps = (puzzle as? Puzzle.Memory)?.taps.orEmpty()
+            val expected = taps.getOrNull(position)
+            val tapped = (answer as? CheckAnswer.Tile)?.number
+            return when {
+                expected == null || tapped == null -> CheckResult.Wrong
+                tapped != expected -> CheckResult.WrongRestart
+                position == taps.lastIndex -> CheckResult.Correct
+                else -> CheckResult.ItemCorrect
+            }
+        }
+
+        override fun restartFrom(
+            position: Int,
+            difficulty: Difficulty,
+        ): Int {
+            val length = MemoryGenerator.roundLength(difficulty)
+            return position.coerceAtLeast(0) / length * length
+        }
+
+        companion object {
+            const val ID = "MemorySequence"
+            private const val DEFAULT_COUNT = 2
+            private val COUNT_RANGE = 1..5
         }
     }
 
@@ -132,7 +201,11 @@ sealed interface CheckType {
     }
 
     companion object {
-        /** Every type; a test keeps it in step with the sealed hierarchy. */
-        val all: List<CheckType> = listOf(Math, Placeholder)
+        /**
+         * Every type; a test keeps it in step with the sealed hierarchy. Lazy: [restartFrom] is a default method, so on
+         * the JVM initializing a type (say [Math]) first initializes this interface, and an eager list would then hold
+         * the half-initialized type as null.
+         */
+        val all: List<CheckType> by lazy { listOf(Math, MemorySequence(), Placeholder) }
     }
 }

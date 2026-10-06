@@ -97,6 +97,17 @@ class ConfigResolverTest {
     }
 
     @Test
+    fun `with a screen reader on at the fire, Memory Sequence is frozen as its numbered variant (Story 3-8)`() {
+        val memory = CheckEntry(CheckType.MemorySequence(), Difficulty.Hard, count = 2)
+
+        val off = ConfigResolver.resolve(alarm, listOf(memory), GlobalSettings(), false, SCHEDULED_AT)
+        val on = ConfigResolver.resolve(alarm, listOf(memory), GlobalSettings(), false, SCHEDULED_AT, accessible = true)
+
+        assertEquals(listOf(memory), off.checkPlan.entries)
+        assertEquals(listOf(memory.copy(type = CheckType.MemorySequence(numbered = true))), on.checkPlan.entries)
+    }
+
+    @Test
     fun `test mode is carried into the config`() {
         val config = ConfigResolver.resolve(alarm, emptyList(), GlobalSettings(), testMode = true, scheduledAt = SCHEDULED_AT)
         assertEquals(true, config.testMode)

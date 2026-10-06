@@ -30,6 +30,7 @@ val uiModule =
                 notificationPermission = get(),
                 testAlarm = get(),
                 copyOf = params.get<AlarmEditorArgs>().copyOf,
+                accessibility = get(),
             )
         }
     }

@@ -4,6 +4,7 @@ import com.yawnandpawn.app.core.alarm.Alarm
 import com.yawnandpawn.app.core.alarm.AlarmDraft
 import com.yawnandpawn.app.core.checks.CheckEntry
 import com.yawnandpawn.app.core.checks.CheckPlan
+import com.yawnandpawn.app.core.checks.accessibleEntries
 import kotlinx.serialization.Serializable
 import kotlin.time.Instant
 
@@ -63,7 +64,8 @@ object ConfigResolver {
     /**
      * The config for a session ringing [alarm] at [scheduledAt]; [testMode] for the test alarm. The check plan is the
      * alarm's [checks] (its `check_config` rows, sorted by position) in its `checkMode` (Story 3.5); an alarm without
-     * checks rings the [defaultPlan].
+     * checks rings the [defaultPlan]. With [accessible] (TalkBack on at the fire, Story 3.8) its Memory Sequence entries
+     * use the numbered variant for this ring.
      */
     fun resolve(
         alarm: Alarm,
@@ -71,6 +73,7 @@ object ConfigResolver {
         globalSettings: GlobalSettings,
         testMode: Boolean,
         scheduledAt: Instant,
+        accessible: Boolean = false,
     ): SessionConfig =
         SessionConfig(
             alarmId = alarm.id,
@@ -89,7 +92,7 @@ object ConfigResolver {
             rampStartPercent = Alarm.DEFAULT_RAMP_START_PERCENT,
             soundRef = alarm.soundRef,
             vibration = alarm.vibration,
-            checkPlan = if (checks.isEmpty()) defaultPlan() else CheckPlan(alarm.checkMode, checks),
+            checkPlan = if (checks.isEmpty()) defaultPlan() else CheckPlan(alarm.checkMode, accessibleEntries(checks, accessible)),
         )
 
     /**

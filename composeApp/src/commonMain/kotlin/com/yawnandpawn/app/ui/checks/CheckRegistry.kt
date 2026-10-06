@@ -7,6 +7,7 @@ import com.yawnandpawn.app.ui.checksetup.CheckPreviewUiState
 import com.yawnandpawn.app.ui.wake.CheckContent
 import com.yawnandpawn.app.ui.wake.MathOperator
 import com.yawnandpawn.app.ui.wake.WakeIntent
+import kotlin.time.Duration
 import com.yawnandpawn.app.core.checks.CheckType as CoreCheckType
 import com.yawnandpawn.app.core.checks.math.MathOperator as CoreMathOperator
 
@@ -21,6 +22,13 @@ interface CheckTrial {
 
     /** This trial after [intent]; taps a check does not use leave it unchanged. */
     fun onIntent(intent: WakeIntent): CheckTrial
+
+    /** How long until [tick] changes what it shows by itself (Memory's playback), or null when it waits for a tap. */
+    val nextTick: Duration?
+        get() = null
+
+    /** This trial after [nextTick] has passed. */
+    fun tick(): CheckTrial = this
 }
 
 /**
@@ -28,20 +36,27 @@ interface CheckTrial {
  * offered by the pickers ([PickableCheckTypes]).
  */
 object CheckRegistry {
-    /** A "Try it" of each registered check at its difficulty, with one item, from the seed. */
-    private val trials: Map<CheckType, (difficulty: Difficulty, seed: Long) -> CheckTrial> =
-        mapOf(CheckType.Math to { difficulty, seed -> MathTrial.start(difficulty, seed) })
+    /** A "Try it" of each registered check at its difficulty, with one item, from the seed; [accessible]: TalkBack on. */
+    private val trials: Map<CheckType, (difficulty: Difficulty, seed: Long, accessible: Boolean) -> CheckTrial> =
+        mapOf(
+            CheckType.Math to { difficulty, seed, _ -> MathTrial.start(difficulty, seed) },
+            CheckType.MemorySequence to { difficulty, seed, accessible -> MemoryTrial.start(difficulty, seed, numbered = accessible) },
+        )
 
     /** The checks with a registered trial. */
     val types: Set<CheckType>
         get() = trials.keys
 
-    /** "Try it" of [type] at [difficulty] with one item, from [seed]; null for a check without a registered trial. */
+    /**
+     * "Try it" of [type] at [difficulty] with one item, from [seed]; with [accessible] (TalkBack on) in its accessible
+     * variant where it has one (Memory Sequence's numbered tiles). Null for a check without a registered trial.
+     */
     fun startTrial(
         type: CheckType,
         difficulty: Difficulty,
         seed: Long,
-    ): CheckTrial? = trials[type]?.invoke(difficulty, seed)
+        accessible: Boolean = false,
+    ): CheckTrial? = trials[type]?.invoke(difficulty, seed, accessible)
 }
 
 /**

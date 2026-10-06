@@ -274,6 +274,36 @@ class CheckPluginSessionTest {
     }
 
     @Test
+    fun `a wrong Memory tap restarts only the current round with a new seed, and the session completes (Story 3-8)`() {
+        val memory = CheckEntry(CheckType.MemorySequence(), Difficulty.Easy, count = 2)
+        val memoryPlan = CheckPlan(CheckMode.All, listOf(memory))
+        val reducer = SessionReducer(StubAvailability(SnoozeAvailability.Available(OFFER)), PluginCheckValidator, NoFallbackPolicy)
+        var state: SessionState = SessionState.Idle
+
+        fun run(): CheckRun = assertIs<SessionState.Active>(state).session.checkRun
+
+        fun tap(tile: Int) {
+            state = reducer.reduce(state, SessionEvent.CheckAnswerSubmitted(CheckAnswer.Tile(tile)), at(1.minutes)).state
+        }
+
+        fun taps(): List<Int> = (memory.type.generate(run().seeds[0], memory.difficulty, memory.count) as Puzzle.Memory).taps
+
+        state = reducer.reduce(state, SessionEvent.AlarmFired(SESSION_ID, testConfig(checkPlan = memoryPlan), false), T0).state
+        state = reducer.reduce(state, SessionEvent.ImUpTapped, T0).state
+        taps().take(5).forEach(::tap)
+        assertEquals(StepPointer(0, 5), run().step, "round 1 done, one tap into round 2")
+        val seedBefore = run().seeds[0]
+
+        tap(taps()[5] % 9 + 1)
+
+        assertEquals(StepPointer(0, 4), run().step, "back to round 2's first tap, not to round 1")
+        assertEquals(1, run().failedAttempts)
+        assertNotEquals(seedBefore, run().seeds[0], "a new sequence")
+        taps().drop(4).forEach(::tap)
+        assertIs<SessionState.Completed>(state)
+    }
+
+    @Test
     fun `the ring after a paid snooze resolves a Random plan again with the new ring's seeds`() {
         val random = CheckPlan(CheckMode.Random, listOf(easy, CheckPlan.PLACEHOLDER_ENTRY))
         // A session whose two rings pick different entries (about half do; the search is deterministic).

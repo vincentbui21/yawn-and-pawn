@@ -1,6 +1,7 @@
 package com.yawnandpawn.app
 
 import android.app.Application
+import com.yawnandpawn.app.android.AndroidAccessibilityState
 import com.yawnandpawn.app.android.AndroidAlarmScheduler
 import com.yawnandpawn.app.android.AndroidLogger
 import com.yawnandpawn.app.android.AndroidUserLockState
@@ -22,6 +23,7 @@ import com.yawnandpawn.app.core.alarm.DeleteAlarm
 import com.yawnandpawn.app.core.alarm.RearmOnFire
 import com.yawnandpawn.app.core.alarm.SaveAlarm
 import com.yawnandpawn.app.core.alarm.SetAlarmEnabled
+import com.yawnandpawn.app.core.checks.AccessibilityState
 import com.yawnandpawn.app.core.error.valueOrNull
 import com.yawnandpawn.app.core.history.MissedNotes
 import com.yawnandpawn.app.core.id.IdGenerator
@@ -87,6 +89,8 @@ val appModule =
         // unavailable until Epic 4.
         // Before the first unlock (Story 2.3): the engine marks the ring, and snooze says "Unlock your phone to snooze".
         single<UserLockState> { AndroidUserLockState(androidContext(), get()) }
+        // TalkBack (Story 3.8): the numbered Memory Sequence when a ring's plan is frozen, and the editor's notes.
+        single<AccessibilityState> { AndroidAccessibilityState(androidContext()) }
         single<SnoozeAvailabilityPolicy> { NoBillingSnoozeAvailability(get()) }
         single<CheckValidator> { PluginCheckValidator }
         single<FallbackPolicy> { NoFallbackPolicy }

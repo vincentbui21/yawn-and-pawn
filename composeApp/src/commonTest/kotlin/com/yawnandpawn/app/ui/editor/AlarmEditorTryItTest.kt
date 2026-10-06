@@ -5,6 +5,7 @@ import com.yawnandpawn.app.core.checks.Puzzle
 import com.yawnandpawn.app.core.error.Outcome
 import com.yawnandpawn.app.core.session.ScheduleTestAlarm
 import com.yawnandpawn.app.testing.AlarmUseCasesFixture
+import com.yawnandpawn.app.testing.FakeAccessibilityState
 import com.yawnandpawn.app.testing.FakeAlarmRepository
 import com.yawnandpawn.app.testing.FakeAlarmScheduler
 import com.yawnandpawn.app.testing.FakeClock
@@ -20,10 +21,12 @@ import com.yawnandpawn.app.ui.checks.Difficulty
 import com.yawnandpawn.app.ui.checksetup.CheckSetupIntent
 import com.yawnandpawn.app.ui.home.AlarmActions
 import com.yawnandpawn.app.ui.wake.CheckContent
+import com.yawnandpawn.app.ui.wake.MemoryPhase
 import com.yawnandpawn.app.ui.wake.WakeIntent
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.test.StandardTestDispatcher
+import kotlinx.coroutines.test.advanceTimeBy
 import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.resetMain
 import kotlinx.coroutines.test.runTest
@@ -57,6 +60,7 @@ class AlarmEditorTryItTest {
             scheduler = scheduler,
         )
     private val seed = 7L
+    private val accessibility = FakeAccessibilityState()
     private var seedsDrawn = 0
 
     @BeforeTest
@@ -82,6 +86,7 @@ class AlarmEditorTryItTest {
             soundPreview = FakeSoundPreview(),
             notificationPermission = FakeNotificationPermission(),
             testAlarm = ScheduleTestAlarm(testAlarmScheduler, testStore, clock, logger),
+            accessibility = accessibility,
             previewSeed = {
                 seedsDrawn++
                 seed
@@ -153,6 +158,45 @@ class AlarmEditorTryItTest {
                 viewModel.state.value.form.checks
                     .single(),
             )
+        }
+
+    @Test
+    fun `a Memory Sequence preview plays on the ViewModel's clock, 350 ms lit and 150 ms gaps, numbered with TalkBack (Story 3-8)`() =
+        runTest(dispatcher) {
+            accessibility.screenReaderOn = true
+            val viewModel = viewModel()
+            viewModel.onIntent(EditorIntent.CheckToggled(CheckType.MemorySequence, selected = true))
+            viewModel.onIntent(EditorIntent.CheckSetupClicked(CheckType.MemorySequence))
+            assertEquals(
+                true,
+                viewModel.state.value
+                    .checkSetupState()
+                    ?.talkBackOn,
+                "Uses numbered tiles with TalkBack.",
+            )
+            viewModel.onIntent(EditorIntent.CheckSetup(CheckSetupIntent.TryItClicked))
+            val sequence =
+                (CoreCheckType.MemorySequence(numbered = true).generate(seed, CoreDifficulty.Medium, 1) as Puzzle.Memory).rounds.single()
+
+            fun memory() =
+                viewModel.state.value.tryIt
+                    ?.content as CheckContent.MemorySequence
+            assertTrue(memory().numbered)
+            assertEquals(MemoryPhase.Watch to sequence[0], memory().phase to memory().litTile)
+            advanceTimeBy(349)
+            assertEquals(sequence[0], memory().litTile, "still lit at 349 ms")
+            advanceTimeBy(2)
+            assertNull(memory().litTile, "the gap")
+            advanceTimeBy(150)
+            assertEquals(sequence[1], memory().litTile)
+            advanceUntilIdle()
+            assertEquals(MemoryPhase.YourTurn, memory().phase)
+
+            viewModel.onIntent(EditorIntent.TryIt(WakeIntent.TileTapped(sequence[0])))
+            viewModel.onIntent(EditorIntent.BackRequested)
+            advanceUntilIdle()
+            assertEquals(EditorPane.CheckSetup, viewModel.state.value.pane)
+            assertNull(viewModel.state.value.tryIt, "no tick brings it back")
         }
 
     @Test

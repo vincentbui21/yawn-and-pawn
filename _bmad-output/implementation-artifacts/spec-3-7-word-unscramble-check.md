@@ -11,8 +11,7 @@ context:
   - '{project-root}/_bmad-output/implementation-artifacts/spec-3-1-check-plugin-contract-and-the-math-generator-in-core.md'
   - '{project-root}/_bmad-output/implementation-artifacts/spec-3-6-try-it-previews-for-every-check.md'
   - '{project-root}/.claude/skills/pps-design/SKILL.md'
-warnings:
-  - 'stacked-on-3.8: built on Story 3.8 (9b5a38b, in review) so CheckType, CheckRegistry and CheckScreen change in one line. The wake renderer hook is option 1: WordInput.kt holds wordRound(state) and WordInput, for 3.2'''s WakeCheck (merged on main as 80f9433) to call.'
+warnings: []
 deferred: []
 ---
 
@@ -63,7 +62,7 @@ deferred: []
 
 PRD Q10's word-list item is resolved and recorded in `docs/decisions/q10-check-parameters.md` (new):
 
-1. **Source: option A.** A list of everyday English words drafted for the project by Claude (1,414 words: 494 Easy, 515 Medium, 405 Hard), project-owned. The owner approved it without reviewing it ("just proceed"), so the drafting itself served as the sensitivity review. See `docs/checks/WORDS.md`.
+1. **Source: option A.** A list of everyday English words drafted for the project by Claude (1,414 words: 494 Easy, 515 Medium, 405 Hard; 1,413 after the review removed "dune", whose scrambles could spell a blocklisted word), project-owned. The owner approved it without reviewing it ("just proceed"), so the drafting itself served as the sensitivity review. See `docs/checks/WORDS.md`.
 2. **Blocklist:** `config/word-blocklist.txt`, by category (profanity, sexual and body, violence and weapons, death and self-harm, drugs and alcohol, hate, crime and politics, religion). `checkWordList` enforces it.
 3. **Anagrams:** any listed word with exactly the same letters is accepted, in any case.
 
@@ -86,6 +85,21 @@ PRD Q10's word-list item is resolved and recorded in `docs/decisions/q10-check-p
     - a light haptic per tile tap;
     - a polite live region with the answer so far (inside the progress line's Box, so no layout change);
     - "Shuffle" and "Clear" pinned under the scrolling area on the Check screen, like Math's pad (unchanged where everything fits).
+
+## Review Triage Log
+
+### Review (2 reviewers, fast mode)
+
+Two reviewers read `3394993`: a verification-gap reviewer and an edge-case reviewer. In the lane 2 stack, the story comes after 3.5, 3.6 and 3.8 on main with 3.2. All findings are patches, fixed in `fix(3.7): review fixes`:
+
+- **patch (high): Word could be picked, but the wake screen could not run it.** `WakeCheck` now shows Word on the real wake screen. A `WordAnswer` is keyed to the engine's position (entry, item, seed, failed attempts), like `CheckInput.following`. A new item, or the same item after a restore, starts with empty slots. Once every slot is filled the screen sends `UserInteracted` + `CheckAnswerSubmitted(Word)`, in order (`sendAnswer`). A wrong word (more failed attempts) clears the slots and shows "Not quite. Try again." until the next tap. `wordRound(state)` reads the usable run. `WordWakeCheckTest` (Robolectric, the real app and word list) solves both words and ends with Success. It also checks that a wrong word clears the slots and that the word can then be solved. `WordTrialTest` covers `WordAnswer`.
+- **patch (high): an unreadable asset crashed every start, and an empty list made Word unsolvable.** `WordListLoader.load` is wrapped in `runCatching`, logs `OperationFailed("load word list")` and installs an empty list. With no list, `ConfigResolver` puts Math (same difficulty, default count) in place of a Word entry, or drops the Word entry when the plan already has Math. A ring never freezes an unsolvable check. Tested in `ConfigResolverTest`, `WakeServiceTest` (empty list at ring → Math) and `WordListLoaderTest` (broken assets → empty list, logged, no crash).
+- **patch: a scramble could spell a blocklisted word.** `checkWordList` now also fails on a listed word that has a blocklisted word's letters (fixture test in `WordListTest`). `WordListLoaderTest` checks the real list against `config/word-blocklist.txt`, so no scramble can spell a blocklisted word. The check found one case: "dune" (an anagram of a blocklisted word), now removed from the list (1,413 words, 493 Easy).
+- **patch: `WordList.set` read the constructor argument.** Because of the shadowing, " Notes " did not count as "notes". It is now `this.words.toSet()` (`WordCheckTest`).
+- **patch: "weekend" (7 letters) was in the 8–10 group of the fixture.** Moved to the 6–7 group. The list is sorted, so the pinned puzzles do not change.
+- **tests:** `CheckPluginSessionTest`: a two-word plan passes on listed anagrams (item, then last), and a reinstalled list gives the same scramble and answers. The Direct Boot loader test is renamed to what Robolectric can check, and item 19 of the Story 3.14 checklist covers the real reboot. `CheckTypeTest`: stable serial names for the Word entry, answer and puzzle. `WordTrialTest`: the anagram assertion now always runs. `WordCheckScreenshotTest`: "Not quite. Try again." on a wrong word, one `Reject` haptic and a `KeyboardTap` per tile. `WordListLoaderTest`: the real list over 2,000 seeds per difficulty gives 5 distinct words with real scrambles. `WordListTest`: CRLF passes, a missing final newline passes, a BOM fails line 1, and a blank middle line is named. `CheckRegistryTest` uninstalls its list after each test.
+- The wrong-word shake uses 3.6's shared `rememberWrongShake`.
+- **not changed (optional):** "Shuffle" can repeat the previous order or lay out the answer.
 
 ## Design Notes
 

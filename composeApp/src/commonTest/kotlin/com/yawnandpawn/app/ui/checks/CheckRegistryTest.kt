@@ -5,6 +5,7 @@ import com.yawnandpawn.app.core.checks.word.WordBank
 import com.yawnandpawn.app.core.checks.word.WordList
 import com.yawnandpawn.app.ui.wake.CheckContent
 import com.yawnandpawn.app.ui.wake.WakeIntent
+import kotlin.test.AfterTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
@@ -17,6 +18,10 @@ import com.yawnandpawn.app.core.checks.CheckType as CoreCheckType
 /** Story 3.6: every check the pickers offer has a "Try it", and the Math trial answers through the core plugin. */
 class CheckRegistryTest {
     private val seed = 42L
+
+    /** The word list is process-wide: no test leaves one behind for the next (review fix, order independence). */
+    @AfterTest
+    fun uninstallWords() = WordBank.install(WordList(emptyList()))
 
     private fun problem(difficulty: Difficulty) =
         (CoreCheckType.Math.generate(seed, difficulty.toCore(), count = 1) as Puzzle.Math).problems.single()

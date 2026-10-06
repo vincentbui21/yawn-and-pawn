@@ -4,7 +4,7 @@ The list the Word Unscramble check (FR-PWK-8, Story 3.7) picks its words from: `
 
 - **Source:** drafted for the project by Claude, on 2026-10-06. The owner approved it without reviewing it (PRD Q10, `docs/decisions/q10-check-parameters.md`).
 - **Licence:** project-owned. It is the project's own work, with no third-party word list and no attribution needed.
-- **Content:** 1,414 plain everyday English words, one per line, lowercase a–z: 494 of 4–5 letters (Easy), 515 of 6–7 (Medium) and 405 of 8–10 (Hard). They are everyday nouns, verbs and adjectives (food, home, nature, animals, places, objects), so a half-asleep user never meets an obscure or upsetting word.
+- **Content:** 1,413 plain everyday English words, one per line, lowercase a–z: 493 of 4–5 letters (Easy), 515 of 6–7 (Medium) and 405 of 8–10 (Hard). They are everyday nouns, verbs and adjectives (food, home, nature, animals, places, objects), so a half-asleep user never meets an obscure or upsetting word.
 - **Sensitivity:** no profanity, sexual, violent, self-harm, drug, hate, religious or political words. `config/word-blocklist.txt` lists such words by category, and `./gradlew checkWordList` (part of `qualityGate`) fails when the list holds one. It also fails on characters other than a–z, duplicates, lengths outside 4–10, and a length group under 300 words.
 - **Anagrams:** a listed word with exactly the target's letters is also accepted ("listen" for "silent"). A scramble is never itself a listed word.
 

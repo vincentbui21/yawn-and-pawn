@@ -142,6 +142,29 @@ fun memoryCheckUiState(
     )
 }
 
+/**
+ * The Check screen for [state] when its current entry is a Word Unscramble (Story 3.7 review), else null: the item and
+ * letters [answer] holds for that position (see [WordAnswer.following]), with the same grace header, snooze and
+ * phone-call note as Math. Pure.
+ */
+fun wordCheckUiState(
+    state: SessionState,
+    availability: SnoozeAvailability,
+    now: TimeSnapshot,
+    answer: WordAnswer,
+    priceOf: PriceLookup = NoPrices,
+): CheckUiState? {
+    val session = (state as? SessionState.Grace)?.session ?: (state as? SessionState.Loud)?.session
+    val content = answer.content()
+    if (session == null || content == null || answer.position != checkPosition(state)) return null
+    return CheckUiState(
+        grace = graceState(state, session, now),
+        content = content,
+        snooze = snoozeOffer(availability, session, priceOf),
+        note = if (session.paused) WakeNote.PhoneCall else null,
+    )
+}
+
 /** Both positions are on the same entry of the same ring of the same session (null never is). */
 internal fun CheckPosition?.isSameEntryAs(other: CheckPosition?): Boolean =
     this != null && other != null && sessionId == other.sessionId && ringIndex == other.ringIndex && entry == other.entry

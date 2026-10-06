@@ -134,7 +134,7 @@ open class YawnAndPawnApp : Application() {
     override fun onCreate() {
         super.onCreate()
         // The Word Unscramble list (Story 3.7), before any ring, restore or preview can make a Word puzzle.
-        WordBank.install(WordListLoader.load(this))
+        WordBank.install(WordListLoader.load(this, AndroidLogger()))
         val koin =
             startKoin {
                 androidContext(this@YawnAndPawnApp)

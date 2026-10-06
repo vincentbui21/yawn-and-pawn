@@ -25,6 +25,8 @@ import com.yawnandpawn.app.core.checks.CheckMode
 import com.yawnandpawn.app.core.checks.CheckPlan
 import com.yawnandpawn.app.core.checks.CheckType
 import com.yawnandpawn.app.core.checks.Difficulty
+import com.yawnandpawn.app.core.checks.word.WordBank
+import com.yawnandpawn.app.core.checks.word.WordList
 import com.yawnandpawn.app.core.error.DomainError
 import com.yawnandpawn.app.core.error.Outcome
 import com.yawnandpawn.app.core.session.ActiveSessionStore
@@ -586,6 +588,29 @@ class WakeServiceTest {
                 .session.config.checkPlan.entries
                 .single()
         assertEquals(memory.copy(type = CheckType.MemorySequence(numbered = true)), entry)
+    }
+
+    @Test
+    fun `with no word list installed a Word Unscramble alarm rings Math instead, never an unsolvable check (Story 3-7 review fix)`() {
+        val app = WakeApp()
+        val word = CheckEntry(CheckType.WordUnscramble, Difficulty.Medium, count = 2)
+        val checks = app.koin.get<CheckConfigRepository>()
+        assertEquals(Outcome.Success(Unit), runBlocking { checks.saveWithAlarm(alarmA, checkConfigsOf(alarmA.id, listOf(word))) })
+        val installed = WordBank.current
+        try {
+            WordBank.install(WordList(emptyList()))
+
+            app.ring(fired)
+            app.awaitRinging()
+
+            assertEquals(
+                listOf(CheckEntry(CheckType.Math, Difficulty.Medium, CheckType.Math.defaultCount)),
+                (app.engine.state.value as SessionState.Ringing)
+                    .session.config.checkPlan.entries,
+            )
+        } finally {
+            WordBank.install(installed)
+        }
     }
 
     @Test

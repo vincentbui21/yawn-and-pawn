@@ -27,13 +27,79 @@ fun wordRound(
 
 /**
  * The Word item [state] waits on: Grace or Loud with a Word Unscramble entry current, from the entry's seed through the
- * core plugin (and the installed word list). For 3.2's wake renderer.
+ * core plugin (and the installed word list). It is read from the
+ * [usable run][com.yawnandpawn.app.core.session.CheckRun.usable], the one the engine checks answers on.
  */
 fun wordRound(state: SessionState): WordRound? {
-    val run = ((state as? SessionState.Grace)?.session ?: (state as? SessionState.Loud)?.session)?.checkRun
+    val run = ((state as? SessionState.Grace)?.session ?: (state as? SessionState.Loud)?.session)?.usableRun()
     val entry = run?.currentEntry?.takeIf { it.type == CheckType.WordUnscramble }
     val seed = run?.seeds?.getOrNull(run.step.entry)
     return if (entry == null || seed == null) null else wordRound(entry.type.generate(seed, entry.difficulty, entry.count), run.step.item)
+}
+
+/**
+ * The Word Unscramble item on the wake screen (Story 3.7 review), UI only: the engine's [position] and [round], the
+ * letters placed so far ([input]) and [wrong] after a wrong word until the next tap. [following] the engine keeps the
+ * letters while it waits on the same item, starts a fresh item with empty slots (also after a restore), and clears the
+ * slots with "Not quite. Try again." when the failed attempts went up. The UI never decides correctness: a word is
+ * sent once every slot is filled ([answer]).
+ */
+data class WordAnswer(
+    val position: CheckPosition? = null,
+    val round: WordRound? = null,
+    val input: WordInput? = null,
+    val wrong: Boolean = false,
+) {
+    /** The word to submit once every slot is filled, else null. */
+    val answer: String?
+        get() = input?.answer
+
+    /** This answer at the engine's [next] position, waiting on [nextRound]. */
+    fun following(
+        next: CheckPosition?,
+        nextRound: WordRound?,
+    ): WordAnswer {
+        val current = position
+        val sameEntry = next.isSameEntryAs(current)
+        return when {
+            next == null || nextRound == null -> {
+                WordAnswer(next)
+            }
+
+            sameEntry && next.failedAttempts > (current?.failedAttempts ?: 0) -> {
+                WordAnswer(next, nextRound, WordInput(nextRound.scramble), wrong = true)
+            }
+
+            sameEntry && next.item == current?.item && next.seed == current?.seed && nextRound == round -> {
+                copy(position = next)
+            }
+
+            else -> {
+                WordAnswer(next, nextRound, WordInput(nextRound.scramble))
+            }
+        }
+    }
+
+    /** A tile, "Shuffle" or "Clear" ([intent]) applied; null for any other intent or with no item. A tap clears [wrong]. */
+    fun edited(intent: WakeIntent): WordAnswer? {
+        val letters = input
+        val next =
+            when {
+                letters == null -> null
+                intent is WakeIntent.LetterTapped -> letters.tappedLetter(intent.index)
+                intent is WakeIntent.SlotTapped -> letters.tappedSlot(intent.index)
+                intent == WakeIntent.ShuffleLetters -> letters.shuffled()
+                intent == WakeIntent.ClearLetters -> letters.cleared()
+                else -> null
+            }
+        return next?.let { copy(input = it, wrong = false) }
+    }
+
+    /** The content the approved composable shows, or null with no item. */
+    fun content(): CheckContent.WordUnscramble? {
+        val shown = round ?: return null
+        return input?.content(shown, wrong)
+    }
 }
 
 /**

@@ -1,10 +1,18 @@
 package com.yawnandpawn.app.ui
 
+import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.hapticfeedback.HapticFeedback
+import androidx.compose.ui.hapticfeedback.HapticFeedbackType
+import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.junit4.createEmptyComposeRule
 import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.onRoot
+import androidx.compose.ui.test.performClick
 import com.github.takahirom.roborazzi.captureRoboImage
 import com.yawnandpawn.app.StopAppRule
 import com.yawnandpawn.app.screenshotOptions
@@ -26,6 +34,7 @@ import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
 import org.robolectric.annotation.Config
 import org.robolectric.annotation.GraphicsMode
+import kotlin.test.assertEquals
 
 /**
  * Story 3.7 screenshots of the Word Unscramble check as the wake screen and "Try it" show it: Easy, Hard (the tiles wrap)
@@ -97,6 +106,34 @@ class WordCheckScreenshotTest {
             composeRule.onNodeWithContentDescription("Slot 1, E").assertExists()
             composeRule.onNodeWithContentDescription("Slot 3, empty").assertExists()
             composeRule.onNodeWithContentDescription("E O").assertExists()
+        }
+    }
+
+    private class RecordingHaptics : HapticFeedback {
+        val performed = mutableListOf<HapticFeedbackType>()
+
+        override fun performHapticFeedback(hapticFeedbackType: HapticFeedbackType) {
+            performed += hapticFeedbackType
+        }
+    }
+
+    @Test
+    fun `a wrong word says Not quite with one error haptic, and a tile tap gives a light one (review fix)`() {
+        val haptics = RecordingHaptics()
+        var shown by mutableStateOf<CheckContent>(easy)
+        withScreen(
+            PpsThemeMode.Light,
+            content = {
+                CompositionLocalProvider(LocalHapticFeedback provides haptics) { CheckScreen(state = check(shown), onIntent = {}) }
+            },
+        ) {
+            composeRule.onNodeWithContentDescription("Letter T").performClick()
+            assertEquals(listOf(HapticFeedbackType.KeyboardTap), haptics.performed, "a tile tap")
+
+            composeRule.runOnUiThread { shown = wrong }
+            composeRule.onNodeWithText("Not quite. Try again.").assertIsDisplayed()
+
+            assertEquals(listOf(HapticFeedbackType.KeyboardTap, HapticFeedbackType.Reject), haptics.performed, "one error haptic")
         }
     }
 

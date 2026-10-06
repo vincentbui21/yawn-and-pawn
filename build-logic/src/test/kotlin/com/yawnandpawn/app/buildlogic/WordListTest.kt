@@ -66,6 +66,27 @@ class WordListTest {
     }
 
     @Test
+    fun `a word with a blocklisted word's letters fails, since a scramble could spell it (review fix)`() {
+        assertEquals(
+            listOf("line ${valid.size + 1}: 'abcd' has the letters of blocklisted 'dcba', so a scramble could spell it"),
+            violations(valid + "abcd", blocked = setOf("dcba")),
+        )
+    }
+
+    @Test
+    fun `line endings and encoding, CRLF and no final newline pass, a BOM fails line 1, a blank middle line is named`() {
+        val blocked = setOf("zzzz")
+        assertEquals(emptyList(), WordListRules.violations(valid.joinToString("\r\n", postfix = "\r\n"), blocked), "CRLF")
+        assertEquals(emptyList(), WordListRules.violations(valid.joinToString("\n"), blocked), "no final newline")
+        assertTrue(
+            WordListRules.violations("﻿" + valid.joinToString("\n", postfix = "\n"), blocked).any { it.startsWith("line 1: ") },
+            "a byte order mark",
+        )
+        val blank = valid.take(10) + "" + valid.drop(10)
+        assertTrue("line 11: '' is not lowercase a-z" in WordListRules.violations(blank.joinToString("\n", postfix = "\n"), blocked))
+    }
+
+    @Test
     fun `a length group under 300 words fails`() {
         val short = valid.filterNot { it.length in 8..10 }.toMutableList() + valid.filter { it.length in 8..10 }.drop(1)
 

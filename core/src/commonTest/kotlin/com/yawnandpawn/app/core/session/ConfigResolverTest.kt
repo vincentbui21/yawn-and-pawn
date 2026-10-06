@@ -93,6 +93,22 @@ class ConfigResolverTest {
     }
 
     @Test
+    fun `without a word list a Word Unscramble entry rings as Math, never an unsolvable check (Story 3-7 review fix)`() {
+        val word = CheckEntry(CheckType.WordUnscramble, Difficulty.Hard, count = 4)
+        val memory = CheckEntry(CheckType.MemorySequence(), Difficulty.Easy, count = 1)
+        val math = CheckEntry(CheckType.Math, Difficulty.Easy, count = 2)
+
+        fun plan(
+            checks: List<CheckEntry>,
+            wordsAvailable: Boolean,
+        ) = ConfigResolver.resolve(alarm, checks, GlobalSettings(), false, SCHEDULED_AT, wordsAvailable = wordsAvailable).checkPlan.entries
+
+        assertEquals(listOf(memory, CheckEntry(CheckType.Math, Difficulty.Hard, 3)), plan(listOf(memory, word), wordsAvailable = false))
+        assertEquals(listOf(math, memory), plan(listOf(word, math, memory), wordsAvailable = false), "Math is there already")
+        assertEquals(listOf(memory, word), plan(listOf(memory, word), wordsAvailable = true))
+    }
+
+    @Test
     fun `an alarm without checks rings the default plan`() {
         val config = ConfigResolver.resolve(alarm.copy(checkMode = CheckMode.All), emptyList(), GlobalSettings(), false, SCHEDULED_AT)
 

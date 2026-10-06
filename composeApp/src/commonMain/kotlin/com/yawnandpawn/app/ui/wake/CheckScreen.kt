@@ -161,9 +161,7 @@ fun CheckScreen(
                             }
                         }
                         if (math != null) NumberPad(onIntent = onIntent, modifier = Modifier.padding(top = spacing.space3))
-                        if (word != null) {
-                            WordActions(onIntent = onIntent, modifier = Modifier.fillMaxWidth().padding(top = spacing.space4))
-                        }
+                        if (word != null) WordActions(onIntent = onIntent, modifier = Modifier.fillMaxWidth().padding(top = spacing.space4))
                     }
                     CheckFooter(state, onIntent)
                 }
@@ -438,15 +436,8 @@ private fun WordCheck(
 ) {
     val spacing = PpsTheme.spacing
     val haptics = LocalHapticFeedback.current
-    val shake = remember { Animatable(0f) }
-    val shakeDistance = with(LocalDensity.current) { spacing.space2.toPx() }
     // Story 3.7: a wrong word shakes the slots with the error haptic, as the other checks do.
-    LaunchedEffect(content.wrong) {
-        if (content.wrong) {
-            haptics.performHapticFeedback(HapticFeedbackType.Reject)
-            shake.animateTo(0f, keyframes { shakeKeyframes(shakeDistance) })
-        }
-    }
+    val shake = rememberWrongShake(content.wrong)
     // Each tile tap: a light haptic before the intent.
     val tap: (WakeIntent) -> Unit = { intent ->
         if (intent is WakeIntent.LetterTapped ||

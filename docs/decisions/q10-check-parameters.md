@@ -19,7 +19,7 @@ Open for the owner (2026-10-06): EXPERIENCE.md says the Check setup stepper goes
 
 ## Word list (owner decision 2026-10-06, Story 3.7)
 
-- **Source:** option A. An English list of plain everyday words, drafted for the project by Claude: 1,414 words, with at least 300 in each length group. It is project-owned, so no third-party licence applies. The owner chose not to review it ("just proceed"), so the drafting itself served as the sensitivity review: plain everyday nouns and verbs only, and no profanity, sexual, violent, self-harm, drug, hate, religious or political words. See `docs/checks/WORDS.md`.
+- **Source:** option A. An English list of plain everyday words, drafted for the project by Claude: 1,414 words (1,413 since the Story 3.7 review removed "dune", an anagram of a blocklisted word), with at least 300 in each length group. It is project-owned, so no third-party licence applies. The owner chose not to review it ("just proceed"), so the drafting itself served as the sensitivity review: plain everyday nouns and verbs only, and no profanity, sexual, violent, self-harm, drug, hate, religious or political words. See `docs/checks/WORDS.md`.
 - **Filter:** `config/word-blocklist.txt` lists offensive and sensitive words by category. The `checkWordList` task (a `qualityGate` dependency) fails if the list holds one of them. It also fails on anything that is not lowercase a–z, on duplicates, on words outside 4–10 letters, and on a length group with fewer than 300 words.
 - **Anagrams:** any listed word with exactly the same letters as the target is accepted, in any case.
 - **Bundling:** the APK asset `words_en.txt`, read once at app start. Assets are readable before the first unlock, so Word Unscramble is Direct Boot safe.

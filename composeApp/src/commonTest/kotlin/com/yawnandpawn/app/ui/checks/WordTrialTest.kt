@@ -11,7 +11,9 @@ import com.yawnandpawn.app.core.session.SessionState
 import com.yawnandpawn.app.core.session.StepPointer
 import com.yawnandpawn.app.testing.aSession
 import com.yawnandpawn.app.ui.wake.CheckContent
+import com.yawnandpawn.app.ui.wake.CheckPosition
 import com.yawnandpawn.app.ui.wake.WakeIntent
+import com.yawnandpawn.app.ui.wake.WordAnswer
 import com.yawnandpawn.app.ui.wake.WordInput
 import com.yawnandpawn.app.ui.wake.WordRound
 import com.yawnandpawn.app.ui.wake.wordRound
@@ -21,6 +23,7 @@ import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
 import kotlin.test.assertNotEquals
+import kotlin.test.assertNotNull
 import kotlin.test.assertNull
 import kotlin.test.assertSame
 import kotlin.test.assertTrue
@@ -96,13 +99,14 @@ class WordTrialTest {
 
     @Test
     fun `a listed anagram is right too`() {
-        WordBank.install(WordList(LIST + "silent"))
+        // Review fix: the only Medium words are listen and silent, so the target always has its anagram listed.
+        WordBank.install(WordList(LIST.filter { it.length !in 6..7 } + "listen" + "silent"))
         val trial = WordTrial.start(Difficulty.Medium, seed)!!
         val word = target(Difficulty.Medium)
-        val other = WordBank.current.anagramsOf(word).firstOrNull { it != word }
+        val other = if (word == "listen") "silent" else "listen"
 
-        if (other != null) assertTrue(trial.spelled(other).state.done, "$other for $word")
-        assertTrue(WordBank.current.anagramsOf("listen").containsAll(listOf("listen", "silent")))
+        assertTrue(word in setOf("listen", "silent"), word)
+        assertTrue(trial.spelled(other).state.done, "$other for $word")
     }
 
     @Test
@@ -140,6 +144,43 @@ class WordTrialTest {
         assertNull(wordRound(puzzle, 3), "past the end")
         assertNull(wordRound(Puzzle.Placeholder, 0))
         assertNotEquals(puzzle.words[2], puzzle.scrambles[2])
+    }
+
+    private fun position(
+        item: Int,
+        failedAttempts: Int = 0,
+    ) = CheckPosition("s", ringIndex = 0, entry = 0, item = item, seed = seed, failedAttempts = failedAttempts)
+
+    @Test
+    fun `the wake screen's Word answer keeps its letters on the same item and starts each new item empty (review fix)`() {
+        val round = WordRound(1, 2, "tnseo")
+        val start = WordAnswer().following(position(0), round)
+        assertEquals(WordInput("tnseo"), start.input)
+        assertNull(start.edited(WakeIntent.DigitTapped(1)), "not a Word tap")
+
+        val placed = assertNotNull(start.edited(WakeIntent.LetterTapped(0)))
+        assertEquals(placed, placed.following(position(0), round), "the same item keeps the letters")
+        assertEquals(WordInput("ilfed"), placed.following(position(1), WordRound(2, 2, "ilfed")).input, "a new item starts empty")
+
+        val full = "tnseo".indices.fold(start) { answer, place -> assertNotNull(answer.edited(WakeIntent.LetterTapped(place))) }
+        assertEquals("tnseo", full.answer, "every slot filled: the word to send")
+    }
+
+    @Test
+    fun `a wrong word clears the slots and shows Not quite until the next tap (review fix)`() {
+        val round = WordRound(1, 2, "tnseo")
+        val full =
+            "tnseo".indices.fold(WordAnswer().following(position(0), round)) { answer, place ->
+                assertNotNull(answer.edited(WakeIntent.LetterTapped(place)))
+            }
+
+        val wrong = full.following(position(0, failedAttempts = 1), round)
+
+        assertTrue(wrong.wrong)
+        assertEquals(WordInput("tnseo"), wrong.input, "the slots are cleared")
+        assertTrue(assertNotNull(wrong.content()).wrong)
+        assertFalse(assertNotNull(wrong.edited(WakeIntent.LetterTapped(2))).wrong, "the next tap clears it")
+        assertNull(WordAnswer().following(null, null).content(), "no Word entry")
     }
 
     private companion object {

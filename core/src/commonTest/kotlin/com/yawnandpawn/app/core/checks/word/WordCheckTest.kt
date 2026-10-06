@@ -40,6 +40,8 @@ class WordCheckTest {
         assertEquals(listOf("notes", "onset", "stone"), raw.bucket(Difficulty.Easy))
         assertEquals(setOf("notes", "onset", "stone"), raw.anagramsOf("TONES"))
         assertTrue(raw.contains("STONE"))
+        assertTrue(raw.contains("notes"), "a cleaned word counts (review fix)")
+        assertTrue(WordList(listOf(" Notes ")).contains("notes"))
         assertFalse(raw.contains("tones"))
         assertEquals(4..5, WordList.lengths(Difficulty.Easy))
         assertEquals(6..7, WordList.lengths(Difficulty.Medium))
@@ -176,6 +178,7 @@ class WordCheckTest {
                 "rainbow",
                 "teacher",
                 "village",
+                "weekend",
                 // 8-10
                 "airplane",
                 "birthday",
@@ -196,7 +199,6 @@ class WordCheckTest {
                 "treasure",
                 "umbrella",
                 "vacation",
-                "weekend",
                 "breakfast",
                 "butterfly",
                 "chocolate",

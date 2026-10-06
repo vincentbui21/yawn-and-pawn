@@ -87,7 +87,10 @@ import kotlin.time.Duration.Companion.seconds
  * - Number pad keys ([WakeCheck.onKey]): the typed digits live only on the screen; "Check" sends
  *   `CheckAnswerSubmitted(Number)` and the engine decides. A new problem or a wrong answer clears the field.
  * - Memory tiles ([WakeCheck.onTile], Story 3.8): on the user's turn each tap sends `CheckAnswerSubmitted(Tile)`; a
- *   wrong one makes the engine restart the round with a new sequence, which plays again. Answers keep their order. * - Grace or Loud on a placeholder entry (only a session stored by Epics 1–2): the screen answers it
+ *   wrong one makes the engine restart the round with a new sequence, which plays again. Answers keep their order.
+ * - Word Unscramble tiles ([WakeCheck.onWordKey], Story 3.7): the letters live only on the screen; once every slot is
+ *   filled the word is sent as `CheckAnswerSubmitted(Word)`. A wrong word clears the slots.
+ * - Grace or Loud on a placeholder entry (only a session stored by Epics 1–2): the screen answers it
  *   (`CheckAnswerSubmitted(Placeholder)`), so "I'm up" alone ends that session; a failed dispatch is retried while due.
  *
  * Once a session it showed completes (the engine's [SessionEngine.ended], since its `state` may skip from Completed to
@@ -263,6 +266,12 @@ class WakeActivity : ComponentActivity() {
             intent is WakeIntent.TileTapped -> {
                 check.onTile(intent.tile, engine.state.value, send = { send(*it.toTypedArray()) }, interacted = ::interacted)
             }
+
+            // Story 3.7: a Word Unscramble letter, slot, "Shuffle" or "Clear".
+            WakeCheck.isWordKey(intent) -> {
+                check.onWordKey(intent, engine.state.value, send = { send(*it.toTypedArray()) }, interacted = ::interacted)
+            }
+
             intent != WakeIntent.ImUpClicked -> {
                 interacted()
             }

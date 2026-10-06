@@ -23,7 +23,8 @@ class WordList(
             }.distinct()
             .sorted()
 
-    private val set: Set<String> = words.toSet()
+    // The cleaned list, not the constructor argument of the same name (review fix: " Notes " must count as "notes").
+    private val set: Set<String> = this.words.toSet()
 
     /** Words by their letters sorted: the anagram index. */
     private val byLetters: Map<String, Set<String>> = this.words.groupBy { it.sortedLetters() }.mapValues { (_, list) -> list.toSet() }

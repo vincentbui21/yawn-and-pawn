@@ -114,6 +114,21 @@ class CheckTypeTest {
         assertEquals("""{"type":"Number","digits":"0109"}""", json.encodeToString(CheckAnswer.serializer(), answers.first()))
     }
 
+    @Test
+    fun `Word Unscramble entries, answers and puzzles serialize with stable names (Story 3-7 review)`() {
+        val json = SessionJson.json
+        val entry = CheckEntry(CheckType.WordUnscramble, Difficulty.Easy, 2)
+        val puzzle: Puzzle = Puzzle.Word(listOf("apple", "stone"), listOf("pplea", "notse"))
+
+        assertEquals(
+            """{"type":{"type":"WordUnscramble"},"difficulty":"Easy","count":2}""",
+            json.encodeToString(CheckEntry.serializer(), entry),
+        )
+        assertEquals(entry, json.decodeFromString(CheckEntry.serializer(), json.encodeToString(CheckEntry.serializer(), entry)))
+        assertEquals("""{"type":"Word","text":"abc"}""", json.encodeToString(CheckAnswer.serializer(), CheckAnswer.Word("abc")))
+        assertEquals(puzzle, json.decodeFromString(Puzzle.serializer(), json.encodeToString(Puzzle.serializer(), puzzle)))
+    }
+
     private companion object {
         /** Seed ("session-1", ring 1, entry 0, attempt 0), Medium, 3 problems. */
         val PINNED_PUZZLE: Puzzle =

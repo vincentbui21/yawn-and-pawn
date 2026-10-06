@@ -17,7 +17,8 @@ const val CHECK_WORD_LIST = "checkWordList"
  * reads the two files.
  *
  * Fails on an entry that is not lowercase a–z (a blank line too), a duplicate, a word outside 4–10 letters, a word on
- * the blocklist, and a length group (4–5, 6–7, 8–10) with fewer than [MIN_PER_GROUP] words.
+ * the blocklist or with a blocklisted word's letters (a scramble could spell it), and a length group (4–5, 6–7, 8–10)
+ * with fewer than [MIN_PER_GROUP] words.
  */
 object WordListRules {
     const val MIN_PER_GROUP = 300
@@ -46,12 +47,16 @@ object WordListRules {
                 .lines()
                 .map { it.removeSuffix("\r") }
         val seen = mutableSetOf<String>()
+        // A scramble is a permutation of a listed word: one with a blocklisted word's letters could spell it (review fix).
+        val blockedByLetters = blocked.associateBy { it.sortedLetters() }
         entries.forEachIndexed { index, word ->
             val line = index + 1
+            val anagram = blockedByLetters[word.sortedLetters()]
             when {
                 !LETTERS.matches(word) -> found += "line $line: '$word' is not lowercase a-z"
                 word.length !in LENGTHS -> found += "line $line: '$word' has ${word.length} letters, not 4 to 10"
                 word in blocked -> found += "line $line: '$word' is on the blocklist"
+                anagram != null -> found += "line $line: '$word' has the letters of blocklisted '$anagram', so a scramble could spell it"
             }
             if (!seen.add(word)) found += "line $line: '$word' is listed twice"
         }
@@ -61,6 +66,8 @@ object WordListRules {
         }
         return found
     }
+
+    private fun String.sortedLetters(): String = toCharArray().sorted().joinToString("")
 }
 
 /** Checks the word list against the blocklist and fails with every problem it finds. */

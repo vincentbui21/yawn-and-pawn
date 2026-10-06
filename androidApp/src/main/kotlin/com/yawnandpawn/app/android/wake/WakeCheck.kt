@@ -21,10 +21,13 @@ import com.yawnandpawn.app.ui.wake.CheckPosition
 import com.yawnandpawn.app.ui.wake.CheckUiState
 import com.yawnandpawn.app.ui.wake.MemoryInput
 import com.yawnandpawn.app.ui.wake.WakeIntent
+import com.yawnandpawn.app.ui.wake.WordAnswer
 import com.yawnandpawn.app.ui.wake.checkPosition
 import com.yawnandpawn.app.ui.wake.mathCheckUiState
 import com.yawnandpawn.app.ui.wake.memoryCheckUiState
 import com.yawnandpawn.app.ui.wake.memoryRound
+import com.yawnandpawn.app.ui.wake.wordCheckUiState
+import com.yawnandpawn.app.ui.wake.wordRound
 import kotlinx.coroutines.delay
 import kotlin.time.Duration
 import kotlin.time.Duration.Companion.milliseconds
@@ -44,6 +47,10 @@ internal class WakeCheck(
 
     /** The Memory Sequence round on screen and its playback (Story 3.8). */
     private var memory by mutableStateOf(MemoryInput())
+
+    /** The Word Unscramble item on screen and the letters placed (Story 3.7). */
+    private var word by mutableStateOf(WordAnswer())
+
     /**
      * The Check screen for [state] with [availability] for its snooze, or null when [state] waits on no Math or Memory
      * Sequence entry.
@@ -57,9 +64,11 @@ internal class WakeCheck(
         val position = checkPosition(state)
         val shown = inputAt(position)
         val shownMemory = memoryAt(state)
+        val shownWord = wordAt(state)
         SideEffect {
             input = shown
             memory = shownMemory
+            word = shownWord
         }
         // The sequence plays by itself: each step after its delay (350 ms lit, 150 ms gap), then the brief tap light.
         val playback = shownMemory.playback
@@ -68,7 +77,34 @@ internal class WakeCheck(
             delay(wait)
             if (memory.playback == playback) memory = memory.ticked()
         }
-        return mathCheckUiState(state, availability, now, shown) ?: memoryCheckUiState(state, availability, now, shownMemory)
+        return mathCheckUiState(state, availability, now, shown)
+            ?: memoryCheckUiState(state, availability, now, shownMemory)
+            ?: wordCheckUiState(state, availability, now, shownWord)
+    }
+
+    /** The Word Unscramble item and its letters as the screen shows them for the engine's [state]. */
+    internal fun wordAt(state: SessionState): WordAnswer = word.following(checkPosition(state), wordRound(state))
+
+    /**
+     * A Word Unscramble tile, "Shuffle" or "Clear" on the engine's [state] (Story 3.7 review): the letters change on
+     * screen only, and once every slot is filled the word is sent as `UserInteracted` + `CheckAnswerSubmitted(Word)`;
+     * the engine decides (a wrong word clears the slots). Any other tap only counts as interaction, through [interacted].
+     */
+    fun onWordKey(
+        intent: WakeIntent,
+        state: SessionState,
+        send: (List<SessionEvent>) -> Unit,
+        interacted: () -> Unit,
+    ) {
+        val current = wordAt(state)
+        val edited = current.edited(intent)
+        word = edited ?: current
+        val answer = edited?.answer
+        if (answer == null) {
+            interacted()
+        } else {
+            send(listOf(SessionEvent.UserInteracted, SessionEvent.CheckAnswerSubmitted(CheckAnswer.Word(answer))))
+        }
     }
 
     /** The typed answer as the screen shows it at the engine's [position]. */
@@ -149,5 +185,12 @@ internal class WakeCheck(
         /** The number pad keys this class handles. */
         fun isKey(intent: WakeIntent): Boolean =
             intent is WakeIntent.DigitTapped || intent == WakeIntent.DeleteDigit || intent == WakeIntent.SubmitAnswer
+
+        /** The Word Unscramble taps [onWordKey] handles: a letter, a slot, "Shuffle" or "Clear". */
+        fun isWordKey(intent: WakeIntent): Boolean =
+            intent is WakeIntent.LetterTapped ||
+                intent is WakeIntent.SlotTapped ||
+                intent == WakeIntent.ShuffleLetters ||
+                intent == WakeIntent.ClearLetters
     }
 }

@@ -80,10 +80,14 @@ data class RingingUiState(
 
 /** The grace window in the check header. */
 sealed interface GraceState {
-    /** Muted: `countdown-ring` with [secondsLeft] of [totalSeconds]. */
+    /**
+     * Muted: `countdown-ring` with [secondsLeft] of [totalSeconds]. [vibrate] is the session's quiet-time vibration
+     * (Story 3.4): without it the countdown gives no haptic ticks either.
+     */
     data class Running(
         val secondsLeft: Int,
         val totalSeconds: Int,
+        val vibrate: Boolean = true,
     ) : GraceState
 
     /** The alarm is back at full volume: bell and "Time's up. Alarm's back on until you finish." */

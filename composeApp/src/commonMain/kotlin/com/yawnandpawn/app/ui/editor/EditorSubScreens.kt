@@ -67,7 +67,7 @@ internal fun EditorSubScreen(
             EditorPane.Sound -> SoundPane(state = state, onIntent = onIntent)
             EditorPane.Snooze -> SnoozePane(state = state, onIntent = onIntent)
             EditorPane.WakeCheck -> full?.let { WakeCheckPane(full = it, onIntent = onIntent) }
-            EditorPane.QuietTime -> full?.let { QuietTimePane(full = it, onIntent = onIntent) }
+            EditorPane.QuietTime -> QuietTimePane(form = state.form, onIntent = onIntent)
             EditorPane.Motivation -> full?.let { MotivationPane(full = it, onIntent = onIntent) }
         }
     }
@@ -179,14 +179,14 @@ private fun WakeCheckPane(
 /** Quiet time (the grace window): 15 to 30 s and "Vibrate during quiet time". */
 @Composable
 private fun QuietTimePane(
-    full: FullEditorSections,
+    form: EditorForm,
     onIntent: (EditorIntent) -> Unit,
 ) {
     GroupCard {
         StepSlider(
             title = stringResource(Res.string.editor_quiet_time),
-            valueText = stringResource(Res.string.editor_grace_seconds, full.graceSeconds),
-            value = full.graceSeconds,
+            valueText = stringResource(Res.string.editor_grace_seconds, form.graceSeconds),
+            value = form.graceSeconds,
             range = Alarm.GRACE_SECONDS_RANGE,
             step = 1,
             onValueChange = { onIntent(EditorIntent.GraceChanged(it)) },
@@ -195,7 +195,7 @@ private fun QuietTimePane(
         GroupDivider()
         SwitchRow(
             label = stringResource(Res.string.editor_vibrate_quiet_time),
-            checked = full.vibrateInGrace,
+            checked = form.vibrateInGrace,
             onCheckedChange = { onIntent(EditorIntent.VibrateInGraceToggled(it)) },
         )
     }

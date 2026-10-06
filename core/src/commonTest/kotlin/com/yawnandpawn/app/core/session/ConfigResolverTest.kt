@@ -1,6 +1,7 @@
 package com.yawnandpawn.app.core.session
 
 import com.yawnandpawn.app.core.alarm.Alarm
+import com.yawnandpawn.app.core.alarm.AlarmDraft
 import com.yawnandpawn.app.core.checks.CheckAnswer
 import com.yawnandpawn.app.core.checks.CheckEntry
 import com.yawnandpawn.app.core.checks.CheckMode
@@ -24,6 +25,7 @@ class ConfigResolverTest {
             vibration = false,
             snoozeLengthMinutes = 15,
             graceSeconds = 30,
+            vibrateInGrace = false,
             requestCode = 1_000,
             createdAt = Instant.parse("2027-01-01T00:00:00Z"),
             updatedAt = Instant.parse("2027-01-01T00:00:00Z"),
@@ -38,7 +40,7 @@ class ConfigResolverTest {
     }
 
     @Test
-    fun `the config takes the alarm's own settings and the global fee settings`() {
+    fun `the config takes the alarm's own settings, its quiet-time vibration included, and the global fee settings`() {
         val settings = GlobalSettings(baseFeeTier = 3, maxSnoozes = 2, vibrateInGrace = true)
         assertEquals(
             SessionConfig(
@@ -50,7 +52,7 @@ class ConfigResolverTest {
                 maxSnoozes = 2,
                 snoozeLengthMinutes = 15,
                 graceSeconds = 30,
-                vibrateInGrace = true,
+                vibrateInGrace = false,
                 volumePercent = 65,
                 gradualVolume = false,
                 rampStartPercent = 20,
@@ -78,5 +80,40 @@ class ConfigResolverTest {
         assertEquals(1, config.baseFeeTier)
         assertEquals(5, config.maxSnoozes)
         assertEquals(false, config.vibrateInGrace)
+    }
+
+    @Test
+    fun `quiet-time vibration is the alarm's own setting, on by default, whatever the global setting says (Story 3_4)`() {
+        val off = GlobalSettings(vibrateInGrace = false)
+        val on = GlobalSettings(vibrateInGrace = true)
+
+        assertEquals(
+            true,
+            Alarm(id = "a", time = LocalTime(7, 0), requestCode = 1, createdAt = SCHEDULED_AT, updatedAt = SCHEDULED_AT).vibrateInGrace,
+        )
+        assertEquals(
+            true,
+            ConfigResolver
+                .resolve(alarm.copy(vibration = true, vibrateInGrace = true), off, testMode = false, scheduledAt = SCHEDULED_AT)
+                .vibrateInGrace,
+        )
+        assertEquals(
+            false,
+            ConfigResolver.resolve(alarm.copy(vibration = true), on, testMode = false, scheduledAt = SCHEDULED_AT).vibrateInGrace,
+        )
+        val draft = AlarmDraft(time = LocalTime(7, 0))
+        assertEquals(true, draft.vibrateInGrace)
+        assertEquals(true, ConfigResolver.resolveTest(draft, off, SCHEDULED_AT).vibrateInGrace)
+        assertEquals(false, ConfigResolver.resolveTest(draft.copy(vibrateInGrace = false), on, SCHEDULED_AT).vibrateInGrace)
+    }
+
+    @Test
+    fun `an alarm with vibration off never vibrates during quiet time, whatever its quiet-time switch says (review fix)`() {
+        val quiet = alarm.copy(vibration = false, vibrateInGrace = true)
+
+        assertEquals(false, ConfigResolver.resolve(quiet, GlobalSettings(), testMode = false, scheduledAt = SCHEDULED_AT).vibrateInGrace)
+        val draft = AlarmDraft(time = LocalTime(7, 0), vibration = false, vibrateInGrace = true)
+        assertEquals(false, ConfigResolver.resolveTest(draft, GlobalSettings(), SCHEDULED_AT).vibrateInGrace)
+        assertEquals(true, ConfigResolver.resolveTest(draft.copy(vibration = true), GlobalSettings(), SCHEDULED_AT).vibrateInGrace)
     }
 }

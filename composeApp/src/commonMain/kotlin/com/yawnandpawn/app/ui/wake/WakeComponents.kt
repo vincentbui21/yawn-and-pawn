@@ -34,9 +34,11 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberUpdatedState
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -45,7 +47,9 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.semantics.LiveRegionMode
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.clearAndSetSemantics
@@ -349,7 +353,13 @@ fun WakeSnackbar(
 /**
  * `countdown-ring`: 120 dp, 8 dp `accent` stroke over the `outline-subtle` track, seconds centred in `display`, next to
  * "Quiet for {seconds}s. ..."; once expired, a solid bell and "Time's up. Alarm's back on until you finish.".
- * TalkBack reads "{seconds} seconds left". Fixed values: the timer itself belongs to the session engine.
+ * TalkBack reads "{seconds} seconds left" on the ring. The values come from the session engine (the grace `Deadline`);
+ * this only draws them (Story 3.4):
+ * - a short haptic tick every 5 s ([isTickSecond]) while the window runs, only with the session's quiet-time vibration
+ *   ([GraceState.Running.vibrate]) and only as the count passes the second: a header that comes back (the screen
+ *   recreated or reopened) does not tick again for the second it shows;
+ * - TalkBack politely announces "{seconds} seconds left" every 10 s and at 5 s ([announcedSecond]), not every second;
+ * - with reduced motion (animator duration scale 0) the plain seconds number replaces the ring.
  */
 @Composable
 fun GraceHeader(
@@ -358,6 +368,18 @@ fun GraceHeader(
 ) {
     val colors = PpsTheme.colors
     val spacing = PpsTheme.spacing
+    val haptics = LocalHapticFeedback.current
+    val running = grace as? GraceState.Running
+    // The lowest second seen in this window, kept across a recreated screen; a higher one starts a new window.
+    var lastSeen by rememberSaveable { mutableIntStateOf(running?.secondsLeft ?: NOT_SEEN) }
+    LaunchedEffect(running?.secondsLeft) {
+        val seconds = running?.secondsLeft ?: return@LaunchedEffect
+        val passed = lastSeen != NOT_SEEN && seconds < lastSeen
+        if (passed && running.vibrate && isTickSecond(seconds, running.totalSeconds)) {
+            haptics.performHapticFeedback(HapticFeedbackType.SegmentTick)
+        }
+        lastSeen = seconds
+    }
     // On a glass card: the accent ring passes on glass over the sunrise gradient (3.17), not on the gradient itself.
     Row(
         modifier = modifier.fillMaxWidth().glass(PpsTheme.shapes.md).padding(spacing.space3),
@@ -366,22 +388,7 @@ fun GraceHeader(
         Box(modifier = Modifier.size(RING_SIZE), contentAlignment = Alignment.Center) {
             when (grace) {
                 is GraceState.Running -> {
-                    val spoken = stringResource(Res.string.grace_seconds_left, grace.secondsLeft)
-                    val stroke = spacing.ringStroke
-                    Canvas(modifier = Modifier.fillMaxSize().clearAndSetSemantics { contentDescription = spoken }) {
-                        val width = stroke.toPx()
-                        val inset = width / 2
-                        val arcSize = Size(size.width - width, size.height - width)
-                        drawArc(colors.outlineSubtle, 0f, FULL_CIRCLE, false, Offset(inset, inset), arcSize, style = Stroke(width))
-                        val sweep = FULL_CIRCLE * grace.secondsLeft / grace.totalSeconds.coerceAtLeast(1)
-                        drawArc(colors.accent, START_ANGLE, sweep, false, Offset(inset, inset), arcSize, style = Stroke(width))
-                    }
-                    Text(
-                        text = grace.secondsLeft.toString(),
-                        modifier = Modifier.clearAndSetSemantics { },
-                        style = PpsTheme.typography.display,
-                        color = colors.text,
-                    )
+                    CountdownRing(grace)
                 }
 
                 GraceState.Expired -> {
@@ -400,7 +407,11 @@ fun GraceHeader(
                     is GraceState.Running -> stringResource(Res.string.grace_running, grace.secondsLeft)
                     GraceState.Expired -> stringResource(Res.string.grace_ended)
                 },
-            modifier = Modifier.weight(1f).padding(start = spacing.space4).semantics { liveRegion = LiveRegionMode.Polite },
+            // Only the expired line is a live region: the running line changes every second (the ring announces it).
+            modifier =
+                Modifier.weight(1f).padding(start = spacing.space4).semantics {
+                    if (grace == GraceState.Expired) liveRegion = LiveRegionMode.Polite
+                },
             style = PpsTheme.typography.body,
             color = colors.text,
         )
@@ -539,3 +550,59 @@ private const val PULSE_MILLIS = 1_200
 private const val FULL_CIRCLE = 360f
 private const val START_ANGLE = -90f
 private val RING_SIZE = 120.dp
+private const val TICK_SECONDS = 5
+private const val ANNOUNCE_SECONDS = 10
+
+/** No countdown second seen yet. */
+private const val NOT_SEEN = -1
+
+/**
+ * The `countdown-ring` itself, inside a [RING_SIZE] box: the ring (only the number with reduced motion), the seconds in
+ * `display`, "{seconds} seconds left" on focus, and the polite announcement node.
+ */
+@Composable
+private fun BoxScope.CountdownRing(grace: GraceState.Running) {
+    val colors = PpsTheme.colors
+    val reducedMotion = rememberReducedMotion()
+    val spoken = stringResource(Res.string.grace_seconds_left, grace.secondsLeft)
+    val announced = announcedSecond(grace.secondsLeft, grace.totalSeconds)?.let { stringResource(Res.string.grace_seconds_left, it) }
+    // The polite announcement: text only at an announced second, so TalkBack speaks it then and nothing else.
+    Box(
+        modifier =
+            Modifier.matchParentSize().clearAndSetSemantics {
+                liveRegion = LiveRegionMode.Polite
+                announced?.let { contentDescription = it }
+            },
+    )
+    val stroke = PpsTheme.spacing.ringStroke
+    Canvas(modifier = Modifier.fillMaxSize().clearAndSetSemantics { contentDescription = spoken }) {
+        if (reducedMotion) return@Canvas
+        val width = stroke.toPx()
+        val inset = width / 2
+        val arcSize = Size(size.width - width, size.height - width)
+        drawArc(colors.outlineSubtle, 0f, FULL_CIRCLE, false, Offset(inset, inset), arcSize, style = Stroke(width))
+        val sweep = FULL_CIRCLE * grace.secondsLeft / grace.totalSeconds.coerceAtLeast(1)
+        drawArc(colors.accent, START_ANGLE, sweep, false, Offset(inset, inset), arcSize, style = Stroke(width))
+    }
+    Text(
+        text = grace.secondsLeft.toString(),
+        modifier = Modifier.clearAndSetSemantics { },
+        style = PpsTheme.typography.display,
+        color = colors.text,
+    )
+}
+
+/** The countdown's haptic rhythm (Story 3.4): a short tick every 5 s while it runs, not at its start or at 0. */
+internal fun isTickSecond(
+    secondsLeft: Int,
+    totalSeconds: Int,
+): Boolean = secondsLeft in 1 until totalSeconds && secondsLeft % TICK_SECONDS == 0
+
+/**
+ * The second TalkBack announces "{seconds} seconds left" at, or null (UX-DR65): every 10 s and at 5 s while the window
+ * runs, not at its start.
+ */
+internal fun announcedSecond(
+    secondsLeft: Int,
+    totalSeconds: Int,
+): Int? = secondsLeft.takeIf { it in 1 until totalSeconds && (it % ANNOUNCE_SECONDS == 0 || it == TICK_SECONDS) }

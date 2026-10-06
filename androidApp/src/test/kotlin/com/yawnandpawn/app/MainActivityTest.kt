@@ -78,7 +78,8 @@ class MainActivityTest {
 
     @Test
     fun `MainActivity opens on Home inside the nav capsule with the empty state and no FAB`() {
-        composeRule.onNodeWithText("Yawn & Pawn").assertExists()
+        // The first frame can still be the restoring screen (session lock, Story 2.6) on a cold test JVM: wait for Home.
+        waitForText("Yawn & Pawn")
         waitForText("No alarms yet.")
         composeRule.onNodeWithText("Add your first alarm").assertExists()
         // The capsule's "+" is the only "Add alarm": there is no FAB.

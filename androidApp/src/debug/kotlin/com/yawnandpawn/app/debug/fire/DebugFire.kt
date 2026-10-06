@@ -83,6 +83,7 @@ class DebugFire(
             vibration = vibration,
             snoozeLengthMinutes = snoozeLengthMinutes,
             graceSeconds = graceSeconds,
+            vibrateInGrace = vibrateInGrace,
         )
 
     companion object {

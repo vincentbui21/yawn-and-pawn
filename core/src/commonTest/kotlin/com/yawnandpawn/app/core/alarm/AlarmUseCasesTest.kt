@@ -388,6 +388,7 @@ class AlarmUseCasesTest {
         assertTrue(a.hasSameSettingsAs(b))
         assertTrue(!a.hasSameSettingsAs(b.copy(label = "Gym")))
         assertTrue(!a.hasSameSettingsAs(b.copy(graceSeconds = 30)))
+        assertTrue(!a.hasSameSettingsAs(b.copy(vibrateInGrace = false)), "quiet-time vibration is a setting (Story 3.4)")
     }
 
     @Test

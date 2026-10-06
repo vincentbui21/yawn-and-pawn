@@ -81,10 +81,7 @@ class AlarmEditorViewModel(
     /** The form as it was opened; any difference is an unsaved change. */
     private var initialForm = EditorForm()
 
-    /**
-     * The stored alarm being edited, or the one a duplicate is prefilled from: supplies the fields the editor does not
-     * show yet (grace window).
-     */
+    /** The stored alarm being edited, or the one a duplicate is prefilled from (its time names it in the delete dialog). */
     private var stored: Alarm? = null
 
     /** The Sound row, the Sound sub-screen's list and its preview (Story 1.17). */
@@ -195,6 +192,15 @@ class AlarmEditorViewModel(
                 editForm { it.copy(vibration = intent.enabled) }
             }
 
+            // Story 3.4: the Quiet time sub-screen.
+            is EditorIntent.GraceChanged -> {
+                editForm { it.copy(graceSeconds = intent.seconds.coerceIn(Alarm.GRACE_SECONDS_RANGE)) }
+            }
+
+            is EditorIntent.VibrateInGraceToggled -> {
+                editForm { it.copy(vibrateInGrace = intent.enabled) }
+            }
+
             else -> {
                 onMenuIntent(intent)
             }
@@ -254,7 +260,7 @@ class AlarmEditorViewModel(
         if (current.isLoading || current.isSaving) return
         _state.update { it.copy(isSaving = true) }
         viewModelScope.launch {
-            when (val result = saveAlarm(current.form.toDraft(alarmId, stored))) {
+            when (val result = saveAlarm(current.form.toDraft(alarmId))) {
                 // Stays saving until the screen leaves, so a quick second tap cannot store the alarm twice.
                 is Outcome.Success -> {
                     // The first save of an enabled alarm (every editor save is one) asks for notifications, once
@@ -293,7 +299,7 @@ class AlarmEditorViewModel(
         testInFlight = true
         viewModelScope.launch {
             // Not cancelled by the editor closing: the config is stored and the alarm armed (or both taken back).
-            val result = withContext(NonCancellable) { testAlarm(current.form.toDraft(alarmId, stored)) }
+            val result = withContext(NonCancellable) { testAlarm(current.form.toDraft(alarmId)) }
             testInFlight = false
             when (result) {
                 is Outcome.Success -> _effects.trySend(EditorEffect.ShowTestScheduled)
@@ -442,10 +448,7 @@ private fun NotificationPermission.askOnce(actions: AlarmActions) {
     }
 }
 
-private fun EditorForm.toDraft(
-    alarmId: String?,
-    stored: Alarm?,
-): AlarmDraft =
+private fun EditorForm.toDraft(alarmId: String?): AlarmDraft =
     AlarmDraft(
         id = alarmId,
         time = time,
@@ -461,7 +464,8 @@ private fun EditorForm.toDraft(
         rampStartPercent = Alarm.DEFAULT_RAMP_START_PERCENT,
         vibration = vibration,
         snoozeLengthMinutes = snoozeLengthMinutes,
-        graceSeconds = (stored?.graceSeconds ?: Alarm.DEFAULT_GRACE_SECONDS).coerceIn(Alarm.GRACE_SECONDS_RANGE),
+        graceSeconds = graceSeconds.coerceIn(Alarm.GRACE_SECONDS_RANGE),
+        vibrateInGrace = vibrateInGrace,
     )
 
 /** "Rings in ..." and, for a one-time alarm whose time has passed today, when it rings tomorrow (shifted in a DST gap). */
@@ -488,6 +492,8 @@ private fun Alarm.toForm(): EditorForm =
         rampStartPercent = rampStartPercent.coerceIn(Alarm.PERCENT_RANGE),
         vibration = vibration,
         soundRef = soundRef.ifBlank { Alarm.DEFAULT_SOUND_REF },
+        graceSeconds = graceSeconds.coerceIn(Alarm.GRACE_SECONDS_RANGE),
+        vibrateInGrace = vibrateInGrace,
     )
 
 private fun <T> Set<T>.toggle(item: T): Set<T> = if (item in this) this - item else this + item

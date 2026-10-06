@@ -4,9 +4,13 @@ import androidx.compose.material3.SnackbarDuration
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.remember
+import androidx.compose.ui.semantics.SemanticsProperties
+import androidx.compose.ui.test.SemanticsMatcher
+import androidx.compose.ui.test.assertIsOn
 import androidx.compose.ui.test.hasClickAction
 import androidx.compose.ui.test.hasText
 import androidx.compose.ui.test.isDialog
+import androidx.compose.ui.test.isToggleable
 import androidx.compose.ui.test.junit4.createEmptyComposeRule
 import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithText
@@ -18,6 +22,7 @@ import com.github.takahirom.roborazzi.captureScreenRoboImage
 import com.yawnandpawn.app.StopAppRule
 import com.yawnandpawn.app.screenshotOptions
 import com.yawnandpawn.app.ui.editor.AlarmEditorScreen
+import com.yawnandpawn.app.ui.editor.EditorIntent
 import com.yawnandpawn.app.ui.editor.EditorPane
 import com.yawnandpawn.app.ui.editor.EditorUiState
 import com.yawnandpawn.app.ui.theme.PpsThemeMode
@@ -27,6 +32,8 @@ import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
 import org.robolectric.annotation.Config
 import org.robolectric.annotation.GraphicsMode
+import kotlin.test.assertEquals
+import kotlin.test.assertNull
 
 /**
  * Story 1.8 and 1.9 screenshots of the Alarm editor (new alarm, edit alarm, one-time "Rings tomorrow" note, discard
@@ -137,6 +144,39 @@ class AlarmScreensScreenshotTest {
 
     @Test
     fun `Snooze sub-screen in Dark`() = editor("alarm_editor_snooze_dark", EditorSamples.snoozePane, PpsThemeMode.Dark)
+
+    @Test
+    @Config(fontScale = 2.0f)
+    fun `Quiet time sub-screen in Light at 200 percent`() = quietTime("alarm_editor_quiet_time_light_font200", PpsThemeMode.Light)
+
+    @Test
+    @Config(fontScale = 2.0f)
+    fun `Quiet time sub-screen in Dark at 200 percent`() = quietTime("alarm_editor_quiet_time_dark_font200", PpsThemeMode.Dark)
+
+    /** Story 3.4 review fix: the production editor (no full sections) has the Quiet time row with the form's value. */
+    @Test
+    fun `the production editor's Quiet time row shows the form's seconds and opens its sub-screen`() {
+        val intents = mutableListOf<EditorIntent>()
+        val state = EditorSamples.newAlarm.copy(form = EditorSamples.newAlarm.form.copy(graceSeconds = 27))
+        assertNull(state.full, "the production editor")
+        withScreen(PpsThemeMode.Light, content = { AlarmEditorScreen(state = state, is24Hour = false, onIntent = { intents += it }) }) {
+            composeRule
+                .onNode(hasText("Quiet time") and hasText("27 seconds") and hasClickAction())
+                .performClick()
+            assertEquals(listOf<EditorIntent>(EditorIntent.PaneOpened(EditorPane.QuietTime)), intents)
+        }
+    }
+
+    /** Story 3.4: the slider says its value as "{seconds} seconds", and the switch is on by default. */
+    private fun quietTime(
+        name: String,
+        mode: PpsThemeMode,
+    ) = withScreen(mode, content = { AlarmEditorScreen(state = EditorSamples.quietTimePane, is24Hour = false, onIntent = {}) }) {
+        composeRule.onNode(SemanticsMatcher.expectValue(SemanticsProperties.StateDescription, "25 seconds")).assertExists()
+        composeRule.onNode(hasText("Vibrate during quiet time")).assertExists()
+        composeRule.onNode(isToggleable()).assertIsOn()
+        capture(name)
+    }
 
     /** The narrowest supported phone width: the seven day chips stay on one line. */
     @Test

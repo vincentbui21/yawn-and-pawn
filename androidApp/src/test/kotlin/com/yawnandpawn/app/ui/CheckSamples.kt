@@ -38,11 +38,28 @@ object CheckSamples {
     private fun map(
         state: SessionState,
         input: CheckInput = CheckInput(),
+        afterMillis: Long = 6_000,
     ): CheckUiState {
         val session = (state as SessionState.Active).session
-        val now = TimeSnapshot(start.wallMillis + 6_000, start.elapsedMillis + 6_000, start.bootCount)
+        val now = TimeSnapshot(start.wallMillis + afterMillis, start.elapsedMillis + afterMillis, start.bootCount)
         return checkNotNull(mathCheckUiState(state, NoBillingSnoozeAvailability().availability(session), now, input))
     }
+
+    /** Story 3.4: the grace window just after "I'm up", 20 s left. */
+    val grace20: CheckUiState = map(grace(session()), afterMillis = 0)
+
+    /** Story 3.4: 5 s left. */
+    val grace5: CheckUiState = map(grace(session()), afterMillis = 15_000)
+
+    /** Story 3.4: a call paused the ring 8 s into the window: the countdown stops at 12 s, with the phone-call note. */
+    val gracePaused: CheckUiState =
+        grace(session()).let { state ->
+            val pausedAt = TimeSnapshot(start.wallMillis + 8_000, start.elapsedMillis + 8_000, start.bootCount)
+            map(state.copy(session = state.session.copy(pausedAt = pausedAt)), afterMillis = 40_000)
+        }
+
+    /** Story 3.4: a ring merged during a snooze has no grace window: no countdown, no expired line. */
+    val noGrace: CheckUiState = map(SessionState.Loud(session().copy(noGraceThisRing = true)))
 
     /** Problem 1 of 3 in Grace, 14 s left, "8" typed. */
     val grace: CheckUiState = map(grace(session()), CheckInput(digits = "8"))

@@ -79,7 +79,7 @@ development_status:
   3-1-check-plugin-contract-and-the-math-generator-in-core: done  # PR 2026-10-06 (Epic 3 auto-run, fast mode)
   3-2-solve-math-to-stop-the-alarm: done  # PR 2026-10-06 (Epic 3 auto-run, fast mode)
   3-3-success-screen-after-the-check-basic: done  # PR 2026-10-06 (Epic 3 auto-run, fast mode)
-  3-4-grace-window-with-the-countdown-ring: backlog
+  3-4-quiet-time-grace-window-with-the-countdown-ring: done  # PR 2026-10-06 (Epic 3 auto-run, fast mode)
   3-5-choose-the-checks-for-each-alarm: backlog
   3-6-try-it-previews-for-every-check: backlog
   3-7-word-unscramble-check: backlog

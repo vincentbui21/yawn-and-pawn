@@ -6,7 +6,7 @@ import androidx.room3.Index
 import androidx.room3.PrimaryKey
 
 /**
- * Row of the `alarm` table in `app.db` (schema v1). Kept separate from the core `Alarm` so storage types
+ * Row of the `alarm` table in `app.db` (schema v1; v5 adds `vibrate_in_grace`). Kept separate from the core `Alarm` so storage types
  * (bitmask, epoch millis, nanosecond of day) never leak into `:core`; see [toEntity] / [toAlarm].
  */
 @Entity(
@@ -41,6 +41,9 @@ data class AlarmEntity(
     val snoozeLengthMinutes: Int,
     @ColumnInfo(name = "grace_seconds")
     val graceSeconds: Int,
+    /** "Vibrate during quiet time" (schema v5, Story 3.4); rows stored before v5 migrate to on. */
+    @ColumnInfo(name = "vibrate_in_grace", defaultValue = "1")
+    val vibrateInGrace: Boolean,
     @ColumnInfo(name = "request_code")
     val requestCode: Int,
     /** Epoch milliseconds. */

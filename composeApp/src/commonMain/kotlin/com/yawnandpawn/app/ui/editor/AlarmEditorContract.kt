@@ -31,6 +31,10 @@ data class EditorForm(
     val vibration: Boolean = true,
     /** The chosen sound, an encoded `SoundRef` (Story 1.17), saved with the alarm. */
     val soundRef: String = Alarm.DEFAULT_SOUND_REF,
+    /** The quiet time ("Quiet time", internally the grace window), 15 to 30 s (Story 3.4: edited and saved). */
+    val graceSeconds: Int = Alarm.DEFAULT_GRACE_SECONDS,
+    /** "Vibrate during quiet time" (Story 3.4: per alarm, on by default). */
+    val vibrateInGrace: Boolean = Alarm.DEFAULT_VIBRATE_IN_GRACE,
 ) {
     companion object {
         /** The time a new alarm opens with. */
@@ -72,8 +76,9 @@ data class EditorUiState(
     /** How far away the next ring is, for the header "Rings in {...}"; `null` shows no countdown. */
     val ringsIn: Countdown? = null,
     /**
-     * The rows of the full editor (EXPERIENCE.md Information Architecture) that later stories wire: wake-up check, quiet
-     * time, fee ladder, motivation and "Test alarm" (the sound list is [sound]). `null` hides them (the Story 1.8 editor).
+     * The rows of the full editor (EXPERIENCE.md Information Architecture) that later stories wire: wake-up check, fee
+     * ladder, motivation and "Test alarm" (the sound list is [sound]; quiet time is in [form] since Story 3.4). `null`
+     * hides them (the Story 1.8 editor).
      */
     val full: FullEditorSections? = null,
     /** Editing a stored alarm: the header's overflow menu offers Duplicate and Delete (also for TalkBack). */
@@ -142,10 +147,6 @@ data class FullEditorSections(
     val qrCodeSaved: Boolean = false,
     /** House Hunt reference photos taken, 0 to 3. */
     val houseHuntPhotos: Int = 0,
-    /** The quiet time ("Quiet time", internally the grace window), 15 to 30 s. */
-    val graceSeconds: Int = Alarm.DEFAULT_GRACE_SECONDS,
-    /** "Vibrate during quiet time". */
-    val vibrateInGrace: Boolean = true,
     /** The first three snooze prices of the fee ladder, or `null` while prices are not known. */
     val feeLadder: List<Money>? = null,
     /** Names of the recorded motivation messages ("Message 1"). */

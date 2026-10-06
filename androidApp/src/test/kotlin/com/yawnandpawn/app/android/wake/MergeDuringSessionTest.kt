@@ -148,7 +148,7 @@ class MergeDuringSessionTest {
         assertEquals(2, ringing.ringIndex)
         assertTrue(ringing.noGraceThisRing)
         assertEquals(1, ringing.snoozesGranted, "no fee")
-        assertEquals(emptyList(), billing.launched)
+        assertTrue(app.logs().none { "LaunchBilling" in it }, "no payment for the merge")
         val trigger = assertNotNull(slotTrigger())
         assertTrue(
             trigger < snoozed.session.snoozeEnd!!.wallMillis - 5.minutes.inWholeMilliseconds,

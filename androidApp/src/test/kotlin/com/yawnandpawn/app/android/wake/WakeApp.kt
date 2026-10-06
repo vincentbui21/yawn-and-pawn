@@ -20,6 +20,7 @@ import com.yawnandpawn.app.core.session.Billing
 import com.yawnandpawn.app.core.session.SessionEngine
 import com.yawnandpawn.app.core.session.SessionEvent
 import com.yawnandpawn.app.core.session.SessionState
+import com.yawnandpawn.app.core.session.SnoozeAvailabilityPolicy
 import com.yawnandpawn.app.core.session.TestAlarmStore
 import com.yawnandpawn.app.core.session.UserLockState
 import com.yawnandpawn.app.core.time.Clock
@@ -61,6 +62,7 @@ internal class WakeApp(
     userLock: UserLockState? = null,
     serviceStartWait: Duration = Duration.ZERO,
     calls: CallState? = null,
+    policy: SnoozeAvailabilityPolicy? = null,
 ) {
     val app: YawnAndPawnApp = ApplicationProvider.getApplicationContext()
     val crashReporter = FakeCrashReporter()
@@ -87,6 +89,7 @@ internal class WakeApp(
                 billing?.let { replaced -> single<Billing> { replaced } }
                 userLock?.let { replaced -> single<UserLockState> { replaced } }
                 calls?.let { replaced -> single<CallState> { replaced } }
+                policy?.let { replaced -> single<SnoozeAvailabilityPolicy> { replaced } }
                 single { WakeServiceStarts(serviceStartWait) }
             },
         )

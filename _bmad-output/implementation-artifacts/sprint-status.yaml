@@ -59,7 +59,7 @@ development_status:
   1-21-epic-1-device-verification-checklist: backlog
   epic-1-retrospective: optional
 
-  epic-2: in-progress
+  epic-2: done
   2-1-keep-the-backup-alarm-armed-and-recover-after-a-kill: done  # PR 2026-10-05 (Epic 2 auto-run, fast mode)
   2-2-session-deadlines-survive-clock-changes-and-reboots: done  # PR #25 stack 2026-10-06 (Epic 2 auto-run, fast mode)
   2-3-ring-before-the-first-unlock-after-a-reboot: done  # PR stack 2026-10-06 (Epic 2 auto-run, fast mode)
@@ -72,7 +72,7 @@ development_status:
   2-10-session-conflict-rules-end-to-end: done  # branch 2026-10-06 (Epic 2 auto-run, fast mode)
   2-11-no-hostage-guard-the-phone-stays-usable: done  # PR stack 2026-10-06 (Epic 2 auto-run, fast mode)
   2-12-back-up-alarms-and-history-never-the-session-or-media: done  # PR 2026-10-05 (Epic 2 auto-run, fast mode)
-  2-13-epic-2-escape-attempts-checklist-on-the-device-matrix: backlog
+  2-13-epic-2-escape-attempts-checklist-on-the-device-matrix: done  # 2026-10-06 Oppo A96 run; owner-only items deferred to v2 by owner decision (story-2-13-epic-2-escape-attempts-checklist.md)
   epic-2-retrospective: optional
 
   epic-3: backlog

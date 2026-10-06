@@ -2,7 +2,7 @@
 title: 'Story 3.4: Quiet time (grace window) with the countdown ring'
 type: 'feature'
 created: '2026-10-06'
-status: 'in-progress'
+status: 'done'
 baseline_revision: 'f88e4f6'
 review_loop_iteration: 0
 followup_review_recommended: false
@@ -78,6 +78,28 @@ deferred: []
 - [x] State rows: Grace running, Grace expired ("Alarm's back on" line), paused for a call, and no grace on a merged ring.
 - [x] "I'm up" and snooze are unchanged.
 - [x] Previews unchanged (`editor-quiet-time`, `check-math`). Roborazzi screenshots added.
+
+## Review Triage Log
+
+### Review (2 reviewers, fast mode)
+
+Two reviewers read `b94b4e7`. All nine findings are patches, fixed in `fix(3.4): review fixes`:
+
+- **patch (high): an alarm with "Vibration" off vibrated in quiet time.** The new switch defaulted on and the migration set it on. Now `ConfigResolver` freezes `vibration && vibrateInGrace` (also for the test ring), and `MIGRATION_4_5` copies each stored alarm's `vibration` into `vibrate_in_grace`. Tested in `ConfigResolverTest` and the v4→v5 migration test, which has a silent alarm.
+- **patch: the 5 s haptic ticks ignored the quiet-time vibration.** `GraceState.Running.vibrate` carries the session's setting, and `GraceHeader` ticks only with it. `GraceHeaderTest` uses a fake `LocalHapticFeedback` stepping 20→15→14→10: ticks at 15 and 10 only, and none when off.
+- **patch: a header coming back at a tick second ticked again.** A `rememberSaveable` holds the lowest second seen, and the header ticks only below it. A higher second means a new window. Tested by saving and restoring the header's state at 15, and by opening at 15.
+- **patch: live regions were not asserted.** The running line has no `LiveRegion`, and the expired line has `Polite` (`GraceHeaderTest`).
+- **patch: reduced motion was not tested.** `GraceHeaderTest` checks that the accent ring pixels are present by default and absent at animator scale 0. `CheckScreenshotTest` adds `wake_check_grace_reduced_motion_sunrise` with the same check.
+- **patch: the editor test's stored alarm used the default.** The fixture stores `vibrateInGrace = false`; opening shows false and Save keeps false. The Quiet time test turns it on.
+- **patch: `hasSameSettingsAs` lacked the new field in its test.** `AlarmUseCasesTest` asserts that a different `vibrateInGrace` is another setting.
+- **patch: the production editor row was not tested.** In `AlarmScreensScreenshotTest`, with no full sections, a clickable "Quiet time" node shows the form's "27 seconds" and sends `PaneOpened(QuietTime)`.
+- **patch: the migration test title claimed the merges are kept.** The v4 fixture now seeds a `session_merge` row and asserts it survives.
+
+After the fixes, `./gradlew qualityGate :androidApp:assembleDebugAndroidTest` passes and the preview baselines are unchanged. Two earlier gate runs each failed one test I did not change, and both pass when run alone:
+- `CallDetectorTest`: an uncaught `ClosedScopeException` reached it from a `WakeService` coroutine left over by an earlier class after Koin stopped.
+- `RingingSemanticsTest`: "Failed to capture a node to bitmap" under load.
+
+They look like order and load flakes in the full suite, so I recorded them here rather than chasing them inside this story.
 
 ## Design Notes
 

@@ -1,10 +1,15 @@
 package com.yawnandpawn.app.ui
 
+import android.content.Context
+import android.provider.Settings
+import androidx.compose.ui.graphics.toArgb
+import androidx.compose.ui.graphics.toPixelMap
 import androidx.compose.ui.semantics.SemanticsProperties
 import androidx.compose.ui.test.SemanticsMatcher
 import androidx.compose.ui.test.assertHeightIsAtLeast
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.assertWidthIsAtLeast
+import androidx.compose.ui.test.captureToImage
 import androidx.compose.ui.test.hasClickAction
 import androidx.compose.ui.test.hasContentDescription
 import androidx.compose.ui.test.hasText
@@ -13,10 +18,12 @@ import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.onRoot
 import androidx.compose.ui.test.performScrollTo
 import androidx.compose.ui.unit.dp
+import androidx.test.core.app.ApplicationProvider
 import com.github.takahirom.roborazzi.captureRoboImage
 import com.yawnandpawn.app.StopAppRule
 import com.yawnandpawn.app.screenshotOptions
 import com.yawnandpawn.app.ui.theme.PpsThemeMode
+import com.yawnandpawn.app.ui.theme.PpsTokens
 import com.yawnandpawn.app.ui.wake.CheckContent
 import com.yawnandpawn.app.ui.wake.CheckScreen
 import com.yawnandpawn.app.ui.wake.CheckUiState
@@ -26,6 +33,7 @@ import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
 import org.robolectric.annotation.Config
 import org.robolectric.annotation.GraphicsMode
+import kotlin.test.assertFalse
 
 /**
  * Story 3.2 screenshots of the Math Check screen as `WakeActivity` maps it ([CheckSamples]), always Sunrise, at 100% and
@@ -63,6 +71,24 @@ class CheckScreenshotTest {
             key(label).assertHeightIsAtLeast(64.dp).assertWidthIsAtLeast(64.dp)
         }
         composeRule.onNode(hasContentDescription("Delete digit")).assertIsDisplayed().assertHeightIsAtLeast(64.dp)
+    }
+
+    // Story 3.4 review fix: with the animator duration scale at 0 the plain number replaces the ring.
+    @Test
+    fun `grace with reduced motion`() {
+        val resolver = ApplicationProvider.getApplicationContext<Context>().contentResolver
+        Settings.Global.putFloat(resolver, Settings.Global.ANIMATOR_DURATION_SCALE, 0f)
+        try {
+            check("wake_check_grace_reduced_motion_sunrise", CheckSamples.grace) {
+                composeRule.onNode(hasContentDescription("14 seconds left")).assertExists()
+                val ring = composeRule.onNode(hasContentDescription("14 seconds left")).captureToImage().toPixelMap()
+                val accent = PpsTokens.Sunrise.accent.toArgb()
+                val drawn = (0 until ring.width).any { x -> (0 until ring.height).any { y -> ring[x, y].toArgb() == accent } }
+                assertFalse(drawn, "no ring arc with reduced motion")
+            }
+        } finally {
+            Settings.Global.putFloat(resolver, Settings.Global.ANIMATOR_DURATION_SCALE, 1f)
+        }
     }
 
     @Test

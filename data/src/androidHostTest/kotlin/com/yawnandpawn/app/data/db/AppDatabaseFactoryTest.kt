@@ -171,17 +171,33 @@ class AppDatabaseFactoryTest {
     }
 
     @Test
-    fun `migrating a v4 database keeps alarms, the code mark, history and merges, and turns quiet-time vibration on`() =
+    fun `migrating a v4 database keeps alarms, the code mark, history and merges, and quiet-time vibration follows vibration`() =
         runTest {
             val alarm = anAlarm(id = "a", requestCode = 1000)
+            val silent = anAlarm(id = "b", requestCode = 1001, time = LocalTime(8, 0)).copy(vibration = false)
             val row = aSessionHistoryRow()
-            createDatabase(version = 4, alarms = listOf(alarm.copy(vibrateInGrace = false)), requestCodeMark = 1002, history = listOf(row))
+            val merge = SessionMergeRow(row.sessionId, "b", Instant.fromEpochMilliseconds(5_000), Instant.fromEpochMilliseconds(6_000))
+            createDatabase(
+                version = 4,
+                // The v4 rows have no quiet-time column: the Kotlin value below is not written.
+                alarms = listOf(alarm.copy(vibrateInGrace = false), silent),
+                requestCodeMark = 1002,
+                history = listOf(row),
+                merges = listOf(merge),
+            )
 
             withDatabase { database ->
                 val repository = RoomAlarmRepository(database.alarmDao())
-                assertEquals(Outcome.Success(listOf(alarm.copy(vibrateInGrace = true))), repository.listAll())
+                assertEquals(
+                    Outcome.Success(listOf(alarm.copy(vibrateInGrace = true), silent.copy(vibrateInGrace = false))),
+                    repository.listAll(),
+                    "on for a vibrating alarm, off for one that never vibrates",
+                )
                 assertEquals(Outcome.Success(1003), RoomRequestCodeSequence(database.requestCodeSequenceDao()).next())
-                assertEquals(Outcome.Success(row), RoomSessionHistoryRepository(database.sessionHistoryDao()).find(row.sessionId))
+                val history = RoomSessionHistoryRepository(database.sessionHistoryDao())
+                assertEquals(Outcome.Success(row), history.find(row.sessionId))
+                assertEquals(Outcome.Success(listOf(merge)), history.merges(row.sessionId), "the merge log is kept")
+                assertEquals(Outcome.Success(Unit), repository.delete(silent.id))
                 // The new column is stored and read back per alarm.
                 assertEquals(Outcome.Success(Unit), repository.upsert(alarm.copy(vibrateInGrace = false)))
                 assertEquals(Outcome.Success(listOf(alarm.copy(vibrateInGrace = false))), repository.listAll())
@@ -308,6 +324,7 @@ class AppDatabaseFactoryTest {
         alarms: List<Alarm> = emptyList(),
         requestCodeMark: Int? = null,
         history: List<SessionHistoryRow> = emptyList(),
+        merges: List<SessionMergeRow> = emptyList(),
     ) {
         val database = JSONObject(schema(version).readText()).getJSONObject("database")
         val file = appDatabaseFile(context).apply { parentFile?.mkdirs() }
@@ -332,6 +349,14 @@ class AppDatabaseFactoryTest {
             requestCodeMark?.let { connection.execSQL("INSERT INTO request_code_sequence (id, last_used) VALUES (0, $it)") }
             // A v3 session_history row as Story 1.13 writes it.
             history.forEach { connection.execSQL(it.toVersion3Insert()) }
+            // A v4 session_merge row as Story 2.9 writes it.
+            merges.forEach {
+                connection.execSQL(
+                    "INSERT INTO session_merge (session_id, alarm_id, scheduled_at, merged_at) VALUES (" +
+                        "'${it.sessionId}', '${it.alarmId}', " +
+                        "${it.scheduledAt.toEpochMilliseconds()}, ${it.mergedAt.toEpochMilliseconds()})",
+                )
+            }
             connection.execSQL("PRAGMA user_version = $version")
         } finally {
             connection.close()
@@ -350,7 +375,8 @@ class AppDatabaseFactoryTest {
     private fun Alarm.toVersion1Insert(): String =
         "INSERT INTO alarm (id, time_nano_of_day, repeat_days, label, enabled, sound_ref, volume_percent, gradual_volume, " +
             "ramp_start_percent, vibration, snooze_length_minutes, grace_seconds, request_code, created_at, updated_at) VALUES (" +
-            "'$id', ${time.toNanosecondOfDay()}, 0, NULL, 1, '$soundRef', $volumePercent, 1, $rampStartPercent, 1, " +
+            "'$id', ${time.toNanosecondOfDay()}, 0, NULL, 1, '$soundRef', $volumePercent, 1, $rampStartPercent, " +
+            "${if (vibration) 1 else 0}, " +
             "$snoozeLengthMinutes, $graceSeconds, $requestCode, ${createdAt.toEpochMilliseconds()}, ${updatedAt.toEpochMilliseconds()})"
 
     /**

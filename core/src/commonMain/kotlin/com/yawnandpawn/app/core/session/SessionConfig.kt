@@ -75,7 +75,8 @@ object ConfigResolver {
             maxSnoozes = globalSettings.maxSnoozes,
             snoozeLengthMinutes = alarm.snoozeLengthMinutes,
             graceSeconds = alarm.graceSeconds,
-            vibrateInGrace = alarm.vibrateInGrace,
+            // Quiet-time vibration needs vibration itself on (review fix): "Vibration" off never vibrates.
+            vibrateInGrace = alarm.vibration && alarm.vibrateInGrace,
             volumePercent = alarm.volumePercent,
             gradualVolume = alarm.gradualVolume,
             // Fixed (owner decision 2026-09-27); alarms saved before Story 1.14 may hold min(20, volume).
@@ -104,7 +105,7 @@ object ConfigResolver {
             maxSnoozes = globalSettings.maxSnoozes,
             snoozeLengthMinutes = draft.snoozeLengthMinutes,
             graceSeconds = draft.graceSeconds,
-            vibrateInGrace = draft.vibrateInGrace,
+            vibrateInGrace = draft.vibration && draft.vibrateInGrace,
             volumePercent = draft.volumePercent,
             gradualVolume = draft.gradualVolume,
             rampStartPercent = Alarm.DEFAULT_RAMP_START_PERCENT,

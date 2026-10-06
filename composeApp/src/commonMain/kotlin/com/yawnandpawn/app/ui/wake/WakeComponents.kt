@@ -34,9 +34,11 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberUpdatedState
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -353,7 +355,9 @@ fun WakeSnackbar(
  * "Quiet for {seconds}s. ..."; once expired, a solid bell and "Time's up. Alarm's back on until you finish.".
  * TalkBack reads "{seconds} seconds left" on the ring. The values come from the session engine (the grace `Deadline`);
  * this only draws them (Story 3.4):
- * - a short haptic tick every 5 s ([isTickSecond]) while the window runs;
+ * - a short haptic tick every 5 s ([isTickSecond]) while the window runs, only with the session's quiet-time vibration
+ *   ([GraceState.Running.vibrate]) and only as the count passes the second: a header that comes back (the screen
+ *   recreated or reopened) does not tick again for the second it shows;
  * - TalkBack politely announces "{seconds} seconds left" every 10 s and at 5 s ([announcedSecond]), not every second;
  * - with reduced motion (animator duration scale 0) the plain seconds number replaces the ring.
  */
@@ -366,10 +370,15 @@ fun GraceHeader(
     val spacing = PpsTheme.spacing
     val haptics = LocalHapticFeedback.current
     val running = grace as? GraceState.Running
+    // The lowest second seen in this window, kept across a recreated screen; a higher one starts a new window.
+    var lastSeen by rememberSaveable { mutableIntStateOf(running?.secondsLeft ?: NOT_SEEN) }
     LaunchedEffect(running?.secondsLeft) {
-        if (running != null && isTickSecond(running.secondsLeft, running.totalSeconds)) {
+        val seconds = running?.secondsLeft ?: return@LaunchedEffect
+        val passed = lastSeen != NOT_SEEN && seconds < lastSeen
+        if (passed && running.vibrate && isTickSecond(seconds, running.totalSeconds)) {
             haptics.performHapticFeedback(HapticFeedbackType.SegmentTick)
         }
+        lastSeen = seconds
     }
     // On a glass card: the accent ring passes on glass over the sunrise gradient (3.17), not on the gradient itself.
     Row(
@@ -543,6 +552,9 @@ private const val START_ANGLE = -90f
 private val RING_SIZE = 120.dp
 private const val TICK_SECONDS = 5
 private const val ANNOUNCE_SECONDS = 10
+
+/** No countdown second seen yet. */
+private const val NOT_SEEN = -1
 
 /**
  * The `countdown-ring` itself, inside a [RING_SIZE] box: the ring (only the number with reduced motion), the seconds in

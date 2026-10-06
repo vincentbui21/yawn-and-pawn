@@ -109,6 +109,7 @@ class AlarmEditorViewModelTest {
             vibration = false,
             soundRef = "builtin:birds",
             graceSeconds = 25,
+            vibrateInGrace = false,
         )
 
     @Test
@@ -234,6 +235,7 @@ class AlarmEditorViewModelTest {
                     vibration = false,
                     soundRef = "builtin:birds",
                     graceSeconds = 25,
+                    vibrateInGrace = false,
                 ),
                 form,
             )
@@ -249,6 +251,7 @@ class AlarmEditorViewModelTest {
             assertTrue(saved.enabled, "Save stores the alarm enabled")
             assertEquals("builtin:birds", saved.soundRef)
             assertEquals(25, saved.graceSeconds)
+            assertFalse(saved.vibrateInGrace, "Save keeps the stored quiet-time vibration")
             assertEquals(listOf<EditorEffect>(EditorEffect.Close), effects)
         }
 
@@ -488,7 +491,7 @@ class AlarmEditorViewModelTest {
             val viewModel = viewModel(stored.id)
             advanceUntilIdle()
             assertEquals(
-                25 to true,
+                25 to false,
                 viewModel.state.value.form
                     .let { it.graceSeconds to it.vibrateInGrace },
                 "opens with the stored values",
@@ -496,7 +499,7 @@ class AlarmEditorViewModelTest {
 
             viewModel.onIntent(EditorIntent.PaneOpened(EditorPane.QuietTime))
             viewModel.onIntent(EditorIntent.GraceChanged(17))
-            viewModel.onIntent(EditorIntent.VibrateInGraceToggled(false))
+            viewModel.onIntent(EditorIntent.VibrateInGraceToggled(true))
             assertEquals(EditorPane.QuietTime, viewModel.state.value.pane)
             viewModel.onIntent(EditorIntent.GraceChanged(99))
             assertEquals(30, viewModel.state.value.form.graceSeconds, "kept in 15 to 30 s")
@@ -505,7 +508,7 @@ class AlarmEditorViewModelTest {
             advanceUntilIdle()
 
             val saved = repository.current.single()
-            assertEquals(17 to false, saved.graceSeconds to saved.vibrateInGrace)
+            assertEquals(17 to true, saved.graceSeconds to saved.vibrateInGrace)
         }
 
     @Test

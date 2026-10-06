@@ -91,7 +91,9 @@ class CheckMappingTest {
             },
             "passed: expired at once",
         )
-        assertEquals(GraceState.Running(secondsLeft = 15, totalSeconds = 20), map(paused, now = at(12_000))?.grace)
+        assertEquals(GraceState.Running(secondsLeft = 15, totalSeconds = 20, vibrate = false), map(paused, now = at(12_000))?.grace)
+        val vibrating = grace().let { it.copy(session = it.session.copy(config = it.session.config.copy(vibrateInGrace = true))) }
+        assertEquals(true, (map(vibrating)?.grace as GraceState.Running).vibrate, "the session's quiet-time vibration")
     }
 
     @Test

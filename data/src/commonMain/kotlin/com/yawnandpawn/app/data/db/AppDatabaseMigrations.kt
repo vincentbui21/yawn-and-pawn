@@ -60,14 +60,15 @@ val MIGRATION_3_4: Migration =
     }
 
 /**
- * v4 to v5 (Story 3.4): adds `alarm.vibrate_in_grace` ("Vibrate during quiet time", per alarm), on for every stored alarm
- * (owner-approved default 2026-09-26). Every other column and table is untouched. The SQL matches the exported `5.json`;
- * Room checks it after migrating.
+ * v4 to v5 (Story 3.4): adds `alarm.vibrate_in_grace` ("Vibrate during quiet time", per alarm). A stored alarm takes its
+ * own `vibration` (on by default, owner-approved 2026-09-26; an alarm that never vibrates keeps not vibrating). Every
+ * other column and table is untouched. The SQL matches the exported `5.json`; Room checks it after migrating.
  */
 val MIGRATION_4_5: Migration =
     object : Migration(4, 5) {
         override suspend fun migrate(connection: SQLiteConnection) {
             connection.execSQL("ALTER TABLE `alarm` ADD COLUMN `vibrate_in_grace` INTEGER NOT NULL DEFAULT 1")
+            connection.execSQL("UPDATE `alarm` SET `vibrate_in_grace` = `vibration`")
         }
     }
 

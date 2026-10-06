@@ -93,12 +93,27 @@ class ConfigResolverTest {
         )
         assertEquals(
             true,
-            ConfigResolver.resolve(alarm.copy(vibrateInGrace = true), off, testMode = false, scheduledAt = SCHEDULED_AT).vibrateInGrace,
+            ConfigResolver
+                .resolve(alarm.copy(vibration = true, vibrateInGrace = true), off, testMode = false, scheduledAt = SCHEDULED_AT)
+                .vibrateInGrace,
         )
-        assertEquals(false, ConfigResolver.resolve(alarm, on, testMode = false, scheduledAt = SCHEDULED_AT).vibrateInGrace)
+        assertEquals(
+            false,
+            ConfigResolver.resolve(alarm.copy(vibration = true), on, testMode = false, scheduledAt = SCHEDULED_AT).vibrateInGrace,
+        )
         val draft = AlarmDraft(time = LocalTime(7, 0))
         assertEquals(true, draft.vibrateInGrace)
         assertEquals(true, ConfigResolver.resolveTest(draft, off, SCHEDULED_AT).vibrateInGrace)
         assertEquals(false, ConfigResolver.resolveTest(draft.copy(vibrateInGrace = false), on, SCHEDULED_AT).vibrateInGrace)
+    }
+
+    @Test
+    fun `an alarm with vibration off never vibrates during quiet time, whatever its quiet-time switch says (review fix)`() {
+        val quiet = alarm.copy(vibration = false, vibrateInGrace = true)
+
+        assertEquals(false, ConfigResolver.resolve(quiet, GlobalSettings(), testMode = false, scheduledAt = SCHEDULED_AT).vibrateInGrace)
+        val draft = AlarmDraft(time = LocalTime(7, 0), vibration = false, vibrateInGrace = true)
+        assertEquals(false, ConfigResolver.resolveTest(draft, GlobalSettings(), SCHEDULED_AT).vibrateInGrace)
+        assertEquals(true, ConfigResolver.resolveTest(draft.copy(vibration = true), GlobalSettings(), SCHEDULED_AT).vibrateInGrace)
     }
 }

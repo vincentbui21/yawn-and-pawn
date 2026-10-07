@@ -2,6 +2,7 @@ package com.yawnandpawn.app.ui.theme
 
 import java.io.File
 import kotlin.test.Test
+import kotlin.test.assertEquals
 import kotlin.test.assertTrue
 
 /**
@@ -41,33 +42,46 @@ class CheckScreenContrastTest {
         )
 
     @Test
-    fun `every check-screen colour pair is in the DESIGN_md table and passes`() {
-        val missing =
-            checkScreenPairs.filter { (fg, bg) ->
-                rows.none { it.theme == "Sunrise" && it.foreground == fg && it.background == bg && !it.documentedFailure }
-            }
+    fun `every check-screen colour pair is a passing row of the DESIGN_md table`() {
+        val missing = ContrastTable.missingPairs(rows, SUNRISE, checkScreenPairs)
         assertTrue(missing.isEmpty(), "check-screen pairs missing from the contrast table (or documented as failing): $missing")
-        val used =
-            rows.filter { row ->
-                row.theme == "Sunrise" &&
-                    checkScreenPairs.any { it.first == row.foreground && it.second == row.background }
-            }
-        val violations = ContrastTable.violations(used, PpsTokens.colorsByName)
+        val violations = ContrastTable.violations(ContrastTable.rowsFor(rows, SUNRISE, checkScreenPairs), PpsTokens.colorsByName)
         assertTrue(violations.isEmpty(), violations.joinToString("\n"))
     }
 
     @Test
-    fun `the fallback link is never drawn on the gradient top, where accent-text fails`() {
-        // The link sits in the footer, in the flat thumb zone (AccentTextPlacementTest checks the position on screen).
-        val onGradient = rows.single { it.theme == "Sunrise" && it.foreground == "accent-text" && it.background == "sunrise-gradient-top" }
-        assertTrue(onGradient.documentedFailure, "accent-text on the gradient top is a documented failure, so nothing draws it there")
-        assertTrue("accent-text" to "sunrise-gradient-top" !in checkScreenPairs)
+    fun `accent-text on the gradient top is a documented failure, so it is not a check-screen pair`() {
+        // Where the link, "Shuffle" and "Clear" really sit is checked on the rendered screen (AccentTextPlacementTest).
+        val onGradient = "accent-text" to "sunrise-gradient-top"
+        assertEquals(listOf(onGradient), ContrastTable.missingPairs(rows, SUNRISE, listOf(onGradient)))
+        assertTrue(onGradient !in checkScreenPairs)
     }
 
+    // Fixtures: missingPairs reports a pair that is absent, only documented as failing, or in another theme.
+
+    private val fixture =
+        """
+        ### Verified contrast (WCAG 2.x)
+
+        | Theme | Pair | Kind | Ratio |
+        |---|---|---|---|
+        | Sunrise | text / bg | text | 16.68 |
+        | Sunrise | accent / sunrise-gradient-top | graphic | **2.73, fails: no accent on the gradient** |
+        | Light | error / bg | text | 5.95 |
+
+        ## Typography
+        """.trimIndent()
+
     @Test
-    fun `a pair missing from the table is reported`() {
-        val pairs = listOf("accent-text" to "surface-variant")
-        val missing = pairs.filter { (fg, bg) -> rows.none { it.theme == "Sunrise" && it.foreground == fg && it.background == bg } }
-        assertTrue(missing == pairs, "the check catches a missing pair")
+    fun `missingPairs reports an absent pair, a documented failure and a pair of another theme`() {
+        val fixtureRows = ContrastTable.parse(fixture)
+        val pairs = listOf("text" to "bg", "accent" to "sunrise-gradient-top", "error" to "bg", "outline" to "surface")
+
+        assertEquals(pairs.drop(1), ContrastTable.missingPairs(fixtureRows, SUNRISE, pairs))
+        assertEquals(listOf(fixtureRows[0]), ContrastTable.rowsFor(fixtureRows, SUNRISE, listOf("text" to "bg")))
+    }
+
+    private companion object {
+        const val SUNRISE = "Sunrise"
     }
 }

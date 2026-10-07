@@ -2,14 +2,19 @@ package com.yawnandpawn.app.ui
 
 import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.semantics.LiveRegionMode
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.SemanticsActions
 import androidx.compose.ui.semantics.SemanticsNode
 import androidx.compose.ui.semantics.SemanticsProperties
 import androidx.compose.ui.semantics.getOrNull
+import androidx.compose.ui.state.ToggleableState
 import androidx.compose.ui.test.SemanticsMatcher
 import androidx.compose.ui.test.hasClickAction
 import androidx.compose.ui.test.junit4.ComposeTestRule
 import androidx.compose.ui.test.onRoot
+import androidx.compose.ui.unit.Dp
+import androidx.compose.ui.unit.DpSize
+import androidx.compose.ui.unit.dp
 import kotlin.test.assertEquals
 import kotlin.test.assertNotNull
 import kotlin.test.assertTrue
@@ -61,25 +66,59 @@ internal object TalkBackRules {
     }
 
     /**
-     * The rules every control on a check screen keeps (NFR-9): every clickable node has a non-empty label and a role; no
-     * action is reachable only by a long click or a custom action; a toggle exposes its state as a switch.
+     * The rules every control on a check screen keeps (NFR-9), by hand, since the Accessibility Test Framework does not
+     * run under Robolectric:
+     * - every clickable node has a non-empty label, a role and a touch target of at least 48 × 48 dp; each of
+     *   [wakeActions] (snooze, "Done", the number pad keys) is at least 64 dp tall;
+     * - a node with a role but no click action says it is disabled (the unavailable snooze, a tile while the sequence
+     *   plays), so TalkBack reads its state;
+     * - a toggle (the torch) is a switch or a check box with a label, a click action and an on or off state;
+     * - no action is reachable only by a long click or a custom action.
      */
-    fun ComposeTestRule.assertControlsLabelledWithRoles() {
+    fun ComposeTestRule.assertControlsLabelledWithRoles(wakeActions: List<SemanticsMatcher> = emptyList()) {
         val clickable = onAllNodes(hasClickAction()).fetchSemanticsNodes()
         assertTrue(clickable.isNotEmpty(), "the screen has controls")
         clickable.forEach { node ->
             assertTrue(label(node).isNotEmpty(), "a control without a label: ${node.config}")
             assertNotNull(node.config.getOrNull(SemanticsProperties.Role), "a control without a role: ${label(node)}")
+            assertAtLeast(node, TARGET_MIN, TARGET_MIN)
+        }
+        wakeActions.forEach { matcher ->
+            onAllNodes(matcher).fetchSemanticsNodes().also { assertTrue(it.isNotEmpty(), "no ${matcher.description}") }.forEach { node ->
+                assertAtLeast(node, TARGET_MIN, TARGET_WAKE)
+            }
         }
         readingOrder().forEach { node ->
-            assertTrue(SemanticsActions.OnLongClick !in node.config, "a long-click action on ${label(node)}")
-            assertTrue(SemanticsActions.CustomActions !in node.config, "a custom action on ${label(node)}")
-            if (SemanticsProperties.ToggleableState in node.config) {
-                assertNotNull(node.config.getOrNull(SemanticsProperties.Role), "a toggle without a role: ${label(node)}")
+            val config = node.config
+            assertTrue(SemanticsActions.OnLongClick !in config, "a long-click action on ${label(node)}")
+            assertTrue(SemanticsActions.CustomActions !in config, "a custom action on ${label(node)}")
+            if (SemanticsProperties.Role in config && SemanticsActions.OnClick !in config) {
+                assertTrue(SemanticsProperties.Disabled in config, "${label(node)} has a role and no action, but is not disabled")
+            }
+            config.getOrNull(SemanticsProperties.ToggleableState)?.let { state ->
+                assertTrue(
+                    config.getOrNull(SemanticsProperties.Role) in setOf(Role.Switch, Role.Checkbox),
+                    "a toggle as a switch: ${label(node)}",
+                )
+                assertTrue(SemanticsActions.OnClick in config, "a toggle that can be toggled: ${label(node)}")
+                assertTrue(state != ToggleableState.Indeterminate, "a toggle that is on or off: ${label(node)}")
                 assertTrue(label(node).isNotEmpty(), "a toggle without a label")
             }
         }
     }
+
+    /** [node]'s touch target is at least [width] × [height]. */
+    private fun ComposeTestRule.assertAtLeast(
+        node: SemanticsNode,
+        width: Dp,
+        height: Dp,
+    ) {
+        val size = with(density) { DpSize(node.size.width.toDp(), node.size.height.toDp()) }
+        assertTrue(size.width >= width && size.height >= height, "${label(node)} is $size, below $width × $height")
+    }
+
+    private val TARGET_MIN = 48.dp
+    private val TARGET_WAKE = 64.dp
 
     /** Headings in reading order. */
     fun ComposeTestRule.headings(): List<String> = readingOrder().filter { SemanticsProperties.Heading in it.config }.map(::label)

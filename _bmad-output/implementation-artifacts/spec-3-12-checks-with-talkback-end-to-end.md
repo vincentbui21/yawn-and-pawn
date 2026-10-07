@@ -149,14 +149,48 @@ Built on `story/3-11-qr-camera-fails-and-before-unlock` (5c5503b: main 7315457 +
 
 **Changes to the plan:**
 - **`fallbackChoices` stays as it is.** The picker maps types by id, so the numbered variant is chosen where a card is turned into the fallback: `WakeFallback.asFallback` now always gives Memory Sequence `numbered = true`, TalkBack on or not (the 3.9 code numbered it only with TalkBack on). `WakeCheck` no longer needs `AccessibilityState`.
-- **Focus after a wrong answer.** `focusRequester` + `focusable()` on the first input only ("1", the first pool letter, tile 1). `clickable` alone can't take focus in touch mode. No pixels change, and the focus moves are instant. Memory moves focus when "Your turn" starts after the replay, never while the tiles are disabled.
+- **Focus after a wrong answer** (changed in review, see below). Math and Word move focus to "Not quite. Try again." itself, and the first input comes next in reading order. Memory never moves focus. `clickable` alone can't take focus in touch mode, so the line gets `focusable()`. No pixels change, and the move is instant.
 - **The 200% rule failed for three checks.** They now use Story 3.2's pinned-input pattern: Memory's grid (Loud: the expired line pushed rows 3 below the window), Word's letters (a 10-letter word's second row) and QR's viewfinder (its bottom 16 dp). Each is pinned above the footer while the header and instruction scroll. In a window shorter than 480 dp the input scrolls with the rest, as Math's pad does. When everything fits it looks the same: the preview baselines and every 100% baseline are unchanged. Three 200% baselines change on purpose, because their input used to be cut off by the scrolling area and is now whole: `wake_check_memory_wrong_sunrise_font200`, `wake_check_word_hard_sunrise_font200` and `wake_check_word_wrong_sunrise_font200`. At 200% on 360 × 640 the grace header fills most of the scrolling area. That is the v2 compact-header item and is noted in `deferred-work.md`.
 - **The picker at 200%.** Its close button and Math (first, always offered) are on screen without scrolling. Word and Memory scroll into view; it is a list, and TalkBack scrolls it.
-- **The fallback link contrast.** `accent-text` sits in the flat thumb zone on `bg-sunrise` (5.06:1). `AccentTextPlacementTest` computes the background behind the top of every `accent-text` label from the gradient (link, "Shuffle", "Clear", also in "Try it") at 411 × 891, 360 × 640 at 200% and 640 × 360. All pass 4.5:1, so no token change.
+- **The fallback link contrast.** `accent-text` sits in the flat thumb zone on `bg-sunrise` (5.06:1). `AccentTextPlacementTest` reads the rendered background around every `accent-text` label (the link, "Shuffle" and "Clear", also in "Try it") from the captured screen, at 411 × 891, at 360 × 640 with 200% font and at 640 × 360. All pass 4.5:1, so no token change.
 - **Contrast pairs.** Besides the listed pairs, the check screens also draw `text` and `text-secondary` on the gradient and on `bg`, `text / surface` (memory numbers) and `outline / bg` (snooze border). All of them are already table rows, so DESIGN.md needs no new row.
 - **Accessibility checks.** `enableAccessibilityChecks()` is not supported under Robolectric (the library logs a warning and checks nothing). The host suite checks the rules by hand. Only the GMD test uses the Accessibility Test Framework, on API 34+.
 - **F5 on the managed device needs no camera, `pm revoke` or system app.** The test swaps the Koin `CodeScanner` for one that reports `NoPermission`. A GMD install may grant runtime permissions, so `assumeTrue` on CAMERA could skip the test. The test makes its QR alarm with `SaveAlarm` (a `checks` list with a code) and fires it with the existing `DebugFire.FireRequest(alarmId)`, so `DebugFire` gets no plan option.
 - **Dependency allowlist.** It covers the runtime classpath only ("test-only dependencies never appear here"), so the androidTest-only accessibility artifact is not listed.
+
+## Review (2 reviewers, fast mode)
+
+Two reviewers looked at 89f760c: one for verification gaps, one for edge cases. All 15 findings are fixed, each with a test.
+
+1. **Word's second wrong answer.** The test was unrealistic. It now fills every slot, gets a wrong word, moves focus elsewhere and checks the line is not focused, then repeats for the second wrong word (`CheckSemanticsSuiteTest`).
+2. **Focus wiring end to end.** `TalkBackF5FlowTest` gives two wrong Math answers on the real screen. `WrongAnswerFocusTest` (new) checks a wrong Word word and a wrong numbered Memory tap on `WakeActivity`.
+3. **`TalkBackRules` is closer to ATF.**
+   - Every clickable node is at least 48 × 48 dp. The wake actions (keys, snooze, "Done", "I'm up") are at least 64 dp tall.
+   - A node with a role and no action must say it is disabled. The disabled snooze already exposes `Disabled` through its `clearAndSetSemantics`, and the rule now checks it.
+   - A toggle must be a switch or a check box, with a click action and an on or off state.
+4. **Live regions** are asserted to be exactly `Polite`.
+5. **"Focusable at once"** is now tested for real.
+   - On the device, the test clock is paused at "I'm up", and exactly one frame after the engine reaches Grace the polite message and the focusable link are there.
+   - On the host, `TalkBackF5FlowTest` checks that the screen knew from the missing permission alone: no camera was bound. A paused clock there, waiting on the engine, left frame state behind. Bisecting the full suite showed it made the later `RingingSemanticsTest` pulse and `SuccessScreenTest` "nothing moves" tests fail, so the host tests no longer pause the clock while waiting on the app.
+6. **The GMD test** has `@SdkSuppress(34)`, so below API 34 it is reported skipped instead of passing unchecked. The Accessibility Test Framework also checks Success, through the "Done" tap.
+7. **"Try it" headings** are exactly ["Try it", the check's heading] for all four checks.
+8. **The footer at its largest.** New fits: Memory in Loud with a €12.99 price and a payment message; Memory before the first unlock; Success after a €2 snooze with the pending-payment note; Success on time with a streak.
+9. **System bars.** Robolectric gives no insets, so a 24 dp status bar and a 48 dp navigation bar are stood in for by padding. All fits now run inside them.
+10. **The placement test** reads the rendered background from `captureToImage()`, not from a copy of the gradient's formula.
+11. **`ContrastTable.missingPairs` / `rowsFor`** are shared helpers in the contrast test code, with their own fixture test. The test names now match what they check.
+12. **(High) Memory never moves focus.** After a wrong tap, TalkBack would have to say "Not quite. Try again.", "Watch the sequence" and the new sequence, about 6 s of speech. A move to tile 1 at "Your turn" could cut that off and leave a blind fallback user unable to stop the alarm without paying. The polite announcements now run whole. Tested with no focused node during the replay or after it.
+13. **Feedback cut off by the focus move.** Math and Word now move focus to "Not quite. Try again." itself, so TalkBack reads it whole as the focused node. The next swipe is "1" or the first letter.
+14. **The check's own text at 200%.**
+    - The scrolling area above a pinned input now opens at its end (`rememberEndScroll`). The word slots, the round and phase, the answer and "Not quite. Try again." sit next to the input, and the grace header scrolls up. TalkBack still reads the header first.
+    - Whether the input is pinned is now measured, not set by a fixed 480 dp threshold. `PinnedFit` adds up the natural heights of the input, Word's actions and the footer (price, message, link). When they don't fit, the input scrolls at full size instead of being squashed. This is tested at 568 dp with the link and a message.
+    - Remaining limit: after 5 different codes, QR's viewfinder, the 3-line message, the link and snooze are taller than 360 × 640 at 200%. The viewfinder scrolls; the torch, link and snooze stay on screen. Recorded with the v2 compact-header item.
+    - A line of text counts as on screen when at most its leading (a tenth of its box) is clipped.
+15. **The device tests leave nothing ringing.**
+    - `endRingForCleanup` (androidTest) sends "I'm up" and each right answer until the session ends. Both `FallbackTalkBackDeviceTest` and `MathCheckDeviceTest` run it in `finally`.
+    - The Koin `CodeScanner` is restored first.
+    - A missing `DebugCheckAnswer` while the session rings fails the test outright.
+
+**Baselines.** The preview baselines are unchanged. 200% screenshots whose scrolling area overflowed now show the end of it, so they change on purpose; all are listed in the commit. New `a11y_*` baselines were added.
 
 ## Tasks & Acceptance
 
@@ -241,5 +275,8 @@ Built on `story/3-11-qr-camera-fails-and-before-unlock` (5c5503b: main 7315457 +
 - CI: `:androidApp:atdApi34DebugAndroidTest` -- expected: `FallbackTalkBackDeviceTest` and `MathCheckDeviceTest` pass.
 
 **Device (human-verify, Story 3.14 — not run here):**
-- Item 14: F5 with TalkBack on, end to end without looking, on at least two devices. Also confirm that focus goes back to the first input after a wrong answer, and that the torch reads its state.
+- Item 14: F5 with TalkBack on, end to end without looking, on at least two devices. Also confirm:
+  - after a wrong Math answer or Word, "Not quite. Try again." is read whole, with focus on it;
+  - after a wrong Memory tap, the whole replayed sequence is heard;
+  - the torch reads its state.
 - Item 15: at 200% on the smallest device, every check keeps its main input and the snooze control on screen.

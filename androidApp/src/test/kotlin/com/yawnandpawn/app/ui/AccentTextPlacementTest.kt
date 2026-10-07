@@ -1,13 +1,14 @@
 package com.yawnandpawn.app.ui
 
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.lerp
+import androidx.compose.ui.graphics.toPixelMap
 import androidx.compose.ui.test.SemanticsMatcher
-import androidx.compose.ui.test.getUnclippedBoundsInRoot
+import androidx.compose.ui.test.captureToImage
 import androidx.compose.ui.test.hasClickAction
 import androidx.compose.ui.test.hasText
 import androidx.compose.ui.test.junit4.createEmptyComposeRule
 import androidx.compose.ui.test.onRoot
+import androidx.compose.ui.test.performScrollTo
 import com.yawnandpawn.app.StopAppRule
 import com.yawnandpawn.app.ui.checks.Difficulty
 import com.yawnandpawn.app.ui.checks.WordTrial
@@ -38,7 +39,8 @@ import kotlin.test.assertTrue
  * Story 3.12, the fallback link contrast question: `accent-text` passes on `bg-sunrise` (5.06) but fails on
  * `sunrise-gradient-top` (4.39), and the wake background fades from one to the other over the top 40% of the screen. So
  * every `accent-text` label on a check screen ("Can't do this check?", "Shuffle", "Clear", also in "Try it") is checked
- * where it actually sits: the background behind its top edge, from the gradient, must give at least 4.5:1.
+ * where it actually sits: the rendered background around it must give at least 4.5:1 (Story 3.12 review: read from the
+ * captured screen, not from a copy of the gradient's formula).
  */
 @RunWith(RobolectricTestRunner::class)
 @GraphicsMode(GraphicsMode.Mode.NATIVE)
@@ -68,21 +70,25 @@ class AccentTextPlacementTest {
             showFallbackLink = true,
         )
 
-    /** The background PpsBackground draws at [y] of a [height] screen: the gradient top fading into `bg` over 40%. */
-    private fun backgroundAt(
-        y: Float,
-        height: Float,
-    ): Color = lerp(PpsTokens.Sunrise.sunriseGradientTop, PpsTokens.Sunrise.bg, (y / (height * GRADIENT_STOP)).coerceIn(0f, 1f))
-
+    /**
+     * The rendered background behind each label: the screen is captured, and the pixels just inside the four corners of
+     * the label's touch target (the text button has no fill, and its text sits in the middle) are read. The worst of
+     * them against `accent-text` must give at least 4.5:1.
+     */
     private fun assertPasses(
         what: String,
         matchers: List<SemanticsMatcher>,
     ) {
-        val screen = composeRule.onRoot().getUnclippedBoundsInRoot()
         matchers.forEach { matcher ->
-            val bounds = composeRule.onNode(matcher).getUnclippedBoundsInRoot()
-            val ratio = contrast(PpsTokens.Sunrise.accentText, backgroundAt(bounds.top.value, screen.bottom.value))
-            assertTrue(ratio >= TEXT_MIN, "$what: ${matcher.description} at ${bounds.top} of ${screen.bottom} is $ratio:1")
+            // A label in a scrolling area is read where it sits once scrolled into view (a pinned one has no scroll).
+            runCatching { composeRule.onNode(matcher).performScrollTo() }
+            val screen = composeRule.onRoot().captureToImage().toPixelMap()
+            val bounds = composeRule.onNode(matcher).fetchSemanticsNode().boundsInRoot
+            val corners =
+                listOf(bounds.left + INSET to bounds.top + INSET, bounds.right - INSET to bounds.top + INSET) +
+                    listOf(bounds.left + INSET to bounds.bottom - INSET, bounds.right - INSET to bounds.bottom - INSET)
+            val worst = corners.minOf { (x, y) -> contrast(PpsTokens.Sunrise.accentText, screen[x.toInt(), y.toInt()]) }
+            assertTrue(worst >= TEXT_MIN, "$what: ${matcher.description} at $bounds is $worst:1 on the rendered background")
         }
     }
 
@@ -138,8 +144,8 @@ class AccentTextPlacementTest {
     }
 
     private companion object {
-        /** DESIGN.md: the Sunrise gradient covers the top 40% of the screen; the thumb zone is flat `bg-sunrise`. */
-        const val GRADIENT_STOP = 0.4f
+        /** How far inside the touch target the background is read, in px. */
+        const val INSET = 3f
         const val TEXT_MIN = 4.5
         const val MAX_CHANNEL = 255f
         const val LINEAR_LIMIT = 0.03928

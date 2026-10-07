@@ -3,6 +3,7 @@ package com.yawnandpawn.app.ui
 import androidx.compose.foundation.focusable
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.size
+import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -10,6 +11,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.semantics.LiveRegionMode
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.SemanticsProperties
 import androidx.compose.ui.semantics.getOrNull
@@ -35,6 +37,7 @@ import com.yawnandpawn.app.ui.TalkBackRules.assertOneHeadingBefore
 import com.yawnandpawn.app.ui.TalkBackRules.assertPolite
 import com.yawnandpawn.app.ui.TalkBackRules.assertReadsInOrder
 import com.yawnandpawn.app.ui.TalkBackRules.headings
+import com.yawnandpawn.app.ui.TalkBackRules.spokenOrder
 import com.yawnandpawn.app.ui.checks.CheckRegistry
 import com.yawnandpawn.app.ui.checks.CheckType
 import com.yawnandpawn.app.ui.checks.Difficulty
@@ -105,6 +108,18 @@ class CheckSemanticsSuiteTest {
 
     private val key = { label: String -> hasText(label) and hasClickAction() }
 
+    private val wrongLine = hasText("Not quite. Try again.")
+
+    /** [content] with a 1 dp focusable beside it, standing in for TalkBack moving on (focus [elsewhere]). */
+    @Composable
+    private fun WithElsewhere(
+        elsewhere: FocusRequester,
+        content: @Composable () -> Unit,
+    ) = Box {
+        content()
+        Box(Modifier.size(1.dp).focusRequester(elsewhere).focusable())
+    }
+
     private fun memory(
         frame: Int,
         wrong: Boolean = false,
@@ -124,7 +139,9 @@ class CheckSemanticsSuiteTest {
         listOf(CheckSamples.easy, CheckSamples.hard).forEach { state ->
             val math = state.content as CheckContent.Math
             wake(state) {
-                composeRule.assertControlsLabelledWithRoles()
+                // Wake actions are at least 64 dp: every key and the snooze control.
+                val keys = (0..9).map { key(it.toString()) } + key("Check") + hasContentDescription("Delete digit")
+                composeRule.assertControlsLabelledWithRoles(wakeActions = keys + hasContentDescription(snoozeSpoken))
                 val heading = composeRule.headings().single()
                 assertTrue(SPOKEN_PROBLEM.matches(heading), "the problem in words: $heading")
                 composeRule.assertOneHeadingBefore(heading, key("1"))
@@ -158,8 +175,10 @@ class CheckSemanticsSuiteTest {
             // The announcement node, polite, with text at an announced second only.
             val announced =
                 composeRule
-                    .onAllNodes(SemanticsMatcher.keyIsDefined(SemanticsProperties.LiveRegion) and hasContentDescription("5 seconds left"))
-                    .fetchSemanticsNodes()
+                    .onAllNodes(
+                        SemanticsMatcher.expectValue(SemanticsProperties.LiveRegion, LiveRegionMode.Polite) and
+                            hasContentDescription("5 seconds left"),
+                    ).fetchSemanticsNodes()
             assertEquals(1, announced.size)
         }
         wake(CheckSamples.loud) {
@@ -168,35 +187,33 @@ class CheckSemanticsSuiteTest {
         }
     }
 
+    /** The wrong line is focused (read whole, never cut off by a focus move), polite, and followed by [next]. */
+    private fun assertWrongLineFocused(next: String) {
+        composeRule.onNode(wrongLine).assertIsFocused()
+        composeRule.assertPolite("Not quite. Try again.")
+        val spoken = composeRule.spokenOrder()
+        assertEquals(next, spoken[spoken.indexOf("Not quite. Try again.") + 1], "the next swipe after the feedback: $spoken")
+    }
+
     @Test
-    fun `after each wrong Math answer focus goes back to the 1 key, and the wrong line is polite`() {
+    fun `after each wrong Math answer focus goes to Not quite, and the next swipe is the 1 key`() {
         val start = CheckSamples.loud
         val math = start.content as CheckContent.Math
         var shown by mutableStateOf(start)
         val elsewhere = FocusRequester()
-        withScreen(
-            PpsThemeMode.Light,
-            content = {
-                Box {
-                    CheckScreen(state = shown, onIntent = {})
-                    Box(Modifier.size(1.dp).focusRequester(elsewhere).focusable())
-                }
-            },
-        ) {
-            composeRule.onNode(key("1")).assertIsNotFocused()
-
+        withScreen(PpsThemeMode.Light, content = { WithElsewhere(elsewhere) { CheckScreen(state = shown, onIntent = {}) } }) {
+            // Typed, then a wrong answer: the field is empty again and the feedback has focus.
+            composeRule.runOnUiThread { shown = start.copy(content = math.copy(answer = "42")) }
             composeRule.runOnUiThread { shown = start.copy(content = math.copy(wrong = true, wrongAttempts = 1)) }
-            composeRule.onNode(key("1")).assertIsFocused()
-            composeRule.assertPolite("Not quite. Try again.")
+            assertWrongLineFocused(next = "1")
 
-            // Typed again (the wrong line goes), focus moved elsewhere, then a second wrong answer: back on "1".
-            composeRule.runOnUiThread {
-                shown = start.copy(content = math.copy(answer = "4", wrongAttempts = 1))
-                elsewhere.requestFocus()
-            }
-            composeRule.onNode(key("1")).assertIsNotFocused()
+            // Focus moved elsewhere (TalkBack swiped on), typed again (the line goes), then a second wrong answer.
+            composeRule.runOnUiThread { elsewhere.requestFocus() }
+            composeRule.onNode(wrongLine).assertIsNotFocused()
+            composeRule.runOnUiThread { shown = start.copy(content = math.copy(answer = "7", wrongAttempts = 1)) }
+            composeRule.onNode(wrongLine).assertDoesNotExist()
             composeRule.runOnUiThread { shown = start.copy(content = math.copy(wrong = true, wrongAttempts = 2)) }
-            composeRule.onNode(key("1")).assertIsFocused()
+            assertWrongLineFocused(next = "1")
         }
     }
 
@@ -230,30 +247,28 @@ class CheckSemanticsSuiteTest {
     }
 
     @Test
-    fun `after each wrong word focus goes back to the first letter, and the wrong line is polite`() {
-        val wrong = WordInput("tnseo").content(WordRound(1, 2, "tnseo"), wrong = true).copy(wrongAttempts = 1)
-        var shown by mutableStateOf(check(word))
-        val elsewhere = FocusRequester()
-        withScreen(
-            PpsThemeMode.Light,
-            content = {
-                Box {
-                    CheckScreen(state = shown, onIntent = {})
-                    Box(Modifier.size(1.dp).focusRequester(elsewhere).focusable())
-                }
-            },
-        ) {
-            composeRule.onNode(hasContentDescription("Letter T")).assertIsNotFocused()
-            composeRule.runOnUiThread { shown = check(wrong) }
-            composeRule.onNode(hasContentDescription("Letter T")).assertIsFocused()
-            composeRule.assertPolite("Not quite. Try again.")
+    fun `after each wrong word focus goes to Not quite, and the next swipe is the first letter`() {
+        val round = WordRound(1, 2, "tnseo")
+        // Every letter placed (the pool is empty), as when the word is sent.
+        val full = (0 until 5).fold(WordInput("tnseo")) { input, place -> input.tappedLetter(place) }
 
-            composeRule.runOnUiThread {
-                shown = check(word.copy(wrongAttempts = 1))
-                elsewhere.requestFocus()
-            }
-            composeRule.runOnUiThread { shown = check(wrong.copy(wrongAttempts = 2)) }
-            composeRule.onNode(hasContentDescription("Letter T")).assertIsFocused()
+        fun filled(attempts: Int) = check(full.content(round, wrong = false).copy(wrongAttempts = attempts))
+
+        fun wrong(attempts: Int) = check(WordInput("tnseo").content(round, wrong = true).copy(wrongAttempts = attempts))
+        var shown by mutableStateOf(filled(attempts = 0))
+        val elsewhere = FocusRequester()
+        withScreen(PpsThemeMode.Light, content = { WithElsewhere(elsewhere) { CheckScreen(state = shown, onIntent = {}) } }) {
+            composeRule.onNode(hasContentDescription("Letter T")).assertDoesNotExist()
+            composeRule.runOnUiThread { shown = wrong(attempts = 1) }
+            assertWrongLineFocused(next = "Letter T")
+
+            composeRule.runOnUiThread { elsewhere.requestFocus() }
+            composeRule.onNode(wrongLine).assertIsNotFocused()
+            // Spelled again (the line goes with the first tap), then a second wrong word.
+            composeRule.runOnUiThread { shown = filled(attempts = 1) }
+            composeRule.onNode(wrongLine).assertDoesNotExist()
+            composeRule.runOnUiThread { shown = wrong(attempts = 2) }
+            assertWrongLineFocused(next = "Letter T")
         }
     }
 
@@ -286,18 +301,19 @@ class CheckSemanticsSuiteTest {
     }
 
     @Test
-    fun `after a wrong tap focus goes to tile 1 once Your turn starts again, not while the new sequence plays`() {
+    fun `after a wrong tap focus never moves, so Not quite, the phase and the new sequence are announced whole`() {
         var shown by mutableStateOf(check(memory(frame = FRAMES_PLAYED)))
+        val focused = SemanticsMatcher.expectValue(SemanticsProperties.Focused, true)
         withScreen(PpsThemeMode.Light, content = { CheckScreen(state = shown, onIntent = {}) }) {
             composeRule.runOnUiThread { shown = check(memory(frame = 0, wrong = true, attempts = 1)) }
             composeRule.assertPolite("Not quite. Try again.")
-            // Disabled while it plays: not focusable, so it has no focused state at all.
-            composeRule
-                .onNode(hasContentDescription("Tile 1"))
-                .assert(SemanticsMatcher("not focused") { it.config.getOrNull(SemanticsProperties.Focused) != true })
+            composeRule.assertPolite("Watch the sequence")
+            composeRule.assertPolite(memory(frame = 0).announced!!.joinToString(", "))
+            assertTrue(composeRule.onAllNodes(focused).fetchSemanticsNodes().isEmpty(), "nothing takes focus during the replay")
 
             composeRule.runOnUiThread { shown = check(memory(frame = FRAMES_PLAYED, attempts = 1)) }
-            composeRule.onNode(hasContentDescription("Tile 1")).assertIsFocused()
+            composeRule.assertPolite("Your turn")
+            assertTrue(composeRule.onAllNodes(focused).fetchSemanticsNodes().isEmpty(), "nothing takes focus on the user's turn")
         }
     }
 
@@ -374,8 +390,15 @@ class CheckSemanticsSuiteTest {
             val trial = assertNotNull(CheckRegistry.startTrial(type, Difficulty.Medium, SEED, accessible = true, code = code), "$type")
             withScreen(PpsThemeMode.Light, content = { CheckPreviewScreen(state = trial.state, onIntent = {}, onClose = {}) }) {
                 composeRule.assertControlsLabelledWithRoles()
+                // "Try it", then the check's own heading: the spoken problem, the word line, the phase, "Scan your code".
                 val headings = composeRule.headings()
-                assertEquals("Try it", headings.first(), "$type")
+                assertEquals(2, headings.size, "$type: $headings")
+                assertEquals("Try it", headings[0], "$type")
+                if (type == CheckType.Math) {
+                    assertTrue(SPOKEN_PROBLEM.matches(headings[1]), "$type: ${headings[1]}")
+                } else {
+                    assertEquals(expected.first, headings[1], "$type")
+                }
                 composeRule.assertReadsInOrder("Try it", "Back", expected.first)
                 assertTrue(composeRule.onAllNodes(expected.second).fetchSemanticsNodes().isNotEmpty(), "$type input")
             }

@@ -4,6 +4,7 @@ import android.content.Intent
 import android.os.Build
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.ui.semantics.LiveRegionMode
 import androidx.compose.ui.semantics.SemanticsActions
 import androidx.compose.ui.semantics.SemanticsNode
 import androidx.compose.ui.semantics.SemanticsProperties
@@ -20,6 +21,7 @@ import androidx.compose.ui.test.performClick
 import androidx.test.core.app.ActivityScenario
 import androidx.test.core.app.ApplicationProvider
 import androidx.test.ext.junit.runners.AndroidJUnit4
+import androidx.test.filters.SdkSuppress
 import com.yawnandpawn.app.android.wake.AndroidAlarmPlayer
 import com.yawnandpawn.app.android.wake.WakeActivity
 import com.yawnandpawn.app.core.alarm.AlarmDraft
@@ -134,10 +136,12 @@ class FallbackTalkBackDeviceTest {
     private fun headings(): List<String> =
         composeRule.onAllNodes(SemanticsMatcher.keyIsDefined(SemanticsProperties.Heading)).fetchSemanticsNodes().map(::label)
 
+    // The Accessibility Test Framework checks the whole screen on every action (touch targets, labels); it needs API 34,
+    // the managed device's level, so below it the test is reported skipped instead of passing unchecked.
     @Test
+    @SdkSuppress(minSdkVersion = Build.VERSION_CODES.UPSIDE_DOWN_CAKE)
     fun a_QR_alarm_without_the_camera_stops_with_taps_on_labels_through_Math() {
-        // The Accessibility Test Framework checks the whole screen on every action (touch targets, labels); API 34+.
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) composeRule.enableAccessibilityChecks()
+        composeRule.enableAccessibilityChecks()
         val scanner = koin.get<CodeScanner>()
         loadKoinModules(module { single<CodeScanner> { NoPermissionScanner } })
         val alarmId = saveQrAlarm()
@@ -152,17 +156,23 @@ class FallbackTalkBackDeviceTest {
                 imUpToTheCameraMessage()
                 linkToMath()
                 solveEveryProblem()
-                poll { engine.state.value !is SessionState.Ring }
+                // Success, checked by the framework on its "Done" tap, which closes the screen.
+                composeRule.waitUntil(STEP_TIMEOUT) { composeRule.onAllNodes(button("Done")).fetchSemanticsNodes().isNotEmpty() }
+                composeRule.onNode(button("Done")).performClick()
             }
 
             assertFalse("the check is passed: the session no longer rings", engine.state.value is SessionState.Ring)
             poll { !player.isRinging && player.sound == null }
             assertFalse("the ring is over", player.isRinging)
             assertNull("the alarm sound is released", player.sound)
+            poll { engine.state.value == SessionState.Idle }
+            assertEquals(SessionState.Idle, engine.state.value)
         } finally {
+            // Story 3.12 review: never leave the device ringing for the next test, whatever failed.
+            loadKoinModules(module { single<CodeScanner> { scanner } })
+            engine.endRingForCleanup()
             poll { engine.state.value == SessionState.Idle }
             runBlocking { koin.get<DeleteAlarm>()(alarmId) }
-            loadKoinModules(module { single<CodeScanner> { scanner } })
         }
     }
 
@@ -186,18 +196,26 @@ class FallbackTalkBackDeviceTest {
         return (saved as Outcome.Success).value.id
     }
 
-    /** Ringing reads the clock first, then "I'm up"; after it the camera message and the link are there, focusable. */
+    /**
+     * Ringing reads the clock first, then "I'm up"; in the first frame after the engine is in Grace (the test clock
+     * paused) the camera message is a polite live region and the link is there, focusable.
+     */
     private fun imUpToTheCameraMessage() {
         composeRule.waitUntil(STEP_TIMEOUT) { composeRule.onAllNodes(button("I'm up")).fetchSemanticsNodes().isNotEmpty() }
         val first = talkBackOrder().take(2)
         assertTrue("TalkBack starts on the clock: $first", CLOCK.matches(first[0]))
         assertEquals("I'm up", first[1])
 
+        composeRule.mainClock.autoAdvance = false
         composeRule.onNode(button("I'm up")).performClick()
-        composeRule.waitUntil(STEP_TIMEOUT) { composeRule.onAllNodes(button(LINK)).fetchSemanticsNodes().isNotEmpty() }
+        poll { engine.state.value is SessionState.Grace }
+        composeRule.mainClock.advanceTimeByFrame()
         assertEquals(listOf("Scan your code"), headings())
-        composeRule.onNode(hasText("Camera isn't available. Pick a fallback check.")).assertExists()
+        composeRule
+            .onNode(hasText("Camera isn't available. Pick a fallback check."))
+            .assert(SemanticsMatcher.expectValue(SemanticsProperties.LiveRegion, LiveRegionMode.Polite))
         composeRule.onNode(button(LINK)).assert(SemanticsMatcher.keyIsDefined(SemanticsActions.RequestFocus))
+        composeRule.mainClock.autoAdvance = true
     }
 
     /** The link opens the picker: its heading, "Back to check", then Math first, which is tapped. */
@@ -214,7 +232,8 @@ class FallbackTalkBackDeviceTest {
     /** Each problem reads in words; its digits are typed by key label, the answer is read back, and "Check" sends it. */
     private fun solveEveryProblem() {
         repeat(MAX_PROBLEMS) {
-            val answer = DebugCheckAnswer.current() ?: return
+            if (engine.state.value !is SessionState.Ring) return
+            val answer = checkNotNull(DebugCheckAnswer.current()) { "the session rings, but no Math answer: ${engine.state.value}" }
             composeRule.waitUntil(STEP_TIMEOUT) { headings().any { SPOKEN_PROBLEM.matches(it) } }
             val before = checkRun()
             answer.forEach { digit -> composeRule.onNode(button(digit.toString())).performClick() }

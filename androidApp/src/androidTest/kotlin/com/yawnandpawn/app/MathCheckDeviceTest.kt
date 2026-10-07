@@ -66,7 +66,8 @@ class MathCheckDeviceTest {
                 composeRule.onNodeWithText("I'm up").performClick()
                 composeRule.waitUntil(STEP_TIMEOUT) { DebugCheckAnswer.current() != null }
                 repeat(MAX_PROBLEMS) {
-                    val answer = DebugCheckAnswer.current() ?: return@repeat
+                    if (engine.state.value !is SessionState.Ring) return@repeat
+                    val answer = checkNotNull(DebugCheckAnswer.current()) { "the session rings, but no Math answer: ${engine.state.value}" }
                     val before = checkRun()
                     answer.forEach { digit -> composeRule.onNode(hasText(digit.toString()) and hasClickAction()).performClick() }
                     composeRule.onNode(hasText("Check") and hasClickAction()).performClick()
@@ -86,6 +87,8 @@ class MathCheckDeviceTest {
             assertFalse("the ring is over", player.isRinging)
             assertNull("the alarm sound is released", player.sound)
         } finally {
+            // Story 3.12 review: never leave the device ringing for the next test, whatever failed.
+            engine.endRingForCleanup()
             poll { engine.state.value == SessionState.Idle }
             runBlocking { koin.get<DeleteAlarm>()(alarmId) }
         }

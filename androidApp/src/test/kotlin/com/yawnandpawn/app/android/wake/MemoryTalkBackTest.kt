@@ -9,7 +9,6 @@ import androidx.compose.ui.test.hasContentDescription
 import androidx.compose.ui.test.hasText
 import androidx.compose.ui.test.junit4.createEmptyComposeRule
 import androidx.compose.ui.test.performClick
-import androidx.test.core.app.ActivityScenario
 import com.yawnandpawn.app.StopAppRule
 import com.yawnandpawn.app.core.alarm.AlarmFired
 import com.yawnandpawn.app.core.alarm.AlarmRepository
@@ -19,6 +18,7 @@ import com.yawnandpawn.app.core.checks.CheckType
 import com.yawnandpawn.app.core.checks.Difficulty
 import com.yawnandpawn.app.core.error.Outcome
 import com.yawnandpawn.app.core.session.SessionState
+import com.yawnandpawn.app.launchActivity
 import com.yawnandpawn.app.testing.FakeAccessibilityState
 import com.yawnandpawn.app.testing.anAlarm
 import com.yawnandpawn.app.testing.checkConfigsOf
@@ -67,12 +67,10 @@ class MemoryTalkBackTest {
         assertEquals(Outcome.Success(Unit), runBlocking { checks.saveWithAlarm(alarm, checkConfigsOf(alarm.id, listOf(memory))) })
         app.ring(AlarmFired(alarm.id, Instant.parse("2027-03-08T06:00:00Z")))
         app.awaitRinging()
-        ActivityScenario.launch<WakeActivity>(Intent(app.app, WakeActivity::class.java)).use {
+        launchActivity<WakeActivity>(Intent(app.app, WakeActivity::class.java)).use {
             composeRule.onNode(hasText("I'm up") and hasClickAction()).performClick()
-            composeRule.mainClock.autoAdvance = false // The sequence stays on its first step while the test reads it.
-            // The engine moves on its own; the screen's clock moves only frame by frame, so the sequence does not play on.
-            app.awaitUntil("Grace") { app.engine.state.value is SessionState.Grace }
-            repeat(FRAMES_TO_SHOW) { composeRule.mainClock.advanceTimeByFrame() }
+            // The sequence stays on its first step: its steps wait on delays the test clock only runs when advanced.
+            composeRule.awaitScreen(app, "Grace") { app.engine.state.value is SessionState.Grace }
             composeRule.onNode(hasText("Watch the sequence")).assertExists()
             val type =
                 (app.engine.state.value as SessionState.Grace)
@@ -80,7 +78,6 @@ class MemoryTalkBackTest {
                     .single()
                     .type
             block(type)
-            composeRule.mainClock.autoAdvance = true
         }
     }
 
@@ -105,9 +102,6 @@ class MemoryTalkBackTest {
         }
 
     private companion object {
-        /** A few frames (well under the 350 ms first step) to draw the Check screen. */
-        const val FRAMES_TO_SHOW = 3
-
         /** "3, 7, 1, 9": the round's tiles as numbers. */
         val SEQUENCE = Regex("""^\d+(, \d+)+$""")
     }

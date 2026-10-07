@@ -13,6 +13,7 @@ import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performScrollTo
 import androidx.test.core.app.ActivityScenario
 import androidx.test.core.app.ApplicationProvider
+import com.yawnandpawn.app.APP_WORK_TIMEOUT_MILLIS
 import com.yawnandpawn.app.StopAppRule
 import com.yawnandpawn.app.ui.format.formatMoney
 import com.yawnandpawn.app.ui.theme.PpsThemeMode
@@ -210,6 +211,6 @@ class Round3TapThroughTest {
     }
 
     private companion object {
-        const val WAIT_MILLIS = 5_000L
+        const val WAIT_MILLIS = APP_WORK_TIMEOUT_MILLIS
     }
 }

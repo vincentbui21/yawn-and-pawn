@@ -8,6 +8,7 @@ import androidx.compose.ui.test.junit4.createEmptyComposeRule
 import androidx.compose.ui.test.onNodeWithText
 import com.yawnandpawn.app.MainActivity
 import com.yawnandpawn.app.StopAppRule
+import com.yawnandpawn.app.buildActivity
 import com.yawnandpawn.app.core.alarm.AlarmFired
 import com.yawnandpawn.app.core.alarm.AlarmRepository
 import com.yawnandpawn.app.core.error.Outcome
@@ -21,7 +22,6 @@ import kotlinx.coroutines.runBlocking
 import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
-import org.robolectric.Robolectric
 import org.robolectric.RobolectricTestRunner
 import org.robolectric.Shadows.shadowOf
 import org.robolectric.android.controller.ServiceController
@@ -80,7 +80,7 @@ class LeaveAndReturnTest {
     fun `leaving the wake screen keeps the service in the foreground and the sound playing, and starts no activity`() {
         val app = WakeApp()
         val service = ring(app)
-        val screen = Robolectric.buildActivity(WakeActivity::class.java).setup()
+        val screen = buildActivity(WakeActivity::class.java).setup()
         startedActivities(app)
 
         // Home, Recents or another app: the wake screen is paused and stopped.
@@ -115,7 +115,7 @@ class LeaveAndReturnTest {
         }
         // The platform keeps one instance (singleTask in its own task, WakeActivityTest checks the manifest); tapped
         // three times, the open screen gets the intent again and still shows the current state.
-        val screen = Robolectric.buildActivity(WakeActivity::class.java).setup()
+        val screen = buildActivity(WakeActivity::class.java).setup()
         repeat(3) {
             notification.contentIntent.send()
             val tap = startedActivities(app).single()
@@ -236,7 +236,7 @@ class LeaveAndReturnTest {
         ring(app)
         startedActivities(app)
 
-        val main = Robolectric.buildActivity(MainActivity::class.java).setup()
+        val main = buildActivity(MainActivity::class.java).setup()
         var forwarded: List<Intent> = emptyList()
         app.awaitUntil("the app opens the wake screen") {
             forwarded = forwarded + startedActivities(app)
@@ -258,7 +258,7 @@ class LeaveAndReturnTest {
         assertEquals(SessionState.Idle, app.engine.state.value)
         startedActivities(app)
 
-        Robolectric.buildActivity(MainActivity::class.java).setup()
+        buildActivity(MainActivity::class.java).setup()
 
         app.awaitUntil("the app opens the wake screen") { startedActivities(app).any(::isWakeScreen) }
     }
@@ -266,7 +266,7 @@ class LeaveAndReturnTest {
     @Test
     fun `a ring that starts while the app is open hands over to the wake screen`() {
         val app = WakeApp()
-        Robolectric.buildActivity(MainActivity::class.java).setup()
+        buildActivity(MainActivity::class.java).setup()
         app.awaitUntil("the main looper settles") { true }
         assertEquals(emptyList(), startedActivities(app).filter(::isWakeScreen))
 
@@ -285,7 +285,7 @@ class LeaveAndReturnTest {
     fun `opening the app with no session shows the app and never opens the wake screen`() {
         val app = WakeApp()
 
-        Robolectric.buildActivity(MainActivity::class.java).setup()
+        buildActivity(MainActivity::class.java).setup()
         app.awaitUntil("the main looper settles") { true }
 
         assertEquals(emptyList(), startedActivities(app).filter(::isWakeScreen))

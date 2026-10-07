@@ -4,10 +4,12 @@ import android.app.AlarmManager
 import androidx.compose.ui.test.junit4.createEmptyComposeRule
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
+import com.yawnandpawn.app.APP_WORK_TIMEOUT_MILLIS
 import com.yawnandpawn.app.StopAppRule
 import com.yawnandpawn.app.android.AlarmFiredReceiver
 import com.yawnandpawn.app.android.ApplicationScope
 import com.yawnandpawn.app.awaitChildren
+import com.yawnandpawn.app.buildActivity
 import com.yawnandpawn.app.core.alarm.AlarmRepository
 import com.yawnandpawn.app.core.alarm.RequestCodes
 import com.yawnandpawn.app.core.alarm.SetAlarmEnabled
@@ -22,7 +24,6 @@ import kotlinx.coroutines.runBlocking
 import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
-import org.robolectric.Robolectric
 import org.robolectric.RobolectricTestRunner
 import org.robolectric.Shadows.shadowOf
 import org.robolectric.annotation.Config
@@ -82,14 +83,14 @@ class OneTimeAlarmFlowTest {
         assertTrue(app.lastMediaPlayer().isReallyPlaying, "the sound plays")
 
         // "I'm up" on the wake screen, then the Math check (Story 3.2) solved, ends the session.
-        val screen = Robolectric.buildActivity(WakeActivity::class.java).setup().get()
+        val screen = buildActivity(WakeActivity::class.java).setup().get()
         composeRule.onNodeWithText("I'm up").performClick()
         app.awaitUntil("the check starts") { app.engine.state.value is SessionState.Grace }
         app.solveCheck()
         // Story 3.3: the Success screen for the session, then "Done" closes the wake screen.
         composeRule.awaitSuccess(app, "Up on time.")
         composeRule.onNodeWithText("Done").performClick()
-        composeRule.waitUntil(timeoutMillis = 5_000) { screen.isFinishing }
+        composeRule.waitUntil(timeoutMillis = APP_WORK_TIMEOUT_MILLIS) { screen.isFinishing }
         app.awaitUntil("the ring stops") { app.player.sound == null }
 
         assertEquals(false, runBlocking { repository.get(once.id).valueOrNull()?.enabled }, "the one-time alarm is off")

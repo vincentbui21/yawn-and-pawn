@@ -61,10 +61,7 @@ class MemoryWakeCheckTest {
         app: WakeApp,
         what: String,
         condition: () -> Boolean,
-    ) = app.awaitUntil(what) {
-        composeRule.waitForIdle()
-        condition()
-    }
+    ) = composeRule.awaitScreen(app, what, condition)
 
     /** Lets the sequence play (350 ms lit, 150 ms gaps) until it is the user's turn. */
     private fun awaitYourTurn(app: WakeApp) =

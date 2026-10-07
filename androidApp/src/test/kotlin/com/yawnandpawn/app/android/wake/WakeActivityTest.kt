@@ -14,10 +14,11 @@ import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.unit.dp
-import androidx.test.core.app.ActivityScenario
+import com.yawnandpawn.app.APP_WORK_TIMEOUT_MILLIS
 import com.yawnandpawn.app.StopAppRule
 import com.yawnandpawn.app.android.ApplicationScope
 import com.yawnandpawn.app.awaitChildren
+import com.yawnandpawn.app.buildActivity
 import com.yawnandpawn.app.core.alarm.Alarm
 import com.yawnandpawn.app.core.alarm.AlarmRepository
 import com.yawnandpawn.app.core.error.DomainError
@@ -31,6 +32,7 @@ import com.yawnandpawn.app.core.session.SessionEvent
 import com.yawnandpawn.app.core.session.SessionState
 import com.yawnandpawn.app.core.session.StoredSession
 import com.yawnandpawn.app.core.time.TimeZoneProvider
+import com.yawnandpawn.app.launchActivity
 import com.yawnandpawn.app.testing.FakeActiveSessionStore
 import com.yawnandpawn.app.testing.FakeAlarmRepository
 import com.yawnandpawn.app.testing.FakeSessionHistoryRepository
@@ -44,7 +46,6 @@ import kotlinx.datetime.toLocalDateTime
 import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
-import org.robolectric.Robolectric
 import org.robolectric.RobolectricTestRunner
 import org.robolectric.Shadows.shadowOf
 import org.robolectric.annotation.Config
@@ -90,7 +91,7 @@ class WakeActivityTest {
         assertIs<SessionState.Ringing>(app.engine.state.value)
     }
 
-    private fun launch(app: WakeApp) = ActivityScenario.launch<WakeActivity>(Intent(app.app, WakeActivity::class.java))
+    private fun launch(app: WakeApp) = launchActivity<WakeActivity>(Intent(app.app, WakeActivity::class.java))
 
     private fun imUp() = composeRule.onNodeWithText("I'm up")
 
@@ -124,7 +125,7 @@ class WakeActivityTest {
         val app = WakeApp()
         ringing(app)
 
-        val activity = Robolectric.buildActivity(WakeActivity::class.java).setup().get()
+        val activity = buildActivity(WakeActivity::class.java).setup().get()
 
         assertTrue(shadowOf(activity).showWhenLocked)
         assertTrue(shadowOf(activity).turnScreenOn)
@@ -140,7 +141,7 @@ class WakeActivityTest {
         val app = WakeApp()
         ringing(app)
 
-        val activity = Robolectric.buildActivity(WakeActivity::class.java).setup().get()
+        val activity = buildActivity(WakeActivity::class.java).setup().get()
 
         @Suppress("DEPRECATION")
         val flags = WindowManager.LayoutParams.FLAG_SHOW_WHEN_LOCKED or WindowManager.LayoutParams.FLAG_TURN_SCREEN_ON
@@ -207,7 +208,7 @@ class WakeActivityTest {
         val notifications = shadowOf(app.app.getSystemService(NotificationManager::class.java))
         assertEquals(1, notifications.size(), "the ringing notification")
 
-        val activity = Robolectric.buildActivity(WakeActivity::class.java).setup().get()
+        val activity = buildActivity(WakeActivity::class.java).setup().get()
         imUp().performClick()
 
         // The compose clock drives the recomposition that answers the placeholder step; Success follows (Story 3.3).
@@ -224,7 +225,7 @@ class WakeActivityTest {
     fun `a forgotten alarm stopped as Missed closes the wake screen`() {
         val app = WakeApp()
         ringing(app)
-        val activity = Robolectric.buildActivity(WakeActivity::class.java).setup().get()
+        val activity = buildActivity(WakeActivity::class.java).setup().get()
         composeRule.waitForIdle()
 
         // 30 minutes pass with no interaction, then the wake service's deadline tick runs (Story 1.16).
@@ -232,7 +233,9 @@ class WakeActivityTest {
         val tick = app.koin.get<ApplicationScope>().launch { app.engine.tick() }
         app.awaitUntil("the tick runs") { tick.isCompleted }
 
-        composeRule.waitUntil(timeoutMillis = 10_000) { app.engine.state.value == SessionState.Idle && activity.isFinishing }
+        composeRule.waitUntil(
+            timeoutMillis = APP_WORK_TIMEOUT_MILLIS,
+        ) { app.engine.state.value == SessionState.Idle && activity.isFinishing }
     }
 
     @Test
@@ -274,7 +277,7 @@ class WakeActivityTest {
         app.dispatch(SessionEvent.ImUpTapped)
         assertIs<SessionState.Grace>(app.engine.state.value)
 
-        Robolectric.buildActivity(WakeActivity::class.java).setup().get()
+        buildActivity(WakeActivity::class.java).setup().get()
 
         app.awaitUntil("the session ends") { app.engine.state.value == SessionState.Idle }
         composeRule.awaitSuccess(app, "Up on time.")
@@ -290,8 +293,8 @@ class WakeActivityTest {
         store.inner.commitFailure = DomainError.StorageFailure("disk full")
         val callsBefore = store.calls.get()
 
-        Robolectric.buildActivity(WakeActivity::class.java).setup().get()
-        composeRule.waitUntil(timeoutMillis = 10_000) { store.calls.get() > callsBefore }
+        buildActivity(WakeActivity::class.java).setup().get()
+        composeRule.waitUntil(timeoutMillis = APP_WORK_TIMEOUT_MILLIS) { store.calls.get() > callsBefore }
         assertIs<SessionState.Grace>(app.engine.state.value, "the failed answer changed nothing")
         store.inner.commitFailure = null
 
@@ -304,7 +307,7 @@ class WakeActivityTest {
         val app = WakeApp()
         val at = aSessionConfig().scheduledAt
         app.koin.get<WakeNotifier>().show(at)
-        val activity = Robolectric.buildActivity(WakeActivity::class.java).setup().get()
+        val activity = buildActivity(WakeActivity::class.java).setup().get()
 
         imUp().performClick()
         composeRule.waitForIdle()
@@ -323,7 +326,7 @@ class WakeActivityTest {
         app.awaitUntil("the session is restored") { restore.isCompleted }
         assertIs<SessionState.Loud>(app.engine.state.value)
 
-        Robolectric.buildActivity(WakeActivity::class.java).setup().get()
+        buildActivity(WakeActivity::class.java).setup().get()
 
         app.awaitUntil("the session ends") { app.engine.state.value == SessionState.Idle }
         composeRule.awaitSuccess(app, "Up on time.")
@@ -335,7 +338,7 @@ class WakeActivityTest {
         val at = Instant.parse("2027-03-03T06:15:00Z")
         app.runtime.startEmergency(at, volumePercent = 80, cause = "commit failed")
 
-        val activity = Robolectric.buildActivity(WakeActivity::class.java).setup().get()
+        val activity = buildActivity(WakeActivity::class.java).setup().get()
         composeRule.onNodeWithContentDescription(alarmTime(app, at = at)).assertExists()
         composeRule.onNodeWithContentDescription("Snooze unavailable, prices not loaded yet").assertExists()
         imUp().performClick()
@@ -343,7 +346,7 @@ class WakeActivityTest {
 
         assertNull(app.runtime.emergency.value)
         assertNull(app.player.sound)
-        composeRule.waitUntil(timeoutMillis = 5_000) { activity.isFinishing }
+        composeRule.waitUntil(timeoutMillis = APP_WORK_TIMEOUT_MILLIS) { activity.isFinishing }
     }
 
     @Test
@@ -352,7 +355,7 @@ class WakeActivityTest {
         val at = Instant.parse("2027-03-03T06:30:00Z")
         app.koin.get<WakeNotifier>().show(at)
 
-        val activity = Robolectric.buildActivity(WakeActivity::class.java).setup().get()
+        val activity = buildActivity(WakeActivity::class.java).setup().get()
 
         composeRule.onNodeWithContentDescription(alarmTime(app, at = at)).assertExists()
         assertFalse(activity.isFinishing, "still Idle: it waits for the session")
@@ -362,7 +365,7 @@ class WakeActivityTest {
     fun `opened by the full-screen intent before the session starts it waits, shows the session and Success when it ends`() {
         val app = WakeApp()
 
-        val activity = Robolectric.buildActivity(WakeActivity::class.java).setup().get()
+        val activity = buildActivity(WakeActivity::class.java).setup().get()
         composeRule.waitForIdle()
         assertFalse(activity.isFinishing, "still Idle: it waits for the session")
         ringing(app)

@@ -5,6 +5,7 @@ import android.content.Intent
 import android.os.Looper
 import androidx.compose.ui.test.junit4.createEmptyComposeRule
 import com.yawnandpawn.app.StopAppRule
+import com.yawnandpawn.app.buildActivity
 import com.yawnandpawn.app.core.alarm.AlarmFired
 import com.yawnandpawn.app.core.alarm.AlarmRepository
 import com.yawnandpawn.app.core.alarm.RequestCodes
@@ -16,7 +17,6 @@ import kotlinx.coroutines.runBlocking
 import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
-import org.robolectric.Robolectric
 import org.robolectric.RobolectricTestRunner
 import org.robolectric.Shadows.shadowOf
 import org.robolectric.annotation.Config
@@ -60,8 +60,7 @@ class NoHostageBackgroundTest {
         assertEquals(Outcome.Success(Unit), runBlocking { app.koin.get<AlarmRepository>().upsert(alarm) })
         val service = app.ring(AlarmFired(alarm.id, Instant.parse("2027-03-08T06:00:00Z")))
         app.awaitRinging()
-        Robolectric
-            .buildActivity(WakeActivity::class.java)
+        buildActivity(WakeActivity::class.java)
             .setup()
             .pause()
             .stop()

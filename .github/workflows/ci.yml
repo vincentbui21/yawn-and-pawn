@@ -94,10 +94,18 @@ jobs:
           sudo udevadm control --reload-rules
           sudo udevadm trigger --name-match=kvm
 
+      # The Gradle daemon (-Xmx4g) and the Kotlin daemon (-Xmx3g) left over from the quality gate and the release bundle
+      # hold several GB the emulator needs: with them running, the runner killed this step (exit 143) during emulator
+      # boot. Stop them first and run without a daemon, compiling Kotlin in the build process with a smaller heap.
       - name: Smoke test on a managed device (ATD, API 34)
         run: |
           set -o pipefail
-          ./gradlew :androidApp:atdApi34DebugAndroidTest \
+          ./gradlew --stop || true
+          pkill -f KotlinCompileDaemon || true
+          free -m
+          ./gradlew :androidApp:atdApi34DebugAndroidTest --no-daemon \
+            -Dorg.gradle.jvmargs="-Xmx3g -Dfile.encoding=UTF-8" \
+            -Pkotlin.compiler.execution.strategy=in-process \
             -Pandroid.testoptions.manageddevices.emulator.gpu=swiftshader_indirect \
             2>&1 | tee "$LOG_DIR/managedDevice.log"
 
@@ -120,6 +128,8 @@ jobs:
             echo "Test, lint and screenshot reports are attached as the \`reports\` artifact."
           } >> "$GITHUB_STEP_SUMMARY"
           for task in $failed; do echo "::error title=Gradle task failed::$task"; done
+          # Memory and disk at the failure, for a step the runner killed (exit 143) without a Gradle error.
+          free -m; df -h /
 
       - name: Upload reports
         if: failure()

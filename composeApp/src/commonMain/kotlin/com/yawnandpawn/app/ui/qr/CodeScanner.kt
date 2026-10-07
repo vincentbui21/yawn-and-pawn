@@ -63,6 +63,12 @@ sealed interface ScanEvent {
     data object Frame : ScanEvent
 
     /**
+     * The camera reported itself open (Story 3.11 review): each time it opens, also after another app let it go. The
+     * wake check's watchdog counts the first frame's 5 s from here, so a slow cold start is not a dead camera.
+     */
+    data object Opened : ScanEvent
+
+    /**
      * The camera cannot be used, for [problem] (Story 3.11): the permission is missing, the camera could not be started
      * or failed (in use, disabled by policy or the privacy toggle when the system refuses it, a fatal error), or the
      * frames keep failing to decode. A [CameraProblem.sticky] problem ended the scan and released the camera; any other

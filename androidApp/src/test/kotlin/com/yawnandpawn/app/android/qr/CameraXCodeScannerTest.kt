@@ -59,6 +59,13 @@ class CameraXCodeScannerTest {
     private val logger = FakeLogger()
     private val events = mutableListOf<ScanEvent>()
 
+    /** How many times the camera reported itself open ([ScanEvent.Opened], kept out of [events]). */
+    private var opens = 0
+
+    private fun record(event: ScanEvent) {
+        if (event == ScanEvent.Opened) opens++ else events += event
+    }
+
     private class FakeDecoder(
         private val reading: FrameDecoder = FrameDecoder { _, done -> done(emptyList()) },
     ) : CloseableFrameDecoder {
@@ -114,7 +121,7 @@ class CameraXCodeScannerTest {
         block: (View) -> Unit = {},
     ) {
         ActivityScenario.launch(MainActivity::class.java).use { scenario ->
-            scenario.onActivity { it.setContent { scanner.Feed(torchOn = true, onEvent = { event -> events += event }) } }
+            scenario.onActivity { it.setContent { scanner.Feed(torchOn = true, onEvent = ::record) } }
             composeRule.waitForIdle()
             scenario.onActivity { block(it.window.decorView) }
         }
@@ -222,7 +229,7 @@ class CameraXCodeScannerTest {
         ActivityScenario.launch(MainActivity::class.java).use { scenario ->
             scenario.onActivity {
                 it.setContent {
-                    scanner.Scan(torchOn = false, onEvent = { event -> events += event })
+                    scanner.Scan(torchOn = false, onEvent = ::record)
                     if (shown) scanner.Preview()
                 }
             }
@@ -248,6 +255,43 @@ class CameraXCodeScannerTest {
             assertEquals(1, cameras.started, "the picture comes and goes; the camera stays")
             assertEquals(0, cameras.released)
         }
+        assertEquals(emptyList(), events)
+    }
+
+    @Test
+    fun `each time the camera opens it says so and lights the torch as the switch shows (screen off and on, review)`() {
+        granted()
+        val cameras = FakeCameras()
+        feed(CameraXCodeScanner(app, logger, cameras, decoder = { FakeDecoder() })) {
+            assertEquals(1, opens)
+            assertEquals(listOf(true), cameras.torch, "lit once the camera is open")
+
+            // The screen goes off: CameraX closes the camera at ON_STOP and opens it again at ON_START, torch off.
+            cameras.state.value = CameraState.create(CameraState.Type.CLOSED)
+            cameras.state.value = CameraState.create(CameraState.Type.OPEN)
+            composeRule.waitForIdle()
+            assertEquals(2, opens)
+            assertEquals(listOf(true, true), cameras.torch, "lit again on the open")
+            assertEquals(1, cameras.started)
+        }
+    }
+
+    @Test
+    fun `a scan composed, removed and composed again binds twice and lights the torch on each (review)`() {
+        granted()
+        val cameras = FakeCameras()
+        val scanner = CameraXCodeScanner(app, logger, cameras, decoder = { FakeDecoder() })
+        var scanning by mutableStateOf(true)
+        ActivityScenario.launch(MainActivity::class.java).use { scenario ->
+            scenario.onActivity { it.setContent { if (scanning) scanner.Scan(torchOn = true, onEvent = ::record) } }
+            composeRule.waitForIdle()
+            scanning = false
+            composeRule.waitForIdle()
+            scanning = true
+            composeRule.waitForIdle()
+        }
+        assertEquals(2, cameras.started)
+        assertEquals(listOf(true, true), cameras.torch)
         assertEquals(emptyList(), events)
     }
 

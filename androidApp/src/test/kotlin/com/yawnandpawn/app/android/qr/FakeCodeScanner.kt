@@ -23,6 +23,8 @@ import com.yawnandpawn.app.ui.qr.ScanResult
  */
 internal class FakeCodeScanner(
     var permitted: Boolean = true,
+    /** Each started camera reports itself open at once, as a quick CameraX start does; else the test calls [open]. */
+    private val opensAtOnce: Boolean = true,
 ) : CodeScanner {
     private var listener: ((ScanEvent) -> Unit)? = null
     private val consecutive = ConsecutiveFrames()
@@ -63,6 +65,7 @@ internal class FakeCodeScanner(
         DisposableEffect(Unit) {
             starts++
             listener = { events(it) }
+            if (opensAtOnce) open()
             onDispose {
                 stops++
                 listener = null
@@ -95,6 +98,9 @@ internal class FakeCodeScanner(
     ) {
         repeat(count) { consecutive.frame(codes.toList())?.let(::emit) }
     }
+
+    /** The camera reports itself open (CameraX's `OPEN` state). */
+    fun open() = emit(ScanEvent.Opened)
 
     /** The analyser's heartbeat: frames arrive. */
     fun heartbeat() = emit(ScanEvent.Frame)

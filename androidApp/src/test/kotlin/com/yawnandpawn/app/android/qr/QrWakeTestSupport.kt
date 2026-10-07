@@ -25,6 +25,7 @@ import com.yawnandpawn.app.core.session.FallbackRequest
 import com.yawnandpawn.app.core.session.SessionData
 import com.yawnandpawn.app.core.session.SessionEvent
 import com.yawnandpawn.app.core.session.SessionState
+import com.yawnandpawn.app.testing.FakeClock
 import com.yawnandpawn.app.testing.FakeMonotonicClock
 import com.yawnandpawn.app.testing.aSessionConfig
 import com.yawnandpawn.app.ui.qr.ScanResult
@@ -57,17 +58,29 @@ internal class QrWake(
     val scanner: FakeCodeScanner = FakeCodeScanner(),
     val monotonic: FakeMonotonicClock = FakeMonotonicClock(elapsedMillis = START_MILLIS),
     val fallback: RecordingFallbackPolicy = RecordingFallbackPolicy(),
+    /** The wall clock, for a test that moves it; the system's otherwise. */
+    wall: FakeClock? = null,
 ) {
-    val app = WakeApp(scanner = scanner, monotonic = monotonic, fallback = fallback)
+    val app = WakeApp(scanner = scanner, monotonic = monotonic, fallback = fallback, clock = wall)
 
     val toothpaste = ScanResult(CodeFormat.Ean13, "4006381333931")
     val code: RegisteredCode = assertNotNull(RegisteredCode.of(toothpaste.format, toothpaste.rawValue))
 
-    /** A ring on a QR/Barcode entry with the toothpaste registered. */
-    fun ring(sessionId: String = "session-qr") {
-        val plan = CheckPlan(CheckMode.All, listOf(CheckEntry(CheckType.QrBarcode, Difficulty.Medium, 1, code = code)))
+    /** A ring on a QR/Barcode entry with [codes] registered, one entry each (by default the toothpaste). */
+    fun ring(
+        sessionId: String = "session-qr",
+        codes: List<RegisteredCode> = listOf(code),
+    ) {
+        val plan = CheckPlan(CheckMode.All, codes.map { CheckEntry(CheckType.QrBarcode, Difficulty.Medium, 1, code = it) })
         app.dispatch(SessionEvent.AlarmFired(sessionId, aSessionConfig().copy(checkPlan = plan), beforeFirstUnlock = false))
         assertIs<SessionState.Ringing>(app.engine.state.value)
+    }
+
+    /** Opens the Fallback check picker from the link. */
+    fun openPicker() {
+        composeRule.onNodeWithText(LINK).performClick()
+        composeRule.waitForIdle()
+        composeRule.onNodeWithText("Pick a fallback check").assertExists()
     }
 
     fun launch(): ActivityScenario<WakeActivity> = ActivityScenario.launch(Intent(app.app, WakeActivity::class.java))

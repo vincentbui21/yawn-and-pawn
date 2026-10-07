@@ -136,6 +136,52 @@ class QrLifecycleTest {
         }
     }
 
+    @Test
+    fun `the permission is read again on each resume, also in Loud - revoked while paused, the message and link show at once (review)`() {
+        val wake = QrWake(composeRule)
+        wake.ring()
+        wake.launch().use { scenario ->
+            wake.imUp()
+            wake.heartbeatAt(START_MILLIS, GRACE_OVER)
+            wake.app.dispatch(SessionEvent.GraceElapsed)
+            wake.app.awaitUntil("Loud") {
+                composeRule.waitForIdle()
+                wake.app.engine.state.value is SessionState.Loud
+            }
+            scenario.moveToState(Lifecycle.State.STARTED)
+            composeRule.waitForIdle()
+            wake.scanner.permitted = false // Revoked in the system settings while the screen was away.
+            scenario.moveToState(Lifecycle.State.RESUMED)
+            composeRule.waitForIdle()
+
+            composeRule.onNodeWithText(UNAVAILABLE).assertExists()
+            composeRule.onNodeWithText(QrWake.LINK).assertExists()
+            assertEquals(1, wake.scanner.starts, "no camera without the permission")
+        }
+    }
+
+    @Test
+    fun `a session restored after a kill without the permission shows the message and the link at once, with no camera (review)`() {
+        val first = QrWake(composeRule)
+        first.ring()
+        first.app.dispatch(SessionEvent.ImUpTapped)
+        first.monotonic.set(START_MILLIS + GRACE_OVER)
+        first.app.dispatch(SessionEvent.GraceElapsed)
+        repeat(2) { first.app.dispatch(SessionEvent.CheckAnswerSubmitted(assertNotNull(wrongAnswer(first.run())))) }
+
+        val wake = QrWake(composeRule, scanner = FakeCodeScanner(permitted = false), monotonic = first.monotonic)
+        wake.launch().use {
+            wake.app.awaitUntil("restored") {
+                composeRule.waitForIdle()
+                wake.app.engine.state.value is SessionState.Loud
+            }
+            composeRule.onNodeWithText(UNAVAILABLE).assertExists()
+            composeRule.onNodeWithText(QrWake.LINK).assertExists()
+            assertEquals(2, wake.run().failedAttempts)
+            assertEquals(0, wake.scanner.starts)
+        }
+    }
+
     private companion object {
         /** Past the default 20 s grace window. */
         const val GRACE_OVER = 25_000L

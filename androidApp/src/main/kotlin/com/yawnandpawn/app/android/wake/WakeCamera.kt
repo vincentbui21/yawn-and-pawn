@@ -56,12 +56,19 @@ internal class WakeCamera(
     var watching = false
         private set
 
-    /** Follows [next]: a new entry gets a new monitor, bound at once while watching. */
+    /** The running camera reported itself open since the last resume. */
+    private var cameraOpen = false
+
+    /** Follows [next]: a new entry gets a new monitor, bound at once while watching (and open if the camera is). */
     fun follow(next: CameraEntry?) {
         if (next == entry) return
         entry = next
         monitor = CameraMonitor()
-        if (watching) monitor.bound(monotonicClock.elapsedMillis())
+        if (watching) {
+            val now = monotonicClock.elapsedMillis()
+            monitor.bound(now)
+            if (cameraOpen) monitor.opened(now)
+        }
         publish()
     }
 
@@ -76,15 +83,31 @@ internal class WakeCamera(
      */
     fun watch(resumed: Boolean) {
         watching = resumed
+        cameraOpen = false
         if (resumed) update { monitor.bound(it) }
     }
 
-    /** What the scanner reported: a code (the camera works), a heartbeat or a problem. */
+    /** What the scanner reported: a code (the camera works), a heartbeat, the camera open, or a problem. */
     fun onEvent(event: ScanEvent) =
         when (event) {
-            is ScanEvent.Detected -> update { monitor.code(it) }
-            ScanEvent.Frame -> update { monitor.frame(it) }
-            is ScanEvent.CameraUnavailable -> update { monitor.problem(event.problem) }
+            is ScanEvent.Detected -> {
+                update { monitor.code(it) }
+            }
+
+            ScanEvent.Frame -> {
+                update { monitor.frame(it) }
+            }
+
+            ScanEvent.Opened -> {
+                update {
+                    cameraOpen = true
+                    monitor.opened(it)
+                }
+            }
+
+            is ScanEvent.CameraUnavailable -> {
+                update { monitor.problem(event.problem) }
+            }
         }
 
     /** The watchdog's tick, only while [watching]. */

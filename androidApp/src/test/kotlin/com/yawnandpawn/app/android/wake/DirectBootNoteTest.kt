@@ -20,6 +20,7 @@ import com.yawnandpawn.app.core.session.SessionState
 import com.yawnandpawn.app.testing.FakeUserLockState
 import com.yawnandpawn.app.testing.aRegisteredCode
 import com.yawnandpawn.app.testing.aSessionConfig
+import com.yawnandpawn.app.testing.rightAnswer
 import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -29,6 +30,7 @@ import org.robolectric.annotation.GraphicsMode
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
 import kotlin.test.assertIs
+import kotlin.test.assertNotNull
 
 /**
  * Story 3.11 (with Story 2.3's Direct Boot): a QR/Barcode alarm that rings before the first unlock rings as Math, and the
@@ -107,6 +109,29 @@ class DirectBootNoteTest {
     }
 
     @Test
+    fun `All with QR then Word rung locked - the note stays on the Word step after the swapped Math is solved (review)`() {
+        val app = WakeApp(userLock = FakeUserLockState(unlocked = false))
+        val word = CheckEntry(CheckType.WordUnscramble, Difficulty.Easy, 1)
+        val plan = CheckPlan(CheckMode.All, qrPlan.entries + word)
+        app.dispatch(SessionEvent.AlarmFired("session-locked", aSessionConfig().copy(checkPlan = plan), beforeFirstUnlock = true))
+        ActivityScenario.launch<WakeActivity>(Intent(app.app, WakeActivity::class.java)).use {
+            imUp(app)
+            repeat(MATH_ITEMS) {
+                val run = assertIs<SessionState.Active>(app.engine.state.value).session.checkRun
+                if (run.step.entry == 0) app.dispatch(SessionEvent.CheckAnswerSubmitted(assertNotNull(rightAnswer(run))))
+            }
+            app.awaitUntil("the Word step") {
+                composeRule.waitForIdle()
+                assertIs<SessionState.Active>(app.engine.state.value)
+                    .session.checkRun.currentEntry
+                    ?.type == CheckType.WordUnscramble
+            }
+            composeRule.onNodeWithText("Shuffle").assertExists()
+            composeRule.onNodeWithText(note).assertExists()
+        }
+    }
+
+    @Test
     fun `a call during the locked ring shows the call note, and the Direct Boot note comes back after it`() {
         var inCall = false
         val calls =
@@ -134,5 +159,10 @@ class DirectBootNoteTest {
             }
             composeRule.onNodeWithText(note).assertExists()
         }
+    }
+
+    private companion object {
+        /** The Direct Boot Math has 3 problems (Math · Medium · 3). */
+        const val MATH_ITEMS = 3
     }
 }

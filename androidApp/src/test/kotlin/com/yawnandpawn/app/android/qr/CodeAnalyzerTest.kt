@@ -103,6 +103,27 @@ class CodeAnalyzerTest {
     }
 
     @Test
+    fun `the heartbeat boundary - a beat at 1000, none at 1499, the next at 1500 (review)`() {
+        var now = 1_000L
+        var beats = 0
+        val analyzer =
+            CodeAnalyzer(
+                decoder = { _, done -> done(emptyList()) },
+                onStable = {},
+                onFrame = { beats++ },
+                elapsedMillis = { now },
+            )
+        analyzer.analyze(Frame().proxy)
+        assertEquals(1, beats, "at 1000")
+        now = 1_499
+        analyzer.analyze(Frame().proxy)
+        assertEquals(1, beats, "at 1499")
+        now = 1_500
+        analyzer.analyze(Frame().proxy)
+        assertEquals(2, beats, "at 1500")
+    }
+
+    @Test
     fun `a frame is closed only when its decoding is done, and a decoder that throws still closes it`() {
         var pending: ((List<ScanResult>?) -> Unit)? = null
         val waiting = Frame()

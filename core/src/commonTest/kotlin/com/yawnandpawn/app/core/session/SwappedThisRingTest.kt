@@ -124,6 +124,24 @@ class SwappedThisRingTest {
     }
 
     @Test
+    fun `a locked ring restored unlocked after a kill keeps its swapped Math and the note (review)`() {
+        val locked = fired(plan(CheckMode.All, qr), locked = true)
+        val restored = reducer.reduce(SessionState.Loud(locked), SessionEvent.ProcessRestored, T0, userLocked = false).state
+        val session = assertIs<SessionState.Active>(restored).session
+        assertFalse(session.directBootRing, "restored unlocked")
+        assertEquals(listOf(DirectBootSubstitution.DIRECT_BOOT_CHECK), session.checkRun.plan.entries, "Math stays mid-ring")
+        assertTrue(DirectBootSubstitution.swappedThisRing(session), "so the note stays with it")
+    }
+
+    @Test
+    fun `the note stays on every entry of the swapped ring, also after the swapped Math is passed`() {
+        val locked = fired(plan(CheckMode.All, qr, word), locked = true)
+        val onWord = locked.copy(checkRun = locked.checkRun.copy(step = StepPointer(entry = 1)))
+        assertEquals(CheckType.WordUnscramble, onWord.checkRun.currentEntry?.type)
+        assertTrue(DirectBootSubstitution.swappedThisRing(onWord))
+    }
+
+    @Test
     fun `no note once the fallback replaced the check, and none for a QR entry with no code (already Math)`() {
         val locked = fired(plan(CheckMode.All, qr), locked = true)
         val fallback = locked.copy(checkRun = locked.checkRun.copy(fallbackUsed = true))

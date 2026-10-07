@@ -4,7 +4,7 @@ type: 'feature'
 created: '2026-10-07'
 status: 'done'
 baseline_revision: '47a24a3'
-review_loop_iteration: 0
+review_loop_iteration: 1
 followup_review_recommended: false
 context:
   - '{project-root}/_bmad-output/implementation-artifacts/epic-3-context.md'
@@ -259,6 +259,33 @@ Status: implemented in fast mode (one agent), stacked on Story 3.10 (`47a24a3`).
 - `./gradlew qualityGate :androidApp:assembleDebugAndroidTest --no-daemon` gives BUILD SUCCESSFUL.
 - `git status --porcelain androidApp/src/test/screenshots/preview` is empty.
 - Earlier gate runs on the shared PC, with other lanes building at the same time, failed once each on tests this story does not touch: `RingingSemanticsTest` ("Failed to capture a node to bitmap"), `SuccessScreenTest` and `AlarmScreensScreenshotTest` (timing). Each passed when run alone, and the whole `:androidApp:testDebugUnitTest` then passed. Watch for this in CI.
+
+## Review (2 reviewers, fast mode)
+
+Two reviewers (verification gaps and edge cases) read `c83296f`. All 20 items are fixed, each with a test (`fix(3.11): review fixes`). Alarm safety came first.
+
+**Kept across a recreated screen (1, 18).** Auto dark mode can flip at sunrise while the alarm rings, and rotation or a font-scale change also recreates the screen. `WakeKept`, a `ViewModel`, now keeps `WakeQr`: the per-entry `WakeCamera` with its latch and monitor, and the torch switch. It also keeps whether the Fallback check picker is open. `QrCameraFailureTest` recreates the screen with a latched link and the torch on, and Math is then allowed with 0 failed attempts. A second test checks that an open picker stays open.
+
+**Nothing-read timer (16).** It counts from the bind or the last code read, whichever is later. Before, one wrong code switched the rule off for good. The old test "a wrong code never gets the link" is inverted: after a wrong code at 1 s, the link shows at 61.1 s. Boundaries (4): 59.999 s gives no link and 60 s gives it; in Robolectric there is no link at 59.9 s.
+
+**Direct Boot note after a kill (19).** `swappedThisRing` is now read from the run: no fallback, and some index where the ring's own resolution is unsafe while the run holds the Direct Boot Math. It no longer needs `directBootRing`, so a ring restored unlocked keeps its Math and its note (`SwappedThisRingTest`). Word step (14): `DirectBootNoteTest` covers All [QR, Word] rung while locked; after the Math is solved, the Word step still shows the note.
+
+**Torch (7, 17).** The scanner lights the torch each time CameraX reports the camera `OPEN`, so it comes back after the screen goes off and on. The switch effect now runs only on a change. `CameraXCodeScannerTest` covers an `OPEN`, `CLOSED`, `OPEN` sequence, and a scan composed, removed and composed again (2 binds, torch `[true, true]`).
+
+**Watchdog start (20).** The scanner sends a new `ScanEvent.Opened` on each camera `OPEN`. While the camera starts, the 5 s count runs from that open, so a slow cold start is not a dead camera. A camera that never opens is caught 15 s after the bind (`CameraMonitor.OPEN_LIMIT_MILLIS`). `FakeCodeScanner(opensAtOnce = false)` with `open()` tests a 4 s open and a first frame 4.5 s later (no message), and a camera that never opens (message at 15 s). A new entry on a camera that is already open counts from the new entry.
+
+**Other items:**
+- (2) Recovery boundary: frames every 100 ms give unavailable at +900 ms and Live at +1000 ms.
+- (3) Heartbeat boundary: no heartbeat at 1499 ms, the next one at 1500 ms.
+- (5) The wall-clock check moved to Robolectric: `WakeApp` with a `FakeClock` moved by an hour, with no effect.
+- (6) The failing-decoder monitor test now sends 10 s of ticks with no frames, and checks that one decoded heartbeat is not enough.
+- (8) New `WakeCameraTest`: a paused watchdog does not run, the latch ends with its entry, and a change is logged once.
+- (9) The message and a focusable link appear in the very next frame (the test clock is paused).
+- (10) No preview while unavailable, and one after 1 s of frames.
+- (11) The `QrCheckScreenTest` bound-camera test uses a non-sticky problem; a separate test covers a sticky one.
+- (12) The picker releases the camera; "Back to check" binds it again with the link kept and the watchdog counting from 0.
+- (13) `WakeCheck.screen` reads the lifecycle state, so each resume redraws the screen and reads the permission again, also in Loud. Tests cover a permission revoked while paused, and a restore with no permission (`starts == 0`).
+- (15) The latch ends with its entry: on a second QR entry there is no link, and the watchdog counts from 0.
 
 **Residual risks (3.14 item 9):**
 - On a real phone: CameraX with a preview surface attached and detached on an `ImageAnalysis` session, black-frame privacy toggles, and video-call apps holding the camera.

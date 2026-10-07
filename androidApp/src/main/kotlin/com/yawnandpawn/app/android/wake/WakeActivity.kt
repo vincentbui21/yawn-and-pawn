@@ -23,6 +23,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.compose.currentStateAsState
 import com.yawnandpawn.app.android.ApplicationScope
@@ -122,7 +123,10 @@ class WakeActivity : ComponentActivity() {
     private val monotonicClock: MonotonicClock by inject()
 
     /** The Check screen's typed answer, grace clock and keys (Story 3.2). */
-    private val check by lazy { WakeCheck(get(), get(), get(), get(), get(), get(), get()) }
+    private val check by lazy {
+        val kept = ViewModelProvider(this, WakeKept.factory(get(), get(), get()))[WakeKept::class.java]
+        WakeCheck(get(), get(), get(), get(), get(), kept)
+    }
 
     /** Keeps the events [send] dispatches in order. */
     private val dispatchOrder = Mutex()

@@ -191,13 +191,30 @@ class QrCheckScreenTest {
         ringQr(app, assertNotNull(RegisteredCode.of(toothpaste.format, toothpaste.rawValue)))
         launch(app).use {
             imUp(app)
-            scanner.fail(CameraProblem.BindFailed)
+            scanner.fail(CameraProblem.Disconnected) // Not sticky: CameraX can open the camera again.
             composeRule.waitForIdle()
             composeRule.onNodeWithText("Camera isn't available. Pick a fallback check.").assertExists()
             // Story 3.9: the fallback link shows at once when the camera is unavailable.
             composeRule.onNodeWithText("Can't do this check?").assertExists()
-            // The CameraX scanner releases the camera itself on a sticky problem (CameraXCodeScannerTest).
-            assertTrue(scanner.running, "the scan stays in composition")
+            assertTrue(scanner.running, "the camera stays bound")
+            assertEquals(0, scanner.stops)
+            assertEquals(1, scanner.starts)
+        }
+    }
+
+    @Test
+    fun `a sticky camera problem shows the same message, the scan stays composed and the scanner releases the camera itself`() {
+        val scanner = FakeCodeScanner()
+        val app = WakeApp(scanner = scanner)
+        ringQr(app, assertNotNull(RegisteredCode.of(toothpaste.format, toothpaste.rawValue)))
+        launch(app).use {
+            imUp(app)
+            scanner.fail(CameraProblem.BindFailed)
+            composeRule.waitForIdle()
+            composeRule.onNodeWithText("Camera isn't available. Pick a fallback check.").assertExists()
+            composeRule.onNodeWithText("Can't do this check?").assertExists()
+            // The CameraX scanner ends its scan and releases the camera on a sticky problem (CameraXCodeScannerTest); the
+            // wake screen only binds it again on the next resume.
             assertEquals(1, scanner.starts)
         }
     }

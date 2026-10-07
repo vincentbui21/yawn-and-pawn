@@ -170,6 +170,7 @@ class CameraXCodeScanner(
             return
         }
         val lifecycleOwner = LocalLifecycleOwner.current
+        val torch by rememberUpdatedState(torchOn)
         var camera by remember { mutableStateOf<StartedCamera?>(null) }
         LaunchedEffect(lifecycleOwner) {
             scan(
@@ -179,15 +180,16 @@ class CameraXCodeScanner(
                     preview.value = use
                 },
                 events = { events(it) },
+                torchOn = { torch },
             )
         }
-        // A camera bound again (each resume of the wake check) lights the torch again as the switch shows it (Story 3.11).
-        LaunchedEffect(camera, torchOn) {
-            @Suppress("TooGenericExceptionCaught", "SwallowedException") // The torch is a nicety; it never ends a scan.
-            try {
-                camera?.torch(torchOn)
-            } catch (e: Exception) {
-                logger.log(LogEvent.OperationFailed("camera torch", e::class.simpleName.orEmpty()))
+        // The switch flipped: the open camera follows. Each time the camera opens (the bind, and again after the screen was
+        // off, when CameraX closed it) the scan lights the torch as the switch shows it (Story 3.11 review).
+        var switched by remember { mutableStateOf(torchOn) }
+        LaunchedEffect(torchOn) {
+            if (torchOn != switched) {
+                switched = torchOn
+                camera?.let { open -> quietly("camera torch") { open.torch(torchOn) } }
             }
         }
     }
@@ -214,12 +216,13 @@ class CameraXCodeScanner(
         owner: LifecycleOwner,
         onCamera: (StartedCamera?, Preview?) -> Unit,
         events: (ScanEvent) -> Unit,
+        torchOn: () -> Boolean = { false },
     ) {
-        val reports = ScanReports(events)
+        var started: StartedCamera? = null
+        val reports = ScanReports(events, onOpen = { quietly("camera torch") { started?.torch?.invoke(torchOn()) } })
         var frames: CloseableFrameDecoder? = null
         var executor: ExecutorService? = null
         var analysis: ImageAnalysis? = null
-        var started: StartedCamera? = null
         var end = Ending("start camera", "", CameraProblem.BindFailed)
         try {
             frames = decoder()
@@ -261,6 +264,7 @@ class CameraXCodeScanner(
      */
     private inner class ScanReports(
         private val events: (ScanEvent) -> Unit,
+        private val onOpen: () -> Unit,
     ) {
         private val main = ContextCompat.getMainExecutor(context)
 
@@ -275,6 +279,12 @@ class CameraXCodeScanner(
 
         val stateObserver =
             Observer<CameraState> { state ->
+                // Open (the bind, or again after a stop or another app): the watchdog's start, and the torch as the switch
+                // shows it, since CameraX does not keep it lit across a close (Story 3.11 review).
+                if (state.type == CameraState.Type.OPEN && !ended) {
+                    events(ScanEvent.Opened)
+                    onOpen()
+                }
                 val problem = cameraProblem(state)
                 val reason = "code ${state.error?.code}"
                 when {

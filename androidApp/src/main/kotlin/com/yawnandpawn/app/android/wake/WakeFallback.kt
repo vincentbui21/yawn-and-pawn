@@ -1,5 +1,6 @@
 package com.yawnandpawn.app.android.wake
 
+import androidx.compose.runtime.MutableState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
@@ -22,9 +23,10 @@ internal class WakeFallback(
     private val policy: FallbackPolicy,
     private val accessibility: AccessibilityState,
     private val reason: (SessionState) -> FallbackReason,
+    open: MutableState<Boolean> = mutableStateOf(false),
 ) {
-    /** The Fallback check picker was opened from the link and not closed. */
-    var pickerOpen by mutableStateOf(false)
+    /** The Fallback check picker was opened from the link and not closed; kept across a recreated screen (3.11 review). */
+    var pickerOpen by open
 
     /** Whether the fallback is offered for [state] now: in Grace or Loud, not used yet, and the [policy] allows it. */
     fun offered(state: SessionState): Boolean {

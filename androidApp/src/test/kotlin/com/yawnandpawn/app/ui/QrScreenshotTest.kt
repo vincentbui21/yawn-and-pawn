@@ -1,5 +1,6 @@
 package com.yawnandpawn.app.ui
 
+import androidx.compose.ui.test.assertHasClickAction
 import androidx.compose.ui.test.assertHeightIsAtLeast
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.assertWidthIsAtLeast
@@ -31,7 +32,8 @@ import org.robolectric.annotation.GraphicsMode
 /**
  * Story 3.10 screenshots, with the camera preview replaced by the placeholder surface (no feed is provided): the wake QR
  * check (scanning, a different code, camera unavailable) in Sunrise, and QR registration (scanning, a code found, camera
- * unavailable) in Light and Dark, at 100% and 200% font scale.
+ * unavailable) in Light and Dark, at 100% and 200% font scale. Story 3.11 adds the watchdog's message with the fallback
+ * link, and the link after 5 different codes.
  */
 @RunWith(RobolectricTestRunner::class)
 @GraphicsMode(GraphicsMode.Mode.NATIVE)
@@ -107,6 +109,52 @@ class QrScreenshotTest {
     fun `wake QR check without the camera at 200 percent`() =
         wake("wake_check_qr_camera_unavailable_sunrise_font200", unavailable) {
             composeRule.onNodeWithText("Camera isn't available. Pick a fallback check.").assertExists()
+        }
+
+    // Story 3.11: the watchdog's message with the link at once, and the link after 5 different codes.
+    private val watchdog = unavailable.copy(showFallbackLink = true)
+    private val afterFailures =
+        scanning.copy(
+            grace = GraceState.Expired,
+            content = CheckContent.QrBarcode(wrongCode = true, wrongAttempts = 5),
+            showFallbackLink = true,
+        )
+
+    private fun linkReady() =
+        composeRule
+            .onNodeWithText("Can't do this check?")
+            .assertIsDisplayed()
+            .assertHasClickAction()
+            .assertHeightIsAtLeast(48.dp)
+
+    @Test
+    fun `wake QR check after the watchdog, with the link (Story 3_11)`() =
+        wake("wake_check_qr_watchdog_sunrise", watchdog) {
+            composeRule.onNodeWithText("Camera isn't available. Pick a fallback check.").assertExists()
+            linkReady()
+        }
+
+    @Test
+    @Config(fontScale = 2.0f)
+    fun `wake QR check after the watchdog at 200 percent`() =
+        wake("wake_check_qr_watchdog_sunrise_font200", watchdog) {
+            composeRule.onNodeWithText("Camera isn't available. Pick a fallback check.").assertExists()
+            composeRule.onNodeWithText("Can't do this check?").assertExists()
+        }
+
+    @Test
+    fun `wake QR check with the link after 5 different codes (Story 3_11)`() =
+        wake("wake_check_qr_link_after_failures_sunrise", afterFailures) {
+            composeRule.onNode(hasContentDescription("Camera viewfinder. Point at your code.")).assertExists()
+            composeRule.onNodeWithText("That's a different code. Scan your registered one.").assertExists()
+            linkReady()
+        }
+
+    @Test
+    @Config(fontScale = 2.0f)
+    fun `wake QR check with the link after 5 different codes at 200 percent`() =
+        wake("wake_check_qr_link_after_failures_sunrise_font200", afterFailures) {
+            composeRule.onNodeWithText("Can't do this check?").assertExists()
         }
 
     @Test

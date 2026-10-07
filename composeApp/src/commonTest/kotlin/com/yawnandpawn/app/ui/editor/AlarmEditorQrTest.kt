@@ -24,6 +24,7 @@ import com.yawnandpawn.app.ui.checks.CheckType
 import com.yawnandpawn.app.ui.checks.PickableCheckTypes
 import com.yawnandpawn.app.ui.checksetup.CheckSetupIntent
 import com.yawnandpawn.app.ui.home.AlarmActions
+import com.yawnandpawn.app.ui.qr.CameraProblem
 import com.yawnandpawn.app.ui.qr.ScanEvent
 import com.yawnandpawn.app.ui.qr.ScanResult
 import com.yawnandpawn.app.ui.qr.TestCameraPermission
@@ -278,7 +279,7 @@ class AlarmEditorQrTest {
             viewModel.onIntent(EditorIntent.CodeRegistered(code))
             viewModel.onIntent(EditorIntent.CheckSetup(CheckSetupIntent.TryItClicked))
 
-            viewModel.onIntent(EditorIntent.TryItScanned(ScanEvent.CameraUnavailable))
+            viewModel.onIntent(EditorIntent.TryItScanned(ScanEvent.CameraUnavailable(CameraProblem.Disconnected)))
 
             assertFalse(
                 assertIs<CheckContent.QrBarcode>(

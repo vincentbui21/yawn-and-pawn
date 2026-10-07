@@ -664,7 +664,7 @@ private fun QrCheck(
         }
         val torch = stringResource(Res.string.qr_torch)
         ViewfinderPlaceholder(spoken = stringResource(Res.string.qr_viewfinder)) { viewfinder ->
-            QrGuide(colors = viewfinder, torchLabel = torch, onTorch = { onIntent(WakeIntent.TorchToggled) })
+            QrGuide(colors = viewfinder, torchLabel = torch, onTorch = { onIntent(WakeIntent.TorchToggled) }, torchOn = content.torchOn)
         }
         // Story 3.10: an error haptic for each different code (keyed by the failed attempts, as the screen sees them).
         val haptics = LocalHapticFeedback.current

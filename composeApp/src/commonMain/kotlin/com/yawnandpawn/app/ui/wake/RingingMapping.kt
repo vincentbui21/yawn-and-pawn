@@ -18,7 +18,7 @@ val NoPrices: PriceLookup = { null }
 
 /**
  * The Ringing screen for [session] (Story 1.15): the alarm's time and date in [zone] (`config.scheduledAt`, as in the
- * notification), its label (none when blank), the phone-call note while a call pauses the ring, and the snooze that
+ * notification), its label (none when blank), its note ([wakeNote]: a paused call, or the Direct Boot check), and the snooze that
  * [availability] (the `SnoozeAvailabilityPolicy` result) allows. The session line needs the paid amount, which arrives
  * with Money in Epic 4, so it is not shown yet. Pure.
  */
@@ -34,7 +34,7 @@ fun ringingUiState(
         date = at.date,
         label = session.config.label?.takeIf { it.isNotBlank() },
         snooze = snoozeOffer(availability, session, priceOf),
-        note = if (session.paused) WakeNote.PhoneCall else null,
+        note = wakeNote(session),
     )
 }
 

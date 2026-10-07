@@ -9,6 +9,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.selection.toggleable
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.IconButtonDefaults
@@ -19,6 +20,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
@@ -87,6 +89,10 @@ fun ViewfinderPlaceholder(
 /**
  * The QR/Barcode overlay of a [ViewfinderPlaceholder]: the centred square guide (with a check once a code is found,
  * [detected]) and the 48 dp torch toggle ([torchLabel], "Torch") top right.
+ *
+ * Story 3.11: given its state ([torchOn], the wake check), the torch is a switch (`Role.Switch` with its toggleable
+ * state), so TalkBack reads "Torch, on" or "off" in the phone's language with no new string; the pixels are the same.
+ * Without it (registration) it stays a plain button.
  */
 @Composable
 fun BoxScope.QrGuide(
@@ -94,6 +100,7 @@ fun BoxScope.QrGuide(
     torchLabel: String,
     onTorch: () -> Unit,
     detected: Boolean = false,
+    torchOn: Boolean? = null,
 ) {
     Box(
         modifier =
@@ -113,12 +120,26 @@ fun BoxScope.QrGuide(
             )
         }
     }
-    IconButton(
-        onClick = onTorch,
-        modifier = Modifier.align(Alignment.TopEnd).padding(PpsTheme.spacing.space2).size(PpsTheme.spacing.targetMin),
-        colors = IconButtonDefaults.iconButtonColors(contentColor = colors.overlay),
-    ) {
-        Icon(painter = painterResource(Res.drawable.symbol_flashlight_on), contentDescription = torchLabel)
+    val place = Modifier.align(Alignment.TopEnd).padding(PpsTheme.spacing.space2).size(PpsTheme.spacing.targetMin)
+    if (torchOn == null) {
+        IconButton(
+            onClick = onTorch,
+            modifier = place,
+            colors = IconButtonDefaults.iconButtonColors(contentColor = colors.overlay),
+        ) {
+            Icon(painter = painterResource(Res.drawable.symbol_flashlight_on), contentDescription = torchLabel)
+        }
+    } else {
+        // The same 48 dp target and centred 24 dp icon as the button above, drawn as a switch.
+        Box(
+            modifier =
+                place
+                    .clip(PpsTheme.shapes.full)
+                    .toggleable(value = torchOn, role = Role.Switch, onValueChange = { onTorch() }),
+            contentAlignment = Alignment.Center,
+        ) {
+            Icon(painter = painterResource(Res.drawable.symbol_flashlight_on), contentDescription = torchLabel, tint = colors.overlay)
+        }
     }
 }
 

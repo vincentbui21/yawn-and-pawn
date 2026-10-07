@@ -56,10 +56,54 @@ sealed interface ScanEvent {
     }
 
     /**
-     * The camera cannot be used: the permission is missing, the camera could not be started or failed (in use, disabled
-     * by policy or the privacy toggle when the system refuses it, a fatal error), or every frame fails to decode.
+     * The camera delivered analysed frames (Story 3.11): a heartbeat, at most one per 500 ms, only for frames the decoder
+     * read (a failed decode is never one). The wake check's [CameraMonitor] needs them to tell a live camera from one
+     * that stopped sending frames.
      */
-    data object CameraUnavailable : ScanEvent
+    data object Frame : ScanEvent
+
+    /**
+     * The camera reported itself open (Story 3.11 review): each time it opens, also after another app let it go. The
+     * wake check's watchdog counts the first frame's 5 s from here, so a slow cold start is not a dead camera.
+     */
+    data object Opened : ScanEvent
+
+    /**
+     * The camera cannot be used, for [problem] (Story 3.11): the permission is missing, the camera could not be started
+     * or failed (in use, disabled by policy or the privacy toggle when the system refuses it, a fatal error), or the
+     * frames keep failing to decode. A [CameraProblem.sticky] problem ended the scan and released the camera; any other
+     * one leaves the camera bound, so it can come back.
+     */
+    data class CameraUnavailable(
+        val problem: CameraProblem,
+    ) : ScanEvent
+}
+
+/** Why the camera cannot be used (Story 3.11). */
+enum class CameraProblem(
+    /** The scan ended and the camera was released: frames cannot bring it back, only a new scan (the next resume). */
+    val sticky: Boolean,
+) {
+    /** The `CAMERA` permission is missing. */
+    NoPermission(sticky = true),
+
+    /** The camera, the model or the use cases could not be set up or bound. */
+    BindFailed(sticky = true),
+
+    /** The system refused the camera: disabled by policy, or by the camera privacy toggle on phones that refuse it. */
+    PrivacyBlocked(sticky = true),
+
+    /** Another app took the camera (in use, or too many cameras open); CameraX opens it again once it is free. */
+    Disconnected(sticky = false),
+
+    /** CameraX reported an error that ends the stream (fatal, stream configuration, Do Not Disturb). */
+    CameraError(sticky = false),
+
+    /** No frame arrived for 5 s (the wake check's watchdog; a scanner never reports it). */
+    NoFrames(sticky = false),
+
+    /** Frame after frame failed to decode (the model or its native library cannot run). */
+    DecoderFailing(sticky = false),
 }
 
 /**
@@ -67,19 +111,34 @@ sealed interface ScanEvent {
  * use `FakeCodeScanner` (the `:androidApp` host tests), so no host or device test needs a camera. Frames are analysed on
  * the device only and never stored.
  *
- * The QR "Try it" preview (Check setup, Story 3.6) shows [Feed] too and checks each stable code against the draft's code
- * itself (`QrTrial`), sending no engine event.
+ * Story 3.11 splits the camera from its picture: [Scan] runs the camera without drawing anything, and [Preview] draws
+ * the running scan's picture inside a viewfinder. The wake check keeps [Scan] running while its approved
+ * camera-unavailable state shows no viewfinder, so a camera that comes back is noticed. Registration and the QR "Try it"
+ * preview (Check setup, Story 3.6) use [Feed], both in one place; "Try it" checks each stable code against the draft's
+ * code itself (`QrTrial`), sending no engine event.
  */
 interface CodeScanner {
     /** Whether the app may use the camera now (the `CAMERA` permission is granted). Never asks. */
     fun cameraPermitted(): Boolean
 
     /**
-     * The camera feed for a viewfinder, while it is in composition: it starts the camera, lights the torch while
-     * [torchOn], reports each stable code and a camera that cannot be used through [onEvent] (on the main thread), and
-     * releases the camera when it leaves composition. It reports [ScanEvent.CameraUnavailable] at once without the
-     * permission, and never asks for it. It never throws: every failure is [ScanEvent.CameraUnavailable].
+     * The camera, while it is in composition, without a picture: it starts the camera, lights the torch while [torchOn],
+     * reports each stable code, a [ScanEvent.Frame] heartbeat and each camera problem through [onEvent] (on the main
+     * thread), and releases the camera when it leaves composition. Without the permission it reports
+     * [ScanEvent.CameraUnavailable] ([CameraProblem.NoPermission]) at once and never asks for it. It never throws: every
+     * failure is a [ScanEvent.CameraUnavailable].
      */
+    @Composable
+    fun Scan(
+        torchOn: Boolean,
+        onEvent: (ScanEvent) -> Unit,
+    )
+
+    /** The picture of the running [Scan], for a viewfinder; nothing while no scan runs. */
+    @Composable
+    fun Preview()
+
+    /** A [Scan] and its own [Preview] in one place: the camera feed of a viewfinder (registration, "Try it"). */
     @Composable
     fun Feed(
         torchOn: Boolean,

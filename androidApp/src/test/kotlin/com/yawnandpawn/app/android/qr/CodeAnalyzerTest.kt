@@ -74,6 +74,56 @@ class CodeAnalyzerTest {
     }
 
     @Test
+    fun `decoded frames send at most one heartbeat per 500 ms, and a failed decode sends none (Story 3_11)`() {
+        var now = 1_000L
+        var failing = false
+        var beats = 0
+        val analyzer =
+            CodeAnalyzer(
+                decoder = { _, done -> done(if (failing) null else emptyList()) },
+                onStable = {},
+                onFrame = { beats++ },
+                elapsedMillis = { now },
+            )
+
+        repeat(20) {
+            analyzer.analyze(Frame().proxy)
+            now += 20
+        }
+        assertEquals(1, beats, "20 frames in 400 ms: one heartbeat")
+
+        now = 1_500
+        analyzer.analyze(Frame().proxy)
+        assertEquals(2, beats, "500 ms after the last one: the next")
+
+        failing = true
+        now = 3_000
+        repeat(5) { analyzer.analyze(Frame().proxy) }
+        assertEquals(2, beats, "a failed decode is never a heartbeat")
+    }
+
+    @Test
+    fun `the heartbeat boundary - a beat at 1000, none at 1499, the next at 1500 (review)`() {
+        var now = 1_000L
+        var beats = 0
+        val analyzer =
+            CodeAnalyzer(
+                decoder = { _, done -> done(emptyList()) },
+                onStable = {},
+                onFrame = { beats++ },
+                elapsedMillis = { now },
+            )
+        analyzer.analyze(Frame().proxy)
+        assertEquals(1, beats, "at 1000")
+        now = 1_499
+        analyzer.analyze(Frame().proxy)
+        assertEquals(1, beats, "at 1499")
+        now = 1_500
+        analyzer.analyze(Frame().proxy)
+        assertEquals(2, beats, "at 1500")
+    }
+
+    @Test
     fun `a frame is closed only when its decoding is done, and a decoder that throws still closes it`() {
         var pending: ((List<ScanResult>?) -> Unit)? = null
         val waiting = Frame()
@@ -244,7 +294,8 @@ class CodeAnalyzerTest {
                 .listFiles { file ->
                     file.extension == "kt"
                 }.orEmpty()
-        val sources = scanner.toList() + common + File("src/main/kotlin/com/yawnandpawn/app/android/wake/WakeCheck.kt")
+        val wake = listOf("WakeCheck.kt", "WakeQr.kt", "WakeCamera.kt").map { File("src/main/kotlin/com/yawnandpawn/app/android/wake/$it") }
+        val sources = scanner.toList() + common + wake
         assertTrue(scanner.size >= 4, "the scanner sources: ${scanner.map { it.name }}")
         assertTrue(common.any { it.name == "CodeScanner.kt" } && sources.all(File::isFile), "the common sources: $sources")
         val banned =

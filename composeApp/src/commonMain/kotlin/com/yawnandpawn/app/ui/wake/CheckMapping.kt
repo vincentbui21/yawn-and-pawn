@@ -3,6 +3,7 @@ package com.yawnandpawn.app.ui.wake
 import com.yawnandpawn.app.core.checks.CheckType
 import com.yawnandpawn.app.core.checks.Puzzle
 import com.yawnandpawn.app.core.session.CheckRun
+import com.yawnandpawn.app.core.session.DirectBootSubstitution
 import com.yawnandpawn.app.core.session.SessionData
 import com.yawnandpawn.app.core.session.SessionState
 import com.yawnandpawn.app.core.session.SnoozeAvailability
@@ -87,7 +88,7 @@ data class CheckInput(
  *   the engine checks, so the alarm can still be stopped;
  * - in Grace the countdown is read from the grace `Deadline` at [now] (frozen at the pause during a call); in Loud after
  *   a grace window "Time's up. Alarm's back on until you finish."; a ring without grace shows neither;
- * - the footer's snooze is the same [snoozeOffer] the Ringing screen shows, and the phone-call note as there.
+ * - the footer's snooze is the same [snoozeOffer] the Ringing screen shows, and the same note ([wakeNote]) as there.
  */
 fun mathCheckUiState(
     state: SessionState,
@@ -114,7 +115,7 @@ fun mathCheckUiState(
                 wrong = input.wrong,
             ),
         snooze = snoozeOffer(availability, session, priceOf),
-        note = if (session.paused) WakeNote.PhoneCall else null,
+        note = wakeNote(session),
     )
 }
 
@@ -138,7 +139,7 @@ fun memoryCheckUiState(
         grace = graceState(state, session, now),
         content = memoryCheckContent(round, playback, input.wrong),
         snooze = snoozeOffer(availability, session, priceOf),
-        note = if (session.paused) WakeNote.PhoneCall else null,
+        note = wakeNote(session),
     )
 }
 
@@ -161,9 +162,22 @@ fun wordCheckUiState(
         grace = graceState(state, session, now),
         content = content,
         snooze = snoozeOffer(availability, session, priceOf),
-        note = if (session.paused) WakeNote.PhoneCall else null,
+        note = wakeNote(session),
     )
 }
+
+/**
+ * The one note of the Ringing and Check screens for [session] (Story 3.11): the phone-call note while a call pauses the
+ * ring, else "Your phone restarted, so today's check is Math." when this ring had a check swapped for the Direct Boot
+ * ([DirectBootSubstitution.swappedThisRing]; it stays after an unlock in the ring and comes back after a call), else
+ * none. Pure.
+ */
+fun wakeNote(session: SessionData): WakeNote? =
+    when {
+        session.paused -> WakeNote.PhoneCall
+        DirectBootSubstitution.swappedThisRing(session) -> WakeNote.DirectBoot
+        else -> null
+    }
 
 /** Both positions are on the same entry of the same ring of the same session (null never is). */
 internal fun CheckPosition?.isSameEntryAs(other: CheckPosition?): Boolean =

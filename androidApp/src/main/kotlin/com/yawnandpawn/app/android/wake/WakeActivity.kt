@@ -22,6 +22,10 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.ViewModelProvider
+import androidx.lifecycle.compose.LocalLifecycleOwner
+import androidx.lifecycle.compose.currentStateAsState
 import com.yawnandpawn.app.android.ApplicationScope
 import com.yawnandpawn.app.android.screen.forwardsToWakeScreen
 import com.yawnandpawn.app.core.checks.CheckAnswer
@@ -38,6 +42,7 @@ import com.yawnandpawn.app.core.time.MonotonicClock
 import com.yawnandpawn.app.core.time.TimeZoneProvider
 import com.yawnandpawn.app.ui.components.LocalViewfinderFeed
 import com.yawnandpawn.app.ui.format.is24HourClock
+import com.yawnandpawn.app.ui.wake.CheckContent
 import com.yawnandpawn.app.ui.wake.CheckScreen
 import com.yawnandpawn.app.ui.wake.CheckUiState
 import com.yawnandpawn.app.ui.wake.FallbackPickerScreen
@@ -70,7 +75,9 @@ import kotlin.time.Duration.Companion.seconds
  * in Grace or Loud on a check entry (Math, Word Unscramble, Memory Sequence, QR/Barcode), the approved Check screen
  * (`ui/wake/CheckScreen`, Stories 3.2, 3.7, 3.8 and 3.10, [WakeCheck]).
  * Opened again from the notification or from "Back to alarm" after Home, it shows the current problem. While the
- * fallback is offered, "Can't do this check?" opens the Fallback check picker (Story 3.9, [WakeCheck]).
+ * fallback is offered, "Can't do this check?" opens the Fallback check picker (Story 3.9, [WakeCheck]). The QR check's
+ * camera runs only while the screen is resumed: pausing it (screen off, Home, the shade) releases the camera, and resuming
+ * binds it again with the 5 s no-frame watchdog started over (Story 3.11, [WakeQr]).
  *
  * It opens only from the ringing notification (its full-screen intent or a tap on it), never from the background. It
  * shows over the lock screen and turns the screen on (`setShowWhenLocked` / `setTurnScreenOn` on API 27+, window flags
@@ -116,7 +123,10 @@ class WakeActivity : ComponentActivity() {
     private val monotonicClock: MonotonicClock by inject()
 
     /** The Check screen's typed answer, grace clock and keys (Story 3.2). */
-    private val check by lazy { WakeCheck(get(), get(), get(), get(), get(), get()) }
+    private val check by lazy {
+        val kept = ViewModelProvider(this, WakeKept.factory(get(), get(), get()))[WakeKept::class.java]
+        WakeCheck(get(), get(), get(), get(), get(), kept)
+    }
 
     /** Keeps the events [send] dispatches in order. */
     private val dispatchOrder = Mutex()
@@ -233,13 +243,7 @@ class WakeActivity : ComponentActivity() {
                 if (session != null) last.sessionShown = true
                 if (current != null) last.state = current
                 val shown = current ?: last.state
-                // Story 3.10: the QR check's viewfinder shows the camera, and each stable code is sent as an answer. One
-                // feed for as long as the camera shows (review): the grace countdown's redraws must not rebind it.
-                val camera = check.qr.showsCamera((shown as? WakeScreen.Check)?.state?.content)
-                val feed = remember(camera) { if (camera) check.qr.feed { send(*it.toTypedArray()) } else null }
-                CompositionLocalProvider(LocalViewfinderFeed provides feed) {
-                    WakeContent(state = shown, onIntent = ::onIntent, onInteracted = ::interacted)
-                }
+                WakeScreenWithCamera(shown, check.qr, ::onIntent, ::interacted, send = { send(*it.toTypedArray()) })
             }
         }
     }
@@ -421,6 +425,33 @@ private sealed interface WakeScreen {
     data class Fallback(
         val state: FallbackPickerUiState,
     ) : WakeScreen
+}
+
+/**
+ * [WakeContent] for [shown], with the QR check's camera ([qr], Stories 3.10 and 3.11). The viewfinder shows the camera's
+ * picture, one for as long as the camera shows (3.10 review: the grace countdown's redraws must not rebuild it). The
+ * camera itself runs next to the screen while it is resumed on a QR check with the permission, also under the
+ * camera-unavailable message, so a camera that comes back is noticed. Paused (screen off, Home, the shade) it is
+ * released. Each stable code is sent as an answer through [send].
+ */
+@Composable
+private fun WakeScreenWithCamera(
+    shown: WakeScreen?,
+    qr: WakeQr,
+    onIntent: (WakeIntent) -> Unit,
+    onInteracted: () -> Unit,
+    send: (List<SessionEvent>) -> Unit,
+) {
+    val content = (shown as? WakeScreen.Check)?.state?.content
+    val camera = qr.showsCamera(content)
+    val feed = remember(camera) { if (camera) qr.preview() else null }
+    CompositionLocalProvider(LocalViewfinderFeed provides feed) {
+        WakeContent(state = shown, onIntent = onIntent, onInteracted = onInteracted)
+    }
+    val lifecycle by LocalLifecycleOwner.current.lifecycle.currentStateAsState()
+    if (content is CheckContent.QrBarcode && lifecycle.isAtLeast(Lifecycle.State.RESUMED) && qr.permitted()) {
+        qr.Scan(send)
+    }
 }
 
 /**

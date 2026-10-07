@@ -173,7 +173,7 @@ class QrScanningTest {
             permission.granted = true
             model.onShown()
             assertFalse(model.state.cameraUnavailable, "back from the settings with the permission")
-            model.onScan(ScanEvent.CameraUnavailable)
+            model.onScan(ScanEvent.CameraUnavailable(CameraProblem.BindFailed))
             assertTrue(model.state.cameraUnavailable, "a camera that cannot start")
             model.onIntent(QrIntent.UseCode)
         }

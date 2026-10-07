@@ -12,6 +12,7 @@ import androidx.compose.ui.test.performClick
 import com.yawnandpawn.app.StopAppRule
 import com.yawnandpawn.app.android.qr.QrWake.Companion.LINK
 import com.yawnandpawn.app.android.qr.QrWake.Companion.START_MILLIS
+import com.yawnandpawn.app.android.wake.awaitScreen
 import com.yawnandpawn.app.core.checks.qr.CodeFormat
 import com.yawnandpawn.app.core.session.CameraFallbackPolicy
 import com.yawnandpawn.app.core.session.FallbackReason
@@ -48,8 +49,7 @@ class QrFailedAttemptsTest {
             (1..CameraFallbackPolicy.FAILED_ATTEMPTS).forEach { attempt ->
                 wake.heartbeatAt(START_MILLIS, attempt * 1_000L)
                 wake.scanner.frames(3, ScanResult(CodeFormat.QrCode, "wrong code $attempt"))
-                wake.app.awaitUntil("attempt $attempt counted") {
-                    composeRule.waitForIdle()
+                composeRule.awaitScreen(wake.app, "attempt $attempt counted") {
                     wake.run().failedAttempts == attempt
                 }
                 composeRule
@@ -62,8 +62,7 @@ class QrFailedAttemptsTest {
 
             composeRule.onNodeWithText(LINK).performClick()
             composeRule.onNode(hasText("Math") and hasClickAction()).performClick()
-            wake.app.awaitUntil("the fallback replaced the check") {
-                composeRule.waitForIdle()
+            composeRule.awaitScreen(wake.app, "the fallback replaced the check") {
                 wake.run().fallbackUsed
             }
             assertEquals(FallbackReason.FailedAttempts, wake.fallback.reasons.last())

@@ -2,6 +2,7 @@ package com.yawnandpawn.app.android.qr
 
 import android.Manifest
 import android.app.Application
+import android.content.Intent
 import android.view.View
 import android.view.ViewGroup
 import androidx.activity.compose.setContent
@@ -16,12 +17,12 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.test.junit4.createEmptyComposeRule
 import androidx.lifecycle.LifecycleOwner
 import androidx.lifecycle.MutableLiveData
-import androidx.test.core.app.ActivityScenario
 import androidx.test.core.app.ApplicationProvider
 import com.yawnandpawn.app.MainActivity
 import com.yawnandpawn.app.StopAppRule
 import com.yawnandpawn.app.core.checks.qr.CodeFormat
 import com.yawnandpawn.app.core.log.LogEvent
+import com.yawnandpawn.app.launchActivity
 import com.yawnandpawn.app.testing.FakeLogger
 import com.yawnandpawn.app.ui.qr.CameraProblem
 import com.yawnandpawn.app.ui.qr.ScanEvent
@@ -120,7 +121,7 @@ class CameraXCodeScannerTest {
         scanner: CameraXCodeScanner,
         block: (View) -> Unit = {},
     ) {
-        ActivityScenario.launch(MainActivity::class.java).use { scenario ->
+        launchActivity<MainActivity>(Intent(app, MainActivity::class.java)).use { scenario ->
             scenario.onActivity { it.setContent { scanner.Feed(torchOn = true, onEvent = ::record) } }
             composeRule.waitForIdle()
             scenario.onActivity { block(it.window.decorView) }
@@ -226,7 +227,7 @@ class CameraXCodeScannerTest {
         val cameras = FakeCameras()
         val scanner = CameraXCodeScanner(app, logger, cameras, decoder = { FakeDecoder() })
         var shown by mutableStateOf(false)
-        ActivityScenario.launch(MainActivity::class.java).use { scenario ->
+        launchActivity<MainActivity>(Intent(app, MainActivity::class.java)).use { scenario ->
             scenario.onActivity {
                 it.setContent {
                     scanner.Scan(torchOn = false, onEvent = ::record)
@@ -282,7 +283,7 @@ class CameraXCodeScannerTest {
         val cameras = FakeCameras()
         val scanner = CameraXCodeScanner(app, logger, cameras, decoder = { FakeDecoder() })
         var scanning by mutableStateOf(true)
-        ActivityScenario.launch(MainActivity::class.java).use { scenario ->
+        launchActivity<MainActivity>(Intent(app, MainActivity::class.java)).use { scenario ->
             scenario.onActivity { it.setContent { if (scanning) scanner.Scan(torchOn = true, onEvent = ::record) } }
             composeRule.waitForIdle()
             scanning = false

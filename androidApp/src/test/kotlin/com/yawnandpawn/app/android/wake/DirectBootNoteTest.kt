@@ -5,7 +5,6 @@ import androidx.compose.ui.test.hasContentDescription
 import androidx.compose.ui.test.junit4.createEmptyComposeRule
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
-import androidx.test.core.app.ActivityScenario
 import com.yawnandpawn.app.StopAppRule
 import com.yawnandpawn.app.android.call.CallState
 import com.yawnandpawn.app.android.qr.FakeCodeScanner
@@ -17,6 +16,7 @@ import com.yawnandpawn.app.core.checks.Difficulty
 import com.yawnandpawn.app.core.session.DirectBootSubstitution
 import com.yawnandpawn.app.core.session.SessionEvent
 import com.yawnandpawn.app.core.session.SessionState
+import com.yawnandpawn.app.launchActivity
 import com.yawnandpawn.app.testing.FakeUserLockState
 import com.yawnandpawn.app.testing.aRegisteredCode
 import com.yawnandpawn.app.testing.aSessionConfig
@@ -61,8 +61,7 @@ class DirectBootNoteTest {
 
     private fun imUp(app: WakeApp) {
         composeRule.onNodeWithText("I'm up").performClick()
-        app.awaitUntil("Grace") {
-            composeRule.waitForIdle()
+        composeRule.awaitScreen(app, "Grace") {
             app.engine.state.value is SessionState.Grace
         }
     }
@@ -73,7 +72,7 @@ class DirectBootNoteTest {
         val scanner = FakeCodeScanner()
         val app = WakeApp(userLock = lock, scanner = scanner)
         ring(app, "session-locked", locked = true)
-        ActivityScenario.launch<WakeActivity>(Intent(app.app, WakeActivity::class.java)).use {
+        launchActivity<WakeActivity>(Intent(app.app, WakeActivity::class.java)).use {
             composeRule.onNodeWithText(note).assertExists()
             imUp(app)
             composeRule.onNodeWithText("Problem 1 of 3").assertExists()
@@ -89,15 +88,14 @@ class DirectBootNoteTest {
             assertEquals(listOf(DirectBootSubstitution.DIRECT_BOOT_CHECK), session.checkRun.plan.entries, "Math stays for the ring")
 
             app.solveCheck()
-            app.awaitUntil("the locked session ended") {
-                composeRule.waitForIdle()
+            composeRule.awaitScreen(app, "the locked session ended") {
                 app.engine.state.value !is SessionState.Ring
             }
         }
 
         app.awaitUntil("idle") { app.engine.state.value == SessionState.Idle }
         ring(app, "session-unlocked", locked = false)
-        ActivityScenario.launch<WakeActivity>(Intent(app.app, WakeActivity::class.java)).use {
+        launchActivity<WakeActivity>(Intent(app.app, WakeActivity::class.java)).use {
             composeRule.onNodeWithText("I'm up").assertExists()
             composeRule.onNodeWithText(note).assertDoesNotExist()
             imUp(app)
@@ -114,14 +112,13 @@ class DirectBootNoteTest {
         val word = CheckEntry(CheckType.WordUnscramble, Difficulty.Easy, 1)
         val plan = CheckPlan(CheckMode.All, qrPlan.entries + word)
         app.dispatch(SessionEvent.AlarmFired("session-locked", aSessionConfig().copy(checkPlan = plan), beforeFirstUnlock = true))
-        ActivityScenario.launch<WakeActivity>(Intent(app.app, WakeActivity::class.java)).use {
+        launchActivity<WakeActivity>(Intent(app.app, WakeActivity::class.java)).use {
             imUp(app)
             repeat(MATH_ITEMS) {
                 val run = assertIs<SessionState.Active>(app.engine.state.value).session.checkRun
                 if (run.step.entry == 0) app.dispatch(SessionEvent.CheckAnswerSubmitted(assertNotNull(rightAnswer(run))))
             }
-            app.awaitUntil("the Word step") {
-                composeRule.waitForIdle()
+            composeRule.awaitScreen(app, "the Word step") {
                 assertIs<SessionState.Active>(app.engine.state.value)
                     .session.checkRun.currentEntry
                     ?.type == CheckType.WordUnscramble
@@ -140,12 +137,11 @@ class DirectBootNoteTest {
             }
         val app = WakeApp(userLock = FakeUserLockState(unlocked = false), calls = calls)
         ring(app, "session-locked", locked = true)
-        ActivityScenario.launch<WakeActivity>(Intent(app.app, WakeActivity::class.java)).use {
+        launchActivity<WakeActivity>(Intent(app.app, WakeActivity::class.java)).use {
             composeRule.onNodeWithText(note).assertExists()
             inCall = true
             app.dispatch(SessionEvent.CallStarted)
-            app.awaitUntil("the call pauses the ring") {
-                composeRule.waitForIdle()
+            composeRule.awaitScreen(app, "the call pauses the ring") {
                 assertIs<SessionState.Active>(app.engine.state.value).session.paused
             }
             composeRule.onNodeWithText("Paused for your call. Rings again when it ends.").assertExists()
@@ -153,8 +149,7 @@ class DirectBootNoteTest {
 
             inCall = false
             app.dispatch(SessionEvent.CallEnded)
-            app.awaitUntil("the call ends") {
-                composeRule.waitForIdle()
+            composeRule.awaitScreen(app, "the call ends") {
                 !assertIs<SessionState.Active>(app.engine.state.value).session.paused
             }
             composeRule.onNodeWithText(note).assertExists()

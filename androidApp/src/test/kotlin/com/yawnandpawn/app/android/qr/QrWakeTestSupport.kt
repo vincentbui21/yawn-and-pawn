@@ -9,6 +9,7 @@ import androidx.test.core.app.ActivityScenario
 import com.yawnandpawn.app.android.wake.WakeActivity
 import com.yawnandpawn.app.android.wake.WakeApp
 import com.yawnandpawn.app.android.wake.WakeQr
+import com.yawnandpawn.app.android.wake.awaitScreen
 import com.yawnandpawn.app.core.checks.CheckEntry
 import com.yawnandpawn.app.core.checks.CheckMode
 import com.yawnandpawn.app.core.checks.CheckPlan
@@ -25,6 +26,7 @@ import com.yawnandpawn.app.core.session.FallbackRequest
 import com.yawnandpawn.app.core.session.SessionData
 import com.yawnandpawn.app.core.session.SessionEvent
 import com.yawnandpawn.app.core.session.SessionState
+import com.yawnandpawn.app.launchActivity
 import com.yawnandpawn.app.testing.FakeClock
 import com.yawnandpawn.app.testing.FakeMonotonicClock
 import com.yawnandpawn.app.testing.aSessionConfig
@@ -83,14 +85,13 @@ internal class QrWake(
         composeRule.onNodeWithText("Pick a fallback check").assertExists()
     }
 
-    fun launch(): ActivityScenario<WakeActivity> = ActivityScenario.launch(Intent(app.app, WakeActivity::class.java))
+    fun launch(): ActivityScenario<WakeActivity> = launchActivity(Intent(app.app, WakeActivity::class.java))
 
     fun run(): CheckRun = assertIs<SessionState.Active>(app.engine.state.value).session.checkRun
 
     fun imUp() {
         composeRule.onNodeWithText("I'm up").performClick()
-        app.awaitUntil("Grace") {
-            composeRule.waitForIdle()
+        composeRule.awaitScreen(app, "Grace") {
             app.engine.state.value is SessionState.Grace
         }
     }

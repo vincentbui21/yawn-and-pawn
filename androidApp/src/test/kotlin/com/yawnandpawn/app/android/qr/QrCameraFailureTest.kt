@@ -18,6 +18,7 @@ import com.yawnandpawn.app.android.qr.QrWake.Companion.LINK
 import com.yawnandpawn.app.android.qr.QrWake.Companion.START_MILLIS
 import com.yawnandpawn.app.android.qr.QrWake.Companion.UNAVAILABLE
 import com.yawnandpawn.app.android.qr.QrWake.Companion.VIEWFINDER
+import com.yawnandpawn.app.android.wake.awaitScreen
 import com.yawnandpawn.app.core.checks.CheckType
 import com.yawnandpawn.app.core.checks.qr.CodeFormat
 import com.yawnandpawn.app.core.checks.qr.RegisteredCode
@@ -206,8 +207,7 @@ class QrCameraFailureTest {
             assertEquals(1, wake.scanner.starts, "the same camera came back; nothing was bound again")
 
             wake.scanner.frames(3, wake.toothpaste)
-            wake.app.awaitUntil("the scan resumed and passed the check") {
-                composeRule.waitForIdle()
+            composeRule.awaitScreen(wake.app, "the scan resumed and passed the check") {
                 wake.app.engine.state.value !is SessionState.Ring
             }
         }
@@ -220,8 +220,7 @@ class QrCameraFailureTest {
         wake.launch().use {
             wake.imUp()
             wake.scanner.frames(3, cereal)
-            wake.app.awaitUntil("one failed attempt") {
-                composeRule.waitForIdle()
+            composeRule.awaitScreen(wake.app, "one failed attempt") {
                 wake.run().failedAttempts == 1
             }
             composeRule.onNodeWithText(LINK).assertDoesNotExist()
@@ -230,8 +229,7 @@ class QrCameraFailureTest {
             composeRule.waitForIdle()
             composeRule.onNodeWithText(LINK).performClick()
             composeRule.onNode(hasText("Math") and hasClickAction()).performClick()
-            wake.app.awaitUntil("the fallback replaced the check") {
-                composeRule.waitForIdle()
+            composeRule.awaitScreen(wake.app, "the fallback replaced the check") {
                 wake.run().fallbackUsed
             }
 
@@ -269,8 +267,7 @@ class QrCameraFailureTest {
 
             composeRule.onNodeWithText(LINK).performClick()
             composeRule.onNode(hasText("Math") and hasClickAction()).performClick()
-            wake.app.awaitUntil("the fallback replaced the check with no failed attempt") {
-                composeRule.waitForIdle()
+            composeRule.awaitScreen(wake.app, "the fallback replaced the check with no failed attempt") {
                 wake.run().fallbackUsed
             }
             assertEquals(FallbackReason.CameraUnavailable, wake.fallback.reasons.last())
@@ -329,8 +326,7 @@ class QrCameraFailureTest {
             composeRule.onNodeWithText(LINK).assertExists()
             composeRule.onNodeWithText(LINK).performClick()
             composeRule.onNode(hasText("Math") and hasClickAction()).performClick()
-            wake.app.awaitUntil("the fallback replaced the check") {
-                composeRule.waitForIdle()
+            composeRule.awaitScreen(wake.app, "the fallback replaced the check") {
                 wake.run().fallbackUsed
             }
             assertIs<SessionState.Ring>(wake.app.engine.state.value, "a check still stands between the user and the end")
@@ -369,8 +365,7 @@ class QrCameraFailureTest {
 
             wake.monotonic.set(START_MILLIS + 10_000)
             wake.scanner.frames(3, wake.toothpaste)
-            wake.app.awaitUntil("the first entry passed") {
-                composeRule.waitForIdle()
+            composeRule.awaitScreen(wake.app, "the first entry passed") {
                 wake.run().step.entry == 1
             }
             composeRule.onNodeWithText(LINK).assertDoesNotExist()

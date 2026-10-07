@@ -14,6 +14,7 @@ import com.yawnandpawn.app.StopAppRule
 import com.yawnandpawn.app.android.qr.QrWake.Companion.START_MILLIS
 import com.yawnandpawn.app.android.qr.QrWake.Companion.UNAVAILABLE
 import com.yawnandpawn.app.android.qr.QrWake.Companion.VIEWFINDER
+import com.yawnandpawn.app.android.wake.awaitScreen
 import com.yawnandpawn.app.core.session.SessionEvent
 import com.yawnandpawn.app.core.session.SessionState
 import com.yawnandpawn.app.testing.wrongAnswer
@@ -96,8 +97,7 @@ class QrLifecycleTest {
             }
             wake.heartbeatAt(START_MILLIS, GRACE_OVER)
             wake.app.dispatch(SessionEvent.GraceElapsed)
-            wake.app.awaitUntil("Loud") {
-                composeRule.waitForIdle()
+            composeRule.awaitScreen(wake.app, "Loud") {
                 wake.app.engine.state.value is SessionState.Loud
             }
             composeRule.onNode(hasContentDescription(VIEWFINDER)).assertExists()
@@ -121,16 +121,14 @@ class QrLifecycleTest {
         val wake = QrWake(composeRule, monotonic = first.monotonic)
         assertEquals(SessionState.Idle, wake.app.engine.state.value)
         wake.launch().use {
-            wake.app.awaitUntil("restored on the same step") {
-                composeRule.waitForIdle()
+            composeRule.awaitScreen(wake.app, "restored on the same step") {
                 wake.app.engine.state.value is SessionState.Loud
             }
             composeRule.onNode(hasContentDescription(VIEWFINDER)).assertExists()
             assertEquals(2, wake.run().failedAttempts)
             assertEquals(1, wake.scanner.starts)
             wake.scanner.frames(3, wake.toothpaste)
-            wake.app.awaitUntil("the restored scan passes the check") {
-                composeRule.waitForIdle()
+            composeRule.awaitScreen(wake.app, "the restored scan passes the check") {
                 wake.app.engine.state.value !is SessionState.Ring
             }
         }
@@ -144,8 +142,7 @@ class QrLifecycleTest {
             wake.imUp()
             wake.heartbeatAt(START_MILLIS, GRACE_OVER)
             wake.app.dispatch(SessionEvent.GraceElapsed)
-            wake.app.awaitUntil("Loud") {
-                composeRule.waitForIdle()
+            composeRule.awaitScreen(wake.app, "Loud") {
                 wake.app.engine.state.value is SessionState.Loud
             }
             scenario.moveToState(Lifecycle.State.STARTED)
@@ -171,8 +168,7 @@ class QrLifecycleTest {
 
         val wake = QrWake(composeRule, scanner = FakeCodeScanner(permitted = false), monotonic = first.monotonic)
         wake.launch().use {
-            wake.app.awaitUntil("restored") {
-                composeRule.waitForIdle()
+            composeRule.awaitScreen(wake.app, "restored") {
                 wake.app.engine.state.value is SessionState.Loud
             }
             composeRule.onNodeWithText(UNAVAILABLE).assertExists()

@@ -7,10 +7,12 @@ import androidx.compose.ui.test.junit4.createEmptyComposeRule
 import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
+import com.yawnandpawn.app.APP_WORK_TIMEOUT_MILLIS
 import com.yawnandpawn.app.StopAppRule
 import com.yawnandpawn.app.android.AlarmFiredReceiver
 import com.yawnandpawn.app.android.ApplicationScope
 import com.yawnandpawn.app.awaitChildren
+import com.yawnandpawn.app.buildActivity
 import com.yawnandpawn.app.core.alarm.AlarmDraft
 import com.yawnandpawn.app.core.alarm.AlarmFired
 import com.yawnandpawn.app.core.alarm.AlarmRepository
@@ -38,7 +40,6 @@ import kotlinx.datetime.LocalTime
 import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
-import org.robolectric.Robolectric
 import org.robolectric.RobolectricTestRunner
 import org.robolectric.Shadows.shadowOf
 import org.robolectric.annotation.Config
@@ -102,7 +103,7 @@ class TestAlarmFlowTest {
         assertNull(testAlarms.pending, "the pending test is used once")
 
         // The ringing screen: snooze reads "Test · no charge" and cannot be tapped.
-        val screen = Robolectric.buildActivity(WakeActivity::class.java).setup().get()
+        val screen = buildActivity(WakeActivity::class.java).setup().get()
         composeRule
             .onNodeWithContentDescription("Snooze unavailable, Test · no charge")
             .assertExists()
@@ -117,7 +118,7 @@ class TestAlarmFlowTest {
         // Story 3.3: the test Success screen, then "Done" closes the wake screen.
         composeRule.awaitSuccess(app, "Test finished. Your alarm works.")
         composeRule.onNodeWithText("Done").performClick()
-        composeRule.waitUntil(timeoutMillis = 5_000) { screen.isFinishing }
+        composeRule.waitUntil(timeoutMillis = APP_WORK_TIMEOUT_MILLIS) { screen.isFinishing }
         app.awaitUntil("the ring stops") { app.player.sound == null }
 
         assertEquals(SessionOutcome.Test, history.rows.single().outcome)

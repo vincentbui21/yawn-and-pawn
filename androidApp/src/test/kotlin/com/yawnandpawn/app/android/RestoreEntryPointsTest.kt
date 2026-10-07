@@ -15,6 +15,7 @@ import com.yawnandpawn.app.android.wake.WakeActivity
 import com.yawnandpawn.app.android.wake.WakeNotifier
 import com.yawnandpawn.app.android.wake.WakeService
 import com.yawnandpawn.app.awaitChildren
+import com.yawnandpawn.app.buildActivity
 import com.yawnandpawn.app.core.alarm.RequestCodes
 import com.yawnandpawn.app.core.error.Outcome
 import com.yawnandpawn.app.core.history.SessionHistoryRepository
@@ -35,7 +36,6 @@ import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
 import org.koin.core.context.GlobalContext
-import org.robolectric.Robolectric
 import org.robolectric.RobolectricTestRunner
 import org.robolectric.Shadows.shadowOf
 import org.robolectric.shadows.ShadowAlarmManager
@@ -102,7 +102,7 @@ class RestoreEntryPointsTest {
         val persisted = SessionState.Ringing(aSession().copy(paying = PurchaseIntentId("intent-1")))
         killWith(persisted)
 
-        Robolectric.buildActivity(MainActivity::class.java).create()
+        buildActivity(MainActivity::class.java).create()
         awaitWork()
 
         val restored = assertIs<SessionState.Ringing>(koin().get<SessionEngine>().state.value)
@@ -129,7 +129,7 @@ class RestoreEntryPointsTest {
         val persisted = SessionState.Loud(aSession())
         killWith(persisted)
 
-        Robolectric.buildActivity(WakeActivity::class.java).create()
+        buildActivity(WakeActivity::class.java).create()
         awaitWork()
 
         assertEquals(persisted.session.sessionId, assertIs<SessionState.Loud>(koin().get<SessionEngine>().state.value).session.sessionId)
@@ -141,7 +141,7 @@ class RestoreEntryPointsTest {
         val session = aSession().copy(interactionDeadline = null)
         killWith(SessionState.Completed(session))
 
-        Robolectric.buildActivity(MainActivity::class.java).create()
+        buildActivity(MainActivity::class.java).create()
         awaitWork()
 
         assertEquals(SessionState.Idle, koin().get<SessionEngine>().state.value)

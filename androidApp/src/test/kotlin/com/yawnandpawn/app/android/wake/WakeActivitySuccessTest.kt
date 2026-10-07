@@ -9,8 +9,10 @@ import android.view.ViewGroup
 import androidx.compose.ui.test.junit4.createEmptyComposeRule
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
+import com.yawnandpawn.app.APP_WORK_TIMEOUT_MILLIS
 import com.yawnandpawn.app.StopAppRule
 import com.yawnandpawn.app.android.ApplicationScope
+import com.yawnandpawn.app.buildActivity
 import com.yawnandpawn.app.core.history.SessionOutcome
 import com.yawnandpawn.app.core.session.SessionEvent
 import com.yawnandpawn.app.core.session.SessionState
@@ -22,7 +24,6 @@ import kotlinx.coroutines.launch
 import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
-import org.robolectric.Robolectric
 import org.robolectric.RobolectricTestRunner
 import org.robolectric.Shadows.shadowOf
 import org.robolectric.android.controller.ActivityController
@@ -67,7 +68,7 @@ class WakeActivitySuccessTest {
     ): ActivityController<WakeActivity> {
         ringing(app, testMode = testMode)
         app.awaitRinging()
-        val controller = Robolectric.buildActivity(WakeActivity::class.java).setup()
+        val controller = buildActivity(WakeActivity::class.java).setup()
         composeRule.onNodeWithText("I'm up").performClick()
         composeRule.awaitSuccess(app, headline)
         return controller
@@ -109,7 +110,7 @@ class WakeActivitySuccessTest {
         val restore = app.koin.get<ApplicationScope>().launch { app.engine.restore() }
         app.awaitUntil("the session is restored") { restore.isCompleted }
 
-        Robolectric.buildActivity(WakeActivity::class.java).setup()
+        buildActivity(WakeActivity::class.java).setup()
 
         composeRule.awaitSuccess(app, "You're up. That's what counts.")
         composeRule.onNodeWithText("paid this morning", substring = true).assertDoesNotExist()
@@ -126,7 +127,7 @@ class WakeActivitySuccessTest {
         composeRule.onNodeWithText(upOnTime).assertExists()
 
         composeRule.onNodeWithText("Done").performClick()
-        composeRule.waitUntil(timeoutMillis = 5_000) { screen.isFinishing }
+        composeRule.waitUntil(timeoutMillis = APP_WORK_TIMEOUT_MILLIS) { screen.isFinishing }
     }
 
     @Test
@@ -155,7 +156,7 @@ class WakeActivitySuccessTest {
     fun `leaving the ringing screen with Home does not close it`() {
         val app = WakeApp()
         ringing(app)
-        val controller = Robolectric.buildActivity(WakeActivity::class.java).setup()
+        val controller = buildActivity(WakeActivity::class.java).setup()
         composeRule.onNodeWithText("I'm up").assertExists()
 
         controller.pause().stop()
@@ -170,7 +171,7 @@ class WakeActivitySuccessTest {
 
         ringing(app, sessionId = "session-2")
 
-        composeRule.waitUntil(timeoutMillis = 5_000) { !composeRule.successShown(upOnTime) }
+        composeRule.waitUntil(timeoutMillis = APP_WORK_TIMEOUT_MILLIS) { !composeRule.successShown(upOnTime) }
         composeRule.onNodeWithText("I'm up").assertExists()
         assertFalse(screen.isFinishing, "the same single wake screen")
         assertEquals("session-2", (app.engine.state.value as SessionState.Active).session.sessionId)
@@ -180,14 +181,14 @@ class WakeActivitySuccessTest {
     fun `a session that ends Missed closes the screen without Success`() {
         val app = WakeApp()
         ringing(app)
-        val screen = Robolectric.buildActivity(WakeActivity::class.java).setup().get()
+        val screen = buildActivity(WakeActivity::class.java).setup().get()
         composeRule.waitForIdle()
 
         ShadowSystemClock.advanceBy(Duration.ofMinutes(31))
         val tick = app.koin.get<ApplicationScope>().launch { app.engine.tick() }
         app.awaitUntil("the tick runs") { tick.isCompleted }
 
-        composeRule.waitUntil(timeoutMillis = 10_000) { screen.isFinishing }
+        composeRule.waitUntil(timeoutMillis = APP_WORK_TIMEOUT_MILLIS) { screen.isFinishing }
         assertIs<SessionState.Missed>(app.engine.ended.value)
         assertFalse(composeRule.successShown(upOnTime), "no Success for a missed alarm")
     }
@@ -231,10 +232,10 @@ class WakeActivitySuccessTest {
         val screen = completed(app).get()
 
         app.runtime.startEmergency(Instant.parse("2027-03-03T06:15:00Z"), volumePercent = 80, cause = "commit failed")
-        composeRule.waitUntil(timeoutMillis = 5_000) { !composeRule.successShown(upOnTime) }
+        composeRule.waitUntil(timeoutMillis = APP_WORK_TIMEOUT_MILLIS) { !composeRule.successShown(upOnTime) }
         composeRule.onNodeWithText("I'm up").performClick()
 
-        composeRule.waitUntil(timeoutMillis = 5_000) { screen.isFinishing }
+        composeRule.waitUntil(timeoutMillis = APP_WORK_TIMEOUT_MILLIS) { screen.isFinishing }
         assertNull(app.runtime.emergency.value)
         assertFalse(composeRule.successShown(upOnTime), "Success does not come back")
     }
@@ -251,9 +252,9 @@ class WakeActivitySuccessTest {
 
         // A new process: a fresh engine with nothing stored and no ended session.
         val app = WakeApp()
-        val screen = Robolectric.buildActivity(WakeActivity::class.java).setup(bundle).get()
+        val screen = buildActivity(WakeActivity::class.java).setup(bundle).get()
 
-        composeRule.waitUntil(timeoutMillis = 5_000) { screen.isFinishing }
+        composeRule.waitUntil(timeoutMillis = APP_WORK_TIMEOUT_MILLIS) { screen.isFinishing }
         assertNull(app.engine.ended.value)
         assertFalse(composeRule.successShown(upOnTime))
     }

@@ -3,12 +3,12 @@ package com.yawnandpawn.app.android.wake
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import com.yawnandpawn.app.StopAppRule
+import com.yawnandpawn.app.buildActivity
 import com.yawnandpawn.app.core.session.SessionState
 import com.yawnandpawn.app.testing.aSession
 import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
-import org.robolectric.Robolectric
 import org.robolectric.RobolectricTestRunner
 import org.robolectric.android.controller.ActivityController
 import kotlin.test.assertEquals
@@ -29,7 +29,7 @@ class WakeScreenEndTest {
     private fun completed(id: String) = SessionState.Completed(aSession(sessionId = id))
 
     private fun screen(saved: Bundle? = null): Pair<ActivityController<ComponentActivity>, WakeScreenEnd> {
-        val controller = Robolectric.buildActivity(ComponentActivity::class.java).create(saved)
+        val controller = buildActivity(ComponentActivity::class.java).create(saved)
         return controller to WakeScreenEnd(controller.get(), ended = { ended }, elapsedMillis = { now })
     }
 

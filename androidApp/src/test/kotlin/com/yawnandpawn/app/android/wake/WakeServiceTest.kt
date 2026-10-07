@@ -14,6 +14,7 @@ import com.yawnandpawn.app.StopAppRule
 import com.yawnandpawn.app.android.AlarmFiredReceiver
 import com.yawnandpawn.app.android.ApplicationScope
 import com.yawnandpawn.app.awaitChildren
+import com.yawnandpawn.app.buildActivity
 import com.yawnandpawn.app.core.alarm.Alarm
 import com.yawnandpawn.app.core.alarm.AlarmFired
 import com.yawnandpawn.app.core.alarm.AlarmRepository
@@ -36,6 +37,7 @@ import com.yawnandpawn.app.core.session.SessionJson
 import com.yawnandpawn.app.core.session.SessionState
 import com.yawnandpawn.app.core.session.StoredSession
 import com.yawnandpawn.app.core.time.Deadline
+import com.yawnandpawn.app.stopApp
 import com.yawnandpawn.app.testing.FakeActiveSessionStore
 import com.yawnandpawn.app.testing.FakeAlarmRepository
 import com.yawnandpawn.app.testing.FakeCheckConfigRepository
@@ -54,6 +56,7 @@ import org.robolectric.RobolectricTestRunner
 import org.robolectric.Shadows.shadowOf
 import org.robolectric.shadows.ShadowAlarmManager
 import java.util.concurrent.atomic.AtomicBoolean
+import java.util.concurrent.atomic.AtomicInteger
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
 import kotlin.test.assertIs
@@ -782,6 +785,38 @@ class WakeServiceTest {
         loadAllowed.complete(Unit)
         app.awaitUntil("the service stops") { shadowOf(service).isStoppedBySelf }
         assertEquals(1, shadowOf(service).stopSelfResultId, "it stops its own latest start")
+    }
+
+    @Test
+    fun `the test teardown destroys a service and a wake screen the test left running, before Koin stops`() {
+        // CI flake (PR #37): a WakeService a test left running resumed its command on the shared main looper after Koin
+        // had stopped, and the exception failed a later test as UncaughtExceptionsBeforeTest.
+        // Only the service's load (the first) waits; the wake screen's restore queues behind it on the engine.
+        val loadAllowed = CompletableDeferred<Unit>()
+        val loads = AtomicInteger()
+        val resumedServiceLoads = AtomicInteger()
+        val empty = FakeActiveSessionStore()
+        val gated =
+            object : ActiveSessionStore by empty {
+                override suspend fun load(): Outcome<StoredSession, DomainError> {
+                    if (loads.incrementAndGet() == 1) {
+                        loadAllowed.await()
+                        resumedServiceLoads.incrementAndGet()
+                    }
+                    return empty.load()
+                }
+            }
+        val app = WakeApp(store = gated)
+        app.startService(WakeService.intent(app.app, WakeService.ACTION_SLOT))
+        val screen = buildActivity(WakeActivity::class.java).setup().get()
+
+        stopApp()
+        loadAllowed.complete(Unit)
+        shadowOf(Looper.getMainLooper()).idle()
+
+        assertEquals(0, resumedServiceLoads.get(), "the service's command was cancelled with the service")
+        assertTrue(screen.isDestroyed, "the wake screen was destroyed")
+        assertNull(GlobalContext.getOrNull(), "Koin stopped after both")
     }
 }
 

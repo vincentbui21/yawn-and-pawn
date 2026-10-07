@@ -9,6 +9,7 @@ import com.yawnandpawn.app.YawnAndPawnApp
 import com.yawnandpawn.app.android.AndroidLogger
 import com.yawnandpawn.app.android.ApplicationScope
 import com.yawnandpawn.app.android.call.CallState
+import com.yawnandpawn.app.buildService
 import com.yawnandpawn.app.core.alarm.AlarmFired
 import com.yawnandpawn.app.core.alarm.AlarmRepository
 import com.yawnandpawn.app.core.alarm.CheckConfigRepository
@@ -37,7 +38,6 @@ import kotlinx.coroutines.runBlocking
 import org.koin.core.Koin
 import org.koin.core.context.GlobalContext
 import org.koin.dsl.module
-import org.robolectric.Robolectric
 import org.robolectric.Shadows.shadowOf
 import org.robolectric.android.controller.ServiceController
 import org.robolectric.shadow.api.Shadow
@@ -126,7 +126,7 @@ internal class WakeApp(
 
     /** Starts the service as the system would for [intent] (created, then `onStartCommand`). */
     fun startService(intent: Intent): ServiceController<WakeService> =
-        Robolectric.buildService(WakeService::class.java, intent).create().startCommand(0, 1)
+        buildService(WakeService::class.java, intent).create().startCommand(0, 1)
 
     /** Starts the service for the alarm [fired]. */
     fun ring(fired: AlarmFired): ServiceController<WakeService> = startService(WakeService.alarmIntent(app, fired))

@@ -56,10 +56,7 @@ class FallbackPickerFlowTest {
         app: WakeApp,
         what: String,
         condition: () -> Boolean,
-    ) = app.awaitUntil(what) {
-        composeRule.waitForIdle()
-        condition()
-    }
+    ) = composeRule.awaitScreen(app, what, condition)
 
     private fun link() = composeRule.onNodeWithText("Can't do this check?")
 

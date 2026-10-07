@@ -61,10 +61,7 @@ class WordWakeCheckTest {
         app: WakeApp,
         what: String,
         condition: () -> Boolean,
-    ) = app.awaitUntil(what) {
-        composeRule.waitForIdle()
-        condition()
-    }
+    ) = composeRule.awaitScreen(app, what, condition)
 
     /** Taps the pool letters that spell [word], as a user does. */
     private fun spell(word: String) =

@@ -81,10 +81,7 @@ class MathCheckScreenTest {
         app: WakeApp,
         what: String,
         condition: () -> Boolean,
-    ) = app.awaitUntil(what) {
-        composeRule.waitForIdle()
-        condition()
-    }
+    ) = composeRule.awaitScreen(app, what, condition)
 
     @Test
     fun `I'm up shows problem 1 of 3 with the countdown, and solving all three on the pad ends the session`() {

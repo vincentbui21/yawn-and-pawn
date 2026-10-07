@@ -5,14 +5,15 @@ import android.content.pm.PackageManager
 import android.media.AudioManager
 import android.view.KeyEvent
 import androidx.compose.ui.test.junit4.createEmptyComposeRule
+import com.yawnandpawn.app.APP_WORK_TIMEOUT_MILLIS
 import com.yawnandpawn.app.StopAppRule
+import com.yawnandpawn.app.buildActivity
 import com.yawnandpawn.app.core.session.SessionEvent
 import com.yawnandpawn.app.core.session.SessionState
 import com.yawnandpawn.app.testing.aSessionConfig
 import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
-import org.robolectric.Robolectric
 import org.robolectric.RobolectricTestRunner
 import org.robolectric.android.controller.ActivityController
 import org.robolectric.annotation.Config
@@ -45,8 +46,7 @@ class WakeVolumeKeysTest {
     ) = KeyEvent(action, code)
 
     /** The wake screen, resumed and with window focus, as the system shows it. */
-    private fun open(): ActivityController<WakeActivity> =
-        Robolectric.buildActivity(WakeActivity::class.java).setup().windowFocusChanged(true)
+    private fun open(): ActivityController<WakeActivity> = buildActivity(WakeActivity::class.java).setup().windowFocusChanged(true)
 
     private fun WakeApp.ring() = dispatch(SessionEvent.AlarmFired("session-1", aSessionConfig(), beforeFirstUnlock = false))
 
@@ -130,7 +130,7 @@ class WakeVolumeKeysTest {
         assertEquals(listOf(true, true), screen.consumesVolumeDown(), "ringing")
         // The screen answers the placeholder step itself.
         app.dispatch(SessionEvent.ImUpTapped)
-        composeRule.waitUntil(timeoutMillis = 10_000) { app.engine.state.value == SessionState.Idle }
+        composeRule.waitUntil(timeoutMillis = APP_WORK_TIMEOUT_MILLIS) { app.engine.state.value == SessionState.Idle }
 
         assertEquals(listOf(false, false), screen.consumesVolumeDown(), "the session ended")
     }

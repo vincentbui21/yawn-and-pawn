@@ -7,6 +7,7 @@ import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleOwner
 import androidx.lifecycle.LifecycleRegistry
 import androidx.lifecycle.compose.LocalLifecycleOwner
+import com.yawnandpawn.app.APP_WORK_TIMEOUT_MILLIS
 import com.yawnandpawn.app.StopAppRule
 import com.yawnandpawn.app.core.history.MissedNotes
 import com.yawnandpawn.app.core.reliability.ReliabilityStatus
@@ -80,14 +81,14 @@ class HomeRouteLifecycleTest {
                 }
             },
         ) {
-            composeRule.waitUntil(timeoutMillis = 5_000) { bannerShown() }
+            composeRule.waitUntil(timeoutMillis = APP_WORK_TIMEOUT_MILLIS) { bannerShown() }
 
             // Back from "Fix": stopped, the setting turned on, started again.
             composeRule.runOnIdle { owner.registry.currentState = Lifecycle.State.CREATED }
             val beforeStart = probe.checks
             probe.status = ReliabilityStatus.ALL_OK
             composeRule.runOnIdle { owner.registry.currentState = Lifecycle.State.STARTED }
-            composeRule.waitUntil(timeoutMillis = 5_000) { !bannerShown() }
+            composeRule.waitUntil(timeoutMillis = APP_WORK_TIMEOUT_MILLIS) { !bannerShown() }
             assertTrue(probe.checks > beforeStart, "ON_START checked again")
 
             // A permission dialog over Home: paused, the setting turned off, resumed.
@@ -96,7 +97,7 @@ class HomeRouteLifecycleTest {
             val beforeResume = probe.checks
             probe.status = ReliabilityStatus.ALL_OK.copy(notificationsAllowed = false)
             composeRule.runOnIdle { owner.registry.currentState = Lifecycle.State.RESUMED }
-            composeRule.waitUntil(timeoutMillis = 5_000) { bannerShown() }
+            composeRule.waitUntil(timeoutMillis = APP_WORK_TIMEOUT_MILLIS) { bannerShown() }
             assertTrue(probe.checks > beforeResume, "ON_RESUME checked again")
         }
     }

@@ -7,7 +7,6 @@ import android.os.UserManager
 import androidx.compose.ui.test.junit4.createEmptyComposeRule
 import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.lifecycle.Lifecycle
-import androidx.test.core.app.ActivityScenario
 import com.yawnandpawn.app.StopAppRule
 import com.yawnandpawn.app.android.ApplicationScope
 import com.yawnandpawn.app.android.crash.FirebaseStartup
@@ -23,6 +22,7 @@ import com.yawnandpawn.app.core.session.PurchaseIntent
 import com.yawnandpawn.app.core.session.SessionEvent
 import com.yawnandpawn.app.core.session.SessionState
 import com.yawnandpawn.app.core.time.Deadline
+import com.yawnandpawn.app.launchActivity
 import com.yawnandpawn.app.testing.FakeActiveSessionStore
 import com.yawnandpawn.app.testing.FakeBilling
 import com.yawnandpawn.app.testing.FakeLogger
@@ -187,7 +187,7 @@ class UnlockDuringRingTest {
         val lock = FakeUserLockState(unlocked = false)
         val app = WakeApp(billing = billing, userLock = lock)
         app.dispatch(SessionEvent.AlarmFired("session-1", aSessionConfig(), beforeFirstUnlock = true))
-        val scenario = ActivityScenario.launch<WakeActivity>(Intent(app.app, WakeActivity::class.java))
+        val scenario = launchActivity<WakeActivity>(Intent(app.app, WakeActivity::class.java))
         composeRule.onNodeWithContentDescription("Snooze unavailable, Unlock your phone to snooze").assertExists()
         var before: WakeActivity? = null
         scenario.onActivity { before = it }
@@ -209,7 +209,7 @@ class UnlockDuringRingTest {
         val lock = FakeUserLockState(unlocked = false)
         val app = WakeApp(billing = billing, userLock = lock)
         app.dispatch(SessionEvent.AlarmFired("session-1", aSessionConfig(), beforeFirstUnlock = true))
-        val scenario = ActivityScenario.launch<WakeActivity>(Intent(app.app, WakeActivity::class.java))
+        val scenario = launchActivity<WakeActivity>(Intent(app.app, WakeActivity::class.java))
         lock.unlock()
 
         scenario.moveToState(Lifecycle.State.STARTED)
@@ -410,7 +410,7 @@ class UnlockDuringRingTest {
             )
         assertEquals(Outcome.Success(Unit), runBlocking { app.koin.get<ActiveSessionStore>().commit(snoozed) })
         // The screen restores the session itself (a restore entry point).
-        val scenario = ActivityScenario.launch<WakeActivity>(Intent(app.app, WakeActivity::class.java))
+        val scenario = launchActivity<WakeActivity>(Intent(app.app, WakeActivity::class.java))
         app.awaitUntil("the snooze is restored") { app.engine.state.value is SessionState.Snoozed }
 
         scenario.moveToState(Lifecycle.State.STARTED)

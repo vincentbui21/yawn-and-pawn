@@ -18,6 +18,7 @@ import androidx.compose.ui.test.performClick
 import androidx.compose.ui.unit.dp
 import androidx.test.core.app.ActivityScenario
 import androidx.test.core.app.ApplicationProvider
+import com.yawnandpawn.app.APP_WORK_TIMEOUT_MILLIS
 import com.yawnandpawn.app.MainActivity
 import com.yawnandpawn.app.StopAppRule
 import com.yawnandpawn.app.android.ApplicationScope
@@ -137,7 +138,7 @@ class SessionLockScreenTest {
     }
 
     private fun assertLocked() {
-        composeRule.waitUntil(timeoutMillis = 5_000) {
+        composeRule.waitUntil(timeoutMillis = APP_WORK_TIMEOUT_MILLIS) {
             composeRule.onAllNodes(hasText("Alarm in progress")).fetchSemanticsNodes().isNotEmpty()
         }
         composeRule.onNode(hasText("Alarm in progress") and isHeading()).assertExists()
@@ -179,7 +180,7 @@ class SessionLockScreenTest {
             assertNull(preview.previewing.value)
 
             dispatch(SessionEvent.ImUpTapped, SessionEvent.CheckAnswerSubmitted(CheckAnswer.Placeholder))
-            composeRule.waitUntil(timeoutMillis = 5_000) { engine.state.value == SessionState.Idle }
+            composeRule.waitUntil(timeoutMillis = APP_WORK_TIMEOUT_MILLIS) { engine.state.value == SessionState.Idle }
             composeRule.waitForIdle()
 
             composeRule.onNodeWithText("Alarm in progress").assertDoesNotExist()
@@ -225,7 +226,7 @@ class SessionLockScreenTest {
             assertRestoring()
 
             finishRestore()
-            composeRule.waitUntil(timeoutMillis = 5_000) {
+            composeRule.waitUntil(timeoutMillis = APP_WORK_TIMEOUT_MILLIS) {
                 composeRule.onAllNodes(hasContentDescription("Add alarm")).fetchSemanticsNodes().isNotEmpty()
             }
 
@@ -241,7 +242,7 @@ class SessionLockScreenTest {
         assertEquals(SessionState.Completed::class, engine.state.value::class, "the history write keeps failing")
 
         ActivityScenario.launch(MainActivity::class.java).use {
-            composeRule.waitUntil(timeoutMillis = 5_000) {
+            composeRule.waitUntil(timeoutMillis = APP_WORK_TIMEOUT_MILLIS) {
                 composeRule.onAllNodes(hasContentDescription("Add alarm")).fetchSemanticsNodes().isNotEmpty()
             }
 

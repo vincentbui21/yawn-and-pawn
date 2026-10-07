@@ -65,13 +65,13 @@ class MainActivityTest {
 
     /** Room reads and writes run off the main thread, so wait for their results to reach the screen. */
     private fun waitForText(text: String) {
-        composeRule.waitUntil(timeoutMillis = 5_000) {
+        composeRule.waitUntil(timeoutMillis = APP_WORK_TIMEOUT_MILLIS) {
             composeRule.onAllNodes(hasText(text)).fetchSemanticsNodes().isNotEmpty()
         }
     }
 
     private fun waitForGone(text: String) {
-        composeRule.waitUntil(timeoutMillis = 5_000) {
+        composeRule.waitUntil(timeoutMillis = APP_WORK_TIMEOUT_MILLIS) {
             composeRule.onAllNodes(hasText(text)).fetchSemanticsNodes().isEmpty()
         }
     }
@@ -288,7 +288,7 @@ class MainActivityTest {
 
         composeRule.onNodeWithContentDescription("7:00 AM alarm").assertIsOn().performClick()
 
-        composeRule.waitUntil(timeoutMillis = 5_000) {
+        composeRule.waitUntil(timeoutMillis = APP_WORK_TIMEOUT_MILLIS) {
             composeRule.onAllNodes(hasText("Rings in", substring = true)).fetchSemanticsNodes().isEmpty()
         }
         composeRule.onNodeWithContentDescription("7:00 AM alarm").assertIsOff()
@@ -331,7 +331,7 @@ class MainActivityTest {
     /** The "New alarm" editor shows the Gym alarm's settings: its label and its time on the wheels. */
     private fun assertPrefilledFromGym() {
         waitForText("New alarm")
-        composeRule.waitUntil(timeoutMillis = 5_000) {
+        composeRule.waitUntil(timeoutMillis = APP_WORK_TIMEOUT_MILLIS) {
             composeRule.onAllNodes(hasText("Gym") and hasSetTextAction()).fetchSemanticsNodes().isNotEmpty()
         }
         assertTrue(wheelValue("Hour").orEmpty().contains("6"), "hour wheel: ${wheelValue("Hour")}")
@@ -374,7 +374,7 @@ class MainActivityTest {
         composeRule.onNode(hasText("Duplicate") and hasClickAction()).performClick()
 
         // One editor, not two stacked: the new alarm's replaces the original's.
-        composeRule.waitUntil(timeoutMillis = 5_000) {
+        composeRule.waitUntil(timeoutMillis = APP_WORK_TIMEOUT_MILLIS) {
             composeRule.onAllNodes(hasText("New alarm")).fetchSemanticsNodes().size == 1 &&
                 composeRule.onAllNodes(hasText("Edit alarm")).fetchSemanticsNodes().isEmpty()
         }

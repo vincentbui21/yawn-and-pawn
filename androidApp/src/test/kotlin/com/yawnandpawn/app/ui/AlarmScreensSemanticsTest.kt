@@ -24,6 +24,7 @@ import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performScrollTo
 import androidx.compose.ui.test.performTouchInput
 import androidx.compose.ui.unit.dp
+import com.yawnandpawn.app.APP_WORK_TIMEOUT_MILLIS
 import com.yawnandpawn.app.StopAppRule
 import com.yawnandpawn.app.core.alarm.RequestCodes
 import com.yawnandpawn.app.core.error.DomainError
@@ -288,7 +289,7 @@ class AlarmScreensSemanticsTest {
         ) {
             composeRule.onNodeWithText("Save").performClick()
 
-            composeRule.waitUntil(timeoutMillis = 5_000) {
+            composeRule.waitUntil(timeoutMillis = APP_WORK_TIMEOUT_MILLIS) {
                 composeRule.onAllNodes(hasText("Couldn't save the alarm. Try again.")).fetchSemanticsNodes().isNotEmpty()
             }
             composeRule.onNodeWithText("New alarm").assertExists()
@@ -322,7 +323,7 @@ class AlarmScreensSemanticsTest {
         ) {
             composeRule.onNode(hasText("Test alarm") and hasClickAction()).performScrollTo().performClick()
 
-            composeRule.waitUntil(timeoutMillis = 5_000) {
+            composeRule.waitUntil(timeoutMillis = APP_WORK_TIMEOUT_MILLIS) {
                 composeRule.onAllNodes(hasText("Lock your phone. We'll ring in 10 seconds.")).fetchSemanticsNodes().isNotEmpty()
             }
             composeRule.onNodeWithText("New alarm").assertExists()
@@ -368,7 +369,7 @@ class AlarmScreensSemanticsTest {
                 )
             },
         ) {
-            composeRule.waitUntil(timeoutMillis = 5_000) { openFailed }
+            composeRule.waitUntil(timeoutMillis = APP_WORK_TIMEOUT_MILLIS) { openFailed }
             assertFalse(closed)
         }
     }
@@ -569,7 +570,7 @@ class AlarmScreensSemanticsTest {
 
             switch.performClick()
 
-            composeRule.waitUntil(timeoutMillis = 5_000) {
+            composeRule.waitUntil(timeoutMillis = APP_WORK_TIMEOUT_MILLIS) {
                 composeRule.onAllNodes(hasText("Couldn't save the alarm. Try again.")).fetchSemanticsNodes().isNotEmpty()
             }
             switch.assertIsOn()
@@ -632,7 +633,7 @@ class AlarmScreensSemanticsTest {
                 )
             },
         ) {
-            composeRule.waitUntil(timeoutMillis = 5_000) {
+            composeRule.waitUntil(timeoutMillis = APP_WORK_TIMEOUT_MILLIS) {
                 composeRule.onAllNodes(hasText("Couldn't open this alarm.")).fetchSemanticsNodes().isNotEmpty()
             }
             assertTrue(shown)

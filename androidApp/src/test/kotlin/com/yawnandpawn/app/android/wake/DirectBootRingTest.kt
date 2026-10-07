@@ -10,12 +10,14 @@ import android.os.IBinder
 import android.os.Looper
 import android.os.UserManager
 import androidx.test.core.app.ApplicationProvider
+import com.yawnandpawn.app.APP_WORK_TIMEOUT_MILLIS
 import com.yawnandpawn.app.StopAppRule
 import com.yawnandpawn.app.android.AndroidLogger
 import com.yawnandpawn.app.android.ApplicationScope
 import com.yawnandpawn.app.android.crash.FirebaseStartup
 import com.yawnandpawn.app.appModule
 import com.yawnandpawn.app.awaitChildren
+import com.yawnandpawn.app.buildService
 import com.yawnandpawn.app.core.alarm.AlarmRepository
 import com.yawnandpawn.app.core.alarm.AlarmScheduler
 import com.yawnandpawn.app.core.alarm.RequestCodes
@@ -51,7 +53,6 @@ import org.koin.android.ext.koin.androidContext
 import org.koin.core.context.GlobalContext
 import org.koin.core.context.startKoin
 import org.koin.dsl.module
-import org.robolectric.Robolectric
 import org.robolectric.RobolectricTestRunner
 import org.robolectric.Shadows.shadowOf
 import org.robolectric.annotation.Config
@@ -97,7 +98,7 @@ class DirectBootRingTest {
     @Test
     fun `while locked every context closes credential-protected storage and the device-protected one stays open`() {
         lockUser()
-        val service = Robolectric.buildService(PlainService::class.java).create().get()
+        val service = buildService(PlainService::class.java).create().get()
         val contexts = listOf(app, app.applicationContext, app.baseContext, service, service.applicationContext)
         val closed =
             listOf<Pair<String, (Context) -> Any?>>(
@@ -141,7 +142,7 @@ class DirectBootRingTest {
         what: String,
         condition: () -> Boolean,
     ) {
-        repeat(500) {
+        repeat((APP_WORK_TIMEOUT_MILLIS / 10).toInt()) {
             shadowOf(Looper.getMainLooper()).idle()
             if (condition()) return
             Thread.sleep(10)
@@ -185,7 +186,7 @@ class DirectBootRingTest {
         app.sendBroadcast(Intent(shadowOf(armed.operation).savedIntent))
         idle()
         val start = assertNotNull(shadowOf(app).nextStartedService, "the alarm receiver starts the wake service")
-        Robolectric.buildService(WakeService::class.java, start).create().startCommand(0, 1)
+        buildService(WakeService::class.java, start).create().startCommand(0, 1)
         val engine = koin.get<SessionEngine>()
         val player = koin.get<AndroidAlarmPlayer>()
         try {

@@ -19,11 +19,12 @@ class CheckTypeTest {
                     CheckType.Math -> "Math"
                     CheckType.WordUnscramble -> "WordUnscramble"
                     is CheckType.MemorySequence -> "MemorySequence"
+                    CheckType.QrBarcode -> "QrBarcode"
                     CheckType.Placeholder -> "Placeholder"
                 }
             }
 
-        assertEquals(listOf("Math", "WordUnscramble", "MemorySequence", "Placeholder"), listed)
+        assertEquals(listOf("Math", "WordUnscramble", "MemorySequence", "QrBarcode", "Placeholder"), listed)
         assertEquals(listed, CheckType.all.map { it.id })
     }
 
@@ -40,6 +41,7 @@ class CheckTypeTest {
                 "Math" to listOf(false, true, true, 1..10, 3),
                 "WordUnscramble" to listOf(false, true, true, 1..5, 2),
                 "MemorySequence" to listOf(false, true, true, 1..5, 2),
+                "QrBarcode" to listOf(true, false, false, 1..1, 1),
                 "Placeholder" to listOf(false, true, false, 1..1, 1),
             ),
             declared,

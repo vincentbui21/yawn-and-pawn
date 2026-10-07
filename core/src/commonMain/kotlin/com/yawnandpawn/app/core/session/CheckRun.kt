@@ -92,7 +92,7 @@ data class CheckRun(
     fun withItemInPuzzle(): CheckRun {
         val entry = currentEntry
         val seed = seeds.getOrNull(step.entry)
-        val last = if (entry == null || seed == null) -1 else entry.type.generate(seed, entry.difficulty, entry.count).size - 1
+        val last = if (entry == null || seed == null) -1 else entry.puzzle(seed).size - 1
         return if (last < 0 || step.item in 0..last) this else copy(step = step.copy(item = step.item.coerceIn(0, last)))
     }
 

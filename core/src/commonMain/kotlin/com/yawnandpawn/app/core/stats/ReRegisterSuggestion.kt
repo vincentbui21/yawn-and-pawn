@@ -1,6 +1,7 @@
 package com.yawnandpawn.app.core.stats
 
 import com.yawnandpawn.app.core.alarm.Alarm
+import com.yawnandpawn.app.core.alarm.CheckConfigRepository
 import com.yawnandpawn.app.core.checks.CheckType
 import com.yawnandpawn.app.core.error.DomainError
 import com.yawnandpawn.app.core.error.Outcome
@@ -10,6 +11,7 @@ import com.yawnandpawn.app.core.time.Clock
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.flowOf
+import kotlinx.coroutines.flow.map
 import kotlin.time.Duration
 import kotlin.time.Duration.Companion.days
 import kotlin.time.Instant
@@ -96,16 +98,32 @@ fun interface FallbackHistory {
 }
 
 /**
- * Port: the registered camera checks of the alarms and when each was last registered. Story 3.10 stores them (check
- * config with the code); until then there are none ([None]), so Home never suggests re-registering.
+ * Port: the registered camera checks of the alarms and when each was last registered. In production the stored checks
+ * ([StoredCheckRegistrations], Story 3.10); [None] has none, so Home never suggests re-registering.
  */
 fun interface CheckRegistrations {
     fun observe(): Flow<List<ConfiguredCheck>>
 
-    /** No registered check: the production value until Story 3.10. */
+    /** No registered check (tests that are not about the banner). */
     object None : CheckRegistrations {
         override fun observe(): Flow<List<ConfiguredCheck>> = flowOf(emptyList())
     }
+}
+
+/**
+ * The production [CheckRegistrations] (Story 3.10): every stored check with a registered code (QR/Barcode's
+ * `check_config` row), at the time its code was last registered (`CheckConfig.codeRegisteredAt`), again after every
+ * change of the alarms or their checks.
+ */
+class StoredCheckRegistrations(
+    private val checkConfigs: CheckConfigRepository,
+) : CheckRegistrations {
+    override fun observe(): Flow<List<ConfiguredCheck>> =
+        checkConfigs.observeAlarmsWithChecks().map { alarms ->
+            alarms
+                .flatMap { it.checks }
+                .mapNotNull { config -> config.codeRegisteredAt?.let { ConfiguredCheck(config.alarmId, config.entry.type, it) } }
+        }
 }
 
 /**

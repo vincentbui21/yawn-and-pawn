@@ -51,10 +51,11 @@ fun MutableList<NavKey>.selectTab(tab: AppTab) {
 fun MutableList<NavKey>.openEditor(
     alarmId: String?,
     copyOf: String? = null,
+    scanCode: Boolean = false,
 ) {
     val top = topTab() ?: return
     if (top != AppTab.Alarms) removeAt(lastIndex)
-    add(Route.AlarmEditor(alarmId, copyOf))
+    add(Route.AlarmEditor(alarmId, copyOf, scanCode))
 }
 
 /** Closes [route] if it is on top; a late second close never pops the Alarms root. */

@@ -66,7 +66,7 @@ class FakeCheckConfigRepository(
     }
 }
 
-/** The rows of [entries] for [alarmId], in order, as the alarm use cases store them. */
+/** The rows of [entries] for [alarmId], in order, as the alarm use cases store them (a code registered [at] too). */
 fun checkConfigsOf(
     alarmId: String,
     entries: List<CheckEntry>,
@@ -80,5 +80,6 @@ fun checkConfigsOf(
             entry = entry,
             createdAt = at,
             updatedAt = at,
+            codeRegisteredAt = at.takeIf { entry.code != null },
         )
     }

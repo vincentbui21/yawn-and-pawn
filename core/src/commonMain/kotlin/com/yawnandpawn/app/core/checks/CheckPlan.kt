@@ -1,5 +1,8 @@
 package com.yawnandpawn.app.core.checks
 
+import com.yawnandpawn.app.core.checks.qr.RegisteredCode
+import kotlinx.serialization.EncodeDefault
+import kotlinx.serialization.ExperimentalSerializationApi
 import kotlinx.serialization.Serializable
 
 /** How a ring uses an alarm's checks (FR-PWK-2): one of them per ring, or all of them in order. */
@@ -12,13 +15,27 @@ enum class CheckMode {
     All,
 }
 
-/** One check of an alarm's plan: [type] at [difficulty], with [count] items (problems, words, rounds). */
+/**
+ * One check of an alarm's plan: [type] at [difficulty], with [count] items (problems, words, rounds). [code] is the
+ * registered code of a [CheckType.QrBarcode] entry (Story 3.10) and null for every other type. A null [code] is never
+ * encoded, so a session stored before Story 3.10 encodes and decodes exactly as before.
+ */
 @Serializable
 data class CheckEntry(
     val type: CheckType,
     val difficulty: Difficulty,
     val count: Int,
-)
+    @OptIn(ExperimentalSerializationApi::class)
+    @EncodeDefault(EncodeDefault.Mode.NEVER)
+    val code: RegisteredCode? = null,
+) {
+    /** The puzzle of this entry for [seed]: what the screen shows and what the answer is checked against. */
+    fun puzzle(seed: Long): Puzzle = type.puzzle(this, seed)
+
+    /** This entry has everything its puzzle needs (a QR/Barcode entry: a registered code); `SaveAlarm` rejects one that does not. */
+    val isReady: Boolean
+        get() = type.isReady(this)
+}
 
 /**
  * An alarm's checks (FR-PWK-2): [entries] in the user's order, used as [mode] says. A ring runs the plan that

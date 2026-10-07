@@ -3,6 +3,7 @@ package com.yawnandpawn.app.ui.checks
 import com.yawnandpawn.app.core.checks.CheckAnswer
 import com.yawnandpawn.app.core.checks.CheckResult
 import com.yawnandpawn.app.core.checks.Puzzle
+import com.yawnandpawn.app.core.checks.qr.RegisteredCode
 import com.yawnandpawn.app.ui.checksetup.CheckPreviewUiState
 import com.yawnandpawn.app.ui.wake.CheckContent
 import com.yawnandpawn.app.ui.wake.MathOperator
@@ -36,12 +37,16 @@ interface CheckTrial {
  * offered by the pickers ([PickableCheckTypes]).
  */
 object CheckRegistry {
-    /** A "Try it" of each registered check at its difficulty, with one item, from the seed; [accessible]: TalkBack on. */
-    private val trials: Map<CheckType, (difficulty: Difficulty, seed: Long, accessible: Boolean) -> CheckTrial?> =
+    /**
+     * A "Try it" of each registered check at its difficulty, with one item, from the seed; [accessible]: TalkBack on;
+     * the registered code for QR/Barcode (Story 3.10), which has no trial without one.
+     */
+    private val trials: Map<CheckType, (difficulty: Difficulty, seed: Long, accessible: Boolean, code: RegisteredCode?) -> CheckTrial?> =
         mapOf(
-            CheckType.Math to { difficulty, seed, _ -> MathTrial.start(difficulty, seed) },
-            CheckType.WordUnscramble to { difficulty, seed, _ -> WordTrial.start(difficulty, seed) },
-            CheckType.MemorySequence to { difficulty, seed, accessible -> MemoryTrial.start(difficulty, seed, numbered = accessible) },
+            CheckType.Math to { difficulty, seed, _, _ -> MathTrial.start(difficulty, seed) },
+            CheckType.WordUnscramble to { difficulty, seed, _, _ -> WordTrial.start(difficulty, seed) },
+            CheckType.MemorySequence to { difficulty, seed, accessible, _ -> MemoryTrial.start(difficulty, seed, numbered = accessible) },
+            CheckType.QrBarcode to { _, _, _, code -> code?.let(QrTrial::start) },
         )
 
     /** The checks with a registered trial. */
@@ -57,7 +62,8 @@ object CheckRegistry {
         difficulty: Difficulty,
         seed: Long,
         accessible: Boolean = false,
-    ): CheckTrial? = trials[type]?.invoke(difficulty, seed, accessible)
+        code: RegisteredCode? = null,
+    ): CheckTrial? = trials[type]?.invoke(difficulty, seed, accessible, code)
 }
 
 /**

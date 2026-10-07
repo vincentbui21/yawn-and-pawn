@@ -666,6 +666,11 @@ private fun QrCheck(
         ViewfinderPlaceholder(spoken = stringResource(Res.string.qr_viewfinder)) { viewfinder ->
             QrGuide(colors = viewfinder, torchLabel = torch, onTorch = { onIntent(WakeIntent.TorchToggled) })
         }
+        // Story 3.10: an error haptic for each different code (keyed by the failed attempts, as the screen sees them).
+        val haptics = LocalHapticFeedback.current
+        LaunchedEffect(content.wrongCode, content.wrongAttempts) {
+            if (content.wrongCode) haptics.performHapticFeedback(HapticFeedbackType.Reject)
+        }
         if (content.wrongCode) {
             Text(
                 text = stringResource(Res.string.qr_wrong_code),

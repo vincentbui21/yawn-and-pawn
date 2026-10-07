@@ -12,6 +12,7 @@ import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
@@ -35,6 +36,7 @@ import com.yawnandpawn.app.core.session.SnoozeAvailabilityPolicy
 import com.yawnandpawn.app.core.session.UserLockState
 import com.yawnandpawn.app.core.time.MonotonicClock
 import com.yawnandpawn.app.core.time.TimeZoneProvider
+import com.yawnandpawn.app.ui.components.LocalViewfinderFeed
 import com.yawnandpawn.app.ui.format.is24HourClock
 import com.yawnandpawn.app.ui.wake.CheckScreen
 import com.yawnandpawn.app.ui.wake.CheckUiState
@@ -65,8 +67,8 @@ import kotlin.time.Duration.Companion.seconds
 
 /**
  * The wake screen over the lock screen (AD-5): the approved Ringing screen (`ui/wake/RingingScreen`, Story 1.15) and,
- * in Grace or Loud on a Math or Memory Sequence entry, the approved Check screen (`ui/wake/CheckScreen`, Stories 3.2
- * and 3.8, [WakeCheck]).
+ * in Grace or Loud on a check entry (Math, Word Unscramble, Memory Sequence, QR/Barcode), the approved Check screen
+ * (`ui/wake/CheckScreen`, Stories 3.2, 3.7, 3.8 and 3.10, [WakeCheck]).
  * Opened again from the notification or from "Back to alarm" after Home, it shows the current problem. While the
  * fallback is offered, "Can't do this check?" opens the Fallback check picker (Story 3.9, [WakeCheck]).
  *
@@ -114,7 +116,7 @@ class WakeActivity : ComponentActivity() {
     private val monotonicClock: MonotonicClock by inject()
 
     /** The Check screen's typed answer, grace clock and keys (Story 3.2). */
-    private val check by lazy { WakeCheck(get(), get(), get(), get(), get()) }
+    private val check by lazy { WakeCheck(get(), get(), get(), get(), get(), get()) }
 
     /** Keeps the events [send] dispatches in order. */
     private val dispatchOrder = Mutex()
@@ -230,7 +232,14 @@ class WakeActivity : ComponentActivity() {
                             ?.let { WakeScreen.Ringing(alarmOnlyRingingUiState(it, zone)) }
                 if (session != null) last.sessionShown = true
                 if (current != null) last.state = current
-                WakeContent(state = current ?: last.state, onIntent = ::onIntent, onInteracted = ::interacted)
+                val shown = current ?: last.state
+                // Story 3.10: the QR check's viewfinder shows the camera, and each stable code is sent as an answer. One
+                // feed for as long as the camera shows (review): the grace countdown's redraws must not rebind it.
+                val camera = check.qr.showsCamera((shown as? WakeScreen.Check)?.state?.content)
+                val feed = remember(camera) { if (camera) check.qr.feed { send(*it.toTypedArray()) } else null }
+                CompositionLocalProvider(LocalViewfinderFeed provides feed) {
+                    WakeContent(state = shown, onIntent = ::onIntent, onInteracted = ::interacted)
+                }
             }
         }
     }
@@ -278,6 +287,12 @@ class WakeActivity : ComponentActivity() {
             // Story 3.7: a Word Unscramble letter, slot, "Shuffle" or "Clear".
             WakeCheck.isWordKey(intent) -> {
                 check.onWordKey(intent, engine.state.value, send = { send(*it.toTypedArray()) }, interacted = ::interacted)
+            }
+
+            // Story 3.10: the QR viewfinder's torch.
+            intent == WakeIntent.TorchToggled -> {
+                check.qr.toggleTorch()
+                interacted()
             }
 
             intent != WakeIntent.ImUpClicked -> {

@@ -215,7 +215,7 @@ object PluginCheckValidator : CheckValidator {
         } else {
             // A damaged row's item past the end is checked on the last item, as the wake screen shows it (Story 3.2).
             val item = run.withItemInPuzzle().step.item
-            val result = entry.type.validate(entry.type.generate(seed, entry.difficulty, entry.count), item, answer)
+            val result = entry.type.validate(entry.puzzle(seed), item, answer)
             stepResultOf(result, lastEntry = run.step.entry >= run.plan.entries.lastIndex)
         }
     }

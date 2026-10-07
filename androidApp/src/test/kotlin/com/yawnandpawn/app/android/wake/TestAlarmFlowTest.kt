@@ -17,8 +17,11 @@ import com.yawnandpawn.app.core.alarm.AlarmDraft
 import com.yawnandpawn.app.core.alarm.AlarmFired
 import com.yawnandpawn.app.core.alarm.AlarmRepository
 import com.yawnandpawn.app.core.alarm.RequestCodes
+import com.yawnandpawn.app.core.checks.CheckEntry
+import com.yawnandpawn.app.core.checks.CheckMode
 import com.yawnandpawn.app.core.checks.CheckPlan
 import com.yawnandpawn.app.core.checks.CheckType
+import com.yawnandpawn.app.core.checks.Difficulty
 import com.yawnandpawn.app.core.error.DomainError
 import com.yawnandpawn.app.core.error.Outcome
 import com.yawnandpawn.app.core.history.SessionOutcome
@@ -29,6 +32,7 @@ import com.yawnandpawn.app.testing.FakeActiveSessionStore
 import com.yawnandpawn.app.testing.FakeBilling
 import com.yawnandpawn.app.testing.FakeSessionHistoryRepository
 import com.yawnandpawn.app.testing.FakeTestAlarmStore
+import com.yawnandpawn.app.testing.aRegisteredCode
 import com.yawnandpawn.app.testing.aSessionConfig
 import com.yawnandpawn.app.testing.anAlarm
 import kotlinx.coroutines.runBlocking
@@ -232,6 +236,36 @@ class TestAlarmFlowTest {
         assertEquals(emptyList(), history.merges, "no merge row: the real alarm got its own session")
         assertTrue(app.logs().none { it.startsWith("SessionEventIgnored type=CheckAnswerSubmitted") }, "${app.logs()}")
         controller.destroy() // No ticking service left behind for the next test.
+    }
+
+    @Test
+    fun `a real alarm during a QR test answers the test with its own code, ends it as Test and rings (Story 3_10 review)`() {
+        val app = app()
+        val alarm = anAlarm(id = "alarm-a", requestCode = 1000)
+        assertEquals(Outcome.Success(Unit), runBlocking { app.koin.get<AlarmRepository>().upsert(alarm) })
+        val qr = CheckPlan(CheckMode.All, listOf(CheckEntry(CheckType.QrBarcode, Difficulty.Medium, 1, code = aRegisteredCode())))
+        testAlarms.pending = aSessionConfig(label = "test", testMode = true).copy(checkPlan = qr)
+        val controller = app.startService(WakeService.intent(app.app, WakeService.ACTION_TEST))
+        app.awaitRinging()
+        val test = app.engine.state.value as SessionState.Ringing
+        assertEquals(
+            CheckType.QrBarcode,
+            test.session.checkRun.currentEntry
+                ?.type,
+            "the QR plan rings as QR",
+        )
+
+        controller
+            .withIntent(
+                WakeService.alarmIntent(app.app, AlarmFired(alarm.id, Instant.parse("2027-03-08T06:00:00Z"))),
+            ).startCommand(0, 2)
+        app.awaitUntil("the real session rings") {
+            (app.engine.state.value as? SessionState.Ringing)?.session?.config?.testMode == false
+        }
+
+        assertEquals(SessionOutcome.Test, history.rows.single { it.sessionId == test.session.sessionId }.outcome, "ended, not left ringing")
+        assertTrue(app.logs().none { it.startsWith("SessionEventIgnored type=CheckAnswerSubmitted") }, "${app.logs()}")
+        controller.destroy()
     }
 
     @Test

@@ -3,6 +3,7 @@ package com.yawnandpawn.app.ui.editor
 import com.yawnandpawn.app.core.alarm.Alarm
 import com.yawnandpawn.app.core.alarm.AlarmField
 import com.yawnandpawn.app.core.alarm.CheckConfig
+import com.yawnandpawn.app.core.checks.qr.RegisteredCode
 import com.yawnandpawn.app.ui.checks.CheckType
 import com.yawnandpawn.app.ui.checks.Difficulty
 import com.yawnandpawn.app.ui.checks.defaultCount
@@ -12,6 +13,7 @@ import com.yawnandpawn.app.ui.checksetup.CheckSetupIntent
 import com.yawnandpawn.app.ui.format.Countdown
 import com.yawnandpawn.app.ui.format.Money
 import com.yawnandpawn.app.ui.format.Weekdays
+import com.yawnandpawn.app.ui.qr.ScanEvent
 import com.yawnandpawn.app.ui.sound.SoundPickerIntent
 import com.yawnandpawn.app.ui.sound.SoundPickerUiState
 import com.yawnandpawn.app.ui.wake.WakeIntent
@@ -74,6 +76,9 @@ enum class EditorPane {
     Motivation,
     CheckSetup,
     TryIt,
+
+    /** QR registration (Story 3.10), opened from Check setup's "Your code" or Home's "Re-register". */
+    ScanCode,
     ;
 
     /** How deep the pane is: Back goes up one level, and the slide runs forward when going deeper. */
@@ -82,7 +87,7 @@ enum class EditorPane {
             when (this) {
                 Main -> 0
                 CheckSetup -> 2
-                TryIt -> 3
+                TryIt, ScanCode -> 3
                 else -> 1
             }
 }
@@ -161,6 +166,8 @@ data class CheckChip(
     val type: CheckType,
     val difficulty: Difficulty,
     val count: Int = type.defaultCount,
+    /** QR/Barcode: the registered code (Story 3.10), saved with the alarm; null until one is scanned. */
+    val code: RegisteredCode? = null,
 )
 
 /** The motivation message the alarm plays: none, a random one of the recordings, or one named recording. */
@@ -185,6 +192,8 @@ data class FullEditorSections(
     val noCheckError: Boolean = false,
     /** A QR/Barcode code is registered (its Check setup row says "Code saved"). */
     val qrCodeSaved: Boolean = false,
+    /** Picking a camera check was refused the camera: "Camera isn't available." with "Fix" (Story 3.10). */
+    val cameraUnavailable: Boolean = false,
     /** House Hunt reference photos taken, 0 to 3. */
     val houseHuntPhotos: Int = 0,
     /** The first three snooze prices of the fee ladder, or `null` while prices are not known. */
@@ -312,6 +321,19 @@ sealed interface EditorIntent {
     data class TryIt(
         val intent: WakeIntent,
     ) : EditorIntent
+
+    /** What the camera of a QR/Barcode "Try it" reported (Story 3.10). */
+    data class TryItScanned(
+        val event: ScanEvent,
+    ) : EditorIntent
+
+    /** QR registration's "Use this code" (Story 3.10): the code of the QR/Barcode check. */
+    data class CodeRegistered(
+        val code: RegisteredCode,
+    ) : EditorIntent
+
+    /** "Fix" on "Camera isn't available.": the app's page in the system settings (Story 3.10). */
+    data object FixCamera : EditorIntent
 
     /** All mode: move a selected check one place up or down in the order the checks run. */
     data class CheckMoved(

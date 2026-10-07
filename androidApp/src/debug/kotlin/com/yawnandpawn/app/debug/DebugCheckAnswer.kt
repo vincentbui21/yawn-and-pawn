@@ -23,7 +23,7 @@ object DebugCheckAnswer {
         val run = session?.checkRun?.usable(session.sessionId, session.ringIndex)
         val entry = run?.currentEntry
         val seed = run?.seeds?.getOrNull(run.step.entry)
-        val puzzle = if (entry == null || seed == null) null else entry.type.generate(seed, entry.difficulty, entry.count) as? Puzzle.Math
+        val puzzle = if (entry == null || seed == null) null else entry.puzzle(seed) as? Puzzle.Math
         return run?.let {
             puzzle
                 ?.problems

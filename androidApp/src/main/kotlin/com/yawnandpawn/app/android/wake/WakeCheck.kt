@@ -11,7 +11,6 @@ import androidx.compose.runtime.setValue
 import com.yawnandpawn.app.core.checks.AccessibilityState
 import com.yawnandpawn.app.core.checks.CheckAnswer
 import com.yawnandpawn.app.core.session.FallbackPolicy
-import com.yawnandpawn.app.core.session.FallbackReason
 import com.yawnandpawn.app.core.session.SessionEvent
 import com.yawnandpawn.app.core.session.SessionState
 import com.yawnandpawn.app.core.session.SnoozeAvailability
@@ -19,6 +18,7 @@ import com.yawnandpawn.app.core.time.BootCounter
 import com.yawnandpawn.app.core.time.Clock
 import com.yawnandpawn.app.core.time.MonotonicClock
 import com.yawnandpawn.app.core.time.TimeSnapshot
+import com.yawnandpawn.app.ui.qr.CodeScanner
 import com.yawnandpawn.app.ui.wake.CheckInput
 import com.yawnandpawn.app.ui.wake.CheckPosition
 import com.yawnandpawn.app.ui.wake.CheckUiState
@@ -32,6 +32,7 @@ import com.yawnandpawn.app.ui.wake.fallbackPickerUiState
 import com.yawnandpawn.app.ui.wake.mathCheckUiState
 import com.yawnandpawn.app.ui.wake.memoryCheckUiState
 import com.yawnandpawn.app.ui.wake.memoryRound
+import com.yawnandpawn.app.ui.wake.qrCheckUiState
 import com.yawnandpawn.app.ui.wake.wordCheckUiState
 import com.yawnandpawn.app.ui.wake.wordRound
 import kotlinx.coroutines.delay
@@ -48,6 +49,10 @@ import kotlin.time.Duration.Companion.milliseconds
  * used; the link opens the Fallback check picker, a card sends `FallbackRequested(type, reason)`, and "Back to check"
  * closes it without using the fallback. The picker closes by itself once the fallback is no longer offered. With
  * TalkBack on ([accessibility]) a picked Memory Sequence is its numbered variant, as a frozen plan would hold it.
+ *
+ * Story 3.10 adds the QR/Barcode check ([qr], the [scanner]'s feed): "Camera isn't available. Pick a fallback check." at
+ * once without the permission or when the camera fails, and then the fallback is asked for with reason
+ * `CameraUnavailable`, so the link shows at once. The screen never asks for the permission.
  */
 internal class WakeCheck(
     private val clock: Clock,
@@ -55,8 +60,12 @@ internal class WakeCheck(
     private val bootCounter: BootCounter,
     fallbackPolicy: FallbackPolicy,
     accessibility: AccessibilityState,
+    private val scanner: CodeScanner? = null,
 ) {
-    private val fallback = WakeFallback(fallbackPolicy, accessibility, FALLBACK_REASON)
+    /** The QR/Barcode check's camera, torch and answers (Story 3.10). */
+    val qr = WakeQr(scanner, monotonicClock)
+
+    private val fallback = WakeFallback(fallbackPolicy, accessibility, qr::fallbackReason)
 
     private var input by mutableStateOf(CheckInput())
 
@@ -67,8 +76,9 @@ internal class WakeCheck(
     private var word by mutableStateOf(WordAnswer())
 
     /**
-     * The Check screen for [state] with [availability] for its snooze, or null when [state] waits on no Math or Memory
-     * Sequence entry.
+     * The Check screen for [state] with [availability] for its snooze, or null when [state] waits on no Math, Memory
+     * Sequence, Word Unscramble or QR/Barcode entry. The QR check has the camera when the permission is granted (read now,
+     * never asked) and the scanner has not failed.
      */
     @Composable
     fun screen(
@@ -80,10 +90,17 @@ internal class WakeCheck(
         val shown = inputAt(position)
         val shownMemory = memoryAt(state)
         val shownWord = wordAt(state)
+        val code =
+            (state as? SessionState.Active)
+                ?.session
+                ?.checkRun
+                ?.currentEntry
+                ?.code
         SideEffect {
             input = shown
             memory = shownMemory
             word = shownWord
+            qr.expected = code
         }
         // The sequence plays by itself: each step after its delay (350 ms lit, 150 ms gap), then the brief tap light.
         val playback = shownMemory.playback
@@ -100,6 +117,7 @@ internal class WakeCheck(
             mathCheckUiState(state, availability, now, shown)
                 ?: memoryCheckUiState(state, availability, now, shownMemory)
                 ?: wordCheckUiState(state, availability, now, shownWord)
+                ?: qrCheckUiState(state, availability, now, shown, cameraAvailable = qr.cameraAvailable(), torchOn = qr.torchOn)
         )?.copy(showFallbackLink = offered)
     }
 
@@ -127,7 +145,7 @@ internal class WakeCheck(
         val chosen = (intent as? WakeIntent.FallbackChosen)?.let { coreCheckType(it.type) }?.let(fallback::asFrozen)
         fallback.pickerOpen = intent == WakeIntent.FallbackLinkClicked && fallback.offered(state)
         if (chosen != null) {
-            send(listOf(SessionEvent.UserInteracted, SessionEvent.FallbackRequested(chosen, FALLBACK_REASON)))
+            send(listOf(SessionEvent.UserInteracted, SessionEvent.FallbackRequested(chosen, qr.fallbackReason(state))))
         } else {
             interacted()
         }
@@ -232,12 +250,6 @@ internal class WakeCheck(
     companion object {
         /** How often the grace countdown reads the clock; the seconds shown round up, so a quarter second is exact enough. */
         val GRACE_TICK: Duration = 250.milliseconds
-
-        /**
-         * Why the fallback is offered: until the camera check reports its camera state (Stories 3.10 and 3.11), only after
-         * 5 failed attempts.
-         */
-        val FALLBACK_REASON: FallbackReason = FallbackReason.FailedAttempts
 
         /** The fallback intents this class handles. */
         fun isFallback(intent: WakeIntent): Boolean =

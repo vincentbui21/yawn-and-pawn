@@ -1,6 +1,7 @@
 package com.yawnandpawn.app.core.checks
 
 import com.yawnandpawn.app.core.checks.math.MathProblem
+import com.yawnandpawn.app.core.checks.qr.RegisteredCode
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 
@@ -50,6 +51,18 @@ sealed interface Puzzle {
     ) : Puzzle {
         override val size: Int
             get() = words.size
+    }
+
+    /**
+     * The puzzle of a [CheckType.QrBarcode] entry: scan [code], one item. A null [code] (an entry saved without one,
+     * which `SaveAlarm` rejects and `PlanResolver` never lets ring) can never be passed.
+     */
+    @Serializable
+    @SerialName("Code")
+    data class Code(
+        val code: RegisteredCode?,
+    ) : Puzzle {
+        override val size: Int = 1
     }
 
     /** The puzzle of the [CheckType.Placeholder] stand-in: one item, answered by "I'm up". */

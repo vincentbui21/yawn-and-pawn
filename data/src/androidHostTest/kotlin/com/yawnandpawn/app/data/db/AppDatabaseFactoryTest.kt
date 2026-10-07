@@ -24,6 +24,7 @@ import com.yawnandpawn.app.data.alarm.RoomCheckConfigRepository
 import com.yawnandpawn.app.data.alarm.RoomRequestCodeSequence
 import com.yawnandpawn.app.data.history.RoomSessionHistoryRepository
 import com.yawnandpawn.app.testing.AlarmUseCasesFixture
+import com.yawnandpawn.app.testing.aRegisteredCode
 import com.yawnandpawn.app.testing.aSessionHistoryRow
 import com.yawnandpawn.app.testing.anAlarm
 import kotlinx.coroutines.test.runTest
@@ -300,16 +301,63 @@ class AppDatabaseFactoryTest {
                 assertEquals(Outcome.Success(Unit), history.upsert(withFallback))
                 assertEquals(Outcome.Success(withFallback), history.find("session-2"))
             }
-            assertEquals(7, userVersion())
+            assertEquals(AppDatabase.SCHEMA_VERSION, userVersion())
+        }
+
+    @Test
+    fun `the exported version 8 schema adds the nullable registered code to check config`() {
+        assertTrue(schema(8).exists(), "exported schema missing: ${schema(8).absolutePath}")
+        val json = schema(8).readText()
+
+        assertTrue(json.contains("\"version\": 8"), "schema version 8")
+        assertEquals(listOf("alarm", "request_code_sequence", "session_history", "session_merge", "check_config"), tableNames(json))
+        assertTrue(json.contains("`code_format` TEXT, `code_value` TEXT, `code_registered_at` INTEGER"), "nullable code columns")
+        assertTrue(json.contains("`fallback_from` TEXT,"), "Story 3.9's column is kept")
+    }
+
+    @Test
+    fun `migrating a v7 database keeps every check without a code, then stores a QR code with its time (Story 3-10)`() =
+        runTest {
+            val alarm = anAlarm(id = "a", requestCode = 1000)
+            createDatabase(
+                version = 7,
+                alarms = listOf(alarm),
+                requestCodeMark = 1000,
+                sql =
+                    listOf(
+                        "INSERT INTO check_config (id, alarm_id, position, type, difficulty, count, created_at, updated_at) " +
+                            "VALUES ('a:Math', 'a', 0, 'Math', 'Medium', 3, 1000, 2000)",
+                    ),
+            )
+
+            withDatabase { database ->
+                val checks = RoomCheckConfigRepository(database.checkConfigDao())
+                val math = assertIs<Outcome.Success<List<CheckConfig>>>(checks.forAlarm("a")).value.single()
+                assertEquals(CheckEntry(CheckType.Math, Difficulty.Medium, 3), math.entry, "no code")
+                assertEquals(null, math.codeRegisteredAt)
+
+                val code = aRegisteredCode()
+                val registeredAt = Instant.fromEpochMilliseconds(3_000)
+                val qr =
+                    math.copy(
+                        id = "a:QrBarcode",
+                        position = 1,
+                        entry = CheckEntry(CheckType.QrBarcode, Difficulty.Medium, 1, code),
+                        codeRegisteredAt = registeredAt,
+                    )
+                assertEquals(Outcome.Success(Unit), checks.saveWithAlarm(alarm, listOf(math, qr)))
+                assertEquals(Outcome.Success(listOf(math, qr)), checks.forAlarm("a"), "the code and its time read back")
+            }
+            assertEquals(8, userVersion())
         }
 
     @Test
     fun `the migrations cover every version step and nothing is destructive`() {
         assertEquals(
-            listOf(1 to 2, 2 to 3, 3 to 4, 4 to 5, 5 to 6, 6 to 7),
+            listOf(1 to 2, 2 to 3, 3 to 4, 4 to 5, 5 to 6, 6 to 7, 7 to 8),
             APP_DATABASE_MIGRATIONS.map { it.startVersion to it.endVersion },
         )
-        assertEquals(7, AppDatabase.SCHEMA_VERSION)
+        assertEquals(8, AppDatabase.SCHEMA_VERSION)
     }
 
     @Test
@@ -404,6 +452,7 @@ class AppDatabaseFactoryTest {
         requestCodeMark: Int? = null,
         history: List<SessionHistoryRow> = emptyList(),
         merges: List<SessionMergeRow> = emptyList(),
+        sql: List<String> = emptyList(),
     ) {
         val database = JSONObject(schema(version).readText()).getJSONObject("database")
         val file = appDatabaseFile(context).apply { parentFile?.mkdirs() }
@@ -436,6 +485,8 @@ class AppDatabaseFactoryTest {
                         "${it.scheduledAt.toEpochMilliseconds()}, ${it.mergedAt.toEpochMilliseconds()})",
                 )
             }
+            // Rows of later tables, in the SQL of [version] (for example a v7 `check_config` row).
+            sql.forEach(connection::execSQL)
             connection.execSQL("PRAGMA user_version = $version")
         } finally {
             connection.close()

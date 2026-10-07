@@ -18,6 +18,13 @@
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
     <uses-permission android:name="android.permission.WAKE_LOCK" />
     <uses-permission android:name="android.permission.VIBRATE" />
+    <!-- The QR/Barcode check (Story 3.10): asked only when the user picks it or registers a code (FR-ONB-2), never at
+         app start or on the wake screen. Frames are analysed on the device and never stored. The camera is not required,
+         so a phone without one can still install the app and use the other checks. -->
+    <uses-permission android:name="android.permission.CAMERA" />
+    <uses-feature
+        android:name="android.hardware.camera"
+        android:required="false" />
 
     <application
         android:name=".YawnAndPawnApp"
@@ -42,6 +49,12 @@
         <provider
             android:name="com.google.firebase.provider.FirebaseInitProvider"
             android:authorities="${applicationId}.firebaseinitprovider"
+            tools:node="remove" />
+        <!-- ML Kit (Story 3.10 review): not started at every app start (an alarm's cold start must not wait for it);
+             MlKitFrameDecoder.create starts it when a scanner first starts. -->
+        <provider
+            android:name="com.google.mlkit.common.internal.MlKitInitProvider"
+            android:authorities="${applicationId}.mlkitinitprovider"
             tools:node="remove" />
         <meta-data
             android:name="firebase_analytics_collection_enabled"

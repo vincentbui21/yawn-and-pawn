@@ -9,11 +9,13 @@ import com.yawnandpawn.app.core.alarm.AlarmRepository
 import com.yawnandpawn.app.core.alarm.AlarmRule
 import com.yawnandpawn.app.core.alarm.CheckConfig
 import com.yawnandpawn.app.core.alarm.CheckConfigRepository
+import com.yawnandpawn.app.core.alarm.ReRegisterCode
 import com.yawnandpawn.app.core.alarm.SaveAlarm
 import com.yawnandpawn.app.core.alarm.nextOccurrence
 import com.yawnandpawn.app.core.alarm.orderedEntries
 import com.yawnandpawn.app.core.checks.AccessibilityState
 import com.yawnandpawn.app.core.checks.CheckEntry
+import com.yawnandpawn.app.core.checks.qr.RegisteredCode
 import com.yawnandpawn.app.core.error.DomainError
 import com.yawnandpawn.app.core.error.Outcome
 import com.yawnandpawn.app.core.error.errorOrNull
@@ -30,6 +32,7 @@ import com.yawnandpawn.app.ui.checks.CheckTrial
 import com.yawnandpawn.app.ui.checks.CheckType
 import com.yawnandpawn.app.ui.checks.Difficulty
 import com.yawnandpawn.app.ui.checks.PickableCheckTypes
+import com.yawnandpawn.app.ui.checks.QrTrial
 import com.yawnandpawn.app.ui.checks.core
 import com.yawnandpawn.app.ui.checks.defaultCount
 import com.yawnandpawn.app.ui.checks.toCore
@@ -38,6 +41,8 @@ import com.yawnandpawn.app.ui.checksetup.CheckSetupIntent
 import com.yawnandpawn.app.ui.format.Weekdays
 import com.yawnandpawn.app.ui.format.countdownOf
 import com.yawnandpawn.app.ui.home.AlarmActions
+import com.yawnandpawn.app.ui.qr.CameraPermission
+import com.yawnandpawn.app.ui.qr.allowsCameraCheck
 import com.yawnandpawn.app.ui.wake.WakeIntent
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.NonCancellable
@@ -64,6 +69,8 @@ import com.yawnandpawn.app.core.checks.CheckMode as CoreCheckMode
 data class AlarmEditorArgs(
     val alarmId: String?,
     val copyOf: String? = null,
+    /** Opens straight on QR registration of the alarm's QR/Barcode check, and saves the new code (Home's "Re-register"). */
+    val scanCode: Boolean = false,
 )
 
 /**
@@ -102,7 +109,19 @@ class AlarmEditorViewModel(
     private val previewSeed: () -> Long = { Random.nextLong() },
     /** TalkBack (Story 3.8): the Memory Sequence note and its numbered "Try it". */
     private val accessibility: AccessibilityState = AccessibilityState { false },
+    /** The camera permission asked when QR/Barcode is picked (Story 3.10); null treats the camera as allowed (tests). */
+    private val cameraPermission: CameraPermission? = null,
+    /** Re-register (Story 3.13): open on QR registration and store the code at once, through [reRegisterCode]. */
+    private val scanCode: Boolean = false,
+    /** Stores a re-registered code alone (the alarm unchanged); null in tests that never re-register. */
+    private val reRegisterCode: ReRegisterCode? = null,
 ) : ViewModel() {
+    /**
+     * The editor opened on QR registration for "Re-register" (only when the alarm has a QR/Barcode check): "Use this
+     * code" stores that code alone, and Back closes the editor. Any other opening edits the form as usual.
+     */
+    private var reRegistering = false
+
     /** The pending tick of the running preview (Memory's playback). */
     private var trialTicks: Job? = null
 
@@ -287,6 +306,33 @@ class AlarmEditorViewModel(
             }
 
             else -> {
+                return onCodeIntent(intent)
+            }
+        }
+        return true
+    }
+
+    /** QR/Barcode (Story 3.10): a registered code, the "Try it" camera and "Fix"; false for any other intent. */
+    private fun onCodeIntent(intent: EditorIntent): Boolean {
+        when (intent) {
+            is EditorIntent.CodeRegistered -> {
+                if (reRegistering) {
+                    storeCode(intent.code)
+                } else {
+                    editCheck(CheckType.QrBarcode) { it.copy(code = intent.code) }
+                    _state.update { it.copy(pane = EditorPane.CheckSetup, setupType = CheckType.QrBarcode) }
+                }
+            }
+
+            is EditorIntent.TryItScanned -> {
+                (trial as? QrTrial)?.let { showTrial(it.onScan(intent.event)) }
+            }
+
+            EditorIntent.FixCamera -> {
+                cameraPermission?.openSettings()
+            }
+
+            else -> {
                 return false
             }
         }
@@ -295,6 +341,25 @@ class AlarmEditorViewModel(
 
     /** Ticks or unticks [type]: added last when the picker offers it; any check left clears "Pick at least one check." */
     private fun toggleCheck(
+        type: CheckType,
+        selected: Boolean,
+    ) {
+        // Story 3.10: a camera check is selected only with the camera permission, asked now if missing (FR-ONB-2);
+        // refused, the card stays unselected and "Camera isn't available." shows with "Fix".
+        val permission = cameraPermission?.takeIf { selected && type.usesCamera && !it.isGranted() }
+        if (permission != null) {
+            viewModelScope.launch {
+                val allowed = permission.allowsCameraCheck()
+                _state.update { it.copy(full = it.full?.copy(cameraUnavailable = !allowed)) }
+                if (allowed) addOrRemoveCheck(type, selected = true)
+            }
+            return
+        }
+        if (selected && type.usesCamera) _state.update { it.copy(full = it.full?.copy(cameraUnavailable = false)) }
+        addOrRemoveCheck(type, selected)
+    }
+
+    private fun addOrRemoveCheck(
         type: CheckType,
         selected: Boolean,
     ) {
@@ -330,7 +395,16 @@ class AlarmEditorViewModel(
                 startTryIt(type)
             }
 
-            // The camera checks' rows arrive with their stories.
+            // Story 3.10: "Your code" opens QR registration; "Fix" the app's settings.
+            CheckSetupIntent.ScanCodeClicked -> {
+                if (type == CheckType.QrBarcode) _state.update { it.copy(pane = EditorPane.ScanCode) }
+            }
+
+            CheckSetupIntent.FixCamera -> {
+                cameraPermission?.openSettings()
+            }
+
+            // The printable QR and House Hunt photos arrive with Epic 7.
             else -> {
                 Unit
             }
@@ -347,7 +421,7 @@ class AlarmEditorViewModel(
                 .firstOrNull { it.type == type } ?: return
         // TalkBack on: the accessible variant (Memory Sequence's numbered tiles, Story 3.8); the notes follow the same read.
         val talkBackOn = refreshTalkBack()
-        val started = CheckRegistry.startTrial(type, chip.difficulty, previewSeed(), talkBackOn) ?: return
+        val started = CheckRegistry.startTrial(type, chip.difficulty, previewSeed(), talkBackOn, chip.code) ?: return
         _state.update { it.copy(pane = EditorPane.TryIt) }
         showTrial(started)
     }
@@ -390,6 +464,30 @@ class AlarmEditorViewModel(
             }
     }
 
+    /**
+     * "Re-register" (Stories 3.10 and 3.13): stores [code] as the alarm's QR/Barcode code with a new registration time,
+     * leaving everything else of the alarm as it is (enabled or not, its time, its arming), then closes. A failure
+     * shows "Couldn't save the alarm. Try again." and stays on QR registration.
+     */
+    private fun storeCode(code: RegisteredCode) {
+        val id = alarmId
+        val store = reRegisterCode
+        if (id == null || store == null || _state.value.isSaving) return
+        _state.update { it.copy(isSaving = true) }
+        viewModelScope.launch {
+            when (val result = store(id, code)) {
+                is Outcome.Success -> {
+                    close()
+                }
+
+                is Outcome.Failure -> {
+                    _state.update { it.copy(isSaving = false) }
+                    showFailure(result.error)
+                }
+            }
+        }
+    }
+
     /** Back or "Done": Check setup again, with the form as it was. */
     private fun closeTryIt() {
         trialTicks?.cancel()
@@ -419,9 +517,13 @@ class AlarmEditorViewModel(
                 initialForm = form
                 changedOnOpen = hasUnshownChecks(checks)
                 val custom = form.repeatDays.isNotEmpty() && form.repeatDays != Weekdays
+                // Re-register (Story 3.13): straight to QR registration when the alarm has a QR/Barcode check.
+                val scan = scanCode && form.checks.any { it.type == CheckType.QrBarcode }
+                reRegistering = scan
                 _state.update {
                     it
                         .copy(isLoading = false, form = form, customRepeat = custom, hasOverflowMenu = !asCopy)
+                        .let { opened -> if (scan) opened.copy(pane = EditorPane.ScanCode, setupType = CheckType.QrBarcode) else opened }
                         .withRings(form, clock.now(), timeZoneProvider.current())
                         .withChecks()
                 }
@@ -456,15 +558,26 @@ class AlarmEditorViewModel(
     /** No check a ring can run: none at all, or only checks without a core plugin, which a save would drop. */
     private fun EditorForm.hasNoCoreCheck(): Boolean = checks.none { it.type.core != null }
 
+    /**
+     * Whether the form's checks stop Save before it stores anything, and shows why:
+     * - no check (or only checks without a core plugin, which a save would drop): "Pick at least one check." under the
+     *   Wake-up check row and in its sub-screen;
+     * - a QR/Barcode check without a code, which can never be passed (`SaveAlarm` refuses it, Story 3.10): its Check
+     *   setup opens, where "Your code" says "Scan a code to use this check.".
+     */
+    private fun checksBlockSave(form: EditorForm): Boolean {
+        val noCheck = form.hasNoCoreCheck()
+        val noCode = form.checks.any { it.type == CheckType.QrBarcode && it.code == null }
+        when {
+            noCheck -> _state.update { it.copy(full = it.full?.copy(noCheckError = true)) }
+            noCode -> _state.update { it.copy(pane = EditorPane.CheckSetup, setupType = CheckType.QrBarcode) }
+        }
+        return noCheck || noCode
+    }
+
     private fun save() {
         val current = _state.value
-        if (current.isLoading || current.isSaving) return
-        // No check (or only checks without a core plugin, which a save would drop): "Pick at least one check." under the
-        // Wake-up check row and in its sub-screen; nothing is stored.
-        if (current.form.hasNoCoreCheck()) {
-            _state.update { it.copy(full = it.full?.copy(noCheckError = true)) }
-            return
-        }
+        if (current.isLoading || current.isSaving || checksBlockSave(current.form)) return
         _state.update { it.copy(isSaving = true) }
         viewModelScope.launch {
             when (val result = saveAlarm(current.form.toDraft(alarmId))) {
@@ -546,6 +659,11 @@ class AlarmEditorViewModel(
 
             current.pane == EditorPane.TryIt -> {
                 closeTryIt()
+            }
+
+            // QR registration returns to Check setup; opened from "Re-register", Back leaves the editor unchanged.
+            current.pane == EditorPane.ScanCode -> {
+                if (reRegistering) close() else _state.update { it.copy(pane = EditorPane.CheckSetup) }
             }
 
             current.pane == EditorPane.CheckSetup -> {
@@ -683,7 +801,10 @@ private fun EditorForm.toDraft(alarmId: String?): AlarmDraft =
         snoozeLengthMinutes = snoozeLengthMinutes,
         graceSeconds = graceSeconds.coerceIn(Alarm.GRACE_SECONDS_RANGE),
         vibrateInGrace = vibrateInGrace,
-        checks = checks.mapNotNull { chip -> chip.type.core?.let { CheckEntry(it, chip.difficulty.toCore(), chip.count) } },
+        checks =
+            checks.mapNotNull { chip ->
+                chip.type.core?.let { CheckEntry(it, chip.difficulty.toCore(), chip.count, code = chip.code) }
+            },
         checkMode = CoreCheckMode.valueOf(checkMode.name),
     )
 
@@ -696,8 +817,16 @@ private fun wakeCheckOnly(
     talkBackOn: Boolean,
 ): FullEditorSections = FullEditorSections(rows = setOf(EditorPane.WakeCheck), types = pickable, talkBackOn = talkBackOn)
 
-/** The Wake-up check row and sub-screen show the form's checks and mode. */
-private fun EditorUiState.withChecks(): EditorUiState = copy(full = full?.copy(checks = form.checks, checkMode = form.checkMode))
+/** The Wake-up check row and sub-screen show the form's checks and mode, and whether QR/Barcode has its code. */
+private fun EditorUiState.withChecks(): EditorUiState =
+    copy(
+        full =
+            full?.copy(
+                checks = form.checks,
+                checkMode = form.checkMode,
+                qrCodeSaved = form.checks.any { it.type == CheckType.QrBarcode && it.code != null },
+            ),
+    )
 
 /** A newly ticked check: Medium, with its type's default count (Story 3.5). */
 private fun newCheck(type: CheckType): CheckChip = CheckChip(type, Difficulty.Medium, type.core?.defaultCount ?: type.defaultCount)
@@ -736,7 +865,9 @@ private fun Alarm.toForm(checks: List<CheckConfig>): EditorForm =
             checks
                 .orderedEntries()
                 .mapNotNull { entry ->
-                    entry.type.toUi()?.let { CheckChip(it, entry.difficulty.toUi(), entry.count.coerceIn(entry.type.countRange)) }
+                    entry.type.toUi()?.let {
+                        CheckChip(it, entry.difficulty.toUi(), entry.count.coerceIn(entry.type.countRange), code = entry.code)
+                    }
                 }.ifEmpty { EditorForm.DEFAULT_CHECKS },
         checkMode = CheckMode.valueOf(checkMode.name),
         time = time,

@@ -67,6 +67,9 @@ enum class AlarmField {
 
     /** The checks (Story 3.5): none, the same type twice, a count outside the type's range, or a type no one may pick. */
     Checks,
+
+    /** A check that needs a registered code has none (QR/Barcode, Story 3.10): "Scan a code to use this check.". */
+    CheckCode,
 }
 
 /**

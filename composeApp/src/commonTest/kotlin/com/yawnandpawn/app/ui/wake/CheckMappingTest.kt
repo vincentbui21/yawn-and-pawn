@@ -200,12 +200,14 @@ class CheckMappingTest {
         assertEquals(com.yawnandpawn.app.ui.checks.CheckType.Math, uiCheckType(CheckType.Math))
         assertNull(uiCheckType(CheckType.Placeholder), "the stand-in has no screen")
         assertEquals(CheckType.Math, coreCheckType(com.yawnandpawn.app.ui.checks.CheckType.Math))
-        assertNull(coreCheckType(com.yawnandpawn.app.ui.checks.CheckType.QrBarcode), "no core plugin before Story 3.10")
+        assertEquals(CheckType.QrBarcode, coreCheckType(com.yawnandpawn.app.ui.checks.CheckType.QrBarcode), "Story 3.10")
+        assertNull(coreCheckType(com.yawnandpawn.app.ui.checks.CheckType.HouseHunt), "no core plugin before Epic 7")
     }
 
     @Test
     fun `every camera check has a screen, so the re-register banner can name it (Story 3_13)`() {
-        // Story 3.10 adds the QR/Barcode core type: this then also pins it to UiCheckType.QrBarcode.
         CheckType.all.filter { it.usesCamera }.forEach { assertNotNull(uiCheckType(it), "$it has no screen") }
+        assertEquals(listOf(CheckType.QrBarcode), CheckType.all.filter { it.usesCamera }, "Story 3.10's QR/Barcode")
+        assertEquals(com.yawnandpawn.app.ui.checks.CheckType.QrBarcode, uiCheckType(CheckType.QrBarcode))
     }
 }

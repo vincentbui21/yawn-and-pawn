@@ -10,6 +10,7 @@ import com.yawnandpawn.app.android.UnavailableBilling
 import com.yawnandpawn.app.android.WordListLoader
 import com.yawnandpawn.app.android.androidTimeModule
 import com.yawnandpawn.app.android.crash.FirebaseStartup
+import com.yawnandpawn.app.android.qr.qrModule
 import com.yawnandpawn.app.android.reliability.reliabilityModule
 import com.yawnandpawn.app.android.screen.AndroidWakeScreenOpener
 import com.yawnandpawn.app.android.sound.soundModule
@@ -21,6 +22,7 @@ import com.yawnandpawn.app.core.alarm.AlarmScheduler
 import com.yawnandpawn.app.core.alarm.AlarmScheduling
 import com.yawnandpawn.app.core.alarm.AlarmWriteLock
 import com.yawnandpawn.app.core.alarm.DeleteAlarm
+import com.yawnandpawn.app.core.alarm.ReRegisterCode
 import com.yawnandpawn.app.core.alarm.RearmOnFire
 import com.yawnandpawn.app.core.alarm.SaveAlarm
 import com.yawnandpawn.app.core.alarm.SetAlarmEnabled
@@ -64,7 +66,7 @@ import org.koin.dsl.module
 /** Koin bindings of :androidApp (platform adapters, core wiring). Later stories add their bindings here. */
 val appModule =
     module {
-        includes(androidTimeModule, wakeModule(), soundModule(), reliabilityModule())
+        includes(androidTimeModule, wakeModule(), soundModule(), reliabilityModule(), qrModule())
         single<IdGenerator> { UuidV4IdGenerator() }
         single<Logger> { AndroidLogger() }
         single { ApplicationScope(get()) }
@@ -84,6 +86,8 @@ val appModule =
         single { SessionSlotRearm(get(), get(), get(), get(), get(), get()) }
         factory { SaveAlarm(get(), get(), get(), get(), get(), get(), get(), get()) }
         factory { SetAlarmEnabled(get(), get(), get(), get(), get()) }
+        // Story 3.10: Home's "Re-register" stores a new code alone.
+        factory { ReRegisterCode(get(), get(), get(), get(), get()) }
         factory { DeleteAlarm(get(), get(), get(), get(), get()) }
         // "Test alarm" (Story 1.18): the editor's values ring as a test 10 s later, through the test request code.
         factory { ScheduleTestAlarm(get(), get(), get(), get()) }

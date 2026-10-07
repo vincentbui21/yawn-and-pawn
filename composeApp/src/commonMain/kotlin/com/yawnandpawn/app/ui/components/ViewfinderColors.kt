@@ -13,6 +13,8 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.IconButtonDefaults
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.ProvidableCompositionLocal
+import androidx.compose.runtime.compositionLocalOf
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -49,8 +51,15 @@ fun viewfinderColors(): ViewfinderColors {
 }
 
 /**
+ * The live camera feed drawn inside a [ViewfinderPlaceholder], under its guides (Story 3.10): the screen that runs the
+ * scanner provides it around the check or the registration. Previews and screenshots provide none, so they keep the
+ * flat placeholder fill (a camera preview cannot render on the host).
+ */
+val LocalViewfinderFeed: ProvidableCompositionLocal<(@Composable BoxScope.() -> Unit)?> = compositionLocalOf { null }
+
+/**
  * `viewfinder` placeholder (House Hunt, QR/Barcode and their registration): the camera preview area, 4:3, inside a
- * `rounded.md` frame. The design preview has no camera, so the feed is a flat fill. [spoken] is its TalkBack label
+ * `rounded.md` frame. Without a [LocalViewfinderFeed] the feed is a flat fill. [spoken] is its TalkBack label
  * ("Camera viewfinder. Point at your code."), `null` for none; [overlay] draws the guides and buttons over it.
  */
 @Composable
@@ -69,7 +78,10 @@ fun ViewfinderPlaceholder(
                 .background(colors.feed)
                 .then(colors.frame?.let { Modifier.border(PpsTheme.spacing.hairline, it, PpsTheme.shapes.md) } ?: Modifier)
                 .then(if (spoken != null) Modifier.semantics { contentDescription = spoken } else Modifier),
-    ) { overlay(colors) }
+    ) {
+        LocalViewfinderFeed.current?.invoke(this)
+        overlay(colors)
+    }
 }
 
 /**

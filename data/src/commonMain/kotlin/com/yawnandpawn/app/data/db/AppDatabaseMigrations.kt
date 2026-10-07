@@ -112,6 +112,22 @@ val MIGRATION_6_7: Migration =
         }
     }
 
+/**
+ * v7 to v8 (Story 3.10): adds the registered code of a QR/Barcode check to `check_config`, as three nullable columns:
+ * `code_format` (`CodeFormat.storedName`), `code_value` (the SHA-256 fingerprint of the trimmed value, never the raw
+ * value; see `CheckCodeColumns`) and `code_registered_at` (epoch milliseconds, Story 3.13's re-register banner). Every
+ * stored entry keeps nulls (no QR/Barcode entry existed before). The SQL matches the exported `8.json`; Room checks it
+ * after migrating.
+ */
+val MIGRATION_7_8: Migration =
+    object : Migration(7, 8) {
+        override suspend fun migrate(connection: SQLiteConnection) {
+            connection.execSQL("ALTER TABLE `check_config` ADD COLUMN `code_format` TEXT")
+            connection.execSQL("ALTER TABLE `check_config` ADD COLUMN `code_value` TEXT")
+            connection.execSQL("ALTER TABLE `check_config` ADD COLUMN `code_registered_at` INTEGER")
+        }
+    }
+
 /** Every migration of `app.db`, oldest first; `buildAppDatabase` registers them all. */
 val APP_DATABASE_MIGRATIONS: Array<Migration> =
-    arrayOf(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6, MIGRATION_6_7)
+    arrayOf(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6, MIGRATION_6_7, MIGRATION_7_8)

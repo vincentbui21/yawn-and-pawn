@@ -217,7 +217,7 @@
   evidence: |
     - The new detekt rule `CredentialStorageAccess` made `AndroidNotificationPermission` move its preferences ("reliability", the "asked once" flag for the notification permission) to device-protected storage. The file is now `shared_prefs/reliability.xml` in the device-protected domain. When this branch is rebased onto main, Story 2.12's `backup_rules.xml`, `data_extraction_rules.xml` and `BackupRulesTest` must cover it (exclude it, or include it as a setting). The flag in the old credential-protected file is not migrated, so a user may be asked for the notification permission once more.
     - A Snoozed session restored while locked and not yet over is still ignored by `ProcessRestored` (no table change). Its next ring is marked before the first unlock when it starts, because the snooze rows apply the lock state to every new ring.
-    - The Direct Boot note ("Your phone restarted, so today's check is Math.", preview `ringing-locked`) is Epic 3, together with Math as the Direct Boot check. Epic 2 shows only the lock-icon snooze.
+    - The Direct Boot note ("Your phone restarted, so today's check is Math.", preview `ringing-locked`) is Epic 3, together with Math as the Direct Boot check. Epic 2 shows only the lock-icon snooze. **Resolved in Story 3.11:** `DirectBootSubstitution.swappedThisRing` and `wakeNote` show the note on the Ringing and Check screens of a ring whose camera check was swapped for Math.
 - source_spec: `_bmad-output/implementation-artifacts/spec-2-9-merge-an-alarm-that-rings-during-a-session.md`
   summary: Story 2.9 notes for the rebase onto main and for the owner.
   evidence: |

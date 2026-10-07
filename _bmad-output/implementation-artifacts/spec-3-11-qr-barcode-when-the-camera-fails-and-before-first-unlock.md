@@ -2,8 +2,8 @@
 title: 'Story 3.11: QR/Barcode when the camera fails, and before first unlock'
 type: 'feature'
 created: '2026-10-07'
-status: 'ready-for-dev'
-baseline_revision: 'cef47fa'
+status: 'done'
+baseline_revision: '47a24a3'
 review_loop_iteration: 0
 followup_review_recommended: false
 context:
@@ -102,6 +102,19 @@ deferred: []
   - `CheckType.fallbackChoices`;
   - `CameraFallbackPolicy.FAILED_ATTEMPTS`.
 
+## Implementation notes (3.10's final code changes the plan)
+
+Built on `origin/story/3-10-qr-barcode` (47a24a3, PR #37 in CI), not on `main`: the orchestrator's unattended Epic 3 run stacks it, and it is rebased onto `main` once #37 is merged. Every 3.10 fix the Base lists is there; these points change or pin the plan (defaults taken, the owner can change any of them):
+- **Names on 3.10's branch.** The fallback reason is already a function (`WakeQr.fallbackReason(state)`, in `WakeQr.kt`, the QR part of `WakeCheck`), not a `FALLBACK_REASON` constant. The camera monitor lives in `WakeQr`. `FakeCodeScanner.fail()` had no problem argument; it now takes one.
+- **What ends a scan.** In 3.10 every failure ends the scan (the camera is released and `CameraUnavailable` is sent once). Now only the sticky problems end it: `NoPermission`, `BindFailed` (any setup step throws) and `PrivacyBlocked` (`ERROR_CAMERA_DISABLED`). The camera in use (`ERROR_CAMERA_IN_USE`, `ERROR_MAX_CAMERAS_IN_USE`) is `Disconnected`, and every other ending error of 3.10's `cameraErrorEnds` (fatal, stream config, Do Not Disturb) is `CameraError`. Both are reported at once while the camera stays bound, so CameraX can reopen it. A 10-frame decode-failure streak is `DecoderFailing`, reported while the analysis goes on. `ERROR_OTHER_RECOVERABLE_ERROR` is still left to CameraX, as in 3.10, and if it stops the frames, the watchdog fires.
+- **Scan / Preview split, kept.** It is still needed: the approved unavailable state has no viewfinder, so a feed drawn inside the viewfinder would unbind the camera exactly when recovery must be watched. The `Preview` use case is bound with `Scan`. `Preview()` sets its surface provider while composed and clears it on leaving (`setSurfaceProvider(null)` makes the use case inactive). This replaces binding and unbinding the use case and gives the same `ImageAnalysis`-only session. `Feed` (registration, "Try it") runs its own `Scan` + `Preview` pair, so a wake scan never takes over the registration's preview.
+- **Scan in composition.** `WakeActivity` composes the scan while it is resumed, the screen is a QR check and the permission is granted, and it keeps it composed through every problem. The CameraX scanner releases the camera itself on a sticky one. The scan also follows the lifecycle: each `ON_RESUME` restarts the watchdog (`bound`), and the watchdog ticks only while resumed. Recomposition can wait until `ON_START` after a quick pause and stop (screen off), so the camera then stays composed but is closed by CameraX. A stopped screen must not count as "no frames".
+- **The camera privacy toggle on phones that mute the camera** (black frames, no error; no public API). Black frames decode with no code, so they are heartbeats and the watchdog cannot see them. A dark-frame heuristic is not used, because it would hide the viewfinder. Instead there is a "nothing read" rule: once the camera has been bound for **60 s** with no code read at all (none detected, right or wrong), the fallback link shows (reason `CameraUnavailable`, latched like the camera latch). The viewfinder, torch and scanning stay, and the check is never passed: the fallback is still a Hard check. A covered lens therefore gets the link after 60 s, which is slower than the existing path (any barcode held up 5 times). The same rule also serves a damaged code that ML Kit cannot read. Device check: 3.14 item 9.
+- **Logging.** `WakeQr` logs each change into an unavailable status once, as `OperationFailed("camera", <problem>)`. The scanner keeps 3.10's step logs (which step failed), with no code or image.
+- **Torch after screen off/on** (deferred from 3.10). The switch keeps its state. The torch goes off with the camera on pause, and the rebound camera lights it again on resume, so the switch never shows a state the torch is not in.
+- **Heartbeats in tests.** `FakeCodeScanner.frames()` sends no heartbeat; `heartbeat()` does. A `Detected` event also counts as a frame for the monitor, since the camera had to deliver it.
+- **Direct Boot screen test.** The Robolectric note test is a new `DirectBootNoteTest` (`WakeApp`, `FakeUserLockState`, Compose rule). `DirectBootRingTest` runs under the locked-storage shadow and has no Compose rule. The next ring after the unlock is checked in Robolectric as the next alarm, and as the ring after a snooze in core (`DirectBootTest`).
+
 ## Code Map
 
 - `composeApp/.../ui/qr/CodeScanner.kt`:
@@ -127,7 +140,7 @@ deferred: []
 ## Tasks & Acceptance
 
 **Execution:**
-- [ ] `CameraMonitor` with `CameraMonitorTest` (commonTest, `FakeMonotonicClock`):
+- [x] `CameraMonitor` with `CameraMonitorTest` (commonTest, `FakeMonotonicClock`):
   - 4 900 ms is `Starting`, 5 000 ms is `Unavailable(NoFrames)`;
   - a stall after `Live` at the last frame + 5 000;
   - an error mid-scan;
@@ -135,34 +148,34 @@ deferred: []
   - a sticky problem ignores heartbeats;
   - `everUnavailable` stays true after recovery;
   - a wall-clock jump has no effect.
-- [ ] Port split (`Scan` / `Preview`), the heartbeat in `CodeAnalyzer` (throttle test: 20 frames in 400 ms give 1 heartbeat; a failed decode gives none), and the `cameraState` mapping in `CameraXCodeScanner` (Robolectric, as 3.10 fix 8).
-- [ ] `WakeCheck`/`WakeActivity` wiring: the status-driven `cameraAvailable`, the latched reason, scanning only while resumed, the scanner kept through recoverable problems, and the torch as a switch.
-- [ ] `QrCameraFailureTest` (Robolectric, `FakeCodeScanner` + `FakeMonotonicClock`, the real Koin graph through `WakeApp`):
+- [x] Port split (`Scan` / `Preview`), the heartbeat in `CodeAnalyzer` (throttle test: 20 frames in 400 ms give 1 heartbeat; a failed decode gives none), and the `cameraState` mapping in `CameraXCodeScanner` (Robolectric, as 3.10 fix 8).
+- [x] `WakeCheck`/`WakeActivity` wiring: the status-driven `cameraAvailable`, the latched reason, scanning only while resumed, the scanner kept through recoverable problems, and the torch as a switch.
+- [x] `QrCameraFailureTest` (Robolectric, `FakeCodeScanner` + `FakeMonotonicClock`, the real Koin graph through `WakeApp`):
   - 4.9 s gives no message;
   - 5.0 s gives the message and the link;
   - an error mid-scan shows both at once;
   - a disconnect (error, then frames resume) brings the viewfinder back while the link stays;
   - tapping Math with 1 failed attempt sends `FallbackRequested(Math, CameraUnavailable)` and the session runs Math · Hard · 6.
-- [ ] `QrLifecycleTest` (Robolectric):
+- [x] `QrLifecycleTest` (Robolectric):
   - pause: `stops == 1`, the torch is released;
   - resume: `starts == 2` and the watchdog restarts (4.9 s after the resume, no message);
   - grace → Loud: `starts == 1`;
   - restore after a kill on the same step with the same failed attempts gives `starts == 1`.
-- [ ] `QrFailedAttemptsTest`: 4 different codes give no link; the 5th gives the link with reason `FailedAttempts`.
-- [ ] Direct Boot:
+- [x] `QrFailedAttemptsTest`: 4 different codes give no link; the 5th gives the link with reason `FailedAttempts`.
+- [x] Direct Boot:
   - `swappedThisRing` and `wakeNote` with core and composeApp tests: All [QR], Random picking QR, Random picking Word, after unlock in the ring, the next unlocked ring, fallback used, paused and swapped;
   - an extension of `DirectBootRingTest` (Robolectric, `FakeUserLockState`): the locked ring shows the note on Ringing and on the Math Check screen; it stays after the unlock; the next ring is QR with no note.
-- [ ] Semantics (TalkBack AC):
+- [x] Semantics (TalkBack AC):
   - the viewfinder reads "Camera viewfinder. Point at your code.";
   - the torch has role Switch and toggleable state Off, then On after a tap;
   - "That's a different code. Scan your registered one." and the unavailable message are polite live regions;
   - the fallback link exists with a click action and is focusable in the first frame after `CameraUnavailable`, with no clock advance.
-- [ ] Roborazzi (Sunrise, 100% and 200%):
+- [x] Roborazzi (Sunrise, 100% and 200%):
   - `wake_check_qr_watchdog` (message and link);
   - `wake_check_qr_link_after_failures` (viewfinder, wrong-code line and link);
   - `wake_ringing_direct_boot` (the note and the lock snooze);
   - `wake_check_math_direct_boot` (the note above the problem).
-- [ ] Deferred-work: mark the Story 2.3 item "The Direct Boot note … is Epic 3" as resolved here.
+- [x] Deferred-work: mark the Story 2.3 item "The Direct Boot note … is Epic 3" as resolved here.
 
 **Acceptance Criteria:**
 - Given the QR check has bound the camera, when no frame arrives within 5 s (monotonic clock), CameraX reports an error, or the camera is disconnected, then the check shows "Camera isn't available. Pick a fallback check." and the fallback link immediately (`FallbackRequested` reason `CameraUnavailable`). If the camera later recovers, the scan resumes and the link stays. Tests with `FakeCodeScanner` and `FakeMonotonicClock` cover 4.9 s (no message), 5.0 s (message), an error callback mid-scan and a disconnect.
@@ -176,16 +189,16 @@ deferred: []
 
 ## pps-design Done checklist
 
-- [ ] Only tokens from `DESIGN.md` used (no raw hex, no new radii, no new font sizes).
-- [ ] Sunrise screenshots of the new states at 100% and 200% (wake screens only; no app screen changes).
-- [ ] Every colour pair is in the contrast table: `note-inline` on Ringing and Check is the approved `ringing-locked` pair, and the unavailable card is `text / glass+sunrise-gradient-top`. No new pair.
-- [ ] Touch targets: the torch is 48 dp, the fallback link is at least 48 dp, and snooze stays 64 dp.
-- [ ] 200% font and TalkBack: the viewfinder label, the torch switch state, polite live regions, and the link focusable at once.
-- [ ] Reduced motion: no new animation.
-- [ ] Copy verbatim from EXPERIENCE.md Key strings ("Camera isn't available. Pick a fallback check.", "Can't do this check?", "Your phone restarted, so today's check is Math.", "Camera viewfinder. Point at your code.", "Torch"). No new strings.
-- [ ] State rows: "Camera denied, unavailable or failed to start" and "Before first unlock (Direct Boot)" (EXPERIENCE.md State Patterns).
-- [ ] "I'm up" and snooze unchanged; snooze stays visible with the message and the link.
-- [ ] Previews unchanged (`check-qr-camera-unavailable`, `ringing-locked`); new Roborazzi baselines added.
+- [x] Only tokens from `DESIGN.md` used (no raw hex, no new radii, no new font sizes).
+- [x] Sunrise screenshots of the new states at 100% and 200% (wake screens only; no app screen changes).
+- [x] Every colour pair is in the contrast table: `note-inline` on Ringing and Check is the approved `ringing-locked` pair, and the unavailable card is `text / glass+sunrise-gradient-top`. No new pair.
+- [x] Touch targets: the torch is 48 dp, the fallback link is at least 48 dp, and snooze stays 64 dp.
+- [x] 200% font and TalkBack: the viewfinder label, the torch switch state, polite live regions, and the link focusable at once.
+- [x] Reduced motion: no new animation.
+- [x] Copy verbatim from EXPERIENCE.md Key strings ("Camera isn't available. Pick a fallback check.", "Can't do this check?", "Your phone restarted, so today's check is Math.", "Camera viewfinder. Point at your code.", "Torch"). No new strings.
+- [x] State rows: "Camera denied, unavailable or failed to start" and "Before first unlock (Direct Boot)" (EXPERIENCE.md State Patterns).
+- [x] "I'm up" and snooze unchanged; snooze stays visible with the message and the link.
+- [x] Previews unchanged (`check-qr-camera-unavailable`, `ringing-locked`); new Roborazzi baselines added.
 
 ## Design Notes
 
@@ -214,3 +227,39 @@ deferred: []
 - Item 8: 5 wrong codes bring up the link.
 - Item 12: reboot before unlock gives Math and the note; after the unlock Math stays; the next alarm is QR.
 - Item 14: TalkBack reads the torch state.
+
+## Auto Run Result
+
+Status: implemented in fast mode (one agent), stacked on Story 3.10 (`47a24a3`). Review has not run yet. Read this with the Implementation notes above.
+
+**Built:**
+- `CameraMonitor` and `CameraStatus` (`composeApp` `ui/qr`). `problem(p)` takes no time, because a problem does not depend on one.
+- `ScanEvent.Frame` and `ScanEvent.CameraUnavailable(CameraProblem)`.
+- The `Scan` / `Preview` / `Feed` port.
+- The `CodeAnalyzer` heartbeat.
+- `cameraProblem(state)`, which replaces `cameraErrorEnds`.
+- `WakeQr`, with the new `WakeCamera` (a monitor per entry, kept as snapshot state for the screen): a 250 ms watchdog tick while resumed, the latched `CameraUnavailable` reason, and the "nothing read" link.
+- `WakeActivity` composes the scan only while resumed.
+- The torch as a `Role.Switch`, only where its state is known (the wake check and "Try it"). Registration keeps its plain button.
+- `DirectBootSubstitution.swappedThisRing` with `CheckRun.resolvedFor`, which `forRing` now uses too.
+- `wakeNote(session)` in every wake mapper.
+
+**Tests:**
+- `CameraMonitorTest`, `WakeNoteTest` (composeApp), `SwappedThisRingTest` (core).
+- `QrCameraFailureTest`, `QrLifecycleTest`, `QrFailedAttemptsTest` and `DirectBootNoteTest` (Robolectric, `FakeCodeScanner` + `FakeMonotonicClock`, the real Koin graph).
+- `CameraXCodeScannerTest` and `CodeAnalyzerTest` updated. The storage scan now covers `WakeQr.kt`.
+- 8 new Roborazzi baselines (the `_sunrise` suffix follows the existing names): `wake_check_qr_watchdog`, `wake_check_qr_link_after_failures`, `wake_ringing_direct_boot`, `wake_check_math_direct_boot`, each at 100% and 200%. No existing baseline changed: the torch switch draws the same pixels.
+
+**Defaults taken, beyond the Design Notes (the owner can change any of them):**
+- The 60 s "nothing read" link (see Implementation notes).
+- The torch stays lit across a pause.
+- Opening the Fallback check picker leaves the QR screen, so it releases the camera, and "Back to check" binds it again.
+
+**Verification:**
+- `./gradlew qualityGate :androidApp:assembleDebugAndroidTest --no-daemon` gives BUILD SUCCESSFUL.
+- `git status --porcelain androidApp/src/test/screenshots/preview` is empty.
+- Earlier gate runs on the shared PC, with other lanes building at the same time, failed once each on tests this story does not touch: `RingingSemanticsTest` ("Failed to capture a node to bitmap"), `SuccessScreenTest` and `AlarmScreensScreenshotTest` (timing). Each passed when run alone, and the whole `:androidApp:testDebugUnitTest` then passed. Watch for this in CI.
+
+**Residual risks (3.14 item 9):**
+- On a real phone: CameraX with a preview surface attached and detached on an `ImageAnalysis` session, black-frame privacy toggles, and video-call apps holding the camera.
+- When the screen goes off quickly, recomposition can wait until `ON_START`. The watchdog ignores the stopped time, so this is safe.

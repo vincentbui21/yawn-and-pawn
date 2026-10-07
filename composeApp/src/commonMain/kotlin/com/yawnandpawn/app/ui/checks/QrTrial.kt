@@ -36,7 +36,7 @@ class QrTrial private constructor(
                 this
             }
 
-            event == ScanEvent.CameraUnavailable -> {
+            event is ScanEvent.CameraUnavailable -> {
                 copy(content = content.copy(cameraAvailable = false))
             }
 

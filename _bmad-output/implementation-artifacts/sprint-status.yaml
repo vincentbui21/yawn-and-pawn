@@ -86,7 +86,7 @@ development_status:
   3-8-memory-sequence-check: done  # PR stack 2026-10-06 (Epic 3 auto-run, fast mode)
   3-9-fallback-check-picker: done  # PR stack 2026-10-06 (Epic 3 auto-run, fast mode)
   3-10-qr-barcode-register-a-code-and-scan-it-to-stop-the-alarm: done  # PR 2026-10-07 (Epic 3 auto-run, fast mode)
-  3-11-qr-barcode-when-the-camera-fails-and-before-first-unlock: backlog
+  3-11-qr-barcode-when-the-camera-fails-and-before-first-unlock: done  # stacked on 3.10, 2026-10-07 (Epic 3 auto-run, fast mode)
   3-12-checks-with-talkback-end-to-end: backlog
   3-13-suggest-re-registering-after-3-fallbacks-in-7-days: done  # PR stack 2026-10-06 (Epic 3 auto-run, fast mode)
   3-14-epic-3-device-verification-checklist: backlog

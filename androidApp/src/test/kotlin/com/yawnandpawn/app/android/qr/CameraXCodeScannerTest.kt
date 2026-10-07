@@ -10,6 +10,9 @@ import androidx.camera.core.ImageAnalysis
 import androidx.camera.core.ImageProxy
 import androidx.camera.core.UseCase
 import androidx.camera.view.PreviewView
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.test.junit4.createEmptyComposeRule
 import androidx.lifecycle.LifecycleOwner
 import androidx.lifecycle.MutableLiveData
@@ -20,6 +23,7 @@ import com.yawnandpawn.app.StopAppRule
 import com.yawnandpawn.app.core.checks.qr.CodeFormat
 import com.yawnandpawn.app.core.log.LogEvent
 import com.yawnandpawn.app.testing.FakeLogger
+import com.yawnandpawn.app.ui.qr.CameraProblem
 import com.yawnandpawn.app.ui.qr.ScanEvent
 import com.yawnandpawn.app.ui.qr.ScanResult
 import org.junit.Rule
@@ -28,15 +32,19 @@ import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
 import org.robolectric.Shadows.shadowOf
 import org.robolectric.annotation.GraphicsMode
+import org.robolectric.shadows.ShadowSystemClock
 import java.lang.reflect.Proxy
+import java.time.Duration
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
+import kotlin.test.assertNull
 import kotlin.test.assertTrue
 
 /**
  * Story 3.10 review: the real CameraX scanner on the host, with the camera binding and the model replaced. Every way the
- * camera can fail ends in exactly one `CameraUnavailable`, logged, with everything released, and nothing is thrown into
- * the process (which also hosts `WakeService`).
+ * camera can fail is a logged `CameraUnavailable`, and nothing is thrown into the process (which also hosts
+ * `WakeService`). Story 3.11: a sticky problem ends the scan with everything released; any other one is reported once
+ * per change while the camera stays bound, and decoded frames send heartbeats.
  */
 @RunWith(RobolectricTestRunner::class)
 @GraphicsMode(GraphicsMode.Mode.NATIVE)
@@ -121,13 +129,17 @@ class CameraXCodeScannerTest {
 
     private fun failures(): List<String> = logger.events.filterIsInstance<LogEvent.OperationFailed>().map { it.operation }
 
+    private fun unavailable(problem: CameraProblem): ScanEvent = ScanEvent.CameraUnavailable(problem)
+
+    private fun stateError(code: Int): CameraState = CameraState.create(CameraState.Type.CLOSED, CameraState.StateError.create(code))
+
     @Test
     fun `a model that cannot load is camera unavailable, with nothing started and no crash`() {
         granted()
         val cameras = FakeCameras()
         feed(CameraXCodeScanner(app, logger, cameras, decoder = { error("no model") }))
 
-        assertEquals(listOf<ScanEvent>(ScanEvent.CameraUnavailable), events)
+        assertEquals(listOf(unavailable(CameraProblem.BindFailed)), events)
         assertEquals(0, cameras.started, "the camera is never bound")
         assertEquals(listOf("start camera"), failures())
     }
@@ -137,7 +149,7 @@ class CameraXCodeScannerTest {
         granted()
         feed(CameraXCodeScanner(app, logger, FakeCameras(), decoder = { throw UnsatisfiedLinkError("libbarhopper_v3") }))
 
-        assertEquals(listOf<ScanEvent>(ScanEvent.CameraUnavailable), events)
+        assertEquals(listOf(unavailable(CameraProblem.BindFailed)), events)
     }
 
     @Test
@@ -146,33 +158,97 @@ class CameraXCodeScannerTest {
         val decoder = FakeDecoder()
         feed(CameraXCodeScanner(app, logger, FakeCameras(failure = IllegalArgumentException("no back camera")), decoder = { decoder }))
 
-        assertEquals(listOf<ScanEvent>(ScanEvent.CameraUnavailable), events)
+        assertEquals(listOf(unavailable(CameraProblem.BindFailed)), events)
         assertEquals(1, decoder.closed)
         assertEquals(listOf("start camera"), failures())
     }
 
     @Test
-    fun `an error in the camera state after binding (in use, disabled, fatal) is camera unavailable at once, released`() {
-        listOf(CameraState.ERROR_CAMERA_IN_USE, CameraState.ERROR_CAMERA_DISABLED, CameraState.ERROR_CAMERA_FATAL_ERROR).forEach { code ->
+    fun `the camera disabled (policy or privacy toggle) is camera unavailable at once and ends the scan, released`() {
+        granted()
+        val cameras = FakeCameras()
+        val decoder = FakeDecoder()
+        feed(CameraXCodeScanner(app, logger, cameras, decoder = { decoder })) { root ->
+            assertEquals(1, cameras.started)
+            assertEquals(1, root.previewViews().size, "the viewfinder shows the camera")
+            assertEquals(emptyList(), events, "an open camera is fine")
+            assertTrue(cameras.torch.isNotEmpty() && cameras.torch.all { it }, "the torch is lit as asked: ${cameras.torch}")
+
+            cameras.state.value = stateError(CameraState.ERROR_CAMERA_DISABLED)
+            composeRule.waitForIdle()
+
+            assertEquals(listOf(unavailable(CameraProblem.PrivacyBlocked)), events)
+            assertEquals(1, cameras.released, "the camera is released")
+            assertEquals(1, decoder.closed)
+            assertFalse(cameras.state.hasObservers(), "no observer is left")
+        }
+    }
+
+    @Test
+    fun `another app taking the camera or a fatal error is reported at once, once per change, the camera kept bound`() {
+        listOf(
+            CameraState.ERROR_CAMERA_IN_USE to CameraProblem.Disconnected,
+            CameraState.ERROR_MAX_CAMERAS_IN_USE to CameraProblem.Disconnected,
+            CameraState.ERROR_CAMERA_FATAL_ERROR to CameraProblem.CameraError,
+        ).forEach { (code, problem) ->
             events.clear()
             granted()
             val cameras = FakeCameras()
             val decoder = FakeDecoder()
-            feed(CameraXCodeScanner(app, logger, cameras, decoder = { decoder })) { root ->
-                assertEquals(1, cameras.started)
-                assertEquals(1, root.previewViews().size, "the viewfinder shows the camera")
-                assertEquals(emptyList(), events, "an open camera is fine")
-                assertTrue(cameras.torch.isNotEmpty() && cameras.torch.all { it }, "the torch is lit as asked: ${cameras.torch}")
-
-                cameras.state.value = CameraState.create(CameraState.Type.CLOSED, CameraState.StateError.create(code))
+            feed(CameraXCodeScanner(app, logger, cameras, decoder = { decoder })) {
+                cameras.state.value = stateError(code)
+                cameras.state.value = CameraState.create(CameraState.Type.OPENING, CameraState.StateError.create(code))
                 composeRule.waitForIdle()
+                assertEquals(listOf(unavailable(problem)), events, "error $code: once, at once")
+                assertEquals(0, cameras.released, "error $code: bound, so CameraX can open it again")
+                assertTrue(cameras.state.hasObservers())
 
-                assertEquals(listOf<ScanEvent>(ScanEvent.CameraUnavailable), events, "error $code")
-                assertEquals(1, cameras.released, "error $code: the camera is released")
-                assertEquals(1, decoder.closed)
-                assertFalse(cameras.state.hasObservers(), "no observer is left")
+                cameras.state.value = CameraState.create(CameraState.Type.OPEN)
+                cameras.state.value = stateError(code)
+                composeRule.waitForIdle()
+                assertEquals(listOf(unavailable(problem), unavailable(problem)), events, "error $code: open again, then again")
             }
+            assertEquals(1, cameras.released, "error $code: leaving the screen releases it")
+            assertEquals(1, decoder.closed)
         }
+    }
+
+    @Test
+    fun `the wake scan binds the camera with no picture, and its preview draws one`() {
+        granted()
+        val cameras = FakeCameras()
+        val scanner = CameraXCodeScanner(app, logger, cameras, decoder = { FakeDecoder() })
+        var shown by mutableStateOf(false)
+        ActivityScenario.launch(MainActivity::class.java).use { scenario ->
+            scenario.onActivity {
+                it.setContent {
+                    scanner.Scan(torchOn = false, onEvent = { event -> events += event })
+                    if (shown) scanner.Preview()
+                }
+            }
+            composeRule.waitForIdle()
+            scenario.onActivity { assertEquals(emptyList(), it.window.decorView.previewViews(), "no picture") }
+            assertEquals(1, cameras.started)
+            assertEquals(listOf("Preview", "ImageAnalysis"), cameras.useCases.map { it::class.simpleName })
+
+            shown = true
+            composeRule.waitForIdle()
+            scenario.onActivity {
+                assertEquals(
+                    1,
+                    it.window.decorView
+                        .previewViews()
+                        .size,
+                    "the picture",
+                )
+            }
+            shown = false
+            composeRule.waitForIdle()
+            scenario.onActivity { assertEquals(emptyList(), it.window.decorView.previewViews()) }
+            assertEquals(1, cameras.started, "the picture comes and goes; the camera stays")
+            assertEquals(0, cameras.released)
+        }
+        assertEquals(emptyList(), events)
     }
 
     @Test
@@ -194,7 +270,7 @@ class CameraXCodeScannerTest {
     }
 
     @Test
-    fun `frames that ML Kit keeps failing to decode are camera unavailable, and stable codes before that are reported`() {
+    fun `a decoder that keeps failing is camera unavailable with the camera kept bound, and decoding again sends heartbeats`() {
         granted()
         val code = ScanResult(CodeFormat.QrCode, "kitchen")
         var failing = false
@@ -204,16 +280,23 @@ class CameraXCodeScannerTest {
         feed(CameraXCodeScanner(app, logger, cameras, decoder = { decoder }, analyzerSet = { analyzer = it })) {
             repeat(3) { analyzer!!.analyze(frame()) }
             composeRule.waitForIdle()
-            assertEquals(listOf<ScanEvent>(ScanEvent.Detected(code)), events)
+            assertEquals(listOf(ScanEvent.Frame, ScanEvent.Detected(code)), events, "a heartbeat, then the stable code")
 
             failing = true
             repeat(CodeAnalyzer.MAX_FAILURES) { analyzer!!.analyze(frame()) }
             composeRule.waitForIdle()
 
-            assertEquals(listOf(ScanEvent.Detected(code), ScanEvent.CameraUnavailable), events)
-            assertEquals(1, cameras.released)
+            assertEquals(listOf(ScanEvent.Frame, ScanEvent.Detected(code), unavailable(CameraProblem.DecoderFailing)), events)
+            assertEquals(0, cameras.released, "Story 3.11: the analysis goes on, so a decoder that reads again is noticed")
             assertEquals(listOf("decode camera frames"), failures())
+
+            failing = false
+            ShadowSystemClock.advanceBy(Duration.ofMillis(CodeAnalyzer.HEARTBEAT_MILLIS))
+            analyzer!!.analyze(frame())
+            composeRule.waitForIdle()
+            assertEquals(ScanEvent.Frame, events.last(), "decoding again: a heartbeat")
         }
+        assertEquals(1, cameras.released)
     }
 
     @Test
@@ -226,25 +309,26 @@ class CameraXCodeScannerTest {
         assertFalse(scanner.cameraPermitted())
         feed(scanner) { root -> assertEquals(emptyList(), root.previewViews()) }
 
-        assertEquals(listOf<ScanEvent>(ScanEvent.CameraUnavailable), events)
+        assertEquals(listOf(unavailable(CameraProblem.NoPermission)), events)
         assertEquals(0, cameras.started)
         assertEquals(0, decoders, "ML Kit is never started")
     }
 
     @Test
-    fun `which camera states end the scan`() {
-        fun ends(
+    fun `which camera states are which problem`() {
+        fun problem(
             code: Int,
             type: CameraState.Type = CameraState.Type.CLOSED,
-        ) = cameraErrorEnds(CameraState.create(type, CameraState.StateError.create(code)))
+        ) = cameraProblem(CameraState.create(type, CameraState.StateError.create(code)))
 
-        assertFalse(cameraErrorEnds(CameraState.create(CameraState.Type.OPEN)))
-        assertTrue(ends(CameraState.ERROR_CAMERA_IN_USE))
-        assertTrue(ends(CameraState.ERROR_MAX_CAMERAS_IN_USE))
-        assertTrue(ends(CameraState.ERROR_CAMERA_DISABLED))
-        assertTrue(ends(CameraState.ERROR_CAMERA_FATAL_ERROR))
-        assertTrue(ends(CameraState.ERROR_DO_NOT_DISTURB_MODE_ENABLED))
-        assertTrue(ends(CameraState.ERROR_STREAM_CONFIG))
-        assertFalse(ends(CameraState.ERROR_OTHER_RECOVERABLE_ERROR, CameraState.Type.OPENING), "CameraX retries it")
+        assertNull(cameraProblem(CameraState.create(CameraState.Type.OPEN)))
+        assertEquals(CameraProblem.Disconnected, problem(CameraState.ERROR_CAMERA_IN_USE))
+        assertEquals(CameraProblem.Disconnected, problem(CameraState.ERROR_MAX_CAMERAS_IN_USE))
+        assertEquals(CameraProblem.PrivacyBlocked, problem(CameraState.ERROR_CAMERA_DISABLED))
+        assertEquals(CameraProblem.CameraError, problem(CameraState.ERROR_CAMERA_FATAL_ERROR))
+        assertEquals(CameraProblem.CameraError, problem(CameraState.ERROR_DO_NOT_DISTURB_MODE_ENABLED))
+        assertEquals(CameraProblem.CameraError, problem(CameraState.ERROR_STREAM_CONFIG))
+        assertNull(problem(CameraState.ERROR_OTHER_RECOVERABLE_ERROR, CameraState.Type.OPENING), "CameraX retries it")
+        assertTrue(CameraProblem.PrivacyBlocked.sticky && !CameraProblem.Disconnected.sticky && !CameraProblem.CameraError.sticky)
     }
 }

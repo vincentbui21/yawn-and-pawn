@@ -120,10 +120,17 @@ data class CheckRun(
             fallback: Boolean = false,
             substitute: (CheckPlan) -> CheckPlan = { it },
         ): CheckRun {
-            val pickSeed = SeedDeriver.seed(sessionId, ringIndex, SeedDeriver.PICK, 0, fallback)
-            val resolved = substitute(PlanResolver.resolve(plan, pickSeed))
+            val resolved = substitute(resolvedFor(plan, sessionId, ringIndex, fallback))
             val seeds = resolved.entries.indices.map { SeedDeriver.seed(sessionId, ringIndex, it, 0, fallback) }
             return CheckRun(resolved, seeds, fallbackUsed = fallback, fallbackSource = plan.takeIf { fallback })
         }
+
+        /** [plan] resolved for ring [ringIndex] of session [sessionId] with the ring's pick seed, before any substitution. */
+        internal fun resolvedFor(
+            plan: CheckPlan,
+            sessionId: String,
+            ringIndex: Int,
+            fallback: Boolean = false,
+        ): CheckPlan = PlanResolver.resolve(plan, SeedDeriver.seed(sessionId, ringIndex, SeedDeriver.PICK, 0, fallback))
     }
 }

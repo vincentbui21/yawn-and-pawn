@@ -81,8 +81,13 @@ class QrRegistrationModel(
                 }
             }
 
-            ScanEvent.CameraUnavailable -> {
+            is ScanEvent.CameraUnavailable -> {
                 state = state.copy(cameraUnavailable = true)
+            }
+
+            // Story 3.11: heartbeats are for the wake check's watchdog; registration has none.
+            ScanEvent.Frame -> {
+                Unit
             }
         }
     }

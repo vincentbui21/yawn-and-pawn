@@ -62,4 +62,19 @@ object DirectBootSubstitution {
         isSafe: (CheckEntry) -> Boolean = { it.type.directBootSafe },
     ): CheckPlan =
         if (plan.entries.all(isSafe)) plan else plan.copy(entries = plan.entries.map { if (isSafe(it)) it else DIRECT_BOOT_CHECK })
+
+    /**
+     * Whether this ring of [session] had a check entry swapped for [DIRECT_BOOT_CHECK] (Story 3.11): the ring uses the
+     * Direct Boot substitutions (`directBootRing`, kept after an unlock in the ring), the fallback did not replace the
+     * check, and the ring's own resolution of the chosen plan (the same pick seed the reducer used) holds an entry that is
+     * not Direct Boot safe. The wake screens then say "Your phone restarted, so today's check is Math.". A Random pick
+     * that was already safe changed nothing, so it gets no note, and an entry `PlanResolver` already made the default
+     * one (QR/Barcode without a code) was not swapped. Pure and derived: never stored.
+     */
+    fun swappedThisRing(session: SessionData): Boolean {
+        val run = session.checkRun
+        if (!session.directBootRing || run.fallbackUsed) return false
+        val resolved = CheckRun.resolvedFor(run.nextRingPlan(session.config.checkPlan), session.sessionId, session.ringIndex)
+        return resolved.entries.any { !it.type.directBootSafe }
+    }
 }

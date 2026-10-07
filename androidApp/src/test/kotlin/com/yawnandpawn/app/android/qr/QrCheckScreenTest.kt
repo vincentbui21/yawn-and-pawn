@@ -26,6 +26,7 @@ import com.yawnandpawn.app.core.session.SessionEvent
 import com.yawnandpawn.app.core.session.SessionState
 import com.yawnandpawn.app.testing.aSessionConfig
 import com.yawnandpawn.app.testing.wrongAnswer
+import com.yawnandpawn.app.ui.qr.CameraProblem
 import com.yawnandpawn.app.ui.qr.QrRegistrationRoute
 import com.yawnandpawn.app.ui.qr.ScanResult
 import com.yawnandpawn.app.ui.theme.PpsThemeMode
@@ -184,18 +185,20 @@ class QrCheckScreenTest {
     }
 
     @Test
-    fun `a camera that fails while scanning shows the same message and is released`() {
+    fun `a camera that fails while scanning shows the same message, and stays bound so it can come back (Story 3_11)`() {
         val scanner = FakeCodeScanner()
         val app = WakeApp(scanner = scanner)
         ringQr(app, assertNotNull(RegisteredCode.of(toothpaste.format, toothpaste.rawValue)))
         launch(app).use {
             imUp(app)
-            scanner.fail()
+            scanner.fail(CameraProblem.BindFailed)
             composeRule.waitForIdle()
             composeRule.onNodeWithText("Camera isn't available. Pick a fallback check.").assertExists()
             // Story 3.9: the fallback link shows at once when the camera is unavailable.
             composeRule.onNodeWithText("Can't do this check?").assertExists()
-            assertFalse(scanner.running, "the camera is released")
+            // The CameraX scanner releases the camera itself on a sticky problem (CameraXCodeScannerTest).
+            assertTrue(scanner.running, "the scan stays in composition")
+            assertEquals(1, scanner.starts)
         }
     }
 

@@ -1,5 +1,12 @@
 package com.yawnandpawn.app.ui
 
+import com.yawnandpawn.app.core.checks.CheckEntry
+import com.yawnandpawn.app.core.checks.CheckMode
+import com.yawnandpawn.app.core.checks.CheckPlan
+import com.yawnandpawn.app.core.checks.CheckType
+import com.yawnandpawn.app.core.checks.Difficulty
+import com.yawnandpawn.app.core.session.CheckRun
+import com.yawnandpawn.app.core.session.DirectBootSubstitution
 import com.yawnandpawn.app.core.session.NoBillingSnoozeAvailability
 import com.yawnandpawn.app.core.session.SessionData
 import com.yawnandpawn.app.core.session.SnoozeAvailability
@@ -8,6 +15,7 @@ import com.yawnandpawn.app.core.session.UnavailableReason
 import com.yawnandpawn.app.core.session.nextOffer
 import com.yawnandpawn.app.core.time.TimeSnapshot
 import com.yawnandpawn.app.testing.FakeUserLockState
+import com.yawnandpawn.app.testing.aRegisteredCode
 import com.yawnandpawn.app.testing.aSession
 import com.yawnandpawn.app.testing.aSessionConfig
 import com.yawnandpawn.app.ui.format.Money
@@ -49,6 +57,29 @@ object RingingSamples {
 
     /** Before the first unlock: lock icon, "Unlock your phone to snooze" (TalkBack "Snooze unavailable, Unlock ..."). */
     val lockedBeforeUnlock: RingingUiState = session().let { ringingUiState(it, locked.availability(it), utc) }
+
+    /**
+     * Story 3.11: a ring before the first unlock whose QR/Barcode check the reducer swapped for Math: the note "Your phone
+     * restarted, so today's check is Math." with the lock snooze. [directBootSession] is that session.
+     */
+    val directBootSession: SessionData =
+        session().let {
+            val qr = CheckEntry(CheckType.QrBarcode, Difficulty.Medium, 1, code = aRegisteredCode())
+            it.copy(
+                config = it.config.copy(checkPlan = CheckPlan(CheckMode.All, listOf(qr))),
+                beforeFirstUnlock = true,
+                directBootRing = true,
+                checkRun = CheckRun(CheckPlan(CheckMode.All, listOf(DirectBootSubstitution.DIRECT_BOOT_CHECK)), listOf(DIRECT_BOOT_SEED)),
+            )
+        }
+
+    /** The Ringing screen of [directBootSession]. */
+    val directBoot: RingingUiState = ringingUiState(directBootSession, locked.availability(directBootSession), utc)
+
+    /** The snooze of [directBootSession] (locked: "Unlock your phone to snooze"). */
+    val directBootAvailability: SnoozeAvailability = locked.availability(directBootSession)
+
+    private const val DIRECT_BOOT_SEED = 42L
 
     /** Story 2.4: the same locked session after the user unlocked, with the Epic 1 policy: "Prices not loaded yet". */
     val afterUnlockPricesNotLoaded: RingingUiState =

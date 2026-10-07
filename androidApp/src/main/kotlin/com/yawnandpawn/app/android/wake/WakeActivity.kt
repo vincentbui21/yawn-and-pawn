@@ -125,7 +125,7 @@ class WakeActivity : ComponentActivity() {
     /** The Check screen's typed answer, grace clock and keys (Story 3.2). */
     private val check by lazy {
         val kept = ViewModelProvider(this, WakeKept.factory(get(), get(), get()))[WakeKept::class.java]
-        WakeCheck(get(), get(), get(), get(), get(), kept)
+        WakeCheck(get(), get(), get(), get(), kept)
     }
 
     /** Keeps the events [send] dispatches in order. */

@@ -103,11 +103,15 @@ data class MemoryInput(
     fun tapped(tile: Int): MemoryInput? = playback?.takeUnless { it.playing }?.let { copy(playback = it.tapped(tile)) }
 }
 
-/** What the Memory check shows for [round] as [playback] plays it, with the wrong-tap message while [wrong]. Pure. */
+/**
+ * What the Memory check shows for [round] as [playback] plays it, with the wrong-tap message while [wrong] and the
+ * entry's [wrongAttempts] so far. Pure.
+ */
 fun memoryCheckContent(
     round: MemoryRound,
     playback: MemoryPlayback,
     wrong: Boolean,
+    wrongAttempts: Int = 0,
 ): CheckContent.MemorySequence =
     CheckContent.MemorySequence(
         round = round.round,
@@ -118,4 +122,5 @@ fun memoryCheckContent(
         wrong = wrong,
         gridSize = round.gridSize,
         announced = round.sequence.takeIf { round.numbered },
+        wrongAttempts = wrongAttempts,
     )

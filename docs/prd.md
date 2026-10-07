@@ -339,7 +339,7 @@ Within the app, every path leads back to the ringing alarm, but the **phone itse
 - **NFR-6 Platform:** minSdk 26 (Android 8.0), targetSdk 36 (Android 16), Play Billing Library 8+.
 - **NFR-7 Performance:** ringing screen visible ≤ 1 s after alarm trigger; app cold start ≤ 1.5 s on the reference mid-range device (Pixel 6a [ASSUMPTION — A7]).
 - **NFR-8 Battery:** no background work except scheduled alarms; no persistent service while idle.
-- **NFR-9 Accessibility:** TalkBack labels, 48dp touch targets, supports large font; each check type has an accessible alternative or the fallback check. (Known gap: the fallback check's Memory Sequence is visual; see Q12.)
+- **NFR-9 Accessibility:** TalkBack labels, 48dp touch targets, supports large font; each check type has an accessible alternative or the fallback check. (Q12 closed: Math first with spoken input, Memory Sequence numbered and announced; see `docs/decisions/q12-accessible-fallback.md`.)
 - **NFR-10 Localization-ready:** all strings in resources; currency always formatted from Play data, never hard-coded. English only at launch; more languages only if demand shows up (Q7 closed).
 - **NFR-11 Maintainability & testability (required for the Ralph loop):**
   - Business logic (fee engine, session state machine, check generators/validators, stats, billing recovery rules) lives in a platform-independent shared module with ≥ 90% line coverage, **enforced by Kover** in the quality gate.
@@ -477,7 +477,7 @@ Deferred review findings (each with a revisit condition):
 
 - **Q10** Check parameters are incomplete: count ranges for Memory Sequence rounds, Word Unscramble and House Hunt; Math Hard operand bounds; word-list source and offensive-word filter (rubric, medium). *Revisit:* before E4 stories are written.
 - **Q11** Fallback check can be triggered on purpose (deliberate failed House Hunt matches); should fallback require an objective failure signal and be at least as hard? (adversarial M7). *Revisit:* after Spike S3, or if CM-4 > 10% in closed test.
-- **Q12** Accessible fallback path for TalkBack users (fallback check uses visual Memory Sequence) (rubric medium, adversarial L4). *Revisit:* before E3 stories are written.
+- **Q12** Accessible fallback path for TalkBack users (fallback check uses visual Memory Sequence) (rubric medium, adversarial L4). **Closed 2026-10-07 (Story 3.12):** see `docs/decisions/q12-accessible-fallback.md`.
 - **Q13** Refund-and-repeat makes snoozes free for savvy users; add server-side voided-purchase checks post-MVP? (adversarial M12). *Revisit:* if CM-1 > 5% in closed test or first month.
 - **Q14** Cap the call pause (a self-call or VoIP call pauses the alarm indefinitely) (adversarial M5, partly). *Revisit:* if closed testers report it as an escape.
 - **Q15** Calendar day colour when a day has several sessions; outcome logged for an alarm disabled/deleted inside the commitment-lock window (rubric medium). *Revisit:* before E7 stories are written.

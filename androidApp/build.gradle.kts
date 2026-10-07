@@ -162,5 +162,7 @@ dependencies {
     androidTestImplementation(libs.androidx.test.core)
     androidTestImplementation(libs.androidx.test.ext.junit)
     androidTestImplementation(libs.compose.ui.test.junit4)
+    // Story 3.12: Compose accessibility checks in the managed-device F5 test (FallbackTalkBackDeviceTest).
+    androidTestImplementation(libs.androidx.compose.ui.test.junit4.accessibility)
     // Story 2.5: the notification-shade return test on the managed device.
 }

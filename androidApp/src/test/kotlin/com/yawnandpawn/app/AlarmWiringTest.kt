@@ -13,10 +13,20 @@ import com.yawnandpawn.app.core.alarm.RearmOnFire
 import com.yawnandpawn.app.core.alarm.RequestCodeSequence
 import com.yawnandpawn.app.core.alarm.SaveAlarm
 import com.yawnandpawn.app.core.alarm.SetAlarmEnabled
+import com.yawnandpawn.app.core.config.CommitmentEventRepository
+import com.yawnandpawn.app.core.config.GlobalSettingsRepository
+import com.yawnandpawn.app.core.config.PendingChangeRepository
+import com.yawnandpawn.app.core.config.PromotePendingChanges
+import com.yawnandpawn.app.core.config.RecordCommitmentEvent
+import com.yawnandpawn.app.core.config.SetBaseFee
+import com.yawnandpawn.app.core.config.SetMaxSnoozes
 import com.yawnandpawn.app.core.id.IdGenerator
 import com.yawnandpawn.app.core.id.UuidV4IdGenerator
 import com.yawnandpawn.app.data.alarm.RoomAlarmRepository
 import com.yawnandpawn.app.data.alarm.RoomRequestCodeSequence
+import com.yawnandpawn.app.data.config.CompositePendingChangeRepository
+import com.yawnandpawn.app.data.config.DataStoreGlobalSettings
+import com.yawnandpawn.app.data.config.RoomCommitmentEventRepository
 import com.yawnandpawn.app.stopApp
 import org.junit.After
 import org.junit.Test
@@ -44,6 +54,19 @@ class AlarmWiringTest {
         assertNotNull(koin.get<SetAlarmEnabled>())
         assertNotNull(koin.get<DeleteAlarm>())
         assertSame(koin.get<AlarmWriteLock>(), koin.get<AlarmWriteLock>())
+    }
+
+    @Test
+    fun `Koin binds the commitment lock - settings, pending changes over both stores, events and their use cases`() {
+        val koin = GlobalContext.get()
+
+        assertIs<DataStoreGlobalSettings>(koin.get<GlobalSettingsRepository>())
+        assertIs<CompositePendingChangeRepository>(koin.get<PendingChangeRepository>())
+        assertIs<RoomCommitmentEventRepository>(koin.get<CommitmentEventRepository>())
+        assertNotNull(koin.get<SetBaseFee>())
+        assertNotNull(koin.get<SetMaxSnoozes>())
+        assertNotNull(koin.get<RecordCommitmentEvent>())
+        assertSame(koin.get<PromotePendingChanges>(), koin.get<PromotePendingChanges>())
     }
 
     @Test

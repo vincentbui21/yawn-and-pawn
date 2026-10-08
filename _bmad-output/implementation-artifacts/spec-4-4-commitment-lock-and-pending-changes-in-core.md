@@ -62,8 +62,10 @@ at once (AD-16, FR-SET-1, FR-ALM-2). Nothing implements that yet. Also, nothing 
   `effectiveAfter.scheduledAt`. The resolved config is frozen at `AlarmFired` as before.
 - **`PromotePendingChanges`:** once now > `effectiveAfter.scheduledAt`, and unless the session in progress rings that
   very occurrence, it writes the pending value as the live value and then deletes the pending change. It runs:
-  - on app start and every time the engine returns to Idle (so after `Recorded`), from `YawnAndPawnApp`;
-  - in `rescheduleAll()`, through an optional `PendingChangePromotion` hook on `AlarmScheduling` (before its lock).
+  - when the wake service shuts down after a session (Completed or Missed, then `Recorded`), as a one-shot job in the
+    application scope (a long-lived collector would keep `ApplicationScope.awaitChildren()` in tests from returning);
+  - in `rescheduleAll()` (app start, boot, time and zone changes), through an optional `PendingChangePromotion` hook on
+    `AlarmScheduling` (before its lock; an exception there is logged and the alarms are armed anyway).
   - A pending change whose alarm was turned off still takes effect after that time.
 - **Storage:**
   - **app.db v8 → v9:**
@@ -112,7 +114,8 @@ at once (AD-16, FR-SET-1, FR-ALM-2). Nothing implements that yet. Also, nothing 
    values into the editor, re-saving an alarm with untouched grace or checks cancels its pending weakening. That is the
    safe direction.
 4. **Check plan equality** ignores the order of the entries and their registered codes. A new sticker or a reorder is
-   never "weakening"; a reorder in All mode is Strengthening, which also applies at once.
+   never "weakening" (both are `NoChange` and apply at once). The Epic 1 placeholder entry ("I'm up" alone passes it)
+   counts for nothing, so dropping it is never weakening.
 5. **`SaveAlarm` API:** a new `save(draft): Outcome<AlarmSaved>`. `invoke` keeps its signature (it returns
    `save(...).alarm`).
 6. **`RecordCommitmentEvent`** takes the `Alarm` (captured before a delete) and writes only inside the window. 4.6
@@ -158,7 +161,7 @@ at once (AD-16, FR-SET-1, FR-ALM-2). Nothing implements that yet. Also, nothing 
 - `data/.../config/` (Room entities and DAOs, `RoomPendingChangeRepository`, `RoomCommitmentEventRepository`,
   `DataStoreGlobalSettings`, `CompositePendingChangeRepository`).
 - `data/.../db/AppDatabase.kt` and `AppDatabaseMigrations.kt` (`MIGRATION_8_9`); `data/schemas/.../9.json`.
-- `androidApp`: Koin wiring, the `WakeService` config read, the promotion on Idle, the backup XML comments, and the
+- `androidApp`: Koin wiring, the `WakeService` config read and its promotion on shutdown, the backup XML comments, and the
   `BackupRulesCoverageTest` flow.
 - `data/.../SessionLockGuardScanTest.kt`: `config` becomes a fully scanned package, and `PromotePendingChanges` is
   allowed.

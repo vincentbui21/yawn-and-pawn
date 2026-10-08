@@ -4,8 +4,10 @@
     and lower). BackupRulesTest checks every entry; BackupRulesCoverageTest fails on any app file that no rule names.
 
     Backed up, device-protected storage only:
-      - app.db: alarms, the request-code mark and session history;
-      - datastore/settings.preferences_pb: settings and the missed-note dismissals.
+      - app.db: alarms, the request-code mark, session history, and the commitment lock's pending changes and
+        commitment events (Story 4.4);
+      - datastore/settings.preferences_pb: settings (the base fee and max snoozes, and their pending changes, Story 4.4)
+        and the missed-note dismissals.
     Never backed up (excluded explicitly, so a later broader include can never pick them up):
       - runtime.db and its journals: the active wake session (Story 1.12);
       - app.db-journal: the rollback journal (TRUNCATE mode keeps every commit in app.db itself); app.db.lck and

@@ -31,6 +31,11 @@ import com.yawnandpawn.app.core.billing.MoneyFormatter
 import com.yawnandpawn.app.core.billing.UsdFeeLadder
 import com.yawnandpawn.app.core.checks.AccessibilityState
 import com.yawnandpawn.app.core.checks.word.WordBank
+import com.yawnandpawn.app.core.config.PromotePendingChanges
+import com.yawnandpawn.app.core.config.RecordCommitmentEvent
+import com.yawnandpawn.app.core.config.SaveGlobalSetting
+import com.yawnandpawn.app.core.config.SetBaseFee
+import com.yawnandpawn.app.core.config.SetMaxSnoozes
 import com.yawnandpawn.app.core.error.valueOrNull
 import com.yawnandpawn.app.core.history.MissedNotes
 import com.yawnandpawn.app.core.id.IdGenerator
@@ -79,14 +84,27 @@ val appModule =
         // Scheduling (Story 1.10): the only AlarmScheduler and the sync helper. A fire rings through the wake service
         // (Story 1.14), then re-arms through RearmOnFire (device test round 1: the ring first).
         single<AlarmScheduler> { AndroidAlarmScheduler(androidContext(), get(), get(), get(), get()) }
-        single { AlarmScheduling(get(), get(), get(), get(), get(), get()) }
+        // rescheduleAll() promotes the due pending changes first (Story 4.4).
+        single { AlarmScheduling(get(), get(), get(), get(), get(), get(), promotion = get<PromotePendingChanges>()) }
+        // The commitment lock (Story 4.4): promotion skips the occurrence the session in progress rings, read lazily (the
+        // engine is built after the scheduling it may need).
+        single {
+            val scope = this
+            PromotePendingChanges(get(), get(), get(), get(), get(), get(), get()) {
+                PromotePendingChanges.occurrenceOf(scope.get<SessionEngine>().state.value)
+            }
+        }
+        factory { SaveGlobalSetting(get(), get(), get(), get(), get(), get(), get()) }
+        factory { SetBaseFee(get()) }
+        factory { SetMaxSnoozes(get()) }
+        factory { RecordCommitmentEvent(get(), get(), get(), get(), get()) }
         single { RearmOnFire(get(), get(), get(), get(), get()) }
         single<AlarmFiredHandler> {
             WakeAlarmFiredHandler(get(), get<RearmOnFire>(), get(), get(), starts = get(), timings = get(), rearm = get())
         }
         // The session slot armed from runtime.db without the engine (Story 2.1): after system events and refused starts.
         single { SessionSlotRearm(get(), get(), get(), get(), get(), get()) }
-        factory { SaveAlarm(get(), get(), get(), get(), get(), get(), get(), get()) }
+        factory { SaveAlarm(get(), get(), get(), get(), get(), get(), get(), get(), get(), get()) }
         factory { SetAlarmEnabled(get(), get(), get(), get(), get()) }
         // Story 3.10: Home's "Re-register" stores a new code alone.
         factory { ReRegisterCode(get(), get(), get(), get(), get()) }
@@ -157,6 +175,8 @@ open class YawnAndPawnApp : Application() {
         val scope = koin.get<ApplicationScope>()
         // App start re-arms every alarm (AD-4); it also covers a backup restore, which restarts the app.
         val scheduling = koin.get<AlarmScheduling>()
+        // It also promotes the due pending changes of the commitment lock first (Story 4.4); the wake service promotes
+        // them again when a session is over.
         scope.launch { scheduling.rescheduleAll() }
         // With no session left in runtime.db (nothing, an unreadable row or a stored Idle), an alarm volume a crashed session
         // saved is put back (AD-5). Only a read: the session itself is restored by WakeService, MainActivity or

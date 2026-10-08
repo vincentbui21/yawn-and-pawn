@@ -11,6 +11,14 @@ import com.yawnandpawn.app.core.alarm.Alarm
 import com.yawnandpawn.app.core.alarm.AlarmDraft
 import com.yawnandpawn.app.core.alarm.AlarmFired
 import com.yawnandpawn.app.core.alarm.SaveAlarm
+import com.yawnandpawn.app.core.config.CommitmentAction
+import com.yawnandpawn.app.core.config.CommitmentEvent
+import com.yawnandpawn.app.core.config.CommitmentEventRepository
+import com.yawnandpawn.app.core.config.Occurrence
+import com.yawnandpawn.app.core.config.PendingChange
+import com.yawnandpawn.app.core.config.PendingChangeRepository
+import com.yawnandpawn.app.core.config.SetBaseFee
+import com.yawnandpawn.app.core.config.SettingValue
 import com.yawnandpawn.app.core.error.Outcome
 import com.yawnandpawn.app.core.history.MissedNoteDismissals
 import com.yawnandpawn.app.core.history.SessionHistoryRepository
@@ -81,6 +89,15 @@ class BackupRulesCoverageTest {
         assertEquals(emptyList(), reRegisterInputs.checkConfigs)
         assertEquals(mapOf(reRegisterKey to dismissedAt), reRegisterInputs.dismissedAt)
         assertIs<Outcome.Success<*>>(runBlocking { koin.get<ScheduleTestAlarm>()(AlarmDraft(time = LocalTime(8, 0))) })
+        // The commitment lock (Story 4.4): the global settings and a global pending change live in the settings DataStore,
+        // an alarm's pending change and a commitment event in app.db; no new file, all backed up.
+        assertIs<Outcome.Success<*>>(runBlocking { koin.get<SetBaseFee>()(3) })
+        val waitsFor = Occurrence(alarmId, Instant.parse("2027-03-09T06:00:00Z"))
+        val pending = koin.get<PendingChangeRepository>()
+        assertIs<Outcome.Success<*>>(runBlocking { pending.put(PendingChange(null, SettingValue.MaxSnoozes(5), waitsFor)) })
+        assertIs<Outcome.Success<*>>(runBlocking { pending.put(PendingChange(alarmId, SettingValue.GraceSeconds(30), waitsFor)) })
+        val event = CommitmentEvent("event-1", alarmId, waitsFor.scheduledAt, CommitmentAction.Disabled, dismissedAt)
+        assertIs<Outcome.Success<*>>(runBlocking { koin.get<CommitmentEventRepository>().insert(event) })
         // The notification permission is asked once (Story 2.3 keeps that flag in device-protected preferences).
         val reliability = File(app.app.createDeviceProtectedStorageContext().dataDir, "shared_prefs/reliability.xml")
         koin.get<AndroidNotificationPermission>().apply { attach {} }.request()

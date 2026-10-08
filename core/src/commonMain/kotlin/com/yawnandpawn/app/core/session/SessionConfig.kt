@@ -7,6 +7,11 @@ import com.yawnandpawn.app.core.checks.CheckPlan
 import com.yawnandpawn.app.core.checks.CheckType
 import com.yawnandpawn.app.core.checks.accessibleEntries
 import com.yawnandpawn.app.core.checks.word.WordBank
+import com.yawnandpawn.app.core.config.PendingChange
+import com.yawnandpawn.app.core.config.SettingValue
+import com.yawnandpawn.app.core.config.applyingTo
+import com.yawnandpawn.app.core.config.withCodesFrom
+import com.yawnandpawn.app.core.config.withPending
 import kotlinx.serialization.Serializable
 import kotlin.time.Instant
 
@@ -59,8 +64,8 @@ data class GlobalSettings(
 }
 
 /**
- * Builds the frozen [SessionConfig] (AD-16). Pure: the caller reads the alarm and the settings and passes them in.
- * Pending changes inside the commitment lock window arrive in Epic 4.
+ * Builds the frozen [SessionConfig] (AD-16). Pure: the caller reads the alarm, the settings and the pending changes
+ * (Story 4.4) and passes them in.
  */
 object ConfigResolver {
     /**
@@ -70,6 +75,10 @@ object ConfigResolver {
      * use the numbered variant for the whole session: the plan is frozen at the fire, and snooze re-rings reuse it.
      * Without [wordsAvailable] (the word list failed to load, Story 3.7 review) a Word Unscramble entry could never be
      * solved, so Math takes its place for the session ([ringableEntries]).
+     *
+     * [pendingChanges] (Story 4.4, the commitment lock) are the stored pending changes: one of [alarm] or a global one
+     * applies only to an occurrence strictly after the one it waits for ([PendingChange.appliesTo]), so it is ignored
+     * at that occurrence and any earlier one. [alarm], [checks] and [globalSettings] are the live values.
      */
     fun resolve(
         alarm: Alarm,
@@ -79,6 +88,27 @@ object ConfigResolver {
         scheduledAt: Instant,
         accessible: Boolean = false,
         wordsAvailable: Boolean = WordBank.current.words.isNotEmpty(),
+        pendingChanges: List<PendingChange> = emptyList(),
+    ): SessionConfig {
+        val applying = pendingChanges.applyingTo(alarm.id, scheduledAt)
+        val settings = globalSettings.withPending(applying)
+        val graceSeconds = applying.firstNotNullOfOrNull { (it.value as? SettingValue.GraceSeconds)?.seconds } ?: alarm.graceSeconds
+        val plan =
+            applying.firstNotNullOfOrNull { (it.value as? SettingValue.Checks)?.plan?.withCodesFrom(checks) }
+                ?: CheckPlan(alarm.checkMode, checks)
+        return resolveLive(alarm, plan, settings, graceSeconds, testMode, scheduledAt, accessible, wordsAvailable)
+    }
+
+    @Suppress("LongParameterList")
+    private fun resolveLive(
+        alarm: Alarm,
+        plan: CheckPlan,
+        globalSettings: GlobalSettings,
+        graceSeconds: Int,
+        testMode: Boolean,
+        scheduledAt: Instant,
+        accessible: Boolean,
+        wordsAvailable: Boolean,
     ): SessionConfig =
         SessionConfig(
             alarmId = alarm.id,
@@ -88,7 +118,7 @@ object ConfigResolver {
             baseFeeTier = globalSettings.baseFeeTier,
             maxSnoozes = globalSettings.maxSnoozes,
             snoozeLengthMinutes = alarm.snoozeLengthMinutes,
-            graceSeconds = alarm.graceSeconds,
+            graceSeconds = graceSeconds,
             // Quiet-time vibration needs vibration itself on (review fix): "Vibration" off never vibrates.
             vibrateInGrace = alarm.vibration && alarm.vibrateInGrace,
             volumePercent = Alarm.ringableVolume(alarm.volumePercent),
@@ -98,7 +128,14 @@ object ConfigResolver {
             soundRef = alarm.soundRef,
             vibration = alarm.vibration,
             checkPlan =
-                if (checks.isEmpty()) defaultPlan() else CheckPlan(alarm.checkMode, ringableEntries(checks, accessible, wordsAvailable)),
+                if (plan.entries.isEmpty()) {
+                    defaultPlan()
+                } else {
+                    CheckPlan(
+                        plan.mode,
+                        ringableEntries(plan.entries, accessible, wordsAvailable),
+                    )
+                },
         )
 
     /**

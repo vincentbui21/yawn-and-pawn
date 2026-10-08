@@ -2,6 +2,7 @@ package com.yawnandpawn.app.android.wake
 
 import com.yawnandpawn.app.android.ApplicationScope
 import com.yawnandpawn.app.android.crash.FirebaseStartup
+import com.yawnandpawn.app.core.billing.PriceRefreshScheduler
 import com.yawnandpawn.app.core.error.Outcome
 import com.yawnandpawn.app.core.log.LogEvent
 import com.yawnandpawn.app.core.log.Logger
@@ -23,8 +24,9 @@ import kotlin.time.Duration.Companion.seconds
  * - [WakeActivity] resumed with the user unlocked, for example after `requestDismissKeyguard` ([onScreenResumedUnlocked]).
  *
  * Each signal:
- * - initialises billing and crash reporting once per process, outside the AD-2 table, so an unlock in Grace or Loud
- *   (no `UserUnlocked` row) still starts them. Each is marked done only once it succeeded, so a throw is logged and the
+ * - initialises billing and crash reporting once per process, and schedules the price refresh jobs (Story 4.3,
+ *   launched on [ApplicationScope]; the scheduler enqueues them once per process), outside the AD-2 table, so an unlock
+ *   in Grace or Loud (no `UserUnlocked` row) still starts them. Each is marked done only once it succeeded, so a throw is logged and the
  *   next signal tries again;
  * - calls [replayLedger] every time (Story 4.10: the grant ledger is replayed, so a payment left unsettled by an overnight
  *   restart is settled at the first unlock or when the wake screen opens; it must only launch its work);
@@ -43,6 +45,7 @@ class UnlockSignals(
     private val scope: ApplicationScope,
     private val logger: Logger,
     private val retry: Duration = RETRY,
+    private val prices: PriceRefreshScheduler? = null,
     private val replayLedger: () -> Unit = {},
 ) {
     private var billingStarted = false
@@ -99,6 +102,8 @@ class UnlockSignals(
                 logger.log(LogEvent.OperationFailed("start billing", e::class.simpleName.orEmpty()))
             }
         }
+        // WorkManager waits for the unlock (Story 4.3): launched, never awaited, as this runs inside engine effects.
+        prices?.let { scheduler -> scope.launch { scheduler.start() } }
         // Application.onCreate starts Firebase too: started (or waiting for the unlock), it is not asked again.
         if (!firebase.started) {
             try {

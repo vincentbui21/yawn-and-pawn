@@ -12,6 +12,7 @@ import com.yawnandpawn.app.core.alarm.AlarmDraft
 import com.yawnandpawn.app.core.alarm.AlarmFired
 import com.yawnandpawn.app.core.alarm.SaveAlarm
 import com.yawnandpawn.app.core.billing.InstallIdProvider
+import com.yawnandpawn.app.core.billing.PriceCacheStore
 import com.yawnandpawn.app.core.config.CommitmentAction
 import com.yawnandpawn.app.core.config.CommitmentEvent
 import com.yawnandpawn.app.core.config.CommitmentEventRepository
@@ -32,8 +33,10 @@ import com.yawnandpawn.app.core.stats.ReRegisterSuggestions
 import com.yawnandpawn.app.data.db.appDatabaseFile
 import com.yawnandpawn.app.data.db.runtimeDatabaseFile
 import com.yawnandpawn.app.data.settings.InstallIdDataStore
+import com.yawnandpawn.app.data.settings.PriceCacheDataStore
 import com.yawnandpawn.app.data.settings.SettingsDataStore
 import com.yawnandpawn.app.stopApp
+import com.yawnandpawn.app.testing.aPriceSnapshot
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.runBlocking
 import kotlinx.datetime.LocalTime
@@ -109,6 +112,8 @@ class BackupRulesCoverageTest {
         app.awaitUntil("the asked-once flag is written") { reliability.isFile }
         // The install id (Story 4.8), made on first use in its own DataStore; the Pay path also writes runtime.db intents.
         assertIs<Outcome.Success<*>>(runBlocking { koin.get<InstallIdProvider>().installId() })
+        // The cached Play prices (Story 4.3), as a refresh stores them, in their own DataStore.
+        assertIs<Outcome.Success<*>>(runBlocking { koin.get<PriceCacheStore>().update { aPriceSnapshot() } })
         // Close the databases and the DataStore, as when the process ends, so their files are final.
         stopApp()
 
@@ -120,6 +125,7 @@ class BackupRulesCoverageTest {
             runtimeDatabaseFile(app.app),
             SettingsDataStore.settingsFile(app.app),
             InstallIdDataStore.installIdFile(app.app),
+            PriceCacheDataStore.priceCacheFile(app.app),
         ).forEach { expected ->
             assertTrue(files.any { it.first == expected.canonicalFile }, "the morning created $expected; found $names")
         }

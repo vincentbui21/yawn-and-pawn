@@ -147,6 +147,9 @@ dependencies {
     implementation(libs.camerax.lifecycle)
     implementation(libs.camerax.view)
     implementation(libs.mlkit.barcode.scanning)
+    // Story 4.3 (AD-17): deferred non-alarm work (the price refresh). Started on demand after the first unlock only;
+    // the default initializer is removed from the merged manifest.
+    implementation(libs.workmanager.runtime)
 
     testImplementation(project(":testing"))
     testImplementation(libs.kotlin.test)
@@ -157,6 +160,7 @@ dependencies {
     testImplementation(libs.roborazzi)
     testImplementation(libs.roborazzi.compose)
     testImplementation(libs.roborazzi.junit.rule)
+    testImplementation(libs.workmanager.testing)
 
     androidTestImplementation(libs.androidx.test.runner)
     androidTestImplementation(libs.androidx.test.core)

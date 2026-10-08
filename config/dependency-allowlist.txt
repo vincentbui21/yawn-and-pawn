@@ -324,3 +324,16 @@ org.checkerframework:checker-qual
 org.jetbrains.kotlin:kotlin-bom
 org.jetbrains.kotlinx:atomicfu
 org.jetbrains.kotlinx:atomicfu-jvm
+
+# WorkManager 2.11.0 (Story 4.3, AD-17: deferred non-alarm work; the first user is the price refresh). Reviewed
+# 2026-10-08, Apache-2.0 (AndroidX): the WorkManager runtime schedules jobs through JobScheduler and AlarmManager and
+# keeps them in its own on-device database (Room 2 over the androidx.sqlite already listed; distinct from the app's
+# androidx.room3) with a lifecycle-aware service. None opens a network connection. Its merged permissions (WAKE_LOCK,
+# ACCESS_NETWORK_STATE, RECEIVE_BOOT_COMPLETED, FOREGROUND_SERVICE) are already allowlisted. It starts on demand after
+# the first unlock only (default initializer removed).
+androidx.lifecycle:lifecycle-service
+androidx.room:room-common
+androidx.room:room-common-jvm
+androidx.room:room-runtime
+androidx.room:room-runtime-android
+androidx.work:work-runtime

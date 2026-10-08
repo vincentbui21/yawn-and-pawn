@@ -185,4 +185,6 @@ fun DomainError.diagnostic(): String =
         is DomainError.CurrencyMismatch -> "currency mismatch: $left and $right"
         is DomainError.InvalidCurrency -> "invalid currency: $currency"
         is DomainError.InvalidFee -> "invalid fee: tier $baseFeeTier, snooze $snoozeNumber"
+        is DomainError.ProductDetailsFailed -> "product details failed (${if (transient) "transient" else "permanent"}): $cause"
+        is DomainError.BackgroundWorkFailure -> "background work failure: $cause"
     }

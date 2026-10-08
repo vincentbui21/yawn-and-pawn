@@ -15,9 +15,11 @@ import com.yawnandpawn.app.android.wake.AndroidAlarmPlayer
 import com.yawnandpawn.app.android.wake.WakeActivity
 import com.yawnandpawn.app.android.wake.WakeNotifier
 import com.yawnandpawn.app.android.wake.WakeService
+import com.yawnandpawn.app.android.work.BackgroundTasks
 import com.yawnandpawn.app.awaitChildren
 import com.yawnandpawn.app.buildActivity
 import com.yawnandpawn.app.core.alarm.RequestCodes
+import com.yawnandpawn.app.core.billing.ConsumeRetryTask
 import com.yawnandpawn.app.core.billing.GrantLedgerStore
 import com.yawnandpawn.app.core.billing.PurchaseIntent
 import com.yawnandpawn.app.core.billing.PurchaseIntentStore
@@ -37,13 +39,14 @@ import com.yawnandpawn.app.core.session.SessionState
 import com.yawnandpawn.app.core.session.StoredSession
 import com.yawnandpawn.app.core.time.Clock
 import com.yawnandpawn.app.core.time.Deadline
+import com.yawnandpawn.app.core.work.BackgroundTaskKind
 import com.yawnandpawn.app.core.work.BackgroundWork
 import com.yawnandpawn.app.data.session.ActiveSessionDao
 import com.yawnandpawn.app.data.session.ActiveSessionEntity
 import com.yawnandpawn.app.data.session.GrantLedgerEntity
 import com.yawnandpawn.app.data.session.PurchaseIntentEntity
 import com.yawnandpawn.app.stopApp
-import com.yawnandpawn.app.testing.RecordingBackgroundWork
+import com.yawnandpawn.app.testing.FakeBackgroundWork
 import com.yawnandpawn.app.testing.aGrant
 import com.yawnandpawn.app.testing.aPurchaseIntent
 import com.yawnandpawn.app.testing.aSession
@@ -269,8 +272,7 @@ class RestoreEntryPointsTest {
         assertEquals(RecordStatus.Granted, assertIs<Outcome.Success<PurchaseRecord?>>(record).value?.status)
         // Play Billing arrives in Story 4.12: until then the consume fails and the row waits for the next start or resume.
         assertEquals(Outcome.Success(listOf(grant)), runBlocking { koin().get<GrantLedgerStore>().all() })
-        val jobs = (koin().get<BackgroundWork>() as RecordingBackgroundWork).jobs
-        assertEquals(listOf(PurchaseLedger.CONSUME_RETRY_JOB, PurchaseLedger.CONSUME_RETRY_PERIODIC), jobs)
+        assertEquals(listOf(PurchaseLedger.CONSUME_RETRY_JOB, PurchaseLedger.CONSUME_RETRY_PERIODIC), consumeRetryJobs())
     }
 
     @Test
@@ -286,7 +288,7 @@ class RestoreEntryPointsTest {
 
         assertEquals(Outcome.Success(null), runBlocking { koin().get<PurchaseRecordRepository>().get(grant.token.hash()) })
         assertEquals(Outcome.Success(listOf(grant)), runBlocking { koin().get<GrantLedgerStore>().all() })
-        assertEquals(emptyList(), (koin().get<BackgroundWork>() as RecordingBackgroundWork).jobs)
+        assertEquals(emptyList(), (koin().get<BackgroundWork>() as FakeBackgroundWork).enqueued)
     }
 
     @Test
@@ -303,14 +305,15 @@ class RestoreEntryPointsTest {
     }
 
     @Test
-    fun `the app's real retry worker is bound and runs the consume retry job`() {
+    fun `the app's WorkManager worker runs the consume retry job with the ledger's task`() {
         awaitWork()
 
-        assertEquals(Outcome.Success(Unit), koin().get<InProcessBackgroundWork>().enqueue(PurchaseLedger.CONSUME_RETRY_JOB))
-        awaitWork()
-
-        assertTrue(ShadowLog.getLogsForTag(AndroidLogger.TAG).none { "run background task" in it.msg })
+        assertIs<ConsumeRetryTask>(koin().get<BackgroundTasks>().taskFor(BackgroundTaskKind.ConsumeRetry))
     }
+
+    /** The consume retry jobs handed to background work (app start also enqueues the price refresh jobs, Story 4.3). */
+    private fun consumeRetryJobs() =
+        (koin().get<BackgroundWork>() as FakeBackgroundWork).enqueued.filter { it.task == BackgroundTaskKind.ConsumeRetry }
 
     @Test
     fun `restore is called only from WakeService, MainActivity and WakeActivity - never from the app or a receiver`() {

@@ -31,6 +31,9 @@ class LoggerTest {
         assertEquals("currency mismatch: USD and EUR", DomainError.CurrencyMismatch("USD", "EUR").diagnostic())
         assertEquals("invalid currency: usd", DomainError.InvalidCurrency("usd").diagnostic())
         assertEquals("invalid fee: tier 11, snooze 1", DomainError.InvalidFee(11, 1).diagnostic())
+        assertEquals("product details failed (transient): offline", DomainError.ProductDetailsFailed(true, "offline").diagnostic())
+        assertEquals("product details failed (permanent): no billing", DomainError.ProductDetailsFailed(false, "no billing").diagnostic())
+        assertEquals("background work failure: locked", DomainError.BackgroundWorkFailure("locked").diagnostic())
     }
 
     @Test

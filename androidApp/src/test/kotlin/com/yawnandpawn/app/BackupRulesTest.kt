@@ -6,6 +6,7 @@ import com.yawnandpawn.app.android.backup.SkippedRestoreNotice
 import com.yawnandpawn.app.data.db.AppDatabase
 import com.yawnandpawn.app.data.db.RuntimeDatabase
 import com.yawnandpawn.app.data.settings.InstallIdDataStore
+import com.yawnandpawn.app.data.settings.PriceCacheDataStore
 import com.yawnandpawn.app.data.settings.SettingsDataStore
 import org.junit.After
 import org.junit.Test
@@ -56,6 +57,8 @@ class BackupRulesTest {
             Triple("exclude", "device_sharedpref", "settings_fallback.xml"),
             // The install id (Story 4.8): never restored onto another phone.
             Triple("exclude", "device_file", installId),
+            // The cached Play prices (Story 4.3): in the phone's Play currency, never restored onto another phone.
+            Triple("exclude", "device_file", "datastore/${PriceCacheDataStore.FILE_NAME}"),
             Triple("exclude", "root", "."),
             Triple("exclude", "file", "."),
             Triple("exclude", "database", "."),

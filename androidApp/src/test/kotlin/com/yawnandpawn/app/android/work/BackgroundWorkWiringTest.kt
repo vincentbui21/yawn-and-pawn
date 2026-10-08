@@ -1,0 +1,263 @@
+package com.yawnandpawn.app.android.work
+
+import android.content.ComponentName
+import android.content.pm.PackageManager
+import android.os.Looper
+import android.util.Log
+import androidx.test.core.app.ApplicationProvider
+import androidx.work.Configuration
+import androidx.work.ListenableWorker
+import androidx.work.NetworkType
+import androidx.work.WorkInfo
+import androidx.work.WorkManager
+import androidx.work.testing.SynchronousExecutor
+import androidx.work.testing.TestListenableWorkerBuilder
+import androidx.work.testing.WorkManagerTestInitHelper
+import androidx.work.workDataOf
+import com.yawnandpawn.app.APP_WORK_TIMEOUT_MILLIS
+import com.yawnandpawn.app.StopAppRule
+import com.yawnandpawn.app.YawnAndPawnApp
+import com.yawnandpawn.app.core.billing.PriceCatalog
+import com.yawnandpawn.app.core.billing.PriceRefreshJobs
+import com.yawnandpawn.app.core.billing.PriceRefreshScheduler
+import com.yawnandpawn.app.core.billing.ProductDetailsSource
+import com.yawnandpawn.app.core.billing.SnoozeProducts
+import com.yawnandpawn.app.core.error.DomainError
+import com.yawnandpawn.app.core.error.Outcome
+import com.yawnandpawn.app.core.log.LogEvent
+import com.yawnandpawn.app.core.log.Logger
+import com.yawnandpawn.app.core.session.UserLockState
+import com.yawnandpawn.app.core.work.BackgroundTask
+import com.yawnandpawn.app.core.work.BackgroundTaskKind
+import com.yawnandpawn.app.core.work.BackgroundWork
+import com.yawnandpawn.app.core.work.TaskResult
+import com.yawnandpawn.app.restartKoin
+import com.yawnandpawn.app.testing.FakeLogger
+import com.yawnandpawn.app.testing.FakeProductDetailsSource
+import com.yawnandpawn.app.testing.FakeUserLockState
+import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.runBlocking
+import org.junit.Before
+import org.junit.Rule
+import org.junit.Test
+import org.junit.runner.RunWith
+import org.koin.core.context.GlobalContext
+import org.koin.core.module.Module
+import org.koin.dsl.module
+import org.robolectric.RobolectricTestRunner
+import org.robolectric.Shadows.shadowOf
+import java.util.concurrent.TimeUnit
+import kotlin.test.assertEquals
+import kotlin.test.assertFalse
+import kotlin.test.assertIs
+import kotlin.test.assertNotNull
+import kotlin.test.assertTrue
+import kotlin.test.fail
+
+/**
+ * Story 4.3 (AD-17): the WorkManager adapter, on WorkManager's own test setup (`WorkManagerTestInitHelper` and its
+ * `TestDriver`). The price refresh jobs are unique, need the network and run the price refresh through the app's one
+ * worker; nothing reaches WorkManager before the first unlock; WorkManager starts on demand, not at app start.
+ */
+@RunWith(RobolectricTestRunner::class)
+class BackgroundWorkWiringTest {
+    @get:Rule(order = 0)
+    val stopApp = StopAppRule()
+
+    private val app = ApplicationProvider.getApplicationContext<YawnAndPawnApp>()
+    private val source = FakeProductDetailsSource()
+    private val log = FakeLogger()
+
+    @Before
+    fun setUp() {
+        WorkManagerTestInitHelper.initializeTestWorkManager(
+            app,
+            Configuration
+                .Builder()
+                .setMinimumLoggingLevel(Log.DEBUG)
+                .setExecutor(SynchronousExecutor())
+                .build(),
+        )
+    }
+
+    private fun start(vararg overrides: Module) =
+        restartKoin(
+            app,
+            module {
+                single<ProductDetailsSource> { source }
+                single<Logger> { log }
+                single<UserLockState> { FakeUserLockState(unlocked = true) }
+                // The real adapter instead of the tests' fake.
+                single<BackgroundWork> { AndroidBackgroundWork(app, get()) }
+            },
+            *overrides,
+        )
+
+    private val workManager: WorkManager
+        get() = WorkManager.getInstance(app)
+
+    private fun infos(name: String): List<WorkInfo> = workManager.getWorkInfosForUniqueWork(name).get()
+
+    private fun awaitUntil(
+        what: String,
+        condition: () -> Boolean,
+    ) {
+        val deadline = System.currentTimeMillis() + APP_WORK_TIMEOUT_MILLIS
+        while (System.currentTimeMillis() < deadline) {
+            shadowOf(Looper.getMainLooper()).idle()
+            if (condition()) return
+            Thread.sleep(POLL_MILLIS)
+        }
+        fail("timed out waiting until $what")
+    }
+
+    @Test
+    fun `the scheduler enqueues the two unique price refresh jobs, with a network constraint and a daily period`() {
+        start()
+        val koin = GlobalContext.get()
+
+        assertTrue(runBlocking { koin.get<PriceRefreshScheduler>().start() })
+
+        val now = assertNotNull(infos(PriceRefreshJobs.NOW.uniqueName).singleOrNull())
+        assertEquals(WorkInfo.State.ENQUEUED, now.state)
+        assertEquals(NetworkType.CONNECTED, now.constraints.requiredNetworkType)
+        assertTrue(AndroidBackgroundWork.TAG in now.tags)
+        assertEquals(null, now.periodicityInfo)
+
+        val daily = assertNotNull(infos(PriceRefreshJobs.DAILY.uniqueName).singleOrNull())
+        assertEquals(WorkInfo.State.ENQUEUED, daily.state)
+        assertEquals(NetworkType.CONNECTED, daily.constraints.requiredNetworkType)
+        assertEquals(TimeUnit.HOURS.toMillis(24), daily.periodicityInfo?.repeatIntervalMillis)
+    }
+
+    @Test
+    fun `a pending one-time job is kept, and the periodic job is updated in place`() {
+        start()
+        val work = GlobalContext.get().get<BackgroundWork>()
+        PriceRefreshJobs.ALL.forEach { assertEquals(Outcome.Success(Unit), work.enqueue(it)) }
+        val first = PriceRefreshJobs.ALL.map { infos(it.uniqueName).single().id }
+
+        PriceRefreshJobs.ALL.forEach { assertEquals(Outcome.Success(Unit), work.enqueue(it)) }
+
+        assertEquals(first, PriceRefreshJobs.ALL.map { infos(it.uniqueName).single().id })
+    }
+
+    @Test
+    fun `when the network comes, the job runs the price refresh and fills the cache`() {
+        start()
+        val koin = GlobalContext.get()
+        assertEquals(Outcome.Success(Unit), koin.get<BackgroundWork>().enqueue(PriceRefreshJobs.NOW))
+        val id = infos(PriceRefreshJobs.NOW.uniqueName).single().id
+        assertEquals(emptyList(), source.requests, "nothing runs before the constraint is met")
+
+        assertNotNull(WorkManagerTestInitHelper.getTestDriver(app)).setAllConstraintsMet(id)
+
+        awaitUntil("the job succeeded") { workManager.getWorkInfoById(id).get()?.state == WorkInfo.State.SUCCEEDED }
+        assertEquals(listOf(SnoozeProducts.all), source.requests)
+        assertEquals(SnoozeProducts.all.size, runBlocking { koin.get<PriceCatalog>().observe().first() }.entries.size)
+    }
+
+    @Test
+    fun `nothing reaches WorkManager while the user is locked`() {
+        val work = AndroidBackgroundWork(app, FakeUserLockState(unlocked = false)) { fail("WorkManager must not start before the unlock") }
+
+        val result = work.enqueue(PriceRefreshJobs.NOW)
+
+        assertIs<DomainError.BackgroundWorkFailure>(assertIs<Outcome.Failure<DomainError>>(result).error)
+    }
+
+    @Test
+    fun `a WorkManager that throws is a failure value, not a crash`() {
+        val work = AndroidBackgroundWork(app, FakeUserLockState(unlocked = true)) { throw IllegalStateException("no database") }
+
+        val error = assertIs<Outcome.Failure<DomainError>>(work.enqueue(PriceRefreshJobs.DAILY)).error
+
+        assertEquals(DomainError.BackgroundWorkFailure("price-refresh: IllegalStateException"), error)
+    }
+
+    private fun runWorker(
+        task: String?,
+        attempt: Int = 0,
+    ): ListenableWorker.Result =
+        runBlocking {
+            TestListenableWorkerBuilder<BackgroundTaskWorker>(app)
+                .setInputData(if (task == null) workDataOf() else workDataOf(BackgroundTaskWorker.KEY_TASK to task))
+                .setRunAttemptCount(attempt)
+                .build()
+                .doWork()
+        }
+
+    private fun tasks(answer: () -> TaskResult) =
+        module { single { BackgroundTasks(mapOf(BackgroundTaskKind.PriceRefresh to BackgroundTask { answer() })) } }
+
+    @Test
+    fun `the worker maps the task's result, retrying a transient failure up to three runs`() {
+        var answer = TaskResult.Done
+        start(tasks { answer })
+        val name = BackgroundTaskKind.PriceRefresh.name
+
+        assertEquals(ListenableWorker.Result.success(), runWorker(name))
+        answer = TaskResult.Failed
+        assertEquals(ListenableWorker.Result.failure(), runWorker(name))
+        answer = TaskResult.RetryLater
+        assertEquals(ListenableWorker.Result.retry(), runWorker(name, attempt = 0))
+        assertEquals(ListenableWorker.Result.retry(), runWorker(name, attempt = 1))
+        assertEquals(ListenableWorker.Result.failure(), runWorker(name, attempt = BackgroundTaskWorker.MAX_ATTEMPTS - 1))
+    }
+
+    @Test
+    fun `a job with no known task, or a task that throws, fails and is logged`() {
+        start(tasks { throw IllegalStateException("boom") })
+
+        assertEquals(ListenableWorker.Result.failure(), runWorker("WeeklySummaryFromTheFuture"))
+        assertEquals(ListenableWorker.Result.failure(), runWorker(null))
+        assertEquals(ListenableWorker.Result.failure(), runWorker(BackgroundTaskKind.PriceRefresh.name))
+
+        assertEquals(
+            listOf<LogEvent>(
+                LogEvent.OperationFailed("run background task", "no task for WeeklySummaryFromTheFuture"),
+                LogEvent.OperationFailed("run background task", "no task for null"),
+                LogEvent.OperationFailed("run background task", "PriceRefresh: IllegalStateException"),
+            ),
+            log.events.filter { it is LogEvent.OperationFailed && it.operation == "run background task" },
+        )
+    }
+
+    @Test
+    fun `the price refresh task is registered and runs the catalog refresh`() {
+        start()
+        source.failWith(DomainError.ProductDetailsFailed(transient = true, cause = "offline"))
+
+        assertEquals(ListenableWorker.Result.retry(), runWorker(BackgroundTaskKind.PriceRefresh.name))
+        assertEquals(1, source.requests.size)
+    }
+
+    @Test
+    fun `the production source fails without retrying until the Play adapter arrives`() =
+        runBlocking {
+            val result = UnavailableProductDetailsSource().fetch(SnoozeProducts.all)
+
+            val error = assertIs<DomainError.ProductDetailsFailed>(assertIs<Outcome.Failure<DomainError>>(result).error)
+            assertFalse(error.transient)
+        }
+
+    @Test
+    fun `WorkManager is not started by the manifest, and the app gives its configuration`() {
+        @Suppress("DEPRECATION") // The flags are the only way to read these parts of the merged manifest.
+        val provider =
+            app.packageManager.getProviderInfo(
+                ComponentName(app, "androidx.startup.InitializationProvider"),
+                PackageManager.GET_META_DATA,
+            )
+        val initializers = provider.metaData?.keySet().orEmpty()
+
+        assertFalse("androidx.work.WorkManagerInitializer" in initializers, "initializers: $initializers")
+        assertTrue(initializers.isNotEmpty(), "the other startup initializers stay: $initializers")
+        assertIs<Configuration.Provider>(app)
+        assertEquals(Log.INFO, app.workManagerConfiguration.minimumLoggingLevel)
+    }
+
+    private companion object {
+        const val POLL_MILLIS = 20L
+    }
+}

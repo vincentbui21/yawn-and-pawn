@@ -35,7 +35,7 @@ deferred:
   - `CachedPriceCatalog` (production `PriceCatalog`): fetches all 50 `SnoozeProducts`, merges with the pure `PriceCatalogSnapshot.mergedWith(result, requested, fetchedAt)` inside one store update, keeps the previous snapshot on failure, and runs one refresh at a time (Mutex).
   - Staleness: `PriceCachePolicy` and `PriceEntry.freshnessAt(now)` → Fresh / Stale / Expired; `snapshot.displayablePriceFor(productId, now)` hides Expired entries.
   - `PriceCatalogJson`: the stored form (versioned JSON, entries with micros + currency + Play string + fetchedAt).
-  - `PriceRefreshTask` (the background task) and `PriceRefreshScheduler` (app start / first unlock: enqueue "price-refresh-now" and the daily "price-refresh", once per process, only when unlocked) and `PriceRefreshTrigger.onSessionStarted()` (one refresh launched on a scope, never awaited, only when unlocked).
+  - `PriceRefreshTask` (the background task) and `PriceRefreshScheduler` (app start / first unlock: enqueue "price-refresh-now" and the daily "price-refresh", once per process, only when unlocked) and `SessionStartPriceRefresh.onSessionStarted()` (one refresh launched on a scope, never awaited, only when unlocked).
 - **Core (`core.work`, AD-17):** `BackgroundWork` port (`enqueue(BackgroundJob)`), `BackgroundJob(uniqueName, task, needsNetwork, repeatEvery)`, `BackgroundTaskKind` (PriceRefresh), `BackgroundTask` and `TaskResult` (Done / RetryLater / Failed).
 - **`:data`:** `PriceCacheDataStore`: a separate device-protected Preferences DataStore `datastore/price_cache.preferences_pb` (`createWithPath`, `ReplaceFileCorruptionHandler` → empty). `DataStorePriceCacheStore` keeps the snapshot as one JSON string; an undecodable value is logged and read as empty.
 - **`:androidApp`:**
@@ -43,7 +43,7 @@ deferred:
   - `BackgroundTaskWorker` (`CoroutineWorker`): runs the registered `BackgroundTask` for the job's kind; RetryLater → `Result.retry()` up to 3 attempts, then failure.
   - On-demand initialisation: `YawnAndPawnApp` is a `Configuration.Provider`; the manifest removes `androidx.work.WorkManagerInitializer` from `InitializationProvider`.
   - App start launches `PriceRefreshScheduler.start()` on `ApplicationScope` (never on the main thread, never awaited); `UnlockSignals.initialiseAfterUnlock()` calls it too (BOOT_COMPLETED / ACTION_USER_UNLOCKED), so a process started locked schedules after the unlock.
-  - `WakeService`: after `AlarmFired` commits a new session, `PriceRefreshTrigger.onSessionStarted()`.
+  - `WakeService`: after `AlarmFired` commits a new session, `SessionStartPriceRefresh.onSessionStarted()`.
   - Backup rules exclude `datastore/price_cache.preferences_pb` in every section; `BackupRulesCoverageTest` creates the file.
   - Dependency allowlist: `androidx.work:work-runtime`, `work-runtime-ktx` and whatever new coordinates WorkManager brings (Room 2 and SQLite of `androidx.room`, reviewed, Apache-2.0), in the same change.
 

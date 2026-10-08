@@ -92,7 +92,10 @@ room3-compiler = { module = "androidx.room3:room3-compiler", version.ref = "room
 # AndroidSQLiteDriver (framework SQLite); see docs/decisions/oq-2-room.md for why not the bundled driver.
 sqlite-framework = { module = "androidx.sqlite:sqlite-framework", version.ref = "sqlite" }
 datastore-preferences = { module = "androidx.datastore:datastore-preferences", version.ref = "datastore" }
-workmanager-runtime = { module = "androidx.work:work-runtime-ktx", version.ref = "workmanager" }
+# Story 4.3 (AD-17): WorkManager for deferred non-alarm work. work-runtime has the coroutine API since 2.9 (the -ktx
+# artifact is empty), so the app uses it directly. work-testing is test-only (WorkManagerTestInitHelper, TestDriver).
+workmanager-runtime = { module = "androidx.work:work-runtime", version.ref = "workmanager" }
+workmanager-testing = { module = "androidx.work:work-testing", version.ref = "workmanager" }
 camerax-core = { module = "androidx.camera:camera-core", version.ref = "camerax" }
 camerax-camera2 = { module = "androidx.camera:camera-camera2", version.ref = "camerax" }
 camerax-lifecycle = { module = "androidx.camera:camera-lifecycle", version.ref = "camerax" }

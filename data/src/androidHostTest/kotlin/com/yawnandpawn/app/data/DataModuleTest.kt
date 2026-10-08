@@ -5,6 +5,7 @@ import androidx.test.core.app.ApplicationProvider
 import com.yawnandpawn.app.core.alarm.AlarmRepository
 import com.yawnandpawn.app.core.alarm.RequestCodeSequence
 import com.yawnandpawn.app.core.billing.InstallIdProvider
+import com.yawnandpawn.app.core.billing.PriceCacheStore
 import com.yawnandpawn.app.core.billing.PurchaseIntentStore
 import com.yawnandpawn.app.core.error.Outcome
 import com.yawnandpawn.app.core.history.MissedNoteDismissals
@@ -27,11 +28,14 @@ import com.yawnandpawn.app.data.session.RoomActiveSessionStore
 import com.yawnandpawn.app.data.session.RoomPurchaseIntentStore
 import com.yawnandpawn.app.data.settings.DataStoreInstallIdProvider
 import com.yawnandpawn.app.data.settings.DataStoreMissedNoteDismissals
+import com.yawnandpawn.app.data.settings.DataStorePriceCacheStore
 import com.yawnandpawn.app.data.settings.DataStoreReRegisterDismissals
 import com.yawnandpawn.app.data.settings.InstallIdDataStore
+import com.yawnandpawn.app.data.settings.PriceCacheDataStore
 import com.yawnandpawn.app.data.settings.SettingsDataStore
 import com.yawnandpawn.app.testing.FakeClock
 import com.yawnandpawn.app.testing.FakeLogger
+import com.yawnandpawn.app.testing.aPriceSnapshot
 import com.yawnandpawn.app.testing.anAppVersion
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.runBlocking
@@ -125,6 +129,37 @@ class DataModuleTest {
         } finally {
             app.koin.get<RuntimeDatabase>().close()
             app.close()
+        }
+    }
+
+    @Test
+    fun `the data module binds the price cache to its own DataStore and releases it on close`() {
+        val ports =
+            module {
+                single<Context> { context }
+                single<Logger> { FakeLogger() }
+                single<IdGenerator> { UuidV4IdGenerator() }
+            }
+        val app = koinApplication { modules(ports, dataModule) }
+        val store = app.koin.get<PriceCacheStore>()
+        assertIs<DataStorePriceCacheStore>(store)
+        assertSame(app.koin.get<PriceCacheDataStore>(), app.koin.get<PriceCacheDataStore>())
+        assertIs<Outcome.Success<*>>(runBlocking { store.update { aPriceSnapshot(1..2) } })
+        app.close()
+
+        val again = koinApplication { modules(ports, dataModule) }
+        try {
+            assertEquals(
+                aPriceSnapshot(1..2),
+                runBlocking {
+                    again.koin
+                        .get<PriceCacheStore>()
+                        .observe()
+                        .first()
+                },
+            )
+        } finally {
+            again.close()
         }
     }
 

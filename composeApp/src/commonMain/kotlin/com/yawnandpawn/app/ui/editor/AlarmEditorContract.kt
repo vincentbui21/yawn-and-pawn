@@ -3,6 +3,7 @@ package com.yawnandpawn.app.ui.editor
 import com.yawnandpawn.app.core.alarm.Alarm
 import com.yawnandpawn.app.core.alarm.AlarmField
 import com.yawnandpawn.app.core.alarm.CheckConfig
+import com.yawnandpawn.app.core.billing.Money
 import com.yawnandpawn.app.core.checks.qr.RegisteredCode
 import com.yawnandpawn.app.ui.checks.CheckType
 import com.yawnandpawn.app.ui.checks.Difficulty
@@ -11,7 +12,6 @@ import com.yawnandpawn.app.ui.checks.toUi
 import com.yawnandpawn.app.ui.checksetup.CheckPreviewUiState
 import com.yawnandpawn.app.ui.checksetup.CheckSetupIntent
 import com.yawnandpawn.app.ui.format.Countdown
-import com.yawnandpawn.app.ui.format.Money
 import com.yawnandpawn.app.ui.format.Weekdays
 import com.yawnandpawn.app.ui.qr.ScanEvent
 import com.yawnandpawn.app.ui.sound.SoundPickerIntent

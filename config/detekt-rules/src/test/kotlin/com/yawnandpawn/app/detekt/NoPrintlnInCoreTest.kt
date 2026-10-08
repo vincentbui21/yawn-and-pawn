@@ -60,6 +60,7 @@ class NoPrintlnInCoreTest {
                 "CredentialStorageAccess",
                 "NoHostageApis",
                 "NoUnseededRandom",
+                "NoFloatingPointMoney",
             ),
             ruleSet.rules.keys.map { it.value },
         )

@@ -29,6 +29,7 @@ import androidx.compose.ui.test.hasText
 import androidx.compose.ui.test.junit4.createEmptyComposeRule
 import androidx.compose.ui.unit.dp
 import com.yawnandpawn.app.StopAppRule
+import com.yawnandpawn.app.core.billing.Money
 import com.yawnandpawn.app.core.checks.Puzzle
 import com.yawnandpawn.app.core.checks.qr.CodeFormat
 import com.yawnandpawn.app.core.checks.qr.RegisteredCode
@@ -44,7 +45,6 @@ import com.yawnandpawn.app.ui.checks.Difficulty
 import com.yawnandpawn.app.ui.checks.toCore
 import com.yawnandpawn.app.ui.checksetup.CheckPreviewScreen
 import com.yawnandpawn.app.ui.checksetup.CheckPreviewUiState
-import com.yawnandpawn.app.ui.format.Money
 import com.yawnandpawn.app.ui.theme.PpsThemeMode
 import com.yawnandpawn.app.ui.wake.CheckContent
 import com.yawnandpawn.app.ui.wake.CheckScreen
@@ -424,7 +424,7 @@ class CheckSemanticsSuiteTest {
                 SuccessUiState(SuccessKind.OnTime(streakDays = 0)) to "Up on time.",
                 SuccessUiState(SuccessKind.OnTime(streakDays = 4)) to "Up on time.",
                 SuccessUiState(SuccessKind.AfterSnooze(paidThisMorning = null)) to "You're up. That's what counts.",
-                SuccessUiState(SuccessKind.AfterSnooze(paidThisMorning = Money(amountMicros = 2_000_000, currencyCode = "EUR"))) to
+                SuccessUiState(SuccessKind.AfterSnooze(paidThisMorning = Money(micros = 2_000_000, currency = "EUR"))) to
                     "You're up. That's what counts.",
                 SuccessUiState(SuccessKind.Test, pendingNotUsed = true) to "Test finished. Your alarm works.",
             )

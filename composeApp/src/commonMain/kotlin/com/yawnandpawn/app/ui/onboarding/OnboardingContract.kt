@@ -1,9 +1,9 @@
 package com.yawnandpawn.app.ui.onboarding
 
+import com.yawnandpawn.app.core.billing.Money
 import com.yawnandpawn.app.ui.checkpicker.CheckPickerIntent
 import com.yawnandpawn.app.ui.checkpicker.CheckPickerUiState
 import com.yawnandpawn.app.ui.editor.RepeatChoice
-import com.yawnandpawn.app.ui.format.Money
 import com.yawnandpawn.app.ui.format.Weekdays
 import com.yawnandpawn.app.ui.reliability.ChecklistItem
 import com.yawnandpawn.app.ui.reliability.ChecklistRow

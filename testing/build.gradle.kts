@@ -22,3 +22,11 @@ kotlin {
         }
     }
 }
+
+// Story 4.2: SnoozeProductsFileTest (jvmTest here, as :core allows only common source sets) checks the fee ladder
+// against the product list tools/play-catalog reads.
+val snoozeProducts = rootProject.layout.projectDirectory.file("config/snooze-products.txt")
+tasks.withType<Test>().configureEach {
+    inputs.file(snoozeProducts).withPathSensitivity(PathSensitivity.RELATIVE)
+    systemProperty("yawnandpawn.snoozeProducts", snoozeProducts.asFile.absolutePath)
+}

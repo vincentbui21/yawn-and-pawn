@@ -1,5 +1,6 @@
 package com.yawnandpawn.app.ui.wake
 
+import com.yawnandpawn.app.core.billing.Money
 import com.yawnandpawn.app.core.checks.CheckEntry
 import com.yawnandpawn.app.core.checks.CheckMode
 import com.yawnandpawn.app.core.checks.CheckPlan
@@ -14,7 +15,6 @@ import com.yawnandpawn.app.core.time.TimeSnapshot
 import com.yawnandpawn.app.testing.aSession
 import com.yawnandpawn.app.testing.aSessionConfig
 import com.yawnandpawn.app.testing.everySessionState
-import com.yawnandpawn.app.ui.format.Money
 import kotlinx.datetime.LocalDate
 import kotlinx.datetime.LocalTime
 import kotlinx.datetime.TimeZone

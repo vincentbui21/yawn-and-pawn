@@ -14,11 +14,11 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.semantics.semantics
+import com.yawnandpawn.app.core.billing.Money
 import com.yawnandpawn.app.ui.components.PpsTextButton
 import com.yawnandpawn.app.ui.components.RowIcon
 import com.yawnandpawn.app.ui.components.TabScreen
 import com.yawnandpawn.app.ui.components.glass
-import com.yawnandpawn.app.ui.format.Money
 import com.yawnandpawn.app.ui.format.formatMoney
 import com.yawnandpawn.app.ui.resources.Res
 import com.yawnandpawn.app.ui.resources.home_streak_day

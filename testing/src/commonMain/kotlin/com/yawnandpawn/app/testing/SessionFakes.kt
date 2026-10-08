@@ -1,53 +1,68 @@
 package com.yawnandpawn.app.testing
 
+import com.yawnandpawn.app.core.billing.FeeLadder
+import com.yawnandpawn.app.core.billing.FeeRules
+import com.yawnandpawn.app.core.billing.FeeStep
+import com.yawnandpawn.app.core.billing.SnoozeProducts
+import com.yawnandpawn.app.core.billing.nextOffer
 import com.yawnandpawn.app.core.checks.CheckAnswer
 import com.yawnandpawn.app.core.checks.CheckEntry
 import com.yawnandpawn.app.core.checks.CheckMode
 import com.yawnandpawn.app.core.checks.CheckPlan
 import com.yawnandpawn.app.core.checks.CheckType
+import com.yawnandpawn.app.core.error.DomainError
+import com.yawnandpawn.app.core.error.Outcome
 import com.yawnandpawn.app.core.session.CameraFallbackPolicy
 import com.yawnandpawn.app.core.session.CheckRun
 import com.yawnandpawn.app.core.session.CheckValidator
 import com.yawnandpawn.app.core.session.FallbackDecision
 import com.yawnandpawn.app.core.session.FallbackPolicy
 import com.yawnandpawn.app.core.session.FallbackRequest
-import com.yawnandpawn.app.core.session.FeeLadder
 import com.yawnandpawn.app.core.session.SessionData
 import com.yawnandpawn.app.core.session.SnoozeAvailability
 import com.yawnandpawn.app.core.session.SnoozeAvailabilityPolicy
-import com.yawnandpawn.app.core.session.SnoozeOffer
 import com.yawnandpawn.app.core.session.StepResult
 import com.yawnandpawn.app.core.session.UnavailableReason
 import com.yawnandpawn.app.core.session.UserLockState
-import com.yawnandpawn.app.core.session.nextOffer
-import com.yawnandpawn.app.core.session.snoozeProductId
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 
 /**
- * [FeeLadder] under test control: snooze n at base tier B is `snooze_usd_NN` with NN = [tierOf] (B, n), by default
- * B + n - 1. Every call is kept in [calls] as (baseFeeTier, snoozeNumber).
+ * [FeeLadder] under test control: snooze n at base tier B is USD tier [tierOf] (B, n), by default B × n like the real
+ * ladder: `snooze_usd_NN` up to 50, [FeeStep.PriceCapReached] above, and [DomainError.InvalidFee] for a tier below 1 or a
+ * snooze number below 1 (the fake does not cap B at 10). Every call is kept in [calls] as (baseFeeTier, snoozeNumber).
  */
 class FakeFeeLadder(
-    var tierOf: (baseFeeTier: Int, snoozeNumber: Int) -> Int = { baseFeeTier, snoozeNumber -> baseFeeTier + snoozeNumber - 1 },
+    var tierOf: (baseFeeTier: Int, snoozeNumber: Int) -> Int = { baseFeeTier, snoozeNumber -> baseFeeTier * snoozeNumber },
 ) : FeeLadder {
     private val recorded = mutableListOf<Pair<Int, Int>>()
 
     val calls: List<Pair<Int, Int>>
         get() = recorded.toList()
 
-    override fun offer(
+    override fun productFor(
         baseFeeTier: Int,
         snoozeNumber: Int,
-    ): SnoozeOffer {
+    ): Outcome<FeeStep, DomainError.InvalidFee> {
         recorded += baseFeeTier to snoozeNumber
-        return SnoozeOffer(productId = snoozeProductId(tierOf(baseFeeTier, snoozeNumber)), snoozeNumber = snoozeNumber)
+        if (baseFeeTier < 1 || snoozeNumber < 1) return Outcome.Failure(DomainError.InvalidFee(baseFeeTier, snoozeNumber))
+        val tier = tierOf(baseFeeTier, snoozeNumber)
+        return Outcome.Success(
+            if (tier >
+                FeeRules.PRICE_CAP_TIER
+            ) {
+                FeeStep.PriceCapReached
+            } else {
+                FeeStep.Product(SnoozeProducts.idOf(tier), tier)
+            },
+        )
     }
 }
 
 /**
  * [SnoozeAvailabilityPolicy] under test control: Available at the [ladder]'s next offer unless [unavailable] names a
- * reason. Every session asked about is kept in [asked].
+ * reason; [UnavailableReason.PriceCapReached] when the ladder has no next offer. Every session asked about is kept in
+ * [asked].
  */
 class FakeSnoozeAvailability(
     val ladder: FeeLadder = FakeFeeLadder(),
@@ -60,7 +75,9 @@ class FakeSnoozeAvailability(
 
     override fun availability(session: SessionData): SnoozeAvailability {
         sessions += session
-        return unavailable?.let { SnoozeAvailability.Unavailable(it) } ?: SnoozeAvailability.Available(ladder.nextOffer(session))
+        val offer = ladder.nextOffer(session)
+        val reason = unavailable ?: if (offer == null) UnavailableReason.PriceCapReached else null
+        return reason?.let { SnoozeAvailability.Unavailable(it) } ?: SnoozeAvailability.Available(checkNotNull(offer))
     }
 }
 

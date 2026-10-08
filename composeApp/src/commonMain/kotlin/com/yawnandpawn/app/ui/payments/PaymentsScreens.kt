@@ -6,6 +6,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import com.yawnandpawn.app.core.billing.Money
 import com.yawnandpawn.app.ui.components.AppSnackbar
 import com.yawnandpawn.app.ui.components.GroupCard
 import com.yawnandpawn.app.ui.components.GroupDivider
@@ -13,7 +14,6 @@ import com.yawnandpawn.app.ui.components.NavRow
 import com.yawnandpawn.app.ui.components.NoteInline
 import com.yawnandpawn.app.ui.components.SubScreen
 import com.yawnandpawn.app.ui.components.TextCard
-import com.yawnandpawn.app.ui.format.Money
 import com.yawnandpawn.app.ui.format.formatMoney
 import com.yawnandpawn.app.ui.resources.Res
 import com.yawnandpawn.app.ui.resources.disclosure_escape_body

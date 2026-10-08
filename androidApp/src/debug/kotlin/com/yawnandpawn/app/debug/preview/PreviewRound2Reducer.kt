@@ -1,6 +1,6 @@
 package com.yawnandpawn.app.debug.preview
 
-import com.yawnandpawn.app.ui.format.Money
+import com.yawnandpawn.app.core.billing.Money
 import com.yawnandpawn.app.ui.progress.ProgressIntent
 import com.yawnandpawn.app.ui.progress.ProgressUiState
 import com.yawnandpawn.app.ui.reliability.ChecklistItem
@@ -77,7 +77,7 @@ private val WEAKENING = PreviewProgressSamples.settingsBaseFeeWeakening.weakenin
 private fun SettingsUiState.withFee(fee: Money?): SettingsUiState {
     if (fee == null) return this
     val unit = PreviewSamples.price(1)
-    val multiple = (fee.amountMicros / unit.amountMicros).toInt()
+    val multiple = (fee.micros / unit.micros).toInt()
     return copy(
         baseFee = fee,
         lowerFee = if (multiple > 1) PreviewSamples.price(multiple - 1) else null,

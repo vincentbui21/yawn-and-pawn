@@ -6,7 +6,6 @@ import com.yawnandpawn.app.core.checks.CheckPlan
 import com.yawnandpawn.app.core.checks.CheckType
 import kotlin.test.Test
 import kotlin.test.assertEquals
-import kotlin.test.assertFailsWith
 import kotlin.test.assertFalse
 import kotlin.test.assertIs
 import kotlin.test.assertNotEquals
@@ -71,22 +70,6 @@ class SessionPoliciesTest {
         val finished = run.copy(step = StepPointer(1, 0))
         assertNull(finished.currentEntry)
         assertEquals(StepResult.Invalid, PluginCheckValidator.validate(finished, CheckAnswer.Placeholder))
-    }
-
-    @Test
-    fun `the tier ladder maps base tier and snooze number to snooze_usd_NN, capped at 50`() {
-        assertEquals(SnoozeOffer("snooze_usd_01", 1), TierFeeLadder.offer(baseFeeTier = 1, snoozeNumber = 1))
-        assertEquals(SnoozeOffer("snooze_usd_04", 2), TierFeeLadder.offer(baseFeeTier = 3, snoozeNumber = 2))
-        assertEquals(SnoozeOffer("snooze_usd_50", 9), TierFeeLadder.offer(baseFeeTier = 48, snoozeNumber = 9))
-        assertFailsWith<IllegalArgumentException> { TierFeeLadder.offer(baseFeeTier = 0, snoozeNumber = 1) }
-        assertFailsWith<IllegalArgumentException> { TierFeeLadder.offer(baseFeeTier = 1, snoozeNumber = 0) }
-    }
-
-    @Test
-    fun `the next offer is the ladder at the base tier and snoozes granted plus one`() {
-        val session = ringSession().copy(snoozesGranted = 2)
-        assertEquals(SnoozeOffer("snooze_usd_03", 3), TierFeeLadder.nextOffer(session))
-        assertEquals("snooze_usd_10", snoozeProductId(10))
     }
 
     @Test

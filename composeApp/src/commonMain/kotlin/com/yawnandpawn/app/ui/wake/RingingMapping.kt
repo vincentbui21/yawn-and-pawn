@@ -1,11 +1,11 @@
 package com.yawnandpawn.app.ui.wake
 
+import com.yawnandpawn.app.core.billing.Money
 import com.yawnandpawn.app.core.checks.CheckType
 import com.yawnandpawn.app.core.session.SessionData
 import com.yawnandpawn.app.core.session.SessionState
 import com.yawnandpawn.app.core.session.SnoozeAvailability
 import com.yawnandpawn.app.core.session.UnavailableReason
-import com.yawnandpawn.app.ui.format.Money
 import kotlinx.datetime.TimeZone
 import kotlinx.datetime.toLocalDateTime
 import kotlin.time.Instant

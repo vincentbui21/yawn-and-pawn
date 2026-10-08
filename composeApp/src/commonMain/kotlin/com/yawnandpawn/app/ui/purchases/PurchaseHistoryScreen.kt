@@ -11,12 +11,12 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
+import com.yawnandpawn.app.core.billing.Money
 import com.yawnandpawn.app.ui.components.GroupCard
 import com.yawnandpawn.app.ui.components.GroupDivider
 import com.yawnandpawn.app.ui.components.NavRow
 import com.yawnandpawn.app.ui.components.SubScreen
 import com.yawnandpawn.app.ui.format.DateStyle
-import com.yawnandpawn.app.ui.format.Money
 import com.yawnandpawn.app.ui.format.formatClockTime
 import com.yawnandpawn.app.ui.format.formatDate
 import com.yawnandpawn.app.ui.format.formatMoney

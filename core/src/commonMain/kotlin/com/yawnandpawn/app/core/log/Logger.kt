@@ -180,4 +180,7 @@ fun DomainError.diagnostic(): String =
         DomainError.ExactAlarmNotPermitted -> "exact alarms not permitted"
         is DomainError.SchedulerFailure -> "scheduler failure: $cause"
         DomainError.SessionActive -> "a session is active"
+        is DomainError.CurrencyMismatch -> "currency mismatch: $left and $right"
+        is DomainError.InvalidCurrency -> "invalid currency: $currency"
+        is DomainError.InvalidFee -> "invalid fee: tier $baseFeeTier, snooze $snoozeNumber"
     }

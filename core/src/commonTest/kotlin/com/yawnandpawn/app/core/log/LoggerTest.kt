@@ -28,6 +28,9 @@ class LoggerTest {
         assertEquals("invalid alarm field Label", DomainError.InvalidAlarm(AlarmField.Label).diagnostic())
         assertEquals("exact alarms not permitted", DomainError.ExactAlarmNotPermitted.diagnostic())
         assertEquals("scheduler failure: limit", DomainError.SchedulerFailure("limit").diagnostic())
+        assertEquals("currency mismatch: USD and EUR", DomainError.CurrencyMismatch("USD", "EUR").diagnostic())
+        assertEquals("invalid currency: usd", DomainError.InvalidCurrency("usd").diagnostic())
+        assertEquals("invalid fee: tier 11, snooze 1", DomainError.InvalidFee(11, 1).diagnostic())
     }
 
     @Test

@@ -1,8 +1,13 @@
 package com.yawnandpawn.app.testing
 
+import com.yawnandpawn.app.core.billing.FeeStep
+import com.yawnandpawn.app.core.billing.Money
+import com.yawnandpawn.app.core.billing.formatTotals
 import com.yawnandpawn.app.core.checks.CheckAnswer
 import com.yawnandpawn.app.core.checks.CheckPlan
 import com.yawnandpawn.app.core.checks.CheckType
+import com.yawnandpawn.app.core.error.DomainError
+import com.yawnandpawn.app.core.error.Outcome
 import com.yawnandpawn.app.core.session.CheckRun
 import com.yawnandpawn.app.core.session.ConfigResolver
 import com.yawnandpawn.app.core.session.FallbackDecision
@@ -44,24 +49,43 @@ class SessionFakesTest {
         )
 
     @Test
-    fun `FakeFeeLadder maps tier and snooze number to snooze_usd_NN and records each call`() {
+    fun `FakeFeeLadder prices B times N like the real ladder, caps above 50 and records each call`() {
         val ladder = FakeFeeLadder()
-        assertEquals(SnoozeOffer("snooze_usd_03", 2), ladder.offer(baseFeeTier = 2, snoozeNumber = 2))
+        assertEquals(Outcome.Success(FeeStep.Product("snooze_usd_04", 4)), ladder.productFor(baseFeeTier = 2, snoozeNumber = 2))
+        assertEquals(Outcome.Success(FeeStep.PriceCapReached), ladder.productFor(baseFeeTier = 10, snoozeNumber = 6))
+        assertEquals(Outcome.Failure(DomainError.InvalidFee(0, 1)), ladder.productFor(baseFeeTier = 0, snoozeNumber = 1))
+        assertEquals(Outcome.Failure(DomainError.InvalidFee(1, 0)), ladder.productFor(baseFeeTier = 1, snoozeNumber = 0))
         ladder.tierOf = { _, n -> n * 10 }
-        assertEquals(SnoozeOffer("snooze_usd_30", 3), ladder.offer(baseFeeTier = 1, snoozeNumber = 3))
-        assertEquals(listOf(2 to 2, 1 to 3), ladder.calls)
+        assertEquals(Outcome.Success(FeeStep.Product("snooze_usd_30", 30)), ladder.productFor(baseFeeTier = 1, snoozeNumber = 3))
+        assertEquals(listOf(2 to 2, 10 to 6, 0 to 1, 1 to 0, 1 to 3), ladder.calls)
     }
 
     @Test
-    fun `FakeSnoozeAvailability offers the next ladder price until told a reason`() {
+    fun `FakeSnoozeAvailability offers the next ladder price until told a reason, and reports the cap`() {
         val ladder = FakeFeeLadder()
         val availability = FakeSnoozeAvailability(ladder)
-        assertEquals(SnoozeAvailability.Available(SnoozeOffer("snooze_usd_03", 2)), availability.availability(session(snoozesGranted = 1)))
+        assertEquals(SnoozeAvailability.Available(SnoozeOffer("snooze_usd_04", 2)), availability.availability(session(snoozesGranted = 1)))
         assertEquals(listOf(2 to 2), ladder.calls)
+
+        ladder.tierOf = { _, _ -> 51 }
+        assertEquals(SnoozeAvailability.Unavailable(UnavailableReason.PriceCapReached), availability.availability(session()))
 
         availability.unavailable = UnavailableReason.Offline
         assertEquals(SnoozeAvailability.Unavailable(UnavailableReason.Offline), availability.availability(session()))
-        assertEquals(2, availability.asked.size)
+        assertEquals(3, availability.asked.size)
+    }
+
+    @Test
+    fun `FakeMoneyFormatter writes the code and all micro digits, and records each amount`() {
+        val formatter = FakeMoneyFormatter()
+        assertEquals("USD 1.000000", formatter.format(Money.of(1, "USD")))
+        assertEquals("EUR -0.500000", formatter.format(Money(-500_000, "EUR")))
+        assertEquals("JPY 150.000001", formatter.format(Money(150_000_001, "JPY")))
+        assertEquals(
+            "USD 4.000000 + EUR 2.000000",
+            formatter.formatTotals(listOf(Money.of(1, "USD"), Money.of(2, "EUR"), Money.of(3, "USD"))),
+        )
+        assertEquals(5, formatter.formatted.size)
     }
 
     @Test

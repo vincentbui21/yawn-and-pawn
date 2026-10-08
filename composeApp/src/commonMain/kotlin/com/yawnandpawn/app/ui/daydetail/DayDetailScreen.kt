@@ -21,6 +21,8 @@ import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
+import com.yawnandpawn.app.core.billing.Money
+import com.yawnandpawn.app.core.billing.totalsByCurrency
 import com.yawnandpawn.app.ui.checks.CheckType
 import com.yawnandpawn.app.ui.checks.displayName
 import com.yawnandpawn.app.ui.checks.icon
@@ -29,7 +31,6 @@ import com.yawnandpawn.app.ui.components.RowIcon
 import com.yawnandpawn.app.ui.components.SubScreen
 import com.yawnandpawn.app.ui.components.glass
 import com.yawnandpawn.app.ui.format.DateStyle
-import com.yawnandpawn.app.ui.format.Money
 import com.yawnandpawn.app.ui.format.formatClockTime
 import com.yawnandpawn.app.ui.format.formatDate
 import com.yawnandpawn.app.ui.format.formatMoney
@@ -143,8 +144,8 @@ data class SessionDetail(
     val rings: Int get() = events.count { it is MorningEvent.Rang }
     val snoozes: Int get() = events.count { it is MorningEvent.Snoozed }
 
-    /** What this session charged; `null` when nothing was paid. */
-    val paid: Money? get() = events.filterIsInstance<MorningEvent.Snoozed>().map { it.price }.reduceOrNull { a, b -> a + b }
+    /** What this session charged, one total per currency (AD-8); empty when nothing was paid. */
+    val paid: List<Money> get() = totalsByCurrency(events.filterIsInstance<MorningEvent.Snoozed>().map { it.price })
 
     /** Minutes from the first ring to the solved check (the session's end); `null` when it never ended that way. */
     val minutesToUp: Int?
@@ -281,7 +282,7 @@ private fun SessionTiles(session: SessionDetail) {
                 Tile(Res.drawable.symbol_snooze, session.snoozes.toString(), stringResource(Res.string.progress_tile_snoozes)),
                 Tile(
                     Res.drawable.symbol_payments,
-                    session.paid?.let { formatMoney(it) } ?: stringResource(Res.string.day_tile_no_charge),
+                    session.paid.takeIf { it.isNotEmpty() }?.let { formatMoney(it) } ?: stringResource(Res.string.day_tile_no_charge),
                     stringResource(Res.string.day_tile_paid),
                 ),
             ),

@@ -9,6 +9,9 @@ import com.yawnandpawn.app.android.crash.FirebaseCrashReporter
 import com.yawnandpawn.app.android.crash.isFirebaseConfigured
 import com.yawnandpawn.app.android.wake.NoOpCrashReporter
 import com.yawnandpawn.app.android.wake.WakeRuntime
+import com.yawnandpawn.app.core.billing.FeeLadder
+import com.yawnandpawn.app.core.billing.MoneyFormatter
+import com.yawnandpawn.app.core.billing.UsdFeeLadder
 import com.yawnandpawn.app.core.crash.CrashReporter
 import com.yawnandpawn.app.core.history.SessionHistoryRepository
 import com.yawnandpawn.app.core.session.ActiveSessionStore
@@ -17,7 +20,6 @@ import com.yawnandpawn.app.core.session.CameraFallbackPolicy
 import com.yawnandpawn.app.core.session.CheckValidator
 import com.yawnandpawn.app.core.session.EffectRunner
 import com.yawnandpawn.app.core.session.FallbackPolicy
-import com.yawnandpawn.app.core.session.FeeLadder
 import com.yawnandpawn.app.core.session.NoBillingSnoozeAvailability
 import com.yawnandpawn.app.core.session.PluginCheckValidator
 import com.yawnandpawn.app.core.session.SessionEngine
@@ -25,10 +27,10 @@ import com.yawnandpawn.app.core.session.SessionRecorder
 import com.yawnandpawn.app.core.session.SessionReducer
 import com.yawnandpawn.app.core.session.SessionState
 import com.yawnandpawn.app.core.session.SnoozeAvailabilityPolicy
-import com.yawnandpawn.app.core.session.TierFeeLadder
 import com.yawnandpawn.app.core.session.UserLockState
 import com.yawnandpawn.app.data.history.RoomSessionHistoryRepository
 import com.yawnandpawn.app.data.session.RoomActiveSessionStore
+import com.yawnandpawn.app.ui.format.AndroidMoneyFormatter
 import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -77,7 +79,8 @@ class SessionWiringTest {
         assertIs<AndroidUserLockState>(koin.get<UserLockState>())
         assertSame(PluginCheckValidator, koin.get<CheckValidator>())
         assertIs<CameraFallbackPolicy>(koin.get<FallbackPolicy>())
-        assertSame(TierFeeLadder, koin.get<FeeLadder>())
+        assertSame(UsdFeeLadder, koin.get<FeeLadder>())
+        assertIs<AndroidMoneyFormatter>(koin.get<MoneyFormatter>())
     }
 
     @Test

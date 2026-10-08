@@ -32,10 +32,4 @@ class CountdownTest {
         assertEquals(Countdown.Minutes(1), countdownOf(0.seconds))
         assertEquals(Countdown.HoursMinutes(1, 0), countdownOf(59.minutes + 30.seconds))
     }
-
-    @Test
-    fun `money multiplies and adds in one currency`() {
-        assertEquals(Money.of(3, "EUR"), Money.of(1, "EUR") * 3)
-        assertEquals(Money.of(3, "USD"), Money.of(1, "USD") + Money.of(2, "USD"))
-    }
 }

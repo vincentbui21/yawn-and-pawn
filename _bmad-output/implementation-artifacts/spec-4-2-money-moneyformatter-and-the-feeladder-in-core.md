@@ -2,7 +2,7 @@
 title: 'Story 4.2: Money, MoneyFormatter and the FeeLadder in core'
 type: 'feature'
 created: '2026-10-08'
-status: 'in-progress'
+status: 'review'
 baseline_revision: '75b1877'
 review_loop_iteration: 0
 followup_review_recommended: true
@@ -63,6 +63,7 @@ deferred:
 4. **Production ladder name:** `UsdFeeLadder` (an object) replaces `TierFeeLadder`.
 5. **`AndroidMoneyFormatter` location:** in `:composeApp` androidMain (package `ui.format`), because the UI's `formatMoney` must reach it. It is bound in Koin from `:androidApp`, and its Robolectric test lives in `:androidApp`.
 6. **Mixed totals in the UI:** Day detail's "paid" becomes the per-currency totals. Home, Progress and Success keep one `Money` until 4.7/4.15 feed them.
+7. **28 reachable products, not 31:** the epic and PRD §6.3 say 31 distinct products for B 1–10 × N 1–5, but B × N gives 28 (1–10; 12, 14, 16, 18, 20; 15, 21, 24, 27, 30; 28, 32, 36, 40; 25, 35, 45, 50). The tests assert 28. The catalogue keeps all 50 products.
 
 ## I/O & Edge-Case Matrix
 
@@ -76,7 +77,7 @@ deferred:
 | Invalid B | 0, −1, 11 | `InvalidFee(B, N)` |
 | Invalid N | 0, −3 | `InvalidFee(B, N)` (checked before the cap) |
 | Overflow | B 10, N `Int.MAX_VALUE` | `PriceCapReached` (no Int overflow) |
-| Reachable set | B 1..10 × N 1..5 | 31 distinct ids, all in `config/snooze-products.txt` |
+| Reachable set | B 1..10 × N 1..5 | 28 distinct ids (not 31, decision 7), all in `config/snooze-products.txt` |
 | Catalogue file | `config/snooze-products.txt` | exactly `SnoozeProducts.all`, in order (comments and blanks skipped) |
 | Money currency | "usd", "US", "USDX", "", "U1D" | constructor throws; `parse` → `InvalidCurrency` |
 | Plus | USD + USD; USD + EUR | sum; `CurrencyMismatch("USD","EUR")` |
@@ -98,7 +99,7 @@ deferred:
 1. `core.billing`: `Money`, `totalsByCurrency`, `MoneyFormatter` + `formatTotals`, `FeeLadder`, `FeeStep`, `UsdFeeLadder`, `FeeRules`, `SnoozeProducts`.
 2. `core.error.DomainError`: `CurrencyMismatch`, `InvalidCurrency`, `InvalidFee`; `diagnostic()` cases.
 3. `core.session`: remove `FeeLadder`, `TierFeeLadder` and `snoozeProductId` from `SessionPolicies.kt`; `nextStep`/`nextOffer` in `core.billing`.
-4. `config/snooze-products.txt` (50 ids); a `core` `jvmTest` reads it through a system property.
+4. `config/snooze-products.txt` (50 ids); a `:testing` `jvmTest` reads it through a system property (`verifyCoreDependencies` allows only `commonMain`/`commonTest` in `:core`).
 5. `:testing`: `FakeFeeLadder` (B × N by default, records calls, cap above 50), `FakeSnoozeAvailability` (cap → `PriceCapReached`), `FakeMoneyFormatter`.
 6. `:composeApp`: delete `ui.format.Money`; `formatMoney(Money)` and `formatMoney(List<Money>)` through `AndroidMoneyFormatter`; migrate fields (`micros`, `currency`) and Day detail totals.
 7. `:androidApp`: Koin `FeeLadder` → `UsdFeeLadder`, `MoneyFormatter` → `AndroidMoneyFormatter`; previews and tests migrated.
@@ -110,7 +111,7 @@ deferred:
 
 - **core** `MoneyTest`: currency validation (table), `parse`, `plus`, `times`, `of`, `totalsByCurrency`.
 - **core** `FeeLadderTest`: the edge-case table; examples; 31 reachable; ids in `SnoozeProducts.all`; `nextStep`/`nextOffer` for a session; `formatTotals` through a recording formatter.
-- **core** `jvmTest` `SnoozeProductsFileTest`: the shared file equals `SnoozeProducts.all`; every reachable id is in it.
+- **testing** `jvmTest` `SnoozeProductsFileTest`: the shared file equals `SnoozeProducts.all`; every reachable id is in it.
 - **testing** `SessionFakesTest`: fakes follow B × N and the cap; `FakeMoneyFormatter` is deterministic.
 - **androidApp** `AndroidMoneyFormatterTest` (Robolectric): the four locales, sub-unit rounding, zero, the mixed list.
 - **androidApp** `SessionWiringTest`: Koin binds `UsdFeeLadder` and `AndroidMoneyFormatter`.
@@ -122,3 +123,17 @@ deferred:
 **Commands:**
 - `./gradlew qualityGate :androidApp:assembleDebugAndroidTest --no-daemon` -- expected: BUILD SUCCESSFUL.
 - `git status --porcelain androidApp/src/test/screenshots` -- expected: only the re-recorded money baselines (decision 1).
+
+## Auto Run Result
+
+Status: implemented in fast mode (one agent, Epic 4 Lane 1), waiting for review. Branch `story/4-2-money-and-feeladder` on main `75b1877` + the Epic 4 context commits.
+
+**Verification:**
+- `./gradlew qualityGate :androidApp:assembleDebugAndroidTest --no-daemon`: BUILD SUCCESSFUL (22 min). Kover is green for core, session, checks and the new billing variant.
+- 70 screenshot baselines were re-recorded, all of them screens that show money ("$1" became "$1.00", decision 1). The other baselines are unchanged.
+
+**Residual risks:**
+- **Shared file:** `config/snooze-products.txt` also comes from 4.1. Both versions list the same ids, and comments are ignored.
+- **Callers:** `FeeLadder` moved to `core.billing` and returns an `Outcome`. Branches that still import `core.session.FeeLadder`/`TierFeeLadder` need a rebase.
+- **The "31" in the epic:** the epic text says 31 reachable products. The real count is 28 (decision 7), and the planning docs still say 31.
+

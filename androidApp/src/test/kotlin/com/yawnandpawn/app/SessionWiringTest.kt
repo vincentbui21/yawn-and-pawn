@@ -15,7 +15,9 @@ import com.yawnandpawn.app.core.billing.BillingCountry
 import com.yawnandpawn.app.core.billing.DisplayPrices
 import com.yawnandpawn.app.core.billing.FeeLadder
 import com.yawnandpawn.app.core.billing.LivePriceSource
+import com.yawnandpawn.app.core.billing.LiveSnoozeAvailability
 import com.yawnandpawn.app.core.billing.MoneyFormatter
+import com.yawnandpawn.app.core.billing.SnoozeConditions
 import com.yawnandpawn.app.core.billing.UsdFeeLadder
 import com.yawnandpawn.app.core.crash.CrashReporter
 import com.yawnandpawn.app.core.history.SessionHistoryRepository
@@ -25,7 +27,6 @@ import com.yawnandpawn.app.core.session.CameraFallbackPolicy
 import com.yawnandpawn.app.core.session.CheckValidator
 import com.yawnandpawn.app.core.session.EffectRunner
 import com.yawnandpawn.app.core.session.FallbackPolicy
-import com.yawnandpawn.app.core.session.NoBillingSnoozeAvailability
 import com.yawnandpawn.app.core.session.PluginCheckValidator
 import com.yawnandpawn.app.core.session.SessionEngine
 import com.yawnandpawn.app.core.session.SessionRecorder
@@ -86,7 +87,9 @@ class SessionWiringTest {
     fun `Koin binds the Epic 1 production policies`() {
         val koin = GlobalContext.get()
 
-        assertIs<NoBillingSnoozeAvailability>(koin.get<SnoozeAvailabilityPolicy>())
+        // Story 4.7: every reason over the live env; the conditions are one instance, shared with the wake screen.
+        assertIs<LiveSnoozeAvailability>(koin.get<SnoozeAvailabilityPolicy>())
+        assertSame(koin.get<SnoozeConditions>(), koin.get<SnoozeConditions>())
         assertIs<AndroidUserLockState>(koin.get<UserLockState>())
         assertSame(PluginCheckValidator, koin.get<CheckValidator>())
         assertIs<CameraFallbackPolicy>(koin.get<FallbackPolicy>())

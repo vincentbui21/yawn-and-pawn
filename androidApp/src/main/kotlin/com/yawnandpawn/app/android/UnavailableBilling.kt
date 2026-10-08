@@ -13,7 +13,8 @@ import com.yawnandpawn.app.core.session.PurchaseToken
 
 /**
  * The [Billing] until Story 4.12 binds Play Billing: every launch fails (logged), nothing is listed or consumed, and no
- * update ever comes. Snooze is never offered before Story 4.7 (`NoBillingSnoozeAvailability`), so nothing should launch.
+ * update ever comes. Snooze is never offered meanwhile (`LiveSnoozeAvailability` finds no cached price: nothing fills
+ * the cache before Story 4.12), so nothing should launch.
  */
 class UnavailableBilling(
     private val logger: Logger,

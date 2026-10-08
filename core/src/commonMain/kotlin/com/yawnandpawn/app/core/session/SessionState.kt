@@ -1,9 +1,16 @@
 package com.yawnandpawn.app.core.session
 
+import com.yawnandpawn.app.core.billing.Money
+import com.yawnandpawn.app.core.error.valueOrNull
 import com.yawnandpawn.app.core.time.Deadline
 import com.yawnandpawn.app.core.time.TimeSnapshot
+import kotlinx.serialization.KSerializer
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
+import kotlinx.serialization.builtins.ListSerializer
+import kotlinx.serialization.descriptors.SerialDescriptor
+import kotlinx.serialization.encoding.Decoder
+import kotlinx.serialization.encoding.Encoder
 import kotlin.jvm.JvmInline
 import kotlin.time.Instant
 
@@ -120,6 +127,9 @@ sealed interface SessionState {
  * ring started or restored while locked (Story 2.3; history `direct_boot`). Unlike [beforeFirstUnlock], which each
  * new ring sets from the lock state, it only ever goes from false to true, so history keeps it after the unlock.
  * @property ended when the session ended (Completed or Missed), set by the reducer on that transition; null before.
+ * @property paid what each paid snooze of the session cost, in order (Story 4.7), appended by `PurchaseGranted` and
+ * `ReuseAccepted` when the price is known. For the wake screen only ("{paid} paid this morning"); history totals always
+ * come from purchase records. A session stored before Story 4.7 has none; a malformed stored amount is dropped.
  */
 @Serializable
 data class SessionData(
@@ -142,6 +152,8 @@ data class SessionData(
     val interactionDeadline: Deadline? = null,
     val snoozeEnd: Deadline? = null,
     val pausedAt: TimeSnapshot? = null,
+    @Serializable(with = PaidAmountsSerializer::class)
+    val paid: List<Money> = emptyList(),
 ) {
     /** A call is in progress (AD-2 `CallStarted` until `CallEnded`). */
     val paused: Boolean
@@ -150,4 +162,29 @@ data class SessionData(
     /** The wall time of [firstRing]; not stored (derived). */
     val firstRingAt: Instant?
         get() = firstRing?.let { Instant.fromEpochMilliseconds(it.wallMillis) }
+}
+
+/** One stored amount of [SessionData.paid]: micros and an ISO 4217 code, checked by [Money.parse] when read. */
+@Serializable
+private data class StoredAmount(
+    val micros: Long,
+    val currency: String,
+)
+
+/**
+ * [SessionData.paid] as a list of `{"micros":…,"currency":"…"}`. Reading drops an amount whose currency is malformed
+ * (display-only data must never make the whole session unreadable).
+ */
+internal object PaidAmountsSerializer : KSerializer<List<Money>> {
+    private val stored = ListSerializer(StoredAmount.serializer())
+
+    override val descriptor: SerialDescriptor = stored.descriptor
+
+    override fun serialize(
+        encoder: Encoder,
+        value: List<Money>,
+    ) = encoder.encodeSerializableValue(stored, value.map { StoredAmount(it.micros, it.currency) })
+
+    override fun deserialize(decoder: Decoder): List<Money> =
+        decoder.decodeSerializableValue(stored).mapNotNull { Money.parse(it.micros, it.currency).valueOrNull() }
 }

@@ -1,5 +1,6 @@
 package com.yawnandpawn.app.core.session
 
+import com.yawnandpawn.app.core.billing.PriceEntry
 import com.yawnandpawn.app.core.checks.CheckAnswer
 import com.yawnandpawn.app.core.checks.CheckEntry
 import com.yawnandpawn.app.core.checks.CheckMode
@@ -8,10 +9,15 @@ import com.yawnandpawn.app.core.checks.CheckResult
 import com.yawnandpawn.app.core.checks.CheckType
 import com.yawnandpawn.app.core.checks.Difficulty
 
-/** The next snooze on sale: Play product [productId] (`snooze_usd_NN`, AD-7) for snooze [snoozeNumber] of the session. */
+/**
+ * The next snooze on sale: Play product [productId] (`snooze_usd_NN`, AD-7) for snooze [snoozeNumber] of the session.
+ * [price] is the cached Play price the button shows (Story 4.7), carried to the confirm sheet and the purchase intent;
+ * null where no price is attached (the fee ladder alone, test doubles).
+ */
 data class SnoozeOffer(
     val productId: String,
     val snoozeNumber: Int,
+    val price: PriceEntry? = null,
 )
 
 /** Why snooze is not offered (AD-7, FR-RNG-7); the wake screen shows the reason on the disabled button. */
@@ -38,8 +44,13 @@ sealed interface SnoozeAvailability {
         val offer: SnoozeOffer,
     ) : SnoozeAvailability
 
+    /**
+     * Not on sale for [reason]. [price] is the price of the earlier payment being refunded
+     * ([UnavailableReason.EarlierPaymentRefunding], when cached); null for every other reason.
+     */
     data class Unavailable(
         val reason: UnavailableReason,
+        val price: PriceEntry? = null,
     ) : SnoozeAvailability
 }
 
@@ -164,7 +175,8 @@ class CameraFallbackPolicy(
 }
 
 /**
- * The Epic 1 production [SnoozeAvailabilityPolicy]: there is no billing yet, so snooze is never offered. The reason, in
+ * The Epic 1 [SnoozeAvailabilityPolicy], kept for tests and previews (Story 4.7 replaced it in production with
+ * `LiveSnoozeAvailability`): snooze is never offered. The reason, in
  * this order of precedence (Story 2.3; Epic 4's real policy keeps it): a test session says "Test · no charge"
  * ([UnavailableReason.TestMode]); while the user has not unlocked since boot ([userLock], read live) "Unlock your phone
  * to snooze" ([UnavailableReason.BeforeFirstUnlock]); otherwise it waits for the catalogue.

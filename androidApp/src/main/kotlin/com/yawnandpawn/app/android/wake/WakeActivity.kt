@@ -31,6 +31,7 @@ import com.yawnandpawn.app.android.ApplicationScope
 import com.yawnandpawn.app.android.screen.forwardsToWakeScreen
 import com.yawnandpawn.app.core.billing.BillingCountry
 import com.yawnandpawn.app.core.billing.PurchaseCoordinator
+import com.yawnandpawn.app.core.billing.SnoozeConditions
 import com.yawnandpawn.app.core.billing.TaxNote
 import com.yawnandpawn.app.core.checks.CheckAnswer
 import com.yawnandpawn.app.core.error.Outcome
@@ -94,11 +95,12 @@ import kotlin.time.Duration.Companion.seconds
  * shortcut.
  *
  * It renders from in-memory state only, with no loading state and no repository call: the engine's `state` mapped by
- * [ringingUiState], with the snooze the [SnoozeAvailabilityPolicy] allows ("Prices not loaded yet",
- * or "Test · no charge" for a test session, or "Unlock your phone to snooze" before the first unlock). The availability
- * follows the live [UserLockState] too (Story 2.4), so an unlock re-renders the snooze control in place, without
- * finishing or recreating the screen. The emergency ring shows its own alarm time. Opened just before the
- * session starts (the service posts the ringing notification first), it shows the notification's alarm time and waits.
+ * [ringingUiState], with the snooze the [SnoozeAvailabilityPolicy] allows (Story 4.7: every reason, or "Snooze ·
+ * {price}"). The availability follows the live env of [SnoozeConditions] (the [UserLockState], connectivity, the cached
+ * prices; Stories 2.4 and 4.7), so an unlock, a connection or a price load re-renders the snooze control in place,
+ * without finishing or recreating the screen. "I'm up" never depends on it. The emergency ring shows its own alarm
+ * time. Opened just before the session starts (the service posts the ringing notification first), it shows the
+ * notification's alarm time and waits.
  *
  * Every dispatch is launched on [ApplicationScope], outside composition and outside any engine effect:
  * - "I'm up" sends `UserInteracted`, then `ImUpTapped`. In the emergency ring it stops the ring instead. Tapped while
@@ -132,6 +134,7 @@ class WakeActivity : ComponentActivity() {
     private val appScope: ApplicationScope by inject()
     private val timeZones: TimeZoneProvider by inject()
     private val snoozePolicy: SnoozeAvailabilityPolicy by inject()
+    private val snoozeConditions: SnoozeConditions by inject()
     private val timings: WakeTimings by inject()
     private val userLock: UserLockState by inject()
     private val unlockSignals: UnlockSignals by inject()
@@ -239,10 +242,11 @@ class WakeActivity : ComponentActivity() {
         setContent {
             val state by engine.state.collectAsState()
             val emergency by runtime.emergency.collectAsState()
-            // Story 2.4: the lock state is part of the snooze availability, so an unlock re-renders the control in place.
-            // The availability below is never remembered (the policy reads live inputs: the lock state now, the
-            // catalogue and connectivity in Epic 4); keyed on this observed state, an unlock recomposes it.
-            val unlocked by remember { userLock.observe() }.collectAsState(initial = userLock.isUserUnlocked())
+            // Stories 2.4 and 4.7: the snooze availability follows the live env (the lock state, connectivity, the cached
+            // prices, stranded payments), so an unlock, a connection or a price load re-renders the control in place.
+            // The availability below is never remembered (the policy reads the env's latest value); keyed on this
+            // observed env, every change recomposes it. Collecting it is also what keeps the reducer's view current.
+            val env by remember { snoozeConditions.observe() }.collectAsState(initial = snoozeConditions.current())
             // The full-screen intent can open the screen just before the session starts (the service posts the ringing
             // notification first): it waits for a session or an emergency ring, and closes only once that is over.
             val active = state.isRinging() || emergency != null
@@ -273,7 +277,7 @@ class WakeActivity : ComponentActivity() {
                 if (end.successSessionId != null) LaunchedEffect(Unit) { finish() }
                 val zone = timeZones.current()
                 val session = (state as? SessionState.Active)?.session?.takeIf { state.isRinging() }
-                val availability = session?.let { key(unlocked) { snoozePolicy.availability(it) } }
+                val availability = session?.let { key(env) { snoozePolicy.availability(it) } }
                 // Story 4.13: the confirm sheet and its message over the session's Ringing or Check screen.
                 val overlay = sheetOverlay(session, availability)
                 // The notification's alarm time only stands in while the screen waits for its first session: once one

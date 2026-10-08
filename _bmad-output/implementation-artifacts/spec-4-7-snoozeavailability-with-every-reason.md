@@ -102,7 +102,7 @@ deferred:
 
 ## Tasks
 
-1. `core.net.Connectivity`; `core.billing.SnoozeAvailability.kt` (`SnoozeEnv`, `snoozeAvailability`, `SnoozeConditions`, `LiveSnoozeAvailability`).
+1. `core.net.Connectivity`; `core.billing.SnoozeAvailabilityRules.kt` (`SnoozeEnv`, `snoozeAvailability`, `SnoozeConditions`, `LiveSnoozeAvailability`).
 2. `SessionPolicies.kt`: `SnoozeOffer.price`, `Unavailable.price`; `SessionState.kt`: `paid` + serializer; `SessionEvent.kt`: `price` on `PurchaseGranted`/`ReuseAccepted`; `PurchaseRules`: append.
 3. `PriceRefresh.kt`: `SessionStartPriceRefresh` gated on `Connectivity`.
 4. `:testing` `FakeConnectivity`.
@@ -116,8 +116,21 @@ deferred:
 - **core** `SessionJsonTest`: a pre-4.7 row decodes with `paid` empty; `paid` round trips; a malformed amount is dropped. Reducer: a grant with a price appends it.
 - **core** `PriceRefreshTest`: the session-start refresh waits for online.
 - **composeApp** `RingingMappingTest`: every reason → UI offer; Play's `formattedPrice` used.
-- **androidApp** Robolectric `SnoozeFooterCopyTest`: the label and TalkBack text of every variant on Ringing and on the Check footer, "I'm up" enabled in each; `AndroidConnectivityTest` (shadow network callback); `WakeActivity` live change with `FakeConnectivity`; Roborazzi for the new variants on Ringing and the Check footer at 100 % and 200 %.
+- **androidApp** Robolectric `SnoozeVariantsTest`: the label and TalkBack text of every variant on Ringing and on the Check footer, "I'm up" enabled in each; `AndroidConnectivityTest` (shadow network callback); `WakeActivity` live change with `FakeConnectivity`; Roborazzi for the new variants on Ringing and the Check footer at 100 % and 200 %.
 
 ## Verification
 
 - `./gradlew qualityGate :androidApp:assembleDebugAndroidTest --no-daemon` -- expected: BUILD SUCCESSFUL.
+
+## pps-design Done checklist
+
+- [x] Only tokens from `DESIGN.md` used: no new component; `button-snooze` and its disabled variant are the Epic 1 ones.
+- [x] Sunrise checked with screenshots (wake screens are Sunrise only): every variant on Ringing and on the Check footer (`SnoozeVariantsTest`, plus the existing Ringing and Check baselines).
+- [x] Every colour pair used is already in the `DESIGN.md` contrast table (no new pair).
+- [x] Touch targets: the wake snooze stays 64 dp, "I'm up" 72 dp.
+- [x] 200 % font scale screenshots for every new variant; TalkBack reads "Snooze unavailable, {reason}" (asserted for each disabled variant).
+- [x] Reduced motion: no new motion.
+- [x] Copy matches `EXPERIENCE.md > Voice and Tone` verbatim, from string resources (no new string).
+- [x] Every snooze state row of `EXPERIENCE.md > State Patterns` (snooze unavailable, test alarm, before first unlock, already paid "Not now") is mapped.
+- [x] "I'm up" stays the most prominent wake action, enabled in every variant; snooze is visible, plain and priced with Play's string.
+- [x] Screenshot tests updated (Roborazzi); the design preview already holds these states (`ringing-offline`, `ringing-max-snoozes`, `ringing-stranded`).

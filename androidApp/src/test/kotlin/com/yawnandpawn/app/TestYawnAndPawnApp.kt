@@ -1,9 +1,11 @@
 package com.yawnandpawn.app
 
 import com.yawnandpawn.app.android.crash.FirebaseStartup
+import com.yawnandpawn.app.core.net.Connectivity
 import com.yawnandpawn.app.core.reliability.ReliabilityProbe
 import com.yawnandpawn.app.core.work.BackgroundWork
 import com.yawnandpawn.app.testing.FakeBackgroundWork
+import com.yawnandpawn.app.testing.FakeConnectivity
 import com.yawnandpawn.app.testing.FakeReliabilityProbe
 import org.koin.android.ext.koin.androidContext
 import org.koin.core.module.Module
@@ -25,6 +27,9 @@ val testAppModule: Module =
         single<ReliabilityProbe> { FakeReliabilityProbe() }
         single { FirebaseStartup(androidContext(), get(), initialize = {}) }
         single<BackgroundWork> { FakeBackgroundWork() }
+        // An online phone (Story 4.7), so snooze reasons and the session-start refresh never depend on the host's
+        // network. AndroidConnectivityTest tests the real adapter.
+        single<Connectivity> { FakeConnectivity(online = true) }
     }
 
 /**

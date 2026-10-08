@@ -10,9 +10,13 @@ enum class SnoozeUnavailableReason { Offline, MaxSnoozesReached, PriceCapReached
 
 /** What the one `button-snooze` shows on every wake screen. */
 sealed interface SnoozeOffer {
-    /** "Snooze · {price}": opens the confirm sheet. */
+    /**
+     * "Snooze · {price}": opens the confirm sheet. [formattedPrice] is Play's own localized string (Story 4.7), shown as
+     * is; without it (previews) [price] is formatted by the app.
+     */
     data class Available(
         val price: Money,
+        val formattedPrice: String? = null,
     ) : SnoozeOffer
 
     /** Disabled with its reason. */
@@ -26,9 +30,13 @@ sealed interface SnoozeOffer {
     /** Before the first unlock after a reboot: lock icon, "Unlock your phone to snooze". */
     data object LockedBeforeUnlock : SnoozeOffer
 
-    /** After "Not now" on an already-paid purchase: "An earlier {price} payment is being refunded". */
+    /**
+     * After "Not now" on an already-paid purchase: "An earlier {price} payment is being refunded", with Play's
+     * [formattedPrice] when known.
+     */
     data class StrandedRefund(
         val price: Money,
+        val formattedPrice: String? = null,
     ) : SnoozeOffer
 }
 

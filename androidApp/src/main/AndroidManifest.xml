@@ -22,6 +22,8 @@
          app start or on the wake screen. Frames are analysed on the device and never stored. The camera is not required,
          so a phone without one can still install the app and use the other checks. -->
     <uses-permission android:name="android.permission.CAMERA" />
+    <!-- Snooze is unavailable offline (Story 4.7, AndroidConnectivity reads the default network). -->
+    <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
     <uses-feature
         android:name="android.hardware.camera"
         android:required="false" />

@@ -237,7 +237,7 @@ fun SnoozeButton(
 ) {
     if (offer is SnoozeOffer.Available) {
         WakeOutlinedButton(
-            text = stringResource(Res.string.wake_snooze_price, formatMoney(offer.price)),
+            text = stringResource(Res.string.wake_snooze_price, offer.formattedPrice ?: formatMoney(offer.price)),
             onClick = onClick,
             modifier = modifier,
         )
@@ -302,7 +302,7 @@ private fun disabledSnoozeReason(offer: SnoozeOffer): String =
         is SnoozeOffer.Unavailable -> reasonText(offer.reason)
         SnoozeOffer.TestMode -> stringResource(Res.string.wake_test_no_charge)
         SnoozeOffer.LockedBeforeUnlock -> stringResource(Res.string.wake_unlock_to_snooze)
-        is SnoozeOffer.StrandedRefund -> stringResource(Res.string.wake_stranded_refund, formatMoney(offer.price))
+        is SnoozeOffer.StrandedRefund -> stringResource(Res.string.wake_stranded_refund, offer.formattedPrice ?: formatMoney(offer.price))
     }
 
 @Composable

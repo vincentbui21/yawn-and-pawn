@@ -1,6 +1,7 @@
 package com.yawnandpawn.app.core.session
 
 import com.yawnandpawn.app.core.billing.LivePrice
+import com.yawnandpawn.app.core.billing.Money
 import com.yawnandpawn.app.core.checks.CheckAnswer
 import com.yawnandpawn.app.core.checks.CheckType
 import kotlin.time.Instant
@@ -139,13 +140,15 @@ sealed interface SessionEvent {
     /**
      * A purchase of [productId] arrived; it grants a snooze when [verdict] is [PurchaseVerdict.Grant]. The check starts
      * over at the next ring, with that ring's seeds. [orderId] is Play's order id when it gave one; it goes into the grant
-     * ledger row and the purchase record (Story 4.10).
+     * ledger row and the purchase record (Story 4.10). [price] is what it cost (from the purchase intent, Story 4.11),
+     * appended to `SessionData.paid` for the wake screen; null when unknown.
      */
     data class PurchaseGranted(
         val productId: String,
         val token: PurchaseToken,
         val verdict: PurchaseVerdict,
         val orderId: String? = null,
+        val price: Money? = null,
     ) : PurchaseEvent
 
     /** The purchase failed for [kind] (Story 4.11); nothing was charged. */
@@ -204,10 +207,14 @@ sealed interface SessionEvent {
         val livePrice: LivePrice,
     ) : UserEvent
 
-    /** The user accepted reusing the stranded payment [token] for [productId]; the check starts over at the next ring. */
+    /**
+     * The user accepted reusing the stranded payment [token] for [productId]; the check starts over at the next ring.
+     * [price] is what that payment cost, appended to `SessionData.paid`; null when unknown.
+     */
     data class ReuseAccepted(
         val productId: String,
         val token: PurchaseToken,
+        val price: Money? = null,
     ) : UserEvent
 
     /** The user declined reusing the stranded payment for [productId]. */

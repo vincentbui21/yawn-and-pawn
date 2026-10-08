@@ -5,6 +5,7 @@ import android.util.Log
 import androidx.work.Configuration
 import com.yawnandpawn.app.android.AndroidAccessibilityState
 import com.yawnandpawn.app.android.AndroidAlarmScheduler
+import com.yawnandpawn.app.android.AndroidConnectivity
 import com.yawnandpawn.app.android.AndroidLogger
 import com.yawnandpawn.app.android.AndroidUserLockState
 import com.yawnandpawn.app.android.ApplicationScope
@@ -31,6 +32,7 @@ import com.yawnandpawn.app.core.alarm.RearmOnFire
 import com.yawnandpawn.app.core.alarm.SaveAlarm
 import com.yawnandpawn.app.core.alarm.SetAlarmEnabled
 import com.yawnandpawn.app.core.billing.FeeLadder
+import com.yawnandpawn.app.core.billing.LiveSnoozeAvailability
 import com.yawnandpawn.app.core.billing.MoneyFormatter
 import com.yawnandpawn.app.core.billing.PriceCatalog
 import com.yawnandpawn.app.core.billing.PriceRefreshScheduler
@@ -39,6 +41,7 @@ import com.yawnandpawn.app.core.billing.PurchaseCoordinator
 import com.yawnandpawn.app.core.billing.PurchaseLedger
 import com.yawnandpawn.app.core.billing.PurgeOldPurchaseIntents
 import com.yawnandpawn.app.core.billing.ReplayGrantLedger
+import com.yawnandpawn.app.core.billing.SnoozeConditions
 import com.yawnandpawn.app.core.billing.UsdFeeLadder
 import com.yawnandpawn.app.core.checks.AccessibilityState
 import com.yawnandpawn.app.core.checks.word.WordBank
@@ -53,13 +56,13 @@ import com.yawnandpawn.app.core.history.MissedNotes
 import com.yawnandpawn.app.core.id.IdGenerator
 import com.yawnandpawn.app.core.id.UuidV4IdGenerator
 import com.yawnandpawn.app.core.log.Logger
+import com.yawnandpawn.app.core.net.Connectivity
 import com.yawnandpawn.app.core.session.ActiveSessionStore
 import com.yawnandpawn.app.core.session.Billing
 import com.yawnandpawn.app.core.session.CameraFallbackPolicy
 import com.yawnandpawn.app.core.session.CheckValidator
 import com.yawnandpawn.app.core.session.EffectRunner
 import com.yawnandpawn.app.core.session.FallbackPolicy
-import com.yawnandpawn.app.core.session.NoBillingSnoozeAvailability
 import com.yawnandpawn.app.core.session.PluginCheckValidator
 import com.yawnandpawn.app.core.session.ScheduleTestAlarm
 import com.yawnandpawn.app.core.session.SessionEngine
@@ -141,7 +144,12 @@ val appModule =
         single<UserLockState> { AndroidUserLockState(androidContext(), get()) }
         // TalkBack (Story 3.8): the numbered Memory Sequence when a ring's plan is frozen, and the editor's notes.
         single<AccessibilityState> { AndroidAccessibilityState(androidContext()) }
-        single<SnoozeAvailabilityPolicy> { NoBillingSnoozeAvailability(get()) }
+        // Snooze availability (Story 4.7): every reason, from the session and the live env (connectivity, cached prices,
+        // the lock state; stranded payments arrive with Story 4.11). Billing stays unavailable until Story 4.12: nothing
+        // fills the price cache, so snooze reads "Prices not loaded yet".
+        single<Connectivity> { AndroidConnectivity(androidContext(), get()) }
+        single { SnoozeConditions(get(), get(), get(), get()) }
+        single<SnoozeAvailabilityPolicy> { LiveSnoozeAvailability(get(), get(), get()) }
         single<CheckValidator> { PluginCheckValidator }
         single<FallbackPolicy> { CameraFallbackPolicy() }
         // The fee ladder (Story 4.2): snooze N at base fee B is product snooze_usd_NN with NN = B x N, capped at 50.

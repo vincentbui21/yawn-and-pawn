@@ -1,5 +1,6 @@
 package com.yawnandpawn.app.core.session
 
+import com.yawnandpawn.app.core.billing.Money
 import com.yawnandpawn.app.core.checks.CheckEntry
 import com.yawnandpawn.app.core.checks.CheckMode
 import com.yawnandpawn.app.core.checks.CheckPlan
@@ -133,6 +134,25 @@ class SessionJsonTest {
             assertEquals(StoredSession.Found(state), SessionJson.decode(row), name)
             assertEquals(StoredSession.Found(state), SessionJson.decode(SessionJson.encode(state)), "$name round trip")
         }
+    }
+
+    @Test
+    fun `a row stored before Story 4_7 decodes with nothing paid, and the paid amounts round trip`() {
+        val before = assertIs<StoredSession.Found>(SessionJson.decode("""{"type":"Snoozed","session":$SESSION_V2}}"""))
+        assertEquals(emptyList(), (before.state as SessionState.Active).session.paid)
+
+        val paid = SessionState.Snoozed(full.copy(paid = listOf(Money.of(1, "USD"), Money(2_490_000, "EUR"), Money(0, "JPY"))))
+        val encoded = SessionJson.encode(paid)
+        assertTrue(""""paid":[{"micros":1000000,"currency":"USD"},""" in encoded, encoded)
+        assertEquals(StoredSession.Found(paid), SessionJson.decode(encoded))
+    }
+
+    @Test
+    fun `a malformed paid amount is dropped, the session and the other amounts are kept`() {
+        val state = SessionState.Snoozed(full.copy(paid = listOf(Money.of(1, "USD"), Money.of(2, "USD"))))
+        val damaged = SessionJson.encode(state).replaceFirst(""""currency":"USD"""", """"currency":"usd"""")
+
+        assertEquals(StoredSession.Found(SessionState.Snoozed(full.copy(paid = listOf(Money.of(2, "USD"))))), SessionJson.decode(damaged))
     }
 
     @Test

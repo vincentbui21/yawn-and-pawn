@@ -1,6 +1,7 @@
 package com.yawnandpawn.app.ui.wake
 
 import com.yawnandpawn.app.core.billing.Money
+import com.yawnandpawn.app.core.billing.PriceEntry
 import com.yawnandpawn.app.core.checks.CheckEntry
 import com.yawnandpawn.app.core.checks.CheckMode
 import com.yawnandpawn.app.core.checks.CheckPlan
@@ -110,6 +111,21 @@ class RingingMappingTest {
         assertEquals(
             SnoozeOffer.Unavailable(SnoozeUnavailableReason.PricesNotLoaded),
             snoozeOffer(SnoozeAvailability.Available(CoreSnoozeOffer("snooze_usd_01", 1)), session),
+        )
+    }
+
+    @Test
+    fun `the policy's price wins, shown as Play's own string, for a snooze and for a refund (Story 4_7)`() {
+        val euro = PriceEntry("snooze_usd_02", "2,49 €", Money(2_490_000, "EUR"), Instant.parse("2027-03-03T05:00:00Z"))
+        val session = aSession().copy(declinedReuseProduct = "snooze_usd_02")
+
+        assertEquals(
+            SnoozeOffer.Available(euro.price, "2,49 €"),
+            snoozeOffer(SnoozeAvailability.Available(CoreSnoozeOffer("snooze_usd_02", 2, euro)), session, prices),
+        )
+        assertEquals(
+            SnoozeOffer.StrandedRefund(euro.price, "2,49 €"),
+            snoozeOffer(SnoozeAvailability.Unavailable(UnavailableReason.EarlierPaymentRefunding, euro), session, prices),
         )
     }
 

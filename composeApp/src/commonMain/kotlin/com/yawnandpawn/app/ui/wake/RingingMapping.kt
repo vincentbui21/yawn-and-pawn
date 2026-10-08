@@ -19,8 +19,8 @@ val NoPrices: PriceLookup = { null }
 /**
  * The Ringing screen for [session] (Story 1.15): the alarm's time and date in [zone] (`config.scheduledAt`, as in the
  * notification), its label (none when blank), its note ([wakeNote]: a paused call, or the Direct Boot check), and the snooze that
- * [availability] (the `SnoozeAvailabilityPolicy` result) allows. The session line needs the paid amount, which arrives
- * with Money in Epic 4, so it is not shown yet. Pure.
+ * [availability] (the `SnoozeAvailabilityPolicy` result) allows. The session line (from `SessionData.paid`) is Story
+ * 4.15's, so it is not shown yet. Pure.
  */
 fun ringingUiState(
     session: SessionData,
@@ -51,8 +51,9 @@ fun alarmOnlyRingingUiState(
 }
 
 /**
- * What `button-snooze` shows for [availability] (AD-7). A price [priceOf] does not know means the catalogue is not
- * loaded, so it reads "prices not loaded yet" rather than inventing one.
+ * What `button-snooze` shows for [availability] (AD-7, Story 4.7): the reason's variant, or "Snooze · {price}" with
+ * Play's `formattedPrice` from the policy's result. A result without a price falls back to [priceOf]; a price nobody
+ * knows means the catalogue is not loaded, so it reads "prices not loaded yet" rather than inventing one.
  */
 fun snoozeOffer(
     availability: SnoozeAvailability,
@@ -60,16 +61,23 @@ fun snoozeOffer(
     priceOf: PriceLookup = NoPrices,
 ): SnoozeOffer =
     when (availability) {
-        is SnoozeAvailability.Available -> priceOf(availability.offer.productId)?.let { SnoozeOffer.Available(it) } ?: pricesNotLoaded()
-        is SnoozeAvailability.Unavailable -> unavailableOffer(availability.reason, session, priceOf)
+        is SnoozeAvailability.Available -> {
+            availability.offer.price?.let { SnoozeOffer.Available(it.price, it.formattedPrice) }
+                ?: priceOf(availability.offer.productId)?.let { SnoozeOffer.Available(it) }
+                ?: pricesNotLoaded()
+        }
+
+        is SnoozeAvailability.Unavailable -> {
+            unavailableOffer(availability, session, priceOf)
+        }
     }
 
 private fun unavailableOffer(
-    reason: UnavailableReason,
+    availability: SnoozeAvailability.Unavailable,
     session: SessionData,
     priceOf: PriceLookup,
 ): SnoozeOffer =
-    when (reason) {
+    when (availability.reason) {
         UnavailableReason.TestMode -> {
             SnoozeOffer.TestMode
         }
@@ -99,8 +107,11 @@ private fun unavailableOffer(
             SnoozeOffer.Unavailable(SnoozeUnavailableReason.PaymentPending)
         }
 
+        // The refunded payment's price: the policy's cached one, else [priceOf]; with none, no price is invented.
         UnavailableReason.EarlierPaymentRefunding -> {
-            session.declinedReuseProduct?.let(priceOf)?.let { SnoozeOffer.StrandedRefund(it) } ?: pricesNotLoaded()
+            availability.price?.let { SnoozeOffer.StrandedRefund(it.price, it.formattedPrice) }
+                ?: session.declinedReuseProduct?.let(priceOf)?.let { SnoozeOffer.StrandedRefund(it) }
+                ?: pricesNotLoaded()
         }
     }
 

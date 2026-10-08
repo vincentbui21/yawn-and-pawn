@@ -58,7 +58,7 @@ wordList {
 }
 
 // ---------------------------------------------------------------------------------------------
-// Play catalogue (Story 4.1, AD-7, tools/play-catalog/README.md): `./gradlew playCatalog -Pmode=dry-run|apply
+// Play catalogue (Story 4.1, AD-7, tools/play-catalog/README.md): `./gradlew playCatalog -PplayCatalogMode=dry-run|apply
 // [-Pcredentials=<key file outside the repo>]` (or PLAY_SERVICE_ACCOUNT_JSON) creates and updates the 50 snooze
 // products. The tool runs in its own JVM, so its Google API client never joins this build's classpath.
 // ---------------------------------------------------------------------------------------------
@@ -82,15 +82,22 @@ dependencies {
 
 tasks.register<JavaExec>("playCatalog") {
     group = "publishing"
-    description = "Creates and updates the 50 snooze products in Play Console (-Pmode=dry-run|apply)."
+    description = "Creates and updates the 50 snooze products in Play Console (-PplayCatalogMode=dry-run|apply; default dry-run)."
     classpath = playCatalogTool
     mainClass.set("com.yawnandpawn.app.playcatalog.MainKt")
-    val mode = providers.gradleProperty("mode")
+    // The mode is read only from this command line (-PplayCatalogMode=...), never from gradle.properties or an
+    // ORG_GRADLE_PROJECT_ variable, and defaults to dry-run: nothing but an explicit command writes to Play.
+    val commandLine = gradle.startParameter.projectProperties
+    val mode = commandLine["playCatalogMode"] ?: "dry-run"
+    val legacyMode = commandLine.containsKey("mode")
     val credentials = providers.gradleProperty("credentials")
     val repoRoot = rootDir.absolutePath
+    doFirst {
+        if (legacyMode) throw GradleException("playCatalog takes -PplayCatalogMode=dry-run|apply, not -Pmode.")
+    }
     argumentProviders.add(
         CommandLineArgumentProvider {
-            listOf("--mode", mode.getOrElse(""), "--repo-root", repoRoot) +
+            listOf("--mode", mode, "--repo-root", repoRoot) +
                 credentials.map { listOf("--credentials", it) }.getOrElse(emptyList())
         },
     )

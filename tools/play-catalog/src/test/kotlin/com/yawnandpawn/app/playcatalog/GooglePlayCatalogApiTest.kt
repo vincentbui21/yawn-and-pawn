@@ -89,7 +89,10 @@ class GooglePlayCatalogApiTest {
         assertEquals(OptionState.INACTIVE, option.state)
         assertTrue(option.isBuy && option.legacyCompatible && !option.multiQuantityEnabled)
         assertEquals(RegionalConfig(Price.usd(2), available = true), option.regions["US"])
-        assertEquals(RegionalConfig(Price("EUR", 1, 790_000_000), available = false), option.regions["FI"])
+        assertEquals(
+            RegionalConfig(Price("EUR", 1, 790_000_000), available = false, rawAvailability = "NO_LONGER_AVAILABLE"),
+            option.regions["FI"],
+        )
         assertEquals(Price.usd(2), option.newRegionsUsd)
         assertTrue(option.newRegionsAvailable)
     }
@@ -138,6 +141,38 @@ class GooglePlayCatalogApiTest {
         assertTrue(""""title":"Snooze"""" in body && """"description":"One snooze for your alarm."""" in body, body)
         assertTrue(""""regionCode":"JP"""" in body && """"availability":"AVAILABLE"""" in body, body)
         assertFalse(""""state"""" in body, body)
+        assertTrue(
+            """"newRegionsConfig":{"availability":"AVAILABLE","eurPrice":{"currencyCode":"EUR","nanos":0,"units":"3"},""" +
+                """"usdPrice":{"currencyCode":"USD","nanos":0,"units":"3"}}""" in body,
+            body,
+        )
+    }
+
+    @Test
+    fun `an update keeps the option's tax and compliance settings and offer tags as Play returned them`() {
+        val listed =
+            api(
+                "oneTimeProducts" to (
+                    200 to
+                        """
+                        {"oneTimeProducts": [{"productId": "snooze_usd_02",
+                          "listings": [{"languageCode": "en-US", "title": "Snooze", "description": "One snooze for your alarm."}],
+                          "purchaseOptions": [{"purchaseOptionId": "buy", "state": "ACTIVE", "buyOption": {"legacyCompatible": true},
+                            "taxAndComplianceSettings": {"withdrawalRightType": "WITHDRAWAL_RIGHT_SERVICE"},
+                            "offerTags": [{"tag": "owner-tag"}],
+                            "regionalPricingAndAvailabilityConfigs": [
+                              {"regionCode": "US", "price": {"currencyCode": "USD", "units": "3"}, "availability": "AVAILABLE"}]}]}]}
+                        """.trimIndent()
+                ),
+            ).listOneTimeProducts("com.yawnandpawn.app").single()
+        val desired = SnoozeCatalog.desiredProduct(2, FakePlayCatalogApi.convert(2), listed)
+
+        val body =
+            GsonFactory.getDefaultInstance().toString(PlayModelMapper.toApi("com.yawnandpawn.app", desired, "2025/03"))
+
+        assertTrue(""""taxAndComplianceSettings":{"withdrawalRightType":"WITHDRAWAL_RIGHT_SERVICE"}""" in body, body)
+        assertTrue(""""offerTags":[{"tag":"owner-tag"}]""" in body, body)
+        assertTrue(""""units":"2"""" in body, body)
     }
 
     @Test

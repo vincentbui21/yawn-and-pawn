@@ -18,6 +18,9 @@ object ExitCode {
     const val OK = 0
     const val API_FAILURE = 1
     const val USAGE = 2
+
+    /** The run finished, but some managed products need a fix in Play Console (plan kind "attention"). */
+    const val ATTENTION = 3
 }
 
 /**
@@ -54,13 +57,32 @@ class CatalogRunner(
         val plan = CatalogPlanner.plan(existing, conversions)
         plan.products.forEach { out(line(it)) }
         out(plan.summary())
-        if (plan.count(PlanKind.ATTENTION) > 0) {
-            out("Products marked attention are left unchanged; fix them in Play Console first.")
-        }
+        val attention = plan.count(PlanKind.ATTENTION)
         when {
-            plan.changes.isEmpty() -> out("0 changes. Play matches the catalogue.")
-            mode == Mode.DRY_RUN -> out("Dry run: nothing was written. Run ./gradlew playCatalog -Pmode=apply to make these changes.")
-            else -> apply(plan)
+            plan.changes.isEmpty() && attention == 0 -> {
+                out("0 changes. Play matches the catalogue.")
+            }
+
+            plan.changes.isEmpty() -> {
+                out("0 changes.")
+            }
+
+            mode == Mode.DRY_RUN -> {
+                out(
+                    "Dry run: nothing was written. Run ./gradlew playCatalog -PplayCatalogMode=apply to make these changes.",
+                )
+            }
+
+            else -> {
+                apply(plan)
+            }
+        }
+        if (attention > 0) {
+            out(
+                "ATTENTION: $attention products were left unchanged because they have purchase options this tool does not manage. " +
+                    "Fix them in Play Console, then run again.",
+            )
+            return ExitCode.ATTENTION
         }
         return ExitCode.OK
     }
@@ -69,9 +91,10 @@ class CatalogRunner(
         val changes = plan.changes
         changes.forEachIndexed { index, change ->
             progress = "${index + 1} of ${changes.size}"
-            var stored: OneTimeProduct? = null
-            if (change.patch.isNotEmpty()) {
-                stored =
+            val stored =
+                if (change.patch.isEmpty()) {
+                    null
+                } else {
                     api.patchOneTimeProduct(
                         packageName = packageName,
                         product = requireNotNull(change.desired),
@@ -79,9 +102,16 @@ class CatalogRunner(
                         regionsVersion = requireNotNull(change.regionsVersion),
                         allowMissing = change.kind == PlanKind.CREATE,
                     )
-            }
-            val buyState = stored?.purchaseOptions?.firstOrNull { it.id == SnoozeCatalog.PURCHASE_OPTION_ID }?.state
-            if (change.activate && buyState != OptionState.ACTIVE) {
+                }
+            // After a patch, trust Play's answer: a new option is a draft, and Play may also take an option off sale when
+            // its prices change. Either way it is activated, so a patched product never stays off sale.
+            val activate =
+                if (stored == null) {
+                    change.activate
+                } else {
+                    stored.purchaseOptions.firstOrNull { it.id == SnoozeCatalog.PURCHASE_OPTION_ID }?.state != OptionState.ACTIVE
+                }
+            if (activate) {
                 api.activatePurchaseOption(packageName, change.productId, SnoozeCatalog.PURCHASE_OPTION_ID)
             }
             out("Done $progress: ${change.productId} ${change.kind.label}")

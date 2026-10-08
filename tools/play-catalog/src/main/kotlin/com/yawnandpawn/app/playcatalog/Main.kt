@@ -2,10 +2,12 @@ package com.yawnandpawn.app.playcatalog
 
 import com.google.api.client.googleapis.javanet.GoogleNetHttpTransport
 import com.google.api.client.http.HttpRequestInitializer
+import com.google.api.client.http.HttpTransport
 import com.google.api.client.json.gson.GsonFactory
 import com.google.api.services.androidpublisher.AndroidPublisher
 import com.google.api.services.androidpublisher.AndroidPublisherScopes
 import com.google.auth.http.HttpCredentialsAdapter
+import com.google.auth.oauth2.GoogleCredentials
 import com.google.auth.oauth2.ServiceAccountCredentials
 import java.io.File
 import java.io.IOException
@@ -20,7 +22,7 @@ fun main(args: Array<String>) {
 
 object PlayCatalogMain {
     const val USAGE =
-        "Usage: ./gradlew playCatalog -Pmode=dry-run|apply [-Pcredentials=<service-account key file outside the repo>] " +
+        "Usage: ./gradlew playCatalog [-PplayCatalogMode=dry-run|apply] [-Pcredentials=<service-account key file outside the repo>] " +
             "(or set ${Credentials.ENV_VAR} to the key JSON)"
 
     private const val APPLICATION_NAME = "yawn-and-pawn-play-catalog"
@@ -94,19 +96,32 @@ object PlayCatalogMain {
                 is CredentialsSource.FromEnvironment -> readKey(source.json.byteInputStream())
                 is CredentialsSource.FromFile -> source.file.inputStream().use(::readKey)
             }
+        return GooglePlayCatalogApi(publisher(credentials, GoogleNetHttpTransport.newTrustedTransport()))
+    }
+
+    /**
+     * The API client. Every request is sent exactly once: [HttpCredentialsAdapter] would re-send a request after a 401
+     * (refreshing the token), and the client could retry on an IO error, so both handlers are removed. A write is
+     * never repeated blindly; the token is still refreshed before each request when it is about to expire.
+     */
+    fun publisher(
+        credentials: GoogleCredentials,
+        transport: HttpTransport,
+    ): AndroidPublisher {
         val adapter = HttpCredentialsAdapter(credentials)
         val initializer =
             HttpRequestInitializer { request ->
                 adapter.initialize(request)
+                request.unsuccessfulResponseHandler = null
+                request.ioExceptionHandler = null
+                request.numberOfRetries = 0
                 request.connectTimeout = CONNECT_TIMEOUT_MS
                 request.readTimeout = READ_TIMEOUT_MS
             }
-        val publisher =
-            AndroidPublisher
-                .Builder(GoogleNetHttpTransport.newTrustedTransport(), GsonFactory.getDefaultInstance(), initializer)
-                .setApplicationName(APPLICATION_NAME)
-                .build()
-        return GooglePlayCatalogApi(publisher)
+        return AndroidPublisher
+            .Builder(transport, GsonFactory.getDefaultInstance(), initializer)
+            .setApplicationName(APPLICATION_NAME)
+            .build()
     }
 
     private fun readKey(stream: InputStream) =

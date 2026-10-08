@@ -104,7 +104,7 @@ object CatalogPlanner {
             }
 
             else -> {
-                compare(tier, current, desired, converted.regionsVersion)
+                compare(tier, current, desired, converted)
             }
         }
     }
@@ -113,7 +113,7 @@ object CatalogPlanner {
         tier: Int,
         current: OneTimeProduct,
         desired: OneTimeProduct,
-        regionsVersion: String,
+        converted: ConvertedPrices,
     ): ProductPlan {
         val id = current.productId
         val reasons = mutableListOf<String>()
@@ -123,7 +123,7 @@ object CatalogPlanner {
             patch += PatchField.LISTINGS
         }
         val buy = current.purchaseOptions.firstOrNull()
-        val optionReasons = optionDifferences(tier, buy, desired.purchaseOptions.single())
+        val optionReasons = optionDifferences(tier, buy, converted.regions.keys + SnoozeCatalog.BASE_REGION)
         if (optionReasons.isNotEmpty()) {
             reasons += optionReasons
             patch += PatchField.PURCHASE_OPTIONS
@@ -136,7 +136,7 @@ object CatalogPlanner {
                 activate -> PlanKind.ACTIVATE
                 else -> PlanKind.UNCHANGED
             }
-        return ProductPlan(id, kind, reasons, patch, activate, desired.takeIf { patch.isNotEmpty() }, regionsVersion)
+        return ProductPlan(id, kind, reasons, patch, activate, desired.takeIf { patch.isNotEmpty() }, converted.regionsVersion)
     }
 
     private fun listingDifference(current: OneTimeProduct): String? {
@@ -151,7 +151,7 @@ object CatalogPlanner {
     private fun optionDifferences(
         tier: Int,
         current: PurchaseOption?,
-        desired: PurchaseOption,
+        offeredRegions: Set<String>,
     ): List<String> {
         if (current == null) return listOf("purchase option ${SnoozeCatalog.PURCHASE_OPTION_ID} missing")
         val base = SnoozeCatalog.basePrice(tier)
@@ -161,9 +161,12 @@ object CatalogPlanner {
         }
         val us = current.regions[SnoozeCatalog.BASE_REGION]
         if (us?.price != base) reasons += "price ${us?.price ?: "missing"} -> $base"
-        val missing = desired.regions.keys.filter { current.regions[it]?.available != true }
+        // Only regions Play offers today count; a region Play stopped returning is kept as it is (never deleted).
+        val missing = offeredRegions.sorted().filter { current.regions[it]?.available != true }
         if (missing.isNotEmpty()) reasons += "${missing.size} regions missing or unavailable (${missing.take(MAX_LISTED).joinToString()})"
-        if (current.newRegionsUsd != base || !current.newRegionsAvailable) reasons += "new-regions price ${current.newRegionsUsd} -> $base"
+        if (current.newRegionsUsd != base || current.newRegionsEur == null || !current.newRegionsAvailable) {
+            reasons += "new-regions price ${current.newRegionsUsd} / ${current.newRegionsEur} -> $base / EUR from Play"
+        }
         return reasons
     }
 

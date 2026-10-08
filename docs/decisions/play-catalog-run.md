@@ -13,13 +13,13 @@ Each run needs three outputs: the dry run, the apply, and a second dry run showi
 ### Dry run
 
 ```
-(paste the output of ./gradlew playCatalog -Pmode=dry-run here)
+(paste the output of ./gradlew playCatalog -PplayCatalogMode=dry-run here)
 ```
 
 ### Apply
 
 ```
-(paste the output of ./gradlew playCatalog -Pmode=apply here)
+(paste the output of ./gradlew playCatalog -PplayCatalogMode=apply here)
 ```
 
 ### Second dry run (expected: 0 changes.)

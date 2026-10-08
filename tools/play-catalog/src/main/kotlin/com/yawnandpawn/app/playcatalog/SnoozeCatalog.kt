@@ -49,7 +49,9 @@ object SnoozeCatalog {
 
     /**
      * The product as it should be in Play, with every region Play offers priced from [converted] (the conversion of
-     * [basePrice]) and the US pinned to the base price. [existing] keeps listings in other languages.
+     * [basePrice]) and the US pinned to the base price. From [existing] it keeps, so a patch never deletes them:
+     * listings in other languages, regions the conversion no longer returns (with their current price and
+     * availability), and the `buy` option's fields this tool does not model ([PurchaseOption.extras]).
      */
     fun desiredProduct(
         tier: Int,
@@ -57,8 +59,10 @@ object SnoozeCatalog {
         existing: OneTimeProduct? = null,
     ): OneTimeProduct {
         val base = basePrice(tier)
+        val currentBuy = existing?.purchaseOptions?.firstOrNull { it.id == PURCHASE_OPTION_ID }
         val regions =
-            converted.regions.mapValues { (_, price) -> RegionalConfig(price, available = true) } +
+            currentBuy?.regions.orEmpty() +
+                converted.regions.mapValues { (_, price) -> RegionalConfig(price, available = true) } +
                 (BASE_REGION to RegionalConfig(base, available = true))
         val otherListings = existing?.listings.orEmpty().filter { it.languageCode != LISTING_LANGUAGE }
         return OneTimeProduct(
@@ -76,6 +80,7 @@ object SnoozeCatalog {
                         newRegionsUsd = base,
                         newRegionsEur = converted.otherRegionsEur,
                         newRegionsAvailable = true,
+                        extras = currentBuy?.extras.orEmpty(),
                     ),
                 ),
         )

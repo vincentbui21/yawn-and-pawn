@@ -46,15 +46,23 @@ enum class OptionState {
     }
 }
 
-/** A price and availability in one region of a purchase option. */
+/**
+ * A price and availability in one region of a purchase option. [rawAvailability] keeps Play's value when it is not
+ * `AVAILABLE` (for example `NO_LONGER_AVAILABLE`), so a region the tool keeps is written back exactly as it was.
+ */
 data class RegionalConfig(
     val price: Price,
     val available: Boolean,
+    val rawAvailability: String? = null,
 )
 
 /**
  * One purchase option of a product. [isBuy] is false for a rent option. [state] is null in a write
  * (output only). [regions] maps a region code (`US`, `FI`, …) to its price.
+ *
+ * [extras] holds the option's fields this tool does not model (for example `taxAndComplianceSettings` with the EEA
+ * withdrawal right, or `offerTags`), exactly as Play returned them. A patch of `purchaseOptions` replaces the whole
+ * option, so they are written back unchanged and an owner's Play Console setting is never reset.
  */
 data class PurchaseOption(
     val id: String,
@@ -66,6 +74,7 @@ data class PurchaseOption(
     val newRegionsUsd: Price?,
     val newRegionsEur: Price?,
     val newRegionsAvailable: Boolean,
+    val extras: Map<String, Any?> = emptyMap(),
 )
 
 /** A one-time product with the fields the tool manages. */

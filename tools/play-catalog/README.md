@@ -17,8 +17,14 @@ Creates and updates the 50 snooze products in Play Console (Story 4.1, PRD §6.3
 
 **What it never does:**
 - It never touches any other product, such as `spike_s1_test`. Those are reported as `unmanaged`.
-- It never deletes anything. The tool has no delete call.
-- It never retries a failed write.
+- It never deletes anything. The tool has no delete or deactivate call, and it uses only GET, POST and PATCH.
+- On a managed product, a patch never drops:
+  - listings in other languages;
+  - a region Play no longer returns (kept with its current price and availability);
+  - the `buy` option settings the tool does not model, such as tax and compliance (the EEA withdrawal right) and offer tags.
+- It never sends a request twice. Retries are switched off in the HTTP client, including the re-send after a 401.
+
+**Mode:** `-PplayCatalogMode=dry-run|apply`, only from the command line. Without it the tool does a dry run. A value in `gradle.properties` or an `ORG_GRADLE_PROJECT_` variable is ignored, and the old `-Pmode` is refused.
 
 **Pending purchases:** the API has no catalogue setting for them. The app turns them on in Play Billing (`enablePendingPurchases(...enableOneTimeProducts())`, Story 4.12).
 
@@ -35,24 +41,27 @@ spike_s1_test   unmanaged  not a snooze_usd_NN product; never changed
 ```
 
 - **create:** the product does not exist. Apply creates it, then activates its `buy` option.
-- **update:** the `en-US` listing, the US price, a region, the new-regions price or the Buy option settings differ. Apply patches only those fields. A price update rewrites every local price from a fresh conversion.
+- **update:** the `en-US` listing, the US price, a region Play offers, the new-regions USD/EUR price or the Buy option settings differ. Apply patches only those fields. A price update rewrites every local price from a fresh conversion.
 - **activate:** the `buy` option is draft or inactive. Apply activates it.
 - **unchanged:** nothing to do. Local prices that only moved with exchange rates count as unchanged.
 - **unmanaged:** not one of the 50 ids. Never changed.
-- **attention:** a managed product has a purchase option other than `buy`. It is left alone; fix it in Play Console, then run again.
+- **attention:** a managed product has a purchase option other than `buy` (for example a lone `default` option made by hand). It is left alone; fix it in Play Console, then run again.
 
-When nothing is left to do, the summary ends with `0 changes.` and the last line is `0 changes. Play matches the catalogue.`
+When nothing is left to do, the summary ends with `0 changes.` and the last line is `0 changes. Play matches the catalogue.` That last line is printed only when no product needs attention.
 
 **Exit codes:**
 - **0:** success.
-- **1:** a Play API call failed. The tool stops at once and prints the API's message. Run the dry run again to see what is left.
+- **1:** a Play API call failed, or Play's answer lacked a field the tool needs. The tool stops at once and prints the call and the message. Run the dry run again to see what is left.
 - **2:** a usage or credentials problem.
+- **3:** the run finished, but some products need attention (an `ATTENTION:` line says how many). Gradle reports it as a failed build, so it is never missed.
 
 ## Credentials
 
 The tool reads the service-account key only from:
 
-1. `-Pcredentials=<path>`: a key file **outside the repository**. A path inside the repository is refused. This option wins when both are set.
+1. `-Pcredentials=<path>`: a key file **outside the repository**. This option wins when both are set. A path inside the repository is refused:
+   - the check compares canonical paths, so a junction, a symbolic link or an 8.3 short name cannot hide one;
+   - from a git worktree, the main checkout counts as the repository too.
 2. The `PLAY_SERVICE_ACCOUNT_JSON` environment variable, which holds the key JSON itself (as in CI).
 
 When neither is set, the tool stops with a message. It never prints the key.
@@ -78,13 +87,13 @@ Do this once, as soon as Story 4.1 is merged. New products can take a few hours 
 1. **Dry run:**
    ```powershell
    $env:JAVA_HOME = "C:/Users/BuiTua/AppData/Local/Programs/jdk17/jdk-17.0.20.1+1"
-   ./gradlew playCatalog -Pmode=dry-run "-Pcredentials=C:/Users/BuiTua/keys/play-catalog.json"
+   ./gradlew playCatalog -PplayCatalogMode=dry-run "-Pcredentials=C:/Users/BuiTua/keys/play-catalog.json"
    ```
    - Expected: `50 create`, `1 unmanaged` (`spike_s1_test`), `50 changes.` and "Dry run: nothing was written."
    - Copy the whole output.
 2. **Apply:**
    ```powershell
-   ./gradlew playCatalog -Pmode=apply "-Pcredentials=C:/Users/BuiTua/keys/play-catalog.json"
+   ./gradlew playCatalog -PplayCatalogMode=apply "-Pcredentials=C:/Users/BuiTua/keys/play-catalog.json"
    ```
    - Expected: 50 `Done i of 50` lines and "Applied 50 changes."
    - Copy the whole output.

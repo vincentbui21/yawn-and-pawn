@@ -36,7 +36,10 @@ class CatalogRunnerTest {
         assertTrue(output.any { it.startsWith("snooze_usd_11   create     USD 11.00, 3 regions") }, text)
         assertTrue(output.any { it.startsWith("spike_s1_test   unmanaged") }, text)
         assertTrue("40 create, 2 update, 1 activate, 7 unchanged, 1 unmanaged, 0 attention. 43 changes." in output, text)
-        assertTrue(output.last().startsWith("Dry run: nothing was written."), text)
+        assertEquals(
+            "Dry run: nothing was written. Run ./gradlew playCatalog -PplayCatalogMode=apply to make these changes.",
+            output.last(),
+        )
     }
 
     @Test
@@ -138,6 +141,118 @@ class CatalogRunnerTest {
 
         assertEquals(ExitCode.API_FAILURE, run(api, Mode.APPLY))
         assertEquals(emptyList(), api.writes)
+    }
+
+    @Test
+    fun `fixing a listing keeps the other languages in Play`() {
+        val german = Listing("de-DE", "Schlummern", "Einmal schlummern.")
+        val typo = TestCatalogs.applied(6).copy(listings = listOf(Listing("en-US", "Snoze", "One snooze for your alarm."), german))
+        val api = FakePlayCatalogApi((1..50).map { if (it == 6) typo else TestCatalogs.applied(it) })
+
+        assertEquals(ExitCode.OK, run(api, Mode.APPLY))
+
+        assertEquals(listOf("patch snooze_usd_06 [listings]"), api.writes)
+        assertEquals(listOf(SnoozeCatalog.listing, german), api.products.getValue("snooze_usd_06").listings)
+    }
+
+    @Test
+    fun `after a failed run, the next apply finishes only what is left, and the third run has nothing to do`() {
+        val api = FakePlayCatalogApi().apply { failOn = "activate snooze_usd_05" }
+
+        assertEquals(ExitCode.API_FAILURE, run(api, Mode.APPLY))
+        assertEquals("activate snooze_usd_05/buy", api.writes.last())
+        assertEquals(
+            OptionState.DRAFT,
+            api.products
+                .getValue("snooze_usd_05")
+                .purchaseOptions
+                .single()
+                .state,
+        )
+
+        api.failOn = null
+        val before = api.writes.size
+        assertEquals(ExitCode.OK, run(api, Mode.APPLY))
+        val second = api.writes.drop(before)
+        assertEquals("activate snooze_usd_05/buy", second.first(), "05 is only activated, not patched again")
+        assertFalse(second.any { it.startsWith("patch snooze_usd_05") })
+        assertFalse(second.any { (1..4).any { tier -> SnoozeCatalog.productId(tier) in it } }, second.toString())
+        assertEquals(
+            (6..50).map {
+                "patch ${SnoozeCatalog.productId(it)} [listings, purchaseOptions] allowMissing"
+            },
+            second.filter { it.startsWith("patch") },
+        )
+
+        val afterSecond = api.writes.size
+        assertEquals(ExitCode.OK, run(api, Mode.APPLY))
+        assertEquals(afterSecond, api.writes.size)
+        assertEquals("0 changes. Play matches the catalogue.", output.last())
+    }
+
+    @Test
+    fun `a product Play took off sale after its price patch is activated again`() {
+        val api = FakePlayCatalogApi((1..50).map { if (it == 2) TestCatalogs.wrongPrice(2, 3) else TestCatalogs.applied(it) })
+        api.stateAfterOptionPatch = OptionState.INACTIVE
+
+        assertEquals(ExitCode.OK, run(api, Mode.APPLY))
+
+        assertEquals(listOf("patch snooze_usd_02 [purchaseOptions]", "activate snooze_usd_02/buy"), api.writes)
+        assertEquals(
+            OptionState.ACTIVE,
+            api.products
+                .getValue("snooze_usd_02")
+                .purchaseOptions
+                .single()
+                .state,
+        )
+    }
+
+    @Test
+    fun `a product needing attention is never written, never reported as matching, and exits 3`() {
+        val extra =
+            TestCatalogs.applied(14).let { product ->
+                product.copy(purchaseOptions = product.purchaseOptions + product.purchaseOptions.single().copy(id = "rent", isBuy = false))
+            }
+        val lone = TestCatalogs.withBuyOption(TestCatalogs.applied(15)) { it.copy(id = "default") }
+        val api =
+            FakePlayCatalogApi(
+                (1..50).map {
+                    if (it == 14) {
+                        extra
+                    } else if (it == 15) {
+                        lone
+                    } else {
+                        TestCatalogs.applied(it)
+                    }
+                },
+            )
+
+        val exit = run(api, Mode.APPLY)
+
+        assertEquals(ExitCode.ATTENTION, exit)
+        assertEquals(emptyList(), api.writes)
+        assertTrue(output.any { it.startsWith("snooze_usd_14   attention  has purchase options this tool does not manage (rent)") }, text)
+        assertTrue(
+            output.any { it.startsWith("snooze_usd_15   attention  has purchase options this tool does not manage (default)") },
+            text,
+        )
+        assertFalse(output.any { "Play matches the catalogue" in it }, text)
+        assertTrue(output.last().startsWith("ATTENTION: 2 products were left unchanged"), text)
+    }
+
+    @Test
+    fun `attention does not stop the other changes`() {
+        val extra =
+            TestCatalogs.applied(14).let { product ->
+                product.copy(purchaseOptions = product.purchaseOptions + product.purchaseOptions.single().copy(id = "rent", isBuy = false))
+            }
+        val api = FakePlayCatalogApi((1..13).map(TestCatalogs::applied) + extra)
+
+        assertEquals(ExitCode.ATTENTION, run(api, Mode.APPLY))
+
+        assertEquals(36, api.writes.count { it.startsWith("patch") })
+        assertFalse(api.writes.any { "snooze_usd_14" in it })
     }
 
     @Test

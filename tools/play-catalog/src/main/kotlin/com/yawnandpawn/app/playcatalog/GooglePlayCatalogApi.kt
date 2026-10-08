@@ -83,9 +83,14 @@ class GooglePlayCatalogApi(
                 BatchUpdatePurchaseOptionStatesRequest()
                     .setRequests(listOf(UpdatePurchaseOptionStateRequest().setActivatePurchaseOptionRequest(activate)))
             val response = products.purchaseOptions().batchUpdateStates(packageName, productId, request).execute()
-            PlayModelMapper.fromApi(response.oneTimeProducts.single { it.productId == productId })
+            val product = response.oneTimeProducts.orEmpty().firstOrNull { it?.productId == productId }
+            PlayModelMapper.fromApi(requireNotNull(product) { "the answer does not contain $productId" })
         }
 
+    /**
+     * Runs one API call. Every failure, including an answer that lacks a field the tool needs, becomes a
+     * [PlayApiException] naming the call, so the run stops with a message instead of a stack trace.
+     */
     private fun <T> call(
         name: String,
         block: () -> T,
@@ -99,6 +104,8 @@ class GooglePlayCatalogApi(
             throw PlayApiException(name, "HTTP ${e.statusCode}: ${e.statusMessage ?: e.message.orEmpty()}", e.statusCode, e)
         } catch (e: IOException) {
             throw PlayApiException(name, e.message ?: e.javaClass.simpleName, cause = e)
+        } catch (e: IllegalArgumentException) {
+            throw PlayApiException(name, "unexpected answer from Play: ${e.message}", cause = e)
         }
 
     private companion object {
@@ -106,9 +113,17 @@ class GooglePlayCatalogApi(
     }
 }
 
-/** Maps between the tool's model and the API client's model. Fields the tool does not manage are not read or written. */
+/**
+ * Maps between the tool's model and the API client's model. An answer without a field the tool needs fails with an
+ * [IllegalArgumentException] (turned into a [PlayApiException] by the caller).
+ */
 object PlayModelMapper {
     private const val AVAILABLE = "AVAILABLE"
+    private const val NO_LONGER_AVAILABLE = "NO_LONGER_AVAILABLE"
+
+    /** The purchase option fields the tool models; every other field is carried in [PurchaseOption.extras]. */
+    private val modelledOptionFields =
+        setOf("purchaseOptionId", "state", "buyOption", "regionalPricingAndAvailabilityConfigs", "newRegionsConfig")
 
     fun toApi(price: Price): ApiMoney =
         ApiMoney()
@@ -116,15 +131,18 @@ object PlayModelMapper {
             .setUnits(price.units)
             .setNanos(price.nanos)
 
-    fun fromApi(money: ApiMoney): Price = Price(money.currencyCode, money.units ?: 0L, money.nanos ?: 0)
+    fun fromApi(money: ApiMoney?): Price {
+        val currency = requireNotNull(money?.currencyCode) { "a price without a currency" }
+        return Price(currency, money.units ?: 0L, money.nanos ?: 0)
+    }
 
     fun fromApi(response: ConvertRegionPricesResponse): ConvertedPrices =
         ConvertedPrices(
-            regionsVersion = requireNotNull(response.regionVersion?.version) { "convertRegionPrices returned no regions version" },
+            regionsVersion = requireNotNull(response.regionVersion?.version) { "no regions version in the answer" },
             regions =
                 response.convertedRegionPrices
                     .orEmpty()
-                    .mapValues { (_, converted) -> fromApi(converted.price) }
+                    .mapValues { (region, converted) -> fromApi(requireNotNull(converted?.price) { "no price for region $region" }) }
                     .toSortedMap(),
             otherRegionsUsd = response.convertedOtherRegionsPrice?.usdPrice?.let(::fromApi),
             otherRegionsEur = response.convertedOtherRegionsPrice?.eurPrice?.let(::fromApi),
@@ -132,25 +150,36 @@ object PlayModelMapper {
 
     fun fromApi(product: ApiProduct): OneTimeProduct =
         OneTimeProduct(
-            productId = product.productId,
-            listings = product.listings.orEmpty().map { Listing(it.languageCode, it.title.orEmpty(), it.description.orEmpty()) },
+            productId = requireNotNull(product.productId) { "a product without an id" },
+            listings =
+                product.listings.orEmpty().map {
+                    Listing(
+                        requireNotNull(it.languageCode) { "a listing without a language" },
+                        it.title.orEmpty(),
+                        it.description.orEmpty(),
+                    )
+                },
             purchaseOptions = product.purchaseOptions.orEmpty().map(::fromApi),
         )
 
     private fun fromApi(option: OneTimeProductPurchaseOption): PurchaseOption =
         PurchaseOption(
-            id = option.purchaseOptionId,
+            id = requireNotNull(option.purchaseOptionId) { "a purchase option without an id" },
             state = OptionState.parse(option.state),
             isBuy = option.buyOption != null,
             legacyCompatible = option.buyOption?.legacyCompatible == true,
             multiQuantityEnabled = option.buyOption?.multiQuantityEnabled == true,
             regions =
                 option.regionalPricingAndAvailabilityConfigs.orEmpty().associate {
-                    it.regionCode to RegionalConfig(fromApi(it.price), it.availability == AVAILABLE)
+                    val region = requireNotNull(it.regionCode) { "a regional price without a region" }
+                    // Any availability other than AVAILABLE is kept as Play wrote it, so a kept region goes back unchanged.
+                    region to
+                        RegionalConfig(fromApi(it.price), it.availability == AVAILABLE, it.availability.takeIf { a -> a != AVAILABLE })
                 },
             newRegionsUsd = option.newRegionsConfig?.usdPrice?.let(::fromApi),
             newRegionsEur = option.newRegionsConfig?.eurPrice?.let(::fromApi),
             newRegionsAvailable = option.newRegionsConfig?.availability == AVAILABLE,
+            extras = option.filterKeys { it !in modelledOptionFields },
         )
 
     /** The patch body. The purchase option state is output only, so it is never sent. */
@@ -175,8 +204,11 @@ object PlayModelMapper {
             OneTimeProductPurchaseOptionNewRegionsConfig()
                 .setUsdPrice(option.newRegionsUsd?.let(::toApi))
                 .setEurPrice(option.newRegionsEur?.let(::toApi))
-                .setAvailability(if (option.newRegionsAvailable) AVAILABLE else "NO_LONGER_AVAILABLE")
-        return OneTimeProductPurchaseOption()
+                .setAvailability(if (option.newRegionsAvailable) AVAILABLE else NO_LONGER_AVAILABLE)
+        val result = OneTimeProductPurchaseOption()
+        // Unmodelled fields (tax and compliance settings, offer tags, ...) go back exactly as Play returned them.
+        option.extras.forEach { (name, value) -> result.set(name, value) }
+        return result
             .setPurchaseOptionId(option.id)
             .setBuyOption(
                 OneTimeProductBuyPurchaseOption()
@@ -187,7 +219,7 @@ object PlayModelMapper {
                     OneTimeProductPurchaseOptionRegionalPricingAndAvailabilityConfig()
                         .setRegionCode(region)
                         .setPrice(toApi(config.price))
-                        .setAvailability(if (config.available) AVAILABLE else "NO_LONGER_AVAILABLE")
+                        .setAvailability(config.rawAvailability ?: if (config.available) AVAILABLE else NO_LONGER_AVAILABLE)
                 },
             ).setNewRegionsConfig(newRegions)
     }

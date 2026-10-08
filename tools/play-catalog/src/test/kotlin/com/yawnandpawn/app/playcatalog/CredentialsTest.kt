@@ -1,5 +1,6 @@
 package com.yawnandpawn.app.playcatalog
 
+import org.junit.Assume
 import java.io.File
 import java.nio.file.Files
 import kotlin.test.AfterTest
@@ -14,6 +15,8 @@ class CredentialsTest {
     private val repoRoot = temp.resolve("repo").apply { mkdirs() }
     private val keyOutside = temp.resolve("keys/play.json").apply { parentFile.mkdirs() }.apply { writeText("{}") }
     private val json = """{"type": "service_account"}"""
+
+    private fun real(file: File): File = file.toPath().toRealPath().toFile()
 
     @AfterTest
     fun cleanUp() {
@@ -53,7 +56,7 @@ class CredentialsTest {
     fun `a key file outside the repository is used, and wins over the variable`() {
         val source = Credentials.resolve(keyOutside.path, mapOf("PLAY_SERVICE_ACCOUNT_JSON" to json), repoRoot)
 
-        assertEquals(CredentialsSource.FromFile(keyOutside.absoluteFile.normalize()), source)
+        assertEquals(CredentialsSource.FromFile(real(keyOutside)), source)
     }
 
     @Test
@@ -63,7 +66,38 @@ class CredentialsTest {
         val message = failure(inside.path)
 
         assertTrue("is inside the repository" in message, message)
-        assertTrue("inside the repository" in failure(repoRoot.resolve("sub/../key.json").path))
+        assertTrue("inside the repository" in failure(repoRoot.resolve("androidApp/../androidApp/key.json").path))
+    }
+
+    @Test
+    fun `a key reached through a junction or link into the repository is refused`() {
+        val target = repoRoot.resolve("secrets").apply { mkdirs() }
+        target.resolve("key.json").writeText("{}")
+        val link = temp.resolve("link")
+        val linked =
+            runCatching { Files.createSymbolicLink(link.toPath(), target.toPath()) }.isSuccess ||
+                (
+                    System.getProperty("os.name").startsWith("Windows") &&
+                        ProcessBuilder("cmd", "/c", "mklink", "/J", link.path, target.path).start().waitFor() == 0
+                )
+        Assume.assumeTrue("cannot create a link or junction here", linked && link.resolve("key.json").isFile)
+
+        val message = failure(link.resolve("key.json").path)
+
+        assertTrue("is inside the repository" in message, message)
+    }
+
+    @Test
+    fun `from a worktree, a key in the main checkout is refused too`() {
+        val main = temp.resolve("main").apply { resolve(".git/worktrees/w1").mkdirs() }
+        val worktree = main.resolve(".claude/worktrees/w1").apply { mkdirs() }
+        worktree.resolve(".git").writeText("gitdir: ${main.resolve(".git/worktrees/w1").path}\n")
+        val keyInMain = main.resolve("play.json").apply { writeText("{}") }
+
+        assertEquals(listOf(real(worktree), real(main)), Credentials.checkouts(worktree))
+        val message = assertFailsWith<CredentialsException> { Credentials.resolve(keyInMain.path, emptyMap(), worktree) }.message.orEmpty()
+        assertTrue("is inside the repository (${real(main)})" in message, message)
+        assertEquals(CredentialsSource.FromFile(real(keyOutside)), Credentials.resolve(keyOutside.path, emptyMap(), worktree))
     }
 
     @Test

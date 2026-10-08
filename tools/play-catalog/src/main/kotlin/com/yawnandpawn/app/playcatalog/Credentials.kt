@@ -53,14 +53,40 @@ object Credentials {
         given: File,
         repoRoot: File,
     ): CredentialsSource {
-        val file = given.absoluteFile.normalize()
-        val root = repoRoot.absoluteFile.normalize()
-        if (file.startsWith(root)) {
+        if (!given.isFile) throw CredentialsException("The credentials file ${given.absoluteFile.normalize()} does not exist.")
+        // Real paths resolve junctions, symbolic links and 8.3 short names, so none of them hides a key in a checkout.
+        val file = realFile(given)
+        val checkout = checkouts(repoRoot).firstOrNull { file.startsWith(it) }
+        if (checkout != null) {
             throw CredentialsException(
-                "The credentials file $file is inside the repository. Keep the service-account key outside it and never commit it.",
+                "The credentials file $file is inside the repository ($checkout). Keep the service-account key outside it " +
+                    "and never commit it.",
             )
         }
-        if (!file.isFile) throw CredentialsException("The credentials file $file does not exist.")
         return CredentialsSource.FromFile(file)
     }
+
+    /**
+     * The checkout [repoRoot] and, when it is a git worktree (its `.git` is a file `gitdir: <main>/.git/worktrees/<name>`),
+     * the main checkout that owns it, all as real paths.
+     */
+    fun checkouts(repoRoot: File): List<File> {
+        val root = realFile(repoRoot)
+        val gitFile = root.resolve(".git")
+        val gitDir =
+            gitFile
+                .takeIf { it.isFile }
+                ?.readLines()
+                ?.firstOrNull { it.startsWith(GITDIR_PREFIX) }
+                ?.removePrefix(GITDIR_PREFIX)
+                ?.trim()
+                ?.let { realFile(root.resolve(it)) }
+        val mainCheckout = generateSequence(gitDir) { it.parentFile }.firstOrNull { it.name == ".git" }?.parentFile
+        return listOfNotNull(root, mainCheckout).distinct()
+    }
+
+    private const val GITDIR_PREFIX = "gitdir:"
+
+    /** The path with every link resolved; the canonical path when the file does not exist. */
+    private fun realFile(file: File): File = if (file.exists()) file.toPath().toRealPath().toFile() else file.canonicalFile
 }

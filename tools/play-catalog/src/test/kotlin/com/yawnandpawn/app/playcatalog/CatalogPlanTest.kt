@@ -117,7 +117,87 @@ class CatalogPlanTest {
         val plan = plan(listOf(notLegacy, newRegions))
 
         assertEquals(listOf("purchase option is not a legacy-compatible single-quantity Buy option"), plan.of("snooze_usd_11").reasons)
-        assertEquals(listOf("new-regions price USD 1.00 -> USD 12.00"), plan.of("snooze_usd_12").reasons)
+        assertEquals(listOf("new-regions price USD 1.00 / EUR 12.00 -> USD 12.00 / EUR from Play"), plan.of("snooze_usd_12").reasons)
+    }
+
+    @Test
+    fun `a missing new-regions EUR price is an update`() {
+        val noEur = TestCatalogs.withBuyOption(TestCatalogs.applied(15)) { it.copy(newRegionsEur = null) }
+
+        val update = plan(listOf(noEur)).of("snooze_usd_15")
+
+        assertEquals(PlanKind.UPDATE, update.kind)
+        assertEquals(setOf(PatchField.PURCHASE_OPTIONS), update.patch)
+        assertEquals(
+            Price("EUR", 15),
+            update.desired!!
+                .purchaseOptions
+                .single()
+                .newRegionsEur,
+        )
+    }
+
+    @Test
+    fun `a listing patch keeps the listings in other languages`() {
+        val german = Listing("de-DE", "Schlummern", "Einmal schlummern.")
+        val typo = TestCatalogs.applied(6).copy(listings = listOf(Listing("en-US", "Snoze", "One snooze for your alarm."), german))
+
+        val update = plan(listOf(typo)).of("snooze_usd_06")
+
+        assertEquals(setOf(PatchField.LISTINGS), update.patch)
+        assertEquals(listOf(SnoozeCatalog.listing, german), update.desired!!.listings)
+    }
+
+    @Test
+    fun `a region Play no longer returns is kept as it is and is not an update`() {
+        val withOldRegion =
+            TestCatalogs.withBuyOption(TestCatalogs.applied(16)) {
+                it.copy(
+                    regions =
+                        it.regions + ("XX" to RegionalConfig(Price("XXX", 99), available = false, rawAvailability = "NO_LONGER_AVAILABLE")),
+                )
+            }
+        val wrongPriceToo =
+            TestCatalogs.withBuyOption(withOldRegion) {
+                it.copy(regions = it.regions + ("US" to RegionalConfig(Price.usd(1), available = true)))
+            }
+
+        assertEquals(PlanKind.UNCHANGED, plan(listOf(withOldRegion)).of("snooze_usd_16").kind)
+        val update = plan(listOf(wrongPriceToo)).of("snooze_usd_16")
+        assertEquals(listOf("price USD 1.00 -> USD 16.00"), update.reasons)
+        val regions =
+            update.desired!!
+                .purchaseOptions
+                .single()
+                .regions
+        assertEquals(RegionalConfig(Price("XXX", 99), available = false, rawAvailability = "NO_LONGER_AVAILABLE"), regions["XX"])
+        assertEquals(setOf("FI", "JP", "US", "XX"), regions.keys)
+    }
+
+    @Test
+    fun `option settings the tool does not model are carried into the patch`() {
+        val tax = mapOf("taxAndComplianceSettings" to mapOf("withdrawalRightType" to "WITHDRAWAL_RIGHT_SERVICE"))
+        val current =
+            TestCatalogs.withBuyOption(TestCatalogs.applied(17)) {
+                it.copy(extras = tax, regions = it.regions + ("US" to RegionalConfig(Price.usd(2), available = true)))
+            }
+
+        val update = plan(listOf(current)).of("snooze_usd_17")
+
+        assertEquals(
+            tax,
+            update.desired!!
+                .purchaseOptions
+                .single()
+                .extras,
+        )
+    }
+
+    @Test
+    fun `a lone hand-made default option is flagged, not replaced`() {
+        val handMade = TestCatalogs.withBuyOption(TestCatalogs.applied(18)) { it.copy(id = "default") }
+
+        assertEquals(PlanKind.ATTENTION, plan(listOf(handMade)).of("snooze_usd_18").kind)
     }
 
     @Test

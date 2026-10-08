@@ -19,6 +19,9 @@ class FakePlayCatalogApi(
     var failOn: String? = null
     var failStatus: Int = 500
 
+    /** When set, a patch of `purchaseOptions` leaves every option in this state (Play taking a changed option off sale). */
+    var stateAfterOptionPatch: OptionState? = null
+
     override fun listOneTimeProducts(packageName: String): List<OneTimeProduct> {
         record("list")
         return products.values.sortedBy { it.productId }
@@ -50,7 +53,7 @@ class FakePlayCatalogApi(
                 listings = if (PatchField.LISTINGS in fields) product.listings else base.listings,
                 purchaseOptions =
                     if (PatchField.PURCHASE_OPTIONS in fields) {
-                        product.purchaseOptions.map { it.copy(state = states[it.id] ?: OptionState.DRAFT) }
+                        product.purchaseOptions.map { it.copy(state = stateAfterOptionPatch ?: states[it.id] ?: OptionState.DRAFT) }
                     } else {
                         base.purchaseOptions
                     },

@@ -21,7 +21,7 @@ deferred: []
 **Problem:** Snoozing costs B × N USD, so Play needs 50 consumable one-time products `snooze_usd_01` … `snooze_usd_50` priced 1.00 … 50.00 USD with local prices everywhere Play sells. Typing 50 products by hand is slow and error-prone, and nothing would keep the catalogue in line with the fee ladder afterwards.
 
 **Approach:**
-- **Tool:** `tools/play-catalog` is a JVM command-line tool in its own included build, like `tools/tokens` (Story 1.3), with its unit tests in `qualityGate`. The root task `./gradlew playCatalog -Pmode=dry-run|apply [-Pcredentials=<path>]` runs it in a separate JVM (`JavaExec`), so the Play API client never joins the Gradle build classpath or the app classpath.
+- **Tool:** `tools/play-catalog` is a JVM command-line tool in its own included build, like `tools/tokens` (Story 1.3), with its unit tests in `qualityGate`. The root task `./gradlew playCatalog -PplayCatalogMode=dry-run|apply [-Pcredentials=<path>]` runs it in a separate JVM (`JavaExec`), so the Play API client never joins the Gradle build classpath or the app classpath.
 - **Desired catalogue (in memory):** 50 products, id `snooze_usd_NN`, base price NN.00 USD. Each has:
   - the `en-US` listing "Snooze" / "One snooze for your alarm." (EXPERIENCE.md Key strings);
   - one Buy purchase option `buy`, legacy-compatible (what Play Billing Library 9 shows as the product's one-time offer), multi-quantity off;
@@ -51,11 +51,11 @@ deferred: []
 
 1. **Pending purchases:** the Play Developer API (`v3-rev20260924`) has no pending-transactions field on one-time products or purchase options. Pending purchases for one-time products are switched on in the app with `enablePendingPurchases(PendingPurchasesParams.newBuilder().enableOneTimeProducts().build())`, which PBL 8+ requires. That is Story 4.12's adapter. The catalogue sets nothing for it.
 2. **"Status active":** one-time products have no state in the new API. The state lives on the purchase option, so "active" means the `buy` option is `ACTIVE`.
-3. **Price drift:** a product is "update" when the US price is not NN.00 USD, a region Play now offers is missing or not available, the new-regions USD price is not NN.00, the `buy` option is not legacy-compatible single-quantity, or the `en-US` listing differs. Other regions' local prices are **not** compared to a fresh conversion, because Play's conversion rates move and every later dry run would show 50 updates. A price update rewrites every regional price from a fresh conversion.
-4. **Unexpected purchase options:** a managed product with a purchase option other than `buy` is reported as "attention" and left alone (patching `purchaseOptions` would remove the other option, which counts as a delete).
+3. **Price drift:** a product is "update" when the US price is not NN.00 USD, a region Play now offers is missing or not available, the new-regions USD price is not NN.00 or the EUR price is missing, the `buy` option is not legacy-compatible single-quantity, or the `en-US` listing differs. Other regions' local prices are **not** compared to a fresh conversion, because Play's conversion rates move and every later dry run would show 50 updates. A price update rewrites every offered region from a fresh conversion; regions Play no longer returns, and option fields the tool does not model, are kept (review items 8 and 9).
+4. **Unexpected purchase options:** a managed product with a purchase option other than `buy` is reported as "attention" and left alone, and the run exits 3 (patching `purchaseOptions` would remove the other option, which counts as a delete).
 5. **Listing language:** `en-US`, assumed to be the app's default store-listing language from Story 1.4.
 6. **Purchase option id:** `buy`.
-7. **Credentials:** `-Pcredentials` wins over the environment variable when both are set. A `-Pcredentials` path inside the repository is refused.
+7. **Credentials:** `-Pcredentials` wins over the environment variable when both are set. A `-Pcredentials` path inside the repository is refused, compared as real paths, and from a worktree the main checkout counts too. The mode is `-PplayCatalogMode`, from the command line only, default dry-run.
 8. **Wiring:** the tool is a top-level included build (`includeBuild("tools/play-catalog")`) run through `JavaExec`, not a Gradle plugin like `tools/tokens`. A plugin would put the Google API client (Guava, HTTP client, gRPC context) on the build-script classpath next to AGP.
 9. **Allowlist:** the tool's dependencies go in a new `config/tool-dependency-allowlist.txt` rather than `config/dependency-allowlist.txt`. An entry in the app allowlist would let the same library into the app without review.
 10. **Latency:** writes use Play's default (latency-sensitive) propagation, so the products reach Billing as soon as possible.
@@ -75,7 +75,7 @@ deferred: []
 | Extra purchase option | `buy` + `rent` | attention, untouched |
 | API error | patch #3 fails with 403 | stops, message + "Manage store presence" hint, exit 1; no retry, no later write |
 | Credentials | none / env JSON / `-Pcredentials` file / file in repo / missing file / env not JSON | error exit 2 / env / file / error / error / error |
-| Mode | missing or unknown `-Pmode` | usage error, exit 2 |
+| Mode | no `-PplayCatalogMode` / unknown value / old `-Pmode` | dry run / usage error, exit 2 / Gradle error |
 
 </intent-contract>
 
@@ -111,6 +111,24 @@ Status: implemented in fast mode (one agent; owner-approved unattended Epic 4 ru
 - `./gradlew qualityGate :androidApp:assembleDebugAndroidTest --no-daemon` ends BUILD SUCCESSFUL (10 min).
 - 48 tool tests on `FakePlayCatalogApi` and a scripted `MockHttpTransport`, with no network.
 - `./gradlew playCatalog` without credentials stops with exit 2 and the "No Play credentials" message. No real Play call was made.
+
+## Review (2 reviewers, fast mode)
+
+Two reviewers read `171ede6`: one on verification gaps, one on edge cases. Nothing HIGH was found in the code itself: there is no delete path, and only the 50 managed ids are written. One gap in the tests was rated HIGH and is fixed below. Every item is fixed in `fix(4.1): review fixes`, each with a test:
+
+1. **Other-language listings** were kept only through `desiredProduct(existing)`. They are now pinned by tests in the planner and the runner: a listing patch keeps `de-DE` in Play.
+2. **Round trip:** `PlayRoundTripTest` runs the runner on the real adapter and JSON client against an in-memory Play that answers like Play. Prices come back as strings, `state` and `packageName` are added, and `multiQuantityEnabled: false` and `nanos: 0` are left out. Apply, then a second run, gives "0 changes" with no PATCH or `batchUpdateStates`. The only HTTP methods used are GET, POST and PATCH; there is no delete or deactivate, and `spike_s1_test` is never touched.
+3. **New-regions EUR price:** a missing EUR price is now an update. The patch body is asserted to carry `newRegionsConfig` with the USD and EUR prices and `AVAILABLE`.
+4. **No retries in the production client:** `PlayCatalogMain.publisher` removes the credentials adapter's re-send after a 401, the IO retry handler, and the retry count. A test with real service-account credentials (a generated key, with a scripted token endpoint) shows that a 503 and a 401 each send exactly one PATCH.
+5. **Failure, then a re-run:** after a failed activation of 05, the next apply only activates 05 and creates 06–50. A third run reports "0 changes".
+6. **Malformed answers:** a missing required field (regions version, product id, price, currency) or an activation answer without the product now becomes a `PlayApiException` naming the call ("unexpected answer from Play"). The run stops with exit 1 and makes no later write.
+7. **Attention in the runner:** a `buy` + `rent` product and a lone hand-made `default` option are never written.
+8. **Unmodelled option settings:** fields of the `buy` option the tool does not model are kept in `PurchaseOption.extras` and written back unchanged, for example `taxAndComplianceSettings` (the EEA withdrawal right) and `offerTags`.
+9. **Regions Play stopped returning** are kept with their current price and availability (`rawAvailability`). Only the regions Play offers today count as missing.
+10. **Activation after a patch:** apply trusts Play's answer to the patch. Whenever the `buy` option is not `ACTIVE` afterwards, it activates it, even if the plan did not expect that.
+11. **Attention exit:** with any product needing attention, "Play matches the catalogue" is not printed, and the run ends with an `ATTENTION:` line and exit code 3.
+12. **Key location:** the key check compares real paths, which resolve junctions, links and 8.3 names. From a worktree it also refuses the main checkout, found through the `gitdir:` line. Tests cover a real junction and a worktree layout.
+13. **Mode property (below MEDIUM):** `-Pmode` became `-PplayCatalogMode`. It is read only from the command line (`gradle.startParameter`) and defaults to dry-run. An `ORG_GRADLE_PROJECT_` variable or `gradle.properties` value is ignored, and `-Pmode` is refused. Both were checked by hand. The README, the owner steps and the run template were updated.
 
 **Notes:**
 - **Patch path:** the client's patch path is `.../onetimeproducts/{productId}` (lower case), unlike list's `oneTimeProducts`. It comes from Google's discovery document; a test pins it.

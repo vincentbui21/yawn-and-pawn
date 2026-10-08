@@ -23,6 +23,7 @@ import java.io.File
 import kotlin.test.assertEquals
 import kotlin.test.assertNotNull
 import kotlin.test.assertNull
+import kotlin.test.assertSame
 import kotlin.test.assertTrue
 
 /** Story 1.14: the ringing notification, its channel, its strings and its colour. */
@@ -147,6 +148,52 @@ class WakeNotifierTest {
         // A slot fire's startForeground posts the full one again, as before.
         assertNotNull(notifier.build(sevenAm).fullScreenIntent)
         assertEquals(WakeNotifier.CHANNEL_ID, notifier.build(sevenAm).channelId)
+    }
+
+    @Test
+    fun `a second wake screen started before the first stopped keeps it quiet (PR 41 review)`() {
+        notifier.show(sevenAm)
+        notifier.wakeScreenShown(visible = true, ringing = true) // A
+        notifier.wakeScreenShown(visible = true, ringing = true) // B starts before A stops
+
+        notifier.wakeScreenShown(visible = false, ringing = true) // A stops
+
+        assertTrue(notifier.screenShown)
+        assertEquals(WakeNotifier.QUIET_CHANNEL_ID, posted().channelId)
+        notifier.wakeScreenShown(visible = false, ringing = true) // B stops: now it is left
+        assertEquals(WakeNotifier.CHANNEL_ID, posted().channelId)
+    }
+
+    @Test
+    fun `a stop for a configuration change is not leaving, and the recreated screen keeps it quiet (PR 41 review)`() {
+        notifier.show(sevenAm)
+        notifier.wakeScreenShown(visible = true, ringing = true)
+        val quiet = posted()
+
+        notifier.wakeScreenShown(visible = false, ringing = true, changingConfigurations = true)
+        assertTrue(notifier.screenShown, "still visible until the new instance starts")
+        notifier.show(sevenAm) // A step between the stop and the start.
+        notifier.wakeScreenShown(visible = true, ringing = true)
+
+        assertSame(quiet, posted(), "nothing posted")
+        notifier.wakeScreenShown(visible = false, ringing = true)
+        assertEquals(WakeNotifier.CHANNEL_ID, posted().channelId)
+    }
+
+    @Test
+    fun `after leaving, the next ring step posts the full-screen intent again (PR 41 review)`() {
+        notifier.show(sevenAm)
+        notifier.wakeScreenShown(visible = true, ringing = true)
+        notifier.wakeScreenShown(visible = false, ringing = true)
+        assertNull(posted().fullScreenIntent)
+
+        notifier.show(sevenAm)
+
+        assertNotNull(posted().fullScreenIntent)
+        assertEquals(WakeNotifier.CHANNEL_ID, posted().channelId)
+        val full = posted()
+        notifier.show(sevenAm)
+        assertSame(full, posted(), "then once per alarm time again")
     }
 
     @Test

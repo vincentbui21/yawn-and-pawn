@@ -10,9 +10,11 @@ import com.yawnandpawn.app.core.checks.CheckType
 import com.yawnandpawn.app.core.checks.Difficulty
 import com.yawnandpawn.app.core.checks.qr.CodeFormat
 import com.yawnandpawn.app.core.checks.qr.RegisteredCode
+import com.yawnandpawn.app.core.time.Deadline
 import kotlinx.datetime.LocalTime
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.time.Duration.Companion.seconds
 import kotlin.time.Instant
 
 class ConfigResolverTest {
@@ -241,6 +243,33 @@ class ConfigResolverDeviceCheckTest {
         assertEquals(10, ConfigResolver.resolveTest(draft(NO_CHECKS).copy(volumePercent = 5), GlobalSettings(), SCHEDULED_AT).volumePercent)
         val loud = alarm.copy(volumePercent = 35)
         assertEquals(35, ConfigResolver.resolve(loud, NO_CHECKS, GlobalSettings(), false, SCHEDULED_AT).volumePercent)
+    }
+}
+
+/** Review fix for PR #41: a session stored with 0% before the 10% minimum never re-rings silently. */
+class RingVolumeFloorTest {
+    private val silent = ringSession(testConfig().copy(volumePercent = 0))
+
+    @Test
+    fun `a stored 0 percent session plays and comes back from quiet time at 10 percent`() {
+        val sound = entryEffects(SessionState.Ringing(silent)).filterIsInstance<EntryEffect.SoundAt>().single()
+        assertEquals(Alarm.MIN_VOLUME_PERCENT, sound.volumePercent)
+        assertEquals(10, entryEffects(SessionState.Loud(silent)).filterIsInstance<EntryEffect.SoundAt>().single().volumePercent)
+
+        val grace = SessionState.Grace(silent.copy(graceEnd = Deadline.after(T0, 20.seconds)))
+        val unmute =
+            SessionReducer(StubAvailability(SnoozeAvailability.Available(OFFER)), PluginCheckValidator, CameraFallbackPolicy())
+                .reduce(grace, SessionEvent.GraceElapsed, at(21.seconds))
+                .effects
+                .filterIsInstance<SessionEffect.UnmuteToVolume>()
+                .single()
+        assertEquals(10, unmute.volumePercent)
+    }
+
+    @Test
+    fun `a session at a normal volume keeps it`() {
+        val loud = ringSession(testConfig().copy(volumePercent = 65))
+        assertEquals(65, entryEffects(SessionState.Ringing(loud)).filterIsInstance<EntryEffect.SoundAt>().single().volumePercent)
     }
 }
 

@@ -155,7 +155,12 @@ class WakeActivity : ComponentActivity() {
 
     /** Left (Home, another app, the screen off): while the alarm rings, the notification heads up again as the way back. */
     override fun onStop() {
-        runtime.wakeScreenShown(visible = false, ringing = forwardsToWakeScreen(engine.state.value, runtime.emergency.value))
+        // A recreate (rotation, dark mode, font scale) is not leaving: the new instance starts next (PR #41 review).
+        runtime.wakeScreenShown(
+            visible = false,
+            ringing = forwardsToWakeScreen(engine.state.value, runtime.emergency.value),
+            changingConfigurations = isChangingConfigurations,
+        )
         super.onStop()
     }
 

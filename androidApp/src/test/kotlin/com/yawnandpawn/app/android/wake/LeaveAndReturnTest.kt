@@ -8,6 +8,7 @@ import androidx.compose.ui.test.junit4.createEmptyComposeRule
 import androidx.compose.ui.test.onNodeWithText
 import com.yawnandpawn.app.MainActivity
 import com.yawnandpawn.app.StopAppRule
+import com.yawnandpawn.app.android.ApplicationScope
 import com.yawnandpawn.app.buildActivity
 import com.yawnandpawn.app.core.alarm.AlarmFired
 import com.yawnandpawn.app.core.alarm.AlarmRepository
@@ -16,8 +17,11 @@ import com.yawnandpawn.app.core.session.ActiveSessionStore
 import com.yawnandpawn.app.core.session.SessionEvent
 import com.yawnandpawn.app.core.session.SessionState
 import com.yawnandpawn.app.core.time.Deadline
+import com.yawnandpawn.app.testing.FakeClock
+import com.yawnandpawn.app.testing.FakeMonotonicClock
 import com.yawnandpawn.app.testing.aSession
 import com.yawnandpawn.app.testing.anAlarm
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
 import org.junit.Rule
 import org.junit.Test
@@ -35,6 +39,7 @@ import kotlin.test.assertNull
 import kotlin.test.assertSame
 import kotlin.test.assertTrue
 import kotlin.time.Duration.Companion.minutes
+import kotlin.time.Duration.Companion.seconds
 import kotlin.time.Instant
 
 /**
@@ -123,6 +128,97 @@ class LeaveAndReturnTest {
         assertTrue(app.lastMediaPlayer().isReallyPlaying)
         screen.restart().resume()
         assertEquals(WakeNotifier.QUIET_CHANNEL_ID, assertNotNull(posted(app)).channelId)
+        service.destroy()
+    }
+
+    @Test
+    fun `a recreate of the visible wake screen while ringing posts nothing, so no heads-up comes back (PR 41 review)`() {
+        val app = WakeApp()
+        ring(app)
+        val screen = buildActivity(WakeActivity::class.java).setup()
+        val quiet = assertNotNull(posted(app))
+        assertEquals(WakeNotifier.QUIET_CHANNEL_ID, quiet.channelId)
+
+        screen.recreate()
+        app.awaitUntil("the main looper settles") { true }
+
+        assertSame(quiet, posted(app), "not posted again: no Alarms-channel post in between, nothing for the rate limit")
+        // Still counted as visible once: leaving it now posts the way back.
+        screen.pause().stop()
+        assertEquals(WakeNotifier.CHANNEL_ID, assertNotNull(posted(app)).channelId)
+    }
+
+    @Test
+    fun `left during quiet time, the grace end posts the full-screen intent again (PR 41 review)`() {
+        val clock = FakeClock(Instant.parse("2027-03-08T06:00:10Z"))
+        val monotonic = FakeMonotonicClock(elapsedMillis = 5_000_000)
+        val app = WakeApp(clock = clock, monotonic = monotonic)
+        val service = ring(app)
+        val screen = buildActivity(WakeActivity::class.java).setup()
+        app.dispatch(SessionEvent.UserInteracted, SessionEvent.ImUpTapped)
+        assertIs<SessionState.Grace>(app.engine.state.value)
+
+        // The power key: the screen stops; the way back heads up without bringing the screen straight back.
+        screen.pause().stop()
+        val away = assertNotNull(posted(app))
+        assertEquals(WakeNotifier.CHANNEL_ID, away.channelId)
+        assertNull(away.fullScreenIntent)
+
+        clock.advanceBy(21.seconds)
+        monotonic.advanceBy(21.seconds)
+        val tick = app.koin.get<ApplicationScope>().launch { app.engine.tick() }
+        app.awaitUntil("the grace window ends") { tick.isCompleted && app.engine.state.value is SessionState.Loud }
+
+        val loud = assertNotNull(posted(app))
+        assertEquals(WakeNotifier.CHANNEL_ID, loud.channelId)
+        assertNotNull(loud.fullScreenIntent, "the loud ring can turn the screen on again")
+        service.destroy()
+    }
+
+    @Test
+    fun `left during an emergency ring, the way back heads up and its backup slot posts the full-screen intent (PR 41 review)`() {
+        val app = WakeApp()
+        app.runtime.startEmergency(fired.scheduledAt, volumePercent = 80, cause = "test")
+        val screen = buildActivity(WakeActivity::class.java).setup()
+        assertEquals(WakeNotifier.QUIET_CHANNEL_ID, assertNotNull(posted(app)).channelId)
+
+        screen.pause().stop()
+        val away = assertNotNull(posted(app))
+        assertEquals(WakeNotifier.CHANNEL_ID, away.channelId, "the way back heads up")
+        assertNull(away.fullScreenIntent)
+
+        val service = app.startService(WakeService.intent(app.app, WakeService.ACTION_SLOT))
+        app.awaitUntil("the slot start is handled") { true }
+        assertNotNull(assertNotNull(posted(app)).fullScreenIntent)
+        service.destroy()
+    }
+
+    @Test
+    fun `left during a ring, an emergency ring that starts posts the full-screen intent again (PR 41 review)`() {
+        val app = WakeApp()
+        val service = ring(app)
+        val screen = buildActivity(WakeActivity::class.java).setup()
+        screen.pause().stop()
+        assertNull(assertNotNull(posted(app)).fullScreenIntent)
+
+        app.runtime.startEmergency(fired.scheduledAt + 1.minutes, volumePercent = 80, cause = "test")
+
+        assertNotNull(assertNotNull(posted(app)).fullScreenIntent)
+        app.runtime.stopEmergency()
+        service.destroy()
+    }
+
+    @Test
+    fun `a wake screen left while Idle does not stop the next ring's full notification (PR 41 review)`() {
+        val app = WakeApp()
+        val screen = buildActivity(WakeActivity::class.java).setup()
+        screen.pause().stop()
+
+        val service = ring(app)
+
+        val full = assertNotNull(posted(app))
+        assertEquals(WakeNotifier.CHANNEL_ID, full.channelId)
+        assertNotNull(full.fullScreenIntent)
         service.destroy()
     }
 

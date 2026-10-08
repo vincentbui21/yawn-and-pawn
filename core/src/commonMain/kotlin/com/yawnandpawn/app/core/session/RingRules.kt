@@ -1,5 +1,6 @@
 package com.yawnandpawn.app.core.session
 
+import com.yawnandpawn.app.core.alarm.Alarm
 import com.yawnandpawn.app.core.checks.CheckPlan
 import com.yawnandpawn.app.core.session.SessionState.Grace
 import com.yawnandpawn.app.core.session.SessionState.Loud
@@ -116,7 +117,10 @@ internal class RingRules(
                 if (state is Grace && !session.paused && session.graceEnd?.isDue(now) == true) {
                     Transition(
                         Loud(session.copy(graceEnd = null)),
-                        listOf(SessionEffect.UnmuteToVolume(session.config.volumePercent), SessionEffect.StrongHaptic),
+                        listOf(
+                            SessionEffect.UnmuteToVolume(Alarm.ringableVolume(session.config.volumePercent)),
+                            SessionEffect.StrongHaptic,
+                        ),
                     )
                 } else {
                     null

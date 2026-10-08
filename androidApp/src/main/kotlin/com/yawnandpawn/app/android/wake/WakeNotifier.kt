@@ -43,13 +43,22 @@ class WakeNotifier(
     var shownFor: Instant? = null
         private set
 
-    /** The wake screen is visible (started): every post is the quiet on-screen one. */
+    /** A wake screen is visible (one or more started instances): every post is the quiet on-screen one. */
     @Volatile
     var screenShown: Boolean = false
         private set
 
-    /** The posted notification is the quiet on-screen one (meaningful while [shownFor] is set). */
-    private var postedOnScreen = false
+    /**
+     * Started wake screens (PR #41 review): two `singleTask` instances can overlap, with B started before A stopped, so
+     * the screen counts as visible while any is started.
+     */
+    private var startedScreens = 0
+
+    /** Wake screens stopped for a configuration change (rotation, dark mode, font scale): their new instance starts next. */
+    private var recreatingScreens = 0
+
+    /** Which version is posted (meaningful while [shownFor] is set). */
+    private var posted = Posted.Full
 
     /**
      * The notification for a ring of the alarm scheduled at [alarmAt]. Creates the channel first. Without [fullScreen]
@@ -142,45 +151,57 @@ class WakeNotifier(
     }
 
     /**
-     * Posts (or updates) the notification for [alarmAt]: the on-screen one while the wake screen is visible, else the
-     * ringing one. Nothing when that one already shows that time, so a step never posts (and alerts) twice; the one
-     * posted on leaving the screen ([wakeScreenShown]) counts as the ringing one. After a swipe ([forget]) it is posted
-     * again, so the next `WakeUiShown` (each session step, the heartbeat included) restores it (Story 2.5).
+     * Posts (or updates) the notification for [alarmAt]: the quiet on-screen one while the wake screen is visible, else
+     * the full ringing one with its full-screen intent. Nothing when that one already shows that time, so a step never
+     * posts (and alerts) twice. The heads-up posted on leaving the screen has no full-screen intent, so the next ring
+     * step (the grace end, the heartbeat, an emergency ring) posts the full one, and a ring that goes loud turns the
+     * screen on again (PR #41 review). After a swipe ([forget]) it is posted again, so the next `WakeUiShown` (each
+     * session step, the heartbeat included) restores it (Story 2.5).
      */
     fun show(alarmAt: Instant) {
         synchronized(lock) {
-            if (shownFor == alarmAt && postedOnScreen == screenShown) return
-            val onScreen = screenShown
-            manager.notify(NOTIFICATION_ID, if (onScreen) buildOnScreen(alarmAt) else buildRinging(alarmAt))
+            val wanted = if (screenShown) Posted.OnScreen else Posted.Full
+            if (shownFor == alarmAt && posted == wanted) return
+            manager.notify(NOTIFICATION_ID, if (wanted == Posted.OnScreen) buildOnScreen(alarmAt) else buildRinging(alarmAt))
             shownFor = alarmAt
-            postedOnScreen = onScreen
+            posted = wanted
         }
     }
 
     /**
-     * The wake screen became visible ([visible], `onStart`) or was left (`onStop`: Home, another app, the screen off).
-     * Shown: a posted ringing notification becomes the on-screen one, which also takes down a heads-up already over the
-     * screen. Left while the alarm [ringing] (Ring or an emergency ring): the ringing one again, so it heads up as the
-     * way back (Story 2.5), but without its full-screen intent, so leaving with the power key does not bring the screen
-     * straight back; the next slot fire's `startForeground` posts the full one, as before. Left in a snooze, the quiet
-     * one stays and the snooze end's `WakeUiShown` posts the full one.
+     * A wake screen started ([visible], `onStart`) or stopped (`onStop`: Home, another app, the screen off). The screen
+     * counts as visible while any instance is started; a stop for a [changingConfigurations] recreate keeps it visible
+     * until the new instance starts, so a rotation posts nothing (PR #41 review).
+     *
+     * Visible: a posted ringing notification becomes the on-screen one, which also takes down a heads-up already over
+     * the screen. Left while the alarm [ringing] (Ring or an emergency ring): the ringing one again, so it heads up as the
+     * way back (Story 2.5), without its full-screen intent, so leaving with the power key does not bring the screen
+     * straight back; the next ring step posts the full one ([show]). Left in a snooze, the quiet one stays and the snooze
+     * end's `WakeUiShown` posts the full one.
      */
     fun wakeScreenShown(
         visible: Boolean,
         ringing: Boolean,
+        changingConfigurations: Boolean = false,
     ) {
         synchronized(lock) {
-            screenShown = visible
+            when {
+                visible && recreatingScreens > 0 -> recreatingScreens--
+                visible -> startedScreens++
+                changingConfigurations -> recreatingScreens++
+                else -> startedScreens = (startedScreens - 1).coerceAtLeast(0)
+            }
+            screenShown = startedScreens > 0
             val alarmAt = shownFor ?: return
             when {
-                visible && !postedOnScreen -> {
+                screenShown && posted != Posted.OnScreen -> {
                     manager.notify(NOTIFICATION_ID, buildOnScreen(alarmAt))
-                    postedOnScreen = true
+                    posted = Posted.OnScreen
                 }
 
-                !visible && postedOnScreen && ringing -> {
+                !screenShown && posted == Posted.OnScreen && ringing -> {
                     manager.notify(NOTIFICATION_ID, buildRinging(alarmAt, fullScreen = false))
-                    postedOnScreen = false
+                    posted = Posted.Away
                 }
             }
         }
@@ -190,7 +211,7 @@ class WakeNotifier(
     fun shownByService(alarmAt: Instant) {
         synchronized(lock) {
             shownFor = alarmAt
-            postedOnScreen = screenShown
+            posted = if (screenShown) Posted.OnScreen else Posted.Full
         }
     }
 
@@ -224,6 +245,9 @@ class WakeNotifier(
             }
         manager.createNotificationChannel(channel)
     }
+
+    /** The posted version: [Full] (Alarms channel with the full-screen intent), [Away] (without it), [OnScreen] (quiet). */
+    private enum class Posted { Full, Away, OnScreen }
 
     companion object {
         const val CHANNEL_ID = "alarms"

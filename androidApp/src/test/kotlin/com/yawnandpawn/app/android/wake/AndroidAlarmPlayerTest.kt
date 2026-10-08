@@ -81,6 +81,22 @@ class AndroidAlarmPlayerTest {
 
     private fun alarmVolume() = audio.getStreamVolume(AudioManager.STREAM_ALARM)
 
+    @Test
+    fun `a session stored at 0 percent before the minimum rings and unmutes at 10 percent, never silent (PR 41 review)`() {
+        // 100 steps, so 10% (step 10) differs from the stream's lowest audible step (1).
+        shadowOf(audio).setStreamMaxVolume(100)
+        play(volumePercent = 10)
+        val tenPercent = alarmVolume()
+        player.stop(restoreVolume = true)
+
+        play(volumePercent = 0)
+        assertEquals(tenPercent, alarmVolume(), "played at the 10% floor")
+        player.mute()
+        player.unmuteTo(0)
+        assertEquals(tenPercent, alarmVolume(), "back from quiet time at the 10% floor")
+        player.stop(restoreVolume = true)
+    }
+
     private fun play(
         ref: String = Alarm.DEFAULT_SOUND_REF,
         volumePercent: Int = 80,

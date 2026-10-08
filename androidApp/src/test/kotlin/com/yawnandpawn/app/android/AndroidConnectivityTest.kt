@@ -1,10 +1,14 @@
 package com.yawnandpawn.app.android
 
+import android.Manifest
 import android.content.Context
+import android.content.ContextWrapper
+import android.content.pm.PackageManager
 import android.net.ConnectivityManager
 import android.net.NetworkCapabilities
 import androidx.test.core.app.ApplicationProvider
 import com.yawnandpawn.app.StopAppRule
+import com.yawnandpawn.app.core.log.LogEvent
 import com.yawnandpawn.app.testing.FakeLogger
 import kotlinx.coroutines.flow.toList
 import kotlinx.coroutines.launch
@@ -30,7 +34,8 @@ class AndroidConnectivityTest {
 
     private val context: Context = ApplicationProvider.getApplicationContext()
     private val manager = context.getSystemService(ConnectivityManager::class.java)
-    private val connectivity = AndroidConnectivity(context, FakeLogger())
+    private val logger = FakeLogger()
+    private val connectivity = AndroidConnectivity(context, logger)
 
     private fun capabilities(vararg capability: Int): NetworkCapabilities =
         ShadowNetworkCapabilities.newInstance().also { caps -> capability.forEach { shadowOf(caps).addCapability(it) } }
@@ -71,4 +76,39 @@ class AndroidConnectivityTest {
 
             assertEquals(listOf(false), seen)
         }
+
+    @Test
+    fun `no default network reads as offline`() =
+        runTest(UnconfinedTestDispatcher()) {
+            shadowOf(manager).setActiveNetworkInfo(null)
+            val seen = mutableListOf<Boolean>()
+            backgroundScope.launch { connectivity.observeOnline().toList(seen) }
+
+            assertEquals(listOf(false), seen)
+            assertEquals(emptyList(), logger.events)
+        }
+
+    @Test
+    fun `a failing system service reads as online and is logged, so Play decides`() =
+        runTest(UnconfinedTestDispatcher()) {
+            // No ConnectivityManager at all: both the read and the registration fail.
+            val broken =
+                object : ContextWrapper(context) {
+                    override fun getSystemService(name: String): Any? =
+                        if (name == Context.CONNECTIVITY_SERVICE) null else super.getSystemService(name)
+                }
+            val seen = mutableListOf<Boolean>()
+            backgroundScope.launch { AndroidConnectivity(broken, logger).observeOnline().toList(seen) }
+
+            assertEquals(listOf(true), seen)
+            assertTrue(logger.events.isNotEmpty())
+            assertTrue(logger.events.all { it is LogEvent.OperationFailed && it.operation == "read connectivity" }, "${logger.events}")
+        }
+
+    @Test
+    fun `the app asks for the network state permission`() {
+        val info = context.packageManager.getPackageInfo(context.packageName, PackageManager.GET_PERMISSIONS)
+
+        assertTrue(Manifest.permission.ACCESS_NETWORK_STATE in info.requestedPermissions.orEmpty())
+    }
 }

@@ -14,7 +14,11 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.onCompletion
 import kotlinx.coroutines.flow.onEach
+import kotlinx.coroutines.flow.onStart
+import kotlinx.coroutines.flow.update
+import kotlinx.coroutines.flow.updateAndGet
 import kotlin.time.Instant
 
 /**
@@ -100,9 +104,10 @@ private fun onSale(
  *
  * [observe] combines them and emits a new env on every change, so the wake screen re-renders the snooze control in
  * place. [current] is the latest env [observe] produced (the time and lock state read again), so the reducer accepts a
- * tap on exactly the button the screen shows. Nothing is collected eagerly: until a collector has seen every input once,
- * [current] is online with no prices, which is at best "prices not loaded yet", never Available and never a false
- * "offline".
+ * tap on exactly the button the screen shows. Nothing is collected eagerly. While nobody collects (before the first
+ * collector has seen every input once, and again once the last collector stops: review fix, so the next ring never
+ * starts from the previous ring's connection or prices), [current] is the safe env: online with no prices, which is at
+ * best "prices not loaded yet", never Available and never a false "offline".
  */
 class SnoozeConditions(
     private val connectivity: Connectivity,
@@ -111,7 +116,8 @@ class SnoozeConditions(
     private val clock: Clock,
     private val stranded: Flow<Set<String>> = flowOf(emptySet()),
 ) {
-    private val latest = MutableStateFlow(Inputs(online = true, prices = PriceCatalogSnapshot.EMPTY, stranded = emptySet()))
+    private val latest = MutableStateFlow(SAFE)
+    private val collectors = MutableStateFlow(0)
 
     /** The latest env: the last inputs [observe] saw, with the time and the lock state read now. */
     fun current(): SnoozeEnv = latest.value.let { SnoozeEnv(it.online, it.prices, clock.now(), userLock.isUserUnlocked(), it.stranded) }
@@ -122,12 +128,21 @@ class SnoozeConditions(
             Inputs(online, prices, stranded)
         }.onEach { latest.value = it }
             .map { current() }
+            .onStart { collectors.update { it + 1 } }
+            .onCompletion {
+                // The last collector gone: forget the inputs it saw (the wake screen closed; the next ring starts safe).
+                if (collectors.updateAndGet { it - 1 } == 0) latest.value = SAFE
+            }
 
     private data class Inputs(
         val online: Boolean,
         val prices: PriceCatalogSnapshot,
         val stranded: Set<String>,
     )
+
+    private companion object {
+        val SAFE = Inputs(online = true, prices = PriceCatalogSnapshot.EMPTY, stranded = emptySet())
+    }
 }
 
 /**
@@ -135,7 +150,8 @@ class SnoozeConditions(
  * [snoozeAvailability] over the latest env of [conditions], with the session's frozen fee on [ladder].
  */
 class LiveSnoozeAvailability(
-    private val conditions: SnoozeConditions,
+    /** The env source; the wake screen collects the same instance (one Koin single). */
+    val conditions: SnoozeConditions,
     private val ladder: FeeLadder,
     private val logger: Logger,
 ) : SnoozeAvailabilityPolicy {

@@ -156,6 +156,27 @@ class SessionJsonTest {
     }
 
     @Test
+    fun `a partly broken or missing paid list never loses the session (review fix)`() {
+        val state = SessionState.Snoozed(full.copy(paid = listOf(Money.of(2, "USD"))))
+        val encoded = SessionJson.encode(state)
+        val stored = """"paid":[{"micros":2000000,"currency":"USD"}]"""
+        assertTrue(stored in encoded, encoded)
+        val broken =
+            listOf(
+                """"paid":[{"micros":"x","currency":"USD"},{"micros":2000000,"currency":"USD"}]""" to listOf(Money.of(2, "USD")),
+                """"paid":[{"currency":"USD"},{"micros":2000000},{"micros":2000000,"currency":"USD"}]""" to listOf(Money.of(2, "USD")),
+                """"paid":[{"micros":1.5,"currency":"USD"},7,"USD",null,{"micros":2000000,"currency":5}]""" to emptyList(),
+                """"paid":null""" to emptyList(),
+                """"paid":"USD 2"""" to emptyList(),
+                """"paid":{"micros":2000000,"currency":"USD"}""" to emptyList(),
+            )
+        broken.forEach { (paid, expected) ->
+            val text = encoded.replace(stored, paid)
+            assertEquals(StoredSession.Found(SessionState.Snoozed(full.copy(paid = expected))), SessionJson.decode(text), paid)
+        }
+    }
+
+    @Test
     fun `a pending test config stored by version 1 decodes with its steps as placeholder entries`() {
         assertEquals(testConfig(checkPlan = TWO_STEPS), SessionJson.decodeConfig(CONFIG_V1))
         val config = testConfig(checkPlan = CheckPlan(CheckMode.Random, listOf(CheckEntry(CheckType.Math, Difficulty.Easy, count = 10))))

@@ -41,16 +41,18 @@ class AndroidConnectivity(
                         trySend(false)
                     }
                 }
+            // The current value first, read before registering: the system then calls back with the default network at
+            // once, so a callback can never be overtaken by an older read (review fix).
+            trySend(manager.isOnlineNow())
             val registered =
                 runCatching { manager.registerDefaultNetworkCallback(callback) }
                     .onFailure { logger.log(LogEvent.OperationFailed(OPERATION, it::class.simpleName.orEmpty())) }
                     .isSuccess
-            trySend(if (registered) manager.isOnlineNow() else true)
             awaitClose { if (registered) runCatching { manager.unregisterNetworkCallback(callback) } }
         }.distinctUntilChanged()
 
-    private fun ConnectivityManager.isOnlineNow(): Boolean =
-        runCatching { activeNetwork?.let(::getNetworkCapabilities)?.isOnline() == true }
+    private fun ConnectivityManager?.isOnlineNow(): Boolean =
+        runCatching { checkNotNull(this).activeNetwork?.let(::getNetworkCapabilities)?.isOnline() == true }
             .onFailure { logger.log(LogEvent.OperationFailed(OPERATION, it::class.simpleName.orEmpty())) }
             .getOrDefault(true)
 

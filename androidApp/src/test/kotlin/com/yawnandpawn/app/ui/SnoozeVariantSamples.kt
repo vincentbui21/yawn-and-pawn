@@ -33,13 +33,13 @@ enum class SnoozeVariant(
     val label: String,
     val talkBack: String?,
 ) {
-    Available("Snooze · $1.00", null),
+    Available("Snooze · US$1.00", null),
     TestMode("Test · no charge", "Snooze unavailable, Test · no charge"),
     BeforeFirstUnlock("Unlock your phone to snooze", "Snooze unavailable, Unlock your phone to snooze"),
     MaxSnoozes("Snooze unavailable: max snoozes reached", "Snooze unavailable, max snoozes reached"),
     PriceCap("Snooze unavailable: price cap reached", "Snooze unavailable, price cap reached"),
     PaymentPending("Snooze unavailable: payment pending", "Snooze unavailable, payment pending"),
-    Refunding("An earlier $1.00 payment is being refunded", "Snooze unavailable, An earlier $1.00 payment is being refunded"),
+    Refunding("An earlier US$1.00 payment is being refunded", "Snooze unavailable, An earlier US$1.00 payment is being refunded"),
     Offline("Snooze unavailable: offline", "Snooze unavailable, offline"),
     PricesNotLoaded("Prices not loaded yet", "Snooze unavailable, prices not loaded yet"),
     ;
@@ -54,11 +54,14 @@ object SnoozeVariantSamples {
     private val start = TimeSnapshot(wallMillis = at.toEpochMilliseconds(), elapsedMillis = 1_000_000, bootCount = 1)
     private val firstProduct = SnoozeProducts.idOf(1)
 
-    /** Play's prices as a US phone shows them ("$N.00"), fetched an hour before the ring. */
+    /**
+     * Play's prices as Play formats them, "US$N.00", fetched an hour before the ring: unlike the app's own formatting of
+     * USD on an en-US phone ("$N.00"), so the screenshots show that the button uses Play's string (review fix).
+     */
     private val playPrices =
         PriceCatalogSnapshot(
             (1..SnoozeProducts.all.size).associate { tier ->
-                SnoozeProducts.idOf(tier) to PriceEntry(SnoozeProducts.idOf(tier), "$$tier.00", Money.of(tier, "USD"), at - 1.hours)
+                SnoozeProducts.idOf(tier) to PriceEntry(SnoozeProducts.idOf(tier), "US$$tier.00", Money.of(tier, "USD"), at - 1.hours)
             },
         )
 

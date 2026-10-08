@@ -146,3 +146,19 @@ Status: implemented in fast mode (Epic 4 Lane 1), waiting for review. Branch `st
 - `SnoozeConditions.current()` is only as fresh as the last collection (the wake screen collects it); a reducer call with no wake screen open sees the last env, which is safe (no snooze tap without the screen).
 - An invalid frozen fee is logged on each recomposition that recomputes availability (rare: a damaged config).
 - `NET_CAPABILITY_VALIDATED` can lag a fresh connection by a few seconds; the button then changes in place.
+
+## Review (2 reviewers, fast mode)
+
+Two reviewers looked at the branch, one for verification gaps and one for edge cases. Neither found a HIGH defect in production code; "I'm up", the checks and the sound never wait on connectivity or prices. Every item is fixed in `fix(4.7): review fixes`, each with a test:
+
+1. **Production wiring:** `SessionWiringTest` starts the app's own modules without `testAppModule` and finds `AndroidConnectivity` under `LiveSnoozeAvailability`, whose `conditions` is the Koin single the wake screen collects.
+2. **Visible labels:** `SnoozeVariantsTest` asserts each disabled variant's visible label (unmerged tree) and its icon (lock before the first unlock, block otherwise; new test tags on the icon).
+3. **AndroidConnectivity failures:** no default network reads offline; a missing system service reads online and logs "read connectivity". The current value is now read before the callback is registered (the system calls back at once), so an older read can never overtake a callback.
+4. **Permission:** the app requests `ACCESS_NETWORK_STATE`.
+5. **Orderings:** B = 10, max 5, 5 granted → max snoozes (not the cap); B = 0 with pending and offline → invalid fee; B = 0 in test mode → test mode.
+6. **`paid` never loses the session:** the serializer reads JSON element by element; a bad micros or currency drops that amount only, and `null` or a non-list reads as nothing paid.
+7. **Play's string:** the samples use "US$N.00", so the screenshots show the button and the refund label use Play's `formattedPrice`, not the app's formatting.
+8. **Prices loading in place:** online with an empty cache shows "prices not loaded yet", then a refresh turns it into "Snooze · USD 1.00" on the same resumed activity.
+9. **Sharper tests:** the wiring test checks the shared instance; scenario 6 pins the production policy type; the reducer test drives `SnoozeTapped` and `PayConfirmed` through the live policy for every row of the reasons table; the in-place test checks the exact sequence of envs.
+10. **Stale env across rings:** when the last collector of `SnoozeConditions.observe()` stops, `current()` falls back to the safe env (online, no prices), so the next ring never starts from the previous ring's connection or prices.
+11. **Pay while just unavailable:** deferred to 4.11/4.13 in deferred-work.md (the sheet closes with the reason, or a new AD-2 row answers `PayConfirmed` while unavailable). Also deferred: the refund label should show the amount paid (4.10/4.11), not today's cached price.

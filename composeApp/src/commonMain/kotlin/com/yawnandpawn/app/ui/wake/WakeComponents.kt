@@ -68,6 +68,7 @@ import androidx.compose.ui.layout.boundsInWindow
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalHapticFeedback
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.LiveRegionMode
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.clearAndSetSemantics
@@ -262,10 +263,12 @@ fun SnoozeButton(
         horizontalArrangement = Arrangement.Center,
         verticalAlignment = Alignment.CenterVertically,
     ) {
+        val locked = offer is SnoozeOffer.LockedBeforeUnlock
         Icon(
-            painter = painterResource(if (offer is SnoozeOffer.LockedBeforeUnlock) Res.drawable.symbol_lock else Res.drawable.symbol_block),
+            painter = painterResource(if (locked) Res.drawable.symbol_lock else Res.drawable.symbol_block),
             contentDescription = null,
-            modifier = Modifier.size(spacing.space6),
+            // Not read by TalkBack (the row's semantics are cleared); tagged so tests can tell the two icons apart.
+            modifier = Modifier.size(spacing.space6).testTag(if (locked) SNOOZE_LOCK_ICON_TAG else SNOOZE_BLOCK_ICON_TAG),
             tint = colors.disabledContent,
         )
         Text(
@@ -277,6 +280,12 @@ fun SnoozeButton(
         )
     }
 }
+
+/** Test tag of the lock icon of the disabled snooze before the first unlock (Story 4.7 review). */
+const val SNOOZE_LOCK_ICON_TAG = "snooze-lock-icon"
+
+/** Test tag of the block icon of every other disabled snooze. */
+const val SNOOZE_BLOCK_ICON_TAG = "snooze-block-icon"
 
 /** The visible label; "prices not loaded yet" alone reads "Prices not loaded yet" on one line (owner decision 2026-10-02). */
 @Composable

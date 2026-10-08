@@ -11,6 +11,12 @@ import kotlinx.serialization.builtins.ListSerializer
 import kotlinx.serialization.descriptors.SerialDescriptor
 import kotlinx.serialization.encoding.Decoder
 import kotlinx.serialization.encoding.Encoder
+import kotlinx.serialization.json.JsonArray
+import kotlinx.serialization.json.JsonDecoder
+import kotlinx.serialization.json.JsonElement
+import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.JsonPrimitive
+import kotlinx.serialization.json.longOrNull
 import kotlin.jvm.JvmInline
 import kotlin.time.Instant
 
@@ -172,8 +178,10 @@ private data class StoredAmount(
 )
 
 /**
- * [SessionData.paid] as a list of `{"micros":…,"currency":"…"}`. Reading drops an amount whose currency is malformed
- * (display-only data must never make the whole session unreadable).
+ * [SessionData.paid] as a list of `{"micros":…,"currency":"…"}`. Display-only data must never make the whole session
+ * unreadable (a session that fails to decode must never stop a ring), so reading JSON is lenient element by element:
+ * an amount with a missing or malformed micros or currency is dropped, the others are kept, and anything but a list
+ * (`null`, a string) reads as nothing paid.
  */
 internal object PaidAmountsSerializer : KSerializer<List<Money>> {
     private val stored = ListSerializer(StoredAmount.serializer())
@@ -186,5 +194,16 @@ internal object PaidAmountsSerializer : KSerializer<List<Money>> {
     ) = encoder.encodeSerializableValue(stored, value.map { StoredAmount(it.micros, it.currency) })
 
     override fun deserialize(decoder: Decoder): List<Money> =
-        decoder.decodeSerializableValue(stored).mapNotNull { Money.parse(it.micros, it.currency).valueOrNull() }
+        if (decoder is JsonDecoder) {
+            (decoder.decodeJsonElement() as? JsonArray).orEmpty().mapNotNull(::amountOf)
+        } else {
+            decoder.decodeSerializableValue(stored).mapNotNull { Money.parse(it.micros, it.currency).valueOrNull() }
+        }
+
+    private fun amountOf(element: JsonElement): Money? {
+        val fields = element as? JsonObject ?: return null
+        val micros = (fields["micros"] as? JsonPrimitive)?.takeIf { !it.isString }?.longOrNull
+        val currency = (fields["currency"] as? JsonPrimitive)?.takeIf { it.isString }?.content
+        return if (micros == null || currency == null) null else Money.parse(micros, currency).valueOrNull()
+    }
 }

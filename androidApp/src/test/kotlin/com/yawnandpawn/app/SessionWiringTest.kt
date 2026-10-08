@@ -2,6 +2,7 @@ package com.yawnandpawn.app
 
 import android.content.Context
 import androidx.test.core.app.ApplicationProvider
+import com.yawnandpawn.app.android.AndroidConnectivity
 import com.yawnandpawn.app.android.AndroidUserLockState
 import com.yawnandpawn.app.android.ApplicationScope
 import com.yawnandpawn.app.android.UnavailableBilling
@@ -17,10 +18,12 @@ import com.yawnandpawn.app.core.billing.FeeLadder
 import com.yawnandpawn.app.core.billing.LivePriceSource
 import com.yawnandpawn.app.core.billing.LiveSnoozeAvailability
 import com.yawnandpawn.app.core.billing.MoneyFormatter
+import com.yawnandpawn.app.core.billing.SessionStartPriceRefresh
 import com.yawnandpawn.app.core.billing.SnoozeConditions
 import com.yawnandpawn.app.core.billing.UsdFeeLadder
 import com.yawnandpawn.app.core.crash.CrashReporter
 import com.yawnandpawn.app.core.history.SessionHistoryRepository
+import com.yawnandpawn.app.core.net.Connectivity
 import com.yawnandpawn.app.core.session.ActiveSessionStore
 import com.yawnandpawn.app.core.session.Billing
 import com.yawnandpawn.app.core.session.CameraFallbackPolicy
@@ -34,16 +37,21 @@ import com.yawnandpawn.app.core.session.SessionReducer
 import com.yawnandpawn.app.core.session.SessionState
 import com.yawnandpawn.app.core.session.SnoozeAvailabilityPolicy
 import com.yawnandpawn.app.core.session.UserLockState
+import com.yawnandpawn.app.data.dataModule
 import com.yawnandpawn.app.data.history.RoomSessionHistoryRepository
 import com.yawnandpawn.app.data.session.RoomActiveSessionStore
 import com.yawnandpawn.app.ui.format.AndroidMoneyFormatter
+import com.yawnandpawn.app.ui.uiModule
 import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
+import org.koin.android.ext.koin.androidContext
 import org.koin.core.context.GlobalContext
+import org.koin.core.context.startKoin
 import org.robolectric.RobolectricTestRunner
 import kotlin.test.assertEquals
 import kotlin.test.assertIs
+import kotlin.test.assertNotNull
 import kotlin.test.assertNotSame
 import kotlin.test.assertSame
 
@@ -87,14 +95,32 @@ class SessionWiringTest {
     fun `Koin binds the Epic 1 production policies`() {
         val koin = GlobalContext.get()
 
-        // Story 4.7: every reason over the live env; the conditions are one instance, shared with the wake screen.
-        assertIs<LiveSnoozeAvailability>(koin.get<SnoozeAvailabilityPolicy>())
-        assertSame(koin.get<SnoozeConditions>(), koin.get<SnoozeConditions>())
+        // Story 4.7: every reason over the live env. The policy (the reducer's) reads the one SnoozeConditions single that
+        // the wake screen injects and collects, so the screen and the reducer agree (review fix).
+        val policy = assertIs<LiveSnoozeAvailability>(koin.get<SnoozeAvailabilityPolicy>())
+        assertSame(koin.get<SnoozeConditions>(), policy.conditions)
         assertIs<AndroidUserLockState>(koin.get<UserLockState>())
         assertSame(PluginCheckValidator, koin.get<CheckValidator>())
         assertIs<CameraFallbackPolicy>(koin.get<FallbackPolicy>())
         assertSame(UsdFeeLadder, koin.get<FeeLadder>())
         assertIs<AndroidMoneyFormatter>(koin.get<MoneyFormatter>())
+    }
+
+    @Test
+    fun `the production graph, without the test overrides, binds the real connectivity under the snooze policy`() {
+        // testAppModule replaces Connectivity with a fake in every other test: a lost production binding would only
+        // crash the wake screen on a phone (review fix). Only the app's own modules here.
+        stopApp()
+        val koin =
+            startKoin {
+                androidContext(ApplicationProvider.getApplicationContext())
+                modules(appModule, dataModule, uiModule)
+            }.koin
+
+        assertIs<AndroidConnectivity>(koin.get<Connectivity>())
+        val policy = assertIs<LiveSnoozeAvailability>(koin.get<SnoozeAvailabilityPolicy>())
+        assertSame(koin.get<SnoozeConditions>(), policy.conditions)
+        assertNotNull(koin.get<SessionStartPriceRefresh>())
     }
 
     @Test

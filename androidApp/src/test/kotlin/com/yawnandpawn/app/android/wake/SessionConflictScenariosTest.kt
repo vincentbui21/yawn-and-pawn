@@ -12,6 +12,7 @@ import com.yawnandpawn.app.core.alarm.Alarm
 import com.yawnandpawn.app.core.alarm.AlarmFired
 import com.yawnandpawn.app.core.alarm.AlarmRepository
 import com.yawnandpawn.app.core.alarm.RequestCodes
+import com.yawnandpawn.app.core.billing.LiveSnoozeAvailability
 import com.yawnandpawn.app.core.checks.CheckAnswer
 import com.yawnandpawn.app.core.checks.CheckMode
 import com.yawnandpawn.app.core.checks.CheckPlan
@@ -427,6 +428,7 @@ class SessionConflictScenariosTest {
         lock.unlocked = false
         // The production policy wiring (LiveSnoozeAvailability over the app's UserLockState), not this test's fake.
         app = newProcess(snoozePolicy = null)
+        assertIs<LiveSnoozeAvailability>(app.koin.get<SnoozeAvailabilityPolicy>(), "the production policy, not a fake")
         store(alarmA.copy(soundRef = systemSound))
         app.ring(AlarmFired(alarmA.id, scheduledAt))
         app.awaitRinging()

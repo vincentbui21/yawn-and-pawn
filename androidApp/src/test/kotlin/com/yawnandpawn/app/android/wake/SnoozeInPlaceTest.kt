@@ -93,4 +93,22 @@ class SnoozeInPlaceTest {
         }
         assertEquals(Lifecycle.State.RESUMED, scenario.state)
     }
+
+    @Test
+    fun `prices arriving while the wake screen is in front change the snooze in place (review fix)`() {
+        connectivity.online = true
+        val app = WakeApp(connectivity = connectivity, productDetails = FakeProductDetailsSource())
+        app.dispatch(SessionEvent.AlarmFired("session-1", aSessionConfig(), beforeFirstUnlock = false))
+        val scenario = launchActivity<WakeActivity>(Intent(app.app, WakeActivity::class.java))
+        var before: WakeActivity? = null
+        scenario.onActivity { before = it }
+        awaitShown("Snooze unavailable, prices not loaded yet")
+
+        assertEquals(Outcome.Success(Unit), runBlocking { app.koin.get<PriceCatalog>().refresh() })
+
+        awaitShown("Snooze · USD 1.00")
+        composeRule.onNodeWithText("Snooze · USD 1.00").assertIsEnabled()
+        scenario.onActivity { now -> assertSame(before, now, "the same activity instance, not recreated") }
+        assertEquals(Lifecycle.State.RESUMED, scenario.state)
+    }
 }

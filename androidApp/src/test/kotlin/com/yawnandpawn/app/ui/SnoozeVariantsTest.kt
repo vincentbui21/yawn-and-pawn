@@ -6,6 +6,7 @@ import androidx.compose.ui.test.assertIsEnabled
 import androidx.compose.ui.test.assertIsNotEnabled
 import androidx.compose.ui.test.junit4.createEmptyComposeRule
 import androidx.compose.ui.test.onNodeWithContentDescription
+import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.onRoot
 import com.github.takahirom.roborazzi.captureRoboImage
@@ -14,6 +15,8 @@ import com.yawnandpawn.app.screenshotOptions
 import com.yawnandpawn.app.ui.theme.PpsThemeMode
 import com.yawnandpawn.app.ui.wake.CheckScreen
 import com.yawnandpawn.app.ui.wake.RingingScreen
+import com.yawnandpawn.app.ui.wake.SNOOZE_BLOCK_ICON_TAG
+import com.yawnandpawn.app.ui.wake.SNOOZE_LOCK_ICON_TAG
 import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -49,6 +52,10 @@ class SnoozeVariantsTest {
                 .assertHasClickAction()
         } else {
             composeRule.onNodeWithContentDescription(talkBack).assertExists().assertIsNotEnabled()
+            // The visible label (TalkBack reads the row's description; the label lives in the unmerged tree).
+            composeRule.onNodeWithText(variant.label, useUnmergedTree = true).assertIsDisplayed()
+            val icon = if (variant == SnoozeVariant.BeforeFirstUnlock) SNOOZE_LOCK_ICON_TAG else SNOOZE_BLOCK_ICON_TAG
+            composeRule.onNodeWithTag(icon, useUnmergedTree = true).assertIsDisplayed()
         }
     }
 

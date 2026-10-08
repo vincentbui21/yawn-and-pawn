@@ -8,6 +8,7 @@ import com.yawnandpawn.app.core.log.LogEvent
 import com.yawnandpawn.app.core.net.Connectivity
 import com.yawnandpawn.app.core.session.CameraFallbackPolicy
 import com.yawnandpawn.app.core.session.PluginCheckValidator
+import com.yawnandpawn.app.core.session.PurchaseIntentId
 import com.yawnandpawn.app.core.session.SessionData
 import com.yawnandpawn.app.core.session.SessionEffect
 import com.yawnandpawn.app.core.session.SessionEvent
@@ -29,7 +30,6 @@ import kotlinx.coroutines.test.UnconfinedTestDispatcher
 import kotlinx.coroutines.test.runTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
-import kotlin.test.assertTrue
 import kotlin.time.Duration.Companion.days
 import kotlin.time.Instant
 
@@ -133,7 +133,22 @@ class SnoozeAvailabilityTest {
                 session(baseFeeTier = 10, maxSnoozes = 6, granted = 5, pending = true) to env(online = false),
                 unavailable(UnavailableReason.PriceCapReached),
             ),
+            Triple(
+                "max snoozes before the cap: B = 10, max 5, 5 granted",
+                session(baseFeeTier = 10, granted = 5) to env(),
+                unavailable(UnavailableReason.MaxSnoozesReached),
+            ),
             Triple("invalid frozen fee", session(baseFeeTier = 0) to env(), unavailable(UnavailableReason.InvalidFee)),
+            Triple(
+                "invalid fee before pending and offline",
+                session(baseFeeTier = 0, pending = true) to env(online = false),
+                unavailable(UnavailableReason.InvalidFee),
+            ),
+            Triple(
+                "test mode before an invalid fee",
+                session(baseFeeTier = 0, testMode = true) to env(),
+                unavailable(UnavailableReason.TestMode),
+            ),
             Triple("pending", session(pending = true) to env(), unavailable(UnavailableReason.PaymentPending)),
             Triple(
                 "pending, refunding and offline",
@@ -289,8 +304,71 @@ class SnoozeAvailabilityTest {
 
             clock.advanceBy(1.days)
             assertEquals(now + 1.days, env.conditions.current().now, "the time is read at each call")
-            assertTrue(emitted.size >= 7, "one env per change: ${emitted.size}")
-            assertEquals(false, emitted.last().online)
+            // One env per change, in order: (online, unlocked, prices loaded, stranded).
+            assertEquals(
+                listOf(
+                    listOf(false, false, false, false),
+                    listOf(false, true, false, false),
+                    listOf(true, true, false, false),
+                    listOf(true, true, true, false),
+                    listOf(true, true, true, true),
+                    listOf(true, true, true, false),
+                    listOf(false, true, true, false),
+                ),
+                emitted.map { listOf(it.online, it.userUnlocked, it.prices.entries.isNotEmpty(), it.strandedProducts.isNotEmpty()) },
+            )
+        }
+
+    @Test
+    fun `the reducer accepts a snooze tap and a pay confirm exactly when the live policy offers one, for every reason`() =
+        runTest(UnconfinedTestDispatcher()) {
+            val live = Env(clock = TestClock(now))
+            collecting(live)
+            val policy = LiveSnoozeAvailability(live.conditions, UsdFeeLadder, logger)
+            val reducer = SessionReducer(policy, PluginCheckValidator, CameraFallbackPolicy())
+
+            table.forEach { (name, input, expected) ->
+                val (session, env) = input
+                live.connectivity.online = env.online
+                live.catalog.state.value = env.prices
+                live.lock.state.value = env.userUnlocked
+                live.stranded.value = env.strandedProducts
+                assertEquals(expected, policy.availability(session), name)
+
+                val ringing = SessionState.Ringing(session)
+                val tapped = reducer.reduce(ringing, SessionEvent.SnoozeTapped, T0)
+                val sheet = tapped.effects.filterIsInstance<SessionEffect.ShowSnoozeConfirm>()
+                val paid = reducer.reduce(ringing, SessionEvent.PayConfirmed(PurchaseIntentId("intent-1")), T0)
+                val paying = (paid.state as? SessionState.Active)?.session?.paying
+                if (expected is SnoozeAvailability.Available) {
+                    assertEquals(listOf(SessionEffect.ShowSnoozeConfirm(expected.offer)), sheet, name)
+                    assertEquals(PurchaseIntentId("intent-1"), paying, name)
+                } else {
+                    assertEquals(emptyList(), sheet, name)
+                    assertEquals(null, paying, "$name: no purchase starts")
+                }
+            }
+        }
+
+    @Test
+    fun `once the last collector stops, the env falls back to safe, so the next ring never starts from a stale connection`() =
+        runTest(UnconfinedTestDispatcher()) {
+            val env = Env(online = true, prices = allPrices, clock = TestClock(now))
+            val policy = LiveSnoozeAvailability(env.conditions, UsdFeeLadder, logger)
+            val first = env.conditions.observe().launchIn(backgroundScope)
+            val second = env.conditions.observe().launchIn(backgroundScope)
+            assertEquals(available(1, 1), policy.availability(session()))
+
+            first.cancel()
+            assertEquals(available(1, 1), policy.availability(session()), "another collector still watches")
+            second.cancel()
+            env.connectivity.online = false
+
+            assertEquals(SnoozeEnv(true, PriceCatalogSnapshot.EMPTY, now, true), env.conditions.current())
+            assertEquals(unavailable(UnavailableReason.CatalogueNotLoaded), policy.availability(session()), "never a stale Available")
+
+            env.conditions.observe().launchIn(backgroundScope)
+            assertEquals(unavailable(UnavailableReason.Offline), policy.availability(session()), "the next collector sees the truth")
         }
 
     @Test

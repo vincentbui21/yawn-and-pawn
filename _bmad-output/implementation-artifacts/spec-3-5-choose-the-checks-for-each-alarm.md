@@ -32,7 +32,7 @@ deferred: []
 **Always:**
 - **Pickable types:** a type with a core plugin that a user may pick, which is only `Math` (`Placeholder` never). Story 3.2's `CheckRegistry` (wake composables) narrows this list when it lands.
 - **Defaults:** a new alarm starts with Random · Math · Medium · 3, the epic default. A newly ticked check starts at Medium with the core `defaultCount`.
-- **Count range:** the stepper uses the core `countRange` (Math 1–10, owner decision q10). EXPERIENCE.md's "(1 to 5)" is the preview's generic range and is listed for the owner.
+- **Count range:** the stepper uses the core `countRange` (Math 1–10, owner decision q10). EXPERIENCE.md says the same since the owner decision of 2026-10-08 (Math 1 to 10, Word Unscramble and Memory Sequence 1 to 5).
 - **Strings:** existing resources only. "Move up", "Move down", "Pick at least one check.", "Problems", "Checks", "Mode", "Your checks", "Random" and "All" are all in EXPERIENCE.md.
 - **Reordering:** reuse the preview composables. In All mode, "Move up" and "Move down" stay the preview's 48 dp row buttons and are also TalkBack custom actions on the row.
 - **Unsaved changes:** check edits are part of the form, so "Discard changes?" covers them. The editor's Back from Check setup returns to the Wake-up check sub-screen.
@@ -124,7 +124,6 @@ Two reviewers read `dcd0fb8`. The story was rebased onto main after Stories 3.2 
 - **patch: alarms without rows were handled differently in different places.** Home's card now shows the default check's icon, like the editor, Save's identical-alarm rule, Duplicate and the ring (`CheckPlan.default()`, Math · Medium · 3).
 - **patch: KDoc said "Problems, 1 to 5".** It now says the check's own range.
 - **tests:** the Math stepper is enabled at 5 and 9 (catches a return to 1..5). A ViewModel built without `pickable` offers Math, Word Unscramble and Memory Sequence in order. `WakeApp(checkConfigs = …)`: a failing check read still rings the default plan and logs `read alarm checks`. A failing check read on open gives `OpenFailed` and logs `open alarm`. The frozen-plan tests in `WakeServiceTest` and `ConfigResolverTest` store two entries out of insertion order.
-- **open owner question (not changed):** EXPERIENCE.md says the Check setup stepper goes "1 to 5". Each type keeps its own range (Math 1 to 10, owner-approved q10 defaults; Word and Memory 1 to 5). EXPERIENCE.md is approved copy, so it is left as it is. The owner should decide whether it should say "the check's range".
 
 ## Design Notes
 
@@ -134,10 +133,9 @@ Two reviewers read `dcd0fb8`. The story was rebased onto main after Stories 3.2 
 - **"Try it":** it stays visible and does nothing until Story 3.6 wires it (story AC).
 - **Test heap:** the androidApp unit tests get a 1 GB heap, the same change as `fix(3.3): review fixes`, since the default 512 MB ran out at the end of the gate.
 - **Full editor rows:** the production editor turns on only the Wake-up check row of `FullEditorSections` (`rows`), so quiet time, motivation and the fee ladder stay hidden until their stories. The preview keeps every row.
-- **For the owner:** EXPERIENCE.md says the count stepper goes "1 to 5", but q10 says Math counts 1–10 (core `countRange`). This story follows the story AC and uses the type's range.
 
 - **Before 3.2 (merge order, resolved):** on its first base, a saved alarm rang a Math plan that the placeholder wake screen could not answer, so `BackupRulesCoverageTest` deleted its alarm's rows before the ring. In the lane 2 stack, 3.2 is on main, so that delete is gone. An alarm stored without rows counts as having the default checks everywhere: the editor, the identical-alarm check, Duplicate, Home's icons and the ring.
-- **Deferred:** the test alarm rings `ConfigResolver.defaultPlan()`, not the draft's checks (a follow-up once 3.2/3.6 can ring Math).
+- **Deferred:** the test alarm rings `ConfigResolver.defaultPlan()`, not the draft's checks (a follow-up once 3.2/3.6 can ring Math). Fixed after the Epic 3 device check (2026-10-08): a test rings the draft's checks and mode.
 
 ## Verification
 

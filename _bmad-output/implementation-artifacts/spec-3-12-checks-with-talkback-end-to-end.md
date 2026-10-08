@@ -262,11 +262,11 @@ Two reviewers looked at 89f760c: one for verification gaps, one for edge cases. 
 **Defaults taken in fast mode (the owner can change any of them):**
 - **F5 without `pm revoke`.** The epic says `pm revoke`. Revoking a runtime permission kills the app process, and that would end the instrumentation run. A fresh test install never has `CAMERA` granted, which is the same state F5 describes (a cleanup revoked it). The test assumes that state, and the camera adapter reports `NoPermission` exactly as after a revoke. The ATD image probably has no camera anyway (epic 3 context, "Testing on CI").
 - **The headings, the first-input focus targets and the 200% rule** are as described in the intent above.
-- **Fallback Memory is always numbered**, as the epic's 3.9 text says, not only when TalkBack is on.
+- **Fallback Memory is always numbered**, as the epic's 3.9 text says, not only when TalkBack is on. Confirmed by the owner 2026-10-08.
 - **Accessibility checks on the host.** `enableAccessibilityChecks()` is meant for instrumented tests. If it also runs under Robolectric 4.17, turn it on in `CheckSemanticsSuiteTest` too. If not, the host suite checks the same rules by hand and only the GMD test uses the Accessibility Test Framework.
 
 **Open questions for the owner (not blocking):**
-- Is "Word {n} of {count}" the right heading for Word, or should EXPERIENCE.md add an instruction line ("Unscramble the word")? Adding the line would be a new key string.
+- ~~Is "Word {n} of {count}" the right heading for Word, or should EXPERIENCE.md add an instruction line?~~ Decided 2026-10-08 (owner): the heading stays "Word {n} of {count}", with no instruction line.
 - If a check cannot fit its input and the footer at 200% on 360 × 640 even with the header scrolled, does it join the v2 compact-header item?
 
 ## Verification

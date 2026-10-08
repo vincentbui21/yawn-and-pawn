@@ -27,8 +27,13 @@ Test alarms at 10% volume, vibration off (owner request).
 | 17 | Success screen variants | Pass (partial) | 2026-10-08 | "Up on time." for a real alarm, "Test finished. Your alarm works." for a test alarm, Done closes. 60 s auto-close not checked. |
 | 18 | Copy matches EXPERIENCE.md | Deferred to v2 | | |
 | 19 | Reboot before unlock with Word | Deferred to v2 | | |
+| 20 | Heads-up over the wake screen (bug 2 fix) | Deferred to v2 | | With the phone unlocked, let a test alarm ring, open the wake screen and tap "I'm up": no "Tap to return to your alarm" heads-up drops over the countdown, also when the grace window ends ("Time's up") and at the 60 s heartbeat. Press Home: the notification heads up as the way back, and a tap returns to the alarm. Press power during the ring: note whether and when the wake screen comes back by itself (leaving posts the notification without its full-screen intent; the next slot fire posts the full one, as before). Check on the Oppo (ColorOS) and one stock Android phone. |
+| 21 | Bug fixes 1, 3, 4 and 5 | Deferred to v2 | | Test alarm from the editor with QR (code registered, not saved) shows "Scan your code", with Word shows the Word step; the Sound slider stops at 10%; a new alarm shows "Easy · 3 problems"; the Memory grid stays put when "Not quite. Try again." appears. |
 
 ## Bugs found (to fix before or early in Epic 4)
+
+Fixed in `fix/epic-3-device-check-bugs` (2026-10-08, host tests only; rows 20 and 21 recheck them on a device).
+
 1. **"Test alarm" ignores the alarm's checks.** A test alarm always rings Math · Medium · 3, both from unsaved editor changes and from a saved QR alarm (`check_config` had the QR row with its code). Test alarms should use the alarm's checks (the editor's current ones).
 2. **Heads-up notification covers the wake screen's countdown** while the wake screen is in front.
 3. **Volume can be set to 0 %** in Sound, making a silent alarm possible.

@@ -78,15 +78,15 @@ graph TD
 | Grace, Loud | CheckAnswerSubmitted | valid, last step | Completed | stop sound; cancel slot; record outcome; play motivation |
 | Grace, Loud | FallbackRequested | fallback allowed (FR-PWK-11), not used | same | replace plan with fallback check; `fallbackUsed = true`; timers unchanged |
 | Ringing, Grace, Loud | SnoozeTapped | `snoozeAvailability` = Available (AD-7) | same | show confirm |
-| Ringing, Grace, Loud | PayConfirmed | Available, not paying, live price for the offered product, keyguard not locked | same, paying = intentId | persist `PurchaseIntent` (same transaction as the state); launch billing |
-| Ringing, Grace, Loud | PayConfirmed | Available, not paying, live price for the offered product, keyguard locked (Spike S1) | same, paying = intentId, unlocking | persist `PurchaseIntent` (same transaction as the state); request keyguard dismiss |
+| Ringing, Grace, Loud | PayConfirmed | Available, not paying (a pending unlock is replaced), live price for the offered product, keyguard not locked | same, paying = intentId | persist `PurchaseIntent` (same transaction as the state); launch billing |
+| Ringing, Grace, Loud | PayConfirmed | Available, not paying (a pending unlock is replaced), live price for the offered product, keyguard locked (Spike S1) | same, paying = intentId, unlocking | persist `PurchaseIntent` (same transaction as the state); request keyguard dismiss |
 | Ringing, Grace, Loud (unlocking) | UnlockSucceeded | | same, unlocking = false | launch billing |
 | Ringing, Grace, Loud (unlocking) | UnlockFailed | cancelled or error | same, paying = null, unlocking = false | show "Phone still locked. No charge."; sound continues |
 | Ringing, Grace, Loud | ReuseOffered | stranded token for expected product | same, paying = null | show reuse sheet |
 | Ringing, Grace, Loud | ReuseAccepted | | Snoozed(snoozeEnd) | as PurchaseGranted, using the stranded token |
 | Ringing, Grace, Loud | ReuseDeclined | | same, declinedReuseProduct = product | hide reuse sheet; snooze at that price shows the "earlier payment is being refunded" reason (EXPERIENCE.md) |
 | Ringing, Grace, Loud | PurchaseGranted | reconciler says Grant (AD-7), regardless of `paying` | Snoozed(snoozeEnd), paymentPending = false | stop sound; discard `CheckRun` progress (new seeds); `snoozesGranted++`; arm slot at snoozeEnd; consume |
-| Ringing, Grace, Loud | PurchaseFailed / Cancelled | | same, paying = null | show outcome message; sound continues |
+| Ringing, Grace, Loud | PurchaseFailed / PurchaseCancelled | | same, paying = null | show outcome message; sound continues |
 | Ringing, Grace, Loud | PurchasePending | | same, paying = null, paymentPending = true | show pending message; sound continues |
 | Grace, Loud | ImageMatchCompleted | matched | as CheckAnswerSubmitted (valid) | advance or complete per step |
 | Grace, Loud | ImageMatchCompleted / ImageMatchFailed | not matched or matcher error | same | attempts++; retry prompt; fallback allowed after 5 or on matcher error |
@@ -100,7 +100,7 @@ graph TD
 | Ringing (before first unlock) | UserUnlocked | | same | lift Direct Boot substitutions at next check step; init billing |
 | Completed, Missed | Recorded | history row written | Idle | clear session from runtime.db |
 
-Grace keeps counting while `paying` (or `unlocking`) is set; mute ends when it elapses (FR-RNG-5). A wrong PIN sends no event, so Unlocking waits; the 30-minute timeout is the backstop. Everything that clears `paying` also clears `unlocking`. A PayConfirmed that fails its guards is ignored and logged. The keyguard state is an environment input `SessionEngine` reads (through `UnlockPort`) for PayConfirmed only (Story 4.8). Price of the next snooze is always `FeeLadder(config.baseFeeTier, snoozesGranted + 1)`.
+Grace keeps counting while `paying` (or `unlocking`) is set; mute ends when it elapses (FR-RNG-5). A wrong PIN sends no event, so Unlocking waits; the 30-minute timeout is the backstop. Everything that clears `paying` also clears `unlocking`, and so does the end of the ring (Completed, Missed). A PayConfirmed that fails its guards is ignored and logged. The keyguard state is an environment input `SessionEngine` reads (through `UnlockPort`) for PayConfirmed only (Story 4.8). Price of the next snooze is always `FeeLadder(config.baseFeeTier, snoozesGranted + 1)`.
 
 ### AD-3 — Time comes from ports only
 

@@ -89,14 +89,17 @@ class SessionUnmatchedPairsTest {
     fun `every pair without a row returns the same state with only LogIgnored and never throws`() {
         val reducer = reducer()
         var ignoredPairs = 0
-        states.forEach { state ->
-            events.forEach { event ->
-                val transition = reducer.reduce(state, event, now)
-                if (hasRow(state, event)) {
-                    assertNotEquals(ignored(state, event), transition, "${state.kind} + $event has a row")
-                } else {
-                    ignoredPairs++
-                    assertEquals(ignored(state, event), transition, "${state.kind} + $event has no row")
+        // The keyguard input only changes which effect a Pay asks for, never whether a pair has a row.
+        listOf(false, true).forEach { keyguardLocked ->
+            states.forEach { state ->
+                events.forEach { event ->
+                    val transition = reducer.reduce(state, event, now, keyguardLocked = keyguardLocked)
+                    if (hasRow(state, event)) {
+                        assertNotEquals(ignored(state, event), transition, "${state.kind} + $event has a row")
+                    } else {
+                        ignoredPairs++
+                        assertEquals(ignored(state, event), transition, "${state.kind} + $event has no row")
+                    }
                 }
             }
         }
@@ -172,7 +175,8 @@ class SessionUnmatchedPairsTest {
     private fun payHasRow(
         state: SessionState.Ring,
         event: SessionEvent.PayConfirmed,
-    ): Boolean = !state.session.paused || (state.session.paying == null && event.livePrice.productId == PRODUCT)
+    ): Boolean =
+        !state.session.paused || ((state.session.paying == null || state.session.unlocking) && event.livePrice.productId == PRODUCT)
 
     private fun purchaseHasRow(event: SessionEvent.PurchaseEvent): Boolean =
         when (event) {

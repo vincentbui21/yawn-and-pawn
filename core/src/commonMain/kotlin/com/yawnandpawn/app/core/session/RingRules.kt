@@ -147,7 +147,7 @@ internal class RingRules(
         now: TimeSnapshot,
     ): Transition =
         Transition(
-            SessionState.Missed(session.withoutTimers().copy(ended = now)),
+            SessionState.Missed(session.withoutTimers().withoutPayment().copy(ended = now)),
             listOf(SessionEffect.StopSound, SessionEffect.CancelSlot),
         )
 

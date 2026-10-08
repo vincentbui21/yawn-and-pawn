@@ -12,7 +12,9 @@ context:
 warnings: []
 deferred:
   - 'Story 4.11: execute LaunchBilling(intentId) by reading the intent with PurchaseIntentStore.get, launch outside the engine Mutex with obfuscatedAccountId = InstallIdProvider.installId(); a missing intent is PurchaseFailed(Error)'
-  - 'Story 4.11/4.13: execute RequestKeyguardDismiss through UnlockPort.requestUnlock() outside the Mutex and dispatch result.event(); on WakeActivity resume with the keyguard still locked and `unlocking` set, dispatch UnlockFailed (lost callback)'
+  - 'Story 4.11/4.13: execute RequestKeyguardDismiss through UnlockPort.requestUnlock() outside the Mutex and dispatch result.event(); on WakeActivity resume with `unlocking` set, dispatch UnlockFailed if the keyguard is still locked and UnlockSucceeded if it is unlocked (lost callback, fingerprint unlock)'
+  - 'Story 4.12/4.13: mint a new intent id (UUID v4) for every Pay tap; reusing one fails the commit by design'
+  - 'Story 4.10: when pricing a purchase record from intents, take the newest intent for the session and product (forProduct is oldest first): a cancelled-PIN or replaced-unlock leftover must not price it'
   - 'Story 4.12/4.13: fill PayConfirmed.livePrice from the product''s LIVE ProductDetails at the Pay tap (4.3 review handoff); never from the cached display price. No ProductDetails means billing cannot launch, so the sheet shows the Offline/not-loaded state instead of dispatching PayConfirmed'
   - 'Story 4.12: bind AndroidDeviceUnlocker as UnlockPort in Koin and pass it to SessionEngine (prod uses UnlockPort.Unlocked until then; snooze is never Available before 4.7 anyway)'
   - 'Story 4.14: map PurchaseOutcome.UnlockFailed to WakeMessage.UnlockFailed ("Phone still locked. No charge.")'
@@ -43,7 +45,7 @@ deferred:
 | R33 | Ringing, Grace, Loud (unlocking) | UnlockSucceeded | | same, unlocking = false | launch billing |
 | R34 | Ringing, Grace, Loud (unlocking) | UnlockFailed | cancelled or error | same, paying = null, unlocking = false | show "Phone still locked. No charge." (`PurchaseOutcome.UnlockFailed`); sound continues |
 
-Everything that clears `paying` (purchase results, a grant, a restore, the next ring) also clears `unlocking`. PayConfirmed with a failing guard is ignored and logged (it still counts as a user event); a wrong PIN sends nothing, so the state waits and the 30-minute timeout stays the backstop.
+Everything that clears `paying` (purchase results, a grant, a restore, the next ring) also clears `unlocking`, and so does the end of the ring (Completed, Missed). While only the unlock is pending (billing never launched), a new PayConfirmed replaces it: its intent is written and it launches or asks for the unlock again by the current keyguard, so a lost callback never blocks Pay. PayConfirmed with a failing guard (billing in flight, unavailable, a price for another product) is ignored and logged (it still counts as a user event); a wrong PIN sends nothing, so the state waits and the 30-minute timeout stays the backstop.
 
 ## Boundaries & Constraints
 
@@ -101,3 +103,22 @@ Status: implemented in fast mode (one agent, unattended Epic 4 run), no review p
 - Nothing executes `LaunchBilling` or `RequestKeyguardDismiss` yet (`WakeRuntime` logs them, as before); snooze is never Available in production until 4.7, so no Pay reaches the reducer.
 - A lost unlock callback leaves `unlocking` set until a purchase result, a restore, the next ring or the 30-minute timeout; 4.13 must dispatch `UnlockFailed` on resume with the keyguard still locked.
 - Production binds `UnlockPort.Unlocked`, so until 4.12 a locked Pay would launch billing directly (Play then waits behind the keyguard, as in S1 run V1s).
+
+## Review (2 reviewers, fast mode)
+
+Two reviewers read `176f93f`: one for verification gaps, one for edge cases. Neither found a HIGH issue in production code. Every item was fixed in `fix(4.8): review fixes`:
+
+1. **(HIGH, test) The alarm-safety test stripped the payment before comparing.** It now requires the exact state: a ring that stays a ring keeps `paying`/`unlocking`, and a ring that ends drops them. It runs over 4 reducers (valid last, valid next, invalid, fallback refused), 6 session shapes (paused, before first unlock, mid-check, fallback used, grace over) and 14 events, CallEnded, UserUnlocked and the image matcher included.
+2. **Ring end:** Completed and Missed now clear `paying` and `unlocking`. The "everything that ends" test covers the timeout and the last answer.
+3. **Duplicate intent at engine level:** the same id after a cancelled unlock fails the commit, writes and launches nothing, keeps the first row and is logged.
+4. **Purge at app start:** a Robolectric test seeds 8-day and 1-day intents, restarts the app and keeps only the young one.
+5. **Docs and reducer in sync:** `Ad2TableDocTest` (in `:data` with the other source scans) parses the AD-2 table in `architecture.md` and `AD2_ROWS`. It checks the same 34 rows, the sub-states and the keyguard guards. The doc's "PurchaseFailed / Cancelled" now names `PurchaseCancelled`.
+6. **Decision 7 tested:** `UnlockSucceeded` launches billing even when availability now says Offline.
+7. **Restore test:** it asserts Ringing with a fresh 30-minute deadline from the restore.
+8. **A stuck `unlocking` blocked Pay for the rest of the ring:** a new Pay now replaces a pending unlock (R14/R32 examples and engine tests: the new intent is written and launched, or the unlock is asked again while locked). 4.13 deferral: on resume with the phone unlocked and `unlocking` set, dispatch `UnlockSucceeded`.
+9. **A corrupt install-id file failed forever:** `InstallIdDataStore` has a `ReplaceFileCorruptionHandler` that writes a new id and logs "install id regenerated" without the value. The test uses garbage bytes and checks the new UUID is stable across calls and store instances. A plain I/O error still fails.
+
+Low and minor items:
+- The state-by-event matrix also runs with `keyguardLocked = true`.
+- An R14 example offers snooze 3 after 0 granted, so the intent's snooze number comes from the offer.
+- Deferrals: a new intent id per tap (4.12/4.13), and the newest intent prices a record (4.10).

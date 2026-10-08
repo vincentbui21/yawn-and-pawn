@@ -32,7 +32,10 @@ import kotlin.test.assertTrue
 class DataStoreInstallIdProviderTest {
     private val context = ApplicationProvider.getApplicationContext<Context>()
     private val logger = FakeLogger()
-    private var file = InstallIdDataStore(context)
+
+    private fun open(): InstallIdDataStore = InstallIdDataStore(context, UuidV4IdGenerator(), logger)
+
+    private var file = open()
 
     @After
     fun tearDown() = file.close()
@@ -58,7 +61,7 @@ class DataStoreInstallIdProviderTest {
         runTest {
             val first = provider().installId().id()
             file.close()
-            file = InstallIdDataStore(context)
+            file = open()
 
             assertEquals(first, provider().installId().id())
         }
@@ -79,12 +82,36 @@ class DataStoreInstallIdProviderTest {
             val first = provider().installId().id()
             file.close()
             InstallIdDataStore.installIdFile(context).delete()
-            file = InstallIdDataStore(context)
+            file = open()
 
             val second = provider().installId().id()
             assertNotEquals(first, second, "a fresh install (or a cleared file) gets a new random id")
             val fixed = DataStoreInstallIdProvider(freshStore(), { "id-from-the-generator" }, logger)
             assertEquals("id-from-the-generator", fixed.installId().id(), "the value is the generator's, nothing else")
+        }
+
+    @Test
+    fun `a corrupt file is replaced by a new id that then stays, and the log never holds it`() =
+        runTest {
+            file.close()
+            InstallIdDataStore.installIdFile(context).apply {
+                parentFile?.mkdirs()
+                writeBytes(byteArrayOf(0x7f, 0x01, 0x02, 0x03, 0x04, 0x05))
+            }
+            file = open()
+
+            val id = provider().installId().id()
+
+            assertTrue(UUID_V4.matches(id), id)
+            assertEquals(id, provider().installId().id())
+            file.close()
+            file = open()
+            assertEquals(id, provider().installId().id(), "the replacement was written to the file")
+            assertEquals(
+                listOf<LogEvent>(LogEvent.OperationFailed("read install id", "corrupt file, install id regenerated")),
+                logger.events,
+            )
+            assertFalse(logger.events.any { id in it.toString() })
         }
 
     @Test
@@ -118,7 +145,7 @@ class DataStoreInstallIdProviderTest {
     private fun freshStore(): DataStore<Preferences> {
         file.close()
         InstallIdDataStore.installIdFile(context).delete()
-        file = InstallIdDataStore(context)
+        file = open()
         return file.store
     }
 

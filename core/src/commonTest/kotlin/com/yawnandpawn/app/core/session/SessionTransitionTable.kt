@@ -498,7 +498,41 @@ internal val ROW_CASES: Map<String, List<RowExample>> =
                                 ),
                         )
                     }
-                },
+                } +
+            // The snooze number comes from the offer (here snooze 3 after 0 granted), never from a count of its own.
+            ringStates().map { from ->
+                val third = SnoozeOffer(PRODUCT, snoozeNumber = 3)
+                RowExample(
+                    name = "${from.kind} snooze 3 on offer",
+                    from = from,
+                    event = PAY,
+                    now = N,
+                    expected =
+                        Transition(
+                            from.with(from.session.touched(N).copy(paying = INTENT)),
+                            listOf(
+                                SessionEffect.PersistPurchaseIntent(intentAt(N, offer = third)),
+                                SessionEffect.LaunchBilling(INTENT, SESSION_ID),
+                            ),
+                        ),
+                    reducer = reducer(availability = SnoozeAvailability.Available(third)),
+                )
+            } +
+            // A pending unlock never launched billing, so a new Pay replaces it (Story 4.8 review: a lost keyguard
+            // callback, the user unlocked by fingerprint): the new intent is written and launched, nothing for the old one.
+            ringStates(ringSession().copy(paying = PurchaseIntentId("intent-0"), unlocking = true)).map { from ->
+                RowExample(
+                    name = "${from.kind} replacing a pending unlock",
+                    from = from,
+                    event = PAY,
+                    now = N,
+                    expected =
+                        Transition(
+                            from.with(from.session.touched(N).copy(paying = INTENT, unlocking = false)),
+                            listOf(SessionEffect.PersistPurchaseIntent(intentAt(N)), SessionEffect.LaunchBilling(INTENT, SESSION_ID)),
+                        ),
+                )
+            },
         "R15 Ringing|Grace|Loud+ReuseOffered" to
             ringStates(ringSession().copy(paying = INTENT)).map { from ->
                 RowExample(
@@ -664,11 +698,10 @@ internal val ROW_CASES: Map<String, List<RowExample>> =
                 }
             } +
             listOf(false, true).flatMap { locked ->
-                // Story 4.8 guards: a second Pay while one is in flight (unlocking or not), or a price for another
-                // product, persists no intent and launches nothing; it only counts as a user event.
+                // Story 4.8 guards: a second Pay while billing is in flight, or a price for another product, persists
+                // no intent and launches nothing; it only counts as a user event and is logged.
                 listOf(
                     ringSession().copy(paying = INTENT) to PayConfirmed(PurchaseIntentId("intent-2"), QUOTE),
-                    ringSession().copy(paying = INTENT, unlocking = true) to PayConfirmed(PurchaseIntentId("intent-2"), QUOTE),
                     ringSession() to PayConfirmed(INTENT, QUOTE.copy(productId = "snooze_usd_02")),
                 ).flatMap { (session, event) ->
                     ringStates(session).map { from ->
@@ -813,21 +846,43 @@ internal val ROW_CASES: Map<String, List<RowExample>> =
                         ),
                     keyguardLocked = true,
                 )
-            },
-        "R33 Ringing|Grace|Loud (unlocking)+UnlockSucceeded" to
-            ringStates(ringSession().copy(paying = INTENT, unlocking = true)).map { from ->
+            } +
+            ringStates(ringSession().copy(paying = PurchaseIntentId("intent-0"), unlocking = true)).map { from ->
                 RowExample(
-                    name = from.kind,
+                    name = "${from.kind} replacing a pending unlock, still locked",
                     from = from,
-                    event = SessionEvent.UnlockSucceeded,
+                    event = PAY,
                     now = N,
                     expected =
                         Transition(
-                            from.with(from.session.copy(unlocking = false)),
-                            listOf(SessionEffect.LaunchBilling(INTENT, SESSION_ID)),
+                            from.with(from.session.touched(N).copy(paying = INTENT, unlocking = true)),
+                            listOf(SessionEffect.PersistPurchaseIntent(intentAt(N)), SessionEffect.RequestKeyguardDismiss(INTENT)),
                         ),
+                    keyguardLocked = true,
                 )
             },
+        "R33 Ringing|Grace|Loud (unlocking)+UnlockSucceeded" to
+            ringStates(ringSession().copy(paying = INTENT, unlocking = true))
+                .map { from ->
+                    listOf(
+                        reducer(),
+                        // Decision 7: the unlock does not re-check availability; Play reports Offline itself.
+                        reducer(availability = SnoozeAvailability.Unavailable(UnavailableReason.Offline)),
+                    ).map { reducer ->
+                        RowExample(
+                            name = "${from.kind} ${reducer.snoozeAvailability(from.session)}",
+                            from = from,
+                            event = SessionEvent.UnlockSucceeded,
+                            now = N,
+                            expected =
+                                Transition(
+                                    from.with(from.session.copy(unlocking = false)),
+                                    listOf(SessionEffect.LaunchBilling(INTENT, SESSION_ID)),
+                                ),
+                            reducer = reducer,
+                        )
+                    }
+                }.flatten(),
         "R34 Ringing|Grace|Loud (unlocking)+UnlockFailed" to
             ringStates(ringSession().copy(paying = INTENT, unlocking = true)).map { from ->
                 RowExample(

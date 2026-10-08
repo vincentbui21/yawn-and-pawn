@@ -42,12 +42,14 @@ internal val PAY = SessionEvent.PayConfirmed(INTENT, QUOTE)
 internal fun intentAt(
     now: TimeSnapshot,
     quote: LivePrice = QUOTE,
+    intentId: PurchaseIntentId = INTENT,
+    offer: SnoozeOffer = OFFER,
 ): PurchaseIntent =
     PurchaseIntent(
-        intentId = INTENT,
+        intentId = intentId,
         sessionId = SESSION_ID,
-        productId = OFFER.productId,
-        snoozeNumber = OFFER.snoozeNumber,
+        productId = offer.productId,
+        snoozeNumber = offer.snoozeNumber,
         price = quote.price,
         formattedPrice = quote.formattedPrice,
         createdAt = Instant.fromEpochMilliseconds(now.wallMillis),

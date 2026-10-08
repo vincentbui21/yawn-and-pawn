@@ -122,7 +122,10 @@ internal class CheckRules(
             StepResult.ValidLast -> {
                 Transition(
                     SessionState.Completed(
-                        session.withoutTimers().copy(checkRun = run.copy(step = StepPointer(entry = step.entry + 1)), ended = now),
+                        session.withoutTimers().withoutPayment().copy(
+                            checkRun = run.copy(step = StepPointer(entry = step.entry + 1)),
+                            ended = now,
+                        ),
                     ),
                     listOf(
                         SessionEffect.StopSound,

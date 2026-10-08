@@ -73,7 +73,7 @@ val dataModule =
         // The purchase intents (Story 4.8): written only by the engine's commit, read and purged here.
         single<PurchaseIntentStore> { RoomPurchaseIntentStore(get<RuntimeDatabase>().purchaseIntentDao()) }
         // The install id (Story 4.8) in its own device-protected DataStore, excluded from backup; released like the others.
-        single { InstallIdDataStore(get<Context>()) } withOptions { onClose { it?.close() } }
+        single { InstallIdDataStore(get<Context>(), get(), get()) } withOptions { onClose { it?.close() } }
         single<InstallIdProvider> { DataStoreInstallIdProvider(get<InstallIdDataStore>().store, get(), get()) }
         // The settings DataStore (Story 1.16), device-protected; released when Koin stops, like the databases.
         single { SettingsDataStore(get<Context>()) } withOptions { onClose { it?.close() } }

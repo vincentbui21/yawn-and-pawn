@@ -3,6 +3,7 @@ package com.yawnandpawn.app.core.session
 import com.yawnandpawn.app.core.error.DomainError
 import com.yawnandpawn.app.core.error.Outcome
 import com.yawnandpawn.app.core.log.LogEvent
+import com.yawnandpawn.app.core.time.Deadline
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
@@ -216,9 +217,11 @@ class SessionEnginePurchaseIntentTest {
             runCurrent()
             assertTrue(assertIs<SessionState.Ringing>(store.stored).session.unlocking, "committed before its effects")
 
+            time.advanceBy(3.minutes)
             val second = engine()
-            val restored = second.restore().session()
+            val restored = assertIs<SessionState.Ringing>(assertIs<Outcome.Success<SessionState>>(second.restore()).value).session
 
+            assertEquals(Deadline.after(time.now, 30.minutes), restored.interactionDeadline, "a fresh 30 minutes from the restore")
             assertNull(restored.paying)
             assertFalse(restored.unlocking)
             assertEquals(setOf(INTENT), store.intents.keys)
@@ -246,5 +249,70 @@ class SessionEnginePurchaseIntentTest {
             engine.dispatch(SessionEvent.UnlockSucceeded)
 
             assertFalse(runner.ran.any { it is SessionEffect.LaunchBilling })
+        }
+
+    @Test
+    fun `the same intent id again after a cancelled unlock fails the commit, writes and launches nothing, and is logged`() =
+        runTest {
+            val engine = engine()
+            engine.dispatch(alarmFired)
+            keyguard.locked = true
+            engine.dispatch(PAY)
+            engine.dispatch(SessionEvent.UnlockFailed)
+            val before = engine.state.value
+            val firstRow = store.intents.getValue(INTENT)
+            runner.ran.clear()
+
+            val again = engine.dispatch(SessionEvent.PayConfirmed(INTENT, QUOTE.copy(formattedPrice = "€9.99")))
+
+            assertIs<Outcome.Failure<DomainError>>(again)
+            assertEquals(before, engine.state.value)
+            assertNull((engine.state.value as SessionState.Active).session.paying)
+            assertTrue(runner.ran.isEmpty(), "no unlock request, no launch")
+            assertEquals(firstRow, store.intents.getValue(INTENT), "the first row is unchanged")
+            assertEquals(LogEvent.OperationFailed("commit session state", "storage failure: duplicate intent"), logger.events.last())
+        }
+
+    @Test
+    fun `a lost unlock callback never blocks Pay, the next Pay writes its own intent and launches it, never the old one`() =
+        runTest {
+            val engine = engine()
+            engine.dispatch(alarmFired)
+            keyguard.locked = true
+            engine.dispatch(PAY)
+            // The keyguard-dismiss callback never came back; the user unlocked with a fingerprint.
+            keyguard.locked = false
+            runner.ran.clear()
+            val second = PurchaseIntentId("intent-2")
+
+            val session = engine.dispatch(SessionEvent.PayConfirmed(second, QUOTE)).session()
+
+            assertEquals(second, session.paying)
+            assertFalse(session.unlocking)
+            assertEquals(setOf(INTENT, second), store.intents.keys)
+            assertEquals(listOf<SessionEffect>(SessionEffect.LaunchBilling(second, SESSION_ID)), runner.oneShot)
+
+            // Locked again before a third Pay while billing is in flight: ignored, billing for intent-2 is not touched.
+            keyguard.locked = true
+            runner.ran.clear()
+            engine.dispatch(SessionEvent.PayConfirmed(PurchaseIntentId("intent-3"), QUOTE))
+            assertEquals(listOf<SessionEffect>(SessionEffect.LogIgnored("PayConfirmed", SESSION_ID)), runner.oneShot)
+        }
+
+    @Test
+    fun `a new Pay while the unlock is still pending and the phone still locked asks for the unlock again for the new intent`() =
+        runTest {
+            val engine = engine()
+            engine.dispatch(alarmFired)
+            keyguard.locked = true
+            engine.dispatch(PAY)
+            runner.ran.clear()
+            val second = PurchaseIntentId("intent-2")
+
+            val session = engine.dispatch(SessionEvent.PayConfirmed(second, QUOTE)).session()
+
+            assertEquals(second, session.paying)
+            assertTrue(session.unlocking)
+            assertEquals(listOf<SessionEffect>(SessionEffect.RequestKeyguardDismiss(second)), runner.oneShot)
         }
 }

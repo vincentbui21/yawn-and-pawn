@@ -20,8 +20,9 @@ internal class PurchaseRules(
     /**
      * PayConfirmed while Available, no purchase in flight and the live price is for the offered product: `paying` is set and
      * the [PurchaseIntent] is persisted with the state (the engine writes it in the commit). Unlocked, billing launches;
-     * with the keyguard up ([keyguardLocked], Spike S1) the unlock is requested first. A second confirm while paying
-     * never persists or launches again.
+     * with the keyguard up ([keyguardLocked], Spike S1) the unlock is requested first. A second confirm while billing is
+     * in flight never persists or launches again. While only the unlock is pending, billing never launched, so a new
+     * confirm replaces it (Story 4.8 review): a lost keyguard callback can never block Pay for the rest of the ring.
      */
     fun onPayConfirmed(
         state: Ring,
@@ -30,7 +31,8 @@ internal class PurchaseRules(
         keyguardLocked: Boolean,
     ): Transition? {
         val session = state.session
-        val offer = offer(state)?.takeIf { session.paying == null && event.livePrice.productId == it.productId } ?: return null
+        val free = session.paying == null || session.unlocking
+        val offer = offer(state)?.takeIf { free && event.livePrice.productId == it.productId } ?: return null
         val live = event.livePrice
         val intent =
             PurchaseIntent(

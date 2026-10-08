@@ -1,6 +1,6 @@
 package com.yawnandpawn.app.ui.progress
 
-import com.yawnandpawn.app.ui.format.Money
+import com.yawnandpawn.app.core.billing.Money
 import kotlinx.datetime.DateTimeUnit
 import kotlinx.datetime.LocalDate
 import kotlinx.datetime.daysUntil

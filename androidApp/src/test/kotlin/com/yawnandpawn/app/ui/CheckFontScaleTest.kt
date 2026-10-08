@@ -22,12 +22,12 @@ import androidx.compose.ui.unit.DpRect
 import androidx.compose.ui.unit.dp
 import com.github.takahirom.roborazzi.captureRoboImage
 import com.yawnandpawn.app.StopAppRule
+import com.yawnandpawn.app.core.billing.Money
 import com.yawnandpawn.app.core.checks.Puzzle
 import com.yawnandpawn.app.screenshotOptions
 import com.yawnandpawn.app.ui.TalkBackRules.isInside
 import com.yawnandpawn.app.ui.checks.Difficulty
 import com.yawnandpawn.app.ui.checks.toCore
-import com.yawnandpawn.app.ui.format.Money
 import com.yawnandpawn.app.ui.format.formatClockTime
 import com.yawnandpawn.app.ui.theme.PpsThemeMode
 import com.yawnandpawn.app.ui.wake.CheckContent
@@ -78,7 +78,7 @@ class CheckFontScaleTest {
     val composeRule = createEmptyComposeRule()
 
     private val unavailable = SnoozeOffer.Unavailable(SnoozeUnavailableReason.PricesNotLoaded)
-    private val price = SnoozeOffer.Available(Money(amountMicros = 12_990_000, currencyCode = "EUR"))
+    private val price = SnoozeOffer.Available(Money(micros = 12_990_000, currency = "EUR"))
     private val grace = GraceState.Running(secondsLeft = 14, totalSeconds = 20)
     private val link = hasText("Can't do this check?") and hasClickAction()
     private val wrongLine = hasText("Not quite. Try again.")
@@ -302,7 +302,7 @@ class CheckFontScaleTest {
             SuccessScreen(
                 state =
                     SuccessUiState(
-                        SuccessKind.AfterSnooze(paidThisMorning = Money(amountMicros = 2_000_000, currencyCode = "EUR")),
+                        SuccessKind.AfterSnooze(paidThisMorning = Money(micros = 2_000_000, currency = "EUR")),
                         pendingNotUsed = true,
                     ),
                 onIntent = {},

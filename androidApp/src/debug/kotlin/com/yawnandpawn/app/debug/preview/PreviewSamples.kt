@@ -1,5 +1,6 @@
 package com.yawnandpawn.app.debug.preview
 
+import com.yawnandpawn.app.core.billing.Money
 import com.yawnandpawn.app.ui.checks.CheckType
 import com.yawnandpawn.app.ui.checks.Difficulty
 import com.yawnandpawn.app.ui.editor.CheckChip
@@ -12,7 +13,6 @@ import com.yawnandpawn.app.ui.editor.FullEditorSections
 import com.yawnandpawn.app.ui.editor.MotivationChoice
 import com.yawnandpawn.app.ui.editor.MotivationTiming
 import com.yawnandpawn.app.ui.format.Countdown
-import com.yawnandpawn.app.ui.format.Money
 import com.yawnandpawn.app.ui.home.AlarmCard
 import com.yawnandpawn.app.ui.home.DisableUnderLock
 import com.yawnandpawn.app.ui.home.HomeHero

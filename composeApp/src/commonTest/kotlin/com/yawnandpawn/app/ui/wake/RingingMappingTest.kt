@@ -1,5 +1,6 @@
 package com.yawnandpawn.app.ui.wake
 
+import com.yawnandpawn.app.core.billing.Money
 import com.yawnandpawn.app.core.checks.CheckEntry
 import com.yawnandpawn.app.core.checks.CheckMode
 import com.yawnandpawn.app.core.checks.CheckPlan
@@ -14,7 +15,6 @@ import com.yawnandpawn.app.core.time.TimeSnapshot
 import com.yawnandpawn.app.testing.aSession
 import com.yawnandpawn.app.testing.aSessionConfig
 import com.yawnandpawn.app.testing.everySessionState
-import com.yawnandpawn.app.ui.format.Money
 import kotlinx.datetime.LocalDate
 import kotlinx.datetime.LocalTime
 import kotlinx.datetime.TimeZone
@@ -88,6 +88,7 @@ class RingingMappingTest {
                 UnavailableReason.PaymentPending to SnoozeOffer.Unavailable(SnoozeUnavailableReason.PaymentPending),
                 UnavailableReason.BeforeFirstUnlock to SnoozeOffer.LockedBeforeUnlock,
                 UnavailableReason.EarlierPaymentRefunding to SnoozeOffer.StrandedRefund(dollar),
+                UnavailableReason.InvalidFee to SnoozeOffer.Unavailable(SnoozeUnavailableReason.PricesNotLoaded),
             )
 
         assertEquals(UnavailableReason.entries.toSet(), expected.keys, "every reason is covered")

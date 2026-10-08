@@ -1,30 +1,17 @@
 package com.yawnandpawn.app.ui.format
 
+import com.yawnandpawn.app.core.billing.Money
+import com.yawnandpawn.app.core.billing.MoneyFormatter
+import com.yawnandpawn.app.core.billing.formatTotals
+
 /**
- * An amount of money for display: [amountMicros] millionths of one unit of [currencyCode] (ISO 4217), the way
- * Google Play reports prices. Always shown through [formatMoney], never with a hard-coded currency symbol.
+ * The phone's [MoneyFormatter] (AD-8): the only way the UI turns a [Money] into text, in the phone's locale with the
+ * currency's own symbol and fraction digits. Never a hard-coded currency symbol.
  */
-data class Money(
-    val amountMicros: Long,
-    val currencyCode: String,
-) {
-    operator fun times(factor: Int): Money = copy(amountMicros = amountMicros * factor)
+expect val moneyFormatter: MoneyFormatter
 
-    operator fun plus(other: Money): Money {
-        require(other.currencyCode == currencyCode) { "cannot add $currencyCode and ${other.currencyCode}" }
-        return copy(amountMicros = amountMicros + other.amountMicros)
-    }
+/** [money] in the phone's locale with its currency ("$3.00", "3,00 €", "￥300"). */
+fun formatMoney(money: Money): String = moneyFormatter.format(money)
 
-    companion object {
-        const val MICROS_PER_UNIT: Long = 1_000_000L
-
-        /** [units] whole units of [currencyCode]. */
-        fun of(
-            units: Int,
-            currencyCode: String,
-        ): Money = Money(units * MICROS_PER_UNIT, currencyCode)
-    }
-}
-
-/** [money] in the phone's locale with its currency ("$3", "3 €"); whole amounts drop the decimals. */
-expect fun formatMoney(money: Money): String
+/** One total per currency in [amounts], joined with " + " ("$3.00 + €2.00"); empty for an empty list. */
+fun formatMoney(amounts: List<Money>): String = moneyFormatter.formatTotals(amounts)

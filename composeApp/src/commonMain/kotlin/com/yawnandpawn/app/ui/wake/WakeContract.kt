@@ -1,7 +1,7 @@
 package com.yawnandpawn.app.ui.wake
 
+import com.yawnandpawn.app.core.billing.Money
 import com.yawnandpawn.app.ui.checks.CheckType
-import com.yawnandpawn.app.ui.format.Money
 import kotlinx.datetime.LocalDate
 import kotlinx.datetime.LocalTime
 

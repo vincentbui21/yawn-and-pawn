@@ -1,57 +1,62 @@
 package com.yawnandpawn.app.testing
 
+import com.yawnandpawn.app.core.billing.FeeLadder
+import com.yawnandpawn.app.core.billing.FeeStep
+import com.yawnandpawn.app.core.billing.UsdFeeLadder
+import com.yawnandpawn.app.core.billing.nextAvailability
 import com.yawnandpawn.app.core.checks.CheckAnswer
 import com.yawnandpawn.app.core.checks.CheckEntry
 import com.yawnandpawn.app.core.checks.CheckMode
 import com.yawnandpawn.app.core.checks.CheckPlan
 import com.yawnandpawn.app.core.checks.CheckType
+import com.yawnandpawn.app.core.error.DomainError
+import com.yawnandpawn.app.core.error.Outcome
+import com.yawnandpawn.app.core.log.Logger
 import com.yawnandpawn.app.core.session.CameraFallbackPolicy
 import com.yawnandpawn.app.core.session.CheckRun
 import com.yawnandpawn.app.core.session.CheckValidator
 import com.yawnandpawn.app.core.session.FallbackDecision
 import com.yawnandpawn.app.core.session.FallbackPolicy
 import com.yawnandpawn.app.core.session.FallbackRequest
-import com.yawnandpawn.app.core.session.FeeLadder
 import com.yawnandpawn.app.core.session.SessionData
 import com.yawnandpawn.app.core.session.SnoozeAvailability
 import com.yawnandpawn.app.core.session.SnoozeAvailabilityPolicy
-import com.yawnandpawn.app.core.session.SnoozeOffer
 import com.yawnandpawn.app.core.session.StepResult
 import com.yawnandpawn.app.core.session.UnavailableReason
 import com.yawnandpawn.app.core.session.UserLockState
-import com.yawnandpawn.app.core.session.nextOffer
-import com.yawnandpawn.app.core.session.snoozeProductId
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 
 /**
- * [FeeLadder] under test control: snooze n at base tier B is `snooze_usd_NN` with NN = [tierOf] (B, n), by default
- * B + n - 1. Every call is kept in [calls] as (baseFeeTier, snoozeNumber).
+ * [FeeLadder] that answers exactly like the production [UsdFeeLadder] (B × N, capped at 50, [DomainError.InvalidFee]
+ * outside the fee rules), unless a test sets [answer]. Every call is kept in [calls] as (baseFeeTier, snoozeNumber).
  */
 class FakeFeeLadder(
-    var tierOf: (baseFeeTier: Int, snoozeNumber: Int) -> Int = { baseFeeTier, snoozeNumber -> baseFeeTier + snoozeNumber - 1 },
+    var answer: ((baseFeeTier: Int, snoozeNumber: Int) -> Outcome<FeeStep, DomainError.InvalidFee>)? = null,
 ) : FeeLadder {
     private val recorded = mutableListOf<Pair<Int, Int>>()
 
     val calls: List<Pair<Int, Int>>
         get() = recorded.toList()
 
-    override fun offer(
+    override fun productFor(
         baseFeeTier: Int,
         snoozeNumber: Int,
-    ): SnoozeOffer {
+    ): Outcome<FeeStep, DomainError.InvalidFee> {
         recorded += baseFeeTier to snoozeNumber
-        return SnoozeOffer(productId = snoozeProductId(tierOf(baseFeeTier, snoozeNumber)), snoozeNumber = snoozeNumber)
+        return answer?.invoke(baseFeeTier, snoozeNumber) ?: UsdFeeLadder.productFor(baseFeeTier, snoozeNumber)
     }
 }
 
 /**
- * [SnoozeAvailabilityPolicy] under test control: Available at the [ladder]'s next offer unless [unavailable] names a
- * reason. Every session asked about is kept in [asked].
+ * [SnoozeAvailabilityPolicy] under test control: unless [unavailable] names a reason, the [ladder]'s answer for the
+ * next snooze through [nextAvailability] (Available, [UnavailableReason.PriceCapReached], or a logged
+ * [UnavailableReason.InvalidFee]). Every session asked about is kept in [asked]; [logger] gets the invalid-fee events.
  */
 class FakeSnoozeAvailability(
     val ladder: FeeLadder = FakeFeeLadder(),
     var unavailable: UnavailableReason? = null,
+    val logger: Logger = FakeLogger(),
 ) : SnoozeAvailabilityPolicy {
     private val sessions = mutableListOf<SessionData>()
 
@@ -60,7 +65,7 @@ class FakeSnoozeAvailability(
 
     override fun availability(session: SessionData): SnoozeAvailability {
         sessions += session
-        return unavailable?.let { SnoozeAvailability.Unavailable(it) } ?: SnoozeAvailability.Available(ladder.nextOffer(session))
+        return unavailable?.let { SnoozeAvailability.Unavailable(it) } ?: ladder.nextAvailability(session, logger)
     }
 }
 

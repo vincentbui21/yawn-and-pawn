@@ -1,6 +1,6 @@
 package com.yawnandpawn.app.ui.settings
 
-import com.yawnandpawn.app.ui.format.Money
+import com.yawnandpawn.app.core.billing.Money
 import com.yawnandpawn.app.ui.theme.PpsThemeMode
 import kotlinx.datetime.LocalTime
 

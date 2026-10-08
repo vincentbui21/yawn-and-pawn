@@ -24,6 +24,12 @@ enum class UnavailableReason {
     PriceCapReached,
     PaymentPending,
     EarlierPaymentRefunding,
+
+    /**
+     * The session's frozen base fee or snooze number is outside the fee rules (`DomainError.InvalidFee`, Story 4.2):
+     * a damaged config, never a user choice. Logged; the wake screen shows it like prices not loaded.
+     */
+    InvalidFee,
 }
 
 /** Whether the user can buy a snooze right now (AD-7). */
@@ -41,20 +47,6 @@ sealed interface SnoozeAvailability {
 fun interface SnoozeAvailabilityPolicy {
     fun availability(session: SessionData): SnoozeAvailability
 }
-
-/**
- * Maps `(baseFeeTier, snoozeNumber)` to the Play product of that snooze (AD-7). The real ladder is Epic 4; the price of
- * the next snooze is always [nextOffer].
- */
-fun interface FeeLadder {
-    fun offer(
-        baseFeeTier: Int,
-        snoozeNumber: Int,
-    ): SnoozeOffer
-}
-
-/** The offer for the session's next snooze: `FeeLadder(config.baseFeeTier, snoozesGranted + 1)` (AD-2). */
-fun FeeLadder.nextOffer(session: SessionData): SnoozeOffer = offer(session.config.baseFeeTier, session.snoozesGranted + 1)
 
 /**
  * The result of checking an answer against the current item of a [CheckRun] (AD-9), in terms of the AD-2 rows: "valid,
@@ -232,23 +224,3 @@ object PluginCheckValidator : CheckValidator {
             CheckResult.WrongRestart -> StepResult.InvalidRestart
         }
 }
-
-/**
- * The Epic 1 [FeeLadder]: a simple tier mapping until the real ladder (Epic 4). Snooze n at base tier B is product
- * `snooze_usd_NN` with NN = B + n - 1, capped at the top of the catalogue.
- */
-object TierFeeLadder : FeeLadder {
-    const val TOP_TIER = 50
-
-    override fun offer(
-        baseFeeTier: Int,
-        snoozeNumber: Int,
-    ): SnoozeOffer {
-        require(baseFeeTier >= 1 && snoozeNumber >= 1) { "tier and snooze number start at 1, were $baseFeeTier and $snoozeNumber" }
-        val tier = (baseFeeTier + snoozeNumber - 1).coerceAtMost(TOP_TIER)
-        return SnoozeOffer(productId = snoozeProductId(tier), snoozeNumber = snoozeNumber)
-    }
-}
-
-/** The Play product id of price tier [tier] (1..50): `snooze_usd_01` … `snooze_usd_50` (AD-7). */
-fun snoozeProductId(tier: Int): String = "snooze_usd_" + tier.toString().padStart(2, '0')

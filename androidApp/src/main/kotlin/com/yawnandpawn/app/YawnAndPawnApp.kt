@@ -26,6 +26,9 @@ import com.yawnandpawn.app.core.alarm.ReRegisterCode
 import com.yawnandpawn.app.core.alarm.RearmOnFire
 import com.yawnandpawn.app.core.alarm.SaveAlarm
 import com.yawnandpawn.app.core.alarm.SetAlarmEnabled
+import com.yawnandpawn.app.core.billing.FeeLadder
+import com.yawnandpawn.app.core.billing.MoneyFormatter
+import com.yawnandpawn.app.core.billing.UsdFeeLadder
 import com.yawnandpawn.app.core.checks.AccessibilityState
 import com.yawnandpawn.app.core.checks.word.WordBank
 import com.yawnandpawn.app.core.error.valueOrNull
@@ -39,7 +42,6 @@ import com.yawnandpawn.app.core.session.CameraFallbackPolicy
 import com.yawnandpawn.app.core.session.CheckValidator
 import com.yawnandpawn.app.core.session.EffectRunner
 import com.yawnandpawn.app.core.session.FallbackPolicy
-import com.yawnandpawn.app.core.session.FeeLadder
 import com.yawnandpawn.app.core.session.NoBillingSnoozeAvailability
 import com.yawnandpawn.app.core.session.PluginCheckValidator
 import com.yawnandpawn.app.core.session.ScheduleTestAlarm
@@ -51,10 +53,10 @@ import com.yawnandpawn.app.core.session.SessionSlotRearm
 import com.yawnandpawn.app.core.session.SessionState
 import com.yawnandpawn.app.core.session.SnoozeAvailabilityPolicy
 import com.yawnandpawn.app.core.session.StoredSession
-import com.yawnandpawn.app.core.session.TierFeeLadder
 import com.yawnandpawn.app.core.session.UserLockState
 import com.yawnandpawn.app.core.stats.ReRegisterSuggestions
 import com.yawnandpawn.app.data.dataModule
+import com.yawnandpawn.app.ui.format.moneyFormatter
 import com.yawnandpawn.app.ui.nav.WakeScreenOpener
 import com.yawnandpawn.app.ui.uiModule
 import kotlinx.coroutines.launch
@@ -101,7 +103,10 @@ val appModule =
         single<SnoozeAvailabilityPolicy> { NoBillingSnoozeAvailability(get()) }
         single<CheckValidator> { PluginCheckValidator }
         single<FallbackPolicy> { CameraFallbackPolicy() }
-        single<FeeLadder> { TierFeeLadder }
+        // The fee ladder (Story 4.2): snooze N at base fee B is product snooze_usd_NN with NN = B x N, capped at 50.
+        single<FeeLadder> { UsdFeeLadder }
+        // Money as text (AD-8): the phone's locale and the currency's own digits; the UI uses the same formatter.
+        single<MoneyFormatter> { moneyFormatter }
         single { SessionReducer(get(), get(), get()) }
         single<EffectRunner> { get<WakeRuntime>() }
         single<Billing> { UnavailableBilling(get()) }

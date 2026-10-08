@@ -1,0 +1,169 @@
+---
+title: 'Story 4.2: Money, MoneyFormatter and the FeeLadder in core'
+type: 'feature'
+created: '2026-10-08'
+status: 'review'
+baseline_revision: '75b1877'
+review_loop_iteration: 0
+followup_review_recommended: true
+context:
+  - '{project-root}/_bmad-output/implementation-artifacts/epic-4-context.md'
+  - '{project-root}/_bmad-output/planning-artifacts/epics.md (Story 4.2)'
+  - '{project-root}/docs/architecture.md (AD-7, AD-8, AD-12)'
+  - '{project-root}/docs/prd.md (§6.2, §6.3, FR-RNG-6, FR-RNG-7, NFR-10, NFR-11)'
+warnings:
+  - 'Lane 2 (Story 4.1) also creates config/snooze-products.txt. Both write the same 50 ids, one per line; the 4.2 reader skips blank lines and # comments, so a header 4.1 adds does not break it. Take either version when merging.'
+deferred:
+  - 'Story 4.7: snoozeAvailability maps FeeStep.PriceCapReached to UnavailableReason.PriceCapReached, and MaxSnoozesReached from config.maxSnoozes (FeeRules.MAX_SNOOZES).'
+  - 'Story 4.3: prices shown before purchase are Play formattedPrice strings (AD-8); MoneyFormatter formats totals and history.'
+  - 'Story 4.5/4.6: ladder previews from Play prices per tier instead of Money.times on the local base fee.'
+---
+
+<intent-contract>
+
+## Intent
+
+**Problem:** The Epic 1 placeholder ladder prices snooze N at tier B + N − 1, but the PRD (§6.2) says the Nth snooze costs B × N, capped at $50. It never reports the cap, and it throws on bad input. There are also two money types: `ui.format.Money` (UI only, `plus` throws on mixed currencies) and none in core, although AD-8 says `Money(micros, currency)` is the only money type and formatting goes through a `MoneyFormatter` port.
+
+**Approach:**
+- **`core.billing.Money(micros: Long, currency: String)`** replaces `ui.format.Money` everywhere (one type, AD-8):
+  - The currency must be 3 upper-case ASCII letters. The constructor `require`s it (a programming error); `Money.parse(micros, currency)` returns `Outcome<Money, DomainError.InvalidCurrency>` for adapter input (Play, DataStore).
+  - `plus` never throws: it returns `Outcome<Money, DomainError.CurrencyMismatch>`.
+  - `totalsByCurrency(List<Money>)` returns one `Money` per currency, in first-seen order.
+  - `Money.of(units, currency)` and `times(Int)` remain for previews and ladder approximations.
+- **`MoneyFormatter`** port (`fun format(money): String`) and `MoneyFormatter.formatTotals(list)`: one amount per currency joined with " + " (EXPERIENCE.md "Money, mixed currencies").
+  - `AndroidMoneyFormatter` (composeApp androidMain) uses `NumberFormat.getCurrencyInstance(locale)` with the currency's own fraction digits.
+  - UI `formatMoney(...)` delegates to it, so the UI formats money in no other way.
+  - `FakeMoneyFormatter` lives in `:testing`. Koin binds `MoneyFormatter`.
+- **`core.billing.FeeLadder.productFor(baseFeeTier, snoozeNumber)`** returns `Outcome<FeeStep, DomainError.InvalidFee>`, where `FeeStep` is `Product(productId, usdTier)` or `PriceCapReached`.
+  - `UsdFeeLadder` is the production ladder: NN = B × N, a product when 1 ≤ NN ≤ 50, `PriceCapReached` above.
+  - B outside 1–10 or N < 1 is `InvalidFee`.
+  - `FeeRules` holds the limits: base fee tiers 1–10, max snoozes 1–5 (default 5), cap tier 50.
+  - `SnoozeProducts` holds the 50 ids, checked against `config/snooze-products.txt`.
+- **`nextStep(session)`/`nextOffer(session)`** move with the interface. `nextOffer` is null at the cap or on an invalid config.
+- **Detekt rule `NoFloatingPointMoney`:** in `:core` and `:data`, no `Double`/`Float` property or parameter whose name contains price, amount, fee or paid.
+
+## Boundaries & Constraints
+
+**Always:**
+- Core stays platform-free (AD-1); nothing in `core.billing` throws for expected input (AD-12). The `Money` constructor's currency check is the only `require`.
+- `core.billing` ≥ 90 % line coverage (new Kover variant `billing`, run by `koverVerify`).
+- `NoUnseededRandom`, `NoHostageApis` and every existing rule stay green.
+
+**Never:**
+- No change to the reducer, AD-2 rows, `SessionState`/`SessionJson` (the `paid` list is 4.7) or any schema.
+- No new user-facing string resource. " + " is EXPERIENCE.md's mixed-currency pattern, built in the formatter.
+- No hard-coded currency symbol (`CopyRulesTest` is unchanged).
+
+## Decisions (fast mode: default taken, owner can change)
+
+1. **"$1.00", not "$1":** the formatter always uses the currency's fraction digits, as the AC asserts. Play's own `formattedPrice` for the $1 product is "$1.00" too. The approved previews showed whole amounts without decimals, so every money-bearing preview and screenshot baseline is re-recorded (intended). To revert, drop the decimals for whole amounts in `AndroidMoneyFormatter` and re-record.
+2. **Invalid currency:** the constructor `require`s, and `Money.parse` returns `DomainError.InvalidCurrency`. It is a new `DomainError` case beside the AC's `CurrencyMismatch` and `InvalidFee`.
+3. **Package:** `FeeLadder`, `FeeStep`, the ids and `FeeRules` move to `core.billing`. `SnoozeOffer` stays in `core.session` (availability is 4.7's).
+4. **Production ladder name:** `UsdFeeLadder` (an object) replaces `TierFeeLadder`.
+5. **`AndroidMoneyFormatter` location:** in `:composeApp` androidMain (package `ui.format`), because the UI's `formatMoney` must reach it. It is bound in Koin from `:androidApp`, and its Robolectric test lives in `:androidApp`.
+6. **Mixed totals in the UI:** Day detail's "paid" becomes the per-currency totals. Home, Progress and Success keep one `Money` until 4.7/4.15 feed them.
+7. **28 reachable products, not 31:** the epic and PRD §6.3 say 31 distinct products for B 1–10 × N 1–5, but B × N gives 28 (1–10; 12, 14, 16, 18, 20; 15, 21, 24, 27, 30; 28, 32, 36, 40; 25, 35, 45, 50). The tests assert 28. The catalogue keeps all 50 products.
+
+## I/O & Edge-Case Matrix
+
+| Scenario | Input / State | Expected Output / Behavior |
+|----------|--------------|---------------------------|
+| Ladder B = 1 | N 1..5 | 01, 02, 03, 04, 05 |
+| Ladder B = 3 | N 1..5 | 03, 06, 09, 12, 15 |
+| Ladder top | B 10, N 5 | 50 (exactly the cap) |
+| Cap | B 10, N 6; B 9, N 6 (54); B 1, N 51 | `PriceCapReached` |
+| Not capped | B 1, N 50 | 50 |
+| Invalid B | 0, −1, 11 | `InvalidFee(B, N)` |
+| Invalid N | 0, −3 | `InvalidFee(B, N)` (checked before the cap) |
+| Overflow | B 10, N `Int.MAX_VALUE` | `PriceCapReached` (no Int overflow) |
+| Reachable set | B 1..10 × N 1..5 | 28 distinct ids (not 31, decision 7), all in `config/snooze-products.txt` |
+| Catalogue file | `config/snooze-products.txt` | exactly `SnoozeProducts.all`, in order (comments and blanks skipped) |
+| Money currency | "usd", "US", "USDX", "", "U1D" | constructor throws; `parse` → `InvalidCurrency` |
+| Plus | USD + USD; USD + EUR | sum; `CurrencyMismatch("USD","EUR")` |
+| Negative / zero | −1 µ, 0 µ | allowed (refund corrections); `0` formats as "$0.00" |
+| Totals | [], [USD 1, EUR 2, USD 3] | []; [USD 4, EUR 2] (first-seen order) |
+| Format en-US | USD 1 000 000 µ | "$1.00" |
+| Format de-DE | EUR 1 000 000 µ | "1,00 €" |
+| Format ja-JP | JPY 150 000 000 µ | "￥150" |
+| Format vi-VN | VND 25 000 000 000 µ | "25.000 ₫" |
+| Format sub-unit | USD 1 990 000 µ; USD 1 234 567 µ | "$1.99"; "$1.23" (half-even to the currency's digits) |
+| Mixed list | [USD 1, EUR 2] en-US | "$1.00 + €2.00" |
+| Detekt | `val price: Double`, `fun f(amountUsd: Float?)`, `val paidTotal = 1.5` | reported |
+| Detekt | `val price: Money`, `val ratio: Double`, `val feeTier: Int` | not reported |
+
+</intent-contract>
+
+## Tasks
+
+1. `core.billing`: `Money`, `totalsByCurrency`, `MoneyFormatter` + `formatTotals`, `FeeLadder`, `FeeStep`, `UsdFeeLadder`, `FeeRules`, `SnoozeProducts`.
+2. `core.error.DomainError`: `CurrencyMismatch`, `InvalidCurrency`, `InvalidFee`; `diagnostic()` cases.
+3. `core.session`: remove `FeeLadder`, `TierFeeLadder` and `snoozeProductId` from `SessionPolicies.kt`; `nextStep`/`nextOffer` in `core.billing`.
+4. `config/snooze-products.txt` (50 ids); a `:testing` `jvmTest` reads it through a system property (`verifyCoreDependencies` allows only `commonMain`/`commonTest` in `:core`).
+5. `:testing`: `FakeFeeLadder` (B × N by default, records calls, cap above 50), `FakeSnoozeAvailability` (cap → `PriceCapReached`), `FakeMoneyFormatter`.
+6. `:composeApp`: delete `ui.format.Money`; `formatMoney(Money)` and `formatMoney(List<Money>)` through `AndroidMoneyFormatter`; migrate fields (`micros`, `currency`) and Day detail totals.
+7. `:androidApp`: Koin `FeeLadder` → `UsdFeeLadder`, `MoneyFormatter` → `AndroidMoneyFormatter`; previews and tests migrated.
+8. `:detekt-rules`: `NoFloatingPointMoney` + tests; `detekt.yml` scope (core, data); provider list; `DetektConfigTest`.
+9. Kover variant `billing` (90 %), wired into `koverVerify`.
+10. Re-record the money-bearing screenshot baselines (decision 1).
+
+## Test plan
+
+- **core** `MoneyTest`: currency validation (table), `parse`, `plus`, `times`, `of`, `totalsByCurrency`.
+- **core** `FeeLadderTest`: the edge-case table; examples; 31 reachable; ids in `SnoozeProducts.all`; `nextStep`/`nextOffer` for a session; `formatTotals` through a recording formatter.
+- **testing** `jvmTest` `SnoozeProductsFileTest`: the shared file equals `SnoozeProducts.all`; every reachable id is in it.
+- **testing** `SessionFakesTest`: fakes follow B × N and the cap; `FakeMoneyFormatter` is deterministic.
+- **androidApp** `AndroidMoneyFormatterTest` (Robolectric): the four locales, sub-unit rounding, zero, the mixed list.
+- **androidApp** `SessionWiringTest`: Koin binds `UsdFeeLadder` and `AndroidMoneyFormatter`.
+- **detekt-rules** `NoFloatingPointMoneyTest`: violating and compliant snippets; the provider lists the rule; `DetektConfigTest` checks the core and data scope.
+- **Gate:** `./gradlew qualityGate :androidApp:assembleDebugAndroidTest --no-daemon`.
+
+## Verification
+
+**Commands:**
+- `./gradlew qualityGate :androidApp:assembleDebugAndroidTest --no-daemon` -- expected: BUILD SUCCESSFUL.
+- `git status --porcelain androidApp/src/test/screenshots` -- expected: only the re-recorded money baselines (decision 1).
+
+## Auto Run Result
+
+Status: implemented in fast mode (one agent, Epic 4 Lane 1), waiting for review. Branch `story/4-2-money-and-feeladder` on main `75b1877` + the Epic 4 context commits.
+
+**Verification:**
+- `./gradlew qualityGate :androidApp:assembleDebugAndroidTest --no-daemon`: BUILD SUCCESSFUL (22 min). Kover is green for core, session, checks and the new billing variant.
+- 70 screenshot baselines were re-recorded, all of them screens that show money ("$1" became "$1.00", decision 1). The other baselines are unchanged.
+
+**Residual risks:**
+- **Shared file:** `config/snooze-products.txt` also comes from 4.1. Both versions list the same ids, and comments are ignored.
+- **Callers:** `FeeLadder` moved to `core.billing` and returns an `Outcome`. Branches that still import `core.session.FeeLadder`/`TierFeeLadder` need a rebase.
+- **The "31" in the epic:** the epic text says 31 reachable products. The real count is 28 (decision 7), and the planning docs still say 31.
+
+
+## Review (2 reviewers, fast mode)
+
+Two reviewers looked at `6110810`, one for verification gaps and one for edge cases. Neither found anything HIGH. All 9 items are fixed in `fix(4.2): review fixes`, each with a test:
+
+1. **One formatter, enforced:** `MoneyFormattingScanTest` (composeApp host test) scans `:composeApp` and `:androidApp` main sources, with comments skipped. Outside `AndroidMoneyFormatter.kt` it fails on:
+   - `getCurrencyInstance`, `Currency.getInstance` and `DecimalFormat`;
+   - an escaped `$` or a `$` followed by a digit;
+   - a €, £, ¥ or ₫ symbol.
+
+   A sample test proves that each pattern is caught.
+2. **More formatter cases:**
+   - KWD shows 3 digits ("KWD 1.235").
+   - XXX, which has no digits, shows no decimals and does not crash.
+   - A negative amount shows "-$1.00".
+3. **Detekt finds non-literal doubles:** the rule now also reports `1.5 * n`, `cents / 100.0`, `micros.toDouble()`, `fun price(): Double`, `List<Double>` and `DoubleArray`.
+4. **The fake agrees with the real ladder (with 7):** `FakeFeeLadder` answers like `UsdFeeLadder`, unless a test sets `answer`. A test checks B 0..11 × N 0..6 against the real ladder.
+5. **28, not 31:** epics.md (the 4.2 AC, the catalogue line and the 8.x checklist) and the PRD §6.3 copies now say 28, each with a dated note that this is an arithmetic correction.
+6. **Layouts at 200% font:**
+   - **Purchase history:** a new `PurchaseRowLayout` keeps the date and alarm on one line. When they don't fit beside the price, they take the full width and the price moves down beside the caption. The time keeps "AM" on its line (no-break space).
+   - **Confirm sheet:** it stops below Ringing's clock, but always keeps at least 40% of the screen. Its text scrolls, and its buttons stay whole.
+   - **Tests and baselines:** `MoneyLayoutFontScaleTest` checks one line per title, price clear of the title, the sheet title below the clock, whole buttons and at most 2 lines for "Pay … and snooze". It runs at 411×891 and 360×640. The baselines were re-recorded.
+7. **An invalid frozen fee has its own reason (with 4):** `FeeLadder.nextAvailability(session, logger)` is the shared mapping, so 4.7 can reuse it:
+   - a product is `Available`;
+   - over the cap is `PriceCapReached`;
+   - `InvalidFee` is the new `UnavailableReason.InvalidFee`, logged with its diagnostic.
+
+   The wake screen shows `InvalidFee` like "prices not loaded", so no new string is needed. `FakeSnoozeAvailability` uses the same mapping.
+8. **Cash digits:** the formatter now uses ICU (`android.icu`, as on the phone). A whole amount uses the currency's cash digits, as Play does: IDR "Rp 15.000", HUF "15 000 Ft", USD still "$1.00". ICU's id-ID output has a space after "Rp". A device check is added to deferred-work.md for Story 4.18.
+9. **Words, not substrings:** the money words are matched as camelCase or snake_case words. `feedbackGain`, `feet`, `paramount` and `prepaidCredit` are not reported; `basePrice` is.

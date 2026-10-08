@@ -118,7 +118,7 @@ See Glossary: **Session**, **Ring**. A session starts when an alarm first rings 
 (Research summary — details confirmed in ARCHITECTURE-SPINE.md and Spike S1.)
 
 **Products**
-- Each price step is a **consumable one-time product** with a fixed USD price: `snooze_usd_01` … `snooze_usd_50` (50 products). Only 31 prices are reachable with today's limits (B ≤ 10, N ≤ 5); the full 1–50 catalogue is **deliberate headroom** for Q1/Q3. A unit test asserts that `productFor(fee)` exists for every reachable (B, N). Google Play allows up to 1,000 products per app. Pricing templates were discontinued in Oct 2025, so prices are set via the Play Developer API (`onetimeproducts`) from a script in the repo, not by hand.
+- Each price step is a **consumable one-time product** with a fixed USD price: `snooze_usd_01` … `snooze_usd_50` (50 products). Only 28 prices are reachable with today's limits (B ≤ 10, N ≤ 5) (arithmetic correction 2026-10-08, Story 4.2: B 1–10 × N 1–5 gives 28 distinct B × N values, not 31); the full 1–50 catalogue is **deliberate headroom** for Q1/Q3. A unit test asserts that `productFor(fee)` exists for every reachable (B, N). Google Play allows up to 1,000 products per app. Pricing templates were discontinued in Oct 2025, so prices are set via the Play Developer API (`onetimeproducts`) from a script in the repo, not by hand.
 
 **Linking a purchase to a session**
 - Every session has a random, non-personal `sessionId` (UUID).

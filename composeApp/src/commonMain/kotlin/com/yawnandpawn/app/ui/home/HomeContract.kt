@@ -1,8 +1,8 @@
 package com.yawnandpawn.app.ui.home
 
+import com.yawnandpawn.app.core.billing.Money
 import com.yawnandpawn.app.ui.checks.CheckType
 import com.yawnandpawn.app.ui.format.Countdown
-import com.yawnandpawn.app.ui.format.Money
 import kotlinx.datetime.DayOfWeek
 import kotlinx.datetime.LocalTime
 

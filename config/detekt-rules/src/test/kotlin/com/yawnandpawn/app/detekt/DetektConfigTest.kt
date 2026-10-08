@@ -47,6 +47,13 @@ class DetektConfigTest {
     }
 
     @Test
+    fun `NoFloatingPointMoney is scoped to core and data`() {
+        val rule = (config["yawn-and-pawn"] as Map<*, *>)["NoFloatingPointMoney"] as Map<*, *>
+
+        assertEquals(listOf("**/core/src/**", "**/data/src/**"), rule["includes"])
+    }
+
+    @Test
     fun `NoHostageApis is scoped to androidApp and composeApp`() {
         val rule = (config["yawn-and-pawn"] as Map<*, *>)["NoHostageApis"] as Map<*, *>
         val includes = (rule["includes"] as List<*>).toSet()

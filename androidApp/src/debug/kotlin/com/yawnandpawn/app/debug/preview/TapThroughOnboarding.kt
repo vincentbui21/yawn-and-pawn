@@ -1,5 +1,6 @@
 package com.yawnandpawn.app.debug.preview
 
+import com.yawnandpawn.app.core.billing.Money
 import com.yawnandpawn.app.ui.checkpicker.CheckPickerIntent
 import com.yawnandpawn.app.ui.checkpicker.CheckPickerUiState
 import com.yawnandpawn.app.ui.checks.CheckType
@@ -8,7 +9,6 @@ import com.yawnandpawn.app.ui.editor.CheckChip
 import com.yawnandpawn.app.ui.editor.EditorUiState
 import com.yawnandpawn.app.ui.editor.RepeatChoice
 import com.yawnandpawn.app.ui.format.Countdown
-import com.yawnandpawn.app.ui.format.Money
 import com.yawnandpawn.app.ui.format.Weekdays
 import com.yawnandpawn.app.ui.home.AlarmCard
 import com.yawnandpawn.app.ui.home.HomeUiState
@@ -182,8 +182,8 @@ internal fun List<CheckChip>.moved(
 
 /** One price tier down or up, in whole multiples of the preview base fee (like Settings). */
 private fun OnboardingUiState.withFee(fee: Money): OnboardingUiState {
-    val unit = Money(baseFee.amountMicros / multipleOf(baseFee), baseFee.currencyCode)
-    val multiple = (fee.amountMicros / unit.amountMicros).toInt()
+    val unit = Money(baseFee.micros / multipleOf(baseFee), baseFee.currency)
+    val multiple = (fee.micros / unit.micros).toInt()
     return copy(
         baseFee = fee,
         lowerFee = if (multiple > 1) unit * (multiple - 1) else null,
@@ -194,7 +194,7 @@ private fun OnboardingUiState.withFee(fee: Money): OnboardingUiState {
 /** The base fee's multiple of the lowest tier: the lowest tier has no lower fee. */
 private fun OnboardingUiState.multipleOf(fee: Money): Long {
     val lower = lowerFee ?: return 1
-    return fee.amountMicros / (fee.amountMicros - lower.amountMicros)
+    return fee.micros / (fee.micros - lower.micros)
 }
 
 /** The preview's base fee goes up to 5 tiers (like Settings). */

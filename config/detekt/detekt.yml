@@ -72,6 +72,13 @@ yawn-and-pawn:
     active: true
     includes:
       - '**/core/src/**'
+  # Money is Money(micros: Long, currency) (AD-8, Story 4.2): no Double/Float property or parameter named like a price,
+  # amount, fee or paid in the domain and storage modules.
+  NoFloatingPointMoney:
+    active: true
+    includes:
+      - '**/core/src/**'
+      - '**/data/src/**'
 
 # Test source sets detekt's defaults do not know (androidHostTest, testDebug) are tests too.
 complexity:

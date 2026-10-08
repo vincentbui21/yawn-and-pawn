@@ -9,6 +9,7 @@ import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.ScrollState
 import androidx.compose.foundation.background
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Arrangement
@@ -25,7 +26,9 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.systemBars
 import androidx.compose.foundation.layout.windowInsetsPadding
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.ZeroCornerSize
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Icon
@@ -43,12 +46,21 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.geometry.Size
+import androidx.compose.ui.graphics.BlendMode
+import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.CompositingStrategy
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.layout.boundsInWindow
+import androidx.compose.ui.layout.onGloballyPositioned
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.semantics.LiveRegionMode
 import androidx.compose.ui.semantics.Role
@@ -424,6 +436,10 @@ fun GraceHeader(
  * outlined action pays (or uses the earlier payment); the filled bottom one, a tap outside and Back all run
  * [onDismiss] ("I'll get up", "Not now", "Cancel"). Every input is ignored for 500 ms after the sheet opens or changes
  * state, whatever the animation setting. Neither button is pre-selected.
+ *
+ * With [keepClearAboveY] (a window y in px, the bottom of Ringing's clock) the sheet never grows over that line, but
+ * keeps at least [MIN_SHEET_FRACTION] of the screen: at large font scales its text scrolls and the buttons stay whole.
+ * Where the text runs on past an edge, it fades out over `space6` there, so a cut line reads as "scroll for more".
  */
 @Composable
 fun SnoozeConfirmSheet(
@@ -432,6 +448,7 @@ fun SnoozeConfirmSheet(
     onDismiss: () -> Unit,
     modifier: Modifier = Modifier,
     backdrop: GlassBackdrop? = null,
+    keepClearAboveY: Float? = null,
 ) {
     val colors = PpsTheme.colors
     val spacing = PpsTheme.spacing
@@ -445,7 +462,16 @@ fun SnoozeConfirmSheet(
     val guardedDismiss = { if (!inputLocked) onDismiss() }
     val guardedDismissState = rememberUpdatedState(guardedDismiss)
     NavigationBackHandler(state = rememberNavigationEventState(NavigationEventInfo.None), isBackEnabled = true) { guardedDismiss() }
-    Box(modifier = modifier.fillMaxSize()) {
+    var box by remember { mutableStateOf<Rect?>(null) }
+    val maxSheetHeight =
+        box?.let { bounds ->
+            keepClearAboveY?.let { clearY ->
+                with(LocalDensity.current) {
+                    maxOf(bounds.bottom - clearY, bounds.height * MIN_SHEET_FRACTION).toDp()
+                }
+            }
+        }
+    Box(modifier = modifier.fillMaxSize().onGloballyPositioned { box = it.boundsInWindow() }) {
         // Scrim: a tap outside the sheet is the "I'll get up" path.
         Box(
             modifier =
@@ -460,6 +486,7 @@ fun SnoozeConfirmSheet(
                 Modifier
                     .align(Alignment.BottomCenter)
                     .fillMaxWidth()
+                    .then(maxSheetHeight?.let { Modifier.heightIn(max = it) } ?: Modifier)
                     .glass(
                         PpsTheme.shapes.lg.copy(bottomStart = ZeroCornerSize, bottomEnd = ZeroCornerSize),
                         strong = true,
@@ -468,26 +495,75 @@ fun SnoozeConfirmSheet(
                     .padding(spacing.space6),
             verticalArrangement = Arrangement.spacedBy(spacing.space3),
         ) {
-            SheetContent(sheet)
-            Column(modifier = Modifier.padding(top = spacing.space3), verticalArrangement = Arrangement.spacedBy(spacing.space3)) {
-                when (sheet) {
-                    is SnoozeSheet.Confirm -> {
-                        WakeOutlinedButton(
-                            text = stringResource(Res.string.snooze_confirm_pay, formatMoney(sheet.price)),
-                            onClick = guardedUpper,
-                        )
-                        WakePrimaryButton(text = stringResource(Res.string.snooze_confirm_get_up), onClick = guardedDismiss, hero = false)
-                    }
+            // The text scrolls when the sheet is capped; the buttons below always keep their full size.
+            val scroll = rememberScrollState()
+            Column(
+                modifier =
+                    Modifier
+                        .weight(1f, fill = false)
+                        .fadeAtScrollEdges(scroll, with(LocalDensity.current) { spacing.space6.toPx() }, opaque = colors.text)
+                        .verticalScroll(scroll),
+                verticalArrangement = Arrangement.spacedBy(spacing.space3),
+            ) {
+                SheetContent(sheet)
+            }
+            SheetButtons(sheet = sheet, onUpper = guardedUpper, onDismiss = guardedDismiss)
+        }
+    }
+}
 
-                    is SnoozeSheet.Unlocking -> {
-                        WakeOutlinedButton(text = stringResource(Res.string.snooze_cancel), onClick = guardedDismiss)
-                    }
+/**
+ * Owner check 2026-10-08: at 200% font the sheet's text was cut mid-line just above the buttons. Content that runs on
+ * past the top or bottom edge of [scroll]'s viewport fades out over [fade] px there (an alpha mask, so the glass behind
+ * shows through and no new colour pair appears); a fully shown edge has no fade, and text that fits draws as before.
+ * Only the alpha of [opaque] (any fully opaque theme colour) is used.
+ */
+private fun Modifier.fadeAtScrollEdges(
+    scroll: ScrollState,
+    fade: Float,
+    opaque: Color,
+): Modifier =
+    graphicsLayer {
+        val masked = scroll.canScrollBackward || scroll.canScrollForward
+        compositingStrategy = if (masked) CompositingStrategy.Offscreen else CompositingStrategy.Auto
+    }.drawWithContent {
+        drawContent()
+        if (scroll.canScrollBackward) {
+            drawRect(
+                brush = Brush.verticalGradient(listOf(Color.Transparent, opaque), startY = 0f, endY = fade),
+                blendMode = BlendMode.DstIn,
+            )
+        }
+        if (scroll.canScrollForward) {
+            drawRect(
+                brush = Brush.verticalGradient(listOf(opaque, Color.Transparent), startY = size.height - fade, endY = size.height),
+                blendMode = BlendMode.DstIn,
+            )
+        }
+    }
 
-                    is SnoozeSheet.AlreadyPaid -> {
-                        WakeOutlinedButton(text = stringResource(Res.string.snooze_use_it), onClick = guardedUpper)
-                        WakePrimaryButton(text = stringResource(Res.string.snooze_not_now), onClick = guardedDismiss, hero = false)
-                    }
-                }
+/** The sheet's actions for [sheet]: the outlined upper one ([onUpper]) and the filled dismiss one ([onDismiss]). */
+@Composable
+private fun SheetButtons(
+    sheet: SnoozeSheet,
+    onUpper: () -> Unit,
+    onDismiss: () -> Unit,
+) {
+    val spacing = PpsTheme.spacing
+    Column(modifier = Modifier.padding(top = spacing.space3), verticalArrangement = Arrangement.spacedBy(spacing.space3)) {
+        when (sheet) {
+            is SnoozeSheet.Confirm -> {
+                WakeOutlinedButton(text = stringResource(Res.string.snooze_confirm_pay, formatMoney(sheet.price)), onClick = onUpper)
+                WakePrimaryButton(text = stringResource(Res.string.snooze_confirm_get_up), onClick = onDismiss, hero = false)
+            }
+
+            is SnoozeSheet.Unlocking -> {
+                WakeOutlinedButton(text = stringResource(Res.string.snooze_cancel), onClick = onDismiss)
+            }
+
+            is SnoozeSheet.AlreadyPaid -> {
+                WakeOutlinedButton(text = stringResource(Res.string.snooze_use_it), onClick = onUpper)
+                WakePrimaryButton(text = stringResource(Res.string.snooze_not_now), onClick = onDismiss, hero = false)
             }
         }
     }
@@ -545,6 +621,9 @@ private fun SheetContent(sheet: SnoozeSheet) {
 const val INPUT_LOCK_MILLIS: Long = 500L
 
 private const val SCRIM_ALPHA = 0.32f
+
+/** The share of the screen the confirm sheet may always take, even where the clock sits lower. */
+const val MIN_SHEET_FRACTION = 0.4f
 private const val PULSE_SCALE = 1.03f
 private const val PULSE_MILLIS = 1_200
 private const val FULL_CIRCLE = 360f

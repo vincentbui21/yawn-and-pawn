@@ -41,4 +41,21 @@ sealed interface DomainError {
      * by `SessionLockGuard`. The app shows only "Alarm in progress" then, so no screen shows this error.
      */
     data object SessionActive : DomainError
+
+    /** Two amounts in different currencies were added (AD-8); totals are grouped by currency instead. */
+    data class CurrencyMismatch(
+        val left: String,
+        val right: String,
+    ) : DomainError
+
+    /** [currency] is not an ISO 4217 code (3 upper-case letters), so no `Money` was made. */
+    data class InvalidCurrency(
+        val currency: String,
+    ) : DomainError
+
+    /** The fee ladder was asked for a base fee tier outside 1–10 or a snooze number below 1 (Story 4.2). */
+    data class InvalidFee(
+        val baseFeeTier: Int,
+        val snoozeNumber: Int,
+    ) : DomainError
 }

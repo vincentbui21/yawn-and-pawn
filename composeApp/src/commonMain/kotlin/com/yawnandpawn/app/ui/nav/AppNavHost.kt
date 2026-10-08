@@ -22,12 +22,12 @@ import androidx.navigation3.runtime.rememberNavBackStack
 import androidx.navigation3.runtime.rememberSaveableStateHolderNavEntryDecorator
 import androidx.navigation3.scene.Scene
 import androidx.navigation3.ui.NavDisplay
+import com.yawnandpawn.app.core.billing.Money
 import com.yawnandpawn.app.core.session.SessionLockGuard
 import com.yawnandpawn.app.core.time.Clock
 import com.yawnandpawn.app.core.time.TimeZoneProvider
 import com.yawnandpawn.app.ui.components.subScreenTransition
 import com.yawnandpawn.app.ui.editor.AlarmEditorRoute
-import com.yawnandpawn.app.ui.format.Money
 import com.yawnandpawn.app.ui.format.is24HourClock
 import com.yawnandpawn.app.ui.home.HomeIntent
 import com.yawnandpawn.app.ui.home.HomeRoute
@@ -196,7 +196,7 @@ private fun YouTab() {
 }
 
 /** Never shown: the Settings rows that would show the base fee are hidden until Epic 4. */
-private val HIDDEN_BASE_FEE = Money(amountMicros = 0, currencyCode = "USD")
+private val HIDDEN_BASE_FEE = Money(micros = 0, currency = "USD")
 
 /** The editor of [route] on [backStack]; [onOpenFailed] after it closed because its alarm could not be read. */
 @Composable

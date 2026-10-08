@@ -8,6 +8,10 @@ import kotlin.time.Instant
 internal const val ACTIVE = "session-active"
 internal const val OTHER_SESSION = "session-other"
 
+/** This install's id (the `obfuscatedAccountId` of its own launches), and another install's on the same Google account. */
+internal const val INSTALL = "install-phone"
+internal const val OTHER_INSTALL = "install-tablet"
+
 /** The product of the active session's next snooze. */
 internal const val NEXT = "snooze_usd_02"
 
@@ -32,12 +36,14 @@ internal fun snapshot(
     productId: String = NEXT,
     profileId: String? = ACTIVE,
     token: String = "token-1",
+    accountId: String? = INSTALL,
 ): PurchaseSnapshot =
     PurchaseSnapshot(
         token = PurchaseToken(token),
         productId = productId,
         purchaseState = state,
         profileId = profileId,
+        accountId = accountId,
         orderId = "GPA.0000-0000-0000-00000",
         purchaseTime = PURCHASED_AT,
     )
@@ -55,4 +61,8 @@ internal fun decide(
     ledger: LedgerStatus = LedgerStatus.Absent,
     record: RecordStatus = RecordStatus.Absent,
     context: ReconcileContext = ReconcileContext.Update,
-): PurchaseDecision = PurchaseReconciler.decide(ReconcileInput(purchase, session, ledger, record, context))
+): PurchaseDecision = PurchaseReconciler.decide(ReconcileInput(purchase, session, ledger, record, context, INSTALL))
+
+/** The Grant a [context] gets: a launch in progress is cancelled. */
+internal fun grantIn(context: ReconcileContext): PurchaseDecision.Grant =
+    PurchaseDecision.Grant(abortLaunch = context is ReconcileContext.PreLaunch || context is ReconcileContext.AlreadyOwned)

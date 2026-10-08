@@ -13,9 +13,10 @@ import kotlin.test.assertNull
 import kotlin.test.assertTrue
 
 /**
- * Every combination of the inputs (about 40,000), checked against the money rules that must hold whatever the table
- * says: nothing is granted twice or in test mode, nothing is consumed unless it granted a snooze, and reuse is only
- * offered for the product being bought.
+ * Every combination of the inputs (about 120,000), checked against the money rules that must hold whatever the table
+ * says, in both directions where the rule is an "if and only if": a payment for the ringing session is always granted,
+ * nothing is granted twice or in test mode, nothing is consumed unless it granted a snooze, another install's payments
+ * are never touched, and reuse is only offered for the product being bought.
  */
 class PurchaseReconcilerInvariantsTest {
     private val sessions: List<ActiveSessionSummary?> =
@@ -24,18 +25,21 @@ class PurchaseReconcilerInvariantsTest {
                 listOf(NEXT, OTHER_PRODUCT, null).flatMap { next -> listOf(false, true).map { active(kind, next, it) } }
             }
 
-    private val inputs: List<ReconcileInput> =
+    private val snapshots: List<PurchaseSnapshot> =
         PlayPurchaseState.entries.flatMap { state ->
             listOf(NEXT, OTHER_PRODUCT).flatMap { product ->
                 listOf(ACTIVE, OTHER_SESSION, null).flatMap { profileId ->
-                    sessions.flatMap { session ->
-                        LedgerStatus.entries.flatMap { ledger ->
-                            RecordStatus.entries.flatMap { record ->
-                                ALL_CONTEXTS.map { context ->
-                                    ReconcileInput(snapshot(state, product, profileId), session, ledger, record, context)
-                                }
-                            }
-                        }
+                    listOf(INSTALL, OTHER_INSTALL, null).map { accountId -> snapshot(state, product, profileId, accountId = accountId) }
+                }
+            }
+        }
+
+    private val inputs: List<ReconcileInput> =
+        snapshots.flatMap { purchase ->
+            sessions.flatMap { session ->
+                LedgerStatus.entries.flatMap { ledger ->
+                    RecordStatus.entries.flatMap { record ->
+                        ALL_CONTEXTS.map { context -> ReconcileInput(purchase, session, ledger, record, context, INSTALL) }
                     }
                 }
             }
@@ -43,32 +47,105 @@ class PurchaseReconcilerInvariantsTest {
 
     private val decided: List<Pair<ReconcileInput, PurchaseDecision>> = inputs.map { it to PurchaseReconciler.decide(it) }
 
+    private val ReconcileInput.purchased: Boolean get() = purchase.purchaseState == PlayPurchaseState.Purchased
+    private val ReconcileInput.foreign: Boolean get() = purchase.accountId != null && purchase.accountId != installId
+    private val ReconcileInput.launch: Boolean
+        get() = context is ReconcileContext.PreLaunch || context is ReconcileContext.AlreadyOwned
+    private val ReconcileInput.launchingThis: Boolean
+        get() = context == ReconcileContext.PreLaunch(purchase.productId) || context == ReconcileContext.AlreadyOwned(purchase.productId)
+
     @Test
-    fun `every decision is reachable and the same input always gets the same decision`() {
-        val kinds = decided.map { (_, decision) -> decision }.toSet()
+    fun `every decision is reachable`() {
         assertEquals(
             setOf(
-                PurchaseDecision.Grant,
+                PurchaseDecision.Grant(abortLaunch = false),
+                PurchaseDecision.Grant(abortLaunch = true),
                 PurchaseDecision.ConsumeOnly(retryLaunch = false),
                 PurchaseDecision.ConsumeOnly(retryLaunch = true),
                 PurchaseDecision.LeaveForAutoRefund,
-                PurchaseDecision.OfferReuse,
+                PurchaseDecision.OfferReuse(recordStrandedFirst = true),
+                PurchaseDecision.OfferReuse(recordStrandedFirst = false),
+                PurchaseDecision.Ignore(IgnoreReason.OtherInstall),
                 PurchaseDecision.Ignore(IgnoreReason.Pending),
                 PurchaseDecision.Ignore(IgnoreReason.AlreadyHandled),
             ),
-            kinds,
+            decided.map { it.second }.toSet(),
         )
-        decided.forEach { (input, decision) -> assertEquals(decision, PurchaseReconciler.decide(input)) }
     }
 
     @Test
-    fun `Grant only for an unseen PURCHASED token of the ringing, charging session and its next product`() {
-        decided.filter { it.second == PurchaseDecision.Grant }.forEach { (input, _) ->
+    fun `must grant - an unseen PURCHASED payment for the ringing, charging session and its next product, in every context`() {
+        val mustGrant =
+            decided.filter { (input, _) ->
+                val session = input.session
+                input.purchased &&
+                    !input.foreign &&
+                    input.ledger == LedgerStatus.Absent &&
+                    input.record == RecordStatus.Absent &&
+                    session != null &&
+                    input.purchase.profileId == session.sessionId &&
+                    session.kind.canSnooze &&
+                    !session.testMode &&
+                    session.expectedNextProductId == input.purchase.productId
+            }
+        // Every ringing kind, every context, both products (each the next one in some session), both own-install account
+        // ids (this install's, and none).
+        assertEquals(RING_KINDS.size * ALL_CONTEXTS.size * 2 * 2, mustGrant.size)
+        mustGrant.forEach { (input, decision) -> assertEquals(PurchaseDecision.Grant(abortLaunch = input.launch), decision, "$input") }
+    }
+
+    @Test
+    fun `Grant only for an unseen PURCHASED token of the ringing, charging session and its next product, cancelling any launch`() {
+        decided.mapNotNull { (input, decision) -> (decision as? PurchaseDecision.Grant)?.let { input to it } }.forEach { (input, grant) ->
             val session = checkNotNull(input.session)
-            assertEquals(PlayPurchaseState.Purchased, input.purchase.purchaseState)
+            assertTrue(input.purchased && !input.foreign)
             assertEquals(LedgerStatus.Absent, input.ledger)
             assertEquals(RecordStatus.Absent, input.record)
             assertEquals(session.sessionId, input.purchase.profileId)
+            assertEquals(session.expectedNextProductId, input.purchase.productId)
+            assertTrue(session.kind.canSnooze)
+            assertFalse(session.testMode)
+            assertEquals(input.launch, grant.abortLaunch)
+        }
+    }
+
+    @Test
+    fun `ConsumeOnly exactly for a PURCHASED token this install granted, relaunching only after ITEM_ALREADY_OWNED for it`() {
+        decided.forEach { (input, decision) ->
+            val grantedRecordOnly = input.ledger == LedgerStatus.Absent && input.record == RecordStatus.Granted && !input.foreign
+            val granted = input.purchased && (input.ledger == LedgerStatus.Granted || grantedRecordOnly)
+            assertEquals(granted, decision is PurchaseDecision.ConsumeOnly, "$input -> $decision")
+            if (decision is PurchaseDecision.ConsumeOnly) {
+                assertEquals(input.context == ReconcileContext.AlreadyOwned(input.purchase.productId), decision.retryLaunch)
+            }
+        }
+    }
+
+    @Test
+    fun `Ignore exactly for another install's payment, a pending payment, or one already consumed or reused`() {
+        decided.forEach { (input, decision) ->
+            val otherInstall = input.foreign && input.ledger != LedgerStatus.Granted
+            val pending = !otherInstall && !input.purchased
+            val handledRecord = input.record == RecordStatus.Consumed || input.record == RecordStatus.Reused
+            val handled =
+                !otherInstall &&
+                    input.purchased &&
+                    (input.ledger == LedgerStatus.Consumed || (input.ledger == LedgerStatus.Absent && handledRecord))
+            assertEquals(otherInstall, decision == PurchaseDecision.Ignore(IgnoreReason.OtherInstall), "$input -> $decision")
+            assertEquals(pending, decision == PurchaseDecision.Ignore(IgnoreReason.Pending), "$input -> $decision")
+            assertEquals(handled, decision == PurchaseDecision.Ignore(IgnoreReason.AlreadyHandled), "$input -> $decision")
+        }
+    }
+
+    @Test
+    fun `OfferReuse only for this install's unspent token for the product being bought by a ringing, charging session`() {
+        val offers = decided.mapNotNull { (input, decision) -> (decision as? PurchaseDecision.OfferReuse)?.let { input to it } }
+        offers.forEach { (input, offer) ->
+            val session = checkNotNull(input.session)
+            assertTrue(input.launchingThis && input.purchased && !input.foreign)
+            assertEquals(LedgerStatus.Absent, input.ledger)
+            assertTrue(input.record == RecordStatus.Absent || input.record == RecordStatus.Stranded)
+            assertEquals(input.record == RecordStatus.Absent, offer.recordStrandedFirst)
             assertEquals(session.expectedNextProductId, input.purchase.productId)
             assertTrue(session.kind.canSnooze)
             assertFalse(session.testMode)
@@ -76,48 +153,18 @@ class PurchaseReconcilerInvariantsTest {
     }
 
     @Test
-    fun `ConsumeOnly only for a token that already granted a snooze, and a relaunch only after ITEM_ALREADY_OWNED for it`() {
-        val consumeOnly = decided.mapNotNull { (input, decision) -> (decision as? PurchaseDecision.ConsumeOnly)?.let { input to it } }
-        consumeOnly.forEach { (input, decision) ->
-            val grantedRecordOnly = input.ledger == LedgerStatus.Absent && input.record == RecordStatus.Granted
-            assertEquals(PlayPurchaseState.Purchased, input.purchase.purchaseState)
-            assertTrue(input.ledger == LedgerStatus.Granted || grantedRecordOnly)
-            assertEquals(input.context == ReconcileContext.AlreadyOwned(input.purchase.productId), decision.retryLaunch)
-        }
-    }
-
-    @Test
-    fun `OfferReuse only for the product being bought by a ringing, charging session, and never for a granted token`() {
-        decided.filter { it.second == PurchaseDecision.OfferReuse }.forEach { (input, _) ->
-            val session = checkNotNull(input.session)
-            val product = input.purchase.productId
-            assertTrue(input.context == ReconcileContext.PreLaunch(product) || input.context == ReconcileContext.AlreadyOwned(product))
-            assertEquals(LedgerStatus.Absent, input.ledger)
-            assertTrue(input.record == RecordStatus.Absent || input.record == RecordStatus.Stranded)
-            assertEquals(session.expectedNextProductId, product)
-            assertTrue(session.kind.canSnooze)
-            assertFalse(session.testMode)
-        }
-    }
-
-    @Test
-    fun `LeaveForAutoRefund only for PURCHASED tokens that never granted anything`() {
+    fun `LeaveForAutoRefund only for this install's PURCHASED tokens that never granted anything`() {
         decided.filter { it.second == PurchaseDecision.LeaveForAutoRefund }.forEach { (input, _) ->
-            assertEquals(PlayPurchaseState.Purchased, input.purchase.purchaseState)
+            assertTrue(input.purchased && !input.foreign)
             assertEquals(LedgerStatus.Absent, input.ledger)
             assertTrue(input.record == RecordStatus.Absent || input.record == RecordStatus.Stranded)
         }
     }
 
     @Test
-    fun `a test session never grants or reuses, and a pending payment is always ignored`() {
-        decided.forEach { (input, decision) ->
-            if (input.session?.testMode == true) {
-                assertTrue(decision != PurchaseDecision.Grant && decision != PurchaseDecision.OfferReuse, "$input")
-            }
-            if (input.purchase.purchaseState == PlayPurchaseState.Pending) {
-                assertEquals(PurchaseDecision.Ignore(IgnoreReason.Pending), decision)
-            }
+    fun `a test session never grants or reuses`() {
+        decided.filter { it.first.session?.testMode == true }.forEach { (input, decision) ->
+            assertTrue(decision !is PurchaseDecision.Grant && decision !is PurchaseDecision.OfferReuse, "$input")
         }
     }
 
@@ -146,9 +193,14 @@ class PurchaseReconcilerInvariantsTest {
     }
 
     @Test
-    fun `a snapshot never prints its token`() {
+    fun `a snapshot never prints its token, and compares by value`() {
         assertFalse("token-1" in snapshot().toString())
-        val input = ReconcileInput(snapshot(), active(), LedgerStatus.Absent, RecordStatus.Absent, ReconcileContext.Update)
+        val input = ReconcileInput(snapshot(), active(), LedgerStatus.Absent, RecordStatus.Absent, ReconcileContext.Update, INSTALL)
         assertFalse("token-1" in input.toString())
+        assertTrue("accountId=$INSTALL" in snapshot().toString())
+        assertEquals(snapshot(), snapshot())
+        assertEquals(snapshot().hashCode(), snapshot().hashCode())
+        assertFalse(snapshot() == snapshot(accountId = OTHER_INSTALL))
+        assertFalse(snapshot().equals("token-1"))
     }
 }

@@ -11,16 +11,18 @@ import kotlin.test.assertEquals
 
 /**
  * The PRD §6.3 recovery table and the Story 4.9 rows, one test per row (rows 1–14 are the epic's numbering), then the
- * cases the table leaves open (rows A–H, defaults taken in the spec).
+ * cases the table leaves open (rows A–I, defaults taken in the spec).
  */
 class PurchaseReconcilerTest {
     @Test
     fun `row 1 - PURCHASED for the ringing active session, unseen, the expected product - Grant`() {
         RING_KINDS.forEach { kind ->
             PLAIN_CONTEXTS.forEach { context ->
-                assertEquals(Grant, decide(session = active(kind), context = context), "$kind $context")
+                assertEquals(Grant(abortLaunch = false), decide(session = active(kind), context = context), "$kind $context")
             }
         }
+        // A promo-code style purchase with no account id still grants when its profile id matches.
+        assertEquals(Grant(abortLaunch = false), decide(snapshot(accountId = null)))
     }
 
     @Test
@@ -59,6 +61,7 @@ class PurchaseReconcilerTest {
     fun `row 6 - PURCHASED with no profileId (promo code) - LeaveForAutoRefund`() {
         PLAIN_CONTEXTS.forEach { context ->
             assertEquals(LeaveForAutoRefund, decide(purchase = snapshot(profileId = null), context = context))
+            assertEquals(LeaveForAutoRefund, decide(purchase = snapshot(profileId = null, accountId = null), context = context))
         }
     }
 
@@ -112,21 +115,31 @@ class PurchaseReconcilerTest {
         val launches = listOf(ReconcileContext.PreLaunch(NEXT), ReconcileContext.AlreadyOwned(NEXT))
         launches.forEach { context ->
             RING_KINDS.forEach { kind ->
-                // Paid in an earlier session (unseen, or already recorded stranded), or with no profileId.
+                // Paid in an earlier session (unseen, or already recorded stranded), or with no profileId. An unseen
+                // token is recorded stranded first, so accepting can mark that record reused.
                 listOf(OTHER_SESSION, null).forEach { profileId ->
-                    listOf(RecordStatus.Absent, RecordStatus.Stranded).forEach { record ->
-                        assertEquals(OfferReuse, decide(snapshot(profileId = profileId), active(kind), record = record, context = context))
-                    }
+                    assertEquals(
+                        OfferReuse(recordStrandedFirst = true),
+                        decide(snapshot(profileId = profileId), active(kind), record = RecordStatus.Absent, context = context),
+                    )
+                    assertEquals(
+                        OfferReuse(recordStrandedFirst = false),
+                        decide(snapshot(profileId = profileId), active(kind), record = RecordStatus.Stranded, context = context),
+                    )
                 }
                 // Paid for this session while it was snoozed: stranded, so it needs consent too.
-                assertEquals(OfferReuse, decide(session = active(kind), record = RecordStatus.Stranded, context = context))
+                assertEquals(
+                    OfferReuse(recordStrandedFirst = false),
+                    decide(session = active(kind), record = RecordStatus.Stranded, context = context),
+                )
             }
         }
     }
 
     @Test
     fun `row 12 - ITEM_ALREADY_OWNED for a granted token - ConsumeOnly, then retry the launch once`() {
-        assertEquals(ConsumeOnly(retryLaunch = true), decide(ledger = LedgerStatus.Granted, context = ReconcileContext.AlreadyOwned(NEXT)))
+        val owned = ReconcileContext.AlreadyOwned(NEXT)
+        assertEquals(ConsumeOnly(retryLaunch = true), decide(ledger = LedgerStatus.Granted, context = owned))
         // Before the launch the coordinator consumes it and launches anyway: no retry needed.
         assertEquals(ConsumeOnly(retryLaunch = false), decide(ledger = LedgerStatus.Granted, context = ReconcileContext.PreLaunch(NEXT)))
     }
@@ -155,9 +168,12 @@ class PurchaseReconcilerTest {
     }
 
     @Test
-    fun `row A - a lost callback for this session found before the next launch - Grant, not a reuse offer`() {
-        assertEquals(Grant, decide(context = ReconcileContext.PreLaunch(NEXT)))
-        assertEquals(Grant, decide(context = ReconcileContext.AlreadyOwned(NEXT)))
+    fun `row A - a lost callback for this session found during a launch - Grant that cancels the launch`() {
+        // Launching anyway would open a second Play sheet and charge again for the snooze this token already paid.
+        listOf(NEXT, OTHER_PRODUCT).forEach { product ->
+            assertEquals(Grant(abortLaunch = true), decide(context = ReconcileContext.PreLaunch(product)))
+            assertEquals(Grant(abortLaunch = true), decide(context = ReconcileContext.AlreadyOwned(product)))
+        }
     }
 
     @Test
@@ -190,10 +206,10 @@ class PurchaseReconcilerTest {
     }
 
     @Test
-    fun `row E - a launch for another product decides this token as recovery would`() {
+    fun `row E - a launch for another product decides this token as recovery would, but a grant still cancels it`() {
         val launches = listOf(ReconcileContext.PreLaunch(OTHER_PRODUCT), ReconcileContext.AlreadyOwned(OTHER_PRODUCT))
         launches.forEach { context ->
-            assertEquals(Grant, decide(context = context))
+            assertEquals(Grant(abortLaunch = true), decide(context = context))
             assertEquals(LeaveForAutoRefund, decide(snapshot(profileId = OTHER_SESSION), context = context))
             assertEquals(ConsumeOnly(retryLaunch = false), decide(ledger = LedgerStatus.Granted, context = context))
         }
@@ -226,14 +242,42 @@ class PurchaseReconcilerTest {
     }
 
     @Test
+    fun `row I - another install's payment is left alone - no record, no consume, no reuse, no grant`() {
+        val foreign = snapshot(accountId = OTHER_INSTALL)
+        val foreignPending = snapshot(state = PlayPurchaseState.Pending, accountId = OTHER_INSTALL)
+        ALL_CONTEXTS.forEach { context ->
+            listOf(LedgerStatus.Absent, LedgerStatus.Consumed).forEach { ledger ->
+                RecordStatus.entries.forEach { record ->
+                    listOf(foreign, foreignPending).forEach { purchase ->
+                        assertEquals(
+                            Ignore(IgnoreReason.OtherInstall),
+                            decide(purchase, active(), ledger, record, context),
+                            "$context $ledger $record",
+                        )
+                    }
+                }
+            }
+            // Even with no session, or for a stranded-looking token from yesterday's session.
+            assertEquals(Ignore(IgnoreReason.OtherInstall), decide(foreign, session = null, context = context))
+            val yesterday = snapshot(profileId = OTHER_SESSION, accountId = OTHER_INSTALL)
+            assertEquals(Ignore(IgnoreReason.OtherInstall), decide(yesterday, context = context))
+        }
+        // A granted ledger row (runtime.db, never restored) proves this install granted it: still consumed here.
+        assertEquals(ConsumeOnly(retryLaunch = false), decide(foreign, ledger = LedgerStatus.Granted))
+    }
+
+    @Test
     fun `each decision carries the matching session verdict`() {
         val verdicts =
             mapOf(
-                Grant to PurchaseVerdict.Grant,
+                Grant(abortLaunch = false) to PurchaseVerdict.Grant,
+                Grant(abortLaunch = true) to PurchaseVerdict.Grant,
                 ConsumeOnly(retryLaunch = true) to PurchaseVerdict.ConsumeOnly,
                 ConsumeOnly(retryLaunch = false) to PurchaseVerdict.ConsumeOnly,
                 LeaveForAutoRefund to PurchaseVerdict.LeaveForAutoRefund,
-                OfferReuse to PurchaseVerdict.OfferReuse,
+                OfferReuse(recordStrandedFirst = true) to PurchaseVerdict.OfferReuse,
+                OfferReuse(recordStrandedFirst = false) to PurchaseVerdict.OfferReuse,
+                Ignore(IgnoreReason.OtherInstall) to PurchaseVerdict.Ignore,
                 Ignore(IgnoreReason.Pending) to PurchaseVerdict.Ignore,
                 Ignore(IgnoreReason.AlreadyHandled) to PurchaseVerdict.Ignore,
             )

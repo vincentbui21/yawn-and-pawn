@@ -1,5 +1,6 @@
 package com.yawnandpawn.app.data
 
+import com.yawnandpawn.app.core.billing.PurchaseSnapshot
 import org.junit.Test
 import java.io.File
 import kotlin.test.assertEquals
@@ -8,10 +9,10 @@ import kotlin.test.assertTrue
 /**
  * AD-7 (Story 4.9): the purchase rules live only in `PurchaseReconciler`. Scans the shipped sources (main source sets,
  * plus the debug build's) of `:core`, `:data`, `:androidApp` and `:composeApp`, with comments blanked out: nothing may
- * read a purchase's state, neither Play's (`Purchase.purchaseState`, `getPurchaseState()`, `Purchase.PurchaseState.*`)
- * nor the core snapshot's (`.purchaseState`, `PlayPurchaseState.*`), except the reconciler and the Play Billing
- * adapter's mapping (Story 4.12), which must use [ADAPTER_MAPPING_PATH]. Files are exempt by their path from the
- * repository root, never by bare file name.
+ * name a purchase's state, neither Play's (`purchaseState`, `getPurchaseState`, `PurchaseState`) nor the core
+ * snapshot's (`purchaseState`, `PlayPurchaseState`), except the reconciler and the Play Billing adapter's mapping
+ * (Story 4.12), which must use [ADAPTER_MAPPING_PATH]. Files are exempt by their path from the repository root, never
+ * by bare file name. `PurchaseSnapshot` is not a data class, so its state cannot be destructured out without the name.
  */
 class PurchaseStateReaderScanTest {
     // Host tests run in the :data project directory.
@@ -47,8 +48,14 @@ class PurchaseStateReaderScanTest {
                 Source("core/d/Coordinator.kt", "if (snapshot.purchaseState == PlayPurchaseState.Pending) dispatch(PurchasePending)"),
                 Source("core/e/Enum.kt", "val purchased = PlayPurchaseState.Purchased"),
                 Source("composeApp/f/Safe.kt", "val s = snapshot?.purchaseState"),
-                // Not readers: comments, and a name that only contains the word.
+                // Reads with no dot before the name: a scope function, and wildcard imports of either enum.
+                Source("core/h/With.kt", "fun f(s: PurchaseSnapshot) = with(s) { purchaseState == Pending }"),
+                Source("core/i/Wildcard.kt", "import com.yawnandpawn.app.core.billing.PlayPurchaseState.*\nval p = Pending"),
+                Source("androidApp/j/PlayWildcard.kt", "import com.android.billingclient.api.Purchase.PurchaseState.*\nval p = PENDING"),
+                Source("androidApp/k/Reference.kt", "val read = PurchaseSnapshot::purchaseState"),
+                // Not readers: comments, and names that only contain the word.
                 Source("core/g/Doc.kt", "// purchase.purchaseState\n/* PlayPurchaseState.Pending */ val myPurchaseStateLabel = 1"),
+                Source("core/l/Names.kt", "val purchaseStateLabel = 1\nclass MyPurchaseStateView"),
                 Source(ADAPTER_MAPPING_PATH, "Purchased.takeIf { purchase.purchaseState == Purchase.PurchaseState.PURCHASED }"),
             )
 
@@ -60,9 +67,23 @@ class PurchaseStateReaderScanTest {
                 "core/d/Coordinator.kt",
                 "core/e/Enum.kt",
                 "composeApp/f/Safe.kt",
+                "core/h/With.kt",
+                "core/i/Wildcard.kt",
+                "androidApp/j/PlayWildcard.kt",
+                "androidApp/k/Reference.kt",
             ),
             offenders(rogue),
         )
+    }
+
+    @Test
+    fun `a snapshot cannot be destructured, so its state is never read without the name the scan looks for`() {
+        // `val (_, _, state) = snapshot` or `for ((t, p, s) in purchases)` need componentN, which only a data class has.
+        val components =
+            PurchaseSnapshot::class.java.methods
+                .map { it.name }
+                .filter { it.matches(Regex("""component\d+""")) }
+        assertEquals(emptyList(), components)
     }
 
     /** A source file: [path] from the repository root, with `/` separators. */
@@ -81,12 +102,17 @@ class PurchaseStateReaderScanTest {
 
         val EXEMPT = setOf(RECONCILER_PATH, ADAPTER_MAPPING_PATH)
 
+        /**
+         * Any use of the names at all, not only `x.name`: a scope function (`with(snapshot) { purchaseState }`), a
+         * property reference, a wildcard import of either enum or a named argument all name them. Only the reconciler
+         * and the adapter mapping need them.
+         */
         val READS =
             listOf(
-                Regex("""\.\s*purchaseState\b"""),
-                Regex("""\bgetPurchaseState\s*\("""),
-                Regex("""\bPurchaseState\s*\.\s*(PURCHASED|PENDING|UNSPECIFIED_STATE)\b"""),
-                Regex("""\bPlayPurchaseState\s*\.\s*(Purchased|Pending|entries|valueOf)\b"""),
+                Regex("""\bpurchaseState\b"""),
+                Regex("""\bgetPurchaseState\b"""),
+                Regex("""\bPurchaseState\b"""),
+                Regex("""\bPlayPurchaseState\b"""),
             )
 
         val COMMENTS = Regex("""//[^\n]*|/\*[\s\S]*?\*/""")

@@ -51,6 +51,9 @@ junit4 = "4.13.2"
 androidx-test-runner = "1.7.0"
 androidx-test-core = "1.7.0"
 androidx-test-ext-junit = "1.3.0"
+# Story 3.12, androidTest only: Compose accessibility checks (the Accessibility Test Framework) at the androidx Compose UI
+# version Compose Multiplatform 1.12.1 maps to (verified published 2026-10-07).
+androidx-compose-ui-test-accessibility = "1.12.1"
 foojay = "1.0.0"
 # Build-time only (tools/tokens parses the DESIGN.md frontmatter); never on an app runtime classpath.
 snakeyaml = "2.6"
@@ -116,6 +119,7 @@ junit4 = { module = "junit:junit", version.ref = "junit4" }
 androidx-test-runner = { module = "androidx.test:runner", version.ref = "androidx-test-runner" }
 androidx-test-core = { module = "androidx.test:core", version.ref = "androidx-test-core" }
 androidx-test-ext-junit = { module = "androidx.test.ext:junit", version.ref = "androidx-test-ext-junit" }
+androidx-compose-ui-test-junit4-accessibility = { module = "androidx.compose.ui:ui-test-junit4-accessibility", version.ref = "androidx-compose-ui-test-accessibility" }
 robolectric = { module = "org.robolectric:robolectric", version.ref = "robolectric" }
 turbine = { module = "app.cash.turbine:turbine", version.ref = "turbine" }
 roborazzi = { module = "io.github.takahirom.roborazzi:roborazzi", version.ref = "roborazzi" }

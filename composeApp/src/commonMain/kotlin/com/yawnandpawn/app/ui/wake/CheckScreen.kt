@@ -9,6 +9,7 @@ import androidx.compose.animation.core.keyframes
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.focusable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
@@ -33,6 +34,8 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.PathEffect
 import androidx.compose.ui.graphics.drawOutline
 import androidx.compose.ui.graphics.drawscope.Stroke
@@ -119,62 +122,122 @@ fun CheckScreen(
             }
         },
     ) {
-        val spacing = PpsTheme.spacing
-        // Math keeps its number pad out of the scrolling area (Story 3.2): at 200% font on a small phone only the problem
-        // scrolls, and "Check" stays on screen above the snooze control. Where everything fits, it looks the same.
-        val math = state.content as? CheckContent.Math
-        // Word Unscramble keeps "Shuffle" and "Clear" out of the scrolling area the same way (Story 3.7).
-        val word = state.content as? CheckContent.WordUnscramble
         BoxWithConstraints(modifier = Modifier.fillMaxSize().wakeContentPadding()) {
-            // In a short window (landscape, split screen) the pad and the footer alone would not fit: the pad scrolls with
-            // the problem instead, so "Check" can always be reached, and snooze stays pinned (Story 3.2 review).
-            if (math != null && maxHeight < MIN_PINNED_PAD_HEIGHT) {
-                Column(modifier = Modifier.fillMaxSize()) {
-                    Column(
-                        modifier = Modifier.fillMaxWidth().weight(1f).verticalScroll(rememberScrollState()),
-                        horizontalAlignment = Alignment.CenterHorizontally,
-                    ) {
-                        Column(modifier = Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(spacing.space4)) {
-                            CheckHeader(state)
-                            MathProblem(math)
-                        }
-                        NumberPad(onIntent = onIntent, modifier = Modifier.padding(top = spacing.space3))
-                    }
-                    CheckFooter(state, onIntent)
-                }
-            } else {
-                Column(modifier = Modifier.fillMaxSize()) {
-                    Column(modifier = Modifier.fillMaxWidth().weight(1f), horizontalAlignment = Alignment.CenterHorizontally) {
-                        Column(
-                            modifier =
-                                Modifier
-                                    .fillMaxWidth()
-                                    .weight(1f, fill = math == null && word == null)
-                                    .verticalScroll(rememberScrollState()),
-                            verticalArrangement = Arrangement.spacedBy(spacing.space4),
-                        ) {
-                            CheckHeader(state)
-                            when {
-                                math != null -> MathProblem(math)
-                                word != null -> WordCheck(word, onIntent, withActions = false)
-                                else -> CheckContentView(content = state.content, onIntent = onIntent)
-                            }
-                        }
-                        if (math != null) NumberPad(onIntent = onIntent, modifier = Modifier.padding(top = spacing.space3))
-                        if (word != null) WordActions(onIntent = onIntent, modifier = Modifier.fillMaxWidth().padding(top = spacing.space4))
-                    }
-                    CheckFooter(state, onIntent)
-                }
-            }
+            val fit = remember(state.content::class) { PinnedFit() }
+            PinnedInputCheck(state, onIntent, fit, pinned = fit.fits(constraints.maxHeight))
         }
     }
 }
 
 /**
- * The height under which the Math number pad scrolls with the problem: the 4-row pad (280 dp), the footer at 200% font
- * and a line of the problem. Every phone in portrait has more, so its pinned pad is unchanged.
+ * The check with its input pinned above the footer and the rest scrolling. Math keeps its number pad out of the
+ * scrolling area (Story 3.2), Word Unscramble "Shuffle" and "Clear" (Story 3.7); Story 3.12's 200% rule (360 × 640 dp)
+ * adds Memory Sequence's grid, Word Unscramble's letters and QR/Barcode's viewfinder, which fell below the window there.
+ * So at 200% font on a small phone the input and snooze stay on screen, and the scrolling area shows its end, next to
+ * the input ([rememberEndScroll]). When the input and the footer together do not fit ([pinned] false: landscape, split
+ * screen, or a payment message on a small phone at 200%), the input scrolls with the rest instead of being squashed, so
+ * it can always be reached, and snooze stays pinned (Story 3.2 review). Where everything fits, it looks the same.
  */
-private val MIN_PINNED_PAD_HEIGHT = 480.dp
+@Composable
+private fun PinnedInputCheck(
+    state: CheckUiState,
+    onIntent: (WakeIntent) -> Unit,
+    fit: PinnedFit,
+    pinned: Boolean,
+) {
+    val content = state.content
+    val pinnedInput = pinned && content.hasInput()
+    val input = with(fit) { Modifier.natural(INPUT) }
+    Column(modifier = Modifier.fillMaxSize()) {
+        Column(modifier = Modifier.fillMaxWidth().weight(1f), horizontalAlignment = Alignment.CenterHorizontally) {
+            Column(
+                modifier =
+                    Modifier
+                        .fillMaxWidth()
+                        .weight(1f, fill = !pinnedInput)
+                        .verticalScroll(if (pinnedInput) rememberEndScroll() else rememberScrollState()),
+            ) {
+                Column(modifier = Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(PpsTheme.spacing.space4)) {
+                    CheckHeader(state)
+                    CheckInstruction(content, onIntent)
+                }
+                if (!pinned) {
+                    Box(modifier = Modifier.fillMaxWidth(), contentAlignment = Alignment.TopCenter) { CheckInput(content, onIntent, input) }
+                }
+            }
+            if (pinned) CheckInput(content, onIntent, input)
+            if (content is CheckContent.WordUnscramble) {
+                val actions = with(fit) { Modifier.natural(ACTIONS) }
+                WordActions(onIntent = onIntent, modifier = actions.fillMaxWidth().padding(top = PpsTheme.spacing.space4))
+            }
+        }
+        CheckFooter(state, onIntent, with(fit) { Modifier.natural(FOOTER) })
+    }
+}
+
+/** Whether the check has an input to pin: every check but House Hunt and QR/Barcode without the camera. */
+private fun CheckContent.hasInput(): Boolean =
+    when (this) {
+        is CheckContent.QrBarcode -> cameraAvailable
+        is CheckContent.HouseHunt -> false
+        else -> true
+    }
+
+/** The check above its input: the problem, the word's slots, the round and phase, "Scan your code"; House Hunt whole. */
+@Composable
+private fun CheckInstruction(
+    content: CheckContent,
+    onIntent: (WakeIntent) -> Unit,
+) {
+    when (content) {
+        is CheckContent.Math -> MathProblem(content)
+        is CheckContent.WordUnscramble -> WordCheck(content, onIntent, withPool = false, withActions = false)
+        is CheckContent.MemorySequence -> MemoryInstruction(content)
+        is CheckContent.QrBarcode -> if (content.cameraAvailable) QrHeading() else QrCheck(content, onIntent)
+        is CheckContent.HouseHunt -> HouseHuntCheck(content, onIntent)
+    }
+}
+
+/** The input: the number pad, the letters, the grid, the viewfinder; none for House Hunt or QR without the camera. */
+@Composable
+private fun CheckInput(
+    content: CheckContent,
+    onIntent: (WakeIntent) -> Unit,
+    modifier: Modifier,
+) {
+    val spacing = PpsTheme.spacing
+    when (content) {
+        is CheckContent.Math -> {
+            NumberPad(onIntent = onIntent, modifier = modifier.padding(top = spacing.space3))
+        }
+
+        is CheckContent.WordUnscramble -> {
+            WordPool(content, onIntent, modifier = modifier.fillMaxWidth().padding(top = spacing.space4))
+        }
+
+        is CheckContent.MemorySequence -> {
+            MemoryGrid(content, onIntent = onIntent, modifier = modifier.padding(top = spacing.space3))
+        }
+
+        is CheckContent.QrBarcode -> {
+            if (content.cameraAvailable) {
+                QrScan(
+                    content,
+                    onIntent,
+                    modifier.fillMaxWidth().padding(top = spacing.space3),
+                )
+            }
+        }
+
+        is CheckContent.HouseHunt -> {
+            Unit
+        }
+    }
+}
+
+private const val INPUT = "input"
+private const val ACTIONS = "actions"
+private const val FOOTER = "footer"
 
 /** The grace header and the phone-call note above the check. */
 @Composable
@@ -188,10 +251,11 @@ private fun CheckHeader(state: CheckUiState) {
 private fun CheckFooter(
     state: CheckUiState,
     onIntent: (WakeIntent) -> Unit,
+    modifier: Modifier = Modifier,
 ) {
     val spacing = PpsTheme.spacing
     Column(
-        modifier = Modifier.fillMaxWidth().padding(top = spacing.space3),
+        modifier = modifier.fillMaxWidth().padding(top = spacing.space3),
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.spacedBy(spacing.space2),
     ) {
@@ -221,16 +285,38 @@ internal fun CheckContentView(
     }
 }
 
+/** "Problem {n} of {count}" and the like; a [heading] where the check has no instruction line (Word, Story 3.12). */
 @Composable
-private fun ProgressLine(text: String) {
-    Text(text = text, style = PpsTheme.typography.label, color = PpsTheme.colors.textSecondary)
+private fun ProgressLine(
+    text: String,
+    heading: Boolean = false,
+) {
+    Text(
+        text = text,
+        modifier = if (heading) Modifier.semantics { heading() } else Modifier,
+        style = PpsTheme.typography.label,
+        color = PpsTheme.colors.textSecondary,
+    )
 }
 
+/**
+ * "Not quite. Try again.", a polite live region. With [attempts] (Math and Word, Story 3.12 review) focus moves to this
+ * line itself after each wrong answer (keyed on the entry's failed attempts, so every wrong answer moves it): TalkBack
+ * then reads the feedback as the focused node instead of cutting it off, and the next swipe is the first input ("1" or
+ * the first letter), which follows it in reading order. Focusing it also scrolls it into view at large font sizes. The
+ * move is instant, and nothing is drawn for focus. Memory Sequence passes none: its new sequence is announced right
+ * after, and a focus move would cut that off (Story 3.12 review).
+ */
 @Composable
-private fun WrongAnswer() {
+private fun WrongAnswer(attempts: Int? = null) {
+    val line = remember { FocusRequester() }
+    if (attempts != null) LaunchedEffect(attempts) { runCatching { line.requestFocus() } }
     Text(
         text = stringResource(Res.string.check_wrong_answer),
-        modifier = Modifier.semantics { liveRegion = LiveRegionMode.Polite },
+        modifier =
+            Modifier
+                .then(if (attempts != null) Modifier.focusRequester(line).focusable() else Modifier)
+                .semantics { liveRegion = LiveRegionMode.Polite },
         style = PpsTheme.typography.body,
         color = PpsTheme.colors.error,
     )
@@ -296,7 +382,7 @@ private fun MathProblem(content: CheckContent.Math) {
         ) {
             Text(text = content.answer, style = PpsTheme.typography.display, color = colors.text)
         }
-        if (content.wrong) WrongAnswer()
+        if (content.wrong) WrongAnswer(attempts = content.wrongAttempts)
     }
 }
 
@@ -425,31 +511,26 @@ private fun PadKey(
 
 /**
  * Word Unscramble: "Word {n} of {count}", the answer slots (dashed `outline` border when empty, "Slot {n}, empty"), the
- * `letter-tile`s ("Letter {letter}") and "Shuffle" / "Clear".
+ * `letter-tile`s ("Letter {letter}") and "Shuffle" / "Clear". The Check screen leaves out the actions
+ * ([withActions]) and, unless the window is short, the pool ([withPool]): it pins them under the scrolling area (Story
+ * 3.7 for the actions, Story 3.12 for the pool).
  */
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
 private fun WordCheck(
     content: CheckContent.WordUnscramble,
     onIntent: (WakeIntent) -> Unit,
+    withPool: Boolean = true,
     withActions: Boolean = true,
 ) {
     val spacing = PpsTheme.spacing
-    val haptics = LocalHapticFeedback.current
     // Story 3.7: a wrong word shakes the slots with the error haptic, as the other checks do.
     val shake = rememberWrongShake(content.wrong)
-    // Each tile tap: a light haptic before the intent.
-    val tap: (WakeIntent) -> Unit = { intent ->
-        if (intent is WakeIntent.LetterTapped ||
-            intent is WakeIntent.SlotTapped
-        ) {
-            haptics.performHapticFeedback(HapticFeedbackType.KeyboardTap)
-        }
-        onIntent(intent)
-    }
+    val tap = rememberTileTap(onIntent)
     Column(verticalArrangement = Arrangement.spacedBy(spacing.space4)) {
         Box {
-            ProgressLine(stringResource(Res.string.word_progress, content.wordNumber, content.wordCount))
+            // Word has no instruction line, so "Word {n} of {count}" is its heading (Story 3.12).
+            ProgressLine(stringResource(Res.string.word_progress, content.wordNumber, content.wordCount), heading = true)
             AnswerSoFar(content.slots)
         }
         FlowRow(
@@ -467,20 +548,49 @@ private fun WordCheck(
                 LetterTile(letter = letter, spoken = spoken, dashed = letter == null, onClick = { tap(WakeIntent.SlotTapped(index)) })
             }
         }
-        if (content.wrong) WrongAnswer()
-        FlowRow(horizontalArrangement = Arrangement.spacedBy(spacing.space2), verticalArrangement = Arrangement.spacedBy(spacing.space2)) {
-            content.pool.forEachIndexed { index, letter ->
-                if (letter != null) {
-                    LetterTile(
-                        letter = letter,
-                        spoken = stringResource(Res.string.word_letter, letter.toString()),
-                        dashed = false,
-                        onClick = { tap(WakeIntent.LetterTapped(index)) },
-                    )
-                }
+        if (content.wrong) WrongAnswer(attempts = content.wrongAttempts)
+        if (withPool) WordPool(content, onIntent)
+        if (withActions) WordActions(onIntent = onIntent)
+    }
+}
+
+/** Each tile tap: a light haptic before the intent. */
+@Composable
+private fun rememberTileTap(onIntent: (WakeIntent) -> Unit): (WakeIntent) -> Unit {
+    val haptics = LocalHapticFeedback.current
+    return { intent ->
+        if (intent is WakeIntent.LetterTapped || intent is WakeIntent.SlotTapped) {
+            haptics.performHapticFeedback(HapticFeedbackType.KeyboardTap)
+        }
+        onIntent(intent)
+    }
+}
+
+/** The letters still to place, start-aligned. */
+@OptIn(ExperimentalLayoutApi::class)
+@Composable
+private fun WordPool(
+    content: CheckContent.WordUnscramble,
+    onIntent: (WakeIntent) -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    val spacing = PpsTheme.spacing
+    val tap = rememberTileTap(onIntent)
+    FlowRow(
+        modifier = modifier,
+        horizontalArrangement = Arrangement.spacedBy(spacing.space2),
+        verticalArrangement = Arrangement.spacedBy(spacing.space2),
+    ) {
+        content.pool.forEachIndexed { index, letter ->
+            if (letter != null) {
+                LetterTile(
+                    letter = letter,
+                    spoken = stringResource(Res.string.word_letter, letter.toString()),
+                    dashed = false,
+                    onClick = { tap(WakeIntent.LetterTapped(index)) },
+                )
             }
         }
-        if (withActions) WordActions(onIntent = onIntent)
     }
 }
 
@@ -563,18 +673,33 @@ private fun MemoryCheck(
     content: CheckContent.MemorySequence,
     onIntent: (WakeIntent) -> Unit,
 ) {
+    Column(verticalArrangement = Arrangement.spacedBy(PpsTheme.spacing.space3), horizontalAlignment = Alignment.CenterHorizontally) {
+        MemoryInstruction(content)
+        MemoryGrid(content, onIntent)
+    }
+}
+
+/**
+ * Memory Sequence without its grid: "Round {n} of {count}", the phase line (a heading, Story 3.12) with the announced
+ * sequence, and the wrong-tap line. On the Check screen the grid is pinned under it (Story 3.12's 200% rule).
+ */
+@Composable
+private fun MemoryInstruction(content: CheckContent.MemorySequence) {
     val colors = PpsTheme.colors
-    val spacing = PpsTheme.spacing
     val watching = content.phase == MemoryPhase.Watch
-    val shake = rememberWrongShake(content.wrong)
-    Column(verticalArrangement = Arrangement.spacedBy(spacing.space3), horizontalAlignment = Alignment.CenterHorizontally) {
+    Column(verticalArrangement = Arrangement.spacedBy(PpsTheme.spacing.space3), horizontalAlignment = Alignment.CenterHorizontally) {
         Row(
             modifier = Modifier.fillMaxWidth(),
         ) { ProgressLine(stringResource(Res.string.memory_progress, content.round, content.roundCount)) }
         Box {
+            // The phase line is the heading (Story 3.12), and stays a polite live region.
             Text(
                 text = stringResource(if (watching) Res.string.memory_watch else Res.string.memory_your_turn),
-                modifier = Modifier.semantics { liveRegion = LiveRegionMode.Polite },
+                modifier =
+                    Modifier.semantics {
+                        heading()
+                        liveRegion = LiveRegionMode.Polite
+                    },
                 style = PpsTheme.typography.headline,
                 color = colors.text,
             )
@@ -590,15 +715,30 @@ private fun MemoryCheck(
             }
         }
         if (content.wrong) WrongAnswer()
-        Column(
-            modifier = Modifier.graphicsLayer { translationX = shake.value },
-            verticalArrangement = Arrangement.spacedBy(spacing.space2),
-        ) {
-            val grid = content.gridSize
-            for (row in 0 until grid) {
-                Row(horizontalArrangement = Arrangement.spacedBy(spacing.space2)) {
-                    for (column in 1..grid) MemoryTile(content, tile = row * grid + column, onIntent = onIntent)
-                }
+    }
+}
+
+/**
+ * The `memory-tile` grid, row by row; a wrong tap shakes it. Focus never moves here (Story 3.12 review): after a wrong
+ * tap TalkBack announces "Not quite. Try again.", the phase and the new sequence, and a focus move to a tile would cut
+ * that off, so a blind user could not hear the sequence to repeat.
+ */
+@Composable
+private fun MemoryGrid(
+    content: CheckContent.MemorySequence,
+    onIntent: (WakeIntent) -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    val spacing = PpsTheme.spacing
+    val shake = rememberWrongShake(content.wrong)
+    Column(
+        modifier = modifier.graphicsLayer { translationX = shake.value },
+        verticalArrangement = Arrangement.spacedBy(spacing.space2),
+    ) {
+        val grid = content.gridSize
+        for (row in 0 until grid) {
+            Row(horizontalArrangement = Arrangement.spacedBy(spacing.space2)) {
+                for (column in 1..grid) MemoryTile(content, tile = row * grid + column, onIntent = onIntent)
             }
         }
     }
@@ -650,18 +790,35 @@ private fun QrCheck(
     content: CheckContent.QrBarcode,
     onIntent: (WakeIntent) -> Unit,
 ) {
-    val colors = PpsTheme.colors
     Column(verticalArrangement = Arrangement.spacedBy(PpsTheme.spacing.space3)) {
-        Text(
-            text = stringResource(Res.string.qr_header),
-            modifier = Modifier.semantics { heading() },
-            style = PpsTheme.typography.headline,
-            color = colors.text,
-        )
-        if (!content.cameraAvailable) {
-            CameraUnavailable()
-            return@Column
-        }
+        QrHeading()
+        if (content.cameraAvailable) QrScan(content, onIntent) else CameraUnavailable()
+    }
+}
+
+/** "Scan your code", the QR check's heading. */
+@Composable
+private fun QrHeading() {
+    Text(
+        text = stringResource(Res.string.qr_header),
+        modifier = Modifier.semantics { heading() },
+        style = PpsTheme.typography.headline,
+        color = PpsTheme.colors.text,
+    )
+}
+
+/**
+ * The `viewfinder` with its square guide and 48 dp torch, then the different-code line. On the Check screen it is pinned
+ * above the footer (Story 3.12: at 200% on 360 x 640 the viewfinder's bottom was below the scrolling area).
+ */
+@Composable
+private fun QrScan(
+    content: CheckContent.QrBarcode,
+    onIntent: (WakeIntent) -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    val colors = PpsTheme.colors
+    Column(modifier = modifier, verticalArrangement = Arrangement.spacedBy(PpsTheme.spacing.space3)) {
         val torch = stringResource(Res.string.qr_torch)
         ViewfinderPlaceholder(spoken = stringResource(Res.string.qr_viewfinder)) { viewfinder ->
             QrGuide(colors = viewfinder, torchLabel = torch, onTorch = { onIntent(WakeIntent.TorchToggled) }, torchOn = content.torchOn)
@@ -768,5 +925,6 @@ private fun CameraUnavailable() {
 
 /** The 3x3 Memory Sequence grid; 4x4 tiles are smaller. */
 private const val SMALL_GRID = 3
+
 private const val DASH = 8f
 private val GHOST_SIZE = 72.dp

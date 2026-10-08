@@ -10,7 +10,6 @@ import androidx.compose.runtime.produceState
 import androidx.compose.runtime.setValue
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.compose.currentStateAsState
-import com.yawnandpawn.app.core.checks.AccessibilityState
 import com.yawnandpawn.app.core.checks.CheckAnswer
 import com.yawnandpawn.app.core.log.Logger
 import com.yawnandpawn.app.core.session.FallbackPolicy
@@ -49,8 +48,8 @@ import kotlin.time.Duration.Companion.milliseconds
  *
  * The fallback (Story 3.9): "Can't do this check?" shows while the [fallbackPolicy] offers it and the fallback was not
  * used; the link opens the Fallback check picker, a card sends `FallbackRequested(type, reason)`, and "Back to check"
- * closes it without using the fallback. The picker closes by itself once the fallback is no longer offered. With
- * TalkBack on ([accessibility]) a picked Memory Sequence is its numbered variant, as a frozen plan would hold it.
+ * closes it without using the fallback. The picker closes by itself once the fallback is no longer offered. A picked
+ * Memory Sequence is always its numbered, announced variant (Story 3.12).
  *
  * Story 3.10 adds the QR/Barcode check ([qr], the scanner's camera): "Camera isn't available. Pick a fallback check."
  * at once without the permission or when the camera fails, and then the fallback is asked for with reason
@@ -62,7 +61,6 @@ internal class WakeCheck(
     private val monotonicClock: MonotonicClock,
     private val bootCounter: BootCounter,
     fallbackPolicy: FallbackPolicy,
-    accessibility: AccessibilityState,
     kept: WakeKept = WakeKept(WakeQr(null, monotonicClock, Logger {})),
 ) {
     /**
@@ -71,7 +69,7 @@ internal class WakeCheck(
      */
     val qr = kept.qr
 
-    private val fallback = WakeFallback(fallbackPolicy, accessibility, qr::fallbackReason, kept.pickerOpen)
+    private val fallback = WakeFallback(fallbackPolicy, qr::fallbackReason, kept.pickerOpen)
 
     private var input by mutableStateOf(CheckInput())
 
@@ -153,7 +151,7 @@ internal class WakeCheck(
         send: (List<SessionEvent>) -> Unit,
         interacted: () -> Unit,
     ) {
-        val chosen = (intent as? WakeIntent.FallbackChosen)?.let { coreCheckType(it.type) }?.let(fallback::asFrozen)
+        val chosen = (intent as? WakeIntent.FallbackChosen)?.let { coreCheckType(it.type) }?.let(fallback::asFallback)
         fallback.pickerOpen = intent == WakeIntent.FallbackLinkClicked && fallback.offered(state)
         if (chosen != null) {
             send(listOf(SessionEvent.UserInteracted, SessionEvent.FallbackRequested(chosen, qr.fallbackReason(state))))

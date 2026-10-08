@@ -73,6 +73,10 @@ object CheckSamples {
     /** The last problem, 3 of 3, in Grace. */
     val lastProblem: CheckUiState = map(grace(session(item = 2)), CheckInput(digits = "1234"))
 
+    /** Story 3.12: an Easy problem (two operands) in Loud. */
+    val easy: CheckUiState =
+        map(SessionState.Loud(session(CheckPlan(CheckMode.All, listOf(CheckEntry(CheckType.Math, Difficulty.Easy, count = 3))))))
+
     /** The longest problem (Hard, `a × b + c × d`, the fallback's difficulty) in Grace with 5 digits typed. */
     val hard: CheckUiState =
         map(

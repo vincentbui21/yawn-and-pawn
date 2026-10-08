@@ -113,6 +113,7 @@ fun mathCheckUiState(
                 operators = problem.operators.map { it.toUi() },
                 answer = input.digits,
                 wrong = input.wrong,
+                wrongAttempts = run.failedAttempts,
             ),
         snooze = snoozeOffer(availability, session, priceOf),
         note = wakeNote(session),
@@ -137,7 +138,7 @@ fun memoryCheckUiState(
     if (session == null || round == null || playback == null) return null
     return CheckUiState(
         grace = graceState(state, session, now),
-        content = memoryCheckContent(round, playback, input.wrong),
+        content = memoryCheckContent(round, playback, input.wrong, wrongAttempts = input.position?.failedAttempts ?: 0),
         snooze = snoozeOffer(availability, session, priceOf),
         note = wakeNote(session),
     )

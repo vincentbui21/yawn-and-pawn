@@ -137,6 +137,24 @@ object ContrastTable {
         )
     }
 
+    /**
+     * The [pairs] (foreground to background, DESIGN.md names) of [theme] that have no passing row in [rows]: missing from
+     * the table, or only there as a documented failure (Story 3.12: a screen's pair list is checked against the table).
+     */
+    fun missingPairs(
+        rows: List<ContrastRow>,
+        theme: String,
+        pairs: List<Pair<String, String>>,
+    ): List<Pair<String, String>> =
+        pairs.filter { (fg, bg) -> rows.none { it.theme == theme && it.foreground == fg && it.background == bg && !it.documentedFailure } }
+
+    /** The rows of [theme] in [rows] for [pairs]. */
+    fun rowsFor(
+        rows: List<ContrastRow>,
+        theme: String,
+        pairs: List<Pair<String, String>>,
+    ): List<ContrastRow> = rows.filter { row -> row.theme == theme && (row.foreground to row.background) in pairs }
+
     /** Every problem with [rows] against [colors] (DESIGN.md key to colour), one message per problem naming the row. */
     fun violations(
         rows: List<ContrastRow>,

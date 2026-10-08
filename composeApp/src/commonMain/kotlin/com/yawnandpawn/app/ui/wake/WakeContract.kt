@@ -107,7 +107,8 @@ sealed interface CheckContent {
 
     /**
      * Problem [problemNumber] of [problemCount]: [operands] joined by [operators] (one fewer), for example `23 × 4 + 17`
-     * (Story 3.2: Medium and Hard have more than two operands). [answer] holds the digits typed so far.
+     * (Story 3.2: Medium and Hard have more than two operands). [answer] holds the digits typed so far. [wrongAttempts]
+     * (the failed attempts on the entry) keys the focus move back to the first key after each wrong answer (Story 3.12).
      */
     data class Math(
         val problemNumber: Int,
@@ -116,17 +117,22 @@ sealed interface CheckContent {
         val operators: List<MathOperator>,
         val answer: String = "",
         val wrong: Boolean = false,
+        val wrongAttempts: Int = 0,
     ) : CheckContent {
         override val type: CheckType get() = CheckType.Math
     }
 
-    /** [pool] holds the letters still to place (`null` = moved into a slot); [slots] the answer so far. */
+    /**
+     * [pool] holds the letters still to place (`null` = moved into a slot); [slots] the answer so far. [wrongAttempts]
+     * keys the focus move back to the first pool letter after each wrong word (Story 3.12).
+     */
     data class WordUnscramble(
         val wordNumber: Int,
         val wordCount: Int,
         val pool: List<Char?>,
         val slots: List<Char?>,
         val wrong: Boolean = false,
+        val wrongAttempts: Int = 0,
     ) : CheckContent {
         override val type: CheckType get() = CheckType.WordUnscramble
     }
@@ -134,7 +140,8 @@ sealed interface CheckContent {
     /**
      * A [gridSize] × [gridSize] grid (3, or 4 on Hard, Story 3.8); [litTile] (numbered from 1, row by row) is highlighted
      * while the sequence plays or briefly after a tap; [numbered] is the TalkBack variant, which also announces
-     * [announced] (the round's tiles as numbers) while it watches.
+     * [announced] (the round's tiles as numbers) while it watches. [wrongAttempts] keys the focus move to tile 1 when
+     * "Your turn" starts again after a wrong tap (Story 3.12).
      */
     data class MemorySequence(
         val round: Int,
@@ -145,6 +152,7 @@ sealed interface CheckContent {
         val wrong: Boolean = false,
         val gridSize: Int = 3,
         val announced: List<Int>? = null,
+        val wrongAttempts: Int = 0,
     ) : CheckContent {
         override val type: CheckType get() = CheckType.MemorySequence
     }

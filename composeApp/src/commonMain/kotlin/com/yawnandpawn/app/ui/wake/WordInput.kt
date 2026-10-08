@@ -98,7 +98,7 @@ data class WordAnswer(
     /** The content the approved composable shows, or null with no item. */
     fun content(): CheckContent.WordUnscramble? {
         val shown = round ?: return null
-        return input?.content(shown, wrong)
+        return input?.content(shown, wrong)?.copy(wrongAttempts = position?.failedAttempts ?: 0)
     }
 }
 

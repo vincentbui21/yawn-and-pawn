@@ -6,7 +6,6 @@ import com.yawnandpawn.app.core.session.CameraFallbackPolicy
 import com.yawnandpawn.app.core.session.FallbackDecision
 import com.yawnandpawn.app.core.session.SessionEvent
 import com.yawnandpawn.app.core.session.SessionState
-import com.yawnandpawn.app.testing.FakeAccessibilityState
 import com.yawnandpawn.app.testing.FakeBootCounter
 import com.yawnandpawn.app.testing.FakeClock
 import com.yawnandpawn.app.testing.FakeFallbackPolicy
@@ -27,8 +26,7 @@ import com.yawnandpawn.app.ui.checks.CheckType as UiCheckType
  */
 class WakeCheckTest {
     private val policy = FakeFallbackPolicy(FallbackDecision.NotAllowed)
-    private val talkBack = FakeAccessibilityState()
-    private val check = WakeCheck(FakeClock(), FakeMonotonicClock(), FakeBootCounter(), policy, talkBack)
+    private val check = WakeCheck(FakeClock(), FakeMonotonicClock(), FakeBootCounter(), policy)
     private val grace = aSession().let { SessionState.Grace(it.copy(graceEnd = it.interactionDeadline)) }
     private val sent = mutableListOf<SessionEvent>()
     private var interactions = 0
@@ -93,16 +91,15 @@ class WakeCheckTest {
     }
 
     @Test
-    fun `a picked card asks for its check, and Memory Sequence is the numbered variant while TalkBack is on`() {
+    fun `a picked card asks for its check, and Memory Sequence is always the numbered variant (Story 3-12)`() {
         fun pick(type: UiCheckType) = check.onFallback(WakeIntent.FallbackChosen(type), grace, send = { sent += it }, interacted = {})
 
+        pick(UiCheckType.Math)
         pick(UiCheckType.WordUnscramble)
-        pick(UiCheckType.MemorySequence)
-        talkBack.screenReaderOn = true
         pick(UiCheckType.MemorySequence)
 
         assertEquals(
-            listOf(CheckType.WordUnscramble, CheckType.MemorySequence(), CheckType.MemorySequence(numbered = true)),
+            listOf(CheckType.Math, CheckType.WordUnscramble, CheckType.MemorySequence(numbered = true)),
             sent.filterIsInstance<SessionEvent.FallbackRequested>().map { it.type },
         )
     }

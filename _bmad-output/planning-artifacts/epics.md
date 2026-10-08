@@ -2050,7 +2050,7 @@ So that waking up is free for me too.
 **Acceptance Criteria:**
 
 **Given** an instrumented test on the Gradle Managed Device with accessibility checks enabled for Compose
-**When** it runs flow F5: a debug alarm with a QR/Barcode check, camera permission revoked (`pm revoke`)
+**When** it runs flow F5: a debug alarm with a QR/Barcode check, camera permission revoked (`pm revoke`) (Story 3.12 default: the camera reports no permission, as on a fresh install that never granted it; `pm revoke` would kill the test process)
 **Then** initial focus is the clock, then "I'm up"; after "I'm up" the camera message and the fallback link are focusable immediately; the Fallback check picker lists Math first; the Math problem reads its spoken form; the pad announces keys and the answer; "Check" completes the session and the alarm stops
 **And** no step needs sight, a timed gesture or anything other than a tap (every actionable node has a label and a role)
 
@@ -2122,8 +2122,8 @@ So that Epic 4 builds payments on checks I know work at 6 a.m.
 11. After 3 fallbacks in 7 days on real (non-test) debug alarms, Home shows the re-register banner; "Re-register" opens registration and a new code clears it.
 12. Reboot before unlock with a QR/Barcode alarm: Math and "Your phone restarted, so today's check is Math." appear; after unlock Math stays for that ring; the next alarm uses QR/Barcode.
 13. "Try it" on every check: no sound, nothing logged, the editor keeps unsaved changes.
-14. With TalkBack on, flow F5 end to end without looking at the screen, on at least two devices.
-15. At 200% font size on the smallest device, every check keeps its main input and the snooze control on screen.
+14. With TalkBack on, flow F5 end to end without looking at the screen, on at least two devices. Also (Story 3.12): after a wrong Math answer or Word, TalkBack moves to "Not quite. Try again." and reads it whole, and the next swipe is "1" or the first letter; after a wrong Memory tap focus stays put and "Not quite. Try again.", the phase and the whole replayed sequence ("3, 7, 1, 9") are heard before "Your turn"; the torch reads "on" or "off"; "Answer {value}" is heard after each key.
+15. At 200% font size on the smallest device, every check keeps its main input and the snooze control on screen (Story 3.12 pins the Memory grid, the Word letters and the QR viewfinder above the footer and opens the scrolling area at its end, next to them; after 5 different codes the QR viewfinder scrolls with the rest).
 16. Kill the process mid-check (`adb shell am kill com.yawnandpawn.app`): within 60 s the same problem or step returns.
 17. The Success screen shows the right variant (on time, test); "Done" closes it; untouched it closes after 60 s.
 18. All copy seen matches EXPERIENCE.md, and every `(EXPERIENCE.md Key strings)` string from this epic has been accepted or reworded by the owner in EXPERIENCE.md (FR-MSG-4).

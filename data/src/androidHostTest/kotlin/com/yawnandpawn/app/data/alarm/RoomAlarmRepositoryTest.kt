@@ -71,6 +71,16 @@ class RoomAlarmRepositoryTest {
         }
 
     @Test
+    fun `a volume stored below the minimum reads back as the minimum, never a silent alarm (Epic 3 device check)`() =
+        runTest(timeout = ROOM_IO_TIMEOUT) {
+            dao.insert(anAlarm(id = "silent", requestCode = 1000).toEntity().copy(volumePercent = 0))
+            dao.insert(anAlarm(id = "quiet", requestCode = 1001).toEntity().copy(volumePercent = 30))
+
+            assertEquals(Alarm.MIN_VOLUME_PERCENT, assertIs<Outcome.Success<Alarm>>(repository.get("silent")).value.volumePercent)
+            assertEquals(30, assertIs<Outcome.Success<Alarm>>(repository.get("quiet")).value.volumePercent)
+        }
+
+    @Test
     fun `a one-time alarm without a label reads back with no repeat days and no label`() =
         runTest(timeout = ROOM_IO_TIMEOUT) {
             val alarm = anAlarm()

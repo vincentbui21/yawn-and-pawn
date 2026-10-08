@@ -1,5 +1,6 @@
 package com.yawnandpawn.app.core.session
 
+import com.yawnandpawn.app.core.alarm.Alarm
 import com.yawnandpawn.app.core.time.Deadline
 import com.yawnandpawn.app.core.time.TimeSnapshot
 import kotlin.time.Duration
@@ -82,7 +83,11 @@ private fun soundOf(session: SessionData): EntryEffect =
     if (session.paused) {
         EntryEffect.SoundPaused
     } else {
-        EntryEffect.SoundAt(DirectBootSubstitution.apply(session.config, session.directBootRing).soundRef, session.config.volumePercent)
+        // At least 10% (Epic 3 review): a session stored with 0% before that minimum never re-rings silently.
+        EntryEffect.SoundAt(
+            DirectBootSubstitution.apply(session.config, session.directBootRing).soundRef,
+            Alarm.ringableVolume(session.config.volumePercent),
+        )
     }
 
 private fun ringing(

@@ -53,7 +53,7 @@ class TryItNoStakesTest {
             AlarmEditorRoute(alarmId = null, onClose = {}, onOpenFailed = {}, onOpenCopy = {}, viewModel = viewModel)
         }) {
             composeRule.onNodeWithText("Wake-up check").performClick()
-            composeRule.onNodeWithText("Medium · 3 problems").performClick()
+            composeRule.onNodeWithText("Easy · 3 problems").performClick()
             composeRule.onNodeWithText("Try it").performClick()
             composeRule.waitForIdle()
 
@@ -94,7 +94,7 @@ class TryItNoStakesTest {
             AlarmEditorRoute(alarmId = null, onClose = {}, onOpenFailed = {}, onOpenCopy = {}, viewModel = viewModel)
         }) {
             composeRule.onNodeWithText("Wake-up check").performClick()
-            composeRule.onNodeWithText("Medium · 3 problems").performClick()
+            composeRule.onNodeWithText("Easy · 3 problems").performClick()
             composeRule.onNodeWithText("Try it").performClick()
             composeRule.waitForIdle()
             tap(7)
@@ -119,13 +119,21 @@ class TryItNoStakesTest {
             AlarmEditorRoute(alarmId = null, onClose = {}, onOpenFailed = {}, onOpenCopy = {}, viewModel = viewModel)
         }) {
             composeRule.onNodeWithText("Wake-up check").performClick()
-            composeRule.onNodeWithText("Medium · 3 problems").performClick()
+            composeRule.onNodeWithText("Easy · 3 problems").performClick()
             composeRule.onNodeWithText("Try it").performClick()
             composeRule.waitForIdle()
-            tap(0)
+            // A digit that is surely wrong: an Easy problem (the default since 2026-10-08) can be "37 minus 37".
+            val spoken =
+                composeRule
+                    .onNode(isHeading() and SemanticsMatcher.keyIsDefined(SemanticsProperties.ContentDescription))
+                    .fetchSemanticsNode()
+                    .config[SemanticsProperties.ContentDescription]
+                    .single()
+            val wrong = if (evaluate(spoken) == 0) 9 else 0
+            tap(wrong)
             val rest =
                 composeRule
-                    .onNodeWithContentDescription("Answer 0")
+                    .onNodeWithContentDescription("Answer $wrong")
                     .fetchSemanticsNode()
                     .boundsInRoot.left
 

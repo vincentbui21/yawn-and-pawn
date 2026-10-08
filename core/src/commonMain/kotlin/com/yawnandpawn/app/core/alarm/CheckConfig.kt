@@ -1,6 +1,7 @@
 package com.yawnandpawn.app.core.alarm
 
 import com.yawnandpawn.app.core.checks.CheckEntry
+import com.yawnandpawn.app.core.checks.CheckPlan
 import com.yawnandpawn.app.core.checks.CheckType
 import com.yawnandpawn.app.core.checks.Difficulty
 import com.yawnandpawn.app.core.error.DomainError
@@ -34,9 +35,15 @@ data class CheckConfig(
             type: CheckType,
         ): String = "$alarmId:${type.id}"
 
-        /** The checks of a new alarm and of every alarm stored before Story 3.5: Math · Medium · 3 (epic default). */
-        val DEFAULT_ENTRIES: List<CheckEntry> =
-            listOf(CheckEntry(CheckType.Math, Difficulty.Medium, CheckType.Math.defaultCount))
+        /**
+         * The checks of a new alarm: Math · Easy · 3 ([CheckPlan.DEFAULT_ENTRY]; Easy since the owner decision of
+         * 2026-10-08, Medium before). Alarms stored before Story 3.5 got Math · Medium · 3 rows from the v6 migration
+         * ([LEGACY_DEFAULT_ENTRY]), and stored rows keep their difficulty.
+         */
+        val DEFAULT_ENTRIES: List<CheckEntry> = listOf(CheckPlan.DEFAULT_ENTRY)
+
+        /** The default entry until 2026-10-08, Math · Medium · 3: what the v6 migration gives every alarm stored before Story 3.5. */
+        val LEGACY_DEFAULT_ENTRY: CheckEntry = CheckEntry(CheckType.Math, Difficulty.Medium, CheckType.Math.defaultCount)
 
         /**
          * The types a user may pick: every core plugin but the Epic 1 `Placeholder`. The pickers show the subset that also

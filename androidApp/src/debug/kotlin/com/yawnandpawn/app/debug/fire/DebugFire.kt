@@ -4,10 +4,15 @@ import com.yawnandpawn.app.core.alarm.Alarm
 import com.yawnandpawn.app.core.alarm.AlarmDraft
 import com.yawnandpawn.app.core.alarm.AlarmRepository
 import com.yawnandpawn.app.core.alarm.AlarmScheduler
+import com.yawnandpawn.app.core.alarm.CheckConfig
+import com.yawnandpawn.app.core.alarm.CheckConfigRepository
 import com.yawnandpawn.app.core.alarm.SaveAlarm
+import com.yawnandpawn.app.core.alarm.orderedEntries
+import com.yawnandpawn.app.core.checks.CheckEntry
 import com.yawnandpawn.app.core.error.DomainError
 import com.yawnandpawn.app.core.error.Outcome
 import com.yawnandpawn.app.core.error.flatMap
+import com.yawnandpawn.app.core.error.map
 import com.yawnandpawn.app.core.session.ScheduleTestAlarm
 import com.yawnandpawn.app.core.time.Clock
 import com.yawnandpawn.app.core.time.TimeZoneProvider
@@ -19,7 +24,8 @@ import kotlin.time.Instant
 /**
  * The debug fire-now hook (Story 1.18, debug builds only): rings an alarm [FireRequest.seconds] from now through the
  * real [AlarmScheduler], as a real session or a test.
- * - Test: the stored alarm's values (or a synthetic default) through [ScheduleTestAlarm].
+ * - Test: the stored alarm's values and checks (or a synthetic default with the default checks) through
+ *   [ScheduleTestAlarm]. Without [checkConfigs] (older device tests) a stored alarm tests with the default checks.
  * - Real, with an alarm id: that alarm armed under its own request code; when it fires, its schedule is put right again
  *   by the normal fire path. A disabled alarm does not ring (the fire path ignores it).
  * - Real, no alarm id: a one-time alarm "Debug fire" is saved first, then armed the same way.
@@ -31,6 +37,7 @@ class DebugFire(
     private val scheduleTest: ScheduleTestAlarm,
     private val clock: Clock,
     private val timeZoneProvider: TimeZoneProvider,
+    private val checkConfigs: CheckConfigRepository? = null,
 ) {
     /** What `adb shell am broadcast -a com.yawnandpawn.app.debug.FIRE` asked for. */
     data class FireRequest(
@@ -50,7 +57,9 @@ class DebugFire(
                 }
             }
         return if (request.test) {
-            scheduleTest(stored?.toDraft() ?: syntheticDraft(), delay = seconds.seconds)
+            val draft: Outcome<AlarmDraft, DomainError> =
+                stored?.let { alarm -> checksOf(alarm).map { alarm.toDraft(it) } } ?: Outcome.Success(syntheticDraft())
+            draft.flatMap { scheduleTest(it, delay = seconds.seconds) }
         } else {
             val alarm: Outcome<Alarm, DomainError> = stored?.let { Outcome.Success(it) } ?: saveAlarm(syntheticDraft())
             val ringsAt = Instant.fromEpochMilliseconds(clock.now().toEpochMilliseconds() + seconds * MILLIS_PER_SECOND)
@@ -69,8 +78,20 @@ class DebugFire(
         return AlarmDraft(time = LocalTime(now.hour, now.minute), label = LABEL)
     }
 
-    private fun Alarm.toDraft(): AlarmDraft =
+    /** [alarm]'s stored checks in order; none (the default plan) without [checkConfigs] or rows. */
+    private suspend fun checksOf(alarm: Alarm): Outcome<List<CheckEntry>, DomainError> =
+        checkConfigs?.forAlarm(alarm.id)?.let { read ->
+            when (read) {
+                is Outcome.Success -> Outcome.Success(read.value.orderedEntries())
+                is Outcome.Failure -> read
+            }
+        } ?: Outcome.Success(emptyList())
+
+    /** The stored alarm as the editor would test it: its values, and its [checks] in its mode (the default ones if none). */
+    private fun Alarm.toDraft(checks: List<CheckEntry>): AlarmDraft =
         AlarmDraft(
+            checks = checks.ifEmpty { CheckConfig.DEFAULT_ENTRIES },
+            checkMode = checkMode,
             id = id,
             time = time,
             repeatDays = repeatDays,

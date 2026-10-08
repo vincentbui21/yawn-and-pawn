@@ -53,6 +53,18 @@ data class Alarm(
         val SNOOZE_LENGTHS_MINUTES: Set<Int> = setOf(5, 9, 10, 15)
         val GRACE_SECONDS_RANGE: IntRange = 15..30
         val PERCENT_RANGE: IntRange = 0..100
+
+        /**
+         * The lowest alarm volume (Epic 3 device check, bug 3): 0% made a silent alarm possible. 10% is the default taken
+         * for the unattended fix (no spec sets one; the slider moves in 5% steps); the owner can change it.
+         */
+        const val MIN_VOLUME_PERCENT = 10
+
+        /** The volumes an alarm may have: [MIN_VOLUME_PERCENT] to 100%. */
+        val VOLUME_PERCENT_RANGE: IntRange = MIN_VOLUME_PERCENT..100
+
+        /** [percent] as a ring may use it: a stored value below [MIN_VOLUME_PERCENT] (saved before the minimum) is raised to it. */
+        fun ringableVolume(percent: Int): Int = percent.coerceIn(VOLUME_PERCENT_RANGE)
     }
 }
 

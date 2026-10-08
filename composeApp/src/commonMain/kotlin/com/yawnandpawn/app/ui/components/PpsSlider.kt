@@ -23,8 +23,9 @@ import com.yawnandpawn.app.ui.theme.PpsTheme
 import kotlin.math.roundToInt
 
 /**
- * `slider` for a percentage in steps of [stepPercent]: title and current value ([valueText], "80%") above an
- * accent / `outline` Material 3 slider. TalkBack reads [title] and announces [valueText] on every change.
+ * `slider` for a percentage from [minPercent] to 100 in steps of [stepPercent]: title and current value ([valueText],
+ * "80%") above an accent / `outline` Material 3 slider. TalkBack reads [title] and announces [valueText] on every change.
+ * The alarm volume starts at its minimum (10%, never a silent alarm).
  */
 @Composable
 fun PercentSlider(
@@ -34,11 +35,12 @@ fun PercentSlider(
     onPercentChange: (Int) -> Unit,
     modifier: Modifier = Modifier,
     stepPercent: Int = PERCENT_STEP,
+    minPercent: Int = 0,
 ) = StepSlider(
     title = title,
     valueText = valueText,
-    value = percent,
-    range = 0..MAX_PERCENT,
+    value = percent.coerceIn(minPercent, MAX_PERCENT),
+    range = minPercent..MAX_PERCENT,
     step = stepPercent,
     onValueChange = onPercentChange,
     modifier = modifier,

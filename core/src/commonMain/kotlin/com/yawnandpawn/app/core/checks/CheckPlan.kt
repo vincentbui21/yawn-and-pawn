@@ -47,13 +47,17 @@ data class CheckPlan(
     val entries: List<CheckEntry>,
 ) {
     companion object {
-        /** Math · Medium · 3: the default entry (owner-approved default 2026-09-26) and the Direct Boot check (FR-ALM-11). */
-        val DEFAULT_ENTRY: CheckEntry = CheckEntry(CheckType.Math, Difficulty.Medium, count = CheckType.Math.defaultCount)
+        /**
+         * Math · Easy · 3: the default entry and the Direct Boot check (FR-ALM-11). Easy since the Epic 3 device check
+         * (owner decision 2026-10-08: "Make Easy the default and leave Medium as it is"); Medium before. Stored check
+         * rows keep their own difficulty.
+         */
+        val DEFAULT_ENTRY: CheckEntry = CheckEntry(CheckType.Math, Difficulty.Easy, count = CheckType.Math.defaultCount)
 
         /** The one entry of [placeholder]. */
         val PLACEHOLDER_ENTRY: CheckEntry = CheckEntry(CheckType.Placeholder, Difficulty.Medium, count = 1)
 
-        /** The plan of every alarm and of the test alarm until per-alarm checks (Story 3.5): Random, one Math · Medium · 3. */
+        /** The plan of a ring without configured checks: Random, one [DEFAULT_ENTRY] (Math · Easy · 3). */
         fun default(): CheckPlan = CheckPlan(CheckMode.Random, listOf(DEFAULT_ENTRY))
 
         /**

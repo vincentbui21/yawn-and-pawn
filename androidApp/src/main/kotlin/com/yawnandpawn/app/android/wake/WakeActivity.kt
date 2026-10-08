@@ -110,7 +110,11 @@ import kotlin.time.Duration.Companion.seconds
  * while the engine records the session and goes Idle in the background. Success closes on "Done", after
  * [SUCCESS_TIMEOUT], or when the screen is left (Home), so the next app open shows Home. A new ring replaces it. Any
  * other end (Missed, an emergency ring stopped) finishes the screen.
+ *
+ * While it is visible (`onStart` to `onStop`) the ringing notification is the quiet on-screen one, so no heads-up covers
+ * the countdown; left while the alarm rings, it heads up again as the way back (Epic 3 device check, bug 2).
  */
+@Suppress("TooManyFunctions") // One override per platform callback (lifecycle, keys, focus), each a few lines.
 class WakeActivity : ComponentActivity() {
     private val engine: SessionEngine by inject()
     private val runtime: WakeRuntime by inject()
@@ -142,6 +146,23 @@ class WakeActivity : ComponentActivity() {
      * accessibility shortcut passes.
      */
     internal val volumeKeys = VolumeKeyGate(ringing = { forwardsToWakeScreen(engine.state.value, runtime.emergency.value) })
+
+    /** Visible: the ringing notification goes quiet, so no heads-up covers the countdown (Epic 3 device check, bug 2). */
+    override fun onStart() {
+        super.onStart()
+        runtime.wakeScreenShown(visible = true, ringing = forwardsToWakeScreen(engine.state.value, runtime.emergency.value))
+    }
+
+    /** Left (Home, another app, the screen off): while the alarm rings, the notification heads up again as the way back. */
+    override fun onStop() {
+        // A recreate (rotation, dark mode, font scale) is not leaving: the new instance starts next (PR #41 review).
+        runtime.wakeScreenShown(
+            visible = false,
+            ringing = forwardsToWakeScreen(engine.state.value, runtime.emergency.value),
+            changingConfigurations = isChangingConfigurations,
+        )
+        super.onStop()
+    }
 
     /**
      * Resumed with the user unlocked is an unlock signal (Story 2.4), for example back from the PIN prompt of

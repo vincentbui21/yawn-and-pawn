@@ -38,10 +38,22 @@ const val APP_WORK_TIMEOUT_MILLIS = 30_000L
 
 private val APP_WORK_TIMEOUT = APP_WORK_TIMEOUT_MILLIS.milliseconds
 
-/** Waits (bounded) until every job launched on this scope so far has finished. */
+/** Waits (bounded) until no job launched on this scope is left, including jobs launched while it waits. */
 internal fun ApplicationScope.awaitChildren() {
     val job = coroutineContext[Job] ?: return
-    runBlocking { withTimeout(APP_WORK_TIMEOUT) { job.children.toList().joinAll() } }
+    runBlocking { withTimeout(APP_WORK_TIMEOUT) { job.joinChildren() } }
+}
+
+/**
+ * Joins this job's children until none is left. One snapshot is not enough: a child can launch another on the same
+ * scope while it runs (an engine step's effects, a wake screen's restore), and that one would be missed.
+ */
+private suspend fun Job.joinChildren() {
+    while (true) {
+        val running = children.toList()
+        if (running.isEmpty()) return
+        running.joinAll()
+    }
 }
 
 /**
@@ -101,7 +113,7 @@ fun stopApp() {
     try {
         // Teardown must not fail a test that already passed: wait (bounded), then cancel whatever is left.
         scope?.coroutineContext?.get(Job)?.let { job ->
-            val finished = runBlocking { withTimeoutOrNull(APP_WORK_TIMEOUT) { job.children.toList().joinAll() } }
+            val finished = runBlocking { withTimeoutOrNull(APP_WORK_TIMEOUT) { job.joinChildren() } }
             if (finished == null) {
                 val leftover = job.children.count { it.isActive }
                 println("stopApp: app work still running after $APP_WORK_TIMEOUT, cancelling $leftover leftover job(s)")
@@ -109,6 +121,11 @@ fun stopApp() {
         }
     } finally {
         scope?.cancel()
+        // Cancelling is cooperative: a job between two suspension points (an engine step applying its entry effects)
+        // runs on. Wait for it here, or it lands in the next test: a wake runtime of this graph that starts the service
+        // through its own (real) starter records a WAKE_RESTORE start in the next test's instrumentation, which is how
+        // WakeServiceTest's "no service started" failed although that test's own starter refuses every start.
+        scope?.coroutineContext?.get(Job)?.let { job -> runBlocking { withTimeoutOrNull(APP_WORK_TIMEOUT) { job.join() } } }
         stopKoin()
     }
 }

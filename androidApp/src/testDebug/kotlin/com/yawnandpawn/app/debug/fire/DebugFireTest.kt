@@ -5,6 +5,11 @@ import androidx.test.core.app.ApplicationProvider
 import com.yawnandpawn.app.StopAppRule
 import com.yawnandpawn.app.YawnAndPawnApp
 import com.yawnandpawn.app.core.alarm.RequestCodes
+import com.yawnandpawn.app.core.checks.CheckEntry
+import com.yawnandpawn.app.core.checks.CheckMode
+import com.yawnandpawn.app.core.checks.CheckPlan
+import com.yawnandpawn.app.core.checks.CheckType
+import com.yawnandpawn.app.core.checks.Difficulty
 import com.yawnandpawn.app.core.error.DomainError
 import com.yawnandpawn.app.core.error.Outcome
 import com.yawnandpawn.app.core.session.ScheduleTestAlarm
@@ -15,7 +20,9 @@ import com.yawnandpawn.app.testing.FakeClock
 import com.yawnandpawn.app.testing.FakeLogger
 import com.yawnandpawn.app.testing.FakeTestAlarmStore
 import com.yawnandpawn.app.testing.FakeTimeZoneProvider
+import com.yawnandpawn.app.testing.aRegisteredCode
 import com.yawnandpawn.app.testing.anAlarm
+import com.yawnandpawn.app.testing.checkConfigsOf
 import kotlinx.coroutines.runBlocking
 import org.junit.Rule
 import org.junit.Test
@@ -46,6 +53,7 @@ class DebugFireTest {
             ScheduleTestAlarm(scheduler, testAlarms, clock, FakeLogger()),
             clock,
             FakeTimeZoneProvider(),
+            checkConfigs = fixture.checkConfigs,
         )
 
     private fun inSeconds(seconds: Int) = clock.now().toEpochMilliseconds() + seconds * 1_000L
@@ -69,6 +77,19 @@ class DebugFireTest {
 
         assertEquals("alarm-a", testAlarms.pending?.alarmId)
         assertEquals("Work", testAlarms.pending?.label)
+    }
+
+    @Test
+    fun `a test fire of a stored alarm rings its own checks, and the default ones without (Epic 3 device check)`() {
+        val qr = CheckEntry(CheckType.QrBarcode, Difficulty.Medium, 1, code = aRegisteredCode())
+        val stored = anAlarm(id = "alarm-a", requestCode = 1001).copy(checkMode = CheckMode.All)
+        runBlocking { fixture.checkConfigs.saveWithAlarm(stored, checkConfigsOf(stored.id, listOf(qr))) }
+
+        runBlocking { debugFire.fire(DebugFire.FireRequest(seconds = 5, alarmId = "alarm-a", test = true)) }
+        assertEquals(CheckPlan(CheckMode.All, listOf(qr)), testAlarms.pending?.checkPlan)
+
+        runBlocking { debugFire.fire(DebugFire.FireRequest(seconds = 5, test = true)) }
+        assertEquals(CheckPlan.default(), testAlarms.pending?.checkPlan)
     }
 
     @Test

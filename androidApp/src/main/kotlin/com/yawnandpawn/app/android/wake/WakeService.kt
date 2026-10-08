@@ -456,7 +456,8 @@ class WakeService :
         val event =
             SessionEvent.TestAlarmFired(
                 sessionId = ids.newId(),
-                config = pending,
+                // The editor's checks (Epic 3 device check, bug 1); TalkBack's numbered Memory Sequence is chosen now, as for a real ring.
+                config = ConfigResolver.withAccessibleChecks(pending, accessibility.isScreenReaderOn()),
                 beforeFirstUnlock = locked,
             )
         val started = sessionLock.startingSession { engine.dispatch(event) }

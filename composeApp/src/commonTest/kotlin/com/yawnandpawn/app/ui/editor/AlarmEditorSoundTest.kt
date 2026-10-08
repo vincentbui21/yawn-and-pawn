@@ -235,6 +235,29 @@ class AlarmEditorSoundTest {
         }
 
     @Test
+    fun `the volume never goes below 10 percent, and a stored 0 percent opens and saves as 10 (Epic 3 device check)`() =
+        runTest(dispatcher) {
+            val viewModel = viewModel()
+            advanceUntilIdle()
+            viewModel.onIntent(EditorIntent.PaneOpened(EditorPane.Sound))
+
+            viewModel.onIntent(EditorIntent.VolumeChanged(0))
+            assertEquals(Alarm.MIN_VOLUME_PERCENT, viewModel.state.value.form.volumePercent)
+            viewModel.onIntent(EditorIntent.VolumeChanged(5))
+            assertEquals(10, viewModel.state.value.form.volumePercent)
+            viewModel.onIntent(EditorIntent.VolumeChanged(15))
+            assertEquals(15, viewModel.state.value.form.volumePercent)
+
+            repository.upsert(anAlarm(id = "silent", time = LocalTime(6, 30)).copy(volumePercent = 0))
+            val stored = viewModel("silent")
+            advanceUntilIdle()
+            assertEquals(10, stored.state.value.form.volumePercent, "coerced when read")
+            stored.onIntent(EditorIntent.SaveClicked)
+            advanceUntilIdle()
+            assertEquals(10, repository.current.single { it.id == "silent" }.volumePercent)
+        }
+
+    @Test
     fun `a preview that ends by itself clears the playing row`() =
         runTest(dispatcher) {
             val viewModel = viewModel()

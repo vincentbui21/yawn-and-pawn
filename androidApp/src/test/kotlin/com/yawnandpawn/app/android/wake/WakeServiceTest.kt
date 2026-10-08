@@ -748,16 +748,21 @@ class WakeServiceTest {
 
     @Test
     fun `a refused alarm start through the receiver arms the session slot one heartbeat ahead carrying the alarm`() {
+        val asked = mutableListOf<String?>()
         val app =
             WakeApp(
                 starter = { context ->
-                    WakeServiceStarter(context, GlobalContext.get().get()) { throw ForegroundServiceStartNotAllowedException("background") }
+                    WakeServiceStarter(context, GlobalContext.get().get()) { intent ->
+                        asked += intent.action
+                        throw ForegroundServiceStartNotAllowedException("background")
+                    }
                 },
             )
 
         fireThroughReceiver(app)
 
         assertSlotCarriesAlarmA(app)
+        assertEquals(listOf<String?>(WakeService.ACTION_ALARM), asked, "one start, for the alarm, and it was refused")
         assertNull(shadowOf(app.app).nextStartedService, "no service started")
     }
 

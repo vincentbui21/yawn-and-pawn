@@ -163,7 +163,7 @@ class QrBarcodeCheckTest {
         assertEquals(plan, json.decodeFromString(CheckPlan.serializer(), encoded))
         assertEquals(
             """{"type":{"type":"Math"},"difficulty":"Medium","count":3}""",
-            json.encodeToString(CheckEntry.serializer(), CheckPlan.DEFAULT_ENTRY),
+            json.encodeToString(CheckEntry.serializer(), CheckEntry(CheckType.Math, Difficulty.Medium, count = 3)),
         )
         val answer: CheckAnswer = CheckAnswer.Code(code)
         assertEquals(answer, json.decodeFromString(CheckAnswer.serializer(), json.encodeToString(CheckAnswer.serializer(), answer)))

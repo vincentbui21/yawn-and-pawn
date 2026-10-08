@@ -4,6 +4,7 @@ import android.annotation.SuppressLint
 import android.content.Context
 import android.media.AudioManager
 import android.os.Build
+import com.yawnandpawn.app.core.alarm.Alarm
 import com.yawnandpawn.app.core.log.LogEvent
 import com.yawnandpawn.app.core.log.Logger
 import kotlin.math.roundToInt
@@ -29,8 +30,9 @@ class AlarmVolume(
         get() = if (prefs.contains(KEY_SAVED)) prefs.getInt(KEY_SAVED, 0) else null
 
     /**
-     * Sets the alarm stream to [percent] of its maximum (at least the stream's lowest audible step, so a 0% alarm still
-     * rings), saving the user's volume first unless one is saved already.
+     * Sets the alarm stream to [percent] of its maximum, never below `Alarm.MIN_VOLUME_PERCENT` (Epic 3 review: a session
+     * stored with 0% before that minimum re-rings at 10%) and at least the stream's lowest audible step,
+     * saving the user's volume first unless one is saved already.
      */
     @SuppressLint("ApplySharedPref") // A crash right after must not lose the user's volume.
     fun setForRing(percent: Int) {
@@ -49,7 +51,8 @@ class AlarmVolume(
     private fun indexFor(percent: Int): Int {
         val max = audio.getStreamMaxVolume(AudioManager.STREAM_ALARM)
         val min = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) audio.getStreamMinVolume(AudioManager.STREAM_ALARM) else 0
-        return (max * percent.coerceIn(0, FULL) / FULL.toDouble()).roundToInt().coerceIn(maxOf(min, 1), maxOf(max, 1))
+        // Never below the alarm minimum (10%), also for a session stored with 0% before that minimum existed.
+        return (max * Alarm.ringableVolume(percent) / FULL.toDouble()).roundToInt().coerceIn(maxOf(min, 1), maxOf(max, 1))
     }
 
     private fun setStream(

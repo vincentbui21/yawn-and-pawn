@@ -30,7 +30,8 @@ class CheckMappingTest {
     private fun at(millis: Long) = TimeSnapshot(start.wallMillis + millis, start.elapsedMillis + millis, start.bootCount)
 
     private fun session(
-        plan: CheckPlan = CheckPlan.default(),
+        // Math · Medium · 3, the default until 2026-10-08: these tests read its two-operator problems.
+        plan: CheckPlan = CheckPlan(CheckMode.Random, listOf(CheckEntry(CheckType.Math, Difficulty.Medium, 3))),
         item: Int = 0,
         seed: Long = 1L,
     ): SessionData =

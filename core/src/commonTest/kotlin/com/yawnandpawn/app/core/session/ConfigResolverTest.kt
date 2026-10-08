@@ -2,14 +2,19 @@ package com.yawnandpawn.app.core.session
 
 import com.yawnandpawn.app.core.alarm.Alarm
 import com.yawnandpawn.app.core.alarm.AlarmDraft
+import com.yawnandpawn.app.core.alarm.CheckConfig
 import com.yawnandpawn.app.core.checks.CheckEntry
 import com.yawnandpawn.app.core.checks.CheckMode
 import com.yawnandpawn.app.core.checks.CheckPlan
 import com.yawnandpawn.app.core.checks.CheckType
 import com.yawnandpawn.app.core.checks.Difficulty
+import com.yawnandpawn.app.core.checks.qr.CodeFormat
+import com.yawnandpawn.app.core.checks.qr.RegisteredCode
+import com.yawnandpawn.app.core.time.Deadline
 import kotlinx.datetime.LocalTime
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.time.Duration.Companion.seconds
 import kotlin.time.Instant
 
 class ConfigResolverTest {
@@ -57,7 +62,7 @@ class ConfigResolverTest {
                 rampStartPercent = 20,
                 soundRef = "builtin:birds",
                 vibration = false,
-                checkPlan = CheckPlan(CheckMode.Random, listOf(CheckEntry(CheckType.Math, Difficulty.Medium, count = 3))),
+                checkPlan = CheckPlan(CheckMode.Random, listOf(CheckEntry(CheckType.Math, Difficulty.Easy, count = 3))),
             ),
             ConfigResolver.resolve(alarm, emptyList(), settings, testMode = false, scheduledAt = SCHEDULED_AT),
         )
@@ -169,6 +174,102 @@ class ConfigResolverTest {
         val draft = AlarmDraft(time = LocalTime(7, 0), vibration = false, vibrateInGrace = true)
         assertEquals(false, ConfigResolver.resolveTest(draft, GlobalSettings(), SCHEDULED_AT).vibrateInGrace)
         assertEquals(true, ConfigResolver.resolveTest(draft.copy(vibration = true), GlobalSettings(), SCHEDULED_AT).vibrateInGrace)
+    }
+}
+
+/**
+ * Epic 3 device check fixes: a test ring uses the editor's checks (bug 1), the default check is Math · Easy · 3 (owner
+ * decision 2026-10-08), and a volume below the minimum rings at the minimum (bug 3).
+ */
+class ConfigResolverDeviceCheckTest {
+    private val code = RegisteredCode.of(CodeFormat.Ean13, "4006381333931")
+    private val qr = CheckEntry(CheckType.QrBarcode, Difficulty.Medium, count = 1, code = code)
+    private val word = CheckEntry(CheckType.WordUnscramble, Difficulty.Hard, count = 4)
+    private val memory = CheckEntry(CheckType.MemorySequence(), Difficulty.Easy, count = 2)
+
+    private fun draft(
+        checks: List<CheckEntry>,
+        mode: CheckMode = CheckMode.Random,
+    ) = AlarmDraft(time = LocalTime(7, 0), checks = checks, checkMode = mode)
+
+    @Test
+    fun `a test ring uses the draft's own checks and mode, an unsaved QR code included`() {
+        listOf(listOf(qr), listOf(word), listOf(memory, qr, word)).forEach { checks ->
+            listOf(CheckMode.Random, CheckMode.All).forEach { mode ->
+                val config = ConfigResolver.resolveTest(draft(checks, mode), GlobalSettings(), SCHEDULED_AT, wordsAvailable = true)
+
+                assertEquals(CheckPlan(mode, checks), config.checkPlan, "mode $mode, checks $checks")
+                assertEquals(true, config.testMode)
+            }
+        }
+    }
+
+    @Test
+    fun `a test ring without checks rings the default plan, and without a word list Word rings as Math`() {
+        assertEquals(CheckPlan.default(), ConfigResolver.resolveTest(draft(emptyList()), GlobalSettings(), SCHEDULED_AT).checkPlan)
+        assertEquals(
+            listOf(CheckEntry(CheckType.Math, Difficulty.Hard, CheckType.Math.defaultCount)),
+            ConfigResolver.resolveTest(draft(listOf(word)), GlobalSettings(), SCHEDULED_AT, wordsAvailable = false).checkPlan.entries,
+        )
+    }
+
+    @Test
+    fun `a stored test config gets the numbered Memory Sequence when TalkBack is on at the fire`() {
+        val config = ConfigResolver.resolveTest(draft(listOf(memory, qr)), GlobalSettings(), SCHEDULED_AT)
+
+        assertEquals(config, ConfigResolver.withAccessibleChecks(config, accessible = false))
+        assertEquals(
+            listOf(memory.copy(type = CheckType.MemorySequence(numbered = true)), qr),
+            ConfigResolver.withAccessibleChecks(config, accessible = true).checkPlan.entries,
+        )
+    }
+
+    @Test
+    fun `the default check is Math Easy 3 and the Direct Boot check follows it, the fallback stays Hard`() {
+        val easy = CheckEntry(CheckType.Math, Difficulty.Easy, count = 3)
+        assertEquals(easy, CheckPlan.DEFAULT_ENTRY)
+        assertEquals(CheckPlan(CheckMode.Random, listOf(easy)), ConfigResolver.defaultPlan())
+        assertEquals(listOf(easy), CheckConfig.DEFAULT_ENTRIES)
+        assertEquals(easy, DirectBootSubstitution.DIRECT_BOOT_CHECK)
+        assertEquals(CheckEntry(CheckType.Math, Difficulty.Medium, count = 3), CheckConfig.LEGACY_DEFAULT_ENTRY, "the v6 migration's rows")
+    }
+
+    @Test
+    fun `a volume stored below the minimum rings at the minimum, real or test`() {
+        val alarm =
+            Alarm(id = "a", time = LocalTime(7, 0), volumePercent = 0, requestCode = 1, createdAt = SCHEDULED_AT, updatedAt = SCHEDULED_AT)
+
+        assertEquals(10, ConfigResolver.resolve(alarm, NO_CHECKS, GlobalSettings(), false, SCHEDULED_AT).volumePercent)
+        assertEquals(10, ConfigResolver.resolveTest(draft(NO_CHECKS).copy(volumePercent = 5), GlobalSettings(), SCHEDULED_AT).volumePercent)
+        val loud = alarm.copy(volumePercent = 35)
+        assertEquals(35, ConfigResolver.resolve(loud, NO_CHECKS, GlobalSettings(), false, SCHEDULED_AT).volumePercent)
+    }
+}
+
+/** Review fix for PR #41: a session stored with 0% before the 10% minimum never re-rings silently. */
+class RingVolumeFloorTest {
+    private val silent = ringSession(testConfig().copy(volumePercent = 0))
+
+    @Test
+    fun `a stored 0 percent session plays and comes back from quiet time at 10 percent`() {
+        val sound = entryEffects(SessionState.Ringing(silent)).filterIsInstance<EntryEffect.SoundAt>().single()
+        assertEquals(Alarm.MIN_VOLUME_PERCENT, sound.volumePercent)
+        assertEquals(10, entryEffects(SessionState.Loud(silent)).filterIsInstance<EntryEffect.SoundAt>().single().volumePercent)
+
+        val grace = SessionState.Grace(silent.copy(graceEnd = Deadline.after(T0, 20.seconds)))
+        val unmute =
+            SessionReducer(StubAvailability(SnoozeAvailability.Available(OFFER)), PluginCheckValidator, CameraFallbackPolicy())
+                .reduce(grace, SessionEvent.GraceElapsed, at(21.seconds))
+                .effects
+                .filterIsInstance<SessionEffect.UnmuteToVolume>()
+                .single()
+        assertEquals(10, unmute.volumePercent)
+    }
+
+    @Test
+    fun `a session at a normal volume keeps it`() {
+        val loud = ringSession(testConfig().copy(volumePercent = 65))
+        assertEquals(65, entryEffects(SessionState.Ringing(loud)).filterIsInstance<EntryEffect.SoundAt>().single().volumePercent)
     }
 }
 

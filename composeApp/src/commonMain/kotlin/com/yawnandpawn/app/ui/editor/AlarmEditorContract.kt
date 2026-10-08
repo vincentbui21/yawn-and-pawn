@@ -42,7 +42,7 @@ data class EditorForm(
     val graceSeconds: Int = Alarm.DEFAULT_GRACE_SECONDS,
     /** "Vibrate during quiet time" (Story 3.4: per alarm, on by default). */
     val vibrateInGrace: Boolean = Alarm.DEFAULT_VIBRATE_IN_GRACE,
-    /** The checks in the order All mode runs them (Story 3.5); a new alarm starts with Math · Medium · 3. */
+    /** The checks in the order All mode runs them (Story 3.5); a new alarm starts with Math · Easy · 3. */
     val checks: List<CheckChip> = DEFAULT_CHECKS,
     val checkMode: CheckMode = CheckMode.Random,
 ) {

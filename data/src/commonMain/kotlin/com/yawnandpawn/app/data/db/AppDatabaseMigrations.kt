@@ -76,14 +76,15 @@ val MIGRATION_4_5: Migration =
 
 /**
  * v5 to v6 (Story 3.5): adds `alarm.check_mode` (Random for every alarm) and the `check_config` table, and gives every
- * existing alarm the default checks (Math · Medium · 3, `CheckConfig.DEFAULT_ENTRIES`) at position 0, with the row id
+ * existing alarm the checks it rang until then (Math · Medium · 3, `CheckConfig.LEGACY_DEFAULT_ENTRY`: frozen, so the
+ * Easy default of 2026-10-08 does not change what an upgrade stores) at position 0, with the row id
  * the use cases use (`CheckConfig.idFor`) and the migration time as its timestamps. The SQL matches the exported
  * `6.json`; Room checks it after migrating.
  */
 val MIGRATION_5_6: Migration =
     object : Migration(5, 6) {
         override suspend fun migrate(connection: SQLiteConnection) {
-            val default = CheckConfig.DEFAULT_ENTRIES.single()
+            val default = CheckConfig.LEGACY_DEFAULT_ENTRY
             connection.execSQL("ALTER TABLE `alarm` ADD COLUMN `check_mode` TEXT NOT NULL DEFAULT '${CheckMode.Random.name}'")
             connection.execSQL(
                 "CREATE TABLE IF NOT EXISTS `check_config` (`id` TEXT NOT NULL, `alarm_id` TEXT NOT NULL, " +

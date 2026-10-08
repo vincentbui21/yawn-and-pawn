@@ -89,7 +89,7 @@ development_status:
   3-11-qr-barcode-when-the-camera-fails-and-before-first-unlock: done  # stacked on 3.10, 2026-10-07 (Epic 3 auto-run, fast mode)
   3-12-checks-with-talkback-end-to-end: done  # stacked on 3.11, 2026-10-07 (Epic 3 auto-run, fast mode)
   3-13-suggest-re-registering-after-3-fallbacks-in-7-days: done  # PR stack 2026-10-06 (Epic 3 auto-run, fast mode)
-  3-14-epic-3-device-verification-checklist: backlog
+  3-14-epic-3-device-verification-checklist: in-progress  # device session 2026-10-08; bugs fixed in fix/epic-3-device-check-bugs; owner closes it
   epic-3-retrospective: optional
 
   epic-4: in-progress

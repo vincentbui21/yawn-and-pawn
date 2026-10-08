@@ -3,6 +3,8 @@ package com.yawnandpawn.app.ui.editor
 import androidx.lifecycle.viewModelScope
 import com.yawnandpawn.app.core.alarm.AlarmField
 import com.yawnandpawn.app.core.alarm.RequestCodes
+import com.yawnandpawn.app.core.checks.word.WordBank
+import com.yawnandpawn.app.core.checks.word.WordList
 import com.yawnandpawn.app.core.error.DomainError
 import com.yawnandpawn.app.core.error.Outcome
 import com.yawnandpawn.app.core.log.LogEvent
@@ -20,7 +22,11 @@ import com.yawnandpawn.app.testing.FakeSoundLibrary
 import com.yawnandpawn.app.testing.FakeSoundPreview
 import com.yawnandpawn.app.testing.FakeTestAlarmStore
 import com.yawnandpawn.app.testing.FakeTimeZoneProvider
+import com.yawnandpawn.app.testing.aRegisteredCode
 import com.yawnandpawn.app.testing.anAlarm
+import com.yawnandpawn.app.testing.checkConfigsOf
+import com.yawnandpawn.app.ui.checks.CheckType
+import com.yawnandpawn.app.ui.checks.Difficulty
 import com.yawnandpawn.app.ui.home.AlarmActions
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.Dispatchers
@@ -44,6 +50,10 @@ import kotlin.test.assertFalse
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
 import kotlin.time.Instant
+import com.yawnandpawn.app.core.checks.CheckEntry as CoreCheckEntry
+import com.yawnandpawn.app.core.checks.CheckMode as CoreCheckMode
+import com.yawnandpawn.app.core.checks.CheckType as CoreCheckType
+import com.yawnandpawn.app.core.checks.Difficulty as CoreDifficulty
 
 /** Story 1.18: the editor's "Test alarm" rings the form as it is now, as a test 10 s later. */
 @OptIn(ExperimentalCoroutinesApi::class)
@@ -203,6 +213,88 @@ class AlarmEditorTestAlarmTest {
             return inner.put(config)
         }
     }
+
+    @Test
+    fun `Test alarm rings the form's own checks, QR with its unsaved code (Epic 3 device check)`() =
+        runTest(dispatcher) {
+            val viewModel = viewModel()
+            val code = aRegisteredCode()
+            viewModel.onIntent(EditorIntent.CheckToggled(CheckType.QrBarcode, selected = true))
+            viewModel.onIntent(EditorIntent.CheckSetupClicked(CheckType.QrBarcode))
+            viewModel.onIntent(EditorIntent.CodeRegistered(code))
+            viewModel.onIntent(EditorIntent.CheckToggled(CheckType.Math, selected = false))
+
+            viewModel.onIntent(EditorIntent.TestAlarmClicked)
+            advanceUntilIdle()
+
+            val plan = checkNotNull(testAlarmStore.pending).checkPlan
+            assertEquals(listOf(CoreCheckEntry(CoreCheckType.QrBarcode, CoreDifficulty.Medium, 1, code = code)), plan.entries)
+            assertTrue(repository.current.isEmpty(), "the code is not saved by a test")
+        }
+
+    @Test
+    fun `Test alarm rings the form's own checks and mode, Word then Memory in All (Epic 3 device check)`() =
+        runTest(dispatcher) {
+            // The app installs its word list at start; without one Word would ring as Math (Story 3.7 review).
+            val installed = WordBank.current
+            WordBank.install(WordList(listOf("apple", "stone", "garden", "listen", "airplane", "notebook")))
+            try {
+                val viewModel = viewModel()
+                viewModel.onIntent(EditorIntent.CheckToggled(CheckType.WordUnscramble, selected = true))
+                viewModel.onIntent(EditorIntent.CheckToggled(CheckType.Math, selected = false))
+
+                viewModel.onIntent(EditorIntent.TestAlarmClicked)
+                advanceUntilIdle()
+                assertEquals(
+                    listOf(CoreCheckType.WordUnscramble),
+                    checkNotNull(testAlarmStore.pending).checkPlan.entries.map { it.type },
+                    "Word, not the default Math",
+                )
+
+                viewModel.onIntent(EditorIntent.CheckToggled(CheckType.MemorySequence, selected = true))
+                viewModel.onIntent(EditorIntent.CheckModeSelected(CheckMode.All))
+                viewModel.onIntent(EditorIntent.TestAlarmClicked)
+                advanceUntilIdle()
+                val plan = checkNotNull(testAlarmStore.pending).checkPlan
+                assertEquals(CoreCheckMode.All, plan.mode)
+                assertEquals(listOf(CoreCheckType.WordUnscramble, CoreCheckType.MemorySequence()), plan.entries.map { it.type })
+            } finally {
+                WordBank.install(installed)
+            }
+        }
+
+    @Test
+    fun `a stored alarm's test rings its stored checks, its QR code included (Epic 3 device check)`() =
+        runTest(dispatcher) {
+            val code = aRegisteredCode()
+            val qr = CoreCheckEntry(CoreCheckType.QrBarcode, CoreDifficulty.Medium, 1, code = code)
+            alarms.checkConfigs.saveWithAlarm(stored, checkConfigsOf(stored.id, listOf(qr)))
+            val viewModel = viewModel(stored.id)
+            advanceUntilIdle()
+
+            viewModel.onIntent(EditorIntent.TestAlarmClicked)
+            advanceUntilIdle()
+
+            assertEquals(listOf(qr), checkNotNull(testAlarmStore.pending).checkPlan.entries)
+        }
+
+    @Test
+    fun `a new alarm and a newly ticked Math start at Easy, Word at Medium (owner decision 2026-10-08)`() =
+        runTest(dispatcher) {
+            val viewModel = viewModel()
+            advanceUntilIdle()
+            assertEquals(listOf(CheckChip(CheckType.Math, Difficulty.Easy, 3)), viewModel.state.value.form.checks)
+
+            viewModel.onIntent(EditorIntent.CheckToggled(CheckType.Math, selected = false))
+            viewModel.onIntent(EditorIntent.CheckToggled(CheckType.WordUnscramble, selected = true))
+            viewModel.onIntent(EditorIntent.CheckToggled(CheckType.Math, selected = true))
+
+            assertEquals(
+                mapOf(CheckType.WordUnscramble to Difficulty.Medium, CheckType.Math to Difficulty.Easy),
+                viewModel.state.value.form.checks
+                    .associate { it.type to it.difficulty },
+            )
+        }
 
     @Test
     fun `a test alarm that cannot be armed shows nothing and is logged`() =

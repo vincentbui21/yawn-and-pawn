@@ -2,6 +2,7 @@ package com.yawnandpawn.app.android.wake
 
 import android.app.NotificationManager
 import android.os.Looper
+import android.view.accessibility.AccessibilityManager
 import androidx.compose.ui.test.assertHasNoClickAction
 import androidx.compose.ui.test.junit4.createEmptyComposeRule
 import androidx.compose.ui.test.onNodeWithContentDescription
@@ -123,6 +124,67 @@ class TestAlarmFlowTest {
 
         assertEquals(SessionOutcome.Test, history.rows.single().outcome)
         assertTrue(app.logs().none { "LaunchBilling" in it }, "no billing call in test mode")
+    }
+
+    /** "Test alarm" in the editor with [checks] (unsaved), the fire, and "I'm up": the check entry the test runs. */
+    private fun testCheckOf(
+        checks: List<CheckEntry>,
+        mode: CheckMode = CheckMode.Random,
+    ): CheckEntry {
+        val app = app()
+        val draft = AlarmDraft(time = LocalTime(7, 0), checks = checks, checkMode = mode)
+        assertIs<Outcome.Success<*>>(runBlocking { app.koin.get<ScheduleTestAlarm>()(draft) })
+        app.app.sendBroadcast(AlarmFiredReceiver.intent(app.app, AlarmFiredReceiver.ACTION_TEST_ALARM))
+        shadowOf(Looper.getMainLooper()).idle()
+        app.koin.get<ApplicationScope>().awaitChildren()
+        val controller = app.startService(assertNotNull(shadowOf(app.app).nextStartedService))
+        app.awaitRinging()
+        assertTrue((app.engine.state.value as SessionState.Ringing).session.config.testMode)
+
+        app.dispatch(SessionEvent.UserInteracted, SessionEvent.ImUpTapped)
+        val grace = assertIs<SessionState.Grace>(app.engine.state.value)
+        controller.destroy() // No ticking service left behind for the next test.
+        return assertNotNull(grace.session.checkRun.currentEntry)
+    }
+
+    @Test
+    fun `a test of the editor's QR check with its unsaved code rings the QR step, not Math (Epic 3 device check)`() {
+        val qr = CheckEntry(CheckType.QrBarcode, Difficulty.Medium, 1, code = aRegisteredCode())
+
+        assertEquals(qr, testCheckOf(listOf(qr)))
+    }
+
+    @Test
+    fun `a test of the editor's Word check rings the Word step, not Math (Epic 3 device check)`() {
+        val word = CheckEntry(CheckType.WordUnscramble, Difficulty.Hard, 2)
+
+        assertEquals(word, testCheckOf(listOf(word)))
+    }
+
+    @Test
+    fun `a test of the editor's checks in All mode runs them in order (Epic 3 device check)`() {
+        val memory = CheckEntry(CheckType.MemorySequence(), Difficulty.Easy, 1)
+        val word = CheckEntry(CheckType.WordUnscramble, Difficulty.Easy, 1)
+
+        assertEquals(memory, testCheckOf(listOf(memory, word), CheckMode.All))
+    }
+
+    @Test
+    fun `with TalkBack on at the fire, a test's Memory Sequence is the numbered variant (Epic 3 device check)`() {
+        val app = app()
+        val memory = CheckEntry(CheckType.MemorySequence(), Difficulty.Easy, 1)
+        testAlarms.pending = aSessionConfig(label = "test", testMode = true).copy(checkPlan = CheckPlan(CheckMode.All, listOf(memory)))
+        shadowOf(app.app.getSystemService(AccessibilityManager::class.java)).apply {
+            setEnabled(true)
+            setTouchExplorationEnabled(true)
+        }
+
+        val controller = app.startService(WakeService.intent(app.app, WakeService.ACTION_TEST))
+        app.awaitRinging()
+
+        val ringing = app.engine.state.value as SessionState.Ringing
+        assertEquals(listOf(memory.copy(type = CheckType.MemorySequence(numbered = true))), ringing.session.config.checkPlan.entries)
+        controller.destroy()
     }
 
     @Test

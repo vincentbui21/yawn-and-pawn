@@ -243,8 +243,10 @@ class AlarmEditorViewModel(
             }
 
             is EditorIntent.VolumeChanged -> {
-                editForm { it.copy(volumePercent = intent.percent) }
-                sounds.volumeChanged(intent.percent)
+                // Never below the minimum (Epic 3 device check): the slider stops there, and so does any other caller.
+                val percent = Alarm.ringableVolume(intent.percent)
+                editForm { it.copy(volumePercent = percent) }
+                sounds.volumeChanged(percent)
             }
 
             is EditorIntent.Sound -> {
@@ -828,8 +830,12 @@ private fun EditorUiState.withChecks(): EditorUiState =
             ),
     )
 
-/** A newly ticked check: Medium, with its type's default count (Story 3.5). */
-private fun newCheck(type: CheckType): CheckChip = CheckChip(type, Difficulty.Medium, type.core?.defaultCount ?: type.defaultCount)
+/**
+ * A newly ticked check, with its type's default count (Story 3.5): Math at Easy, the default check's difficulty (owner
+ * decision 2026-10-08: "Make Easy the default and leave Medium as it is"), every other type at Medium.
+ */
+private fun newCheck(type: CheckType): CheckChip =
+    CheckChip(type, if (type == CheckType.Math) Difficulty.Easy else Difficulty.Medium, type.core?.defaultCount ?: type.defaultCount)
 
 /** [type] one place up or down, or the list unchanged at either end. */
 private fun List<CheckChip>.moved(
@@ -874,7 +880,7 @@ private fun Alarm.toForm(checks: List<CheckConfig>): EditorForm =
         repeatDays = repeatDays,
         label = label.orEmpty(),
         snoozeLengthMinutes = snoozeLengthMinutes.takeIf { it in Alarm.SNOOZE_LENGTHS_MINUTES } ?: Alarm.DEFAULT_SNOOZE_LENGTH_MINUTES,
-        volumePercent = volumePercent.coerceIn(Alarm.PERCENT_RANGE),
+        volumePercent = Alarm.ringableVolume(volumePercent),
         gradualVolume = gradualVolume,
         rampStartPercent = rampStartPercent.coerceIn(Alarm.PERCENT_RANGE),
         vibration = vibration,

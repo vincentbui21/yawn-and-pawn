@@ -208,6 +208,17 @@ class WakeRuntime(
      */
     fun notificationSwiped() = notifier.forget()
 
+    /**
+     * The wake screen became visible or was left (Epic 3 device check, bug 2): while it is visible the notification is
+     * the quiet on-screen one, so no heads-up covers its countdown; left while [ringing], it heads up again as the way
+     * back ([WakeNotifier.wakeScreenShown]).
+     */
+    fun wakeScreenShown(
+        visible: Boolean,
+        ringing: Boolean,
+        changingConfigurations: Boolean = false,
+    ) = notifier.wakeScreenShown(visible, ringing, changingConfigurations)
+
     /** The alarm time the posted ringing notification shows, or null when none is posted. */
     fun shownAlarmAt(): Instant? = notifier.shownFor
 

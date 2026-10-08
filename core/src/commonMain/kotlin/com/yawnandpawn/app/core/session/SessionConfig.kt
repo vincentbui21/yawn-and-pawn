@@ -91,7 +91,7 @@ object ConfigResolver {
             graceSeconds = alarm.graceSeconds,
             // Quiet-time vibration needs vibration itself on (review fix): "Vibration" off never vibrates.
             vibrateInGrace = alarm.vibration && alarm.vibrateInGrace,
-            volumePercent = alarm.volumePercent,
+            volumePercent = Alarm.ringableVolume(alarm.volumePercent),
             gradualVolume = alarm.gradualVolume,
             // Fixed (owner decision 2026-09-27); alarms saved before Story 1.14 may hold min(20, volume).
             rampStartPercent = Alarm.DEFAULT_RAMP_START_PERCENT,
@@ -102,20 +102,25 @@ object ConfigResolver {
         )
 
     /**
-     * The plan of a ring without configured checks, and of every test ring: Random · Math · Medium · 3 (Story 3.2,
-     * [CheckPlan.default]).
+     * The plan of a ring (or a test ring) without configured checks: Random · Math · Easy · 3 (Story 3.2,
+     * [CheckPlan.default]; Easy since the owner decision of 2026-10-08).
      */
     fun defaultPlan(): CheckPlan = CheckPlan.default()
 
     /**
      * The config of a test ring (FR-ALM-12, Story 1.18) from the editor's current, possibly unsaved, [draft]: always
      * `testMode`, the alarm id of the draft (or [TEST_ALARM_ID] for a new alarm), a trimmed label (blank means none)
-     * and the same fixed ramp start and check plan as a real ring at [scheduledAt].
+     * and the same fixed ramp start as a real ring at [scheduledAt]. The check plan is the draft's own checks in its
+     * mode, a QR/Barcode entry with its (possibly unsaved) code included, built like a real ring's ([resolve]): a draft
+     * without checks rings the [defaultPlan], and without [wordsAvailable] Math takes Word Unscramble's place. (Epic 3
+     * device check, bug 1: a test used to ring the default plan whatever the alarm's checks.) The numbered Memory
+     * Sequence is chosen at the fire ([withAccessibleChecks]), when TalkBack's state is known.
      */
     fun resolveTest(
         draft: AlarmDraft,
         globalSettings: GlobalSettings,
         scheduledAt: Instant,
+        wordsAvailable: Boolean = WordBank.current.words.isNotEmpty(),
     ): SessionConfig =
         SessionConfig(
             alarmId = draft.id ?: TEST_ALARM_ID,
@@ -127,14 +132,31 @@ object ConfigResolver {
             snoozeLengthMinutes = draft.snoozeLengthMinutes,
             graceSeconds = draft.graceSeconds,
             vibrateInGrace = draft.vibration && draft.vibrateInGrace,
-            volumePercent = draft.volumePercent,
+            volumePercent = Alarm.ringableVolume(draft.volumePercent),
             gradualVolume = draft.gradualVolume,
             rampStartPercent = Alarm.DEFAULT_RAMP_START_PERCENT,
             soundRef = draft.soundRef,
             vibration = draft.vibration,
-            // The draft's own checks are not rung yet (Story 3.5 deferred item): a test ring uses the default plan.
-            checkPlan = defaultPlan(),
+            checkPlan =
+                if (draft.checks.isEmpty()) {
+                    defaultPlan()
+                } else {
+                    CheckPlan(draft.checkMode, ringableEntries(draft.checks, accessible = false, wordsAvailable = wordsAvailable))
+                },
         )
+
+    /**
+     * [config] as the ring that starts now runs it: with [accessible] (TalkBack on at the fire, Story 3.8) its Memory
+     * Sequence entries use the numbered variant. A test config is stored when "Test alarm" is tapped and rings up to
+     * 10 s later, so its fire applies this, as a real ring's [resolve] does.
+     */
+    fun withAccessibleChecks(
+        config: SessionConfig,
+        accessible: Boolean,
+    ): SessionConfig {
+        val entries = accessibleEntries(config.checkPlan.entries, accessible)
+        return if (entries == config.checkPlan.entries) config else config.copy(checkPlan = config.checkPlan.copy(entries = entries))
+    }
 
     /** The alarm id of a test ring for an alarm that is not stored yet. */
     const val TEST_ALARM_ID = "test-alarm"

@@ -67,7 +67,8 @@ class AlarmEditorChecksTest {
             checkConfigs = checkRows,
         )
 
-    private val math = CheckChip(CheckType.Math, Difficulty.Medium, 3)
+    /** The default check: Math · Easy · 3 (owner decision 2026-10-08; Medium before). */
+    private val math = CheckChip(CheckType.Math, Difficulty.Easy, 3)
 
     @BeforeTest
     fun setUp() {
@@ -106,7 +107,7 @@ class AlarmEditorChecksTest {
     private fun AlarmEditorViewModel.checks(): List<CheckChip> = state.value.form.checks
 
     @Test
-    fun `a new alarm starts with Random Math Medium 3, shown on the Wake-up check row only, offering the pickable checks`() =
+    fun `a new alarm starts with Random Math Easy 3, shown on the Wake-up check row only, offering the pickable checks`() =
         runTest(dispatcher) {
             val full = viewModel().state.value.full
 
@@ -117,7 +118,7 @@ class AlarmEditorChecksTest {
         }
 
     @Test
-    fun `ticking adds a check last at Medium with its default count, unticking removes it, and an unoffered check is ignored`() =
+    fun `ticking adds a check last with its default count (Math Easy, others Medium), unticking removes it, unoffered ignored`() =
         runTest(dispatcher) {
             val viewModel = viewModel(pickable = listOf(CheckType.Math, CheckType.WordUnscramble))
 

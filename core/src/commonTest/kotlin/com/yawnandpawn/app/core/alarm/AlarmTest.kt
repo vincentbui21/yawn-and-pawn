@@ -74,7 +74,10 @@ class AlarmTest {
             ValidationCase("41 emoji", valid.copy(label = emoji.repeat(41)), AlarmField.Label),
             ValidationCase("lone high surrogates count once each", valid.copy(label = "\uD83D".repeat(41)), AlarmField.Label),
             ValidationCase("lone high surrogate at the end", valid.copy(label = "x".repeat(39) + "\uD83D"), null),
-            ValidationCase("volume 0 with a level ramp", valid.copy(volumePercent = 0, rampStartPercent = 0), null),
+            // Epic 3 device check: never below 10%, since 0% made a silent alarm possible.
+            ValidationCase("volume 0 (silent)", valid.copy(volumePercent = 0, rampStartPercent = 0), AlarmField.VolumePercent),
+            ValidationCase("volume 9", valid.copy(volumePercent = 9), AlarmField.VolumePercent),
+            ValidationCase("volume 10, the minimum, with a level ramp", valid.copy(volumePercent = 10, rampStartPercent = 0), null),
             ValidationCase("volume 100", valid.copy(volumePercent = 100), null),
             ValidationCase("volume -1", valid.copy(volumePercent = -1), AlarmField.VolumePercent),
             ValidationCase("volume 101", valid.copy(volumePercent = 101), AlarmField.VolumePercent),

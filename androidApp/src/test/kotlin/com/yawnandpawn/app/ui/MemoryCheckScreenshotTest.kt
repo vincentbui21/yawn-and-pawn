@@ -168,6 +168,40 @@ class MemoryCheckScreenshotTest {
     }
 
     @Test
+    fun `the grid stays in place when Not quite appears and goes (Epic 3 device check)`() {
+        var shown by mutableStateOf(content(Difficulty.Medium, frame = 0))
+        withScreen(PpsThemeMode.Light, content = { CheckScreen(state = check(shown), onIntent = {}) }) {
+            composeRule.onNodeWithText("Not quite. Try again.").assertDoesNotExist()
+            val before = composeRule.onNodeWithContentDescription("Tile 1").getBoundsInRoot().top
+
+            composeRule.runOnUiThread { shown = content(Difficulty.Medium, frame = 0, wrong = true) }
+            composeRule.onNodeWithText("Not quite. Try again.").assertExists()
+            assertEquals(before, composeRule.onNodeWithContentDescription("Tile 1").getBoundsInRoot().top, "no jump down")
+
+            composeRule.runOnUiThread { shown = content(Difficulty.Medium, frame = 0) }
+            composeRule.onNodeWithText("Not quite. Try again.").assertDoesNotExist()
+            assertEquals(before, composeRule.onNodeWithContentDescription("Tile 1").getBoundsInRoot().top, "no jump up")
+        }
+    }
+
+    @Test
+    @Config(fontScale = 2.0f)
+    fun `at 200 percent the pinned grid moves at most a few dp when Not quite appears, never a whole line (Epic 3 device check)`() {
+        var shown by mutableStateOf(content(Difficulty.Medium, frame = 0))
+        withScreen(PpsThemeMode.Light, content = { CheckScreen(state = check(shown), onIntent = {}) }) {
+            val before = composeRule.onNodeWithContentDescription("Tile 1").getBoundsInRoot().top
+
+            composeRule.runOnUiThread { shown = content(Difficulty.Medium, frame = 0, wrong = true) }
+            composeRule.onNodeWithText("Not quite. Try again.").assertExists()
+
+            // The area above the pinned grid scrolls here, so the line's room is not kept (it would push "Your turn" out
+            // of view); the grid only takes up what little slack the area had left.
+            val moved = composeRule.onNodeWithContentDescription("Tile 1").getBoundsInRoot().top - before
+            assertTrue(moved <= 8.dp, "moved $moved")
+        }
+    }
+
+    @Test
     fun `the grid stays in place when the numbered sequence starts and ends (review fix)`() {
         var shown by mutableStateOf(content(Difficulty.Easy, numbered = true))
         withScreen(PpsThemeMode.Light, content = { CheckScreen(state = check(shown), onIntent = {}) }) {

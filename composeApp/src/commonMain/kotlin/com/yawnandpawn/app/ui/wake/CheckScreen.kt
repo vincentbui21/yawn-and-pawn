@@ -29,9 +29,13 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.focus.FocusRequester
@@ -148,6 +152,12 @@ private fun PinnedInputCheck(
     val content = state.content
     val pinnedInput = pinned && content.hasInput()
     val input = with(fit) { Modifier.natural(INPUT) }
+    val scroll = if (pinnedInput) rememberEndScroll() else rememberScrollState()
+    // Memory's wrong-tap line keeps its room so the grid never jumps (Epic 3 device check), but only while that room
+    // fits: once the area scrolls (a large font on a small phone) the grid is pinned anyway, and the room would push the
+    // phase line out of view. Dropped for good once seen, so the layout never flips back and forth.
+    var reserveWrongLine by remember { mutableStateOf(true) }
+    LaunchedEffect(scroll.maxValue) { if (scroll.maxValue > 0) reserveWrongLine = false }
     Column(modifier = Modifier.fillMaxSize()) {
         Column(modifier = Modifier.fillMaxWidth().weight(1f), horizontalAlignment = Alignment.CenterHorizontally) {
             Column(
@@ -155,11 +165,11 @@ private fun PinnedInputCheck(
                     Modifier
                         .fillMaxWidth()
                         .weight(1f, fill = !pinnedInput)
-                        .verticalScroll(if (pinnedInput) rememberEndScroll() else rememberScrollState()),
+                        .verticalScroll(scroll),
             ) {
                 Column(modifier = Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(PpsTheme.spacing.space4)) {
                     CheckHeader(state)
-                    CheckInstruction(content, onIntent)
+                    CheckInstruction(content, onIntent, reserveWrongLine)
                 }
                 if (!pinned) {
                     Box(modifier = Modifier.fillMaxWidth(), contentAlignment = Alignment.TopCenter) { CheckInput(content, onIntent, input) }
@@ -188,11 +198,12 @@ private fun CheckContent.hasInput(): Boolean =
 private fun CheckInstruction(
     content: CheckContent,
     onIntent: (WakeIntent) -> Unit,
+    reserveWrongLine: Boolean,
 ) {
     when (content) {
         is CheckContent.Math -> MathProblem(content)
         is CheckContent.WordUnscramble -> WordCheck(content, onIntent, withPool = false, withActions = false)
-        is CheckContent.MemorySequence -> MemoryInstruction(content)
+        is CheckContent.MemorySequence -> MemoryInstruction(content, reserveWrongLine)
         is CheckContent.QrBarcode -> if (content.cameraAvailable) QrHeading() else QrCheck(content, onIntent)
         is CheckContent.HouseHunt -> HouseHuntCheck(content, onIntent)
     }
@@ -681,10 +692,15 @@ private fun MemoryCheck(
 
 /**
  * Memory Sequence without its grid: "Round {n} of {count}", the phase line (a heading, Story 3.12) with the announced
- * sequence, and the wrong-tap line. On the Check screen the grid is pinned under it (Story 3.12's 200% rule).
+ * sequence, and the wrong-tap line. On the Check screen the grid is pinned under it (Story 3.12's 200% rule). With
+ * [reserveWrongLine] the wrong-tap line keeps its room while hidden, so the grid below never jumps down when it shows
+ * (Epic 3 device check, bug 5).
  */
 @Composable
-private fun MemoryInstruction(content: CheckContent.MemorySequence) {
+private fun MemoryInstruction(
+    content: CheckContent.MemorySequence,
+    reserveWrongLine: Boolean = true,
+) {
     val colors = PpsTheme.colors
     val watching = content.phase == MemoryPhase.Watch
     Column(verticalArrangement = Arrangement.spacedBy(PpsTheme.spacing.space3), horizontalAlignment = Alignment.CenterHorizontally) {
@@ -714,8 +730,21 @@ private fun MemoryInstruction(content: CheckContent.MemorySequence) {
                 )
             }
         }
-        if (content.wrong) WrongAnswer()
+        when {
+            content.wrong -> WrongAnswer()
+            reserveWrongLine -> WrongAnswerSpace()
+        }
     }
+}
+
+/** The room of [WrongAnswer] with nothing drawn and nothing for TalkBack: the same line, invisible. */
+@Composable
+private fun WrongAnswerSpace() {
+    Text(
+        text = stringResource(Res.string.check_wrong_answer),
+        modifier = Modifier.alpha(0f).clearAndSetSemantics { },
+        style = PpsTheme.typography.body,
+    )
 }
 
 /**

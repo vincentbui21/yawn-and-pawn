@@ -35,7 +35,7 @@ class DebugFireReceiver :
                 alarmId = intent.getStringExtra(DebugFire.EXTRA_ALARM_ID),
                 test = intent.getBooleanExtra(DebugFire.EXTRA_TEST, false),
             )
-        val debugFire = DebugFire(get(), get(), get(), get(), get(), get())
+        val debugFire = DebugFire(get(), get(), get(), get(), get(), get(), checkConfigs = get())
         val pending = goAsync()
         get<ApplicationScope>().launch {
             try {

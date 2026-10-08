@@ -143,6 +143,18 @@ class WakeActivity : ComponentActivity() {
      */
     internal val volumeKeys = VolumeKeyGate(ringing = { forwardsToWakeScreen(engine.state.value, runtime.emergency.value) })
 
+    /** Visible: the ringing notification goes quiet, so no heads-up covers the countdown (Epic 3 device check, bug 2). */
+    override fun onStart() {
+        super.onStart()
+        runtime.wakeScreenShown(visible = true, ringing = forwardsToWakeScreen(engine.state.value, runtime.emergency.value))
+    }
+
+    /** Left (Home, another app, the screen off): while the alarm rings, the notification heads up again as the way back. */
+    override fun onStop() {
+        runtime.wakeScreenShown(visible = false, ringing = forwardsToWakeScreen(engine.state.value, runtime.emergency.value))
+        super.onStop()
+    }
+
     /**
      * Resumed with the user unlocked is an unlock signal (Story 2.4), for example back from the PIN prompt of
      * `requestDismissKeyguard`, or after an unlock while another screen was in front. The screen itself stays.

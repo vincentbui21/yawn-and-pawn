@@ -77,7 +77,7 @@ class DirectBootTest {
         assertSame(builtIn, DirectBootSubstitution.apply(builtIn, beforeFirstUnlock = true))
         assertSame(system, DirectBootSubstitution.apply(system, beforeFirstUnlock = false))
         assertTrue(CheckType.Placeholder.directBootSafe)
-        assertEquals(CheckEntry(CheckType.Math, Difficulty.Medium, count = 3), DirectBootSubstitution.DIRECT_BOOT_CHECK)
+        assertEquals(CheckEntry(CheckType.Math, Difficulty.Easy, count = 3), DirectBootSubstitution.DIRECT_BOOT_CHECK)
     }
 
     @Test

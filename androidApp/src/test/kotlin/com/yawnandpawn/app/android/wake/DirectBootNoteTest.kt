@@ -157,7 +157,7 @@ class DirectBootNoteTest {
     }
 
     private companion object {
-        /** The Direct Boot Math has 3 problems (Math · Medium · 3). */
+        /** The Direct Boot Math has 3 problems (Math · Easy · 3). */
         const val MATH_ITEMS = 3
     }
 }

@@ -37,7 +37,8 @@ internal fun AlarmEntity.toAlarm(): Alarm =
         label = label,
         enabled = enabled,
         soundRef = soundRef,
-        volumePercent = volumePercent,
+        // Stored below the minimum (before the Epic 3 device-check fix): read as the minimum, never a silent alarm.
+        volumePercent = Alarm.ringableVolume(volumePercent),
         gradualVolume = gradualVolume,
         rampStartPercent = rampStartPercent,
         vibration = vibration,

@@ -53,7 +53,7 @@ class TryItNoStakesTest {
             AlarmEditorRoute(alarmId = null, onClose = {}, onOpenFailed = {}, onOpenCopy = {}, viewModel = viewModel)
         }) {
             composeRule.onNodeWithText("Wake-up check").performClick()
-            composeRule.onNodeWithText("Medium · 3 problems").performClick()
+            composeRule.onNodeWithText("Easy · 3 problems").performClick()
             composeRule.onNodeWithText("Try it").performClick()
             composeRule.waitForIdle()
 
@@ -94,7 +94,7 @@ class TryItNoStakesTest {
             AlarmEditorRoute(alarmId = null, onClose = {}, onOpenFailed = {}, onOpenCopy = {}, viewModel = viewModel)
         }) {
             composeRule.onNodeWithText("Wake-up check").performClick()
-            composeRule.onNodeWithText("Medium · 3 problems").performClick()
+            composeRule.onNodeWithText("Easy · 3 problems").performClick()
             composeRule.onNodeWithText("Try it").performClick()
             composeRule.waitForIdle()
             tap(7)
@@ -119,7 +119,7 @@ class TryItNoStakesTest {
             AlarmEditorRoute(alarmId = null, onClose = {}, onOpenFailed = {}, onOpenCopy = {}, viewModel = viewModel)
         }) {
             composeRule.onNodeWithText("Wake-up check").performClick()
-            composeRule.onNodeWithText("Medium · 3 problems").performClick()
+            composeRule.onNodeWithText("Easy · 3 problems").performClick()
             composeRule.onNodeWithText("Try it").performClick()
             composeRule.waitForIdle()
             tap(0)

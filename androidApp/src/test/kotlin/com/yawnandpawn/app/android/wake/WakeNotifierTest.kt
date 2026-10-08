@@ -96,6 +96,84 @@ class WakeNotifierTest {
         assertNull(notifier.shownFor)
     }
 
+    private fun posted(): Notification = assertNotNull(shadowOf(manager).getNotification(WakeNotifier.NOTIFICATION_ID))
+
+    private fun importanceOf(notification: Notification): Int =
+        assertNotNull(manager.getNotificationChannel(notification.channelId)).importance
+
+    /** The same notification, whatever its channel: the time, the way back, no action. */
+    private fun assertWayBack(notification: Notification) {
+        assertEquals("7:00 AM alarm · Tap to return to your alarm", shadowOf(notification).contentText)
+        assertEquals(Notification.CATEGORY_ALARM, notification.category)
+        assertTrue(notification.flags and Notification.FLAG_ONGOING_EVENT != 0, "ongoing")
+        assertNotNull(notification.contentIntent, "a tap returns to the wake screen")
+        assertNotNull(notification.deleteIntent, "a swipe posts it again")
+        assertTrue(notification.actions.isNullOrEmpty())
+    }
+
+    @Test
+    fun `while the wake screen is visible the notification is quiet, so no heads-up covers the countdown (Epic 3 device check)`() {
+        notifier.show(sevenAm)
+        assertEquals(NotificationManager.IMPORTANCE_HIGH, importanceOf(posted()))
+
+        notifier.wakeScreenShown(visible = true, ringing = true)
+
+        val quiet = posted()
+        assertEquals(WakeNotifier.QUIET_CHANNEL_ID, quiet.channelId)
+        assertEquals(NotificationManager.IMPORTANCE_LOW, importanceOf(quiet), "low importance never heads up")
+        assertNull(quiet.fullScreenIntent, "no full-screen intent over a visible wake screen")
+        assertWayBack(quiet)
+        assertEquals(1, shadowOf(manager).size())
+        // Every later post while it is visible stays quiet: a step's WakeUiShown and a slot fire's startForeground.
+        notifier.show(sevenAm)
+        assertEquals(WakeNotifier.QUIET_CHANNEL_ID, posted().channelId)
+        assertEquals(WakeNotifier.QUIET_CHANNEL_ID, notifier.build(sevenAm).channelId)
+        assertNull(notifier.build(sevenAm).fullScreenIntent)
+    }
+
+    @Test
+    fun `leaving the wake screen while the alarm rings posts the heads-up notification again (Epic 3 device check)`() {
+        notifier.show(sevenAm)
+        notifier.wakeScreenShown(visible = true, ringing = true)
+
+        notifier.wakeScreenShown(visible = false, ringing = true)
+
+        val back = posted()
+        assertEquals(WakeNotifier.CHANNEL_ID, back.channelId)
+        assertEquals(NotificationManager.IMPORTANCE_HIGH, importanceOf(back), "it heads up as the way back")
+        assertNull(back.fullScreenIntent, "leaving with the power key does not bring the screen straight back")
+        assertWayBack(back)
+        assertEquals(sevenAm, notifier.shownFor)
+        // A slot fire's startForeground posts the full one again, as before.
+        assertNotNull(notifier.build(sevenAm).fullScreenIntent)
+        assertEquals(WakeNotifier.CHANNEL_ID, notifier.build(sevenAm).channelId)
+    }
+
+    @Test
+    fun `leaving in a snooze keeps it quiet, and the next ring posts the full ringing one (Epic 3 device check)`() {
+        notifier.show(sevenAm)
+        notifier.wakeScreenShown(visible = true, ringing = false)
+
+        notifier.wakeScreenShown(visible = false, ringing = false)
+        assertEquals(WakeNotifier.QUIET_CHANNEL_ID, posted().channelId)
+
+        notifier.show(sevenAm)
+        assertEquals(WakeNotifier.CHANNEL_ID, posted().channelId)
+        assertNotNull(posted().fullScreenIntent)
+    }
+
+    @Test
+    fun `a ring that starts while the wake screen is visible posts the quiet one (Epic 3 device check)`() {
+        notifier.wakeScreenShown(visible = true, ringing = false)
+        assertEquals(0, shadowOf(manager).size(), "nothing to change before a notification is posted")
+
+        val foreground = notifier.build(sevenAm)
+        notifier.shownByService(sevenAm)
+        assertEquals(WakeNotifier.QUIET_CHANNEL_ID, foreground.channelId)
+        notifier.show(sevenAm)
+        assertEquals(0, shadowOf(manager).size(), "the service's post is the quiet one already: nothing posted again")
+    }
+
     @Test
     fun `the notification colour resource equals the generated DESIGN accent token`() {
         assertEquals(PpsTokens.Light.accent.toArgb(), context.getColor(R.color.notification_accent))

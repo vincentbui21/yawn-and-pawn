@@ -213,7 +213,7 @@ class AlarmEditorQrTest {
             val stored = checkRows.current.values.single()
             assertEquals(
                 listOf(
-                    CheckEntry(CoreCheckType.Math, CoreDifficulty.Medium, 3),
+                    CheckEntry(CoreCheckType.Math, CoreDifficulty.Easy, 3),
                     CheckEntry(CoreCheckType.QrBarcode, CoreDifficulty.Medium, 1, code = code),
                 ),
                 stored.orderedEntries(),

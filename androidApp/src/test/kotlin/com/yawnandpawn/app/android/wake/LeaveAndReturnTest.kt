@@ -101,6 +101,32 @@ class LeaveAndReturnTest {
     }
 
     @Test
+    fun `no heads-up over the visible wake screen, and one again when it is left (Epic 3 device check)`() {
+        val app = WakeApp()
+        val service = ring(app)
+        assertEquals(WakeNotifier.CHANNEL_ID, assertNotNull(posted(app)).channelId, "the ring starts on the Alarms channel")
+
+        val screen = buildActivity(WakeActivity::class.java).setup()
+        val onScreen = assertNotNull(posted(app))
+        assertEquals(WakeNotifier.QUIET_CHANNEL_ID, onScreen.channelId)
+        assertEquals(NotificationManager.IMPORTANCE_LOW, manager(app).getNotificationChannel(onScreen.channelId).importance)
+        assertNull(onScreen.fullScreenIntent)
+        // A slot fire while it is visible (the grace end, the heartbeat) posts the quiet one too.
+        service.withIntent(WakeService.intent(app.app, WakeService.ACTION_SLOT)).startCommand(0, 2)
+        app.awaitUntil("the slot start is handled") { true }
+        assertEquals(WakeNotifier.QUIET_CHANNEL_ID, assertNotNull(posted(app)).channelId)
+
+        screen.pause().stop()
+
+        val away = assertNotNull(posted(app))
+        assertEquals(WakeNotifier.CHANNEL_ID, away.channelId, "high importance again: it heads up as the way back")
+        assertTrue(app.lastMediaPlayer().isReallyPlaying)
+        screen.restart().resume()
+        assertEquals(WakeNotifier.QUIET_CHANNEL_ID, assertNotNull(posted(app)).channelId)
+        service.destroy()
+    }
+
+    @Test
     fun `the notification has no action, and its taps and full-screen intent open the one wake screen on the current state`() {
         val app = WakeApp()
         ring(app)

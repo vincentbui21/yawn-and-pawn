@@ -38,7 +38,10 @@ interface UserLockState {
  * fee tier, max snoozes and snooze length always stay as they were frozen.
  */
 object DirectBootSubstitution {
-    /** The check a ring before the first unlock gets for an entry that needs normal storage: Math · Medium · 3 (Story 3.2). */
+    /**
+     * The check a ring before the first unlock gets for an entry that needs normal storage: [CheckPlan.DEFAULT_ENTRY],
+     * Math · Easy · 3 (Story 3.2; Easy with the default since 2026-10-08, a choice the owner can change).
+     */
     val DIRECT_BOOT_CHECK: CheckEntry = CheckPlan.DEFAULT_ENTRY
 
     fun apply(

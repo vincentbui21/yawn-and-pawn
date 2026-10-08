@@ -167,6 +167,8 @@ private fun SoundPane(
             valueText = stringResource(Res.string.editor_percent, form.volumePercent),
             percent = form.volumePercent,
             onPercentChange = { onIntent(EditorIntent.VolumeChanged(it)) },
+            // 10% at the far left: 0% would make a silent alarm (Epic 3 device check).
+            minPercent = Alarm.MIN_VOLUME_PERCENT,
             modifier = Modifier.padding(horizontal = PpsTheme.spacing.cardPadding, vertical = PpsTheme.spacing.space3),
         )
         GroupDivider()

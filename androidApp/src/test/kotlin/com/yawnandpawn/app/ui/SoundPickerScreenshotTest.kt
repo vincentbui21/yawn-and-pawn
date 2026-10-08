@@ -1,6 +1,7 @@
 package com.yawnandpawn.app.ui
 
 import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.SemanticsActions
 import androidx.compose.ui.semantics.SemanticsProperties
 import androidx.compose.ui.test.SemanticsMatcher
 import androidx.compose.ui.test.assertIsNotEnabled
@@ -12,12 +13,14 @@ import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.onRoot
+import androidx.compose.ui.test.performSemanticsAction
 import com.github.takahirom.roborazzi.captureRoboImage
 import com.yawnandpawn.app.StopAppRule
 import com.yawnandpawn.app.core.alarm.Alarm
 import com.yawnandpawn.app.core.sound.SoundRef
 import com.yawnandpawn.app.screenshotOptions
 import com.yawnandpawn.app.ui.editor.AlarmEditorScreen
+import com.yawnandpawn.app.ui.editor.EditorIntent
 import com.yawnandpawn.app.ui.editor.EditorPane
 import com.yawnandpawn.app.ui.editor.EditorUiState
 import com.yawnandpawn.app.ui.editor.editorSound
@@ -159,6 +162,24 @@ class SoundPickerScreenshotTest {
             assertEquals(0, composeRule.onAllNodesWithText("Sunrise", useUnmergedTree = true).fetchSemanticsNodes().size)
             assertEquals(0, composeRule.onAllNodesWithText("File missing. Default sound will play.").fetchSemanticsNodes().size)
         }
+
+    @Test
+    fun `the volume slider starts at 10 percent, so it can never be set to a silent 0 (Epic 3 device check)`() {
+        val sent = mutableListOf<EditorIntent>()
+        withScreen(
+            PpsThemeMode.Light,
+            content = { AlarmEditorScreen(state = SoundSamples.list, is24Hour = false, onIntent = { sent += it }) },
+        ) {
+            val slider = composeRule.onNodeWithContentDescription("Volume")
+            val range = slider.fetchSemanticsNode().config[SemanticsProperties.ProgressBarRangeInfo]
+            assertEquals(Alarm.MIN_VOLUME_PERCENT.toFloat(), range.range.start)
+            assertEquals(100f, range.range.endInclusive)
+
+            slider.performSemanticsAction(SemanticsActions.SetProgress) { it(0f) }
+
+            assertEquals(EditorIntent.VolumeChanged(Alarm.MIN_VOLUME_PERCENT), sent.filterIsInstance<EditorIntent.VolumeChanged>().last())
+        }
+    }
 
     private fun isRadio(): SemanticsMatcher = SemanticsMatcher.expectValue(SemanticsProperties.Role, Role.RadioButton)
 }

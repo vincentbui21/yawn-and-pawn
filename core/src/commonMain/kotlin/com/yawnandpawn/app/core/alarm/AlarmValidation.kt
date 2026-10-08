@@ -7,7 +7,8 @@ fun validate(alarm: Alarm): AlarmField? =
 
         alarm.soundRef.isBlank() -> AlarmField.SoundRef
 
-        alarm.volumePercent !in Alarm.PERCENT_RANGE -> AlarmField.VolumePercent
+        // Never below the minimum (Epic 3 device check): a 0% alarm would be silent.
+        alarm.volumePercent !in Alarm.VOLUME_PERCENT_RANGE -> AlarmField.VolumePercent
 
         // A percentage of the set volume (Story 1.14), so any value in range is valid at any volume.
         alarm.rampStartPercent !in Alarm.PERCENT_RANGE -> AlarmField.RampStartPercent

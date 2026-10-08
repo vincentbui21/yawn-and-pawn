@@ -50,8 +50,8 @@ class CheckConfigUseCasesTest {
     private fun rowsOf(alarm: Alarm): List<CheckConfig> = checkConfigs.rows.value[alarm.id].orEmpty()
 
     @Test
-    fun `a new alarm starts with Random Math Medium 3`() {
-        assertEquals(listOf(CheckEntry(CheckType.Math, Difficulty.Medium, 3)), AlarmDraft(time = LocalTime(7, 0)).checks)
+    fun `a new alarm starts with Random Math Easy 3 (Medium until the owner decision of 2026-10-08)`() {
+        assertEquals(listOf(CheckEntry(CheckType.Math, Difficulty.Easy, 3)), AlarmDraft(time = LocalTime(7, 0)).checks)
         assertEquals(CheckMode.Random, AlarmDraft(time = LocalTime(7, 0)).checkMode)
         assertEquals(
             listOf(CheckType.Math, CheckType.WordUnscramble, CheckType.MemorySequence(), CheckType.QrBarcode),

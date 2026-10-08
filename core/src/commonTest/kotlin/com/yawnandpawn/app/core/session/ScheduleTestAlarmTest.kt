@@ -66,7 +66,7 @@ class ScheduleTestAlarmTest {
             assertEquals(false, config.vibration)
             assertEquals(5, config.snoozeLengthMinutes)
             assertEquals(25, config.graceSeconds)
-            assertEquals(CheckPlan(CheckMode.Random, listOf(CheckEntry(CheckType.Math, Difficulty.Medium, count = 3))), config.checkPlan)
+            assertEquals(CheckPlan(CheckMode.Random, listOf(CheckEntry(CheckType.Math, Difficulty.Easy, count = 3))), config.checkPlan)
         }
 
     @Test

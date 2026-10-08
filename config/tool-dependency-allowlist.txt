@@ -1,0 +1,50 @@
+# Tool dependency allowlist, checked by `./gradlew :play-catalog:checkToolDependencyAllowlist` (part of qualityGate).
+#
+# Every `group:artifact` on the runtime classpath of tools/play-catalog (Story 4.1) must be listed here, one per line,
+# without a version, with its licence in the comment. `#` starts a comment. These libraries run only on the owner's
+# machine, in the separate JVM of `./gradlew playCatalog`. They are never on an app classpath, so they are NOT in
+# config/dependency-allowlist.txt, and an app story that wants one of them must add it there after its own review.
+#
+# Reviewed 2026-10-08 (Story 4.1): the Google Play Developer API client (androidpublisher v3-rev20260924-2.0.0) and
+# Google auth for the service-account key (1.54.0), with their HTTP, JSON, Guava and tracing-API dependencies. They talk
+# only to Google's OAuth and Play Developer API endpoints, and only when the owner runs the tool.
+
+# Play Developer API client and the Google API client stack (Apache-2.0)
+com.google.apis:google-api-services-androidpublisher  # Apache-2.0
+com.google.api-client:google-api-client               # Apache-2.0
+com.google.http-client:google-http-client             # Apache-2.0
+com.google.http-client:google-http-client-apache-v2   # Apache-2.0
+com.google.http-client:google-http-client-gson        # Apache-2.0
+com.google.oauth-client:google-oauth-client           # Apache-2.0
+com.google.api:api-common                             # BSD-3-Clause
+
+# Google auth: reads the service-account key and signs the OAuth token request (Apache-2.0)
+com.google.auth:google-auth-library-credentials       # Apache-2.0
+com.google.auth:google-auth-library-oauth2-http       # Apache-2.0
+
+# JSON, HTTP and codecs
+com.google.code.gson:gson                             # Apache-2.0
+org.apache.httpcomponents:httpclient                  # Apache-2.0
+org.apache.httpcomponents:httpcore                    # Apache-2.0
+commons-codec:commons-codec                           # Apache-2.0
+commons-logging:commons-logging                       # Apache-2.0
+
+# Guava and annotation libraries
+com.google.guava:guava                                # Apache-2.0
+com.google.guava:failureaccess                        # Apache-2.0
+com.google.guava:listenablefuture                     # Apache-2.0 (empty placeholder artifact)
+com.google.errorprone:error_prone_annotations         # Apache-2.0
+com.google.j2objc:j2objc-annotations                  # Apache-2.0
+com.google.auto.value:auto-value-annotations          # Apache-2.0
+com.google.code.findbugs:jsr305                       # BSD-3-Clause
+org.jspecify:jspecify                                 # Apache-2.0
+org.jetbrains:annotations                             # Apache-2.0
+
+# Tracing and context APIs used by google-http-client (API only; nothing is exported)
+io.grpc:grpc-api                                      # Apache-2.0
+io.grpc:grpc-context                                  # Apache-2.0
+io.opencensus:opencensus-api                          # Apache-2.0
+io.opencensus:opencensus-contrib-http-util            # Apache-2.0
+
+# Kotlin
+org.jetbrains.kotlin:kotlin-stdlib                    # Apache-2.0

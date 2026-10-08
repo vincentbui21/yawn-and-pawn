@@ -57,6 +57,11 @@ androidx-compose-ui-test-accessibility = "1.12.1"
 foojay = "1.0.0"
 # Build-time only (tools/tokens parses the DESIGN.md frontmatter); never on an app runtime classpath.
 snakeyaml = "2.6"
+# Tool only (tools/play-catalog, Story 4.1; verified published on Maven Central 2026-10-08): the Play Developer API client
+# with monetization.onetimeproducts and convertRegionPrices, and Google auth for the service-account key. Never on an app
+# runtime classpath; every resolved module is in config/tool-dependency-allowlist.txt.
+google-api-services-androidpublisher = "v3-rev20260924-2.0.0"
+google-auth-library = "1.54.0"
 
 [libraries]
 # Kotlin / KotlinX (the only libraries :core may use)
@@ -113,6 +118,9 @@ zxing-core = { module = "com.google.zxing:core", version.ref = "zxing" }
 android-gradle-api = { module = "com.android.tools.build:gradle-api", version.ref = "agp" }
 # DESIGN.md frontmatter parser for tools/tokens (build time only)
 snakeyaml = { module = "org.yaml:snakeyaml", version.ref = "snakeyaml" }
+# Play Developer API client and Google auth for tools/play-catalog (tool only)
+google-api-services-androidpublisher = { module = "com.google.apis:google-api-services-androidpublisher", version.ref = "google-api-services-androidpublisher" }
+google-auth-library-oauth2-http = { module = "com.google.auth:google-auth-library-oauth2-http", version.ref = "google-auth-library" }
 
 # Testing
 junit4 = { module = "junit:junit", version.ref = "junit4" }

@@ -4,6 +4,7 @@
 # listed here, one per line, without a version. `#` starts a comment.
 # Adding a line is a review decision: no analytics, ads or network SDKs beyond what the
 # architecture allows (Play Billing, Firebase Crashlytics). Test-only dependencies never appear here.
+# Owner-run tools (tools/play-catalog, Story 4.1) keep their own list with licences in config/tool-dependency-allowlist.txt.
 #
 # Generated from the resolution on 2026-09-26 (Story 1.2) and reviewed: all entries are Kotlin,
 # KotlinX, AndroidX, Compose Multiplatform and Koin libraries; none opens a network connection.

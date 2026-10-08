@@ -58,6 +58,54 @@ wordList {
 }
 
 // ---------------------------------------------------------------------------------------------
+// Play catalogue (Story 4.1, AD-7, tools/play-catalog/README.md): `./gradlew playCatalog -PplayCatalogMode=dry-run|apply
+// [-Pcredentials=<key file outside the repo>]` (or PLAY_SERVICE_ACCOUNT_JSON) creates and updates the 50 snooze
+// products. The tool runs in its own JVM, so its Google API client never joins this build's classpath.
+// ---------------------------------------------------------------------------------------------
+val playCatalogTool =
+    configurations.create("playCatalogTool") {
+        isCanBeConsumed = false
+        isCanBeResolved = true
+        attributes {
+            attribute(Usage.USAGE_ATTRIBUTE, objects.named(Usage.JAVA_RUNTIME))
+            attribute(Category.CATEGORY_ATTRIBUTE, objects.named(Category.LIBRARY))
+            attribute(LibraryElements.LIBRARY_ELEMENTS_ATTRIBUTE, objects.named(LibraryElements.JAR))
+            attribute(Bundling.BUNDLING_ATTRIBUTE, objects.named(Bundling.EXTERNAL))
+            attribute(TargetJvmEnvironment.TARGET_JVM_ENVIRONMENT_ATTRIBUTE, objects.named(TargetJvmEnvironment.STANDARD_JVM))
+        }
+    }
+
+dependencies {
+    // Substituted by the included build tools/play-catalog.
+    playCatalogTool("com.yawnandpawn.tools:play-catalog")
+}
+
+tasks.register<JavaExec>("playCatalog") {
+    group = "publishing"
+    description = "Creates and updates the 50 snooze products in Play Console (-PplayCatalogMode=dry-run|apply; default dry-run)."
+    classpath = playCatalogTool
+    mainClass.set("com.yawnandpawn.app.playcatalog.MainKt")
+    // The mode is read only from this command line (-PplayCatalogMode=...), never from gradle.properties or an
+    // ORG_GRADLE_PROJECT_ variable, and defaults to dry-run: nothing but an explicit command writes to Play.
+    val commandLine = gradle.startParameter.projectProperties
+    val mode = commandLine["playCatalogMode"] ?: "dry-run"
+    val legacyMode = commandLine.containsKey("mode")
+    val credentials = providers.gradleProperty("credentials")
+    val repoRoot = rootDir.absolutePath
+    doFirst {
+        if (legacyMode) throw GradleException("playCatalog takes -PplayCatalogMode=dry-run|apply, not -Pmode.")
+    }
+    argumentProviders.add(
+        CommandLineArgumentProvider {
+            listOf("--mode", mode, "--repo-root", repoRoot) +
+                credentials.map { listOf("--credentials", it) }.getOrElse(emptyList())
+        },
+    )
+    // Talks to Play every time; never up to date or cached.
+    outputs.upToDateWhen { false }
+}
+
+// ---------------------------------------------------------------------------------------------
 // Formatting: Spotless + ktlint over every Kotlin source and build script in the repo.
 // ---------------------------------------------------------------------------------------------
 spotless {
@@ -80,8 +128,8 @@ spotless {
 val detektConfig = files("config/detekt/detekt.yml")
 
 detekt {
-    // The root project only analyses the included builds' sources (build-logic, tools/tokens).
-    source.setFrom("build-logic/src", "tools/tokens/src")
+    // The root project only analyses the included builds' sources (build-logic, tools/tokens, tools/play-catalog).
+    source.setFrom("build-logic/src", "tools/tokens/src", "tools/play-catalog/src")
     config.setFrom(detektConfig)
     buildUponDefaultConfig = true
 }
@@ -136,6 +184,9 @@ tasks.named("koverVerify") {
 //
 // Sound loudness (Story 1.17): checkSoundLoudness, see the soundLoudness block above.
 //
+// Play catalogue (Story 4.1): the tools/play-catalog tests (fake API client, no network) and
+// checkToolDependencyAllowlist (its runtime dependencies against config/tool-dependency-allowlist.txt).
+//
 // Later stories register their checks here as additional dependencies of `qualityGate`.
 // Add them with `dependsOn(...)` below; never run a check outside the gate.
 // ---------------------------------------------------------------------------------------------
@@ -156,6 +207,9 @@ tasks.register("qualityGate") {
         ":detekt-rules:test",
         gradle.includedBuild("build-logic").task(":test"),
         gradle.includedBuild("tokens").task(":test"),
+        // Story 4.1: the Play catalogue tool's tests (fake API client only) and its tool-only dependency allowlist.
+        gradle.includedBuild("play-catalog").task(":test"),
+        gradle.includedBuild("play-catalog").task(":checkToolDependencyAllowlist"),
         "checkTokens",
         "koverVerify",
         ":androidApp:lintDebug",

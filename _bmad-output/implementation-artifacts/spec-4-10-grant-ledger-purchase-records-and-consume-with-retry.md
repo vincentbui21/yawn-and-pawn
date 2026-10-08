@@ -97,7 +97,9 @@ Each ends with one record (consumed, or reused for a reused stranded payment), n
 
 ## Auto Run Result
 
-Status: implemented in fast mode (one agent, unattended Epic 4 run). Branch `story/4-10-grant-ledger` on `origin/story/4-8-purchase-intents` (`1ad600f`), rebased onto `origin/main` after 4.8 merged.
+Status: implemented in fast mode (one agent, unattended Epic 4 run), no review pass yet. Branch `story/4-10-grant-ledger` on `origin/story/4-8-purchase-intents` (`1ad600f`), rebased onto `origin/main` (`8778afe`, 4.8 squash-merged; same tree, no conflicts).
+
+**Verification:** `./gradlew qualityGate :androidApp:assembleDebugAndroidTest --no-daemon` after the rebase: BUILD SUCCESSFUL (13 min 18 s).
 
 **Residual risks:**
 - Nothing consumes in production until 4.12 (`UnavailableBilling.consume` fails), and nothing grants until 4.11; a ledger row can only exist after both.

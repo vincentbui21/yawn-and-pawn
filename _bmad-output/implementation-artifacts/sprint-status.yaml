@@ -102,7 +102,7 @@ development_status:
   4-7-snoozeavailability-with-every-reason: backlog
   4-8-purchase-intents-install-id-and-the-runtime-db-intent-table: done  # Epic 4 auto-run, fast mode
   4-9-purchasereconciler-for-every-recovery-case: done  # Epic 4 auto-run, fast mode
-  4-10-grant-ledger-purchase-records-and-consume-with-retry: backlog
+  4-10-grant-ledger-purchase-records-and-consume-with-retry: done  # Epic 4 auto-run, fast mode
   4-11-billing-orchestration-launch-recovery-item_already_owned-and: backlog
   4-12-play-billing-9-1-adapter-replacing-the-fake: backlog
   4-13-snooze-confirm-sheet: backlog

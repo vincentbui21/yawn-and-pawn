@@ -419,6 +419,9 @@ class WakeService :
                 config = config,
                 beforeFirstUnlock = locked,
             )
+        // Resolved before the dispatch suspends: nothing is looked up from Koin after it, so a dispatch that outlives
+        // the app's Koin (a test teardown) cannot crash the service on the way out.
+        val refresh = prices
         when (val started = engine.dispatch(event)) {
             is Outcome.Failure -> {
                 runtime.startEmergency(fired.scheduledAt, alarm.volumePercent, "session not started: ${started.error.diagnostic()}", fired)
@@ -434,7 +437,7 @@ class WakeService :
                 } else if (foundId == event.sessionId) {
                     // PRD §6.2: prices are refreshed at each session start. Launched after the ring started, never
                     // awaited; the wake screen renders from the cached prices meanwhile (Story 4.3).
-                    prices.onSessionStarted()
+                    refresh.onSessionStarted()
                 }
             }
         }

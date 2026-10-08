@@ -12,8 +12,8 @@ import kotlin.coroutines.cancellation.CancellationException
 
 /**
  * [ActiveSessionStore] over `active_session` in `runtime.db`. States are stored only as [SessionJson] text; each
- * commit replaces the row and inserts its writes (the purchase intent of a Pay, Story 4.8) in one transaction, and
- * `Idle` deletes the row. Storage exceptions become `StorageFailure`.
+ * commit replaces the row and inserts its writes (the purchase intent of a Pay, Story 4.8; the grant ledger row of a
+ * paid snooze, Story 4.10) in one transaction, and `Idle` deletes the row. Storage exceptions become `StorageFailure`.
  */
 class RoomActiveSessionStore(
     private val dao: ActiveSessionDao,
@@ -37,12 +37,9 @@ class RoomActiveSessionStore(
                         ActiveSessionEntity(state.session.sessionId, SessionJson.encode(state), clock.now().toEpochMilliseconds())
                     }
                 }
-            dao.commit(row, writes.map(::entityOf))
-        }
-
-    private fun entityOf(write: RuntimeWrite): PurchaseIntentEntity =
-        when (write) {
-            is RuntimeWrite.PutPurchaseIntent -> PurchaseIntentEntity.of(write.intent)
+            val intents = writes.filterIsInstance<RuntimeWrite.PutPurchaseIntent>().map { PurchaseIntentEntity.of(it.intent) }
+            val grants = writes.filterIsInstance<RuntimeWrite.PutGrant>().map { GrantLedgerEntity.of(it.grant) }
+            dao.commit(row, intents, grants)
         }
 
     override suspend fun clear(): Outcome<Unit, DomainError> = storage { dao.deleteAll() }

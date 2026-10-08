@@ -20,6 +20,7 @@ import com.yawnandpawn.app.core.checks.CheckAnswer
 import com.yawnandpawn.app.core.error.DomainError
 import com.yawnandpawn.app.core.log.LogEvent
 import com.yawnandpawn.app.core.session.PurchaseOutcome
+import com.yawnandpawn.app.core.session.PurchaseToken
 import com.yawnandpawn.app.core.session.SessionData
 import com.yawnandpawn.app.core.session.SessionEffect
 import com.yawnandpawn.app.core.session.SessionReducer
@@ -87,6 +88,7 @@ class WakeRuntimeTest {
     private var state: SessionState = SessionState.Idle
     private var inCall = false
     private var rings = 0
+    private val consumed = mutableListOf<PurchaseToken>()
     private val runtime =
         WakeRuntime(
             WakeOutputs(player, vibrator, notifier, volume, scheduler, crashReporter),
@@ -100,6 +102,7 @@ class WakeRuntimeTest {
                     override fun inCall(): Boolean = inCall
                 },
             onRing = { rings++ },
+            onConsume = { consumed += it },
         )
 
     private val session: SessionData = aSession()
@@ -422,6 +425,17 @@ class WakeRuntimeTest {
         assertEquals(0, shadowOf(notifications).size())
         assertEquals(SchedulerCall.CancelSessionSlot, scheduler.calls.last())
         assertNull(scheduler.armed[RequestCodes.SESSION_SLOT])
+    }
+
+    @Test
+    fun `a paid snooze's Consume hands the token to the ledger's settle and logs nothing, never the token (Story 4-10)`() {
+        val token = PurchaseToken("secret-play-token")
+
+        run(SessionEffect.Consume(token))
+
+        assertEquals(listOf(token), consumed)
+        assertTrue(logger.events.none { "secret-play-token" in it.toString() })
+        assertTrue(logger.events.none { it == LogEvent.SessionEffectLogged("Consume", entry = false) })
     }
 
     @Test

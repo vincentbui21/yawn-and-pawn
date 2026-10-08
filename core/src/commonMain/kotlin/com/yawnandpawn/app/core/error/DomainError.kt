@@ -21,6 +21,14 @@ sealed interface DomainError {
     ) : DomainError
 
     /**
+     * A purchase record can be marked reused only from stranded (Story 4.10); it is [status] (a `RecordStatus` name), so
+     * nothing was written.
+     */
+    data class RecordNotReusable(
+        val status: String,
+    ) : DomainError
+
+    /**
      * The storage layer failed (for example a constraint violation or an I/O error). [cause] is diagnostic text for
      * logs only and must never be shown to users; user-facing copy is keyed by the error type.
      */

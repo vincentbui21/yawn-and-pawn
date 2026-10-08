@@ -14,6 +14,10 @@ import com.yawnandpawn.app.awaitChildren
 import com.yawnandpawn.app.core.alarm.AlarmFired
 import com.yawnandpawn.app.core.alarm.AlarmRepository
 import com.yawnandpawn.app.core.billing.PurchaseIntent
+import com.yawnandpawn.app.core.billing.PurchaseRecord
+import com.yawnandpawn.app.core.billing.PurchaseRecordRepository
+import com.yawnandpawn.app.core.billing.RecordStatus
+import com.yawnandpawn.app.core.billing.hash
 import com.yawnandpawn.app.core.error.DomainError
 import com.yawnandpawn.app.core.error.Outcome
 import com.yawnandpawn.app.core.log.LogEvent
@@ -23,11 +27,14 @@ import com.yawnandpawn.app.core.session.RuntimeWrite
 import com.yawnandpawn.app.core.session.SessionEvent
 import com.yawnandpawn.app.core.session.SessionState
 import com.yawnandpawn.app.core.time.Deadline
+import com.yawnandpawn.app.data.session.ActiveSessionDao
+import com.yawnandpawn.app.data.session.GrantLedgerEntity
 import com.yawnandpawn.app.launchActivity
 import com.yawnandpawn.app.testing.FakeActiveSessionStore
 import com.yawnandpawn.app.testing.FakeBilling
 import com.yawnandpawn.app.testing.FakeLogger
 import com.yawnandpawn.app.testing.FakeUserLockState
+import com.yawnandpawn.app.testing.aGrant
 import com.yawnandpawn.app.testing.aSession
 import com.yawnandpawn.app.testing.aSessionConfig
 import com.yawnandpawn.app.testing.anAlarm
@@ -168,6 +175,36 @@ class UnlockDuringRingTest {
 
         assertEquals(after, app.engine.state.value)
         assertEquals(1, billing.initCalls)
+    }
+
+    @Test
+    fun `every unlock signal replays the grant ledger, the first unlock and each wake screen resume alike (Story 4-10)`() {
+        val app = WakeApp(billing = billing)
+        var replays = 0
+        val replay: () -> Unit = { replays++ }
+        val signals = UnlockSignals(app.engine, billing, app.koin.get(), app.koin.get(), FakeLogger(), Duration.ZERO, replay)
+
+        signals.onUnlocked()
+        signals.onScreenResumedUnlocked()
+        signals.initialiseAfterUnlock()
+
+        assertEquals(3, replays)
+        assertEquals(1, billing.initCalls, "billing still starts once")
+    }
+
+    @Test
+    fun `the app's unlock signal settles a payment left in the grant ledger by an overnight restart (Story 4-10)`() {
+        val app = WakeApp(billing = billing)
+        val grant = aGrant(token = "left-overnight")
+        runBlocking { app.koin.get<ActiveSessionDao>().commit(null, grants = listOf(GrantLedgerEntity.of(grant))) }
+
+        app.koin.get<UnlockSignals>().onUnlocked()
+        shadowOf(Looper.getMainLooper()).idle()
+        app.koin.get<ApplicationScope>().awaitChildren()
+
+        val record = runBlocking { app.koin.get<PurchaseRecordRepository>().get(grant.token.hash()) }
+        assertEquals(RecordStatus.Consumed, assertIs<Outcome.Success<PurchaseRecord?>>(record).value?.status)
+        assertEquals(listOf(grant.token), billing.consumed)
     }
 
     @Test

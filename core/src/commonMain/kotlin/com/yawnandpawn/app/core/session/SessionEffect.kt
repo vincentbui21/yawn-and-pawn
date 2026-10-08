@@ -1,5 +1,6 @@
 package com.yawnandpawn.app.core.session
 
+import com.yawnandpawn.app.core.billing.GrantLedgerEntry
 import com.yawnandpawn.app.core.billing.PurchaseIntent
 import com.yawnandpawn.app.core.time.Deadline
 import kotlin.time.Instant
@@ -133,7 +134,19 @@ sealed interface SessionEffect {
         val intentId: PurchaseIntentId,
     ) : SessionEffect
 
-    /** Consume the purchase [token] that granted a snooze. */
+    /**
+     * Write the grant ledger row of a paid snooze (AD-7, Story 4.10). `SessionEngine` writes it in the same `runtime.db`
+     * transaction as the Snoozed state (`RuntimeWrite.PutGrant`), never through the [EffectRunner].
+     */
+    data class PersistGrant(
+        val grant: GrantLedgerEntry,
+    ) : SessionEffect
+
+    /**
+     * Settle the purchase [token] that granted a snooze: record it, consume it, then drop its ledger row
+     * (`PurchaseLedger.settle`, Story 4.10). The runner starts it outside the engine's Mutex and never waits for it: the
+     * snooze already started at the commit.
+     */
     data class Consume(
         val token: PurchaseToken,
     ) : SessionEffect

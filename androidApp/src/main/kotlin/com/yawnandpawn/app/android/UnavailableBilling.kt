@@ -4,6 +4,8 @@ import com.yawnandpawn.app.core.billing.PurchaseIntent
 import com.yawnandpawn.app.core.log.LogEvent
 import com.yawnandpawn.app.core.log.Logger
 import com.yawnandpawn.app.core.session.Billing
+import com.yawnandpawn.app.core.session.ConsumeResult
+import com.yawnandpawn.app.core.session.PurchaseToken
 import com.yawnandpawn.app.core.session.SessionEvent
 
 /**
@@ -17,4 +19,7 @@ class UnavailableBilling(
         logger.log(LogEvent.OperationFailed("launch billing", "billing unavailable until Epic 4"))
         return SessionEvent.PurchaseFailed
     }
+
+    /** Nothing can be consumed yet: the grant ledger keeps the row and retries (Story 4.10). */
+    override suspend fun consume(token: PurchaseToken): ConsumeResult = ConsumeResult.Failed("billing unavailable until Story 4.12")
 }

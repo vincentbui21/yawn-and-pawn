@@ -89,6 +89,21 @@ class BackupRulesTest {
     }
 
     @Test
+    fun `purchase history is backed up in app db by token hash, and the grant ledger with its tokens stays in runtime db`() {
+        val schemas = File("../data/schemas")
+        val app = File(schemas, "com.yawnandpawn.app.data.db.AppDatabase/${AppDatabase.SCHEMA_VERSION}.json").readText()
+        val runtime = File(schemas, "com.yawnandpawn.app.data.db.RuntimeDatabase/${RuntimeDatabase.SCHEMA_VERSION}.json").readText()
+        val all = backupRules(context, R.xml.data_extraction_rules) + backupRules(context, R.xml.backup_rules)
+        val includes = all.filter { it.kind == "include" }
+
+        assertTrue(app.contains("\"tableName\": \"purchase_record\""), "the records live in app.db")
+        assertTrue(includes.any { it.path == appDb }, "app.db is backed up")
+        assertFalse(app.substringAfter("\"tableName\": \"purchase_record\"").contains("`token` TEXT"), "only the token hash")
+        assertTrue(runtime.contains("\"tableName\": \"grant_ledger\""), "the ledger lives in runtime.db")
+        assertFalse(includes.any { it.path.startsWith(runtimeDb) }, "runtime.db is never backed up")
+    }
+
+    @Test
     fun `the install id is excluded from cloud backup, device transfer and full backup, and never included`() {
         val all = backupRules(context, R.xml.data_extraction_rules) + backupRules(context, R.xml.backup_rules)
 

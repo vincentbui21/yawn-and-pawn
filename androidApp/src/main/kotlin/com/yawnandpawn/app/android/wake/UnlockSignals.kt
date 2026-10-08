@@ -26,6 +26,8 @@ import kotlin.time.Duration.Companion.seconds
  * - initialises billing and crash reporting once per process, outside the AD-2 table, so an unlock in Grace or Loud
  *   (no `UserUnlocked` row) still starts them. Each is marked done only once it succeeded, so a throw is logged and the
  *   next signal tries again;
+ * - calls [replayLedger] every time (Story 4.10: the grant ledger is replayed, so a payment left unsettled by an overnight
+ *   restart is settled at the first unlock or when the wake screen opens; it must only launch its work);
  * - dispatches `UserUnlocked` while the session in memory is still marked before the first unlock. Ringing applies the
  *   AD-2 row; Grace and Loud ignore and log it. A dispatch whose commit failed is retried, at most [MAX_ATTEMPTS] times
  *   [retry] apart, while the ring still waits for the unlock. While one dispatch runs, other signals dispatch nothing.
@@ -41,6 +43,7 @@ class UnlockSignals(
     private val scope: ApplicationScope,
     private val logger: Logger,
     private val retry: Duration = RETRY,
+    private val replayLedger: () -> Unit = {},
 ) {
     private var billingStarted = false
 
@@ -105,6 +108,19 @@ class UnlockSignals(
             } catch (e: Exception) {
                 logger.log(LogEvent.OperationFailed("start crash reporting", e::class.simpleName.orEmpty()))
             }
+        }
+        replayGrantLedger()
+    }
+
+    /** Story 4.10: the callback only launches the replay, never awaits it; a throw is logged. */
+    @Suppress("TooGenericExceptionCaught")
+    private fun replayGrantLedger() {
+        try {
+            replayLedger()
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            logger.log(LogEvent.OperationFailed("replay grant ledger", e::class.simpleName.orEmpty()))
         }
     }
 

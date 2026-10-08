@@ -10,8 +10,10 @@ import com.yawnandpawn.app.core.session.SessionJson
 import com.yawnandpawn.app.core.session.SessionState
 import com.yawnandpawn.app.core.session.StoredSession
 import com.yawnandpawn.app.data.session.RoomActiveSessionStore
+import com.yawnandpawn.app.data.session.RoomGrantLedgerStore
 import com.yawnandpawn.app.data.session.RoomPurchaseIntentStore
 import com.yawnandpawn.app.testing.FakeClock
+import com.yawnandpawn.app.testing.aGrant
 import com.yawnandpawn.app.testing.aPurchaseIntent
 import com.yawnandpawn.app.testing.aSession
 import kotlinx.coroutines.test.runTest
@@ -89,21 +91,68 @@ class RuntimeDatabaseFactoryTest {
         listOf("session_id", "product_id", "snooze_number", "price_micros", "currency", "formatted_price", "created_at").forEach {
             assertTrue(json.contains("`$it`"), it)
         }
-        assertEquals(2, RuntimeDatabase.SCHEMA_VERSION)
+    }
+
+    @Test
+    fun `the exported version 3 schema adds grant_ledger keyed by the raw token, the only store of tokens`() {
+        val json = schema(3).readText()
+
+        assertTrue(json.contains("\"version\": 3"), "schema version 3")
+        assertEquals(listOf("active_session", "purchase_intent", "grant_ledger"), tableNames(json))
+        val ledger = json.substringAfter("\"tableName\": \"grant_ledger\"")
+        assertTrue(json.contains("PRIMARY KEY(`token`)"), "token is the primary key: a token grants once")
+        listOf("session_id", "alarm_id", "product_id", "snooze_number", "status", "created_at").forEach {
+            assertTrue(json.contains("`$it` "), it)
+        }
+        assertTrue(json.contains("`order_id` TEXT,"), "order id is nullable")
+        assertTrue(json.contains("`settled_at` INTEGER,"), "the settled markers that refuse a token twice")
+        assertTrue(ledger.isNotEmpty())
+        assertEquals(3, RuntimeDatabase.SCHEMA_VERSION)
     }
 
     @Test
     fun `the migrations cover every version step and nothing is destructive`() {
-        assertEquals(listOf(1 to 2), RUNTIME_DATABASE_MIGRATIONS.map { it.startVersion to it.endVersion })
+        assertEquals(listOf(1 to 2, 2 to 3), RUNTIME_DATABASE_MIGRATIONS.map { it.startVersion to it.endVersion })
         assertEquals(RuntimeDatabase.SCHEMA_VERSION, RUNTIME_DATABASE_MIGRATIONS.last().endVersion)
     }
+
+    @Test
+    fun `migrating a v2 database keeps the session and its intents and adds an empty, working grant ledger (Story 4-10)`() =
+        runTest {
+            // A session snoozed through the app update, with the intent of its Pay: v2 as Story 4.8 wrote it.
+            val ringing = SessionState.Ringing(aSession(sessionId = "s"))
+            val intent = aPurchaseIntent(sessionId = "s")
+            createVersion(
+                2,
+                ringing,
+                "INSERT INTO purchase_intent (intent_id, session_id, product_id, snooze_number, price_micros, currency, " +
+                    "formatted_price, created_at) VALUES ('${intent.intentId.value}', 's', '${intent.productId}', 1, " +
+                    "${intent.price.micros}, '${intent.price.currency}', '${intent.formattedPrice}', " +
+                    "${intent.createdAt.toEpochMilliseconds()})",
+            )
+
+            val database = buildRuntimeDatabase(context)
+            try {
+                val sessions = RoomActiveSessionStore(database.activeSessionDao(), FakeClock())
+                assertEquals(Outcome.Success(StoredSession.Found(ringing)), sessions.load(), "the session survives the migration")
+                assertEquals(Outcome.Success(intent), RoomPurchaseIntentStore(database.purchaseIntentDao()).get(intent.intentId))
+                assertEquals(0, database.grantLedgerDao().count())
+
+                val grant = aGrant(sessionId = "s")
+                assertEquals(Outcome.Success(Unit), sessions.commit(ringing, listOf(RuntimeWrite.PutGrant(grant))))
+                assertEquals(Outcome.Success(listOf(grant)), RoomGrantLedgerStore(database.grantLedgerDao()).all())
+            } finally {
+                database.close()
+            }
+            assertEquals(3, userVersion())
+        }
 
     @Test
     fun `migrating a v1 database keeps the active session and adds an empty, working intent table`() =
         runTest {
             // A session ringing through the app update (Story 4.8): v1 as Story 1.12 wrote it.
             val ringing = SessionState.Ringing(aSession(sessionId = "s"))
-            createVersion1(ringing)
+            createVersion(1, ringing)
 
             val database = buildRuntimeDatabase(context)
             try {
@@ -117,15 +166,22 @@ class RuntimeDatabaseFactoryTest {
             } finally {
                 database.close()
             }
-            assertEquals(2, userVersion())
+            assertEquals(RuntimeDatabase.SCHEMA_VERSION, userVersion())
         }
 
     private fun tableNames(json: String): List<String> =
         Regex("\"tableName\": \"([^\"]+)\"").findAll(json).map { it.groupValues[1] }.toList()
 
-    /** Writes a v1 `runtime.db` from the exported `1.json`, holding [state] as its one `active_session` row. */
-    private fun createVersion1(state: SessionState.Active) {
-        val database = JSONObject(schema(1).readText()).getJSONObject("database")
+    /**
+     * Writes a `runtime.db` of schema [version] from its exported JSON, holding [state] as its one `active_session` row
+     * and the rows of [sql].
+     */
+    private fun createVersion(
+        version: Int,
+        state: SessionState.Active,
+        vararg sql: String,
+    ) {
+        val database = JSONObject(schema(version).readText()).getJSONObject("database")
         val file = runtimeDatabaseFile(context).apply { parentFile?.mkdirs() }
         val connection = AndroidSQLiteDriver().open(file.absolutePath)
         try {
@@ -140,7 +196,8 @@ class RuntimeDatabaseFactoryTest {
             connection.execSQL(
                 "INSERT INTO active_session (session_id, state_json, updated_at) VALUES ('${state.session.sessionId}', '$json', 1)",
             )
-            connection.execSQL("PRAGMA user_version = 1")
+            sql.forEach(connection::execSQL)
+            connection.execSQL("PRAGMA user_version = $version")
         } finally {
             connection.close()
         }

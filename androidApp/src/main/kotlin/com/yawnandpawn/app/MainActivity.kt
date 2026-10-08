@@ -13,6 +13,7 @@ import com.yawnandpawn.app.android.qr.AndroidCameraPermission
 import com.yawnandpawn.app.android.reliability.AndroidNotificationPermission
 import com.yawnandpawn.app.android.screen.forwardToWakeScreenWhileResumed
 import com.yawnandpawn.app.android.wake.WakeRuntime
+import com.yawnandpawn.app.core.billing.ReplayGrantLedger
 import com.yawnandpawn.app.core.session.SessionEngine
 import com.yawnandpawn.app.ui.App
 import kotlinx.coroutines.launch
@@ -36,6 +37,9 @@ class MainActivity : ComponentActivity() {
     private val runtime: WakeRuntime by inject()
     private val appScope: ApplicationScope by inject()
 
+    // Story 4.10: a granted payment left unsettled (a consume that failed, a crash) is settled again on every start.
+    private val replayLedger: ReplayGrantLedger by inject()
+
     private val cameraPermission: AndroidCameraPermission by inject()
 
     private val requestNotifications = registerForActivityResult(ActivityResultContracts.RequestPermission()) { }
@@ -57,6 +61,7 @@ class MainActivity : ComponentActivity() {
                 override fun onStart(owner: LifecycleOwner) {
                     notificationPermission.attach(launch)
                     cameraPermission.attach(launchCamera)
+                    appScope.launch { replayLedger() }
                 }
 
                 override fun onStop(owner: LifecycleOwner) {

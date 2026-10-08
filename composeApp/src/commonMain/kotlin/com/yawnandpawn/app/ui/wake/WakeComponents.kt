@@ -9,6 +9,7 @@ import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.ScrollState
 import androidx.compose.foundation.background
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Arrangement
@@ -45,9 +46,14 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.geometry.Size
+import androidx.compose.ui.graphics.BlendMode
+import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.CompositingStrategy
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
@@ -433,6 +439,7 @@ fun GraceHeader(
  *
  * With [keepClearAboveY] (a window y in px, the bottom of Ringing's clock) the sheet never grows over that line, but
  * keeps at least [MIN_SHEET_FRACTION] of the screen: at large font scales its text scrolls and the buttons stay whole.
+ * Where the text runs on past an edge, it fades out over `space6` there, so a cut line reads as "scroll for more".
  */
 @Composable
 fun SnoozeConfirmSheet(
@@ -489,8 +496,13 @@ fun SnoozeConfirmSheet(
             verticalArrangement = Arrangement.spacedBy(spacing.space3),
         ) {
             // The text scrolls when the sheet is capped; the buttons below always keep their full size.
+            val scroll = rememberScrollState()
             Column(
-                modifier = Modifier.weight(1f, fill = false).verticalScroll(rememberScrollState()),
+                modifier =
+                    Modifier
+                        .weight(1f, fill = false)
+                        .fadeAtScrollEdges(scroll, with(LocalDensity.current) { spacing.space6.toPx() }, opaque = colors.text)
+                        .verticalScroll(scroll),
                 verticalArrangement = Arrangement.spacedBy(spacing.space3),
             ) {
                 SheetContent(sheet)
@@ -499,6 +511,36 @@ fun SnoozeConfirmSheet(
         }
     }
 }
+
+/**
+ * Owner check 2026-10-08: at 200% font the sheet's text was cut mid-line just above the buttons. Content that runs on
+ * past the top or bottom edge of [scroll]'s viewport fades out over [fade] px there (an alpha mask, so the glass behind
+ * shows through and no new colour pair appears); a fully shown edge has no fade, and text that fits draws as before.
+ * Only the alpha of [opaque] (any fully opaque theme colour) is used.
+ */
+private fun Modifier.fadeAtScrollEdges(
+    scroll: ScrollState,
+    fade: Float,
+    opaque: Color,
+): Modifier =
+    graphicsLayer {
+        val masked = scroll.canScrollBackward || scroll.canScrollForward
+        compositingStrategy = if (masked) CompositingStrategy.Offscreen else CompositingStrategy.Auto
+    }.drawWithContent {
+        drawContent()
+        if (scroll.canScrollBackward) {
+            drawRect(
+                brush = Brush.verticalGradient(listOf(Color.Transparent, opaque), startY = 0f, endY = fade),
+                blendMode = BlendMode.DstIn,
+            )
+        }
+        if (scroll.canScrollForward) {
+            drawRect(
+                brush = Brush.verticalGradient(listOf(opaque, Color.Transparent), startY = size.height - fade, endY = size.height),
+                blendMode = BlendMode.DstIn,
+            )
+        }
+    }
 
 /** The sheet's actions for [sheet]: the outlined upper one ([onUpper]) and the filled dismiss one ([onDismiss]). */
 @Composable

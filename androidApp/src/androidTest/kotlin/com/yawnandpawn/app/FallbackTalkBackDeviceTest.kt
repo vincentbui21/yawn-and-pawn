@@ -142,9 +142,11 @@ class FallbackTalkBackDeviceTest {
     @SdkSuppress(minSdkVersion = Build.VERSION_CODES.UPSIDE_DOWN_CAKE)
     fun a_QR_alarm_without_the_camera_stops_with_taps_on_labels_through_Math() {
         composeRule.enableAccessibilityChecks()
+        // Whatever ran before (another device test, its Success screen, an engine not restored yet): idle first.
+        awaitAppIdle(engine, koin.get(), koin.get(), "before the F5 test")
+        val alarmId = saveQrAlarm()
         val scanner = koin.get<CodeScanner>()
         loadKoinModules(module { single<CodeScanner> { NoPermissionScanner } })
-        val alarmId = saveQrAlarm()
         try {
             val fire = DebugFire(koin.get(), koin.get(), koin.get(), koin.get(), koin.get(), koin.get())
             val armed = runBlocking { fire.fire(DebugFire.FireRequest(seconds = 1, alarmId = alarmId)) }
@@ -168,11 +170,14 @@ class FallbackTalkBackDeviceTest {
             poll { engine.state.value == SessionState.Idle }
             assertEquals(SessionState.Idle, engine.state.value)
         } finally {
-            // Story 3.12 review: never leave the device ringing for the next test, whatever failed.
+            // Story 3.12 review: never leave the device ringing for the next test, whatever failed; the alarm can be
+            // deleted only once the app is idle (the session lock).
             loadKoinModules(module { single<CodeScanner> { scanner } })
-            engine.endRingForCleanup()
-            poll { engine.state.value == SessionState.Idle }
-            runBlocking { koin.get<DeleteAlarm>()(alarmId) }
+            try {
+                awaitAppIdle(engine, koin.get(), koin.get(), "after the F5 test")
+            } finally {
+                runBlocking { koin.get<DeleteAlarm>()(alarmId) }
+            }
         }
     }
 

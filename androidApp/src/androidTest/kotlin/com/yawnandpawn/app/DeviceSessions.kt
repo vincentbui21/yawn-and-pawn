@@ -1,12 +1,40 @@
 package com.yawnandpawn.app
 
+import com.yawnandpawn.app.android.wake.WakeRuntime
 import com.yawnandpawn.app.core.checks.CheckAnswer
 import com.yawnandpawn.app.core.checks.Puzzle
 import com.yawnandpawn.app.core.session.SessionData
 import com.yawnandpawn.app.core.session.SessionEngine
 import com.yawnandpawn.app.core.session.SessionEvent
+import com.yawnandpawn.app.core.session.SessionLockGuard
 import com.yawnandpawn.app.core.session.SessionState
 import kotlinx.coroutines.runBlocking
+
+/**
+ * Waits (bounded) until the app is idle and unlocked, so a device test can save an alarm whatever ran before it (Story
+ * 3.12, CI on PR #40: the first device test of the run saved before anything had restored the engine, and the session
+ * lock refused with `SessionActive`). It restores the engine (only an activity or the wake service does at app start,
+ * and a test may run before either), ends a session left ringing ([endRingForCleanup]), stops an emergency ring, and
+ * waits for Idle (a completed session first writes its history row). Fails with the state it found otherwise.
+ */
+internal fun awaitAppIdle(
+    engine: SessionEngine,
+    guard: SessionLockGuard,
+    runtime: WakeRuntime,
+    what: String,
+) {
+    runBlocking { engine.restore() }
+    repeat((IDLE_TIMEOUT_MILLIS / IDLE_POLL_MILLIS).toInt()) {
+        if (engine.state.value is SessionState.Ring) engine.endRingForCleanup()
+        if (runtime.emergency.value != null) runtime.stopEmergency()
+        if (engine.state.value == SessionState.Idle && !guard.isLocked) return
+        Thread.sleep(IDLE_POLL_MILLIS)
+    }
+    throw AssertionError(
+        "$what: the app is not idle after ${IDLE_TIMEOUT_MILLIS / MILLIS_PER_SECOND} s " +
+            "(state ${engine.state.value}, restored ${engine.restored.value}, emergency ${runtime.emergency.value != null})",
+    )
+}
 
 /**
  * Story 3.12 review: the cleanup of a device test that failed mid-ring, so the managed device is not left ringing for
@@ -47,3 +75,6 @@ private fun rightAnswer(session: SessionData): CheckAnswer? {
 }
 
 private const val MAX_EVENTS = 100
+private const val IDLE_TIMEOUT_MILLIS = 60_000L
+private const val IDLE_POLL_MILLIS = 100L
+private const val MILLIS_PER_SECOND = 1_000L

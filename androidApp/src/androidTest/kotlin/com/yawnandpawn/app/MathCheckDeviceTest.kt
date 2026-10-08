@@ -53,6 +53,8 @@ class MathCheckDeviceTest {
 
     @Test
     fun a_debug_alarm_stops_once_every_Math_problem_is_solved() {
+        // Whatever ran before (another device test, its Success screen, an engine not restored yet): idle first.
+        awaitAppIdle(engine, koin.get(), koin.get(), "before the Math test")
         val fire = DebugFire(koin.get(), koin.get(), koin.get(), koin.get(), koin.get(), koin.get())
         assertTrue("the debug alarm is armed", runBlocking { fire.fire(DebugFire.FireRequest(seconds = 1)) } is Outcome.Success)
         composeRule.waitUntil(RING_TIMEOUT) { engine.state.value is SessionState.Ringing }
@@ -87,10 +89,13 @@ class MathCheckDeviceTest {
             assertFalse("the ring is over", player.isRinging)
             assertNull("the alarm sound is released", player.sound)
         } finally {
-            // Story 3.12 review: never leave the device ringing for the next test, whatever failed.
-            engine.endRingForCleanup()
-            poll { engine.state.value == SessionState.Idle }
-            runBlocking { koin.get<DeleteAlarm>()(alarmId) }
+            // Story 3.12 review: never leave the device ringing for the next test, whatever failed; the alarm can be
+            // deleted only once the app is idle (the session lock).
+            try {
+                awaitAppIdle(engine, koin.get(), koin.get(), "after the Math test")
+            } finally {
+                runBlocking { koin.get<DeleteAlarm>()(alarmId) }
+            }
         }
     }
 

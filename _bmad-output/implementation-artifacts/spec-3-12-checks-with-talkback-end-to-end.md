@@ -190,6 +190,8 @@ Two reviewers looked at 89f760c: one for verification gaps, one for edge cases. 
     - The Koin `CodeScanner` is restored first.
     - A missing `DebugCheckAnswer` while the session rings fails the test outright.
 
+**CI on PR #40, the managed device.** `FallbackTalkBackDeviceTest` ran first in the run, and saving its alarm failed with `SessionActive`. At app start only an activity or the wake service restores the engine, and until then the session lock treats the app as locked. Both device tests now start with `awaitAppIdle`. It runs the restore, ends a session left ringing, stops an emergency ring, and waits (60 s at most, failing with the state it found) for Idle and unlocked. The same call ends each test before the alarm is deleted, so the tests no longer depend on their order.
+
 **Baselines.** The preview baselines are unchanged. 200% screenshots whose scrolling area overflowed now show the end of it, so they change on purpose; all are listed in the commit. New `a11y_*` baselines were added.
 
 ## Tasks & Acceptance

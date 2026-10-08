@@ -37,6 +37,10 @@ dependencyResolutionManagement {
 
 rootProject.name = "yawn-and-pawn"
 
+// Play catalogue tool (Story 4.1): a JVM command-line tool the root `playCatalog` task runs in its own JVM. An included
+// build (not a subproject, AD-1 graph), so the Play Developer API client is on no build-script or app classpath.
+includeBuild("tools/play-catalog")
+
 include(":core")
 include(":data")
 include(":composeApp")

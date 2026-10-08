@@ -148,7 +148,7 @@ class SessionTimelineTest {
     fun `grace keeps counting while paying is set`() {
         val grace =
             firstRing().after(SessionEvent.ImUpTapped, at(1.minutes)).after(
-                SessionEvent.PayConfirmed(INTENT),
+                PAY,
                 at(1.minutes + 5.seconds),
             )
         assertEquals(INTENT, assertIs<Grace>(grace).session.paying)

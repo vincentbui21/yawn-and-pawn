@@ -3,6 +3,7 @@ package com.yawnandpawn.app.data.session
 import com.yawnandpawn.app.core.error.DomainError
 import com.yawnandpawn.app.core.error.Outcome
 import com.yawnandpawn.app.core.session.ActiveSessionStore
+import com.yawnandpawn.app.core.session.RuntimeWrite
 import com.yawnandpawn.app.core.session.SessionJson
 import com.yawnandpawn.app.core.session.SessionState
 import com.yawnandpawn.app.core.session.StoredSession
@@ -11,7 +12,8 @@ import kotlin.coroutines.cancellation.CancellationException
 
 /**
  * [ActiveSessionStore] over `active_session` in `runtime.db`. States are stored only as [SessionJson] text; each
- * commit replaces the row in one transaction, and `Idle` deletes it. Storage exceptions become `StorageFailure`.
+ * commit replaces the row and inserts its writes (the purchase intent of a Pay, Story 4.8) in one transaction, and
+ * `Idle` deletes the row. Storage exceptions become `StorageFailure`.
  */
 class RoomActiveSessionStore(
     private val dao: ActiveSessionDao,
@@ -20,18 +22,27 @@ class RoomActiveSessionStore(
     override suspend fun load(): Outcome<StoredSession, DomainError> =
         storage { dao.get()?.let { SessionJson.decode(it.stateJson) } ?: StoredSession.Empty }
 
-    override suspend fun commit(state: SessionState): Outcome<Unit, DomainError> =
+    override suspend fun commit(
+        state: SessionState,
+        writes: List<RuntimeWrite>,
+    ): Outcome<Unit, DomainError> =
         storage {
-            when (state) {
-                SessionState.Idle -> {
-                    dao.deleteAll()
-                }
+            val row =
+                when (state) {
+                    SessionState.Idle -> {
+                        null
+                    }
 
-                is SessionState.Active -> {
-                    val row = ActiveSessionEntity(state.session.sessionId, SessionJson.encode(state), clock.now().toEpochMilliseconds())
-                    dao.replace(row)
+                    is SessionState.Active -> {
+                        ActiveSessionEntity(state.session.sessionId, SessionJson.encode(state), clock.now().toEpochMilliseconds())
+                    }
                 }
-            }
+            dao.commit(row, writes.map(::entityOf))
+        }
+
+    private fun entityOf(write: RuntimeWrite): PurchaseIntentEntity =
+        when (write) {
+            is RuntimeWrite.PutPurchaseIntent -> PurchaseIntentEntity.of(write.intent)
         }
 
     override suspend fun clear(): Outcome<Unit, DomainError> = storage { dao.deleteAll() }

@@ -1,5 +1,6 @@
 package com.yawnandpawn.app.core.session
 
+import com.yawnandpawn.app.core.billing.PurchaseIntent
 import com.yawnandpawn.app.core.error.DomainError
 import com.yawnandpawn.app.core.error.Outcome
 
@@ -31,10 +32,13 @@ interface ActiveSessionStore {
     suspend fun load(): Outcome<StoredSession, DomainError>
 
     /**
-     * Stores [state] in one transaction, replacing whatever was stored. [SessionState.Idle] deletes the row. When this
-     * fails nothing changed.
+     * Stores [state] and applies [writes] in one transaction, replacing whatever session was stored.
+     * [SessionState.Idle] deletes the row. When this fails nothing changed: no state and none of the writes.
      */
-    suspend fun commit(state: SessionState): Outcome<Unit, DomainError>
+    suspend fun commit(
+        state: SessionState,
+        writes: List<RuntimeWrite> = emptyList(),
+    ): Outcome<Unit, DomainError>
 
     /** Deletes the stored session, readable or not. */
     suspend fun clear(): Outcome<Unit, DomainError>
@@ -61,15 +65,15 @@ interface EffectRunner {
 }
 
 /**
- * The `PurchaseIntent` persisted before billing launches (AD-7). Epic 4 adds the price (micros and currency); Epic 1
- * has only what the reducer knows.
+ * A row `SessionEngine` writes in the same `runtime.db` transaction as a transition (AD-2 rule 2, AD-7). Story 4.10
+ * adds the grant ledger.
  */
-data class PurchaseIntent(
-    val intentId: PurchaseIntentId,
-    val sessionId: String,
-    val productId: String,
-    val snoozeNumber: Int,
-)
+sealed interface RuntimeWrite {
+    /** Insert the [intent] of a `PayConfirmed` (Story 4.8). An intent id is written once: a second write fails the commit. */
+    data class PutPurchaseIntent(
+        val intent: PurchaseIntent,
+    ) : RuntimeWrite
+}
 
 /**
  * Port for Play Billing (AD-7). The real adapter arrives in Epic 4; Epic 1 binds one that always fails.
@@ -89,11 +93,42 @@ fun interface Billing {
     fun init() = Unit
 }
 
-/** Port for the persisted purchase intents (AD-7, `runtime.db` in Epic 4). */
-interface PurchaseIntentStore {
-    /** Stores [intent], replacing one with the same id. */
-    suspend fun save(intent: PurchaseIntent): Outcome<Unit, DomainError>
+/** How a keyguard dismiss request ended (Spike S1). */
+enum class UnlockResult {
+    /** `onDismissSucceeded`: the phone is unlocked. */
+    Succeeded,
 
-    /** The intent [intentId], or `NotFound`. */
-    suspend fun get(intentId: PurchaseIntentId): Outcome<PurchaseIntent, DomainError>
+    /** `onDismissCancelled` or `onDismissError`: still locked. */
+    Failed,
+    ;
+
+    /** The event to dispatch for this result. */
+    fun event(): SessionEvent.UnlockEvent =
+        when (this) {
+            Succeeded -> SessionEvent.UnlockSucceeded
+            Failed -> SessionEvent.UnlockFailed
+        }
+}
+
+/**
+ * Port for the unlock step before Play opens (Spike S1 option B, owner decision 2026-10-08): the Play sheet never shows
+ * over a keyguard, so "Pay" while locked asks for the PIN first. The real adapter (`requestDismissKeyguard` from the
+ * resumed `WakeActivity`) arrives in Story 4.12.
+ *
+ * [requestUnlock] waits for the user, so like `Billing.launch` it must never be awaited inside an [EffectRunner] call;
+ * the runner starts it outside and dispatches [UnlockResult.event]. A wrong PIN gives no result, so it may never return.
+ */
+interface UnlockPort {
+    /** Whether the keyguard is showing now; `SessionEngine` reads it for `PayConfirmed` only. */
+    fun isKeyguardLocked(): Boolean
+
+    /** Asks the user to unlock (PIN, pattern or swipe) and returns how it ended. */
+    suspend fun requestUnlock(): UnlockResult
+
+    /** A phone that is never locked: the default until Story 4.12 binds the real adapter. */
+    object Unlocked : UnlockPort {
+        override fun isKeyguardLocked(): Boolean = false
+
+        override suspend fun requestUnlock(): UnlockResult = UnlockResult.Succeeded
+    }
 }

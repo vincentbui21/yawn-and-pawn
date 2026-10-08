@@ -98,6 +98,8 @@ sealed interface SessionState {
  *
  * @property ringIndex 1 for the first ring, +1 for each ring after a snooze or a merge.
  * @property paying the purchase in flight, if any; cleared on restore (billing is never relaunched).
+ * @property unlocking with [paying]: the keyguard dismiss is requested and billing launches once the user unlocks
+ * (Spike S1, Story 4.8). Cleared with [paying].
  * @property noGraceThisRing this ring started from a merged alarm, so "I'm up" goes straight to [SessionState.Loud].
  * @property beforeFirstUnlock this ring rings before the first unlock since boot and has not seen the unlock yet. Set
  * from the lock state when a ring starts, is restored or follows a snooze (Story 2.3), and cleared by `UserUnlocked`.
@@ -130,6 +132,7 @@ data class SessionData(
     val startedBeforeUnlock: Boolean = false,
     val ended: TimeSnapshot? = null,
     val paying: PurchaseIntentId? = null,
+    val unlocking: Boolean = false,
     val noGraceThisRing: Boolean = false,
     val beforeFirstUnlock: Boolean = false,
     val directBootRing: Boolean = beforeFirstUnlock,

@@ -1,5 +1,8 @@
 package com.yawnandpawn.app.core.session
 
+import com.yawnandpawn.app.core.billing.LivePrice
+import com.yawnandpawn.app.core.billing.Money
+import com.yawnandpawn.app.core.billing.PurchaseIntent
 import com.yawnandpawn.app.core.checks.CheckAnswer
 import com.yawnandpawn.app.core.checks.CheckMode
 import com.yawnandpawn.app.core.checks.CheckPlan
@@ -28,6 +31,30 @@ internal const val SESSION_ID = "session-1"
 internal const val PRODUCT = "snooze_usd_01"
 internal val OFFER = SnoozeOffer(productId = PRODUCT, snoozeNumber = 1)
 internal val INTENT = PurchaseIntentId("intent-1")
+
+/** Play's live price of [PRODUCT] at the Pay tap (Story 4.8). */
+internal val QUOTE = LivePrice(PRODUCT, Money(1_190_000, "EUR"), "€1.19")
+
+/** The user confirmed paying [QUOTE] for intent [INTENT]. */
+internal val PAY = SessionEvent.PayConfirmed(INTENT, QUOTE)
+
+/** The intent a [PAY] in [SESSION_ID] for [OFFER] at [now] persists. */
+internal fun intentAt(
+    now: TimeSnapshot,
+    quote: LivePrice = QUOTE,
+    intentId: PurchaseIntentId = INTENT,
+    offer: SnoozeOffer = OFFER,
+): PurchaseIntent =
+    PurchaseIntent(
+        intentId = intentId,
+        sessionId = SESSION_ID,
+        productId = offer.productId,
+        snoozeNumber = offer.snoozeNumber,
+        price = quote.price,
+        formattedPrice = quote.formattedPrice,
+        createdAt = Instant.fromEpochMilliseconds(now.wallMillis),
+    )
+
 internal val TOKEN = PurchaseToken("token-1")
 internal val SEEDS = listOf(7L)
 internal val NEW_SEEDS = listOf(11L, 12L)

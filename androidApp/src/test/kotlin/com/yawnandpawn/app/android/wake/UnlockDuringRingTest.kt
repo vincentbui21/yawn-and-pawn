@@ -13,12 +13,13 @@ import com.yawnandpawn.app.android.crash.FirebaseStartup
 import com.yawnandpawn.app.awaitChildren
 import com.yawnandpawn.app.core.alarm.AlarmFired
 import com.yawnandpawn.app.core.alarm.AlarmRepository
+import com.yawnandpawn.app.core.billing.PurchaseIntent
 import com.yawnandpawn.app.core.error.DomainError
 import com.yawnandpawn.app.core.error.Outcome
 import com.yawnandpawn.app.core.log.LogEvent
 import com.yawnandpawn.app.core.session.ActiveSessionStore
 import com.yawnandpawn.app.core.session.Billing
-import com.yawnandpawn.app.core.session.PurchaseIntent
+import com.yawnandpawn.app.core.session.RuntimeWrite
 import com.yawnandpawn.app.core.session.SessionEvent
 import com.yawnandpawn.app.core.session.SessionState
 import com.yawnandpawn.app.core.time.Deadline
@@ -457,10 +458,13 @@ private class FlakyCommitStore(
     @Volatile
     var beforeCommit: suspend (SessionState) -> Unit = {}
 
-    override suspend fun commit(state: SessionState): Outcome<Unit, DomainError> {
+    override suspend fun commit(
+        state: SessionState,
+        writes: List<RuntimeWrite>,
+    ): Outcome<Unit, DomainError> {
         attempts.incrementAndGet()
         if (failures.getAndUpdate { if (it > 0) it - 1 else 0 } > 0) return Outcome.Failure(DomainError.StorageFailure("disk full"))
         beforeCommit(state)
-        return inner.commit(state)
+        return inner.commit(state, writes)
     }
 }

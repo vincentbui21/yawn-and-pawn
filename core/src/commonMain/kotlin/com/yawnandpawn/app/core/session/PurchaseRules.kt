@@ -1,9 +1,11 @@
 package com.yawnandpawn.app.core.session
 
+import com.yawnandpawn.app.core.billing.PurchaseIntent
 import com.yawnandpawn.app.core.session.SessionState.Ring
 import com.yawnandpawn.app.core.time.Deadline
 import com.yawnandpawn.app.core.time.TimeSnapshot
 import kotlin.time.Duration.Companion.minutes
+import kotlin.time.Instant
 
 /**
  * AD-2 snooze and purchase rows from Ringing, Grace and Loud. A null result means no row matches. [availability] is
@@ -16,23 +18,63 @@ internal class PurchaseRules(
     fun onSnoozeTapped(state: Ring): Transition? = offer(state)?.let { Transition(state, listOf(SessionEffect.ShowSnoozeConfirm(it))) }
 
     /**
-     * PayConfirmed while Available and no purchase is in flight: `paying` is set, the intent persisted and billing
-     * launched. A second confirm while paying never launches billing again.
+     * PayConfirmed while Available, no purchase in flight and the live price is for the offered product: `paying` is set and
+     * the [PurchaseIntent] is persisted with the state (the engine writes it in the commit). Unlocked, billing launches;
+     * with the keyguard up ([keyguardLocked], Spike S1) the unlock is requested first. A second confirm while billing is
+     * in flight never persists or launches again. While only the unlock is pending, billing never launched, so a new
+     * confirm replaces it (Story 4.8 review): a lost keyguard callback can never block Pay for the rest of the ring.
      */
     fun onPayConfirmed(
         state: Ring,
-        intentId: PurchaseIntentId,
-    ): Transition? =
-        offer(state)?.takeIf { state.session.paying == null }?.let { offer ->
-            val session = state.session
-            Transition(
-                state.with(session.copy(paying = intentId)),
-                listOf(
-                    SessionEffect.PersistPurchaseIntent(intentId, session.sessionId, offer),
-                    SessionEffect.LaunchBilling(intentId, session.sessionId, offer),
-                ),
+        event: SessionEvent.PayConfirmed,
+        now: TimeSnapshot,
+        keyguardLocked: Boolean,
+    ): Transition? {
+        val session = state.session
+        val free = session.paying == null || session.unlocking
+        val offer = offer(state)?.takeIf { free && event.livePrice.productId == it.productId } ?: return null
+        val live = event.livePrice
+        val intent =
+            PurchaseIntent(
+                intentId = event.intentId,
+                sessionId = session.sessionId,
+                productId = offer.productId,
+                snoozeNumber = offer.snoozeNumber,
+                price = live.price,
+                formattedPrice = live.formattedPrice,
+                createdAt = Instant.fromEpochMilliseconds(now.wallMillis),
             )
+        val persist = SessionEffect.PersistPurchaseIntent(intent)
+        val paying = session.copy(paying = event.intentId, unlocking = keyguardLocked)
+        val next = if (keyguardLocked) SessionEffect.RequestKeyguardDismiss(event.intentId) else launch(event.intentId, session)
+        return Transition(state.with(paying), listOf(persist, next))
+    }
+
+    /**
+     * The unlock step's result while `unlocking` (Spike S1): unlocked, billing launches for the intent already persisted;
+     * cancelled or failed, the payment is dropped with "Phone still locked. No charge." and the sound goes on.
+     */
+    fun onUnlock(
+        state: Ring,
+        event: SessionEvent.UnlockEvent,
+    ): Transition? {
+        val session = state.session
+        val intentId = session.paying?.takeIf { session.unlocking } ?: return null
+        return when (event) {
+            SessionEvent.UnlockSucceeded -> {
+                Transition(state.with(session.copy(unlocking = false)), listOf(launch(intentId, session)))
+            }
+
+            SessionEvent.UnlockFailed -> {
+                Transition(state.with(session.withoutPayment()), listOf(SessionEffect.ShowPurchaseOutcome(PurchaseOutcome.UnlockFailed)))
+            }
         }
+    }
+
+    private fun launch(
+        intentId: PurchaseIntentId,
+        session: SessionData,
+    ) = SessionEffect.LaunchBilling(intentId, session.sessionId)
 
     /** ReuseDeclined: remember the product (its snooze shows "earlier payment is being refunded") and hide the sheet. */
     fun onReuseDeclined(
@@ -46,7 +88,7 @@ internal class PurchaseRules(
         event: SessionEvent.PurchaseEvent,
         now: TimeSnapshot,
     ): Transition? {
-        val notPaying = state.session.copy(paying = null)
+        val notPaying = state.session.withoutPayment()
         return when (event) {
             is SessionEvent.ReuseOffered -> {
                 if (event.verdict == PurchaseVerdict.OfferReuse) {
@@ -98,6 +140,7 @@ internal class PurchaseRules(
                 snoozesGranted = session.snoozesGranted + 1,
                 checkRun = session.checkRun.restart(),
                 paying = null,
+                unlocking = false,
                 paymentPending = false,
                 snoozeEnd = snoozeEnd,
             )
@@ -109,3 +152,6 @@ internal class PurchaseRules(
 
     private fun offer(state: Ring): SnoozeOffer? = (availability(state.session) as? SnoozeAvailability.Available)?.offer
 }
+
+/** [this] with no purchase in flight: `paying` and `unlocking` are cleared together. */
+internal fun SessionData.withoutPayment(): SessionData = copy(paying = null, unlocking = false)

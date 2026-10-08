@@ -11,6 +11,7 @@ import com.yawnandpawn.app.core.alarm.Alarm
 import com.yawnandpawn.app.core.alarm.AlarmDraft
 import com.yawnandpawn.app.core.alarm.AlarmFired
 import com.yawnandpawn.app.core.alarm.SaveAlarm
+import com.yawnandpawn.app.core.billing.InstallIdProvider
 import com.yawnandpawn.app.core.config.CommitmentAction
 import com.yawnandpawn.app.core.config.CommitmentEvent
 import com.yawnandpawn.app.core.config.CommitmentEventRepository
@@ -30,6 +31,7 @@ import com.yawnandpawn.app.core.stats.ReRegisterDismissals
 import com.yawnandpawn.app.core.stats.ReRegisterSuggestions
 import com.yawnandpawn.app.data.db.appDatabaseFile
 import com.yawnandpawn.app.data.db.runtimeDatabaseFile
+import com.yawnandpawn.app.data.settings.InstallIdDataStore
 import com.yawnandpawn.app.data.settings.SettingsDataStore
 import com.yawnandpawn.app.stopApp
 import kotlinx.coroutines.flow.first
@@ -105,13 +107,20 @@ class BackupRulesCoverageTest {
         val reliability = File(app.app.createDeviceProtectedStorageContext().dataDir, "shared_prefs/reliability.xml")
         koin.get<AndroidNotificationPermission>().apply { attach {} }.request()
         app.awaitUntil("the asked-once flag is written") { reliability.isFile }
+        // The install id (Story 4.8), made on first use in its own DataStore; the Pay path also writes runtime.db intents.
+        assertIs<Outcome.Success<*>>(runBlocking { koin.get<InstallIdProvider>().installId() })
         // Close the databases and the DataStore, as when the process ends, so their files are final.
         stopApp()
 
         val storage = AppStorage(app.app)
         val files = storage.files()
         val names = files.map { it.second }
-        listOf(appDatabaseFile(app.app), runtimeDatabaseFile(app.app), SettingsDataStore.settingsFile(app.app)).forEach { expected ->
+        listOf(
+            appDatabaseFile(app.app),
+            runtimeDatabaseFile(app.app),
+            SettingsDataStore.settingsFile(app.app),
+            InstallIdDataStore.installIdFile(app.app),
+        ).forEach { expected ->
             assertTrue(files.any { it.first == expected.canonicalFile }, "the morning created $expected; found $names")
         }
 

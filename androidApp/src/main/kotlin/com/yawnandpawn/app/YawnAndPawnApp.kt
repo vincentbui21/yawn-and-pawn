@@ -28,6 +28,7 @@ import com.yawnandpawn.app.core.alarm.SaveAlarm
 import com.yawnandpawn.app.core.alarm.SetAlarmEnabled
 import com.yawnandpawn.app.core.billing.FeeLadder
 import com.yawnandpawn.app.core.billing.MoneyFormatter
+import com.yawnandpawn.app.core.billing.PurgeOldPurchaseIntents
 import com.yawnandpawn.app.core.billing.UsdFeeLadder
 import com.yawnandpawn.app.core.checks.AccessibilityState
 import com.yawnandpawn.app.core.checks.word.WordBank
@@ -138,6 +139,8 @@ val appModule =
         single { SessionReducer(get(), get(), get()) }
         single<EffectRunner> { get<WakeRuntime>() }
         single<Billing> { UnavailableBilling(get()) }
+        // Story 4.8: intents older than 7 days are deleted on app start (runtime.db, device-protected).
+        factory { PurgeOldPurchaseIntents(get(), get(), get()) }
         // The only writer of session history (Story 1.13, AD-18), over the Room repository from dataModule; the engine
         // drives it itself, so the runner never sees the history effects.
         single { SessionRecorder(get()) }
@@ -188,6 +191,9 @@ open class YawnAndPawnApp : Application() {
         // It also promotes the due pending changes of the commitment lock first (Story 4.4); the wake service promotes
         // them again when a session is over.
         scope.launch { scheduling.rescheduleAll() }
+        // Purchase intents are kept 7 days, long enough to price a pending payment that completes later (Story 4.8).
+        val purgeIntents = koin.get<PurgeOldPurchaseIntents>()
+        scope.launch { purgeIntents() }
         // With no session left in runtime.db (nothing, an unreadable row or a stored Idle), an alarm volume a crashed session
         // saved is put back (AD-5). Only a read: the session itself is restored by WakeService, MainActivity or
         // WakeActivity (Story 2.1).

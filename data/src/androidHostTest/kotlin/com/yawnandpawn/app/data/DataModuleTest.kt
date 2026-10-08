@@ -4,9 +4,13 @@ import android.content.Context
 import androidx.test.core.app.ApplicationProvider
 import com.yawnandpawn.app.core.alarm.AlarmRepository
 import com.yawnandpawn.app.core.alarm.RequestCodeSequence
+import com.yawnandpawn.app.core.billing.InstallIdProvider
+import com.yawnandpawn.app.core.billing.PurchaseIntentStore
 import com.yawnandpawn.app.core.error.Outcome
 import com.yawnandpawn.app.core.history.MissedNoteDismissals
 import com.yawnandpawn.app.core.history.SessionHistoryRepository
+import com.yawnandpawn.app.core.id.IdGenerator
+import com.yawnandpawn.app.core.id.UuidV4IdGenerator
 import com.yawnandpawn.app.core.log.Logger
 import com.yawnandpawn.app.core.session.ActiveSessionStore
 import com.yawnandpawn.app.core.stats.CheckRegistrations
@@ -20,8 +24,11 @@ import com.yawnandpawn.app.data.db.AppDatabase
 import com.yawnandpawn.app.data.db.RuntimeDatabase
 import com.yawnandpawn.app.data.history.RoomSessionHistoryRepository
 import com.yawnandpawn.app.data.session.RoomActiveSessionStore
+import com.yawnandpawn.app.data.session.RoomPurchaseIntentStore
+import com.yawnandpawn.app.data.settings.DataStoreInstallIdProvider
 import com.yawnandpawn.app.data.settings.DataStoreMissedNoteDismissals
 import com.yawnandpawn.app.data.settings.DataStoreReRegisterDismissals
+import com.yawnandpawn.app.data.settings.InstallIdDataStore
 import com.yawnandpawn.app.data.settings.SettingsDataStore
 import com.yawnandpawn.app.testing.FakeClock
 import com.yawnandpawn.app.testing.FakeLogger
@@ -96,6 +103,28 @@ class DataModuleTest {
             assertEquals(setOf("s1", "s2"), runBlocking { second.dismissed().first() })
         } finally {
             again.close()
+        }
+    }
+
+    @Test
+    fun `the data module binds the intent store over runtime db and the install id over its own DataStore (Story 4-8)`() {
+        val ports =
+            module {
+                single<Context> { context }
+                single<Logger> { FakeLogger() }
+                single<IdGenerator> { UuidV4IdGenerator() }
+            }
+        val app = koinApplication { modules(ports, dataModule) }
+        try {
+            assertIs<RoomPurchaseIntentStore>(app.koin.get<PurchaseIntentStore>())
+            val ids = app.koin.get<InstallIdProvider>()
+            assertIs<DataStoreInstallIdProvider>(ids)
+            assertSame(app.koin.get<InstallIdDataStore>(), app.koin.get<InstallIdDataStore>())
+            val id = assertIs<Outcome.Success<String>>(runBlocking { ids.installId() }).value
+            assertEquals(Outcome.Success(id), runBlocking { app.koin.get<InstallIdProvider>().installId() })
+        } finally {
+            app.koin.get<RuntimeDatabase>().close()
+            app.close()
         }
     }
 

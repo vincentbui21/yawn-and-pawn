@@ -17,6 +17,8 @@ import com.yawnandpawn.app.android.wake.WakeService
 import com.yawnandpawn.app.awaitChildren
 import com.yawnandpawn.app.buildActivity
 import com.yawnandpawn.app.core.alarm.RequestCodes
+import com.yawnandpawn.app.core.billing.PurchaseIntent
+import com.yawnandpawn.app.core.billing.PurchaseIntentStore
 import com.yawnandpawn.app.core.error.Outcome
 import com.yawnandpawn.app.core.history.SessionHistoryRepository
 import com.yawnandpawn.app.core.history.SessionHistoryRow
@@ -26,10 +28,13 @@ import com.yawnandpawn.app.core.session.PurchaseIntentId
 import com.yawnandpawn.app.core.session.SessionEngine
 import com.yawnandpawn.app.core.session.SessionState
 import com.yawnandpawn.app.core.session.StoredSession
+import com.yawnandpawn.app.core.time.Clock
 import com.yawnandpawn.app.core.time.Deadline
 import com.yawnandpawn.app.data.session.ActiveSessionDao
 import com.yawnandpawn.app.data.session.ActiveSessionEntity
+import com.yawnandpawn.app.data.session.PurchaseIntentEntity
 import com.yawnandpawn.app.stopApp
+import com.yawnandpawn.app.testing.aPurchaseIntent
 import com.yawnandpawn.app.testing.aSession
 import kotlinx.coroutines.runBlocking
 import org.junit.Rule
@@ -47,6 +52,7 @@ import kotlin.test.assertIs
 import kotlin.test.assertNotEquals
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
+import kotlin.time.Duration.Companion.days
 
 /**
  * Story 2.1 (narrowing AD-2 rule 2): `SessionEngine.restore()` runs only from `WakeService`, `MainActivity` and
@@ -208,7 +214,7 @@ class RestoreEntryPointsTest {
         val audio = app.getSystemService(AudioManager::class.java)
         audio.setStreamVolume(AudioManager.STREAM_ALARM, 2, 0)
         AlarmVolume(app, AndroidLogger()).setForRing(100)
-        runBlocking { koin().get<ActiveSessionDao>().replace(ActiveSessionEntity("s", "{not json", updatedAt = 0)) }
+        runBlocking { koin().get<ActiveSessionDao>().commit(ActiveSessionEntity("s", "{not json", updatedAt = 0)) }
         stopApp()
 
         app.onCreate()
@@ -218,6 +224,24 @@ class RestoreEntryPointsTest {
         assertNull(AlarmVolume(app, AndroidLogger()).saved)
         val stored = assertIs<Outcome.Success<StoredSession>>(runBlocking { koin().get<ActiveSessionStore>().load() }).value
         assertIs<StoredSession.Unreadable>(stored, "only read: nothing restored or cleared")
+    }
+
+    @Test
+    fun `app start purges purchase intents older than 7 days and keeps younger ones (Story 4-8)`() {
+        awaitWork()
+        val now = koin().get<Clock>().now()
+        val old = aPurchaseIntent(intentId = "old", sessionId = "s", createdAt = now - 8.days)
+        val young = aPurchaseIntent(intentId = "young", sessionId = "s", createdAt = now - 1.days)
+        runBlocking {
+            koin().get<ActiveSessionDao>().commit(null, listOf(old, young).map(PurchaseIntentEntity::of))
+        }
+        stopApp()
+
+        app.onCreate()
+        awaitWork()
+
+        val left = assertIs<Outcome.Success<List<PurchaseIntent>>>(runBlocking { koin().get<PurchaseIntentStore>().forSession("s") }).value
+        assertEquals(listOf("young"), left.map { it.intentId.value })
     }
 
     @Test

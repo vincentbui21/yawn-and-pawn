@@ -22,7 +22,8 @@ import kotlin.coroutines.cancellation.CancellationException
  * every call runs under one Mutex, so transitions are strictly serial.
  *
  * Each step is write-ahead (AD-2 rule 2): read the time ports once, reduce, commit the new state to the
- * [ActiveSessionStore], and only after the commit succeeded publish it in [state] and run the effects through the
+ * [ActiveSessionStore] (with the purchase intent of a Pay in the same transaction, Story 4.8), and only after the
+ * commit succeeded publish it in [state] and run the effects through the
  * [EffectRunner]: the one-shot effects in order, then the state's [entryEffects]. A step whose state did not change
  * (an ignored event) commits nothing but still runs its effects. If the commit fails nothing runs, the previous state
  * stays, the failure is logged and returned. A failing effect is logged and never undoes the commit. Once a commit
@@ -55,6 +56,7 @@ class SessionEngine internal constructor(
     private val logger: Logger,
     private val due: (SessionState, TimeSnapshot) -> List<SessionEvent>,
     private val userLock: UserLockState = UserLockState.Unlocked,
+    private val unlock: UnlockPort = UnlockPort.Unlocked,
 ) {
     constructor(
         reducer: SessionReducer,
@@ -66,7 +68,8 @@ class SessionEngine internal constructor(
         bootCounter: BootCounter,
         logger: Logger,
         userLock: UserLockState = UserLockState.Unlocked,
-    ) : this(reducer, store, effects, recorder, clock, monotonicClock, bootCounter, logger, ::dueEvents, userLock)
+        unlock: UnlockPort = UnlockPort.Unlocked,
+    ) : this(reducer, store, effects, recorder, clock, monotonicClock, bootCounter, logger, ::dueEvents, userLock, unlock)
 
     private val mutex = Mutex()
     private val current = MutableStateFlow<SessionState>(SessionState.Idle)
@@ -213,14 +216,24 @@ class SessionEngine internal constructor(
     ): Outcome<TimeSnapshot, DomainError> {
         val now = now()
         // Read with the time ports: a ring that starts or is restored while locked is before the first unlock (Story 2.3).
-        val transition = reducer.reduce(from, event, now, userLocked = !userLock.isUserUnlocked())
+        // The keyguard only matters to a Pay (Spike S1), so no other step makes that platform call. A port that cannot tell
+        // counts as locked: the unlock request then succeeds at once on an unlocked phone (S1 run L-s1), whereas a launch
+        // behind a keyguard shows nothing.
+        val keyguardLocked = event is SessionEvent.PayConfirmed && runCatching { unlock.isKeyguardLocked() }.getOrDefault(true)
+        val transition = reducer.reduce(from, event, now, userLocked = !userLock.isUserUnlocked(), keyguardLocked = keyguardLocked)
         val oneShot = if (runOneShot) transition.effects else emptyList()
+        // Rows written with the state (AD-2 rule 2, AD-7): the purchase intent of a Pay is committed in its transaction.
+        val writes =
+            transition.effects
+                .filterIsInstance<SessionEffect.PersistPurchaseIntent>()
+                .map { RuntimeWrite.PutPurchaseIntent(it.intent) }
         return withContext(NonCancellable) {
             // The merge row is written before the commit (Story 2.9 review): a kill between the two would otherwise lose
             // it for good, since a restore runs no one-shot effects. Insert or ignore, so a merge dispatched again after a
             // failed commit still leaves one row with the first time.
             oneShot.filterIsInstance<SessionEffect.RecordMergedOccurrence>().forEach { guarded(it) { history.recordMerge(it, now) } }
-            val committed = if (transition.state == from) Outcome.Success(Unit) else store.commit(transition.state)
+            val unchanged = transition.state == from && writes.isEmpty()
+            val committed = if (unchanged) Outcome.Success(Unit) else store.commit(transition.state, writes)
             if (committed is Outcome.Failure) {
                 logger.log(LogEvent.OperationFailed.of(COMMIT, committed.error))
                 committed
@@ -228,7 +241,7 @@ class SessionEngine internal constructor(
                 val next = transition.state
                 if (next is SessionState.Completed || next is SessionState.Missed) endedFlag.value = next
                 current.value = next
-                oneShot.filterNot { it.isHistory() }.forEach { effect -> guarded(effect) { effects.run(effect) } }
+                oneShot.filterNot { it.isEngineOwned() }.forEach { effect -> guarded(effect) { effects.run(effect) } }
                 applyEntryEffects(transition.state, now)
                 // The start row is written after the effects (device test round 1): the sound never waits for it.
                 // Still inside the lock, so a start row lands before any end row of this session (recordEnd merges).
@@ -301,5 +314,9 @@ class SessionEngine internal constructor(
     }
 }
 
-/** A one-shot history effect: the [SessionRecorder] writes it, never the runner (AD-18; merges since Story 2.9). */
-private fun SessionEffect.isHistory(): Boolean = this is SessionEffect.RecordSessionStart || this is SessionEffect.RecordMergedOccurrence
+/**
+ * A one-shot effect the engine carries out itself, never the runner: the history writes (AD-18; merges since Story 2.9)
+ * go to the [SessionRecorder], and the purchase intent (Story 4.8) is written in the step's commit.
+ */
+private fun SessionEffect.isEngineOwned(): Boolean =
+    this is SessionEffect.RecordSessionStart || this is SessionEffect.RecordMergedOccurrence || this is SessionEffect.PersistPurchaseIntent

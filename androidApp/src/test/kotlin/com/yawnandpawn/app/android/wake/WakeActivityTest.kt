@@ -28,6 +28,7 @@ import com.yawnandpawn.app.core.history.SessionHistoryRow
 import com.yawnandpawn.app.core.history.SessionMergeRow
 import com.yawnandpawn.app.core.history.SessionOutcome
 import com.yawnandpawn.app.core.session.ActiveSessionStore
+import com.yawnandpawn.app.core.session.RuntimeWrite
 import com.yawnandpawn.app.core.session.SessionEvent
 import com.yawnandpawn.app.core.session.SessionState
 import com.yawnandpawn.app.core.session.StoredSession
@@ -402,7 +403,10 @@ private class CountingStore(
 
     override suspend fun load(): Outcome<StoredSession, DomainError> = inner.load().also { calls.incrementAndGet() }
 
-    override suspend fun commit(state: SessionState): Outcome<Unit, DomainError> = inner.commit(state).also { calls.incrementAndGet() }
+    override suspend fun commit(
+        state: SessionState,
+        writes: List<RuntimeWrite>,
+    ): Outcome<Unit, DomainError> = inner.commit(state, writes).also { calls.incrementAndGet() }
 
     override suspend fun clear(): Outcome<Unit, DomainError> = inner.clear().also { calls.incrementAndGet() }
 }

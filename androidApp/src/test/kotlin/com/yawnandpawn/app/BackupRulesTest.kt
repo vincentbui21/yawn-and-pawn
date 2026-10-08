@@ -5,6 +5,7 @@ import androidx.test.core.app.ApplicationProvider
 import com.yawnandpawn.app.android.backup.SkippedRestoreNotice
 import com.yawnandpawn.app.data.db.AppDatabase
 import com.yawnandpawn.app.data.db.RuntimeDatabase
+import com.yawnandpawn.app.data.settings.InstallIdDataStore
 import com.yawnandpawn.app.data.settings.SettingsDataStore
 import org.junit.After
 import org.junit.Test
@@ -33,6 +34,7 @@ class BackupRulesTest {
     private val appDb = AppDatabase.FILE_NAME
     private val runtimeDb = RuntimeDatabase.FILE_NAME
     private val settings = "datastore/${SettingsDataStore.FILE_NAME}"
+    private val installId = "datastore/${InstallIdDataStore.FILE_NAME}"
 
     /** The entries every section must hold, in this order: kind, domain, path. */
     private val sectionEntries =
@@ -52,6 +54,8 @@ class BackupRulesTest {
             Triple("exclude", "device_sharedpref", "reliability.xml"),
             // The fire's last-known global settings (Story 4.4 review fix 11), a per-device fallback.
             Triple("exclude", "device_sharedpref", "settings_fallback.xml"),
+            // The install id (Story 4.8): never restored onto another phone.
+            Triple("exclude", "device_file", installId),
             Triple("exclude", "root", "."),
             Triple("exclude", "file", "."),
             Triple("exclude", "database", "."),
@@ -82,6 +86,17 @@ class BackupRulesTest {
         assertTrue(includes.all { it.domain.startsWith("device_") }, "$includes")
         assertEquals(setOf(appDb, settings), includes.map { it.path }.toSet())
         assertFalse(includes.any { it.path.startsWith(runtimeDb) }, "runtime.db is never included")
+    }
+
+    @Test
+    fun `the install id is excluded from cloud backup, device transfer and full backup, and never included`() {
+        val all = backupRules(context, R.xml.data_extraction_rules) + backupRules(context, R.xml.backup_rules)
+
+        assertEquals(
+            setOf("cloud-backup", "device-transfer", "full-backup-content"),
+            all.filter { it.kind == "exclude" && it.domain == "device_file" && it.path == installId }.map { it.section }.toSet(),
+        )
+        assertFalse(all.any { it.kind == "include" && it.path.contains("install_id") })
     }
 
     @Test

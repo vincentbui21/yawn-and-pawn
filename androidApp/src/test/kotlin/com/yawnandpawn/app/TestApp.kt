@@ -141,13 +141,47 @@ class StopAppRule : TestRule {
     ): Statement =
         object : Statement() {
             override fun evaluate() {
+                val watchdog = TestWatchdog.start(description.displayName)
                 try {
                     base.evaluate()
                 } finally {
-                    stopApp()
+                    try {
+                        stopApp()
+                    } finally {
+                        watchdog.cancel()
+                    }
                 }
             }
         }
+}
+
+/**
+ * Names a test (with its teardown) still running after [LIMIT_MILLIS]: prints every thread's stack in one
+ * `[test-watchdog]` block (the build log shows it, see the root build file), then interrupts the test's thread, so a
+ * wait that never ends fails that test instead of hanging the whole run. The Gradle task timeout is the last resort.
+ * It runs the test where it is (never on another thread, which Robolectric's main looper would not allow).
+ */
+private object TestWatchdog {
+    private const val LIMIT_MILLIS = 5 * 60_000L
+    private val timer = java.util.Timer("test-watchdog", true)
+
+    fun start(test: String): java.util.TimerTask {
+        val testThread = Thread.currentThread()
+        val task =
+            object : java.util.TimerTask() {
+                override fun run() {
+                    val threads =
+                        Thread.getAllStackTraces().entries.joinToString("\n\n") { (thread, stack) ->
+                            "\"${thread.name}\" ${thread.state}\n" + stack.joinToString("\n") { "    at $it" }
+                        }
+                    // One print, so the whole dump is one output event (the root build file logs it).
+                    System.err.print("[test-watchdog] $test still running after ${LIMIT_MILLIS / 1000} s; threads:\n$threads\n")
+                    testThread.interrupt()
+                }
+            }
+        timer.schedule(task, LIMIT_MILLIS, LIMIT_MILLIS)
+        return task
+    }
 }
 
 /**

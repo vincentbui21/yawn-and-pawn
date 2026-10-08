@@ -144,6 +144,15 @@ subprojects {
     if (path != ":detekt-rules") {
         dependencies.add("detektPlugins", project(":detekt-rules"))
     }
+    // A hung test fails its own task, named, after 30 minutes (a whole test task takes about 6 on CI), instead of using
+    // up the 75-minute CI job with no log. The per-test watchdog of the Robolectric tests (StopAppRule) prints the
+    // threads of a test still running after 5 minutes; its lines reach the build log here.
+    tasks.withType<Test>().configureEach {
+        timeout.set(java.time.Duration.ofMinutes(30))
+        addTestOutputListener { _, event ->
+            if (event.message.startsWith("[test-watchdog]")) logger.lifecycle(event.message)
+        }
+    }
 }
 
 // ---------------------------------------------------------------------------------------------

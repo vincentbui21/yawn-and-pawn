@@ -118,12 +118,14 @@ sealed interface SessionEvent {
 
     /**
      * A purchase of [productId] arrived; it grants a snooze when [verdict] is [PurchaseVerdict.Grant]. The check starts
-     * over at the next ring, with that ring's seeds.
+     * over at the next ring, with that ring's seeds. [orderId] is Play's order id when it gave one; it goes into the grant
+     * ledger row and the purchase record (Story 4.10).
      */
     data class PurchaseGranted(
         val productId: String,
         val token: PurchaseToken,
         val verdict: PurchaseVerdict,
+        val orderId: String? = null,
     ) : PurchaseEvent
 
     /** The purchase failed. */

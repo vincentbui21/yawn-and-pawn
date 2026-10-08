@@ -12,6 +12,7 @@ import com.yawnandpawn.app.core.alarm.Alarm
 import com.yawnandpawn.app.core.alarm.AlarmDraft
 import com.yawnandpawn.app.core.alarm.CheckConfig
 import com.yawnandpawn.app.core.alarm.orderedEntries
+import com.yawnandpawn.app.core.billing.RecordStatus
 import com.yawnandpawn.app.core.checks.CheckEntry
 import com.yawnandpawn.app.core.checks.CheckMode
 import com.yawnandpawn.app.core.checks.CheckType
@@ -25,9 +26,11 @@ import com.yawnandpawn.app.core.history.SessionMergeRow
 import com.yawnandpawn.app.data.alarm.RoomAlarmRepository
 import com.yawnandpawn.app.data.alarm.RoomCheckConfigRepository
 import com.yawnandpawn.app.data.alarm.RoomRequestCodeSequence
+import com.yawnandpawn.app.data.billing.RoomPurchaseRecordRepository
 import com.yawnandpawn.app.data.config.RoomPendingChangeRepository
 import com.yawnandpawn.app.data.history.RoomSessionHistoryRepository
 import com.yawnandpawn.app.testing.AlarmUseCasesFixture
+import com.yawnandpawn.app.testing.aPurchaseRecord
 import com.yawnandpawn.app.testing.aRegisteredCode
 import com.yawnandpawn.app.testing.aSessionHistoryRow
 import com.yawnandpawn.app.testing.anAlarm
@@ -412,16 +415,78 @@ class AppDatabaseFactoryTest {
                 assertEquals(Outcome.Success(Unit), pending.put(change))
                 assertEquals(Outcome.Success(listOf(change)), pending.all())
             }
-            assertEquals(9, userVersion())
+            assertEquals(AppDatabase.SCHEMA_VERSION, userVersion())
+        }
+
+    @Test
+    fun `the exported version 10 schema adds the purchase records keyed by token hash, with no alarm key (Story 4-10)`() {
+        assertTrue(schema(10).exists(), "exported schema missing: ${schema(10).absolutePath}")
+        val json = schema(10).readText()
+
+        assertTrue(json.contains("\"version\": 10"), "schema version 10")
+        assertEquals(
+            listOf(
+                "alarm",
+                "request_code_sequence",
+                "session_history",
+                "session_merge",
+                "check_config",
+                "pending_change",
+                "commitment_event",
+                "purchase_record",
+            ),
+            tableNames(json),
+        )
+        val records = json.substringAfter("\"tableName\": \"purchase_record\"")
+        assertTrue(records.contains("PRIMARY KEY(`token_hash`)"), "one record per token hash")
+        assertFalse(records.contains("`token` "), "never the raw token")
+        assertFalse(records.contains("REFERENCES"), "a charge outlives its alarm")
+        val nullable = "`order_id` TEXT, `product_id` TEXT NOT NULL, `session_id` TEXT, `alarm_id` TEXT, `snooze_number` INTEGER"
+        assertTrue(records.contains(nullable), "only a stranded record may lack its session, alarm or snooze")
+        assertTrue(records.contains("`price_micros` INTEGER NOT NULL, `currency` TEXT NOT NULL"))
+        assertTrue(records.contains("index_purchase_record_purchased_at"))
+    }
+
+    @Test
+    fun `migrating a v9 database keeps alarms, history and pending changes and adds empty, working purchase records`() =
+        runTest {
+            val alarm = anAlarm(id = "a", requestCode = 1000)
+            val row = aSessionHistoryRow(sessionId = "session-1", alarmId = "a")
+            createDatabase(
+                version = 9,
+                alarms = listOf(alarm),
+                requestCodeMark = 1000,
+                history = listOf(row),
+                sql =
+                    listOf(
+                        "INSERT INTO pending_change (alarm_id, field, value_json, effective_after_alarm_id, " +
+                            "effective_after_scheduled_at) VALUES ('a', 'GraceSeconds', '{}', 'a', 1000)",
+                        "INSERT INTO commitment_event (id, alarm_id, occurrence_at, action, at) VALUES ('e', 'a', 1, 'Disabled', 2)",
+                    ),
+            )
+
+            withDatabase { database ->
+                assertEquals(Outcome.Success(alarm), RoomAlarmRepository(database.alarmDao()).get("a"))
+                assertEquals(Outcome.Success(row), RoomSessionHistoryRepository(database.sessionHistoryDao()).find("session-1"))
+                assertEquals(1, database.pendingChangeDao().all().size)
+                assertEquals(1, database.commitmentEventDao().all().size)
+                assertEquals(0, database.purchaseRecordDao().count())
+
+                val records = RoomPurchaseRecordRepository(database.purchaseRecordDao())
+                val record = aPurchaseRecord(status = RecordStatus.Stranded)
+                assertEquals(Outcome.Success(Unit), records.put(record))
+                assertEquals(Outcome.Success(listOf(record)), records.all())
+            }
+            assertEquals(10, userVersion())
         }
 
     @Test
     fun `the migrations cover every version step and nothing is destructive`() {
         assertEquals(
-            listOf(1 to 2, 2 to 3, 3 to 4, 4 to 5, 5 to 6, 6 to 7, 7 to 8, 8 to 9),
+            listOf(1 to 2, 2 to 3, 3 to 4, 4 to 5, 5 to 6, 6 to 7, 7 to 8, 8 to 9, 9 to 10),
             APP_DATABASE_MIGRATIONS.map { it.startVersion to it.endVersion },
         )
-        assertEquals(9, AppDatabase.SCHEMA_VERSION)
+        assertEquals(10, AppDatabase.SCHEMA_VERSION)
     }
 
     @Test

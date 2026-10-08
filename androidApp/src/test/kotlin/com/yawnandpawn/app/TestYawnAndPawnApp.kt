@@ -2,7 +2,9 @@ package com.yawnandpawn.app
 
 import com.yawnandpawn.app.android.crash.FirebaseStartup
 import com.yawnandpawn.app.core.reliability.ReliabilityProbe
+import com.yawnandpawn.app.core.work.BackgroundWork
 import com.yawnandpawn.app.testing.FakeReliabilityProbe
+import com.yawnandpawn.app.testing.RecordingBackgroundWork
 import org.koin.android.ext.koin.androidContext
 import org.koin.core.module.Module
 import org.koin.dsl.module
@@ -14,11 +16,14 @@ import org.koin.dsl.module
  *   `ReliabilityProbeTest` tests the real probe directly.
  * - No real Firebase start. With a CI `google-services.json` the app is configured, but a test must never initialise
  *   Firebase (it would try to reach the network); the startup records that it started and does nothing else.
+ * - Background jobs are only recorded (Story 4.10): the consume retry would otherwise wait out its real 30 s backoff on
+ *   the app scope. `InProcessBackgroundWorkTest` tests the real one.
  */
 val testAppModule: Module =
     module {
         single<ReliabilityProbe> { FakeReliabilityProbe() }
         single { FirebaseStartup(androidContext(), get(), initialize = {}) }
+        single<BackgroundWork> { RecordingBackgroundWork() }
     }
 
 /**

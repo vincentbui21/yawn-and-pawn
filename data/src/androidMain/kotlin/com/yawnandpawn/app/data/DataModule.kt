@@ -4,8 +4,10 @@ import android.content.Context
 import com.yawnandpawn.app.core.alarm.AlarmRepository
 import com.yawnandpawn.app.core.alarm.CheckConfigRepository
 import com.yawnandpawn.app.core.alarm.RequestCodeSequence
+import com.yawnandpawn.app.core.billing.GrantLedgerStore
 import com.yawnandpawn.app.core.billing.InstallIdProvider
 import com.yawnandpawn.app.core.billing.PurchaseIntentStore
+import com.yawnandpawn.app.core.billing.PurchaseRecordRepository
 import com.yawnandpawn.app.core.config.CommitmentEventRepository
 import com.yawnandpawn.app.core.config.GlobalSettingsRepository
 import com.yawnandpawn.app.core.config.PendingChangeRepository
@@ -21,6 +23,7 @@ import com.yawnandpawn.app.core.stats.StoredCheckRegistrations
 import com.yawnandpawn.app.data.alarm.RoomAlarmRepository
 import com.yawnandpawn.app.data.alarm.RoomCheckConfigRepository
 import com.yawnandpawn.app.data.alarm.RoomRequestCodeSequence
+import com.yawnandpawn.app.data.billing.RoomPurchaseRecordRepository
 import com.yawnandpawn.app.data.config.CompositePendingChangeRepository
 import com.yawnandpawn.app.data.config.DataStoreGlobalSettings
 import com.yawnandpawn.app.data.config.RoomCommitmentEventRepository
@@ -32,6 +35,7 @@ import com.yawnandpawn.app.data.db.buildAppDatabase
 import com.yawnandpawn.app.data.db.buildRuntimeDatabase
 import com.yawnandpawn.app.data.history.RoomSessionHistoryRepository
 import com.yawnandpawn.app.data.session.RoomActiveSessionStore
+import com.yawnandpawn.app.data.session.RoomGrantLedgerStore
 import com.yawnandpawn.app.data.session.RoomPurchaseIntentStore
 import com.yawnandpawn.app.data.settings.DataStoreInstallIdProvider
 import com.yawnandpawn.app.data.settings.DataStoreMissedNoteDismissals
@@ -93,4 +97,8 @@ val dataModule =
         single<PendingChangeRepository> { CompositePendingChangeRepository(get(), get()) }
         single { get<AppDatabase>().commitmentEventDao() }
         single<CommitmentEventRepository> { RoomCommitmentEventRepository(get()) }
+        // Story 4.10: the grant ledger in runtime.db (rows inserted only by the engine's commit; the raw tokens live only
+        // there) and the purchase records in app.db (backed up, keyed by token hash; written only by PurchaseLedger).
+        single<GrantLedgerStore> { RoomGrantLedgerStore(get<RuntimeDatabase>().grantLedgerDao()) }
+        single<PurchaseRecordRepository> { RoomPurchaseRecordRepository(get<AppDatabase>().purchaseRecordDao()) }
     }

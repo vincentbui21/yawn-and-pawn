@@ -17,8 +17,14 @@ import com.yawnandpawn.app.android.wake.WakeService
 import com.yawnandpawn.app.awaitChildren
 import com.yawnandpawn.app.buildActivity
 import com.yawnandpawn.app.core.alarm.RequestCodes
+import com.yawnandpawn.app.core.billing.GrantLedgerStore
 import com.yawnandpawn.app.core.billing.PurchaseIntent
 import com.yawnandpawn.app.core.billing.PurchaseIntentStore
+import com.yawnandpawn.app.core.billing.PurchaseLedger
+import com.yawnandpawn.app.core.billing.PurchaseRecord
+import com.yawnandpawn.app.core.billing.PurchaseRecordRepository
+import com.yawnandpawn.app.core.billing.RecordStatus
+import com.yawnandpawn.app.core.billing.hash
 import com.yawnandpawn.app.core.error.Outcome
 import com.yawnandpawn.app.core.history.SessionHistoryRepository
 import com.yawnandpawn.app.core.history.SessionHistoryRow
@@ -30,10 +36,14 @@ import com.yawnandpawn.app.core.session.SessionState
 import com.yawnandpawn.app.core.session.StoredSession
 import com.yawnandpawn.app.core.time.Clock
 import com.yawnandpawn.app.core.time.Deadline
+import com.yawnandpawn.app.core.work.BackgroundWork
 import com.yawnandpawn.app.data.session.ActiveSessionDao
 import com.yawnandpawn.app.data.session.ActiveSessionEntity
+import com.yawnandpawn.app.data.session.GrantLedgerEntity
 import com.yawnandpawn.app.data.session.PurchaseIntentEntity
 import com.yawnandpawn.app.stopApp
+import com.yawnandpawn.app.testing.RecordingBackgroundWork
+import com.yawnandpawn.app.testing.aGrant
 import com.yawnandpawn.app.testing.aPurchaseIntent
 import com.yawnandpawn.app.testing.aSession
 import kotlinx.coroutines.runBlocking
@@ -242,6 +252,23 @@ class RestoreEntryPointsTest {
 
         val left = assertIs<Outcome.Success<List<PurchaseIntent>>>(runBlocking { koin().get<PurchaseIntentStore>().forSession("s") }).value
         assertEquals(listOf("young"), left.map { it.intentId.value })
+    }
+
+    @Test
+    fun `app start replays the grant ledger, so a granted payment is in history even while Play cannot consume it (Story 4-10)`() {
+        awaitWork()
+        val grant = aGrant(token = "left-by-a-crash", sessionId = "s")
+        runBlocking { koin().get<ActiveSessionDao>().commit(null, grants = listOf(GrantLedgerEntity.of(grant))) }
+        stopApp()
+
+        app.onCreate()
+        awaitWork()
+
+        val record = runBlocking { koin().get<PurchaseRecordRepository>().get(grant.token.hash()) }
+        assertEquals(RecordStatus.Granted, assertIs<Outcome.Success<PurchaseRecord?>>(record).value?.status)
+        // Play Billing arrives in Story 4.12: until then the consume fails and the row waits for the next start or resume.
+        assertEquals(Outcome.Success(listOf(grant)), runBlocking { koin().get<GrantLedgerStore>().all() })
+        assertEquals(listOf(PurchaseLedger.CONSUME_RETRY_JOB), (koin().get<BackgroundWork>() as RecordingBackgroundWork).jobs)
     }
 
     @Test

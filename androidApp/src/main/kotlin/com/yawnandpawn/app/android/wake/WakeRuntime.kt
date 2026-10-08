@@ -12,6 +12,7 @@ import com.yawnandpawn.app.core.log.Logger
 import com.yawnandpawn.app.core.log.WakeStage
 import com.yawnandpawn.app.core.session.EffectRunner
 import com.yawnandpawn.app.core.session.EntryEffect
+import com.yawnandpawn.app.core.session.PurchaseToken
 import com.yawnandpawn.app.core.session.SessionConfig
 import com.yawnandpawn.app.core.session.SessionEffect
 import com.yawnandpawn.app.core.session.SessionReducer
@@ -87,6 +88,11 @@ class WakeRuntime(
     private val calls: CallState = NoCalls,
     /** A ring (session or emergency) started or was re-applied: the call adapter follows it (Story 2.7). */
     private val onRing: () -> Unit = {},
+    /**
+     * A paid snooze committed: settle its payment (Story 4.10, `PurchaseLedger.settle`). It must only launch the work
+     * (it runs inside the engine's Mutex) and never wait for Play.
+     */
+    private val onConsume: (PurchaseToken) -> Unit = {},
 ) : EffectRunner {
     private val player = outputs.player
     private val vibrator = outputs.vibrator
@@ -145,6 +151,7 @@ class WakeRuntime(
             is SessionEffect.ArmSlot -> armSlotForRing(effect.at)
             SessionEffect.CancelSlot -> cancelSlot()
             SessionEffect.InitBilling -> onInitBilling()
+            is SessionEffect.Consume -> onConsume(effect.token)
             is SessionEffect.ClearRuntimeSession -> endSession()
             is SessionEffect.LogIgnored -> logger.log(LogEvent.SessionEventIgnored(effect.eventType, effect.sessionId))
             else -> if (!runSound(effect)) logger.log(LogEvent.SessionEffectLogged(typeName(effect), entry = false))

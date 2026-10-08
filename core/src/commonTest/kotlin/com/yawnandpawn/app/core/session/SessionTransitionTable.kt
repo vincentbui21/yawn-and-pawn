@@ -1,5 +1,7 @@
 package com.yawnandpawn.app.core.session
 
+import com.yawnandpawn.app.core.billing.GrantLedgerEntry
+import com.yawnandpawn.app.core.billing.LedgerStatus
 import com.yawnandpawn.app.core.billing.Money
 import com.yawnandpawn.app.core.checks.CheckAnswer
 import com.yawnandpawn.app.core.checks.CheckType
@@ -25,6 +27,7 @@ import com.yawnandpawn.app.core.time.TimeSnapshot
 import kotlin.time.Duration.Companion.hours
 import kotlin.time.Duration.Companion.minutes
 import kotlin.time.Duration.Companion.seconds
+import kotlin.time.Instant
 
 /**
  * The AD-2 transition table of Architecture Spine v0.3 (31 rows) plus the Spike S1 unlock rows (R32–R34, Story 4.8),
@@ -101,7 +104,7 @@ private fun SessionState.Ring.touchedAt(now: TimeSnapshot): SessionState.Ring = 
 
 /**
  * Snoozed after a paid snooze at [now]: the check progress is dropped (the next ring resolves new seeds), the slot is
- * armed at the snooze end.
+ * armed at the snooze end, and the grant ledger row (Story 4.10) is persisted with the state before the token is settled.
  */
 private fun grantedFrom(
     session: SessionData,
@@ -116,7 +119,21 @@ private fun grantedFrom(
             paymentPending = false,
             snoozeEnd = snoozeEnd,
         )
-    return Transition(Snoozed(snoozed), listOf(SessionEffect.StopSound, ArmSlot(snoozeEnd), SessionEffect.Consume(TOKEN)))
+    val grant =
+        GrantLedgerEntry(
+            token = TOKEN,
+            sessionId = session.sessionId,
+            alarmId = session.config.alarmId,
+            productId = PRODUCT,
+            snoozeNumber = session.snoozesGranted + 1,
+            orderId = null,
+            status = LedgerStatus.Granted,
+            createdAt = Instant.fromEpochMilliseconds(now.wallMillis),
+        )
+    return Transition(
+        Snoozed(snoozed),
+        listOf(SessionEffect.PersistGrant(grant), SessionEffect.StopSound, ArmSlot(snoozeEnd), SessionEffect.Consume(TOKEN)),
+    )
 }
 
 /** The next ring after the snooze of [snoozedSession], at [now]: the plan resolved again with ring 2's seeds. */

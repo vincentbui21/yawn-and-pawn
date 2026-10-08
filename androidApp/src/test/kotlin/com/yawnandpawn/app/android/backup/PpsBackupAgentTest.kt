@@ -12,6 +12,9 @@ import com.yawnandpawn.app.android.ApplicationScope
 import com.yawnandpawn.app.awaitChildren
 import com.yawnandpawn.app.core.alarm.AlarmRepository
 import com.yawnandpawn.app.core.alarm.AlarmScheduler
+import com.yawnandpawn.app.core.billing.GrantLedgerStore
+import com.yawnandpawn.app.core.billing.PurchaseRecordRepository
+import com.yawnandpawn.app.core.billing.RecordStatus
 import com.yawnandpawn.app.core.error.Outcome
 import com.yawnandpawn.app.core.history.SessionHistoryRepository
 import com.yawnandpawn.app.core.log.LogEvent
@@ -25,6 +28,7 @@ import com.yawnandpawn.app.restartKoin
 import com.yawnandpawn.app.stopApp
 import com.yawnandpawn.app.testing.FakeAlarmScheduler
 import com.yawnandpawn.app.testing.FakeLogger
+import com.yawnandpawn.app.testing.aPurchaseRecord
 import com.yawnandpawn.app.testing.aSessionHistoryRow
 import com.yawnandpawn.app.testing.anAlarm
 import kotlinx.coroutines.runBlocking
@@ -71,6 +75,9 @@ class PpsBackupAgentTest {
     private val alarm = anAlarm(id = "alarm-a", repeatDays = DayOfWeek.entries.toSet(), requestCode = 1000)
     private val history = aSessionHistoryRow(alarmId = "alarm-a")
 
+    // Story 4.10: purchase history is user data, backed up in app.db by token hash; the grant ledger (runtime.db) is not.
+    private val purchase = aPurchaseRecord(status = RecordStatus.Consumed, sessionId = history.sessionId, alarmId = "alarm-a")
+
     @Before
     fun setUp() {
         GlobalContext.get().get<ApplicationScope>().awaitChildren()
@@ -90,12 +97,16 @@ class PpsBackupAgentTest {
         }
     }
 
-    /** The bytes of a current-schema `app.db` holding [alarm] and [history], made by the app itself; the app is stopped after. */
+    /**
+     * The bytes of a current-schema `app.db` holding [alarm], [history] and the [purchase] record, made by the app itself;
+     * the app is stopped after.
+     */
     private fun backedUpAppDb(): ByteArray {
         val koin = GlobalContext.get()
         runBlocking {
             assertEquals(Outcome.Success(Unit), koin.get<AlarmRepository>().upsert(alarm))
             assertEquals(Outcome.Success(Unit), koin.get<SessionHistoryRepository>().upsert(history))
+            assertEquals(Outcome.Success(Unit), koin.get<PurchaseRecordRepository>().put(purchase))
         }
         stopApp()
         return appDatabaseFile(context).readBytes()
@@ -141,6 +152,8 @@ class PpsBackupAgentTest {
         runBlocking {
             assertEquals(Outcome.Success(listOf(alarm)), koin.get<AlarmRepository>().listAll())
             assertEquals(Outcome.Success(history), koin.get<SessionHistoryRepository>().find(history.sessionId), "history unchanged")
+            assertEquals(Outcome.Success(listOf(purchase)), koin.get<PurchaseRecordRepository>().all(), "every charge is restored")
+            assertEquals(Outcome.Success(emptyList()), koin.get<GrantLedgerStore>().all(), "no grant ledger, no raw token comes with it")
             val engine = koin.get<SessionEngine>()
             engine.restore()
             assertEquals(SessionState.Idle, engine.state.value)

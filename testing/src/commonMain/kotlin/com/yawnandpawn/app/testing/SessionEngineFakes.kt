@@ -10,6 +10,7 @@ import com.yawnandpawn.app.core.error.Outcome
 import com.yawnandpawn.app.core.session.ActiveSessionStore
 import com.yawnandpawn.app.core.session.Billing
 import com.yawnandpawn.app.core.session.CheckRun
+import com.yawnandpawn.app.core.session.ConsumeResult
 import com.yawnandpawn.app.core.session.EffectRunner
 import com.yawnandpawn.app.core.session.EntryEffect
 import com.yawnandpawn.app.core.session.PurchaseIntentId
@@ -36,12 +37,13 @@ import kotlin.time.Instant
  * deletes it. Set [commitFailure] to make every commit fail (nothing changes), [loadFailure] for load and
  * [clearFailure] for clear (the row stays; [clears] still counts the call). Put any text in
  * [row] (an unreadable one too) to stand for what an earlier process left. [commits] lists every successful commit.
- * The writes of a commit (Story 4.8) go to [intents] in the same step, and an intent id already stored there fails the
- * whole commit, as in Room; [writes] lists the writes of every successful commit.
+ * The writes of a commit go to [intents] (Story 4.8) and [grants] (Story 4.10) in the same step, and an intent id or a
+ * token already stored there fails the whole commit, as in Room; [writes] lists the writes of every successful commit.
  */
 class FakeActiveSessionStore(
     initial: SessionState = SessionState.Idle,
     val intents: FakePurchaseIntentStore = FakePurchaseIntentStore(),
+    val grants: FakeGrantLedgerStore = FakeGrantLedgerStore(),
 ) : ActiveSessionStore {
     /** The stored JSON text; null when nothing is stored. */
     var row: String? = initial.takeIf { it != SessionState.Idle }?.let { SessionJson.encode(it) }
@@ -83,13 +85,19 @@ class FakeActiveSessionStore(
         state: SessionState,
         writes: List<RuntimeWrite>,
     ): Outcome<Unit, DomainError> {
-        val newIntents = writes.map { write -> (write as RuntimeWrite.PutPurchaseIntent).intent }
+        val newIntents = writes.filterIsInstance<RuntimeWrite.PutPurchaseIntent>().map { it.intent }
+        val newGrants = writes.filterIsInstance<RuntimeWrite.PutGrant>().map { it.grant }
         val ids = newIntents.map { it.intentId }
+        val tokens = newGrants.map { it.token }
         val duplicate = ids.size != ids.toSet().size || ids.any { intents.contains(it) }
+        val duplicateGrant = tokens.size != tokens.toSet().size || tokens.any { grants.contains(it) }
         val failure =
-            commitFailure ?: DomainError.StorageFailure("UNIQUE constraint failed: purchase_intent.intent_id").takeIf { duplicate }
+            commitFailure
+                ?: DomainError.StorageFailure("UNIQUE constraint failed: purchase_intent.intent_id").takeIf { duplicate }
+                ?: DomainError.StorageFailure("UNIQUE constraint failed: grant_ledger.token").takeIf { duplicateGrant }
         failure?.let { return Outcome.Failure(it) }
         newIntents.forEach(intents::put)
+        newGrants.forEach(grants::put)
         written += writes
         row = if (state == SessionState.Idle) null else SessionJson.encode(state)
         committed += state
@@ -146,10 +154,27 @@ class FakeEffectRunner : EffectRunner {
 /**
  * [Billing] under test control: every launch returns [result] (by default [SessionEvent.PurchaseFailed]); use
  * [grants] for a `PurchaseGranted`, or `PurchaseCancelled` / `PurchasePending`. Every intent is kept in [launched].
+ * Each consume (Story 4.10) takes the next of [consumeResults] and then [consumeResult] (by default
+ * [ConsumeResult.Consumed]); every consumed token is kept in [consumed], in order.
  */
-class FakeBilling(
+open class FakeBilling(
     var result: SessionEvent.PurchaseEvent = SessionEvent.PurchaseFailed,
+    var consumeResult: ConsumeResult = ConsumeResult.Consumed,
 ) : Billing {
+    /** Results for the next consumes, first one first; [consumeResult] once they are used up. */
+    val consumeResults: ArrayDeque<ConsumeResult> = ArrayDeque()
+
+    private val consumes = mutableListOf<PurchaseToken>()
+
+    /** Every token passed to [consume], in order (a failed consume too). */
+    val consumed: List<PurchaseToken>
+        get() = consumes.toList()
+
+    override suspend fun consume(token: PurchaseToken): ConsumeResult {
+        consumes += token
+        return consumeResults.removeFirstOrNull() ?: consumeResult
+    }
+
     private val intents = mutableListOf<PurchaseIntent>()
 
     val launched: List<PurchaseIntent>

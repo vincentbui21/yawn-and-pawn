@@ -1,5 +1,6 @@
 package com.yawnandpawn.app.core.session
 
+import com.yawnandpawn.app.core.billing.GrantLedgerEntry
 import com.yawnandpawn.app.core.billing.PurchaseIntent
 import com.yawnandpawn.app.core.error.DomainError
 import com.yawnandpawn.app.core.error.Outcome
@@ -64,7 +65,8 @@ internal class EngineTime(
 
 /**
  * An [ActiveSessionStore] holding one JSON row in memory, encoded with [SessionJson] like the Room store, and the intents
- * its commits wrote (Story 4.8): a commit is all or nothing, and an intent id already stored fails it, as in Room.
+ * (Story 4.8) and grant ledger rows (Story 4.10) its commits wrote: a commit is all or nothing, and an intent id or a
+ * token already stored fails it, as in Room.
  */
 internal class InMemorySessionStore : ActiveSessionStore {
     /** The stored row; null when nothing is stored. */
@@ -83,6 +85,9 @@ internal class InMemorySessionStore : ActiveSessionStore {
     /** The intents written by successful commits, by id. */
     val intents = linkedMapOf<PurchaseIntentId, PurchaseIntent>()
 
+    /** The grant ledger rows written by successful commits, by token (Story 4.10). */
+    val grants = linkedMapOf<PurchaseToken, GrantLedgerEntry>()
+
     /** The writes of each successful commit, in order (empty for a commit without any). */
     val writeLog = mutableListOf<List<RuntimeWrite>>()
 
@@ -98,10 +103,17 @@ internal class InMemorySessionStore : ActiveSessionStore {
         state: SessionState,
         writes: List<RuntimeWrite>,
     ): Outcome<Unit, DomainError> {
-        val added = writes.map { (it as RuntimeWrite.PutPurchaseIntent).intent }
+        val added = writes.filterIsInstance<RuntimeWrite.PutPurchaseIntent>().map { it.intent }
+        val granted = writes.filterIsInstance<RuntimeWrite.PutGrant>().map { it.grant }
         val duplicate = added.any { it.intentId in intents } || added.map { it.intentId }.toSet().size != added.size
-        (commitFailure ?: DomainError.StorageFailure("duplicate intent").takeIf { duplicate })?.let { return Outcome.Failure(it) }
+        val duplicateGrant = granted.any { it.token in grants } || granted.map { it.token }.toSet().size != granted.size
+        (
+            commitFailure
+                ?: DomainError.StorageFailure("duplicate intent").takeIf { duplicate }
+                ?: DomainError.StorageFailure("duplicate grant").takeIf { duplicateGrant }
+        )?.let { return Outcome.Failure(it) }
         added.forEach { intents[it.intentId] = it }
+        granted.forEach { grants[it.token] = it }
         writeLog += writes
         row = if (state == SessionState.Idle) null else SessionJson.encode(state)
         commits += state

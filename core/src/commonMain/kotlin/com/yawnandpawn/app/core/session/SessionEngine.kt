@@ -22,7 +22,8 @@ import kotlin.coroutines.cancellation.CancellationException
  * every call runs under one Mutex, so transitions are strictly serial.
  *
  * Each step is write-ahead (AD-2 rule 2): read the time ports once, reduce, commit the new state to the
- * [ActiveSessionStore] (with the purchase intent of a Pay in the same transaction, Story 4.8), and only after the
+ * [ActiveSessionStore] (with the purchase intent of a Pay or the grant ledger row of a paid snooze in the same
+ * transaction, Stories 4.8 and 4.10), and only after the
  * commit succeeded publish it in [state] and run the effects through the
  * [EffectRunner]: the one-shot effects in order, then the state's [entryEffects]. A step whose state did not change
  * (an ignored event) commits nothing but still runs its effects. If the commit fails nothing runs, the previous state
@@ -222,11 +223,16 @@ class SessionEngine internal constructor(
         val keyguardLocked = event is SessionEvent.PayConfirmed && runCatching { unlock.isKeyguardLocked() }.getOrDefault(true)
         val transition = reducer.reduce(from, event, now, userLocked = !userLock.isUserUnlocked(), keyguardLocked = keyguardLocked)
         val oneShot = if (runOneShot) transition.effects else emptyList()
-        // Rows written with the state (AD-2 rule 2, AD-7): the purchase intent of a Pay is committed in its transaction.
+        // Rows written with the state (AD-2 rule 2, AD-7): the purchase intent of a Pay and the grant ledger row of a paid
+        // snooze (Story 4.10) are committed in its transaction.
         val writes =
-            transition.effects
-                .filterIsInstance<SessionEffect.PersistPurchaseIntent>()
-                .map { RuntimeWrite.PutPurchaseIntent(it.intent) }
+            transition.effects.mapNotNull { effect ->
+                when (effect) {
+                    is SessionEffect.PersistPurchaseIntent -> RuntimeWrite.PutPurchaseIntent(effect.intent)
+                    is SessionEffect.PersistGrant -> RuntimeWrite.PutGrant(effect.grant)
+                    else -> null
+                }
+            }
         return withContext(NonCancellable) {
             // The merge row is written before the commit (Story 2.9 review): a kill between the two would otherwise lose
             // it for good, since a restore runs no one-shot effects. Insert or ignore, so a merge dispatched again after a
@@ -316,7 +322,11 @@ class SessionEngine internal constructor(
 
 /**
  * A one-shot effect the engine carries out itself, never the runner: the history writes (AD-18; merges since Story 2.9)
- * go to the [SessionRecorder], and the purchase intent (Story 4.8) is written in the step's commit.
+ * go to the [SessionRecorder], and the purchase intent (Story 4.8) and the grant ledger row (Story 4.10) are written in
+ * the step's commit.
  */
 private fun SessionEffect.isEngineOwned(): Boolean =
-    this is SessionEffect.RecordSessionStart || this is SessionEffect.RecordMergedOccurrence || this is SessionEffect.PersistPurchaseIntent
+    this is SessionEffect.RecordSessionStart ||
+        this is SessionEffect.RecordMergedOccurrence ||
+        this is SessionEffect.PersistPurchaseIntent ||
+        this is SessionEffect.PersistGrant

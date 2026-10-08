@@ -6,6 +6,7 @@ import com.yawnandpawn.app.android.AndroidAlarmScheduler
 import com.yawnandpawn.app.android.AndroidLogger
 import com.yawnandpawn.app.android.AndroidUserLockState
 import com.yawnandpawn.app.android.ApplicationScope
+import com.yawnandpawn.app.android.InProcessBackgroundWork
 import com.yawnandpawn.app.android.UnavailableBilling
 import com.yawnandpawn.app.android.WordListLoader
 import com.yawnandpawn.app.android.androidTimeModule
@@ -26,9 +27,13 @@ import com.yawnandpawn.app.core.alarm.ReRegisterCode
 import com.yawnandpawn.app.core.alarm.RearmOnFire
 import com.yawnandpawn.app.core.alarm.SaveAlarm
 import com.yawnandpawn.app.core.alarm.SetAlarmEnabled
+import com.yawnandpawn.app.core.billing.ConsumeRetryTask
 import com.yawnandpawn.app.core.billing.FeeLadder
 import com.yawnandpawn.app.core.billing.MoneyFormatter
+import com.yawnandpawn.app.core.billing.PriceSnapshotLookup
+import com.yawnandpawn.app.core.billing.PurchaseLedger
 import com.yawnandpawn.app.core.billing.PurgeOldPurchaseIntents
+import com.yawnandpawn.app.core.billing.ReplayGrantLedger
 import com.yawnandpawn.app.core.billing.UsdFeeLadder
 import com.yawnandpawn.app.core.checks.AccessibilityState
 import com.yawnandpawn.app.core.checks.word.WordBank
@@ -62,6 +67,8 @@ import com.yawnandpawn.app.core.session.SnoozeAvailabilityPolicy
 import com.yawnandpawn.app.core.session.StoredSession
 import com.yawnandpawn.app.core.session.UserLockState
 import com.yawnandpawn.app.core.stats.ReRegisterSuggestions
+import com.yawnandpawn.app.core.work.BackgroundTaskKind
+import com.yawnandpawn.app.core.work.BackgroundWork
 import com.yawnandpawn.app.data.dataModule
 import com.yawnandpawn.app.ui.format.moneyFormatter
 import com.yawnandpawn.app.ui.nav.WakeScreenOpener
@@ -141,6 +148,18 @@ val appModule =
         single<Billing> { UnavailableBilling(get()) }
         // Story 4.8: intents older than 7 days are deleted on app start (runtime.db, device-protected).
         factory { PurgeOldPurchaseIntents(get(), get(), get()) }
+        // Story 4.10: the only writer of purchase records and caller of consume. Its retry job runs in this process until
+        // Story 4.3's WorkManager adapter is bound instead; records with no intent are priced by the product's USD tier
+        // until 4.3's price snapshot is wired in.
+        single {
+            val koin = this
+            InProcessBackgroundWork(get<ApplicationScope>(), get()) {
+                mapOf(BackgroundTaskKind.ConsumeRetry to ConsumeRetryTask(koin.get()))
+            }
+        }
+        single<BackgroundWork> { get<InProcessBackgroundWork>() }
+        single { PurchaseLedger(get(), get(), get(), get(), get(), PriceSnapshotLookup.None, get(), get()) }
+        factory { ReplayGrantLedger(get(), get()) }
         // The only writer of session history (Story 1.13, AD-18), over the Room repository from dataModule; the engine
         // drives it itself, so the runner never sees the history effects.
         single { SessionRecorder(get()) }
@@ -194,6 +213,10 @@ open class YawnAndPawnApp : Application() {
         // Purchase intents are kept 7 days, long enough to price a pending payment that completes later (Story 4.8).
         val purgeIntents = koin.get<PurgeOldPurchaseIntents>()
         scope.launch { purgeIntents() }
+        // Story 4.10: the grant ledger is replayed (record, consume, settle) once the user has unlocked; resume replays it
+        // again (MainActivity). Never on the wake path: the snooze started at its commit.
+        val replayLedger = koin.get<ReplayGrantLedger>()
+        scope.launch { replayLedger() }
         // With no session left in runtime.db (nothing, an unreadable row or a stored Idle), an alarm volume a crashed session
         // saved is put back (AD-5). Only a read: the session itself is restored by WakeService, MainActivity or
         // WakeActivity (Story 2.1).

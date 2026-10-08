@@ -6,8 +6,8 @@ import androidx.room3.Query
 import androidx.room3.Transaction
 
 /**
- * Access to `active_session`, and the one writer of `purchase_intent` ([commit], Story 4.8). Only `RoomActiveSessionStore`
- * uses it.
+ * Access to `active_session`, and the one inserter of `purchase_intent` (Story 4.8) and `grant_ledger` (Story 4.10), both
+ * through [commit]. Only `RoomActiveSessionStore` uses it.
  */
 @Dao
 abstract class ActiveSessionDao {
@@ -28,17 +28,24 @@ abstract class ActiveSessionDao {
     @Insert
     abstract suspend fun insertIntent(row: PurchaseIntentEntity)
 
+    /** Inserts a grant ledger row; a token that is already stored fails (a token grants once). */
+    @Insert
+    abstract suspend fun insertGrant(row: GrantLedgerEntity)
+
     /**
      * One write-ahead commit (AD-2 rule 2): replaces the stored session with [row] (none for Idle, so the table never
-     * holds two sessions) and inserts [intents], all in one transaction. If any insert fails nothing is written.
+     * holds two sessions) and inserts [intents] and [grants], all in one transaction. If any insert fails nothing is
+     * written.
      */
     @Transaction
     open suspend fun commit(
         row: ActiveSessionEntity?,
         intents: List<PurchaseIntentEntity> = emptyList(),
+        grants: List<GrantLedgerEntity> = emptyList(),
     ) {
         deleteAll()
         if (row != null) insert(row)
         intents.forEach { insertIntent(it) }
+        grants.forEach { insertGrant(it) }
     }
 }

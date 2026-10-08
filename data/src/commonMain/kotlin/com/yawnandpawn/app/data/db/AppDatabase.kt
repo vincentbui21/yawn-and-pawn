@@ -10,6 +10,8 @@ import com.yawnandpawn.app.data.alarm.CheckConfigDao
 import com.yawnandpawn.app.data.alarm.CheckConfigEntity
 import com.yawnandpawn.app.data.alarm.RequestCodeSequenceDao
 import com.yawnandpawn.app.data.alarm.RequestCodeSequenceEntity
+import com.yawnandpawn.app.data.billing.PurchaseRecordDao
+import com.yawnandpawn.app.data.billing.PurchaseRecordEntity
 import com.yawnandpawn.app.data.config.CommitmentEventDao
 import com.yawnandpawn.app.data.config.CommitmentEventEntity
 import com.yawnandpawn.app.data.config.PendingChangeDao
@@ -25,7 +27,8 @@ import com.yawnandpawn.app.data.history.SessionMergeEntity
  * 3.4) adds `alarm.vibrate_in_grace` ([MIGRATION_4_5]); version 6 (Story 3.5) adds `check_config` and `alarm.check_mode`
  * ([MIGRATION_5_6]); version 7 (Story 3.9) adds `session_history.fallback_from` ([MIGRATION_6_7]); version 8 (Story 3.10) adds
  * the registered code to `check_config` ([MIGRATION_7_8]); version 9 (Story 4.4) adds `pending_change` and
- * `commitment_event` ([MIGRATION_8_9]). There is no
+ * `commitment_event` ([MIGRATION_8_9]); version 10 (Story 4.10) adds `purchase_record`, the purchase history keyed by
+ * token hash ([MIGRATION_9_10]). There is no
  * destructive migration fallback; restoring a newer file onto an older install is
  * covered by `docs/decisions/db-downgrade.md`.
  */
@@ -38,6 +41,7 @@ import com.yawnandpawn.app.data.history.SessionMergeEntity
         CheckConfigEntity::class,
         PendingChangeEntity::class,
         CommitmentEventEntity::class,
+        PurchaseRecordEntity::class,
     ],
     version = AppDatabase.SCHEMA_VERSION,
     exportSchema = true,
@@ -56,6 +60,8 @@ abstract class AppDatabase : RoomDatabase() {
 
     abstract fun commitmentEventDao(): CommitmentEventDao
 
+    abstract fun purchaseRecordDao(): PurchaseRecordDao
+
     companion object {
         /** File name in the device-protected database directory; also named in the backup rules. */
         const val FILE_NAME = "app.db"
@@ -64,7 +70,7 @@ abstract class AppDatabase : RoomDatabase() {
          * The `app.db` schema this build knows: the `@Database` version, and the limit `PpsBackupAgent` checks a restored
          * file against (Room cannot open a newer one, `docs/decisions/db-downgrade.md`).
          */
-        const val SCHEMA_VERSION = 9
+        const val SCHEMA_VERSION = 10
     }
 }
 

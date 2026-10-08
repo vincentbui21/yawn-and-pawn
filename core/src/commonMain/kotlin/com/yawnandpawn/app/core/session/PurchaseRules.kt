@@ -1,5 +1,7 @@
 package com.yawnandpawn.app.core.session
 
+import com.yawnandpawn.app.core.billing.GrantLedgerEntry
+import com.yawnandpawn.app.core.billing.LedgerStatus
 import com.yawnandpawn.app.core.billing.PurchaseIntent
 import com.yawnandpawn.app.core.session.SessionState.Ring
 import com.yawnandpawn.app.core.time.Deadline
@@ -99,7 +101,8 @@ internal class PurchaseRules(
             }
 
             is SessionEvent.PurchaseGranted -> {
-                if (event.verdict == PurchaseVerdict.Grant) onPaidSnooze(state, event.token, now) else null
+                val paid = PaidWith(event.productId, event.token, event.orderId)
+                if (event.verdict == PurchaseVerdict.Grant) onPaidSnooze(state, paid, now) else null
             }
 
             SessionEvent.PurchaseFailed -> {
@@ -119,18 +122,19 @@ internal class PurchaseRules(
     /** A paid snooze (a grant, or ReuseAccepted); ignored in a test session, which can never charge. */
     fun onPaidSnooze(
         state: Ring,
-        token: PurchaseToken,
+        paid: PaidWith,
         now: TimeSnapshot,
-    ): Transition? = if (state.session.config.testMode) null else snoozed(state, token, now)
+    ): Transition? = if (state.session.config.testMode) null else snoozed(state, paid, now)
 
     /**
-     * A snooze was paid for (a grant, or a reused stranded payment [token]): the sound stops, the check progress is
-     * dropped (the next ring resolves the plan again with new seeds), `snoozesGranted` goes up and the slot is armed at
-     * the snooze end. Snooze time never counts toward the interaction timeout, so the ring timers are cleared.
+     * A snooze was paid for (a grant, or a reused stranded payment): the sound stops, the check progress is dropped (the
+     * next ring resolves the plan again with new seeds), `snoozesGranted` goes up and the slot is armed at the snooze end.
+     * Snooze time never counts toward the interaction timeout, so the ring timers are cleared. The grant ledger row is
+     * persisted with the state (the engine writes it in the commit, Story 4.10), and only then is the token settled.
      */
     private fun snoozed(
         state: Ring,
-        token: PurchaseToken,
+        paid: PaidWith,
         now: TimeSnapshot,
     ): Transition {
         val session = state.session
@@ -144,14 +148,37 @@ internal class PurchaseRules(
                 paymentPending = false,
                 snoozeEnd = snoozeEnd,
             )
+        val grant =
+            GrantLedgerEntry(
+                token = paid.token,
+                sessionId = session.sessionId,
+                alarmId = session.config.alarmId,
+                productId = paid.productId,
+                snoozeNumber = snoozed.snoozesGranted,
+                orderId = paid.orderId,
+                status = LedgerStatus.Granted,
+                createdAt = Instant.fromEpochMilliseconds(now.wallMillis),
+            )
         return Transition(
             SessionState.Snoozed(snoozed),
-            listOf(SessionEffect.StopSound, SessionEffect.ArmSlot(snoozeEnd), SessionEffect.Consume(token)),
+            listOf(
+                SessionEffect.PersistGrant(grant),
+                SessionEffect.StopSound,
+                SessionEffect.ArmSlot(snoozeEnd),
+                SessionEffect.Consume(paid.token),
+            ),
         )
     }
 
     private fun offer(state: Ring): SnoozeOffer? = (availability(state.session) as? SnoozeAvailability.Available)?.offer
 }
+
+/** The payment behind a paid snooze: the [productId] bought, its [token] and Play's [orderId] when known. */
+internal class PaidWith(
+    val productId: String,
+    val token: PurchaseToken,
+    val orderId: String? = null,
+)
 
 /** [this] with no purchase in flight: `paying` and `unlocking` are cleared together. */
 internal fun SessionData.withoutPayment(): SessionData = copy(paying = null, unlocking = false)

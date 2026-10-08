@@ -1,5 +1,6 @@
 package com.yawnandpawn.app.core.session
 
+import com.yawnandpawn.app.core.billing.GrantLedgerEntry
 import com.yawnandpawn.app.core.billing.PurchaseIntent
 import com.yawnandpawn.app.core.error.DomainError
 import com.yawnandpawn.app.core.error.Outcome
@@ -64,15 +65,31 @@ interface EffectRunner {
     suspend fun apply(effect: EntryEffect)
 }
 
-/**
- * A row `SessionEngine` writes in the same `runtime.db` transaction as a transition (AD-2 rule 2, AD-7). Story 4.10
- * adds the grant ledger.
- */
+/** A row `SessionEngine` writes in the same `runtime.db` transaction as a transition (AD-2 rule 2, AD-7). */
 sealed interface RuntimeWrite {
     /** Insert the [intent] of a `PayConfirmed` (Story 4.8). An intent id is written once: a second write fails the commit. */
     data class PutPurchaseIntent(
         val intent: PurchaseIntent,
     ) : RuntimeWrite
+
+    /**
+     * Insert the grant ledger row of a paid snooze (Story 4.10): `PurchaseGranted` or `ReuseAccepted`. A token is written
+     * once: a second grant of the same token fails the commit, so it can never grant twice.
+     */
+    data class PutGrant(
+        val grant: GrantLedgerEntry,
+    ) : RuntimeWrite
+}
+
+/** How a consume ended (Story 4.10). A failure is retried; it never undoes the snooze. */
+sealed interface ConsumeResult {
+    /** Play consumed the token, or had already consumed it (a repeat consume counts as done). */
+    data object Consumed : ConsumeResult
+
+    /** Offline, a service error or billing not ready. [cause] is diagnostic text for the log, never the token. */
+    data class Failed(
+        val cause: String,
+    ) : ConsumeResult
 }
 
 /**
@@ -91,6 +108,13 @@ fun interface Billing {
      * until Epic 4 brings the real adapter.
      */
     fun init() = Unit
+
+    /**
+     * Consumes [token] (Story 4.10). Only `PurchaseLedger` calls it, and only for a token the grant ledger or a granted
+     * purchase record holds: consuming a token that granted nothing keeps the money for nothing (a scan test enforces
+     * it). Fails until an adapter can consume, so the ledger keeps the row and retries.
+     */
+    suspend fun consume(token: PurchaseToken): ConsumeResult = ConsumeResult.Failed("consume not supported")
 }
 
 /** How a keyguard dismiss request ended (Spike S1). */

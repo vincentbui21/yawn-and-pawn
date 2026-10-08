@@ -177,6 +177,7 @@ fun DomainError.diagnostic(): String =
         is DomainError.InvalidAlarm -> "invalid alarm field $field"
         is DomainError.InvalidSetting -> "invalid setting $field"
         is DomainError.NotFound -> "not found: $id"
+        is DomainError.RecordNotReusable -> "record not reusable: $status"
         is DomainError.StorageFailure -> "storage failure: $cause"
         DomainError.ExactAlarmNotPermitted -> "exact alarms not permitted"
         is DomainError.SchedulerFailure -> "scheduler failure: $cause"

@@ -152,6 +152,34 @@ val MIGRATION_8_9: Migration =
         }
     }
 
+/**
+ * v9 to v10 (Story 4.10): adds the empty `purchase_record` table (AD-7; the purchase history, keyed by the SHA-256 hex of
+ * the token, never the token) and its `purchased_at` index. No foreign key: a charge outlives its alarm. Every other
+ * table is untouched. The SQL matches the exported `10.json`; Room checks it after migrating.
+ */
+val MIGRATION_9_10: Migration =
+    object : Migration(9, 10) {
+        override suspend fun migrate(connection: SQLiteConnection) {
+            connection.execSQL(
+                "CREATE TABLE IF NOT EXISTS `purchase_record` (`token_hash` TEXT NOT NULL, `order_id` TEXT, " +
+                    "`product_id` TEXT NOT NULL, `session_id` TEXT, `alarm_id` TEXT, `snooze_number` INTEGER, " +
+                    "`price_micros` INTEGER NOT NULL, `currency` TEXT NOT NULL, `purchased_at` INTEGER NOT NULL, " +
+                    "`status` TEXT NOT NULL, `updated_at` INTEGER NOT NULL, PRIMARY KEY(`token_hash`))",
+            )
+            connection.execSQL("CREATE INDEX IF NOT EXISTS `index_purchase_record_purchased_at` ON `purchase_record` (`purchased_at`)")
+        }
+    }
+
 /** Every migration of `app.db`, oldest first; `buildAppDatabase` registers them all. */
 val APP_DATABASE_MIGRATIONS: Array<Migration> =
-    arrayOf(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6, MIGRATION_6_7, MIGRATION_7_8, MIGRATION_8_9)
+    arrayOf(
+        MIGRATION_1_2,
+        MIGRATION_2_3,
+        MIGRATION_3_4,
+        MIGRATION_4_5,
+        MIGRATION_5_6,
+        MIGRATION_6_7,
+        MIGRATION_7_8,
+        MIGRATION_8_9,
+        MIGRATION_9_10,
+    )

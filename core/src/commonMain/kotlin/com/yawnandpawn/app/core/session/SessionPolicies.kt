@@ -24,6 +24,12 @@ enum class UnavailableReason {
     PriceCapReached,
     PaymentPending,
     EarlierPaymentRefunding,
+
+    /**
+     * The session's frozen base fee or snooze number is outside the fee rules (`DomainError.InvalidFee`, Story 4.2):
+     * a damaged config, never a user choice. Logged; the wake screen shows it like prices not loaded.
+     */
+    InvalidFee,
 }
 
 /** Whether the user can buy a snooze right now (AD-7). */

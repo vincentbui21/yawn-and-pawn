@@ -1,10 +1,9 @@
 package com.yawnandpawn.app.testing
 
 import com.yawnandpawn.app.core.billing.FeeLadder
-import com.yawnandpawn.app.core.billing.FeeRules
 import com.yawnandpawn.app.core.billing.FeeStep
-import com.yawnandpawn.app.core.billing.SnoozeProducts
-import com.yawnandpawn.app.core.billing.nextOffer
+import com.yawnandpawn.app.core.billing.UsdFeeLadder
+import com.yawnandpawn.app.core.billing.nextAvailability
 import com.yawnandpawn.app.core.checks.CheckAnswer
 import com.yawnandpawn.app.core.checks.CheckEntry
 import com.yawnandpawn.app.core.checks.CheckMode
@@ -12,6 +11,7 @@ import com.yawnandpawn.app.core.checks.CheckPlan
 import com.yawnandpawn.app.core.checks.CheckType
 import com.yawnandpawn.app.core.error.DomainError
 import com.yawnandpawn.app.core.error.Outcome
+import com.yawnandpawn.app.core.log.Logger
 import com.yawnandpawn.app.core.session.CameraFallbackPolicy
 import com.yawnandpawn.app.core.session.CheckRun
 import com.yawnandpawn.app.core.session.CheckValidator
@@ -28,12 +28,11 @@ import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 
 /**
- * [FeeLadder] under test control: snooze n at base tier B is USD tier [tierOf] (B, n), by default B × n like the real
- * ladder: `snooze_usd_NN` up to 50, [FeeStep.PriceCapReached] above, and [DomainError.InvalidFee] for a tier below 1 or a
- * snooze number below 1 (the fake does not cap B at 10). Every call is kept in [calls] as (baseFeeTier, snoozeNumber).
+ * [FeeLadder] that answers exactly like the production [UsdFeeLadder] (B × N, capped at 50, [DomainError.InvalidFee]
+ * outside the fee rules), unless a test sets [answer]. Every call is kept in [calls] as (baseFeeTier, snoozeNumber).
  */
 class FakeFeeLadder(
-    var tierOf: (baseFeeTier: Int, snoozeNumber: Int) -> Int = { baseFeeTier, snoozeNumber -> baseFeeTier * snoozeNumber },
+    var answer: ((baseFeeTier: Int, snoozeNumber: Int) -> Outcome<FeeStep, DomainError.InvalidFee>)? = null,
 ) : FeeLadder {
     private val recorded = mutableListOf<Pair<Int, Int>>()
 
@@ -45,28 +44,19 @@ class FakeFeeLadder(
         snoozeNumber: Int,
     ): Outcome<FeeStep, DomainError.InvalidFee> {
         recorded += baseFeeTier to snoozeNumber
-        if (baseFeeTier < 1 || snoozeNumber < 1) return Outcome.Failure(DomainError.InvalidFee(baseFeeTier, snoozeNumber))
-        val tier = tierOf(baseFeeTier, snoozeNumber)
-        return Outcome.Success(
-            if (tier >
-                FeeRules.PRICE_CAP_TIER
-            ) {
-                FeeStep.PriceCapReached
-            } else {
-                FeeStep.Product(SnoozeProducts.idOf(tier), tier)
-            },
-        )
+        return answer?.invoke(baseFeeTier, snoozeNumber) ?: UsdFeeLadder.productFor(baseFeeTier, snoozeNumber)
     }
 }
 
 /**
- * [SnoozeAvailabilityPolicy] under test control: Available at the [ladder]'s next offer unless [unavailable] names a
- * reason; [UnavailableReason.PriceCapReached] when the ladder has no next offer. Every session asked about is kept in
- * [asked].
+ * [SnoozeAvailabilityPolicy] under test control: unless [unavailable] names a reason, the [ladder]'s answer for the
+ * next snooze through [nextAvailability] (Available, [UnavailableReason.PriceCapReached], or a logged
+ * [UnavailableReason.InvalidFee]). Every session asked about is kept in [asked]; [logger] gets the invalid-fee events.
  */
 class FakeSnoozeAvailability(
     val ladder: FeeLadder = FakeFeeLadder(),
     var unavailable: UnavailableReason? = null,
+    val logger: Logger = FakeLogger(),
 ) : SnoozeAvailabilityPolicy {
     private val sessions = mutableListOf<SessionData>()
 
@@ -75,9 +65,7 @@ class FakeSnoozeAvailability(
 
     override fun availability(session: SessionData): SnoozeAvailability {
         sessions += session
-        val offer = ladder.nextOffer(session)
-        val reason = unavailable ?: if (offer == null) UnavailableReason.PriceCapReached else null
-        return reason?.let { SnoozeAvailability.Unavailable(it) } ?: SnoozeAvailability.Available(checkNotNull(offer))
+        return unavailable?.let { SnoozeAvailability.Unavailable(it) } ?: ladder.nextAvailability(session, logger)
     }
 }
 

@@ -197,7 +197,7 @@ FR-SET-3, FR-SET-4 and FR-SET-5, together with Purchase history (FR-PRG-4), are 
 
 #### PRD technical items not captured as FRs
 
-- Play catalogue: 50 consumable one-time products `snooze_usd_01` … `snooze_usd_50` (31 reachable today; rest deliberate headroom), created/updated only via `tools/play-catalog` using the Play Developer API (`onetimeproducts`) in a reviewed commit (pricing templates discontinued); pending purchases must be enabled for one-time products (PBL 8+).
+- Play catalogue: 50 consumable one-time products `snooze_usd_01` … `snooze_usd_50` (28 reachable today, corrected from 31 on 2026-10-08; rest deliberate headroom), created/updated only via `tools/play-catalog` using the Play Developer API (`onetimeproducts`) in a reviewed commit (pricing templates discontinued); pending purchases must be enabled for one-time products (PBL 8+).
 - Unit test: `productFor(fee)` exists for every reachable (B ≤ 10, N ≤ 5) combination.
 - Unit tests against a fake BillingClient for every row of the §6.3 recovery table, the reuse offer, and `ITEM_ALREADY_OWNED` cases (pending→purchased during/after session, lost callback, crash between grant and consume, duplicate delivery).
 - `BillingResponseCode`/purchase-state → message mapping table unit-tested (one string resource per reason).
@@ -2197,7 +2197,7 @@ So that the price is predictable and rises fairly.
 **When** `FeeLadder.productFor(baseFeeTier, snoozeNumber)` is called
 **Then** it returns `snooze_usd_NN` with NN = baseFeeTier × snoozeNumber zero-padded to 2 digits when 1 ≤ NN ≤ 50, and `PriceCapReached` when NN > 50 (the $50 cap)
 **And** it rejects baseFeeTier outside 1–10 or snoozeNumber < 1 with `DomainError.InvalidFee`
-**And** a table test asserts `productFor` exists for every reachable combination (B 1–10 × N 1–5, 31 distinct products) and that every returned id is in the 50-id list used by `tools/play-catalog` (the list lives in one shared file, `config/snooze-products.txt`, read by both tests)
+**And** a table test asserts `productFor` exists for every reachable combination (B 1–10 × N 1–5, 28 distinct products (arithmetic correction 2026-10-08, Story 4.2: B 1–10 × N 1–5 gives 28 distinct B × N values, not 31)) and that every returned id is in the 50-id list used by `tools/play-catalog` (the list lives in one shared file, `config/snooze-products.txt`, read by both tests)
 **And** examples are asserted: B = 1 → 01, 02, 03, 04, 05; B = 3 → 03, 06, 09, 12, 15; B = 10, N = 5 → 50; B = 10, N = 6 → `PriceCapReached`
 **And** Kover shows `core.billing` ≥ 90% line coverage
 **And** `./gradlew qualityGate` passes
@@ -4275,7 +4275,7 @@ So that nothing is forgotten on launch day.
 5. Every `human-verify` checklist story passed or explicitly waived: 1.21, the Epic 2 to Epic 5 checklists, 6.10, 7.12 and 8.8 (story ids listed).
 6. Closed test complete and production access granted (Story 8.9).
 7. targetSdk 36 and Play Billing Library ≥ 8 (9.1.0) in the release build, meeting Play's current deadlines.
-8. `tools/play-catalog` in dry-run mode reports no difference between the repo and the 50 live products, and all 31 reachable products are active.
+8. `tools/play-catalog` in dry-run mode reports no difference between the repo and the 50 live products, and all 28 reachable products are active (corrected from 31 on 2026-10-08).
 9. The production candidate AAB is the same versionCode that passed Stories 8.8 and 8.9 (no rebuild).
 10. `docs/runbooks/post-launch-monitoring.md` exists (Story 8.11).
 **And** any failing row blocks Story 8.12, and the story file lists each item with pass/fail, date and notes; automation never marks this story done

@@ -2,12 +2,15 @@ package com.yawnandpawn.app.testing
 
 import com.yawnandpawn.app.core.billing.FeeStep
 import com.yawnandpawn.app.core.billing.Money
+import com.yawnandpawn.app.core.billing.PRICE_NEXT_SNOOZE
+import com.yawnandpawn.app.core.billing.UsdFeeLadder
 import com.yawnandpawn.app.core.billing.formatTotals
 import com.yawnandpawn.app.core.checks.CheckAnswer
 import com.yawnandpawn.app.core.checks.CheckPlan
 import com.yawnandpawn.app.core.checks.CheckType
 import com.yawnandpawn.app.core.error.DomainError
 import com.yawnandpawn.app.core.error.Outcome
+import com.yawnandpawn.app.core.log.LogEvent
 import com.yawnandpawn.app.core.session.CheckRun
 import com.yawnandpawn.app.core.session.ConfigResolver
 import com.yawnandpawn.app.core.session.FallbackDecision
@@ -49,15 +52,20 @@ class SessionFakesTest {
         )
 
     @Test
-    fun `FakeFeeLadder prices B times N like the real ladder, caps above 50 and records each call`() {
+    fun `FakeFeeLadder answers exactly like the production ladder for every tier and snooze number`() {
         val ladder = FakeFeeLadder()
-        assertEquals(Outcome.Success(FeeStep.Product("snooze_usd_04", 4)), ladder.productFor(baseFeeTier = 2, snoozeNumber = 2))
-        assertEquals(Outcome.Success(FeeStep.PriceCapReached), ladder.productFor(baseFeeTier = 10, snoozeNumber = 6))
-        assertEquals(Outcome.Failure(DomainError.InvalidFee(0, 1)), ladder.productFor(baseFeeTier = 0, snoozeNumber = 1))
-        assertEquals(Outcome.Failure(DomainError.InvalidFee(1, 0)), ladder.productFor(baseFeeTier = 1, snoozeNumber = 0))
-        ladder.tierOf = { _, n -> n * 10 }
+        val pairs = (0..11).flatMap { b -> (0..6).map { n -> b to n } }
+        pairs.forEach { (b, n) -> assertEquals(UsdFeeLadder.productFor(b, n), ladder.productFor(b, n), "B = $b, N = $n") }
+        assertEquals(Outcome.Failure(DomainError.InvalidFee(11, 1)), ladder.productFor(11, 1))
+        assertEquals(pairs + (11 to 1), ladder.calls)
+    }
+
+    @Test
+    fun `FakeFeeLadder gives a test's own answer when set`() {
+        val ladder = FakeFeeLadder()
+        ladder.answer = { _, n -> Outcome.Success(FeeStep.Product("snooze_usd_30", n * 10)) }
         assertEquals(Outcome.Success(FeeStep.Product("snooze_usd_30", 30)), ladder.productFor(baseFeeTier = 1, snoozeNumber = 3))
-        assertEquals(listOf(2 to 2, 10 to 6, 0 to 1, 1 to 0, 1 to 3), ladder.calls)
+        assertEquals(listOf(1 to 3), ladder.calls)
     }
 
     @Test
@@ -67,12 +75,23 @@ class SessionFakesTest {
         assertEquals(SnoozeAvailability.Available(SnoozeOffer("snooze_usd_04", 2)), availability.availability(session(snoozesGranted = 1)))
         assertEquals(listOf(2 to 2), ladder.calls)
 
-        ladder.tierOf = { _, _ -> 51 }
-        assertEquals(SnoozeAvailability.Unavailable(UnavailableReason.PriceCapReached), availability.availability(session()))
+        assertEquals(
+            SnoozeAvailability.Unavailable(UnavailableReason.PriceCapReached),
+            availability.availability(session(snoozesGranted = 25)),
+        )
 
         availability.unavailable = UnavailableReason.Offline
         assertEquals(SnoozeAvailability.Unavailable(UnavailableReason.Offline), availability.availability(session()))
         assertEquals(3, availability.asked.size)
+    }
+
+    @Test
+    fun `FakeSnoozeAvailability reports an invalid frozen fee as its own reason and logs it`() {
+        val logger = FakeLogger()
+        val availability = FakeSnoozeAvailability(logger = logger)
+        val broken = session().copy(config = config.copy(baseFeeTier = 0))
+        assertEquals(SnoozeAvailability.Unavailable(UnavailableReason.InvalidFee), availability.availability(broken))
+        assertEquals(listOf<LogEvent>(LogEvent.OperationFailed(PRICE_NEXT_SNOOZE, "invalid fee: tier 0, snooze 1")), logger.events)
     }
 
     @Test

@@ -88,6 +88,7 @@ class RingingMappingTest {
                 UnavailableReason.PaymentPending to SnoozeOffer.Unavailable(SnoozeUnavailableReason.PaymentPending),
                 UnavailableReason.BeforeFirstUnlock to SnoozeOffer.LockedBeforeUnlock,
                 UnavailableReason.EarlierPaymentRefunding to SnoozeOffer.StrandedRefund(dollar),
+                UnavailableReason.InvalidFee to SnoozeOffer.Unavailable(SnoozeUnavailableReason.PricesNotLoaded),
             )
 
         assertEquals(UnavailableReason.entries.toSet(), expected.keys, "every reason is covered")

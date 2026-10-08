@@ -2,12 +2,14 @@ package com.yawnandpawn.app.core.billing
 
 import com.yawnandpawn.app.core.error.DomainError
 import com.yawnandpawn.app.core.error.Outcome
+import com.yawnandpawn.app.core.log.LogEvent
+import com.yawnandpawn.app.core.session.SnoozeAvailability
 import com.yawnandpawn.app.core.session.SnoozeOffer
+import com.yawnandpawn.app.core.session.UnavailableReason
 import com.yawnandpawn.app.core.session.ringSession
 import com.yawnandpawn.app.core.session.testConfig
 import kotlin.test.Test
 import kotlin.test.assertEquals
-import kotlin.test.assertNull
 
 class FeeLadderTest {
     private fun product(tier: Int): Outcome<FeeStep, DomainError.InvalidFee> =
@@ -93,17 +95,37 @@ class FeeLadderTest {
     fun `the next step is the ladder at the frozen base tier and snoozes granted plus one`() {
         val session = ringSession(testConfig().copy(baseFeeTier = 3)).copy(snoozesGranted = 2)
         assertEquals(product(9), UsdFeeLadder.nextStep(session))
-        assertEquals(SnoozeOffer("snooze_usd_09", 3), UsdFeeLadder.nextOffer(session))
+        val logged = mutableListOf<LogEvent>()
+        assertEquals(
+            SnoozeAvailability.Available(SnoozeOffer("snooze_usd_09", 3)),
+            UsdFeeLadder.nextAvailability(session) { logged += it },
+        )
+        assertEquals(emptyList(), logged)
     }
 
     @Test
-    fun `there is no next offer past the cap or with an invalid frozen fee`() {
+    fun `past the cap the snooze is unavailable for the price cap, and nothing is logged`() {
         val capped = ringSession(testConfig().copy(baseFeeTier = 10)).copy(snoozesGranted = 5)
+        val logged = mutableListOf<LogEvent>()
         assertEquals(this.capped, UsdFeeLadder.nextStep(capped))
-        assertNull(UsdFeeLadder.nextOffer(capped))
+        assertEquals(
+            SnoozeAvailability.Unavailable(UnavailableReason.PriceCapReached),
+            UsdFeeLadder.nextAvailability(capped) { logged += it },
+        )
+        assertEquals(emptyList(), logged)
+    }
 
-        val broken = ringSession(testConfig().copy(baseFeeTier = 0))
-        assertEquals(invalid(0, 1), UsdFeeLadder.nextStep(broken))
-        assertNull(UsdFeeLadder.nextOffer(broken))
+    @Test
+    fun `an invalid frozen fee is its own logged reason, never the price cap`() {
+        listOf(0, 11, -4).forEach { tier ->
+            val broken = ringSession(testConfig().copy(baseFeeTier = tier))
+            val logged = mutableListOf<LogEvent>()
+            assertEquals(invalid(tier, 1), UsdFeeLadder.nextStep(broken))
+            assertEquals(
+                SnoozeAvailability.Unavailable(UnavailableReason.InvalidFee),
+                UsdFeeLadder.nextAvailability(broken) { logged += it },
+            )
+            assertEquals(listOf<LogEvent>(LogEvent.OperationFailed(PRICE_NEXT_SNOOZE, "invalid fee: tier $tier, snooze 1")), logged)
+        }
     }
 }

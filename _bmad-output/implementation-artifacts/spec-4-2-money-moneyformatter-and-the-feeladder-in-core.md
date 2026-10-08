@@ -137,3 +137,33 @@ Status: implemented in fast mode (one agent, Epic 4 Lane 1), waiting for review.
 - **Callers:** `FeeLadder` moved to `core.billing` and returns an `Outcome`. Branches that still import `core.session.FeeLadder`/`TierFeeLadder` need a rebase.
 - **The "31" in the epic:** the epic text says 31 reachable products. The real count is 28 (decision 7), and the planning docs still say 31.
 
+
+## Review (2 reviewers, fast mode)
+
+Two reviewers looked at `6110810`, one for verification gaps and one for edge cases. Neither found anything HIGH. All 9 items are fixed in `fix(4.2): review fixes`, each with a test:
+
+1. **One formatter, enforced:** `MoneyFormattingScanTest` (composeApp host test) scans `:composeApp` and `:androidApp` main sources, with comments skipped. Outside `AndroidMoneyFormatter.kt` it fails on:
+   - `getCurrencyInstance`, `Currency.getInstance` and `DecimalFormat`;
+   - an escaped `$` or a `$` followed by a digit;
+   - a €, £, ¥ or ₫ symbol.
+
+   A sample test proves that each pattern is caught.
+2. **More formatter cases:**
+   - KWD shows 3 digits ("KWD 1.235").
+   - XXX, which has no digits, shows no decimals and does not crash.
+   - A negative amount shows "-$1.00".
+3. **Detekt finds non-literal doubles:** the rule now also reports `1.5 * n`, `cents / 100.0`, `micros.toDouble()`, `fun price(): Double`, `List<Double>` and `DoubleArray`.
+4. **The fake agrees with the real ladder (with 7):** `FakeFeeLadder` answers like `UsdFeeLadder`, unless a test sets `answer`. A test checks B 0..11 × N 0..6 against the real ladder.
+5. **28, not 31:** epics.md (the 4.2 AC, the catalogue line and the 8.x checklist) and the PRD §6.3 copies now say 28, each with a dated note that this is an arithmetic correction.
+6. **Layouts at 200% font:**
+   - **Purchase history:** a new `PurchaseRowLayout` keeps the date and alarm on one line. When they don't fit beside the price, they take the full width and the price moves down beside the caption. The time keeps "AM" on its line (no-break space).
+   - **Confirm sheet:** it stops below Ringing's clock, but always keeps at least 40% of the screen. Its text scrolls, and its buttons stay whole.
+   - **Tests and baselines:** `MoneyLayoutFontScaleTest` checks one line per title, price clear of the title, the sheet title below the clock, whole buttons and at most 2 lines for "Pay … and snooze". It runs at 411×891 and 360×640. The baselines were re-recorded.
+7. **An invalid frozen fee has its own reason (with 4):** `FeeLadder.nextAvailability(session, logger)` is the shared mapping, so 4.7 can reuse it:
+   - a product is `Available`;
+   - over the cap is `PriceCapReached`;
+   - `InvalidFee` is the new `UnavailableReason.InvalidFee`, logged with its diagnostic.
+
+   The wake screen shows `InvalidFee` like "prices not loaded", so no new string is needed. `FakeSnoozeAvailability` uses the same mapping.
+8. **Cash digits:** the formatter now uses ICU (`android.icu`, as on the phone). A whole amount uses the currency's cash digits, as Play does: IDR "Rp 15.000", HUF "15 000 Ft", USD still "$1.00". ICU's id-ID output has a space after "Rp". A device check is added to deferred-work.md for Story 4.18.
+9. **Words, not substrings:** the money words are matched as camelCase or snake_case words. `feedbackGain`, `feet`, `paramount` and `prepaidCredit` are not reported; `basePrice` is.

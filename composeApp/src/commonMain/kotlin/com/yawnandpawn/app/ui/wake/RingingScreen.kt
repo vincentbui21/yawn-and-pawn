@@ -11,10 +11,15 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.layout.boundsInWindow
+import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.traversalIndex
@@ -44,6 +49,8 @@ fun RingingScreen(
     onIntent: (WakeIntent) -> Unit,
     modifier: Modifier = Modifier,
 ) {
+    // The confirm sheet stops below the clock (Story 4.2 review: at 200% font it grew over it).
+    var clockBottom by remember { mutableStateOf<Float?>(null) }
     WakeSurface(
         modifier = modifier,
         overlay = { backdrop ->
@@ -53,6 +60,7 @@ fun RingingScreen(
                     onUpper = { onIntent(WakeIntent.SheetUpperClicked) },
                     onDismiss = { onIntent(WakeIntent.SheetDismissed) },
                     backdrop = backdrop,
+                    keepClearAboveY = clockBottom,
                 )
             }
         },
@@ -69,7 +77,10 @@ fun RingingScreen(
                 state.label?.let { label ->
                     Text(text = label, style = PpsTheme.typography.title, color = colors.text, textAlign = TextAlign.Center)
                 }
-                RingingClock(time = formatClockTime(state.time, is24Hour))
+                RingingClock(
+                    time = formatClockTime(state.time, is24Hour),
+                    modifier = Modifier.onGloballyPositioned { clockBottom = it.boundsInWindow().bottom },
+                )
                 Text(text = formatLongDate(state.date), style = PpsTheme.typography.body, color = colors.textSecondary)
                 state.note?.let { WakeNoteView(note = it, modifier = Modifier.padding(top = spacing.space4)) }
             }
@@ -103,11 +114,14 @@ fun RingingScreen(
  * keeps `clock-xl` exactly. TalkBack reads it first, as the full time.
  */
 @Composable
-private fun RingingClock(time: String) {
+private fun RingingClock(
+    time: String,
+    modifier: Modifier = Modifier,
+) {
     val clock = PpsTheme.typography.clockXl
     val smallest = PpsTheme.typography.display.fontSize
     val measurer = rememberTextMeasurer()
-    BoxWithConstraints {
+    BoxWithConstraints(modifier = modifier) {
         val maxWidth = constraints.maxWidth
         val style =
             remember(time, clock, smallest, maxWidth) {

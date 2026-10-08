@@ -26,7 +26,7 @@ class SessionPoliciesTest {
     }
 
     @Test
-    fun `the reasons are the AD-7 set`() {
+    fun `the reasons are the AD-7 set, plus an invalid frozen fee`() {
         assertEquals(
             listOf(
                 "TestMode",
@@ -37,6 +37,7 @@ class SessionPoliciesTest {
                 "PriceCapReached",
                 "PaymentPending",
                 "EarlierPaymentRefunding",
+                "InvalidFee",
             ),
             UnavailableReason.entries.map { it.name },
         )

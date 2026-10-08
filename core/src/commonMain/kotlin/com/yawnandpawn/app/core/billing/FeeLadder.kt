@@ -2,9 +2,12 @@ package com.yawnandpawn.app.core.billing
 
 import com.yawnandpawn.app.core.error.DomainError
 import com.yawnandpawn.app.core.error.Outcome
-import com.yawnandpawn.app.core.error.valueOrNull
+import com.yawnandpawn.app.core.log.LogEvent
+import com.yawnandpawn.app.core.log.Logger
 import com.yawnandpawn.app.core.session.SessionData
+import com.yawnandpawn.app.core.session.SnoozeAvailability
 import com.yawnandpawn.app.core.session.SnoozeOffer
+import com.yawnandpawn.app.core.session.UnavailableReason
 
 /** The limits of the snooze fee (PRD §6.2, Q1–Q3). */
 object FeeRules {
@@ -81,6 +84,30 @@ object UsdFeeLadder : FeeLadder {
 fun FeeLadder.nextStep(session: SessionData): Outcome<FeeStep, DomainError.InvalidFee> =
     productFor(session.config.baseFeeTier, session.snoozesGranted + 1)
 
-/** The offer for the session's next snooze, or null when the cap is reached or the frozen fee is invalid. */
-fun FeeLadder.nextOffer(session: SessionData): SnoozeOffer? =
-    (nextStep(session).valueOrNull() as? FeeStep.Product)?.let { SnoozeOffer(it.productId, session.snoozesGranted + 1) }
+/**
+ * The ladder's part of snooze availability (AD-7), for `snoozeAvailability` (Story 4.7) and the fakes:
+ * - a product: Available at that offer;
+ * - over the cap: Unavailable([UnavailableReason.PriceCapReached]);
+ * - an invalid frozen fee: Unavailable([UnavailableReason.InvalidFee]), logged with its diagnostic (AD-12), so a damaged
+ *   config never reads as "price cap reached".
+ */
+fun FeeLadder.nextAvailability(
+    session: SessionData,
+    logger: Logger,
+): SnoozeAvailability =
+    when (val step = nextStep(session)) {
+        is Outcome.Failure -> {
+            logger.log(LogEvent.OperationFailed.of(PRICE_NEXT_SNOOZE, step.error))
+            SnoozeAvailability.Unavailable(UnavailableReason.InvalidFee)
+        }
+
+        is Outcome.Success -> {
+            when (val value = step.value) {
+                is FeeStep.Product -> SnoozeAvailability.Available(SnoozeOffer(value.productId, session.snoozesGranted + 1))
+                FeeStep.PriceCapReached -> SnoozeAvailability.Unavailable(UnavailableReason.PriceCapReached)
+            }
+        }
+    }
+
+/** The operation [nextAvailability] logs when the frozen fee is invalid. */
+const val PRICE_NEXT_SNOOZE = "price next snooze"

@@ -2,7 +2,7 @@ package com.yawnandpawn.app.ui
 
 import com.yawnandpawn.app.core.billing.Money
 import com.yawnandpawn.app.core.billing.UsdFeeLadder
-import com.yawnandpawn.app.core.billing.nextOffer
+import com.yawnandpawn.app.core.billing.nextAvailability
 import com.yawnandpawn.app.core.checks.CheckEntry
 import com.yawnandpawn.app.core.checks.CheckMode
 import com.yawnandpawn.app.core.checks.CheckPlan
@@ -15,6 +15,7 @@ import com.yawnandpawn.app.core.session.SessionData
 import com.yawnandpawn.app.core.session.SnoozeAvailability
 import com.yawnandpawn.app.core.session.UnavailableReason
 import com.yawnandpawn.app.core.time.TimeSnapshot
+import com.yawnandpawn.app.testing.FakeLogger
 import com.yawnandpawn.app.testing.FakeUserLockState
 import com.yawnandpawn.app.testing.aRegisteredCode
 import com.yawnandpawn.app.testing.aSession
@@ -93,7 +94,7 @@ object RingingSamples {
     /** Story 2.4: after the unlock with a policy that offers a snooze (fake, Epic 4's catalogue): "Snooze · {price}". */
     val afterUnlockSnooze: RingingUiState =
         session().copy(beforeFirstUnlock = true).let { session ->
-            ringingUiState(session, SnoozeAvailability.Available(checkNotNull(UsdFeeLadder.nextOffer(session))), utc) { Money.of(1, "USD") }
+            ringingUiState(session, UsdFeeLadder.nextAvailability(session, FakeLogger()), utc) { Money.of(1, "USD") }
         }
 
     /** A test alarm before the first unlock still says "Test · no charge". */
@@ -106,6 +107,6 @@ object RingingSamples {
     /** The enabled "Snooze · {price}" variant, preview only until billing (Epic 4). */
     val enabledSnooze: RingingUiState =
         session().let { session ->
-            ringingUiState(session, SnoozeAvailability.Available(checkNotNull(UsdFeeLadder.nextOffer(session))), utc) { Money.of(1, "USD") }
+            ringingUiState(session, UsdFeeLadder.nextAvailability(session, FakeLogger()), utc) { Money.of(1, "USD") }
         }
 }

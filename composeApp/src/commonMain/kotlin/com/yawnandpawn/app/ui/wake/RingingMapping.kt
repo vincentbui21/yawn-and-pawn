@@ -78,7 +78,8 @@ private fun unavailableOffer(
             SnoozeOffer.LockedBeforeUnlock
         }
 
-        UnavailableReason.CatalogueNotLoaded -> {
+        // A damaged frozen fee (logged by the policy) has no copy of its own; it reads like prices not loaded.
+        UnavailableReason.CatalogueNotLoaded, UnavailableReason.InvalidFee -> {
             pricesNotLoaded()
         }
 

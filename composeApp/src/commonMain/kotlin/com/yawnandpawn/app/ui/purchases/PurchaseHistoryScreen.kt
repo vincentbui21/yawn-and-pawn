@@ -1,15 +1,15 @@
 package com.yawnandpawn.app.ui.purchases
 
-import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.layout.Layout
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.unit.Constraints
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import com.yawnandpawn.app.core.billing.Money
 import com.yawnandpawn.app.ui.components.GroupCard
@@ -33,6 +33,7 @@ import com.yawnandpawn.app.ui.theme.TABULAR_FIGURES
 import kotlinx.datetime.LocalDate
 import kotlinx.datetime.LocalTime
 import org.jetbrains.compose.resources.stringResource
+import kotlin.math.roundToInt
 
 /** One charge (FR-PRG-4): when, for which alarm, which snooze of the session and its localized price. */
 data class Purchase(
@@ -96,7 +97,12 @@ fun PurchaseHistoryScreen(
     }
 }
 
-/** `purchase-row`: 64 dp, date and alarm in `body`, the snooze number (or the stranded note) in `caption`, the price. */
+/**
+ * `purchase-row`: 64 dp, date and alarm in `body`, the snooze number (or the stranded note) in `caption`, the price on
+ * the right. The date and alarm line never wraps beside the price: when it does not fit there (large font scales, long
+ * local prices), it takes the full width and the price moves down beside the caption ([PurchaseRowLayout]). The alarm
+ * time keeps its AM/PM marker on its line.
+ */
 @Composable
 private fun PurchaseRow(
     purchase: Purchase,
@@ -104,26 +110,27 @@ private fun PurchaseRow(
 ) {
     val colors = PpsTheme.colors
     val spacing = PpsTheme.spacing
-    Row(
+    PurchaseRowLayout(
+        gap = spacing.space3,
         modifier =
             Modifier
                 .fillMaxWidth()
                 .heightIn(min = ROW_HEIGHT)
                 .semantics(mergeDescendants = true) { }
                 .padding(horizontal = spacing.cardPadding, vertical = spacing.space2),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        Column(modifier = Modifier.weight(1f).padding(end = spacing.space3)) {
+        title = {
             Text(
                 text =
                     stringResource(
                         Res.string.purchase_row_title,
                         formatDate(purchase.date, DateStyle.WeekdayDayMonth),
-                        formatClockTime(purchase.alarmTime, is24Hour),
+                        formatClockTime(purchase.alarmTime, is24Hour).replace(' ', NO_BREAK_SPACE),
                     ),
                 style = PpsTheme.typography.body,
                 color = colors.text,
             )
+        },
+        detail = {
             Text(
                 text =
                     if (purchase.stranded) {
@@ -134,14 +141,72 @@ private fun PurchaseRow(
                 style = PpsTheme.typography.caption,
                 color = colors.textSecondary,
             )
+        },
+        price = {
+            Text(
+                text = formatMoney(purchase.price),
+                style = PpsTheme.typography.body.copy(fontFeatureSettings = TABULAR_FIGURES),
+                color = colors.text,
+                maxLines = 1,
+                softWrap = false,
+            )
+        },
+    )
+}
+
+/**
+ * Lays out a purchase row: [title] over [detail] on the left and [price] on the right, [gap] apart, all centred
+ * vertically like a `Row`. When [title] would not fit on one line beside the price, it takes the full width and the
+ * price is centred on [detail] instead, so the title never wraps for the price's sake.
+ */
+@Composable
+private fun PurchaseRowLayout(
+    gap: Dp,
+    title: @Composable () -> Unit,
+    detail: @Composable () -> Unit,
+    price: @Composable () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    Layout(contents = listOf(title, detail, price), modifier = modifier) { (titles, details, prices), constraints ->
+        val width = constraints.maxWidth
+        val pricePlaceable = prices.single().measure(Constraints(maxWidth = width))
+        val beside = (width - pricePlaceable.width - gap.roundToPx()).coerceAtLeast(0)
+        val titleFits = titles.single().maxIntrinsicWidth(Constraints.Infinity) <= beside
+        val titlePlaceable = titles.single().measure(Constraints(maxWidth = if (titleFits) beside else width))
+        val detailPlaceable = details.single().measure(Constraints(maxWidth = beside))
+        val content =
+            if (titleFits) {
+                maxOf(titlePlaceable.height + detailPlaceable.height, pricePlaceable.height)
+            } else {
+                titlePlaceable.height + maxOf(detailPlaceable.height, pricePlaceable.height)
+            }
+        val height = content.coerceIn(constraints.minHeight, constraints.maxHeight)
+        layout(width, height) {
+            val priceX = width - pricePlaceable.width
+            if (titleFits) {
+                val top = centred(titlePlaceable.height + detailPlaceable.height, height)
+                titlePlaceable.place(0, top)
+                detailPlaceable.place(0, top + titlePlaceable.height)
+                pricePlaceable.place(priceX, centred(pricePlaceable.height, height))
+            } else {
+                val top = centred(content, height)
+                val lower = maxOf(detailPlaceable.height, pricePlaceable.height)
+                titlePlaceable.place(0, top)
+                detailPlaceable.place(0, top + titlePlaceable.height + centred(detailPlaceable.height, lower))
+                pricePlaceable.place(priceX, top + titlePlaceable.height + centred(pricePlaceable.height, lower))
+            }
         }
-        Text(
-            text = formatMoney(purchase.price),
-            style = PpsTheme.typography.body.copy(fontFeatureSettings = TABULAR_FIGURES),
-            color = colors.text,
-        )
     }
 }
+
+/** Where a child of [size] starts to sit centred in [space], rounded like `Alignment.CenterVertically`. */
+private fun centred(
+    size: Int,
+    space: Int,
+): Int = ((space - size) / 2f).roundToInt()
+
+/** Keeps "7:30 AM" on one line. */
+private const val NO_BREAK_SPACE = '\u00A0'
 
 /** DESIGN.md `purchase-row.height`. */
 private val ROW_HEIGHT = 64.dp

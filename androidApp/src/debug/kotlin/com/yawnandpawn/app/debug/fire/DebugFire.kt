@@ -12,6 +12,7 @@ import com.yawnandpawn.app.core.checks.CheckEntry
 import com.yawnandpawn.app.core.error.DomainError
 import com.yawnandpawn.app.core.error.Outcome
 import com.yawnandpawn.app.core.error.flatMap
+import com.yawnandpawn.app.core.error.map
 import com.yawnandpawn.app.core.session.ScheduleTestAlarm
 import com.yawnandpawn.app.core.time.Clock
 import com.yawnandpawn.app.core.time.TimeZoneProvider
@@ -56,14 +57,9 @@ class DebugFire(
                 }
             }
         return if (request.test) {
-            val draft =
-                stored?.let { alarm ->
-                    when (val checks = checksOf(alarm)) {
-                        is Outcome.Success -> alarm.toDraft(checks.value)
-                        is Outcome.Failure -> return checks
-                    }
-                }
-            scheduleTest(draft ?: syntheticDraft(), delay = seconds.seconds)
+            val draft: Outcome<AlarmDraft, DomainError> =
+                stored?.let { alarm -> checksOf(alarm).map { alarm.toDraft(it) } } ?: Outcome.Success(syntheticDraft())
+            draft.flatMap { scheduleTest(it, delay = seconds.seconds) }
         } else {
             val alarm: Outcome<Alarm, DomainError> = stored?.let { Outcome.Success(it) } ?: saveAlarm(syntheticDraft())
             val ringsAt = Instant.fromEpochMilliseconds(clock.now().toEpochMilliseconds() + seconds * MILLIS_PER_SECOND)

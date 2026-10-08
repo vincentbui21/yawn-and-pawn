@@ -68,7 +68,7 @@ class WakeNotifier(
     ): Notification {
         ensureChannel()
         return ringingBuilder(alarmAt, CHANNEL_ID)
-            .apply { if (fullScreen) setFullScreenIntent(openWakeScreen(), true) }
+            .apply { if (fullScreen) setFullScreenIntent(openWakeScreen, true) }
             .build()
     }
 
@@ -78,7 +78,7 @@ class WakeNotifier(
      * tap and delete intent: pulled down from the shade it still reads "Tap to return to your alarm".
      */
     fun buildOnScreen(alarmAt: Instant): Notification {
-        ensureQuietChannel()
+        ensureChannel(quiet = true)
         return ringingBuilder(alarmAt, QUIET_CHANNEL_ID).build()
     }
 
@@ -106,20 +106,22 @@ class WakeNotifier(
             .setAutoCancel(false)
             .setVisibility(Notification.VISIBILITY_PUBLIC)
             .setShowWhen(false)
-            .setContentIntent(openWakeScreen())
+            .setContentIntent(openWakeScreen)
             .setDeleteIntent(postAgain)
             .apply {
                 if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) setForegroundServiceBehavior(Notification.FOREGROUND_SERVICE_IMMEDIATE)
             }
     }
 
-    private fun openWakeScreen(): PendingIntent =
+    /** Opens [WakeActivity]: the full-screen intent and the tap of every version. */
+    private val openWakeScreen: PendingIntent by lazy {
         PendingIntent.getActivity(
             context,
             REQUEST_WAKE_SCREEN,
             WakeActivity.intent(context),
             PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT,
         )
+    }
 
     /**
      * The quiet foreground notification of a service start with no alarm to show yet (a slot fire or a restore): low
@@ -127,7 +129,7 @@ class WakeNotifier(
      * with [build]'s notification (its `WakeUiShown`), so nothing flashes the wake screen at night for nothing.
      */
     fun buildQuiet(): Notification {
-        ensureQuietChannel()
+        ensureChannel(quiet = true)
         return Notification
             .Builder(context, QUIET_CHANNEL_ID)
             .setSmallIcon(R.drawable.ic_stat_alarm)
@@ -203,25 +205,24 @@ class WakeNotifier(
         shownFor = null
     }
 
-    private fun ensureChannel() {
-        if (manager.getNotificationChannel(CHANNEL_ID) != null) return
-        val name = context.getString(R.string.notification_channel_alarms)
+    /** Creates the Alarms channel ([CHANNEL_ID], high importance), or with [quiet] the [QUIET_CHANNEL_ID] one, if missing. */
+    private fun ensureChannel(quiet: Boolean = false) {
+        val id = if (quiet) QUIET_CHANNEL_ID else CHANNEL_ID
+        if (manager.getNotificationChannel(id) != null) return
         val channel =
-            NotificationChannel(CHANNEL_ID, name, NotificationManager.IMPORTANCE_HIGH).apply {
-                // The player rings and vibrates; the notification itself stays quiet.
-                setSound(null, null)
-                enableVibration(false)
-                lockscreenVisibility = Notification.VISIBILITY_PUBLIC
+            if (quiet) {
+                val name = context.getString(R.string.notification_channel_session)
+                NotificationChannel(id, name, NotificationManager.IMPORTANCE_LOW).apply { setSound(null, null) }
+            } else {
+                val name = context.getString(R.string.notification_channel_alarms)
+                NotificationChannel(id, name, NotificationManager.IMPORTANCE_HIGH).apply {
+                    // The player rings and vibrates; the notification itself stays quiet.
+                    setSound(null, null)
+                    enableVibration(false)
+                    lockscreenVisibility = Notification.VISIBILITY_PUBLIC
+                }
             }
         manager.createNotificationChannel(channel)
-    }
-
-    private fun ensureQuietChannel() {
-        if (manager.getNotificationChannel(QUIET_CHANNEL_ID) != null) return
-        val name = context.getString(R.string.notification_channel_session)
-        manager.createNotificationChannel(
-            NotificationChannel(QUIET_CHANNEL_ID, name, NotificationManager.IMPORTANCE_LOW).apply { setSound(null, null) },
-        )
     }
 
     companion object {

@@ -110,7 +110,11 @@ import kotlin.time.Duration.Companion.seconds
  * while the engine records the session and goes Idle in the background. Success closes on "Done", after
  * [SUCCESS_TIMEOUT], or when the screen is left (Home), so the next app open shows Home. A new ring replaces it. Any
  * other end (Missed, an emergency ring stopped) finishes the screen.
+ *
+ * While it is visible (`onStart` to `onStop`) the ringing notification is the quiet on-screen one, so no heads-up covers
+ * the countdown; left while the alarm rings, it heads up again as the way back (Epic 3 device check, bug 2).
  */
+@Suppress("TooManyFunctions") // One override per platform callback (lifecycle, keys, focus), each a few lines.
 class WakeActivity : ComponentActivity() {
     private val engine: SessionEngine by inject()
     private val runtime: WakeRuntime by inject()

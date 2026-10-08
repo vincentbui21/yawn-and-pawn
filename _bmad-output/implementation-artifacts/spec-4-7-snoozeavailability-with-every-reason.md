@@ -13,7 +13,7 @@ context:
   - '{project-root}/_bmad-output/implementation-artifacts/spec-4-2-money-moneyformatter-and-the-feeladder-in-core.md'
   - '{project-root}/_bmad-output/implementation-artifacts/spec-4-3-cache-play-prices-for-offline-display.md'
 warnings:
-  - 'Built on story/4-3-price-cache (2ec338c, PR #47 in CI). Rebase onto origin/main once 4.3 (and 4.4) merge.'
+  - 'Built on story/4-3-price-cache 2ec338c, then rebased onto its rebased tip 778a537 (main 2d7a396 with 4.4 merged). Once 4.3 squash-merges: git rebase --onto origin/main 778a537.'
 deferred:
   - 'Story 4.8 / 4.11: fill PurchaseGranted.price and ReuseAccepted.price from the purchase intent, so SessionData.paid fills; PersistPurchaseIntent reads the price from SnoozeOffer.price.'
   - 'Story 4.11: feed the stranded product ids (reconciler) into SnoozeConditions (today an empty set).'
@@ -134,3 +134,15 @@ deferred:
 - [x] Every snooze state row of `EXPERIENCE.md > State Patterns` (snooze unavailable, test alarm, before first unlock, already paid "Not now") is mapped.
 - [x] "I'm up" stays the most prominent wake action, enabled in every variant; snooze is visible, plain and priced with Play's string.
 - [x] Screenshot tests updated (Roborazzi); the design preview already holds these states (`ringing-offline`, `ringing-max-snoozes`, `ringing-stranded`).
+
+## Auto Run Result
+
+Status: implemented in fast mode (Epic 4 Lane 1), waiting for review. Branch `story/4-7-snooze-availability` on `origin/story/4-3-price-cache` 778a537 (main 2d7a396 + 4.3).
+
+**Verification:** `./gradlew qualityGate :androidApp:assembleDebugAndroidTest --no-daemon`: BUILD SUCCESSFUL (15 min). 22 new Roborazzi baselines (`wake_ringing_snooze_*`, `wake_check_snooze_*`), no existing baseline changed.
+
+**Residual risks:**
+- In the app snooze still reads "Prices not loaded yet" until Story 4.12 fills the price cache; the Available, refunding and paid paths are exercised by tests only.
+- `SnoozeConditions.current()` is only as fresh as the last collection (the wake screen collects it); a reducer call with no wake screen open sees the last env, which is safe (no snooze tap without the screen).
+- An invalid frozen fee is logged on each recomposition that recomputes availability (rare: a damaged config).
+- `NET_CAPABILITY_VALIDATED` can lag a fresh connection by a few seconds; the button then changes in place.

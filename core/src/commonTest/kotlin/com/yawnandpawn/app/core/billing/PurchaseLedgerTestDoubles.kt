@@ -37,11 +37,14 @@ internal enum class CrashPoint {
 
 internal val LEDGER_T0: Instant = Instant.parse("2027-03-10T06:30:00Z")
 
-/** The two databases and Play, kept across "processes": a test builds a new [ledger] over the same stores after a crash. */
-internal class LedgerWorld {
-    /** `grant_ledger` in runtime.db, by token; the engine's commit inserts into the same map in the engine tests. */
-    val ledgerRows: MutableMap<PurchaseToken, GrantLedgerEntry> = linkedMapOf()
-
+/**
+ * The two databases and Play, kept across "processes": a test builds a new [ledger] over the same stores after a crash.
+ * [ledgerRows] is `grant_ledger` in runtime.db, by token; the engine tests pass the session store's map, so the engine's
+ * commits and the ledger share one table.
+ */
+internal class LedgerWorld(
+    val ledgerRows: MutableMap<PurchaseToken, GrantLedgerEntry> = linkedMapOf(),
+) {
     /** `purchase_record` in app.db, by token hash. */
     val recordRows: MutableMap<String, PurchaseRecord> = linkedMapOf()
 
@@ -89,7 +92,12 @@ internal class MemoryLedgerStore(
     private val world: LedgerWorld,
 ) : GrantLedgerStore {
     override suspend fun all(): Outcome<List<GrantLedgerEntry>, DomainError> =
-        world.ledgerFailure?.let { Outcome.Failure(it) } ?: Outcome.Success(world.ledgerRows.values.sortedBy { it.createdAt })
+        world.ledgerFailure?.let { Outcome.Failure(it) }
+            ?: Outcome.Success(
+                world.ledgerRows.values
+                    .filter { it.settledAt == null }
+                    .sortedBy { it.createdAt },
+            )
 
     override suspend fun get(token: PurchaseToken): Outcome<GrantLedgerEntry?, DomainError> =
         world.ledgerFailure?.let { Outcome.Failure(it) } ?: Outcome.Success(world.ledgerRows[token])
@@ -101,10 +109,23 @@ internal class MemoryLedgerStore(
         return Outcome.Success(Unit)
     }
 
-    override suspend fun delete(token: PurchaseToken): Outcome<Unit, DomainError> {
+    override suspend fun markSettled(
+        token: PurchaseToken,
+        at: Instant,
+    ): Outcome<Unit, DomainError> {
         world.ledgerDeleteFailure?.let { return Outcome.Failure(it) }
-        world.ledgerRows.remove(token)
+        world.ledgerRows[token]?.let { world.ledgerRows[token] = it.copy(settledAt = at) }
         return Outcome.Success(Unit)
+    }
+
+    override suspend fun purgeSettledBefore(instant: Instant): Outcome<Int, DomainError> {
+        world.ledgerDeleteFailure?.let { return Outcome.Failure(it) }
+        val old =
+            world.ledgerRows.values
+                .filter { it.settledAt?.let { at -> at < instant } == true }
+                .map { it.token }
+        old.forEach(world.ledgerRows::remove)
+        return Outcome.Success(old.size)
     }
 }
 
@@ -116,11 +137,11 @@ internal class MemoryRecords(
     override suspend fun get(tokenHash: String): Outcome<PurchaseRecord?, DomainError> =
         world.recordFailure?.let { Outcome.Failure(it) } ?: Outcome.Success(world.recordRows[tokenHash])
 
-    override suspend fun put(record: PurchaseRecord): Outcome<Unit, DomainError> {
+    override suspend fun putRecord(record: PurchaseRecord): Outcome<Unit, DomainError> {
         world.recordWriteFailure?.let { return Outcome.Failure(it) }
         puts++
         world.recordRows[record.tokenHash] = record
-        world.crash(if (record.status == RecordStatus.Consumed) CrashPoint.AfterRecordConsumed else CrashPoint.AfterRecordUpsert)
+        world.crash(if (record.consumedAt != null) CrashPoint.AfterRecordConsumed else CrashPoint.AfterRecordUpsert)
         return Outcome.Success(Unit)
     }
 
@@ -158,6 +179,9 @@ internal class FakePlay : Billing {
     val results = ArrayDeque<ConsumeResult>()
     val calls = mutableListOf<PurchaseToken>()
     var throwing: Exception? = null
+
+    /** Tokens Play no longer owns (consumed earlier, or refunded): a consume of one answers `NotOwned`. */
+    val gone = mutableSetOf<PurchaseToken>()
     var hold: CompletableDeferred<Unit>? = null
     lateinit var world: LedgerWorld
 
@@ -167,9 +191,10 @@ internal class FakePlay : Billing {
         calls += token
         hold?.await()
         throwing?.let { throw it }
-        val result = results.removeFirstOrNull() ?: ConsumeResult.Consumed
+        val result = results.removeFirstOrNull() ?: if (token in gone) ConsumeResult.NotOwned else ConsumeResult.Consumed
         if (result == ConsumeResult.Consumed) {
             owned -= token
+            gone += token
             if (::world.isInitialized) world.crash(CrashPoint.AfterConsume)
         }
         return result
@@ -221,8 +246,23 @@ internal fun record(
     snoozeNumber: Int? = null,
     price: Money = Money.of(1, "EUR"),
     purchasedAt: Instant = LEDGER_T0,
+    priceSource: PriceSource = PriceSource.Intent,
+    consumedAt: Instant? = purchasedAt.takeIf { status == RecordStatus.Consumed },
 ): PurchaseRecord =
-    PurchaseRecord(token.hash(), "GPA.1", productId, sessionId, alarmId, snoozeNumber, price, purchasedAt, status, purchasedAt)
+    PurchaseRecord(
+        token.hash(),
+        "GPA.1",
+        productId,
+        sessionId,
+        alarmId,
+        snoozeNumber,
+        price,
+        priceSource,
+        purchasedAt,
+        status,
+        consumedAt,
+        purchasedAt,
+    )
 
 internal fun paidSnapshot(
     token: PurchaseToken = TOKEN_1,

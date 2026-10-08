@@ -51,7 +51,7 @@ class PurchaseLedgerCrashTest {
 
                 assertEquals(1, world.recordRows.size, "$crash: no duplicate record")
                 assertEquals(RecordStatus.Consumed, world.recordOf().status, "$crash")
-                assertTrue(world.ledgerRows.isEmpty(), "$crash: the ledger row is gone")
+                assertTrue(world.ledgerRows.values.all { it.settledAt != null }, "$crash: the ledger row is a settled marker")
                 assertTrue(world.play.owned.isEmpty(), "$crash: consumed on Play")
                 assertEquals(List(crash.consumes) { TOKEN_1 }, world.play.calls, "$crash")
                 // A second replay (the next start) finds nothing to do.
@@ -74,7 +74,7 @@ class PurchaseLedgerCrashTest {
                 val reused = world.recordOf()
                 assertEquals(RecordStatus.Reused, reused.status, "$crash")
                 assertEquals(SESSION, reused.sessionId, "$crash")
-                assertTrue(world.ledgerRows.isEmpty(), "$crash")
+                assertTrue(world.ledgerRows.values.all { it.settledAt != null }, "$crash")
                 assertTrue(world.play.owned.isEmpty(), "$crash")
             }
         }

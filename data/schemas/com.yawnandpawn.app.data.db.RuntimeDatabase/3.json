@@ -2,7 +2,7 @@
   "formatVersion": 1,
   "database": {
     "version": 3,
-    "identityHash": "63a75688ca4fd24decc10ba1e8ba8236",
+    "identityHash": "22eeb7f6bb666119daffc3ee18eb6705",
     "entities": [
       {
         "tableName": "active_session",
@@ -96,7 +96,7 @@
       },
       {
         "tableName": "grant_ledger",
-        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`token` TEXT NOT NULL, `session_id` TEXT NOT NULL, `alarm_id` TEXT NOT NULL, `product_id` TEXT NOT NULL, `snooze_number` INTEGER NOT NULL, `order_id` TEXT, `status` TEXT NOT NULL, `created_at` INTEGER NOT NULL, PRIMARY KEY(`token`))",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`token` TEXT NOT NULL, `session_id` TEXT NOT NULL, `alarm_id` TEXT NOT NULL, `product_id` TEXT NOT NULL, `snooze_number` INTEGER NOT NULL, `order_id` TEXT, `status` TEXT NOT NULL, `created_at` INTEGER NOT NULL, `settled_at` INTEGER, PRIMARY KEY(`token`))",
         "fields": [
           {
             "fieldPath": "token",
@@ -144,6 +144,11 @@
             "columnName": "created_at",
             "affinity": "INTEGER",
             "notNull": true
+          },
+          {
+            "fieldPath": "settledAt",
+            "columnName": "settled_at",
+            "affinity": "INTEGER"
           }
         ],
         "primaryKey": {
@@ -156,7 +161,7 @@
     ],
     "setupQueries": [
       "CREATE TABLE IF NOT EXISTS room_master_table (id INTEGER PRIMARY KEY,identity_hash TEXT)",
-      "INSERT OR REPLACE INTO room_master_table (id,identity_hash) VALUES(42, '63a75688ca4fd24decc10ba1e8ba8236')"
+      "INSERT OR REPLACE INTO room_master_table (id,identity_hash) VALUES(42, '22eeb7f6bb666119daffc3ee18eb6705')"
     ]
   }
 }

@@ -22,7 +22,8 @@ val RUNTIME_MIGRATION_1_2: Migration =
     }
 
 /**
- * `runtime.db` v2 to v3 (Story 4.10): adds the empty `grant_ledger` table (AD-7), keyed by the raw purchase token. The
+ * `runtime.db` v2 to v3 (Story 4.10): adds the empty `grant_ledger` table (AD-7), keyed by the raw purchase token, with
+ * `settled_at` for the settled markers that refuse a token twice. The
  * active session and the intents are untouched, so a session that rings or snoozes through the update keeps going. The
  * SQL matches the exported `3.json`; Room checks it after migrating.
  */
@@ -32,7 +33,8 @@ val RUNTIME_MIGRATION_2_3: Migration =
             connection.execSQL(
                 "CREATE TABLE IF NOT EXISTS `grant_ledger` (`token` TEXT NOT NULL, `session_id` TEXT NOT NULL, " +
                     "`alarm_id` TEXT NOT NULL, `product_id` TEXT NOT NULL, `snooze_number` INTEGER NOT NULL, " +
-                    "`order_id` TEXT, `status` TEXT NOT NULL, `created_at` INTEGER NOT NULL, PRIMARY KEY(`token`))",
+                    "`order_id` TEXT, `status` TEXT NOT NULL, `created_at` INTEGER NOT NULL, `settled_at` INTEGER, " +
+                    "PRIMARY KEY(`token`))",
             )
         }
     }

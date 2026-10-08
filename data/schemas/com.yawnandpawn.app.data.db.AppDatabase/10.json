@@ -2,7 +2,7 @@
   "formatVersion": 1,
   "database": {
     "version": 10,
-    "identityHash": "046788216356ebd9e7f3594a04c0294f",
+    "identityHash": "c353fba9642ca5b0c87f09203393f7db",
     "entities": [
       {
         "tableName": "alarm",
@@ -493,7 +493,7 @@
       },
       {
         "tableName": "purchase_record",
-        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`token_hash` TEXT NOT NULL, `order_id` TEXT, `product_id` TEXT NOT NULL, `session_id` TEXT, `alarm_id` TEXT, `snooze_number` INTEGER, `price_micros` INTEGER NOT NULL, `currency` TEXT NOT NULL, `purchased_at` INTEGER NOT NULL, `status` TEXT NOT NULL, `updated_at` INTEGER NOT NULL, PRIMARY KEY(`token_hash`))",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`token_hash` TEXT NOT NULL, `order_id` TEXT, `product_id` TEXT NOT NULL, `session_id` TEXT, `alarm_id` TEXT, `snooze_number` INTEGER, `price_micros` INTEGER NOT NULL, `currency` TEXT NOT NULL, `price_source` TEXT NOT NULL, `purchased_at` INTEGER NOT NULL, `status` TEXT NOT NULL, `consumed_at` INTEGER, `updated_at` INTEGER NOT NULL, PRIMARY KEY(`token_hash`))",
         "fields": [
           {
             "fieldPath": "tokenHash",
@@ -540,6 +540,12 @@
             "notNull": true
           },
           {
+            "fieldPath": "priceSource",
+            "columnName": "price_source",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
             "fieldPath": "purchasedAt",
             "columnName": "purchased_at",
             "affinity": "INTEGER",
@@ -550,6 +556,11 @@
             "columnName": "status",
             "affinity": "TEXT",
             "notNull": true
+          },
+          {
+            "fieldPath": "consumedAt",
+            "columnName": "consumed_at",
+            "affinity": "INTEGER"
           },
           {
             "fieldPath": "updatedAt",
@@ -579,7 +590,7 @@
     ],
     "setupQueries": [
       "CREATE TABLE IF NOT EXISTS room_master_table (id INTEGER PRIMARY KEY,identity_hash TEXT)",
-      "INSERT OR REPLACE INTO room_master_table (id,identity_hash) VALUES(42, '046788216356ebd9e7f3594a04c0294f')"
+      "INSERT OR REPLACE INTO room_master_table (id,identity_hash) VALUES(42, 'c353fba9642ca5b0c87f09203393f7db')"
     ]
   }
 }

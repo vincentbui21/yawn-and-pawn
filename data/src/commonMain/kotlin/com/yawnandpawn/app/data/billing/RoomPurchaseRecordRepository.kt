@@ -31,7 +31,7 @@ class RoomPurchaseRecordRepository(
             }
         }
 
-    override suspend fun put(record: PurchaseRecord): Outcome<Unit, DomainError> =
+    override suspend fun putRecord(record: PurchaseRecord): Outcome<Unit, DomainError> =
         storage { dao.upsertRecord(PurchaseRecordEntity.of(record)) }
 
     override suspend fun all(): Outcome<List<PurchaseRecord>, DomainError> = storage { dao.all().mapNotNull { it.toRecord() } }

@@ -443,6 +443,8 @@ class AppDatabaseFactoryTest {
         assertFalse(records.contains("REFERENCES"), "a charge outlives its alarm")
         val nullable = "`order_id` TEXT, `product_id` TEXT NOT NULL, `session_id` TEXT, `alarm_id` TEXT, `snooze_number` INTEGER"
         assertTrue(records.contains(nullable), "only a stranded record may lack its session, alarm or snooze")
+        assertTrue(records.contains("`price_source` TEXT NOT NULL"), "whether the price is the amount charged or an estimate")
+        assertTrue(records.contains("`consumed_at` INTEGER,"), "when Play consumed it, reuses included")
         assertTrue(records.contains("`price_micros` INTEGER NOT NULL, `currency` TEXT NOT NULL"))
         assertTrue(records.contains("index_purchase_record_purchased_at"))
     }
@@ -474,7 +476,7 @@ class AppDatabaseFactoryTest {
 
                 val records = RoomPurchaseRecordRepository(database.purchaseRecordDao())
                 val record = aPurchaseRecord(status = RecordStatus.Stranded)
-                assertEquals(Outcome.Success(Unit), records.put(record))
+                assertEquals(Outcome.Success(Unit), records.putRecord(record))
                 assertEquals(Outcome.Success(listOf(record)), records.all())
             }
             assertEquals(10, userVersion())

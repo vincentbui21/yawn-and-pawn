@@ -11,6 +11,7 @@ import com.yawnandpawn.app.android.crash.FirebaseCrashReporter
 import com.yawnandpawn.app.android.crash.isFirebaseConfigured
 import com.yawnandpawn.app.android.sound.LibrarySoundResolver
 import com.yawnandpawn.app.core.billing.PurchaseLedger
+import com.yawnandpawn.app.core.billing.ReplayGrantLedger
 import com.yawnandpawn.app.core.crash.CrashReporter
 import com.yawnandpawn.app.core.session.SessionEngine
 import com.yawnandpawn.app.core.sound.SoundPreview
@@ -91,5 +92,11 @@ fun wakeModule(): Module =
             )
         }
         // The first unlock after a boot (Story 2.4): UserUnlocked, billing and crash reporting.
-        single { UnlockSignals(get(), get(), get(), get(), get()) }
+        single {
+            val koin = this
+            // Story 4.10: every unlock signal replays the grant ledger (looked up then: the ledger is in appModule).
+            UnlockSignals(get(), get(), get(), get(), get(), replayLedger = {
+                koin.get<ApplicationScope>().launch { koin.get<ReplayGrantLedger>()() }
+            })
+        }
     }

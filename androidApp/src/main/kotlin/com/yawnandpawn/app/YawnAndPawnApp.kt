@@ -213,10 +213,13 @@ open class YawnAndPawnApp : Application() {
         // Purchase intents are kept 7 days, long enough to price a pending payment that completes later (Story 4.8).
         val purgeIntents = koin.get<PurgeOldPurchaseIntents>()
         scope.launch { purgeIntents() }
-        // Story 4.10: the grant ledger is replayed (record, consume, settle) once the user has unlocked; resume replays it
-        // again (MainActivity). Never on the wake path: the snooze started at its commit.
+        // Story 4.10: the grant ledger is replayed (record, consume, settle) once the user has unlocked; every unlock signal
+        // (UnlockSignals) and MainActivity start replay it again. Never on the wake path: the snooze started at its commit.
         val replayLedger = koin.get<ReplayGrantLedger>()
         scope.launch { replayLedger() }
+        // The settled markers that refuse a token twice are kept 30 days, then deleted.
+        val purchaseLedger = koin.get<PurchaseLedger>()
+        scope.launch { purchaseLedger.purgeSettled() }
         // With no session left in runtime.db (nothing, an unreadable row or a stored Idle), an alarm volume a crashed session
         // saved is put back (AD-5). Only a read: the session itself is restored by WakeService, MainActivity or
         // WakeActivity (Story 2.1).

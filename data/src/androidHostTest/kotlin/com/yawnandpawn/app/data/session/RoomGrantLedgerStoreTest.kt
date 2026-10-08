@@ -26,9 +26,10 @@ import org.robolectric.RobolectricTestRunner
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
 import kotlin.test.assertIs
+import kotlin.time.Duration.Companion.days
 import kotlin.time.Duration.Companion.minutes
 
-/** Story 4.10: `grant_ledger` rows are inserted only with the Snoozed state, then settled and deleted by the store. */
+/** Story 4.10: `grant_ledger` rows are inserted only with the Snoozed state, then settled (kept as markers) and purged. */
 @RunWith(RobolectricTestRunner::class)
 class RoomGrantLedgerStoreTest {
     private val context = ApplicationProvider.getApplicationContext<Context>()
@@ -77,7 +78,7 @@ class RoomGrantLedgerStoreTest {
         }
 
     @Test
-    fun `rows read oldest first, are marked consumed, deleted, and an Idle commit keeps them`() =
+    fun `pending rows read oldest first, are marked consumed and settled, and an Idle commit keeps them`() =
         runTest {
             val later = aGrant(token = "t-2", createdAt = DEFAULT_FAKE_INSTANT + 5.minutes)
             val earlier = aGrant(token = "t-1")
@@ -87,12 +88,32 @@ class RoomGrantLedgerStoreTest {
 
             assertEquals(Outcome.Success(listOf(earlier, later)), ledger.all())
             assertEquals(Outcome.Success(Unit), ledger.markConsumed(earlier.token))
-            assertEquals(Outcome.Success(earlier.copy(status = LedgerStatus.Consumed)), ledger.get(earlier.token))
-            assertEquals(Outcome.Success(Unit), ledger.delete(earlier.token))
-            assertEquals(Outcome.Success(null), ledger.get(earlier.token))
+            val settledAt = DEFAULT_FAKE_INSTANT + 9.minutes
+            assertEquals(Outcome.Success(Unit), ledger.markSettled(earlier.token, settledAt))
+            val marker = earlier.copy(status = LedgerStatus.Consumed, settledAt = settledAt)
+            assertEquals(Outcome.Success(marker), ledger.get(earlier.token), "the settled marker stays")
+            assertEquals(Outcome.Success(listOf(later)), ledger.all(), "only pending rows are listed")
             assertEquals(Outcome.Success(Unit), ledger.markConsumed(PurchaseToken("none")), "no row: nothing to do")
-            assertEquals(Outcome.Success(Unit), ledger.delete(PurchaseToken("none")))
-            assertEquals(Outcome.Success(listOf(later)), ledger.all())
+            assertEquals(Outcome.Success(Unit), ledger.markSettled(PurchaseToken("none"), settledAt))
+        }
+
+    @Test
+    fun `a settled marker refuses the same token in a later commit, until it is purged after its retention`() =
+        runTest {
+            val grant = aGrant()
+            sessions.commit(snoozed, listOf(RuntimeWrite.PutGrant(grant)))
+            ledger.markSettled(grant.token, DEFAULT_FAKE_INSTANT)
+            val ringing = SessionState.Ringing(aSession(sessionId = "session-1"))
+
+            assertIs<Outcome.Failure<DomainError>>(sessions.commit(snoozed, listOf(RuntimeWrite.PutGrant(grant.copy(snoozeNumber = 2)))))
+            assertEquals(Outcome.Success(StoredSession.Found(snoozed)), sessions.load(), "no second snooze")
+
+            val pending = aGrant(token = "t-pending", createdAt = DEFAULT_FAKE_INSTANT - 90.days)
+            sessions.commit(ringing, listOf(RuntimeWrite.PutGrant(pending)))
+            assertEquals(Outcome.Success(0), ledger.purgeSettledBefore(DEFAULT_FAKE_INSTANT))
+            assertEquals(Outcome.Success(1), ledger.purgeSettledBefore(DEFAULT_FAKE_INSTANT + 1.minutes))
+            assertEquals(Outcome.Success(null), ledger.get(grant.token))
+            assertEquals(Outcome.Success(listOf(pending)), ledger.all(), "a pending row is never purged, however old")
         }
 
     @Test
@@ -118,6 +139,7 @@ class RoomGrantLedgerStoreTest {
             assertFalse("secret-token" in failure.error.toString())
             assertIs<Outcome.Failure<DomainError>>(ledger.all())
             assertIs<Outcome.Failure<DomainError>>(ledger.markConsumed(PurchaseToken("x")))
-            assertIs<Outcome.Failure<DomainError>>(ledger.delete(PurchaseToken("x")))
+            assertIs<Outcome.Failure<DomainError>>(ledger.markSettled(PurchaseToken("x"), DEFAULT_FAKE_INSTANT))
+            assertIs<Outcome.Failure<DomainError>>(ledger.purgeSettledBefore(DEFAULT_FAKE_INSTANT))
         }
 }

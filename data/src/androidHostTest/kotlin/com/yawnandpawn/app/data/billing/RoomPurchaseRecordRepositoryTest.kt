@@ -9,6 +9,7 @@ import com.yawnandpawn.app.core.billing.GrantLedgerStore
 import com.yawnandpawn.app.core.billing.LedgerStatus
 import com.yawnandpawn.app.core.billing.Money
 import com.yawnandpawn.app.core.billing.PriceSnapshotLookup
+import com.yawnandpawn.app.core.billing.PriceSource
 import com.yawnandpawn.app.core.billing.PurchaseLedger
 import com.yawnandpawn.app.core.billing.PurchaseRecord
 import com.yawnandpawn.app.core.billing.PurchaseRecordRepository
@@ -91,6 +92,7 @@ class RoomPurchaseRecordRepositoryTest {
                         sessionId = null,
                         alarmId = null,
                         snoozeNumber = null,
+                        priceSource = PriceSource.Tier,
                         purchasedAt = DEFAULT_FAKE_INSTANT + 2.minutes,
                     ),
                     aPurchaseRecord(
@@ -98,9 +100,12 @@ class RoomPurchaseRecordRepositoryTest {
                         status = RecordStatus.Reused,
                         price = Money(150, "JPY"),
                         purchasedAt = DEFAULT_FAKE_INSTANT + 3.minutes,
+                        consumedAt = DEFAULT_FAKE_INSTANT + 4.minutes,
                     ),
+                    aPurchaseRecord(token = "e", priceSource = PriceSource.Snapshot, purchasedAt = DEFAULT_FAKE_INSTANT + 5.minutes),
+                    aPurchaseRecord(token = "f", priceSource = PriceSource.Unknown, purchasedAt = DEFAULT_FAKE_INSTANT + 6.minutes),
                 )
-            rows.forEach { assertEquals(Outcome.Success(Unit), records.put(it)) }
+            rows.forEach { assertEquals(Outcome.Success(Unit), records.putRecord(it)) }
 
             assertEquals(Outcome.Success(rows.reversed()), records.all())
             rows.forEach { assertEquals(Outcome.Success(it), records.get(it.tokenHash)) }
@@ -119,8 +124,8 @@ class RoomPurchaseRecordRepositoryTest {
     fun `a put replaces the record of the same token hash`() =
         runTest {
             val granted = aPurchaseRecord(status = RecordStatus.Granted)
-            records.put(granted)
-            records.put(granted.copy(status = RecordStatus.Consumed))
+            records.putRecord(granted)
+            records.putRecord(granted.copy(status = RecordStatus.Consumed))
 
             assertEquals(Outcome.Success(listOf(granted.copy(status = RecordStatus.Consumed))), records.all())
         }
@@ -129,31 +134,41 @@ class RoomPurchaseRecordRepositoryTest {
     fun `a damaged row is a storage failure for get and left out of the list, and a closed database fails`() =
         runTest {
             val good = aPurchaseRecord(token = "good")
-            records.put(good)
+            records.putRecord(good)
             appDb.purchaseRecordDao().upsertRecord(PurchaseRecordEntity.of(aPurchaseRecord(token = "bad")).copy(status = "voided"))
             appDb.purchaseRecordDao().upsertRecord(PurchaseRecordEntity.of(aPurchaseRecord(token = "eur")).copy(currency = "eur"))
+            appDb.purchaseRecordDao().upsertRecord(PurchaseRecordEntity.of(aPurchaseRecord(token = "src")).copy(priceSource = "guess"))
 
             val bad = records.get(PurchaseToken("bad").hash())
             assertEquals(Outcome.Failure(DomainError.StorageFailure("unreadable purchase record")), bad)
             assertEquals(Outcome.Success(listOf(good)), records.all())
 
             appDb.close()
-            assertIs<Outcome.Failure<DomainError>>(records.put(good))
+            assertIs<Outcome.Failure<DomainError>>(records.putRecord(good))
             assertIs<Outcome.Failure<DomainError>>(records.get(good.tokenHash))
         }
 
     /** The process dies right after this write. Not an `Exception`, so nothing in the ledger catches it. */
     private class ProcessDied : Throwable("process died")
 
-    private enum class Crash { AfterCommit, AfterRecordUpsert, AfterConsume, AfterLedgerConsumed, AfterRecordConsumed }
+    /** Where the process dies, and the consumes in total once the next start replayed the ledger. */
+    private enum class Crash(
+        val consumes: Int,
+    ) {
+        AfterCommit(1),
+        AfterRecordUpsert(1),
+        AfterConsume(2),
+        AfterLedgerConsumed(1),
+        AfterRecordConsumed(1),
+    }
 
     private class CrashingRecords(
         private val real: PurchaseRecordRepository,
         private val at: Crash,
     ) : PurchaseRecordRepository by real {
-        override suspend fun put(record: PurchaseRecord): Outcome<Unit, DomainError> {
-            val put = real.put(record)
-            val dies = if (record.status == RecordStatus.Consumed) at == Crash.AfterRecordConsumed else at == Crash.AfterRecordUpsert
+        override suspend fun putRecord(record: PurchaseRecord): Outcome<Unit, DomainError> {
+            val put = real.putRecord(record)
+            val dies = if (record.consumedAt != null) at == Crash.AfterRecordConsumed else at == Crash.AfterRecordUpsert
             if (dies) throw ProcessDied()
             return put
         }
@@ -199,11 +214,14 @@ class RoomPurchaseRecordRepositoryTest {
                 val record = assertIs<Outcome.Success<PurchaseRecord?>>(records.get(token.hash())).value
                 assertEquals(RecordStatus.Consumed, record?.status, "$crash")
                 assertEquals(Money(1_190_000, "EUR"), record?.price, "$crash: priced by the intent")
-                assertEquals(Outcome.Success(null), ledger.get(token), "$crash: the ledger row is gone")
-                assertTrue(play.consumed.size in 1..2, "$crash: ${play.consumed.size} consumes")
+                assertEquals(PriceSource.Intent, record?.priceSource, "$crash")
+                val marker = assertIs<Outcome.Success<GrantLedgerEntry?>>(ledger.get(token)).value
+                assertTrue(marker?.settledAt != null, "$crash: the ledger row is a settled marker")
+                assertEquals(crash.consumes, play.consumed.size, "$crash")
             }
             assertEquals(Crash.entries.size, appDb.purchaseRecordDao().count(), "one record per payment, no duplicate")
-            assertEquals(0, runtimeDb.grantLedgerDao().count())
+            assertEquals(Outcome.Success(emptyList()), ledger.all(), "nothing pending")
+            assertEquals(Crash.entries.size, runtimeDb.grantLedgerDao().count(), "one settled marker per payment")
         }
 
     @Test

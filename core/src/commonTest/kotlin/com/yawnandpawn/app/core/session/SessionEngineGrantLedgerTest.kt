@@ -6,6 +6,7 @@ import com.yawnandpawn.app.core.billing.LedgerWorld
 import com.yawnandpawn.app.core.billing.RecordStatus
 import com.yawnandpawn.app.core.billing.SettleResult
 import com.yawnandpawn.app.core.billing.hash
+import com.yawnandpawn.app.core.billing.record
 import com.yawnandpawn.app.core.error.DomainError
 import com.yawnandpawn.app.core.error.Outcome
 import kotlinx.coroutines.CompletableDeferred
@@ -15,13 +16,16 @@ import kotlinx.coroutines.test.runTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertIs
+import kotlin.test.assertNotNull
 import kotlin.test.assertTrue
+import kotlin.time.Duration.Companion.days
 import kotlin.time.Duration.Companion.minutes
 import kotlin.time.Instant
 
 /**
  * Story 4.10: a paid snooze commits the Snoozed state and its grant ledger row in one `runtime.db` transaction; only then
  * is the payment settled, outside the engine, and a crash anywhere is replayed from the ledger without a second grant.
+ * The engine's store and the ledger share one `grant_ledger` table ([LedgerWorld] over the store's map).
  */
 class SessionEngineGrantLedgerTest {
     private val time = EngineTime()
@@ -29,9 +33,7 @@ class SessionEngineGrantLedgerTest {
     private val runner = RecordingRunner()
     private val logger = EngineLogger()
     private val history = InMemoryHistory()
-
-    /** The same `runtime.db`: the ledger reads the rows the engine's commits wrote. */
-    private val world = LedgerWorld()
+    private val world = LedgerWorld(store.grants)
 
     private fun engine(effects: EffectRunner = runner) =
         SessionEngine(reducer(), store, effects, SessionRecorder(history), time.clock, time.monotonicClock, time.bootCounter, logger)
@@ -40,11 +42,6 @@ class SessionEngineGrantLedgerTest {
     private val granted = SessionEvent.PurchaseGranted(PRODUCT, TOKEN, PurchaseVerdict.Grant, orderId = "GPA.3")
 
     private fun Outcome<SessionState, DomainError>.state(): SessionState = assertIs<Outcome.Success<SessionState>>(this).value
-
-    /** Moves the rows the engine committed into the ledger the [world] reads (one `runtime.db`). */
-    private fun syncLedger() {
-        world.ledgerRows.putAll(store.grants.filterKeys { it !in world.ledgerRows })
-    }
 
     @Test
     fun `a grant commits Snoozed and its ledger row together, then the runner gets only Consume`() =
@@ -93,19 +90,23 @@ class SessionEngineGrantLedgerTest {
         }
 
     @Test
-    fun `the same token granted again fails its commit, so it never grants twice`() =
+    fun `a token redelivered after its payment was settled fails its commit, so it never grants twice`() =
         runTest {
             val engine = engine()
             engine.dispatch(alarmFired)
             engine.dispatch(granted)
+            assertEquals(SettleResult.Settled, world.ledger().settle(TOKEN), "recorded, consumed, settled")
             time.advanceBy(9.minutes)
             assertIs<SessionState.Ringing>(engine.dispatch(SessionEvent.SlotFired).state())
             runner.ran.clear()
 
-            assertIs<Outcome.Failure<DomainError>>(engine.dispatch(granted), "a duplicate delivery the reconciler missed")
+            // A duplicate delivery the reconciler missed: the settled marker refuses the token.
+            assertIs<Outcome.Failure<DomainError>>(engine.dispatch(granted))
 
             assertEquals(1, assertIs<SessionState.Ringing>(engine.state.value).session.snoozesGranted)
             assertTrue(runner.oneShot.none { it is SessionEffect.Consume })
+            assertEquals(1, world.play.calls.size)
+            assertEquals(RecordStatus.Consumed, world.recordOf(TOKEN).status)
         }
 
     @Test
@@ -119,10 +120,7 @@ class SessionEngineGrantLedgerTest {
             val settling =
                 object : EffectRunner {
                     override suspend fun run(effect: SessionEffect) {
-                        if (effect is SessionEffect.Consume) {
-                            syncLedger()
-                            backgroundScope.launch { settles += ledger.settle(effect.token) }
-                        }
+                        if (effect is SessionEffect.Consume) backgroundScope.launch { settles += ledger.settle(effect.token) }
                     }
 
                     override suspend fun apply(effect: EntryEffect) = Unit
@@ -141,7 +139,7 @@ class SessionEngineGrantLedgerTest {
             runCurrent()
             assertEquals(listOf(SettleResult.Settled), settles)
             assertEquals(RecordStatus.Consumed, world.recordOf(TOKEN).status)
-            assertTrue(world.ledgerRows.isEmpty())
+            assertNotNull(store.grants.getValue(TOKEN).settledAt)
         }
 
     @Test
@@ -152,7 +150,6 @@ class SessionEngineGrantLedgerTest {
                 dispatch(granted)
             }
             // The process dies before the Consume effect ran anything.
-            syncLedger()
 
             val restored = engine()
             val snoozed = assertIs<SessionState.Snoozed>(restored.restore().state())
@@ -165,27 +162,47 @@ class SessionEngineGrantLedgerTest {
             val paidFor = Triple(record.sessionId, record.alarmId, record.snoozeNumber)
             assertEquals(Triple<String?, String?, Int?>(SESSION_ID, "alarm-1", 1), paidFor)
             assertEquals(listOf(TOKEN), world.play.calls)
-            assertTrue(world.ledgerRows.isEmpty())
+            assertNotNull(store.grants.getValue(TOKEN).settledAt)
             assertEquals(1, assertIs<SessionState.Snoozed>(restored.state.value).session.snoozesGranted)
         }
 
     @Test
-    fun `ReuseAccepted writes the ledger row like a grant, and settling makes the stranded record reused`() =
+    fun `ReuseAccepted writes the ledger row like a grant, and settling makes the stranded record reused and consumed`() =
         runTest {
-            world.recordRows[TOKEN.hash()] =
-                com.yawnandpawn.app.core.billing
-                    .record(RecordStatus.Stranded, token = TOKEN)
+            val yesterday = Instant.fromEpochMilliseconds(T0.wallMillis) - 1.days
+            world.recordRows[TOKEN.hash()] = record(RecordStatus.Stranded, token = TOKEN, purchasedAt = yesterday)
             val engine = engine()
             engine.dispatch(alarmFired)
 
             assertIs<SessionState.Snoozed>(engine.dispatch(SessionEvent.ReuseAccepted(PRODUCT, TOKEN)).state())
-            syncLedger()
+            world.now = Instant.fromEpochMilliseconds(time.now.wallMillis)
             assertEquals(SettleResult.Settled, world.ledger().settle(TOKEN))
 
             val reused = world.recordOf(TOKEN)
             assertEquals(RecordStatus.Reused, reused.status)
+            assertNotNull(reused.consumedAt)
             assertEquals(SESSION_ID, reused.sessionId)
             assertEquals(1, reused.snoozeNumber)
+        }
+
+    @Test
+    fun `a reuse whose commit failed leaves the stranded record stranded and grants nothing`() =
+        runTest {
+            val stranded = record(RecordStatus.Stranded, token = TOKEN)
+            world.recordRows[TOKEN.hash()] = stranded
+            val engine = engine()
+            engine.dispatch(alarmFired)
+            store.commitFailure = DomainError.StorageFailure("disk full")
+
+            assertIs<Outcome.Failure<DomainError>>(engine.dispatch(SessionEvent.ReuseAccepted(PRODUCT, TOKEN)))
+            store.commitFailure = null
+            assertEquals(SettleResult.Settled, world.ledger().settleAll())
+            val early = world.ledger().markReused(TOKEN.hash(), SESSION_ID, "alarm-1", 1)
+
+            assertIs<Outcome.Failure<DomainError>>(early, "no reuse is marked before its commit")
+            assertEquals(stranded, world.recordOf(TOKEN))
+            assertTrue(store.grants.isEmpty())
+            assertEquals(emptyList(), world.play.calls)
         }
 
     @Test

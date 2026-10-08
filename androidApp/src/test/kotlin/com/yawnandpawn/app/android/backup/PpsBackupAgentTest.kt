@@ -18,6 +18,8 @@ import com.yawnandpawn.app.core.billing.RecordStatus
 import com.yawnandpawn.app.core.error.Outcome
 import com.yawnandpawn.app.core.history.SessionHistoryRepository
 import com.yawnandpawn.app.core.log.LogEvent
+import com.yawnandpawn.app.core.session.ActiveSessionStore
+import com.yawnandpawn.app.core.session.RuntimeWrite
 import com.yawnandpawn.app.core.session.SessionEngine
 import com.yawnandpawn.app.core.session.SessionState
 import com.yawnandpawn.app.data.db.AppDatabase
@@ -28,6 +30,7 @@ import com.yawnandpawn.app.restartKoin
 import com.yawnandpawn.app.stopApp
 import com.yawnandpawn.app.testing.FakeAlarmScheduler
 import com.yawnandpawn.app.testing.FakeLogger
+import com.yawnandpawn.app.testing.aGrant
 import com.yawnandpawn.app.testing.aPurchaseRecord
 import com.yawnandpawn.app.testing.aSessionHistoryRow
 import com.yawnandpawn.app.testing.anAlarm
@@ -106,7 +109,7 @@ class PpsBackupAgentTest {
         runBlocking {
             assertEquals(Outcome.Success(Unit), koin.get<AlarmRepository>().upsert(alarm))
             assertEquals(Outcome.Success(Unit), koin.get<SessionHistoryRepository>().upsert(history))
-            assertEquals(Outcome.Success(Unit), koin.get<PurchaseRecordRepository>().put(purchase))
+            assertEquals(Outcome.Success(Unit), koin.get<PurchaseRecordRepository>().putRecord(purchase))
         }
         stopApp()
         return appDatabaseFile(context).readBytes()
@@ -139,6 +142,9 @@ class PpsBackupAgentTest {
 
     @Test
     fun `a backup of the same schema is restored, its alarms are armed when the restore finishes and the app starts Idle`() {
+        // A payment still in the grant ledger when the backup was made: runtime.db (and the raw token) never comes along.
+        val pending = aGrant(token = "raw-token-on-the-old-phone")
+        runBlocking { GlobalContext.get().get<ActiveSessionStore>().commit(SessionState.Idle, listOf(RuntimeWrite.PutGrant(pending))) }
         val backup = backedUpAppDb()
         freshInstall()
 

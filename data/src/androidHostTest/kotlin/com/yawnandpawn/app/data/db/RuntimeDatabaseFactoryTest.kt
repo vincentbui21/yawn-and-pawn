@@ -105,6 +105,7 @@ class RuntimeDatabaseFactoryTest {
             assertTrue(json.contains("`$it` "), it)
         }
         assertTrue(json.contains("`order_id` TEXT,"), "order id is nullable")
+        assertTrue(json.contains("`settled_at` INTEGER,"), "the settled markers that refuse a token twice")
         assertTrue(ledger.isNotEmpty())
         assertEquals(3, RuntimeDatabase.SCHEMA_VERSION)
     }

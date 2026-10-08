@@ -9,9 +9,10 @@ import com.yawnandpawn.app.core.session.PurchaseToken
 import kotlin.time.Instant
 
 /**
- * One row of `grant_ledger` in `runtime.db` (Story 4.10, AD-7): a snooze granted for [token] whose payment is not settled
- * yet, inserted in the same transaction as the Snoozed state. The raw token lives only here: `runtime.db` is never backed
- * up (NFR-14). [status] is `granted` or `consumed`; [createdAt] is wall time in epoch millis.
+ * One row of `grant_ledger` in `runtime.db` (Story 4.10, AD-7): a snooze granted for [token], inserted in the same
+ * transaction as the Snoozed state, and kept as a settled marker ([settledAt]) once its payment is settled. The raw token
+ * lives only here: `runtime.db` is never backed up (NFR-14). [status] is `granted` or `consumed`; times are wall time in
+ * epoch millis.
  */
 @Entity(tableName = "grant_ledger")
 data class GrantLedgerEntity(
@@ -32,12 +33,15 @@ data class GrantLedgerEntity(
     val status: String,
     @ColumnInfo(name = "created_at")
     val createdAt: Long,
+    @ColumnInfo(name = "settled_at")
+    val settledAt: Long? = null,
 ) {
     /** The stored row, or null for a status this build does not know (only a damaged file could hold one). */
     fun toEntry(): GrantLedgerEntry? {
         val known = STATUSES.entries.firstOrNull { it.value == status }?.key ?: return null
         val created = Instant.fromEpochMilliseconds(createdAt)
-        return GrantLedgerEntry(PurchaseToken(token), sessionId, alarmId, productId, snoozeNumber, orderId, known, created)
+        val settled = settledAt?.let { Instant.fromEpochMilliseconds(it) }
+        return GrantLedgerEntry(PurchaseToken(token), sessionId, alarmId, productId, snoozeNumber, orderId, known, created, settled)
     }
 
     /** Hides the token, like `PurchaseToken`. */
@@ -57,6 +61,7 @@ data class GrantLedgerEntity(
                 orderId = entry.orderId,
                 status = STATUSES.getValue(entry.status),
                 createdAt = entry.createdAt.toEpochMilliseconds(),
+                settledAt = entry.settledAt?.toEpochMilliseconds(),
             )
     }
 }

@@ -9,15 +9,18 @@ context:
   - '{project-root}/docs/architecture.md'
   - '{project-root}/_bmad-output/implementation-artifacts/spec-4-8-purchase-intents-install-id-and-the-runtime-db-intent-table.md'
   - '{project-root}/_bmad-output/implementation-artifacts/spec-4-9-purchasereconciler-for-every-recovery-case.md'
+review_loop_iteration: 1
+followup_review_recommended: false
 warnings:
   - 'Story 4.3 (BackgroundWork + WorkManager) is not merged: the port file is copied verbatim from its branch plus the ConsumeRetry kind, and an in-process stand-in runs the job until 4.3 is bound.'
 deferred:
   - 'Story 4.3 rebase: keep 4.3''s core/work/BackgroundWork.kt and add `ConsumeRetry` to BackgroundTaskKind; in workModule register `BackgroundTaskKind.ConsumeRetry to ConsumeRetryTask(get())` in BackgroundTasks; delete InProcessBackgroundWork (+ test) and its two bindings in appModule; in TestYawnAndPawnApp keep one test BackgroundWork binding (4.3''s FakeBackgroundWork; RecordingBackgroundWork can go); bind PurchaseLedger''s PriceSnapshotLookup to the price cache (`{ catalog snapshot priceFor(it)?.price }`) instead of PriceSnapshotLookup.None'
-  - 'Story 4.11: build ReconcileInput from PurchaseLedger.lookup(token); apply ConsumeOnly with PurchaseLedger.consumeOnly(snapshot), LeaveForAutoRefund and OfferReuse(recordStrandedFirst) with PurchaseLedger.recordStranded(snapshot, alarmId); fill PurchaseGranted.orderId from the snapshot; validate ReuseAccepted against the offered product (the reducer now writes a ledger row for it); call markReused only if the reuse flow needs it before the commit (settling a ledger row for a stranded record already makes it reused); run ReplayGrantLedger on WakeActivity open too'
+  - 'Story 4.11: build ReconcileInput from PurchaseLedger.lookup(token) (a settled marker reads Consumed, an unconsumed reuse reads Granted); apply ConsumeOnly with PurchaseLedger.consumeOnly(snapshot), LeaveForAutoRefund and OfferReuse(recordStrandedFirst) with PurchaseLedger.recordStranded(snapshot, alarmId); fill PurchaseGranted.orderId from the snapshot; validate ReuseAccepted against the offered product (the reducer writes a ledger row for it); do NOT call markReused before the ReuseAccepted commit (it is refused without the grant row; settling the row makes the record reused anyway)'
   - 'Story 4.11: a ConsumeOnly without a ledger row that fails is retried only by the next recovery query (the job replays the ledger only)'
-  - 'Story 4.7/4.11: the "An earlier {price} payment is being refunded" label takes PurchaseLedger.refundingPrice(productId): what the stranded payment actually cost, from its record'
-  - 'Story 4.12: map BillingClient.consumeAsync to ConsumeResult; a repeat consume of a consumed token (ITEM_NOT_OWNED after our own consume) is Consumed; never log the token'
-  - 'Story 4.16: read PurchaseRecordRepository.all() (newest first); a stranded record with null alarmId/snoozeNumber shows date and "Not used, refunded automatically by Google"'
+  - 'Story 4.7/4.11: the "An earlier {price} payment is being refunded" label takes PurchaseLedger.refundingPrice(productId): what the stranded payment actually cost, from its record; null (no amount in the label) when that record was not priced by an intent'
+  - 'Story 4.12: map BillingClient.consumeAsync to ConsumeResult: OK = Consumed, ITEM_NOT_OWNED = NotOwned (never Consumed: PurchaseLedger decides by age whether it was our own earlier consume or Google''s refund), anything else = Failed; never log the token'
+  - 'Story 4.3 rebase: InProcessBackgroundWork also ran CONSUME_RETRY_PERIODIC (6 h); 4.3''s WorkManager adapter runs it as unique periodic work (UPDATE)'
+  - 'Story 4.16: read PurchaseRecordRepository.all() (newest first); a stranded record with null alarmId/snoozeNumber shows date and "Not used, refunded automatically by Google"; show an amount only when priceSource is Intent (PriceSource.isAmountPaid), never the Snapshot/Tier/Unknown estimate'
 ---
 
 <intent-contract>
@@ -59,9 +62,17 @@ Between the two databases and Play, each followed by a new process replaying the
 | after the record upsert | consume → settle | 1 |
 | after Play consumed, before the ledger says so | consume again (Play: already consumed = success) | 2 |
 | after the ledger row is consumed | record consumed, row deleted | 1 |
-| after the record is consumed | row deleted | 1 |
+| after the record is consumed | row settled | 1 |
 
-Each ends with one record (consumed, or reused for a reused stranded payment), no ledger row and `snoozesGranted` incremented once (engine test). Duplicate grants of the same token fail their commit.
+Each ends with one record (consumed, or reused and consumed for a reused stranded payment), the ledger row a settled marker and `snoozesGranted` incremented once (engine test). A redelivered grant of the same token fails its commit, also after the payment was settled.
+
+## Review fixes (default taken, owner can change)
+
+- **Settled marker instead of delete (review 2/14):** a settled `grant_ledger` row keeps `settled_at` for 30 days (`purgeSettled` on app start), so a token redelivered after its payment was settled fails its commit and can never grant a second snooze.
+- **Price source (review 10):** `purchase_record.price_source` (`intent`, `snapshot`, `tier`, `unknown`). Only `intent` is the amount paid; `refundingPrice` and (4.16) history show no amount otherwise.
+- **`ConsumeResult.NotOwned` (review 11):** our own earlier consume while the payment (record `purchased_at`) is younger than 60 h; older, Google refunded it: the record becomes stranded, nothing shows it as paid, the row is settled and it is logged.
+- **Reused vs consumed (review 13):** `purchase_record.consumed_at`. A reused record not consumed yet reads as granted to the reconciler and `consumeOnly` consumes it (a restored `app.db` without its ledger row). `markReused` needs the reuse's pending grant row, so a crash before the `ReuseAccepted` commit leaves the record stranded.
+- **Retries (review 12):** every unlock signal (`UnlockSignals`: the first unlock and each wake screen resume) replays the ledger; a failed settle also enqueues `consume-retry-periodic` (6 h, network), which keeps retrying after the one-time job gives up; a row unsettled after 48 h is logged once per process.
 
 ## Decisions (default taken, owner can change)
 
@@ -99,9 +110,29 @@ Each ends with one record (consumed, or reused for a reused stranded payment), n
 
 Status: implemented in fast mode (one agent, unattended Epic 4 run), no review pass yet. Branch `story/4-10-grant-ledger` on `origin/story/4-8-purchase-intents` (`1ad600f`), rebased onto `origin/main` (`8778afe`, 4.8 squash-merged; same tree, no conflicts).
 
-**Verification:** `./gradlew qualityGate :androidApp:assembleDebugAndroidTest --no-daemon` after the rebase: BUILD SUCCESSFUL (13 min 18 s).
+**Verification:** `./gradlew qualityGate :androidApp:assembleDebugAndroidTest --no-daemon` after the rebase: BUILD SUCCESSFUL (13 min 18 s). Re-run after the review fixes: see the review note.
 
 **Residual risks:**
 - Nothing consumes in production until 4.12 (`UnavailableBilling.consume` fails), and nothing grants until 4.11; a ledger row can only exist after both.
 - Until 4.3 is bound, the retry job lives only in the process (no network constraint); app start and resume replay the ledger anyway.
 - A `ConsumeOnly` without a ledger row (lost `runtime.db`) is retried only by later recovery queries (4.11).
+
+## Review (2 reviewers, fast mode)
+
+Two reviewers read `a51fb4c`: one for verification gaps, one for edge cases (the alarm path was untouched). The money-safety review found 2 HIGH defects. Every item was fixed in `fix(4.10): review fixes`, with its test; the schemas were amended in place (app.db v10, runtime.db v3; nothing shipped) and re-exported.
+
+1. **(HIGH) Mutex untested:** a settle and a cold-start `settleAll` run together: one consume, two record writes.
+2. **Never grants twice only in the fake / 14. the guard ended at delete:** settled markers (above); engine test: grant, settle, redeliver → commit fails, one snooze; Room test: the marker refuses the token until purged.
+3. **Room crash table:** exact consumes per crash point (2 after Play consumed, 1 otherwise).
+4. **Pricing order pinned:** the intent beats a cached price (price and snooze number); intents unreadable → the snapshot.
+5. **Scan too narrow:** every write now has its own name (`putRecord`, `markSettled`, `setSettled`, `insertGrant`, `PutGrant(`…), so chained DAO calls, concrete adapters, `commit(grants = …)` and `PutGrant` outside the engine are reported (rogue sources for each).
+6. **Locked app start:** no record, row unchanged, no job.
+7. **`MainActivity` replay:** tested.
+8. **Real wiring:** the app's `InProcessBackgroundWork` runs the job; over the real ledger with Play offline: 4 consumes in the first hour ("gave up after 3 runs"), then the periodic job goes on and settles once Play is back.
+9. **Backup:** a grant committed before the backup; the restore brings the record and no ledger row.
+10. **(HIGH) Estimated prices shown as paid:** `price_source` (above).
+11. **(HIGH) `ITEM_NOT_OWNED` as consumed:** `NotOwned` with the age rule (above).
+12. **Retries stopped after about 90 s:** unlock-signal replay, the periodic job and the 48 h alert (above).
+13. **Reused ambiguity:** `consumed_at` and the guarded `markReused` (above).
+
+**Verification after the fixes:** `./gradlew qualityGate :androidApp:assembleDebugAndroidTest --no-daemon`: BUILD SUCCESSFUL (8 min 36 s). One earlier run failed only in `WakeServiceTest` ("no service started"), the known cross-test flake; it passes alone and on the rerun.

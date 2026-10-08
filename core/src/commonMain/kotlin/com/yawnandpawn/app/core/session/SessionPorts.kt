@@ -83,8 +83,15 @@ sealed interface RuntimeWrite {
 
 /** How a consume ended (Story 4.10). A failure is retried; it never undoes the snooze. */
 sealed interface ConsumeResult {
-    /** Play consumed the token, or had already consumed it (a repeat consume counts as done). */
+    /** Play consumed the token now. */
     data object Consumed : ConsumeResult
+
+    /**
+     * Play does not own the token (`ITEM_NOT_OWNED`): either this app already consumed it (a repeat consume after a crash)
+     * or Google refunded it, for example by its automatic refund of a purchase left unconsumed for 3 days. The adapter
+     * cannot tell which; `PurchaseLedger` decides by the payment's age.
+     */
+    data object NotOwned : ConsumeResult
 
     /** Offline, a service error or billing not ready. [cause] is diagnostic text for the log, never the token. */
     data class Failed(

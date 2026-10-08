@@ -5,6 +5,7 @@ import com.yawnandpawn.app.core.billing.GrantLedgerStore
 import com.yawnandpawn.app.core.billing.LedgerStatus
 import com.yawnandpawn.app.core.billing.Money
 import com.yawnandpawn.app.core.billing.PlayPurchaseState
+import com.yawnandpawn.app.core.billing.PriceSource
 import com.yawnandpawn.app.core.billing.PurchaseRecord
 import com.yawnandpawn.app.core.billing.PurchaseRecordRepository
 import com.yawnandpawn.app.core.billing.PurchaseSnapshot
@@ -18,8 +19,9 @@ import com.yawnandpawn.app.core.work.BackgroundWork
 import kotlin.time.Instant
 
 /**
- * In-memory [GrantLedgerStore] with the rules of `RoomGrantLedgerStore` (Story 4.10): rows by token, oldest first.
- * [FakeActiveSessionStore] inserts into it on commit ([put]); set [failure] to make every call fail with it.
+ * In-memory [GrantLedgerStore] with the rules of `RoomGrantLedgerStore` (Story 4.10): rows by token, [all] lists the
+ * pending ones oldest first, settled markers stay until purged. [FakeActiveSessionStore] inserts into it on commit
+ * ([put]); set [failure] to make every call fail with it.
  */
 class FakeGrantLedgerStore : GrantLedgerStore {
     private val rows = linkedMapOf<PurchaseToken, GrantLedgerEntry>()
@@ -37,14 +39,24 @@ class FakeGrantLedgerStore : GrantLedgerStore {
 
     fun contains(token: PurchaseToken): Boolean = token in rows
 
-    override suspend fun all(): Outcome<List<GrantLedgerEntry>, DomainError> = guarded { entries }
+    override suspend fun all(): Outcome<List<GrantLedgerEntry>, DomainError> = guarded { entries.filter { it.settledAt == null } }
 
     override suspend fun get(token: PurchaseToken): Outcome<GrantLedgerEntry?, DomainError> = guarded { rows[token] }
 
     override suspend fun markConsumed(token: PurchaseToken): Outcome<Unit, DomainError> =
         guarded { rows[token]?.let { rows[token] = it.copy(status = LedgerStatus.Consumed) } }
 
-    override suspend fun delete(token: PurchaseToken): Outcome<Unit, DomainError> = guarded { rows.remove(token) }
+    override suspend fun markSettled(
+        token: PurchaseToken,
+        at: Instant,
+    ): Outcome<Unit, DomainError> = guarded { rows[token]?.let { rows[token] = it.copy(settledAt = at) } }
+
+    override suspend fun purgeSettledBefore(instant: Instant): Outcome<Int, DomainError> =
+        guarded {
+            val old = rows.values.filter { it.settledAt?.let { at -> at < instant } == true }.map { it.token }
+            old.forEach(rows::remove)
+            old.size
+        }
 
     private fun <T> guarded(block: () -> T): Outcome<T, DomainError> = failure?.let { Outcome.Failure(it) } ?: Outcome.Success(block())
 }
@@ -68,7 +80,7 @@ class FakePurchaseRecordRepository : PurchaseRecordRepository {
     override suspend fun get(tokenHash: String): Outcome<PurchaseRecord?, DomainError> =
         failure?.let { Outcome.Failure(it) } ?: Outcome.Success(rows[tokenHash])
 
-    override suspend fun put(record: PurchaseRecord): Outcome<Unit, DomainError> {
+    override suspend fun putRecord(record: PurchaseRecord): Outcome<Unit, DomainError> {
         failure?.let { return Outcome.Failure(it) }
         puts++
         rows[record.tokenHash] = record
@@ -110,7 +122,10 @@ fun aGrant(
     createdAt: Instant = DEFAULT_FAKE_INSTANT,
 ): GrantLedgerEntry = GrantLedgerEntry(PurchaseToken(token), sessionId, alarmId, productId, snoozeNumber, orderId, status, createdAt)
 
-/** A purchase record of [token] (stored by its hash): snooze 1 of [sessionId] at $1.00, [status] granted. */
+/**
+ * A purchase record of [token] (stored by its hash): snooze 1 of [sessionId] at $1.00 from its intent, [status] granted.
+ * Consumed records get [purchasedAt] as their consume time unless told otherwise.
+ */
 fun aPurchaseRecord(
     token: String = "token-1",
     status: RecordStatus = RecordStatus.Granted,
@@ -119,8 +134,10 @@ fun aPurchaseRecord(
     snoozeNumber: Int? = 1,
     productId: String = "snooze_usd_01",
     price: Money = Money.of(1, "USD"),
+    priceSource: PriceSource = PriceSource.Intent,
     orderId: String? = null,
     purchasedAt: Instant = DEFAULT_FAKE_INSTANT,
+    consumedAt: Instant? = purchasedAt.takeIf { status == RecordStatus.Consumed },
 ): PurchaseRecord =
     PurchaseRecord(
         tokenHash = PurchaseToken(token).hash(),
@@ -130,8 +147,10 @@ fun aPurchaseRecord(
         alarmId = alarmId,
         snoozeNumber = snoozeNumber,
         price = price,
+        priceSource = priceSource,
         purchasedAt = purchasedAt,
         status = status,
+        consumedAt = consumedAt,
         updatedAt = purchasedAt,
     )
 

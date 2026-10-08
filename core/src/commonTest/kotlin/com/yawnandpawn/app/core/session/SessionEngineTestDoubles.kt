@@ -68,7 +68,10 @@ internal class EngineTime(
  * (Story 4.8) and grant ledger rows (Story 4.10) its commits wrote: a commit is all or nothing, and an intent id or a
  * token already stored fails it, as in Room.
  */
-internal class InMemorySessionStore : ActiveSessionStore {
+internal class InMemorySessionStore(
+    /** The grant ledger rows written by successful commits, by token (Story 4.10); a test may share it with a ledger. */
+    val grants: MutableMap<PurchaseToken, GrantLedgerEntry> = linkedMapOf(),
+) : ActiveSessionStore {
     /** The stored row; null when nothing is stored. */
     var row: String? = null
 
@@ -84,9 +87,6 @@ internal class InMemorySessionStore : ActiveSessionStore {
 
     /** The intents written by successful commits, by id. */
     val intents = linkedMapOf<PurchaseIntentId, PurchaseIntent>()
-
-    /** The grant ledger rows written by successful commits, by token (Story 4.10). */
-    val grants = linkedMapOf<PurchaseToken, GrantLedgerEntry>()
 
     /** The writes of each successful commit, in order (empty for a commit without any). */
     val writeLog = mutableListOf<List<RuntimeWrite>>()

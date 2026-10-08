@@ -163,8 +163,9 @@ val MIGRATION_9_10: Migration =
             connection.execSQL(
                 "CREATE TABLE IF NOT EXISTS `purchase_record` (`token_hash` TEXT NOT NULL, `order_id` TEXT, " +
                     "`product_id` TEXT NOT NULL, `session_id` TEXT, `alarm_id` TEXT, `snooze_number` INTEGER, " +
-                    "`price_micros` INTEGER NOT NULL, `currency` TEXT NOT NULL, `purchased_at` INTEGER NOT NULL, " +
-                    "`status` TEXT NOT NULL, `updated_at` INTEGER NOT NULL, PRIMARY KEY(`token_hash`))",
+                    "`price_micros` INTEGER NOT NULL, `currency` TEXT NOT NULL, `price_source` TEXT NOT NULL, " +
+                    "`purchased_at` INTEGER NOT NULL, `status` TEXT NOT NULL, `consumed_at` INTEGER, " +
+                    "`updated_at` INTEGER NOT NULL, PRIMARY KEY(`token_hash`))",
             )
             connection.execSQL("CREATE INDEX IF NOT EXISTS `index_purchase_record_purchased_at` ON `purchase_record` (`purchased_at`)")
         }

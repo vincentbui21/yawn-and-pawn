@@ -4,6 +4,7 @@ import android.app.AlarmManager
 import android.content.Intent
 import android.media.AudioManager
 import android.os.Looper
+import android.os.UserManager
 import androidx.test.core.app.ApplicationProvider
 import com.yawnandpawn.app.MainActivity
 import com.yawnandpawn.app.StopAppRule
@@ -268,7 +269,47 @@ class RestoreEntryPointsTest {
         assertEquals(RecordStatus.Granted, assertIs<Outcome.Success<PurchaseRecord?>>(record).value?.status)
         // Play Billing arrives in Story 4.12: until then the consume fails and the row waits for the next start or resume.
         assertEquals(Outcome.Success(listOf(grant)), runBlocking { koin().get<GrantLedgerStore>().all() })
-        assertEquals(listOf(PurchaseLedger.CONSUME_RETRY_JOB), (koin().get<BackgroundWork>() as RecordingBackgroundWork).jobs)
+        val jobs = (koin().get<BackgroundWork>() as RecordingBackgroundWork).jobs
+        assertEquals(listOf(PurchaseLedger.CONSUME_RETRY_JOB, PurchaseLedger.CONSUME_RETRY_PERIODIC), jobs)
+    }
+
+    @Test
+    fun `app start before the first unlock leaves the grant ledger alone and asks Play nothing (AD-15)`() {
+        awaitWork()
+        val grant = aGrant(token = "while-locked", sessionId = "s")
+        runBlocking { koin().get<ActiveSessionDao>().commit(null, grants = listOf(GrantLedgerEntity.of(grant))) }
+        stopApp()
+        shadowOf(app.getSystemService(UserManager::class.java)).setUserUnlocked(false)
+
+        app.onCreate()
+        awaitWork()
+
+        assertEquals(Outcome.Success(null), runBlocking { koin().get<PurchaseRecordRepository>().get(grant.token.hash()) })
+        assertEquals(Outcome.Success(listOf(grant)), runBlocking { koin().get<GrantLedgerStore>().all() })
+        assertEquals(emptyList(), (koin().get<BackgroundWork>() as RecordingBackgroundWork).jobs)
+    }
+
+    @Test
+    fun `MainActivity start replays the grant ledger (Story 4-10)`() {
+        awaitWork()
+        val grant = aGrant(token = "left-by-a-crash", sessionId = "s")
+        runBlocking { koin().get<ActiveSessionDao>().commit(null, grants = listOf(GrantLedgerEntity.of(grant))) }
+
+        buildActivity(MainActivity::class.java).create().start()
+        awaitWork()
+
+        val record = runBlocking { koin().get<PurchaseRecordRepository>().get(grant.token.hash()) }
+        assertEquals(RecordStatus.Granted, assertIs<Outcome.Success<PurchaseRecord?>>(record).value?.status)
+    }
+
+    @Test
+    fun `the app's real retry worker is bound and runs the consume retry job`() {
+        awaitWork()
+
+        assertEquals(Outcome.Success(Unit), koin().get<InProcessBackgroundWork>().enqueue(PurchaseLedger.CONSUME_RETRY_JOB))
+        awaitWork()
+
+        assertTrue(ShadowLog.getLogsForTag(AndroidLogger.TAG).none { "run background task" in it.msg })
     }
 
     @Test

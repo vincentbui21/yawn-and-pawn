@@ -3,6 +3,8 @@ package com.yawnandpawn.app.core.config
 import com.yawnandpawn.app.core.alarm.Alarm
 import com.yawnandpawn.app.core.alarm.AlarmWriteLock
 import com.yawnandpawn.app.core.alarm.InMemoryAlarms
+import com.yawnandpawn.app.core.alarm.InMemoryCheckConfigs
+import com.yawnandpawn.app.core.alarm.RecordingLogger
 import com.yawnandpawn.app.core.alarm.SequentialIds
 import com.yawnandpawn.app.core.alarm.TestClock
 import com.yawnandpawn.app.core.alarm.TestZone
@@ -112,6 +114,42 @@ class SettingsUseCasesTest {
             assertEquals(Outcome.Success(Saved(sevenThirty)), setBaseFee(1))
             assertEquals(2, settings.settings.value.baseFeeTier, "the due value is live now")
             assertEquals(listOf(PendingChange(null, SettingValue.BaseFeeTier(1), sevenThirty)), pending.changes.value)
+        }
+
+    @Test
+    fun `a raise whose live write fails leaves no lower pending fee to be promoted later (review 3)`() =
+        runTest {
+            alarmAt(LocalTime(7, 30))
+            setBaseFee(1)
+            settings.writeFailure = DomainError.StorageFailure("disk")
+
+            assertEquals(Outcome.Failure(DomainError.StorageFailure("disk")), setBaseFee(5))
+            assertTrue(pending.changes.value.isEmpty(), "the pending 1 went first")
+
+            settings.writeFailure = null
+            clock.now = sevenThirty.scheduledAt + PendingChange.SETTLE + 1.hours
+            PromotePendingChanges(
+                pending,
+                settings,
+                alarms,
+                InMemoryCheckConfigs(alarms),
+                clock,
+                AlarmWriteLock(),
+                RecordingLogger(),
+            ) { null }()
+            assertEquals(3, settings.settings.value.baseFeeTier, "never the 1 the raise replaced")
+        }
+
+    @Test
+    fun `a raise whose pending removal fails writes nothing (review 3)`() =
+        runTest {
+            alarmAt(LocalTime(7, 30))
+            setBaseFee(1)
+            pending.removeFailure = DomainError.StorageFailure("disk")
+
+            assertEquals(Outcome.Failure(DomainError.StorageFailure("disk")), setBaseFee(5))
+            assertEquals(3, settings.settings.value.baseFeeTier)
+            assertEquals(1, pending.changes.value.size)
         }
 
     @Test

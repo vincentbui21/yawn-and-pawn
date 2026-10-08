@@ -35,13 +35,14 @@ import kotlin.test.assertIs
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
 import kotlin.time.Duration.Companion.hours
+import kotlin.time.Duration.Companion.milliseconds
 import kotlin.time.Duration.Companion.minutes
 import kotlin.time.Instant
 
 /** Story 4.4: PromotePendingChanges and RecordCommitmentEvent. */
 class PromotePendingChangesTest {
     private val sevenThirty = Instant.parse("2027-03-09T07:30:00Z")
-    private val clock = TestClock(sevenThirty + 10.minutes)
+    private val clock = TestClock(sevenThirty + 40.minutes)
     private val alarms = InMemoryAlarms()
     private val checks = InMemoryCheckConfigs(alarms)
     private val settings = InMemoryGlobalSettings(GlobalSettings(baseFeeTier = 3, maxSnoozes = 2))
@@ -95,13 +96,13 @@ class PromotePendingChangesTest {
     @Test
     fun `a change waits until its occurrence has passed`() =
         runTest {
-            clock.now = sevenThirty
+            clock.now = sevenThirty + PendingChange.SETTLE
             pending.changes.value = listOf(change(SettingValue.BaseFeeTier(1)))
 
             assertEquals(Outcome.Success(0), promote())
             assertEquals(3, settings.settings.value.baseFeeTier)
 
-            clock.now = sevenThirty + 1.minutes
+            clock.now = sevenThirty + PendingChange.SETTLE + 1.milliseconds
             assertEquals(Outcome.Success(1), promote())
             assertEquals(1, settings.settings.value.baseFeeTier)
         }

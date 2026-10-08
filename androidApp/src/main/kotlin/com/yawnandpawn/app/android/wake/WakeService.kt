@@ -22,9 +22,8 @@ import com.yawnandpawn.app.core.alarm.orderedEntries
 import com.yawnandpawn.app.core.checks.AccessibilityState
 import com.yawnandpawn.app.core.checks.CheckAnswer
 import com.yawnandpawn.app.core.checks.Puzzle
-import com.yawnandpawn.app.core.config.GlobalSettingsRepository
-import com.yawnandpawn.app.core.config.PendingChangeRepository
 import com.yawnandpawn.app.core.config.PromotePendingChanges
+import com.yawnandpawn.app.core.config.ReadFireSettings
 import com.yawnandpawn.app.core.crash.CrashReporter
 import com.yawnandpawn.app.core.error.DomainError
 import com.yawnandpawn.app.core.error.Outcome
@@ -37,7 +36,6 @@ import com.yawnandpawn.app.core.log.WakeStage
 import com.yawnandpawn.app.core.log.diagnostic
 import com.yawnandpawn.app.core.session.CheckRun
 import com.yawnandpawn.app.core.session.ConfigResolver
-import com.yawnandpawn.app.core.session.GlobalSettings
 import com.yawnandpawn.app.core.session.SessionData
 import com.yawnandpawn.app.core.session.SessionEngine
 import com.yawnandpawn.app.core.session.SessionEvent
@@ -132,8 +130,7 @@ class WakeService :
     private val userLock: UserLockState by inject()
     private val accessibility: AccessibilityState by inject()
     private val sessionLock: SessionLockGuard by inject()
-    private val globalSettings: GlobalSettingsRepository by inject()
-    private val pendingChanges: PendingChangeRepository by inject()
+    private val fireSettings: ReadFireSettings by inject()
     private val promotePending: PromotePendingChanges by inject()
     private val unlockSignals: UnlockSignals by inject()
     private val calls: CallDetector by inject()
@@ -400,19 +397,18 @@ class WakeService :
             }
         // TalkBack on at the fire: the session's Memory Sequence uses the numbered variant, frozen for its snooze re-rings too (Story 3.8).
         val accessible = accessibility.isScreenReaderOn()
-        // The commitment lock (Story 4.4): the pending changes first, then the live settings (promotion writes the live
-        // value before deleting the pending one, so this order always sees one of the two).
-        val pending = readOrDefault("read pending changes", emptyList()) { pendingChanges.all() }
-        val settings = readOrDefault("read global settings", GlobalSettings()) { globalSettings.get() }
+        // The commitment lock (Story 4.4): the global settings and pending changes from one snapshot, the alarm's pending
+        // changes beside it, within 500 ms; the last-known settings when the store is slow or broken (review fix 11).
+        val fire = fireSettings.read(alarm.id)
         val config =
             ConfigResolver.resolve(
                 alarm,
                 checks,
-                settings,
+                fire.settings,
                 testMode = false,
                 scheduledAt = fired.scheduledAt,
                 accessible = accessible,
-                pendingChanges = pending,
+                pendingChanges = fire.pendingChanges,
             )
         val locked = !userLock.isUserUnlocked()
         val event =
@@ -435,21 +431,6 @@ class WakeService :
             }
         }
     }
-
-    /**
-     * A settings read for the fire: its value, or [default] (logged) when it fails or takes longer than
-     * [SETTINGS_READ_TIMEOUT]. A setting never fails or delays the ring: the defaults and the live alarm ring instead.
-     */
-    private suspend fun <T> readOrDefault(
-        operation: String,
-        default: T,
-        read: suspend () -> Outcome<T, DomainError>,
-    ): T =
-        when (val result = withTimeoutOrNull(SETTINGS_READ_TIMEOUT) { read() }) {
-            null -> default.also { logger.log(LogEvent.OperationFailed(operation, "timed out")) }
-            is Outcome.Success -> result.value
-            is Outcome.Failure -> default.also { logger.log(LogEvent.OperationFailed.of(operation, result.error)) }
-        }
 
     private fun alarmUnreadable(
         fired: AlarmFired,
@@ -726,9 +707,6 @@ class WakeService :
         /** The bound on the alarm read before a merge (Story 2.9 review): a slower read counts as a failure and merges. */
         internal val ALARM_READ_TIMEOUT = 3.seconds
         private const val MAX_CRASH_RESTARTS = 3
-
-        /** The longest a fire waits for the settings DataStore or the pending changes (Story 4.4) before ringing the defaults. */
-        private val SETTINGS_READ_TIMEOUT = 1.seconds
 
         /** The explicit intent for [action]. */
         fun intent(

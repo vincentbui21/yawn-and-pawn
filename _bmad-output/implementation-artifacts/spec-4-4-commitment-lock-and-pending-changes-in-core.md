@@ -60,7 +60,7 @@ at once (AD-16, FR-SET-1, FR-ALM-2). Nothing implements that yet. Also, nothing 
     alarm, so the editor and the tests are unchanged.
 - **`ConfigResolver.resolve(..., pendingChanges)`:** a pending change applies only to an occurrence strictly after its
   `effectiveAfter.scheduledAt`. The resolved config is frozen at `AlarmFired` as before.
-- **`PromotePendingChanges`:** once now > `effectiveAfter.scheduledAt`, and unless the session in progress rings that
+- **`PromotePendingChanges`:** once now > `effectiveAfter.scheduledAt` + `SETTLE` (31 min, review fix 9), and unless the session in progress rings that
   very occurrence, it writes the pending value as the live value and then deletes the pending change. It runs:
   - when the wake service shuts down after a session (Completed or Missed, then `Recorded`), as a one-shot job in the
     application scope (a long-lived collector would keep `ApplicationScope.awaitChildren()` in tests from returning);
@@ -77,9 +77,14 @@ at once (AD-16, FR-SET-1, FR-ALM-2). Nothing implements that yet. Also, nothing 
   - **Settings DataStore:** `base_fee_tier` and `max_snoozes` (the persisted `GlobalSettings`), and
     `pending_global_changes` (a JSON list). AD-6: no settings copy in app.db.
   - `CompositePendingChangeRepository` routes alarm changes to Room and global ones to DataStore.
-- **The fire path (`WakeService`):** it reads the pending changes first and the live settings second. The reverse order
-  of promotion's writes makes the pair consistent. It then resolves with both. Every read is bounded by a 1 s timeout,
-  and a failure falls back to the defaults or to no pending change, with a log entry. It never fails or delays the ring.
+- **The fire path (`WakeService` → `ReadFireSettings`, revised in review):**
+  - It reads one snapshot of the settings DataStore (the live global settings and the global pending changes together),
+    and the alarm's own pending changes at the same time, within one 500 ms budget.
+  - A store that fails, throws or is slow rings with the last-known snapshot. That snapshot is kept in
+    `settings_fallback.xml` (device-protected, excluded from backup) after every successful read or write. The defaults
+    are used only when there never was a snapshot.
+  - Unread alarm pending changes count as none, which leaves the live, stronger values. Every fallback is logged, and
+    the read never fails or delays the ring.
 
 ## Boundaries & Constraints
 
@@ -188,3 +193,46 @@ at once (AD-16, FR-SET-1, FR-ALM-2). Nothing implements that yet. Also, nothing 
 ## Auto Run Result
 
 See the commit `feat(4.4)` and the coordinator's report.
+
+## Review (2 reviewers, fast mode)
+
+Two reviewers (verification gaps, edge cases) found 12 items. All 12 are fixed in `fix(4.4): review fixes`, each with
+its test.
+
+1. **Fire-time read untested.** New Robolectric tests in `CommitmentLockWakeTest`:
+   - a stored tier 7 with a change waiting for this very occurrence rings tier 7;
+   - a change that waited for an earlier occurrence applies;
+   - a failing store rings the last-known tier and logs the failure;
+   - a hanging store holds the ring for the 500 ms budget only, then rings the defaults.
+2. **Promotion wiring untested.**
+   - `rescheduleAll` on the real Koin graph promotes a due change.
+   - The wake service promotes a due change once its session is over.
+   - A core test fails by timeout if the promotion ever moves inside the scheduling lock (deadlock).
+3. **and 10. Write order when a change applies at once.** `SaveGlobalSetting` and `SaveAlarm` now delete the field's
+   pending change first, then write the live value. A deferred change still writes live first, then pending. Tests cover
+   a failed live write (no weaker pending value survives to be promoted) and a failed removal (nothing changes).
+4. **The new occurrence was never pinned in tests.** New tests:
+   - an alarm moved into the window;
+   - an alarm switched on in the save;
+   - an alarm switched off in the save (it still locks for the occurrence it gave up).
+5. **Global changes and other alarms.** A global change waiting for alarm a applies to alarm b's 08:00 ring but not to
+   its 07:00 ring.
+6. **A due change through `SaveAlarm`.** It is promoted on the way, and the new weakening waits (25 s due, edit to
+   30 s: the row keeps 25, 30 waits; the review's 30 → 40 is outside the 15–30 s range).
+7. **Millisecond boundaries.** 8 h + 1 ms is outside the window, and `appliesTo` at the occurrence + 1 ms is true.
+8. **Misleading test names.** Renamed.
+9. **Promotion before `AlarmFired` (alarm safety).**
+   - A change is due only `PendingChange.SETTLE` (30 min no-interaction timeout + 1 min) after its occurrence.
+   - Before the engine is restored, promotion also checks the stored session in runtime.db.
+   - Test: a cold start one second after the occurrence promotes nothing, so the protected ring resolves strong.
+   - Default taken: the same `isDue` is used at save time too. That is stricter than "save-time only", so a save racing
+     the fire cannot promote either.
+10. Same as 3.
+11. **One snapshot, a 500 ms budget, last-known settings.** As described in "The fire path" above.
+    - Default taken: the last-known snapshot lives in its own device-protected SharedPreferences file, not in
+      runtime.db. runtime.db v2 belongs to Story 4.8, and the file stays readable when the DataStore is the part that
+      failed.
+12. **Harder checks in Random mode.**
+    - A plan with at most one counted check counts as All.
+    - Random to Random with the same types, each at least as hard, is Strengthening.
+    - Tests: the placeholder to Math Hard; Math Easy to Math Hard; the same types made harder; a type swapped (weaker).

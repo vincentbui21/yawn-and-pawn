@@ -10,6 +10,7 @@ import kotlin.test.assertNull
 import kotlin.test.assertTrue
 import kotlin.time.Duration
 import kotlin.time.Duration.Companion.hours
+import kotlin.time.Duration.Companion.milliseconds
 import kotlin.time.Duration.Companion.minutes
 import kotlin.time.Duration.Companion.seconds
 import kotlin.time.Instant
@@ -37,6 +38,8 @@ class LockWindowTest {
                 (7.hours + 59.minutes + 59.seconds) to true,
                 8.hours to true,
                 (8.hours + 1.seconds) to false,
+                // Review 7: one millisecond past 8 h is outside.
+                (8.hours + 1.milliseconds) to false,
                 1.seconds to true,
                 Duration.ZERO to false,
                 (-1).seconds to false,

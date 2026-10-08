@@ -153,7 +153,7 @@ class SaveAlarmLockTest {
         }
 
     @Test
-    fun `moving the alarm locks for the stored and the new occurrence, whichever are inside the window`() =
+    fun `moving the alarm locks for the stored occurrence while it is inside the window`() =
         runTest {
             stored()
 
@@ -172,7 +172,7 @@ class SaveAlarmLockTest {
         }
 
     @Test
-    fun `a disabled alarm is never locked`() =
+    fun `an alarm off both before and after the save is never locked`() =
         runTest {
             stored()
             repository.alarms.value += "id-1" to
@@ -228,6 +228,99 @@ class SaveAlarmLockTest {
 
             pending.failure = DomainError.StorageFailure("disk")
             assertEquals(Outcome.Failure(DomainError.StorageFailure("disk")), save(draft.copy(id = "id-1", graceSeconds = 30)))
+        }
+
+    private fun storedAs(change: Alarm.() -> Alarm) {
+        repository.alarms.value += "id-1" to
+            repository.alarms.value
+                .getValue("id-1")
+                .change()
+    }
+
+    private fun storedGrace(): Int =
+        repository.alarms.value
+            .getValue("id-1")
+            .graceSeconds
+
+    @Test
+    fun `moving the alarm into the window locks for the new occurrence (review 4)`() =
+        runTest {
+            stored()
+            storedAs { copy(time = LocalTime(9, 0)) }
+
+            val saved = edit { copy(time = LocalTime(7, 0), graceSeconds = 30) }
+
+            assertEquals(Occurrence("id-1", Instant.parse("2027-03-09T07:00:00Z")), saved.pendingUntil)
+            assertEquals(20, storedGrace())
+            assertEquals(
+                LocalTime(7, 0),
+                repository.alarms.value
+                    .getValue("id-1")
+                    .time,
+            )
+        }
+
+    @Test
+    fun `switching an alarm on in the save locks for its new occurrence (review 4)`() =
+        runTest {
+            stored()
+            storedAs { copy(enabled = false) }
+
+            assertEquals(sevenThirty, edit { copy(enabled = true, graceSeconds = 30) }.pendingUntil)
+            assertEquals(20, storedGrace())
+        }
+
+    @Test
+    fun `switching an alarm off in the save still locks for the occurrence it gave up (review 4)`() =
+        runTest {
+            stored()
+
+            assertEquals(sevenThirty, edit { copy(enabled = false, graceSeconds = 30) }.pendingUntil)
+            assertEquals(20, storedGrace())
+            assertEquals(
+                false,
+                repository.alarms.value
+                    .getValue("id-1")
+                    .enabled,
+            )
+        }
+
+    @Test
+    fun `a pending change past its occurrence is promoted on the way, and the new weakening waits (review 6)`() =
+        runTest {
+            stored()
+            pending.changes.value = listOf(PendingChange("id-1", SettingValue.GraceSeconds(25), Occurrence("id-1", now - 1.hours)))
+
+            assertEquals(sevenThirty, edit { copy(graceSeconds = 30) }.pendingUntil)
+
+            assertEquals(25, storedGrace(), "the due value is live")
+            assertEquals(listOf(PendingChange("id-1", SettingValue.GraceSeconds(30), sevenThirty)), pending.changes.value)
+        }
+
+    @Test
+    fun `a strengthening whose row write fails leaves no weaker pending change behind (review 3)`() =
+        runTest {
+            stored()
+            edit { copy(graceSeconds = 30) }
+            repository.failure = DomainError.StorageFailure("disk")
+
+            assertEquals(Outcome.Failure(DomainError.StorageFailure("disk")), save.save(draft.copy(id = "id-1", graceSeconds = 15)))
+
+            assertEquals(20, storedGrace(), "the old live value stays")
+            assertTrue(pending.changes.value.isEmpty(), "the weaker 30 can never be promoted later")
+        }
+
+    @Test
+    fun `a strengthening whose pending removal fails changes nothing (review 3)`() =
+        runTest {
+            stored()
+            edit { copy(graceSeconds = 30) }
+            pending.removeFailure = DomainError.StorageFailure("disk")
+
+            assertEquals(Outcome.Failure(DomainError.StorageFailure("disk")), save.save(draft.copy(id = "id-1", graceSeconds = 15)))
+
+            assertEquals(20, storedGrace())
+            assertEquals(listOf(PendingChange("id-1", SettingValue.GraceSeconds(30), sevenThirty)), pending.changes.value)
         }
 
     @Test

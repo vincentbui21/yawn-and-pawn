@@ -43,19 +43,33 @@ fun classify(
  * - [ChangeKind.NoChange] when the mode is the same and the entries are the same types at the same difficulty and count,
  *   in any order; a registered code (Story 3.10) and the order do not make a plan easier, so a new sticker or a reorder
  *   is never held back;
- * - [ChangeKind.Strengthening] only when [new] uses mode All, contains every type of [old], and each type's difficulty
- *   (for a type that has one) and count are at least the old ones;
- * - anything else (fewer types, Random mode, a lower difficulty or count, a type swapped) is [ChangeKind.Weakening].
+ * - [ChangeKind.Strengthening] when [new] uses mode All, contains every type of [old], and each type's difficulty (for a
+ *   type that has one) and count are at least the old ones; or (review fix 12) when both are Random with the same types,
+ *   each at least as hard (a ring picks one of the same types, never an easier one);
+ * - anything else (fewer types, a type added to or swapped in a Random plan, All to Random, a lower difficulty or
+ *   count) is [ChangeKind.Weakening].
+ *
+ * A plan with at most one check runs it on every ring whatever its mode, so it counts as All (review fix 12: Math Easy
+ * to Math Hard in Random mode is harder).
  */
 fun classifyChecks(
     old: CheckPlan,
     new: CheckPlan,
-): ChangeKind =
-    when {
-        old.mode == new.mode && old.strength() == new.strength() -> ChangeKind.NoChange
-        new.mode == CheckMode.All && old.counted().all { before -> new.entries.any { it.atLeast(before) } } -> ChangeKind.Strengthening
+): ChangeKind {
+    val oldMode = old.effectiveMode()
+    val newMode = new.effectiveMode()
+    val everyOldAtLeastAsHard = old.counted().all { before -> new.counted().any { it.atLeast(before) } }
+    val sameTypes = old.counted().map { it.type.id }.toSet() == new.counted().map { it.type.id }.toSet()
+    return when {
+        oldMode == newMode && old.strength() == new.strength() -> ChangeKind.NoChange
+        newMode == CheckMode.All && everyOldAtLeastAsHard -> ChangeKind.Strengthening
+        oldMode == CheckMode.Random && newMode == CheckMode.Random && sameTypes && everyOldAtLeastAsHard -> ChangeKind.Strengthening
         else -> ChangeKind.Weakening
     }
+}
+
+/** [CheckPlan.mode], except that a plan with at most one counted check runs it on every ring: All. */
+private fun CheckPlan.effectiveMode(): CheckMode = if (counted().size <= 1) CheckMode.All else mode
 
 private fun higherIsStronger(
     old: Int,

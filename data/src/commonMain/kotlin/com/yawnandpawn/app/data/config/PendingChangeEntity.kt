@@ -52,6 +52,9 @@ abstract class PendingChangeDao {
     @Query("SELECT * FROM pending_change ORDER BY alarm_id ASC, field ASC")
     abstract suspend fun all(): List<PendingChangeEntity>
 
+    @Query("SELECT * FROM pending_change WHERE alarm_id = :alarmId ORDER BY field ASC")
+    abstract suspend fun forAlarm(alarmId: String): List<PendingChangeEntity>
+
     /** Replaces the row of the same alarm and field (no other table refers to it). */
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     abstract suspend fun put(change: PendingChangeEntity)

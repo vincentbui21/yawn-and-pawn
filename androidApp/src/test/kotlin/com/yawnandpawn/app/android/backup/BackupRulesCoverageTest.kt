@@ -92,6 +92,9 @@ class BackupRulesCoverageTest {
         // The commitment lock (Story 4.4): the global settings and a global pending change live in the settings DataStore,
         // an alarm's pending change and a commitment event in app.db; no new file, all backed up.
         assertIs<Outcome.Success<*>>(runBlocking { koin.get<SetBaseFee>()(3) })
+        // The write keeps the last-known settings for the fire (review fix 11) in their own, excluded, preferences file.
+        val fallback = File(app.app.createDeviceProtectedStorageContext().dataDir, "shared_prefs/settings_fallback.xml")
+        app.awaitUntil("the last-known settings are written") { fallback.isFile }
         val waitsFor = Occurrence(alarmId, Instant.parse("2027-03-09T06:00:00Z"))
         val pending = koin.get<PendingChangeRepository>()
         assertIs<Outcome.Success<*>>(runBlocking { pending.put(PendingChange(null, SettingValue.MaxSnoozes(5), waitsFor)) })

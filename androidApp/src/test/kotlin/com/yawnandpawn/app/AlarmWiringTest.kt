@@ -17,6 +17,7 @@ import com.yawnandpawn.app.core.config.CommitmentEventRepository
 import com.yawnandpawn.app.core.config.GlobalSettingsRepository
 import com.yawnandpawn.app.core.config.PendingChangeRepository
 import com.yawnandpawn.app.core.config.PromotePendingChanges
+import com.yawnandpawn.app.core.config.ReadFireSettings
 import com.yawnandpawn.app.core.config.RecordCommitmentEvent
 import com.yawnandpawn.app.core.config.SetBaseFee
 import com.yawnandpawn.app.core.config.SetMaxSnoozes
@@ -67,6 +68,7 @@ class AlarmWiringTest {
         assertNotNull(koin.get<SetMaxSnoozes>())
         assertNotNull(koin.get<RecordCommitmentEvent>())
         assertSame(koin.get<PromotePendingChanges>(), koin.get<PromotePendingChanges>())
+        assertNotNull(koin.get<ReadFireSettings>())
     }
 
     @Test

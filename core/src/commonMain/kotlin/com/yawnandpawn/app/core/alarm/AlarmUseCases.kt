@@ -157,8 +157,9 @@ class SaveAlarm(
         }
 
     /**
-     * Stores the edit [draft] of [stored] through the commitment lock: the row and its checks first (the locked fields at
-     * their decided live values), then each field's pending change put or removed.
+     * Stores the edit [draft] of [stored] through the commitment lock: the pending changes of fields applied now are
+     * removed, then the row and its checks are stored (the locked fields at their decided live values), then the pending
+     * changes of deferred fields are put.
      */
     private suspend fun storeEdit(
         stored: Alarm,
@@ -168,10 +169,10 @@ class SaveAlarm(
         val edited = draft.toAlarm(stored.id, stored.requestCode, stored.createdAt).copy(updatedAt = now)
         (validate(edited) ?: validateChecks(draft.checks))?.let { return Outcome.Failure(DomainError.InvalidAlarm(it)) }
         return checkConfigRepository.forAlarm(stored.id).flatMap { rows ->
-            pendingRepository.all().flatMap { all ->
+            pendingRepository.forAlarm(stored.id).flatMap { own ->
                 val zone = timeZoneProvider.current()
                 val window = LockWindow.latestOf(listOfNotNull(LockWindow.of(stored, now, zone), LockWindow.of(edited, now, zone)))
-                val mine = all.filter { it.alarmId == stored.id }.associateBy { it.field }
+                val mine = own.associateBy { it.field }
                 val liveEntries = rows.orderedEntries().ifEmpty { CheckConfig.DEFAULT_ENTRIES }
                 val grace =
                     CommitmentRules.decide(
@@ -194,27 +195,42 @@ class SaveAlarm(
                 // A code registered in this edit is never held back (a new sticker is not a weaker plan).
                 val plan = (checks.live as SettingValue.Checks).plan.withCodesFrom(draft.checks)
                 val row = edited.copy(graceSeconds = (grace.live as SettingValue.GraceSeconds).seconds, checkMode = plan.mode)
-                // Armed as soon as the row is stored: a failed pending write must never leave the alarm armed at its old time.
-                storeWithChecks(checkConfigRepository, row, plan.entries, now)
+                // Review fix 3: a change applied now drops its pending change before the row is written, so a failure between
+                // never leaves a weaker pending value to undo it later; a deferred change is put after the row. The row is
+                // armed as soon as it is stored: a failed pending write must never leave the alarm armed at its old time.
+                clearApplied(grace, mine)
+                    .flatMap { clearApplied(checks, mine) }
+                    .flatMap { storeWithChecks(checkConfigRepository, row, plan.entries, now) }
                     .onSuccess(scheduling::sync)
-                    .flatMap { alarm -> storePending(grace, mine).flatMap { storePending(checks, mine) }.map { alarm } }
+                    .flatMap { alarm -> putDeferred(grace, mine).flatMap { putDeferred(checks, mine) }.map { alarm } }
                     .map { alarm -> AlarmSaved(alarm, LockWindow.latestOf(listOf(grace, checks).mapNotNull { it.pendingUntil() })) }
             }
         }
     }
 
-    /** Puts [decision]'s pending change, or removes the field's stored one (from [stored]) when it applies now. */
-    private suspend fun storePending(
+    /** Removes the field's stored pending change (from [stored]) when [decision] applies now; nothing otherwise. */
+    private suspend fun clearApplied(
         decision: LockDecision,
         stored: Map<LockedField, PendingChange>,
     ): Outcome<Unit, DomainError> {
-        val field = decision.live.field
-        val before = stored[field]
-        return when (decision) {
-            is LockDecision.ApplyNow -> if (before == null) Outcome.Success(Unit) else pendingRepository.remove(before.alarmId, field)
-            is LockDecision.Defer -> if (before == decision.pending) Outcome.Success(Unit) else pendingRepository.put(decision.pending)
+        val before = stored[decision.live.field]
+        return if (decision is LockDecision.ApplyNow && before != null) {
+            pendingRepository.remove(before.alarmId, before.field)
+        } else {
+            Outcome.Success(Unit)
         }
     }
+
+    /** Puts [decision]'s pending change when it defers and differs from the stored one (from [stored]); nothing otherwise. */
+    private suspend fun putDeferred(
+        decision: LockDecision,
+        stored: Map<LockedField, PendingChange>,
+    ): Outcome<Unit, DomainError> =
+        if (decision is LockDecision.Defer && stored[decision.live.field] != decision.pending) {
+            pendingRepository.put(decision.pending)
+        } else {
+            Outcome.Success(Unit)
+        }
 
     private fun LockDecision.pendingUntil(): Occurrence? = (this as? LockDecision.Defer)?.pending?.effectiveAfter
 

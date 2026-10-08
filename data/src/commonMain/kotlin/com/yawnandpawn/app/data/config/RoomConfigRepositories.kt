@@ -26,6 +26,9 @@ class RoomPendingChangeRepository(
 
     suspend fun all(): Outcome<List<PendingChange>, DomainError> = storage { dao.all().mapNotNull { it.toChange() } }
 
+    suspend fun forAlarm(alarmId: String): Outcome<List<PendingChange>, DomainError> =
+        storage { dao.forAlarm(alarmId).mapNotNull { it.toChange() } }
+
     /** Stores an alarm's [change] ([PendingChange.alarmId] not null). */
     suspend fun put(change: PendingChange): Outcome<Unit, DomainError> = storage { dao.put(change.toEntity()) }
 

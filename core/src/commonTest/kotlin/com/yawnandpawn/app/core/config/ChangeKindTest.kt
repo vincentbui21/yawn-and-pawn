@@ -55,6 +55,8 @@ class ChangeKindTest {
         val math = entry(CheckType.Math)
         val word = entry(CheckType.WordUnscramble)
         val memory = entry(CheckType.MemorySequence())
+        val hardMath = math.copy(difficulty = Difficulty.Hard)
+        val easyMath = math.copy(difficulty = Difficulty.Easy)
         val cases: List<Triple<CheckPlan, CheckPlan, ChangeKind>> =
             listOf(
                 // Equal, or the same entries in another order (All or Random mode): a reorder is never held back.
@@ -63,8 +65,16 @@ class ChangeKindTest {
                 // The Epic 1 placeholder ("I'm up" alone passes it) adds nothing: dropping it is no change.
                 Triple(plan(CheckMode.All, CheckPlan.PLACEHOLDER_ENTRY, math), plan(CheckMode.All, math), same),
                 Triple(plan(CheckMode.All, math, word), plan(CheckMode.All, word, math), same),
+                // One check rings on every ring whatever the mode (review 12).
+                Triple(plan(CheckMode.Random, math), plan(CheckMode.All, math), same),
+                // Review 12: harder in Random mode. The placeholder to Math Hard; one entry made harder; the same types, each
+                // at least as hard.
+                Triple(plan(CheckMode.Random, CheckPlan.PLACEHOLDER_ENTRY), plan(CheckMode.Random, hardMath), strengthening),
+                Triple(plan(CheckMode.Random, easyMath), plan(CheckMode.Random, hardMath), strengthening),
+                Triple(plan(CheckMode.Random, math, word), plan(CheckMode.Random, word, hardMath), strengthening),
+                Triple(plan(CheckMode.Random, math, word), plan(CheckMode.Random, hardMath, memory), weakening),
+                Triple(plan(CheckMode.Random, hardMath), plan(CheckMode.Random, easyMath), weakening),
                 // All mode, every old type kept at least as hard (and something harder).
-                Triple(plan(CheckMode.Random, math), plan(CheckMode.All, math), strengthening),
                 Triple(plan(CheckMode.Random, math, word), plan(CheckMode.All, math, word, memory), strengthening),
                 Triple(plan(CheckMode.All, math), plan(CheckMode.All, math.copy(difficulty = Difficulty.Hard)), strengthening),
                 Triple(plan(CheckMode.All, math), plan(CheckMode.All, math.copy(count = 5)), strengthening),

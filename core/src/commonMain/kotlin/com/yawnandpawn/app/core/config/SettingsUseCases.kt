@@ -2,6 +2,7 @@ package com.yawnandpawn.app.core.config
 
 import com.yawnandpawn.app.core.alarm.AlarmRepository
 import com.yawnandpawn.app.core.alarm.AlarmWriteLock
+import com.yawnandpawn.app.core.billing.FeeRules
 import com.yawnandpawn.app.core.error.DomainError
 import com.yawnandpawn.app.core.error.Outcome
 import com.yawnandpawn.app.core.error.flatMap
@@ -28,7 +29,8 @@ data class Saved(
 /**
  * Saves a global locked setting ([SettingValue.BaseFeeTier] or [SettingValue.MaxSnoozes]) through the commitment lock
  * ([CommitmentRules.decide]): the window is any enabled alarm's, and the change waits for the latest occurrence inside
- * it. Writes the live value first, then the pending change (a crash between leaves the stronger setting). Invalid input
+ * it. Applying now deletes the pending change before the live write; deferring writes the live value before the pending
+ * change, so a crash between never leaves a weaker setting to apply later ([store]). Invalid input
  * is `InvalidSetting` and nothing is written. Runs under the alarm write lock, so it never races a promotion or an alarm
  * save, and inside the session lock (Story 2.6).
  */
@@ -61,34 +63,35 @@ class SaveGlobalSetting(
         }
     }
 
+    /**
+     * Writes [decision] so that a crash or failure between two writes never leaves a weaker value behind (review fix 3):
+     * - apply now: the field's pending change is deleted first, then the live value written; if the live write fails, the
+     *   old live value stays and no weaker pending change survives to be promoted later;
+     * - defer: the effective value is written live first, then the pending change.
+     */
     private suspend fun store(
         decision: LockDecision,
         pending: PendingChange?,
-    ): Outcome<Saved, DomainError> {
-        val live =
-            when (val value = decision.live) {
-                is SettingValue.BaseFeeTier -> settingsRepository.setBaseFeeTier(value.tier)
-                is SettingValue.MaxSnoozes -> settingsRepository.setMaxSnoozes(value.count)
-                is SettingValue.GraceSeconds, is SettingValue.Checks -> Outcome.Success(Unit)
+    ): Outcome<Saved, DomainError> =
+        when (decision) {
+            is LockDecision.ApplyNow -> {
+                val cleared = if (pending == null) Outcome.Success(Unit) else pendingRepository.remove(null, decision.live.field)
+                cleared.flatMap { writeLive(decision.live) }.map { Saved(null) }
             }
-        return live.flatMap {
-            when (decision) {
-                is LockDecision.ApplyNow -> {
-                    if (pending ==
-                        null
-                    ) {
-                        Outcome.Success(Saved(null))
-                    } else {
-                        pendingRepository.remove(null, decision.live.field).map { Saved(null) }
-                    }
-                }
 
-                is LockDecision.Defer -> {
-                    pendingRepository.put(decision.pending).map { Saved(decision.pending.effectiveAfter) }
-                }
+            is LockDecision.Defer -> {
+                writeLive(decision.live)
+                    .flatMap { pendingRepository.put(decision.pending) }
+                    .map { Saved(decision.pending.effectiveAfter) }
             }
         }
-    }
+
+    private suspend fun writeLive(value: SettingValue): Outcome<Unit, DomainError> =
+        when (value) {
+            is SettingValue.BaseFeeTier -> settingsRepository.setBaseFeeTier(value.tier)
+            is SettingValue.MaxSnoozes -> settingsRepository.setMaxSnoozes(value.count)
+            is SettingValue.GraceSeconds, is SettingValue.Checks -> Outcome.Success(Unit)
+        }
 
     private fun invalidField(value: SettingValue): SettingField? =
         when (value) {
@@ -98,11 +101,11 @@ class SaveGlobalSetting(
         }
 
     companion object {
-        /** Base fee tiers $1–$10 (FR-SET-1). */
-        val BASE_FEE_TIERS: IntRange = 1..10
+        /** Base fee tiers $1–$10 (FR-SET-1), the fee ladder's own limits (Story 4.2). */
+        val BASE_FEE_TIERS: IntRange = FeeRules.BASE_FEE_TIERS
 
         /** Max snoozes per session (FR-SET-1, default 5). */
-        val MAX_SNOOZES: IntRange = 1..5
+        val MAX_SNOOZES: IntRange = FeeRules.MAX_SNOOZES
     }
 }
 

@@ -19,6 +19,9 @@ interface PendingChangeRepository {
     /** Every pending change, global and per alarm. */
     suspend fun all(): Outcome<List<PendingChange>, DomainError>
 
+    /** The pending changes of the alarm [alarmId] only (the global ones come with the settings, [SettingsSnapshot]). */
+    suspend fun forAlarm(alarmId: String): Outcome<List<PendingChange>, DomainError>
+
     /** Stores [change], replacing the one of the same alarm (or global) and field. */
     suspend fun put(change: PendingChange): Outcome<Unit, DomainError>
 
@@ -43,6 +46,32 @@ interface GlobalSettingsRepository {
     suspend fun setBaseFeeTier(tier: Int): Outcome<Unit, DomainError>
 
     suspend fun setMaxSnoozes(count: Int): Outcome<Unit, DomainError>
+
+    /** The live settings and the global pending changes from one read of the store, so the two always agree (the fire). */
+    suspend fun snapshot(): Outcome<SettingsSnapshot, DomainError>
+
+    /**
+     * The last snapshot this app read or wrote successfully, kept across process deaths ([SettingsSnapshotCache]); null
+     * when there was none. The fire rings with it when the store cannot be read in time, rather than with the weakest
+     * defaults (review fix 11).
+     */
+    fun lastKnown(): SettingsSnapshot?
+}
+
+/** The global settings and the global pending changes as one read of the settings store saw them. */
+data class SettingsSnapshot(
+    val settings: GlobalSettings,
+    val pending: List<PendingChange>,
+)
+
+/**
+ * Port for the last-known [SettingsSnapshot] (device-protected, not backed up: a per-device fallback). Synchronous and
+ * small, so the fire can read it at once; never throws (a failure reads as none and a failed save is dropped).
+ */
+interface SettingsSnapshotCache {
+    fun load(): SettingsSnapshot?
+
+    fun save(snapshot: SettingsSnapshot)
 }
 
 /** What the user did to an alarm inside its lock window (PRD §6.2: allowed, confirmed and logged). The names are stored. */

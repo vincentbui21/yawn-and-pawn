@@ -20,13 +20,16 @@ import com.yawnandpawn.app.core.time.Clock
 import kotlin.time.Instant
 
 /**
- * Makes the pending changes that are due the live settings (AD-16): once now > `effectiveAfter.scheduledAt`, and no
+ * Makes the pending changes that are due the live settings (AD-16): once the occurrence they wait for is over
+ * ([PendingChange.isDue]: more than [PendingChange.SETTLE] after it, review fix 9), and no
  * session in progress rings that very occurrence ([activeOccurrence]), the pending value is written as the live value
- * (the global setting, or the alarm's grace window or checks) and then the pending change is deleted, in that order, so
- * the fire path, which reads the pending changes before the live settings, always sees one of the two. A change whose
- * alarm was turned off still takes effect; one whose alarm was deleted is dropped.
+ * (the global setting, or the alarm's grace window or checks) and then the pending change is deleted, in that order (a
+ * failure between leaves the change to be promoted again). A change whose alarm was turned off still takes effect; one
+ * whose alarm was deleted is dropped.
  *
- * It runs on app start, whenever the engine is back to Idle (after `Recorded`) and in `AlarmScheduling.rescheduleAll`.
+ * It runs in `AlarmScheduling.rescheduleAll` (app start, boot, time changes) and when the wake service shuts down
+ * after a session. The settle delay keeps it from ever weakening the ring a change waited for, even when the fire
+ * cold-starts the app and `rescheduleAll` runs before `AlarmFired` (review fix 9).
  * It is the one config writer allowed during a session (`SessionLockGuardScanTest`): it only touches occurrences that
  * have passed, and a running session's config is frozen (AD-16). Under the alarm write lock, so it never races a save.
  * A failed write is logged and retried on the next run.
@@ -39,7 +42,8 @@ class PromotePendingChanges(
     private val clock: Clock,
     private val lock: AlarmWriteLock,
     private val logger: Logger,
-    private val activeOccurrence: () -> Occurrence?,
+    /** The occurrence a session in progress rings, in memory or, before the engine is restored, in the stored session. */
+    private val activeOccurrence: suspend () -> Occurrence?,
 ) : PendingChangePromotion {
     override suspend fun promote() {
         invoke()
@@ -49,7 +53,6 @@ class PromotePendingChanges(
     suspend operator fun invoke(): Outcome<Int, DomainError> =
         lock.withLock {
             val now = clock.nowMillis()
-            val active = activeOccurrence()
             when (val read = pendingRepository.all()) {
                 is Outcome.Failure -> {
                     logger.log(LogEvent.OperationFailed.of(OPERATION, read.error))
@@ -57,8 +60,10 @@ class PromotePendingChanges(
                 }
 
                 is Outcome.Success -> {
-                    val due = read.value.filter { it.isDue(now) && it.effectiveAfter != active }
-                    Outcome.Success(due.count { change -> promoteOne(change, now) })
+                    // The session is looked up only when something is due (it may open runtime.db, review fix 9).
+                    val due = read.value.filter { it.isDue(now) }
+                    val active = if (due.isEmpty()) null else activeOccurrence()
+                    Outcome.Success(due.filter { it.effectiveAfter != active }.count { change -> promoteOne(change, now) })
                 }
             }
         }

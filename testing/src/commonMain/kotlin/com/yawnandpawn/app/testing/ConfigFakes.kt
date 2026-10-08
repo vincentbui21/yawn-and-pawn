@@ -6,11 +6,15 @@ import com.yawnandpawn.app.core.config.GlobalSettingsRepository
 import com.yawnandpawn.app.core.config.LockedField
 import com.yawnandpawn.app.core.config.PendingChange
 import com.yawnandpawn.app.core.config.PendingChangeRepository
+import com.yawnandpawn.app.core.config.SettingsSnapshot
+import com.yawnandpawn.app.core.config.SettingsSnapshotCache
 import com.yawnandpawn.app.core.error.DomainError
 import com.yawnandpawn.app.core.error.Outcome
 import com.yawnandpawn.app.core.session.GlobalSettings
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlin.time.Duration
 
 /**
  * In-memory [PendingChangeRepository]: one change per (alarm or global, field), as the Room and DataStore adapters keep.
@@ -36,6 +40,11 @@ class FakePendingChangeRepository(
         return Outcome.Success(changes.value)
     }
 
+    override suspend fun forAlarm(alarmId: String): Outcome<List<PendingChange>, DomainError> {
+        failure?.let { return Outcome.Failure(it) }
+        return Outcome.Success(changes.value.filter { it.alarmId == alarmId })
+    }
+
     override suspend fun put(change: PendingChange): Outcome<Unit, DomainError> {
         (failure ?: writeFailure)?.let { return Outcome.Failure(it) }
         changes.value = changes.value.filterNot { it.alarmId == change.alarmId && it.field == change.field } + change
@@ -52,13 +61,20 @@ class FakePendingChangeRepository(
     }
 }
 
-/** In-memory [GlobalSettingsRepository] starting at [initial]. Set [failure] to make every call fail with it. */
+/**
+ * In-memory [GlobalSettingsRepository] starting at [initial]; its [snapshot] holds the global changes of [pending] (in
+ * the app both live in the settings DataStore). Set [failure] to make every call fail with it, or [snapshotDelay] to
+ * make [snapshot] slow. Each successful snapshot or write becomes [lastKnown], which a test may also set.
+ */
 class FakeGlobalSettingsRepository(
     initial: GlobalSettings = GlobalSettings(),
+    private val pending: PendingChangeRepository? = null,
 ) : GlobalSettingsRepository {
     private val settings = MutableStateFlow(initial)
 
     var failure: DomainError? = null
+    var snapshotDelay: Duration = Duration.ZERO
+    var lastKnownSnapshot: SettingsSnapshot? = null
 
     val current: GlobalSettings
         get() = settings.value
@@ -74,10 +90,35 @@ class FakeGlobalSettingsRepository(
 
     override suspend fun setMaxSnoozes(count: Int): Outcome<Unit, DomainError> = write { it.copy(maxSnoozes = count) }
 
-    private fun write(change: (GlobalSettings) -> GlobalSettings): Outcome<Unit, DomainError> {
+    override suspend fun snapshot(): Outcome<SettingsSnapshot, DomainError> {
+        delay(snapshotDelay)
+        failure?.let { return Outcome.Failure(it) }
+        return Outcome.Success(currentSnapshot().also { lastKnownSnapshot = it })
+    }
+
+    override fun lastKnown(): SettingsSnapshot? = lastKnownSnapshot
+
+    private suspend fun currentSnapshot(): SettingsSnapshot {
+        val global = (pending?.all() as? Outcome.Success)?.value.orEmpty().filter { it.alarmId == null }
+        return SettingsSnapshot(settings.value, global)
+    }
+
+    private suspend fun write(change: (GlobalSettings) -> GlobalSettings): Outcome<Unit, DomainError> {
         failure?.let { return Outcome.Failure(it) }
         settings.value = change(settings.value)
+        lastKnownSnapshot = currentSnapshot()
         return Outcome.Success(Unit)
+    }
+}
+
+/** In-memory [SettingsSnapshotCache] holding [snapshot]. */
+class FakeSettingsSnapshotCache(
+    var snapshot: SettingsSnapshot? = null,
+) : SettingsSnapshotCache {
+    override fun load(): SettingsSnapshot? = snapshot
+
+    override fun save(snapshot: SettingsSnapshot) {
+        this.snapshot = snapshot
     }
 }
 

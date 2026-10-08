@@ -16,6 +16,7 @@ import kotlin.test.assertEquals
 import kotlin.test.assertNull
 import kotlin.time.Duration.Companion.days
 import kotlin.time.Duration.Companion.hours
+import kotlin.time.Duration.Companion.milliseconds
 import kotlin.time.Duration.Companion.minutes
 import kotlin.time.Instant
 
@@ -108,8 +109,14 @@ class CommitmentRulesTest {
         assertEquals(false, change.appliesTo(window.scheduledAt))
         assertEquals(false, change.appliesTo(window.scheduledAt - 1.minutes))
         assertEquals(true, change.appliesTo(window.scheduledAt + 1.days))
-        assertEquals(false, change.isDue(window.scheduledAt))
-        assertEquals(true, change.isDue(window.scheduledAt + 1.minutes))
+        assertEquals(true, change.appliesTo(window.scheduledAt + 1.milliseconds), "a millisecond later (review 7)")
+        assertEquals(
+            false,
+            change.isDue(window.scheduledAt + PendingChange.SETTLE),
+            "not while the fire may still be on its way (review 9)",
+        )
+        assertEquals(true, change.isDue(window.scheduledAt + PendingChange.SETTLE + 1.milliseconds))
+        assertEquals(31.minutes, PendingChange.SETTLE)
         assertEquals(LockedField.BaseFee, change.field)
     }
 
@@ -166,6 +173,27 @@ class CommitmentRulesTest {
         assertEquals(5, config.maxSnoozes)
         assertEquals(30, config.graceSeconds)
         assertEquals(CheckPlan(CheckMode.Random, listOf(easyMath)), config.checkPlan)
+    }
+
+    @Test
+    fun `a global change waiting for one alarm applies to another alarm's later ring only (review 5)`() {
+        val other = alarm.copy(id = "b")
+        val change = listOf(pending(fee(1)))
+
+        fun tierAt(at: Instant) =
+            ConfigResolver
+                .resolve(
+                    other,
+                    listOf(hardMath),
+                    GlobalSettings(baseFeeTier = 3),
+                    false,
+                    at,
+                    wordsAvailable = true,
+                    pendingChanges = change,
+                ).baseFeeTier
+
+        assertEquals(1, tierAt(Instant.parse("2027-03-09T08:00:00Z")), "b rings after a's 07:30")
+        assertEquals(3, tierAt(Instant.parse("2027-03-09T07:00:00Z")), "b rings before a's 07:30")
     }
 
     @Test

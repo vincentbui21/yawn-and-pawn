@@ -7,6 +7,7 @@ import com.yawnandpawn.app.core.alarm.RequestCodeSequence
 import com.yawnandpawn.app.core.config.CommitmentEventRepository
 import com.yawnandpawn.app.core.config.GlobalSettingsRepository
 import com.yawnandpawn.app.core.config.PendingChangeRepository
+import com.yawnandpawn.app.core.config.SettingsSnapshotCache
 import com.yawnandpawn.app.core.history.MissedNoteDismissals
 import com.yawnandpawn.app.core.history.SessionHistoryRepository
 import com.yawnandpawn.app.core.session.ActiveSessionStore
@@ -22,6 +23,7 @@ import com.yawnandpawn.app.data.config.CompositePendingChangeRepository
 import com.yawnandpawn.app.data.config.DataStoreGlobalSettings
 import com.yawnandpawn.app.data.config.RoomCommitmentEventRepository
 import com.yawnandpawn.app.data.config.RoomPendingChangeRepository
+import com.yawnandpawn.app.data.config.SharedPreferencesSettingsCache
 import com.yawnandpawn.app.data.db.AppDatabase
 import com.yawnandpawn.app.data.db.RuntimeDatabase
 import com.yawnandpawn.app.data.db.buildAppDatabase
@@ -71,7 +73,9 @@ val dataModule =
         single<ReRegisterDismissals> { DataStoreReRegisterDismissals(get<SettingsDataStore>().store, get()) }
         // The commitment lock (Story 4.4): the global settings and their pending changes in the same DataStore (AD-6),
         // the alarms' pending changes and the commitment events in app.db.
-        single { DataStoreGlobalSettings(get<SettingsDataStore>().store, get()) }
+        // The last-known settings for a fire that cannot read the DataStore in time (review fix 11); not backed up.
+        single<SettingsSnapshotCache> { SharedPreferencesSettingsCache(get<Context>()) }
+        single { DataStoreGlobalSettings(get<SettingsDataStore>().store, get(), get()) }
         single<GlobalSettingsRepository> { get<DataStoreGlobalSettings>() }
         single { get<AppDatabase>().pendingChangeDao() }
         single { RoomPendingChangeRepository(get()) }

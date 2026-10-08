@@ -32,6 +32,7 @@ import com.yawnandpawn.app.core.billing.UsdFeeLadder
 import com.yawnandpawn.app.core.checks.AccessibilityState
 import com.yawnandpawn.app.core.checks.word.WordBank
 import com.yawnandpawn.app.core.config.PromotePendingChanges
+import com.yawnandpawn.app.core.config.ReadFireSettings
 import com.yawnandpawn.app.core.config.RecordCommitmentEvent
 import com.yawnandpawn.app.core.config.SaveGlobalSetting
 import com.yawnandpawn.app.core.config.SetBaseFee
@@ -88,12 +89,21 @@ val appModule =
         single { AlarmScheduling(get(), get(), get(), get(), get(), get(), promotion = get<PromotePendingChanges>()) }
         // The commitment lock (Story 4.4): promotion skips the occurrence the session in progress rings, read lazily (the
         // engine is built after the scheduling it may need).
+        // Before the engine is restored (a cold start), the stored session in runtime.db is read instead (review fix 9).
         single {
             val scope = this
             PromotePendingChanges(get(), get(), get(), get(), get(), get(), get()) {
-                PromotePendingChanges.occurrenceOf(scope.get<SessionEngine>().state.value)
+                val engine = scope.get<SessionEngine>()
+                PromotePendingChanges.occurrenceOf(engine.state.value) ?: if (engine.restored.value) {
+                    null
+                } else {
+                    (scope.get<ActiveSessionStore>().load().valueOrNull() as? StoredSession.Found)
+                        ?.let { PromotePendingChanges.occurrenceOf(it.state) }
+                }
             }
         }
+        // The fire's settings read (review fix 11): one snapshot within 500 ms, the last-known settings otherwise.
+        factory { ReadFireSettings(get(), get(), get()) }
         factory { SaveGlobalSetting(get(), get(), get(), get(), get(), get(), get()) }
         factory { SetBaseFee(get()) }
         factory { SetMaxSnoozes(get()) }

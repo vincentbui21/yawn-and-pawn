@@ -1,6 +1,7 @@
 package com.yawnandpawn.app.data.config
 
 import androidx.datastore.core.DataStore
+import androidx.datastore.preferences.core.MutablePreferences
 import androidx.datastore.preferences.core.Preferences
 import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.emptyPreferences
@@ -12,6 +13,8 @@ import com.yawnandpawn.app.core.config.PendingChange
 import com.yawnandpawn.app.core.config.PendingChangeJson
 import com.yawnandpawn.app.core.config.PendingChangeRepository
 import com.yawnandpawn.app.core.config.SaveGlobalSetting
+import com.yawnandpawn.app.core.config.SettingsSnapshot
+import com.yawnandpawn.app.core.config.SettingsSnapshotCache
 import com.yawnandpawn.app.core.error.DomainError
 import com.yawnandpawn.app.core.error.Outcome
 import com.yawnandpawn.app.core.error.flatMap
@@ -34,21 +37,32 @@ import okio.IOException
  * - [BASE_FEE_TIER] and [MAX_SNOOZES]: a missing or out-of-range value reads as the `GlobalSettings` default.
  * - [PENDING_GLOBAL]: the global pending changes as one `PendingChangeJson` list; a list that does not decode reads as
  *   none (the live settings, the stronger ones, apply).
+ * - Every successful [snapshot] and every write keeps the resulting snapshot in [cache] ([lastKnown], review fix 11), so a
+ *   fire that cannot read the store in time rings with the last settings, not the weakest defaults.
  *
  * Read errors in the flows behave as in [DataStoreMissedNoteDismissals]: logged, read as the defaults, then read again
  * after a growing pause. A failed one-shot read or write is a `StorageFailure`.
+ *
+ * One adapter for the keys of one store (the settings, their pending changes, the snapshot of both), hence the many
+ * small functions.
  */
+@Suppress("TooManyFunctions")
 class DataStoreGlobalSettings(
     private val store: DataStore<Preferences>,
     private val logger: Logger,
+    private val cache: SettingsSnapshotCache,
 ) : GlobalSettingsRepository {
     override fun observe(): Flow<GlobalSettings> = preferences("read global settings").map(::settingsOf)
 
     override suspend fun get(): Outcome<GlobalSettings, DomainError> = storage { settingsOf(store.data.first()) }
 
-    override suspend fun setBaseFeeTier(tier: Int): Outcome<Unit, DomainError> = storage { store.edit { it[BASE_FEE_TIER] = tier } }
+    override suspend fun setBaseFeeTier(tier: Int): Outcome<Unit, DomainError> = edit { it[BASE_FEE_TIER] = tier }
 
-    override suspend fun setMaxSnoozes(count: Int): Outcome<Unit, DomainError> = storage { store.edit { it[MAX_SNOOZES] = count } }
+    override suspend fun setMaxSnoozes(count: Int): Outcome<Unit, DomainError> = edit { it[MAX_SNOOZES] = count }
+
+    override suspend fun snapshot(): Outcome<SettingsSnapshot, DomainError> = storage { snapshotOf(store.data.first()).also(cache::save) }
+
+    override fun lastKnown(): SettingsSnapshot? = cache.load()
 
     /** The global pending changes; emits again after each change. */
     fun observePending(): Flow<List<PendingChange>> = preferences("read global pending changes").map(::pendingOf)
@@ -57,25 +71,20 @@ class DataStoreGlobalSettings(
 
     /** Stores the global [change], replacing the one of the same field, in one edit. */
     suspend fun putPending(change: PendingChange): Outcome<Unit, DomainError> =
-        storage {
-            store.edit { preferences ->
-                preferences[PENDING_GLOBAL] =
-                    PendingChangeJson.encodeGlobal(pendingOf(preferences).filterNot { it.field == change.field } + change)
-            }
+        edit { preferences ->
+            preferences[PENDING_GLOBAL] =
+                PendingChangeJson.encodeGlobal(pendingOf(preferences).filterNot { it.field == change.field } + change)
         }
 
     suspend fun removePending(field: LockedField): Outcome<Unit, DomainError> =
-        storage {
-            store.edit { preferences ->
-                val left = pendingOf(preferences).filterNot { it.field == field }
-                if (left.isEmpty()) {
-                    preferences.remove(PENDING_GLOBAL)
-                } else {
-                    preferences[PENDING_GLOBAL] =
-                        PendingChangeJson.encodeGlobal(left)
-                }
-            }
+        edit { preferences ->
+            val left = pendingOf(preferences).filterNot { it.field == field }
+            if (left.isEmpty()) preferences.remove(PENDING_GLOBAL) else preferences[PENDING_GLOBAL] = PendingChangeJson.encodeGlobal(left)
         }
+
+    /** One edit of the store; the snapshot it leaves becomes the last-known one. */
+    private suspend fun edit(change: (MutablePreferences) -> Unit): Outcome<Unit, DomainError> =
+        storage { cache.save(snapshotOf(store.edit { change(it) })) }
 
     private fun preferences(operation: String): Flow<Preferences> =
         store.data.retryWhen { cause, attempt ->
@@ -106,6 +115,9 @@ class DataStoreGlobalSettings(
 
         private fun pendingOf(preferences: Preferences): List<PendingChange> =
             preferences[PENDING_GLOBAL]?.let(PendingChangeJson::decodeGlobal).orEmpty().filter { it.field.global }
+
+        private fun snapshotOf(preferences: Preferences): SettingsSnapshot =
+            SettingsSnapshot(settingsOf(preferences), pendingOf(preferences))
     }
 }
 
@@ -120,6 +132,8 @@ class CompositePendingChangeRepository(
     override fun observe(): Flow<List<PendingChange>> = combine(global.observePending(), alarms.observe()) { g, a -> g + a }
 
     override suspend fun all(): Outcome<List<PendingChange>, DomainError> = global.allPending().flatMap { g -> alarms.all().map { g + it } }
+
+    override suspend fun forAlarm(alarmId: String): Outcome<List<PendingChange>, DomainError> = alarms.forAlarm(alarmId)
 
     override suspend fun put(change: PendingChange): Outcome<Unit, DomainError> =
         if (change.alarmId == null) global.putPending(change) else alarms.put(change)

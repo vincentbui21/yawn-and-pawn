@@ -18,6 +18,7 @@ import com.yawnandpawn.app.core.config.LockedField
 import com.yawnandpawn.app.core.config.Occurrence
 import com.yawnandpawn.app.core.config.PendingChange
 import com.yawnandpawn.app.core.config.SettingValue
+import com.yawnandpawn.app.core.config.SettingsSnapshot
 import com.yawnandpawn.app.core.error.DomainError
 import com.yawnandpawn.app.core.error.Outcome
 import com.yawnandpawn.app.core.log.LogEvent
@@ -28,6 +29,7 @@ import com.yawnandpawn.app.data.db.AppDatabase
 import com.yawnandpawn.app.data.db.AppDatabaseConstructor
 import com.yawnandpawn.app.data.settings.SettingsDataStore
 import com.yawnandpawn.app.testing.FakeLogger
+import com.yawnandpawn.app.testing.FakeSettingsSnapshotCache
 import com.yawnandpawn.app.testing.anAlarm
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.first
@@ -37,6 +39,7 @@ import org.junit.After
 import org.junit.Test
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
+import java.io.File
 import java.io.IOException
 import kotlin.test.assertEquals
 import kotlin.test.assertIs
@@ -54,11 +57,12 @@ class ConfigRepositoriesTest {
             .setDriver(AndroidSQLiteDriver())
             .build()
     private val logger = FakeLogger()
+    private val cache = FakeSettingsSnapshotCache()
     private var settingsStore = SettingsDataStore(context)
     private val alarms = RoomAlarmRepository(database.alarmDao())
     private val checks = RoomCheckConfigRepository(database.checkConfigDao())
     private val roomPending = RoomPendingChangeRepository(database.pendingChangeDao())
-    private val global = DataStoreGlobalSettings(settingsStore.store, logger)
+    private val global = DataStoreGlobalSettings(settingsStore.store, logger, cache)
     private val pending = CompositePendingChangeRepository(roomPending, global)
     private val events = RoomCommitmentEventRepository(database.commitmentEventDao())
 
@@ -147,7 +151,7 @@ class ConfigRepositoriesTest {
             assertEquals(GlobalSettings(baseFeeTier = 4, maxSnoozes = 2), global.observe().first())
             settingsStore.close()
             settingsStore = SettingsDataStore(context)
-            val reopened = DataStoreGlobalSettings(settingsStore.store, logger)
+            val reopened = DataStoreGlobalSettings(settingsStore.store, logger, cache)
             assertEquals(Outcome.Success(GlobalSettings(baseFeeTier = 4, maxSnoozes = 2)), reopened.get())
 
             settingsStore.store.edit {
@@ -162,16 +166,60 @@ class ConfigRepositoriesTest {
     @Test
     fun `a broken settings file reads as the defaults in the flows and fails the one-shot calls`() =
         runTest(timeout = TIMEOUT) {
-            val broken = DataStoreGlobalSettings(BrokenStore(), logger)
+            val broken = DataStoreGlobalSettings(BrokenStore(), logger, cache)
 
             assertEquals(GlobalSettings(), broken.observe().first())
             assertEquals(emptyList(), broken.observePending().first())
             assertTrue(logger.events.contains(LogEvent.OperationFailed("read global settings", "IOException")))
             assertIs<Outcome.Failure<DomainError>>(broken.get())
+            assertIs<Outcome.Failure<DomainError>>(broken.snapshot())
             assertIs<Outcome.Failure<DomainError>>(broken.setBaseFeeTier(2))
             assertIs<Outcome.Failure<DomainError>>(broken.putPending(PendingChange(null, SettingValue.MaxSnoozes(5), sevenThirty)))
             assertIs<Outcome.Failure<DomainError>>(CompositePendingChangeRepository(roomPending, broken).all())
         }
+
+    @Test
+    fun `one snapshot holds the settings and the global changes, and every read or write becomes the last-known one`() =
+        runTest(timeout = TIMEOUT) {
+            alarms.upsert(anAlarm(id = "a"))
+            val fee = PendingChange(null, SettingValue.BaseFeeTier(1), sevenThirty)
+            val grace = PendingChange("a", SettingValue.GraceSeconds(30), sevenThirty)
+            global.setBaseFeeTier(4)
+            assertEquals(SettingsSnapshot(GlobalSettings(baseFeeTier = 4), emptyList()), global.lastKnown(), "a write")
+            pending.put(fee)
+            pending.put(grace)
+            assertEquals(SettingsSnapshot(GlobalSettings(baseFeeTier = 4), listOf(fee)), global.lastKnown(), "a pending write")
+
+            cache.snapshot = null
+            assertEquals(Outcome.Success(SettingsSnapshot(GlobalSettings(baseFeeTier = 4), listOf(fee))), global.snapshot())
+            assertEquals(SettingsSnapshot(GlobalSettings(baseFeeTier = 4), listOf(fee)), global.lastKnown(), "a read")
+            assertEquals(Outcome.Success(listOf(grace)), pending.forAlarm("a"), "only the alarm's own")
+            assertEquals(Outcome.Success(emptyList()), pending.forAlarm("b"))
+        }
+
+    @Test
+    fun `the last-known settings survive in their own device-protected preferences`() {
+        val stored =
+            SettingsSnapshot(
+                GlobalSettings(baseFeeTier = 7, maxSnoozes = 2),
+                listOf(PendingChange(null, SettingValue.MaxSnoozes(5), sevenThirty)),
+            )
+        val first = SharedPreferencesSettingsCache(context)
+        assertEquals(null, first.load())
+
+        first.save(stored)
+
+        assertEquals(stored, SharedPreferencesSettingsCache(context).load())
+        val file = File(context.createDeviceProtectedStorageContext().dataDir, "shared_prefs/${SharedPreferencesSettingsCache.PREFS}.xml")
+        context
+            .createDeviceProtectedStorageContext()
+            .getSharedPreferences(SharedPreferencesSettingsCache.PREFS, Context.MODE_PRIVATE)
+            .edit()
+            .putString("snapshot", "not json")
+            .commit()
+        assertEquals(null, SharedPreferencesSettingsCache(context).load(), "a damaged value reads as none")
+        assertTrue(file.isFile, "in device-protected storage")
+    }
 
     /** A DataStore whose reads throw an IOException and whose writes fail. */
     private class BrokenStore : DataStore<Preferences> {

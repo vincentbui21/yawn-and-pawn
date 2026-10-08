@@ -14,6 +14,7 @@ import com.yawnandpawn.app.core.alarm.AlarmFired
 import com.yawnandpawn.app.core.alarm.AlarmRepository
 import com.yawnandpawn.app.core.alarm.CheckConfigRepository
 import com.yawnandpawn.app.core.checks.AccessibilityState
+import com.yawnandpawn.app.core.config.GlobalSettingsRepository
 import com.yawnandpawn.app.core.crash.CrashReporter
 import com.yawnandpawn.app.core.error.Outcome
 import com.yawnandpawn.app.core.history.SessionHistoryRepository
@@ -51,10 +52,11 @@ import kotlin.time.Duration
  * The real app's Koin graph, restarted with a [FakeCrashReporter] and optionally a replaced session [store], alarm
  * [repository], service [starter], session [history] repository, wall [clock], [monotonic] clock, pending [testAlarms],
  * [billing], the alarms' [checkConfigs], the fallback policy, the camera scanner or the screen reader
- * ([accessibility], Story 3.12). The alarm receiver waits [serviceStartWait] for the wake service (none by default: the
- * tests start it themselves, as the system would). The real `MediaPlayer` adapter plays over Robolectric's
- * media shadow (every source opens). The service's coroutines run on the main looper: [awaitUntil] idles it (and the Room threads) until
- * a condition holds. Tear down with `StopAppRule`.
+ * ([accessibility], Story 3.12) or the global settings ([globalSettings], Story 4.4). The alarm receiver waits
+ * [serviceStartWait] for the wake service (none by default: the tests start it themselves, as the system would). The
+ * real `MediaPlayer` adapter plays over Robolectric's media shadow (every source opens). The service's coroutines run
+ * on the main looper: [awaitUntil] idles it (and the Room threads) until a condition holds. Tear down with
+ * `StopAppRule`.
  */
 internal class WakeApp(
     store: ActiveSessionStore? = null,
@@ -73,6 +75,7 @@ internal class WakeApp(
     fallback: FallbackPolicy? = null,
     scanner: CodeScanner? = null,
     accessibility: AccessibilityState? = null,
+    globalSettings: GlobalSettingsRepository? = null,
 ) {
     val app: YawnAndPawnApp = ApplicationProvider.getApplicationContext()
     val crashReporter = FakeCrashReporter()
@@ -104,6 +107,7 @@ internal class WakeApp(
                 fallback?.let { replaced -> single<FallbackPolicy> { replaced } }
                 scanner?.let { replaced -> single<CodeScanner> { replaced } }
                 accessibility?.let { replaced -> single<AccessibilityState> { replaced } }
+                globalSettings?.let { replaced -> single<GlobalSettingsRepository> { replaced } }
                 single { WakeServiceStarts(serviceStartWait) }
             },
         )

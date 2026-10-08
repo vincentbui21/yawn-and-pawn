@@ -3,7 +3,7 @@ title: 'Story 4.3: Cache Play prices for offline display'
 type: 'feature'
 created: '2026-10-08'
 status: 'review'
-baseline_revision: 'ee21604'
+baseline_revision: '96fba93'
 review_loop_iteration: 0
 followup_review_recommended: true
 context:
@@ -13,7 +13,7 @@ context:
   - '{project-root}/docs/prd.md (§6.2 currency rule, FR-RNG-1, FR-RNG-7, NFR-3, NFR-8)'
   - '{project-root}/_bmad-output/implementation-artifacts/spec-4-2-money-moneyformatter-and-the-feeladder-in-core.md'
 warnings:
-  - 'Stacked on story/4-2-money-and-feeladder (ee21604). If PR #44 squash-merges first, rebase with `git rebase --onto origin/main ee21604`.'
+  - 'Built on story/4-2 (ee21604); PR #44 squash-merged as 96fba93 meanwhile, so the branch was rebased onto origin/main (identical tree, no conflicts).'
 deferred:
   - 'Story 4.7: snoozeAvailability reads PriceCatalog.observe() and maps "no displayable price" (missing or expired) to UnavailableReason.CatalogueNotLoaded; the Connectivity port can then gate the session-start refresh on "online".'
   - 'Story 4.10: the "consume-retry" job joins BackgroundTaskKind and registers its BackgroundTask.'
@@ -124,3 +124,15 @@ deferred:
 
 **Commands:**
 - `./gradlew qualityGate :androidApp:assembleDebugAndroidTest --no-daemon` -- expected: BUILD SUCCESSFUL.
+
+## Auto Run Result
+
+Status: implemented in fast mode (one agent, Epic 4 Lane 1), waiting for review. Branch `story/4-3-price-cache` on main `96fba93` (4.2 merged).
+
+**Verification:** `./gradlew qualityGate :androidApp:assembleDebugAndroidTest --no-daemon`: BUILD SUCCESSFUL (27 min). No screenshot baseline changed (no UI change).
+
+**Residual risks:**
+- **No real prices yet:** `UnavailableProductDetailsSource` fails every fetch until 4.12, so the cache stays empty in the app and each refresh logs "fetch prices".
+- **WorkManager on real devices:** the on-demand start after the first unlock is tested in Robolectric (TestDriver) only; a reboot-then-unlock check on the Oppo belongs to the 4.18 checklist.
+- **Session-start refresh while offline:** it is attempted and fails fast (no `Connectivity` port until 4.7).
+- **Staleness constants** (24 h / 30 days) are defaults taken in fast mode; the owner can change them in `PriceCachePolicy`.

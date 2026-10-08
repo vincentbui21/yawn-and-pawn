@@ -30,6 +30,7 @@ import com.yawnandpawn.app.ui.theme.PpsTokens
 import com.yawnandpawn.app.ui.wake.RingingScreen
 import com.yawnandpawn.app.ui.wake.RingingUiState
 import kotlinx.datetime.LocalTime
+import org.junit.After
 import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -58,6 +59,13 @@ class RingingSemanticsTest {
     val composeRule = createEmptyComposeRule()
 
     private val pricesNotLoaded = "Snooze unavailable, prices not loaded yet"
+
+    /** The no-motion test sets the global animator duration scale; later tests get the default back. */
+    @After
+    fun animationsBack() {
+        val resolver = ApplicationProvider.getApplicationContext<Context>().contentResolver
+        Settings.Global.putFloat(resolver, Settings.Global.ANIMATOR_DURATION_SCALE, 1f)
+    }
 
     private fun ringing(
         state: RingingUiState = RingingSamples.firstRing,

@@ -163,10 +163,10 @@ kover {
     }
 }
 
-// core.session and core.checks have their own 90% rules (core/build.gradle.kts, variants "session" and "checks"); they
-// run with this verify task.
+// core.session, core.checks and core.billing have their own 90% rules (core/build.gradle.kts, variants "session",
+// "checks" and "billing"); they run with this verify task.
 tasks.named("koverVerify") {
-    dependsOn(":core:koverVerifySession", ":core:koverVerifyChecks")
+    dependsOn(":core:koverVerifySession", ":core:koverVerifyChecks", ":core:koverVerifyBilling")
 }
 
 // ---------------------------------------------------------------------------------------------

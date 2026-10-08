@@ -30,15 +30,18 @@ kotlin {
     }
 }
 
-// The wake-session package (Story 1.11) and the check plugins (Story 3.1) need their own 90% line coverage, on top of the
-// root rule for all of :core. `koverVerifySession` and `koverVerifyChecks` run inside the root `koverVerify` that
-// qualityGate uses.
+// The wake-session package (Story 1.11), the check plugins (Story 3.1) and billing (Story 4.2) need their own 90% line
+// coverage, on top of the root rule for all of :core. `koverVerifySession`, `koverVerifyChecks` and `koverVerifyBilling`
+// run inside the root `koverVerify` that qualityGate uses.
 kover {
     currentProject {
         createVariant("session") {
             add("jvm")
         }
         createVariant("checks") {
+            add("jvm")
+        }
+        createVariant("billing") {
             add("jvm")
         }
     }
@@ -63,6 +66,18 @@ kover {
             }
             verify {
                 rule("core.checks line coverage") {
+                    minBound(90)
+                }
+            }
+        }
+        variant("billing") {
+            filters {
+                includes {
+                    packages("com.yawnandpawn.app.core.billing")
+                }
+            }
+            verify {
+                rule("core.billing line coverage") {
                     minBound(90)
                 }
             }

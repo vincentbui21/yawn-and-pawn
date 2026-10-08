@@ -155,7 +155,14 @@ val appModule =
         // else by the product's USD tier.
         single {
             val catalog = get<PriceCatalog>()
-            val snapshot = PriceSnapshotLookup { productId -> catalog.observe().first().priceFor(productId)?.price }
+            val snapshot =
+                PriceSnapshotLookup { productId ->
+                    catalog
+                        .observe()
+                        .first()
+                        .priceFor(productId)
+                        ?.price
+                }
             PurchaseLedger(get(), get(), get(), get(), get(), snapshot, get(), get())
         }
         factory { ReplayGrantLedger(get(), get()) }

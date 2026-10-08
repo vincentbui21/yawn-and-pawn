@@ -182,7 +182,8 @@ class UnlockDuringRingTest {
         val app = WakeApp(billing = billing)
         var replays = 0
         val replay: () -> Unit = { replays++ }
-        val signals = UnlockSignals(app.engine, billing, app.koin.get(), app.koin.get(), FakeLogger(), Duration.ZERO, replay)
+        val signals =
+            UnlockSignals(app.engine, billing, app.koin.get(), app.koin.get(), FakeLogger(), app.koin.get(), Duration.ZERO, replay)
 
         signals.onUnlocked()
         signals.onScreenResumedUnlocked()

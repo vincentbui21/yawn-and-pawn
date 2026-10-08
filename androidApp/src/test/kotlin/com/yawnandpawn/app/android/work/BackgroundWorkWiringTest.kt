@@ -19,10 +19,12 @@ import com.google.common.util.concurrent.ListenableFuture
 import com.yawnandpawn.app.APP_WORK_TIMEOUT_MILLIS
 import com.yawnandpawn.app.StopAppRule
 import com.yawnandpawn.app.YawnAndPawnApp
+import com.yawnandpawn.app.core.billing.ConsumeRetryTask
 import com.yawnandpawn.app.core.billing.PriceCatalog
 import com.yawnandpawn.app.core.billing.PriceRefreshJobs
 import com.yawnandpawn.app.core.billing.PriceRefreshScheduler
 import com.yawnandpawn.app.core.billing.ProductDetailsSource
+import com.yawnandpawn.app.core.billing.PurchaseLedger
 import com.yawnandpawn.app.core.billing.SessionStartPriceRefresh
 import com.yawnandpawn.app.core.billing.SnoozeProducts
 import com.yawnandpawn.app.core.error.DomainError
@@ -145,6 +147,22 @@ class BackgroundWorkWiringTest {
         assertEquals(WorkInfo.State.ENQUEUED, daily.state)
         assertEquals(NetworkType.CONNECTED, daily.constraints.requiredNetworkType)
         assertEquals(TimeUnit.HOURS.toMillis(24), daily.periodicityInfo?.repeatIntervalMillis)
+    }
+
+    @Test
+    fun `the consume retry jobs (Story 4-10) are unique WorkManager work run by the ledger's task`() {
+        start()
+        val work = GlobalContext.get().get<BackgroundWork>()
+
+        assertEquals(Outcome.Success(Unit), work.enqueue(PurchaseLedger.CONSUME_RETRY_JOB))
+        assertEquals(Outcome.Success(Unit), work.enqueue(PurchaseLedger.CONSUME_RETRY_PERIODIC))
+
+        val once = assertNotNull(infos(PurchaseLedger.CONSUME_RETRY_JOB.uniqueName).singleOrNull())
+        assertEquals(NetworkType.CONNECTED, once.constraints.requiredNetworkType)
+        assertEquals(null, once.periodicityInfo)
+        val periodic = assertNotNull(infos(PurchaseLedger.CONSUME_RETRY_PERIODIC.uniqueName).singleOrNull())
+        assertEquals(TimeUnit.HOURS.toMillis(6), periodic.periodicityInfo?.repeatIntervalMillis)
+        assertIs<ConsumeRetryTask>(GlobalContext.get().get<BackgroundTasks>().taskFor(BackgroundTaskKind.ConsumeRetry))
     }
 
     @Test

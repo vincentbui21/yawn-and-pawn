@@ -32,19 +32,37 @@ enum class PriceFreshness {
     Expired,
 }
 
-/** The staleness rules of the price cache (Story 4.3; defaults taken in fast mode, the owner can change them). */
+/**
+ * The staleness rules of the price cache (Story 4.3; defaults taken in fast mode, the owner can change them).
+ *
+ * The cache is for display only: the price charged and recorded is Play's live one, queried again before a purchase
+ * (Stories 4.8, 4.12, 4.13), never a cached entry.
+ */
 object PriceCachePolicy {
     /** A price fetched longer ago than this is [PriceFreshness.Stale]. Also the period of the daily refresh. */
     val STALE_AFTER: Duration = 24.hours
 
     /** A price fetched longer ago than this is [PriceFreshness.Expired]. */
     val EXPIRES_AFTER: Duration = 30.days
+
+    /**
+     * A fetch time up to this far after "now" is clock jitter and counts as fresh; further in the future (the clock was
+     * set back, or was wrong at the fetch) the entry is [PriceFreshness.Stale], and beyond [EXPIRES_AFTER] in the future
+     * [PriceFreshness.Expired], so a clock glitch never keeps a price fresh for ever.
+     */
+    val FUTURE_TOLERANCE: Duration = 1.hours
 }
 
-/** This entry's freshness at [now]. A fetch time after [now] (the clock was set back) counts as fresh. */
+/**
+ * This entry's freshness at [now]. A fetch time in the future counts as fresh only within
+ * [PriceCachePolicy.FUTURE_TOLERANCE]; further ahead it is stale, and expired beyond [PriceCachePolicy.EXPIRES_AFTER].
+ */
 fun PriceEntry.freshnessAt(now: Instant): PriceFreshness {
     val age = now - fetchedAt
+    val ahead = -age
     return when {
+        ahead > PriceCachePolicy.EXPIRES_AFTER -> PriceFreshness.Expired
+        ahead > PriceCachePolicy.FUTURE_TOLERANCE -> PriceFreshness.Stale
         age <= PriceCachePolicy.STALE_AFTER -> PriceFreshness.Fresh
         age <= PriceCachePolicy.EXPIRES_AFTER -> PriceFreshness.Stale
         else -> PriceFreshness.Expired
@@ -66,9 +84,11 @@ data class PriceCatalogSnapshot(
 
     /**
      * The snapshot after a successful fetch of [requested] returned [result] at [fetchedAt] (Story 4.3):
-     * - a usable price (requested, not reported unfetched, non-blank string, more than zero) replaces its entry;
-     * - a requested product without a usable price keeps its previous entry, unless that entry is in a currency the new
-     *   prices do not use (the phone changed country): such entries are dropped;
+     * - a usable price (requested, not reported unfetched, non-blank string, more than zero) in the answer's currency
+     *   ([answerCurrency]) replaces its entry; usable prices in another currency are dropped, so a snapshot never mixes
+     *   currencies;
+     * - a requested product without a new price keeps its previous entry, unless that entry is in another currency than
+     *   the answer's (the phone changed country): such entries are dropped;
      * - entries of products not [requested] are dropped.
      *
      * With no usable price at all, every requested entry is kept as it was.
@@ -79,16 +99,32 @@ data class PriceCatalogSnapshot(
         fetchedAt: Instant,
     ): PriceCatalogSnapshot {
         val wanted = requested.toSet()
+        val usable = result.usablePrices(wanted)
+        val currency = answerCurrency(usable) ?: return PriceCatalogSnapshot(entries.filterKeys { it in wanted })
         val fresh =
-            result.prices
-                .filter { it.productId in wanted && it.productId !in result.unfetched && it.isUsable() }
+            usable
+                .filter { it.price.currency == currency }
                 .associate { it.productId to PriceEntry(it.productId, it.formattedPrice, it.price, fetchedAt) }
-        val currencies = fresh.values.mapTo(HashSet()) { it.price.currency }
-        val kept =
-            entries.filter { (id, entry) ->
-                id in wanted && id !in fresh && (currencies.isEmpty() || entry.price.currency in currencies)
-            }
+        val kept = entries.filter { (id, entry) -> id in wanted && id !in fresh && entry.price.currency == currency }
         return PriceCatalogSnapshot(kept + fresh)
+    }
+
+    /**
+     * The one currency a Play answer's [usable] prices are kept in (null when there are none): the currency of most of
+     * them. Play answers in one currency; should one mix currencies, the majority wins, a tie keeps this snapshot's own
+     * (most common) currency when it is among the tied ones, and otherwise the first tied currency in answer order.
+     */
+    fun answerCurrency(usable: List<ProductPrice>): String? {
+        val counts = usable.groupingBy { it.price.currency }.eachCount()
+        val top = counts.values.maxOrNull() ?: return null
+        val tied = counts.filterValues { it == top }.keys
+        val own =
+            entries.values
+                .groupingBy { it.price.currency }
+                .eachCount()
+                .maxByOrNull { it.value }
+                ?.key
+        return own?.takeIf { it in tied } ?: usable.first { it.price.currency in tied }.price.currency
     }
 
     companion object {
@@ -108,6 +144,10 @@ data class ProductDetailsResult(
     val prices: List<ProductPrice>,
     val unfetched: Set<String> = emptySet(),
 )
+
+/** The prices of this answer that may be cached: requested, not reported unfetched, a non-blank string, more than zero. */
+fun ProductDetailsResult.usablePrices(requested: Set<String>): List<ProductPrice> =
+    prices.filter { it.productId in requested && it.productId !in unfetched && it.isUsable() }
 
 private fun ProductPrice.isUsable(): Boolean = formattedPrice.isNotBlank() && price.micros > 0
 

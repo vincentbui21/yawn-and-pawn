@@ -268,3 +268,15 @@
   summary: (device row for the Story 4.18 checklist) Money formatting on the phone matches the host tests and Google Play's own price strings.
   evidence: `AndroidMoneyFormatter` formats with ICU (`android.icu`), and a whole amount uses the currency's cash digits (Story 4.2 review). Robolectric runs ICU from the android-all jar, but the phone's ICU and CLDR versions can differ. Check on the Oppo, with the phone language set to each in turn: English (US) "$1.00", Deutsch "1,00 €", Bahasa Indonesia "Rp 15.000" (or "Rp15.000", as Play shows it), Magyar "15 000 Ft". In each, compare Purchase history and Home "paid" with the price on Play's sheet.
   status: assigned to Story 4.18 (human-verify).
+- source_spec: `_bmad-output/implementation-artifacts/spec-4-3-cache-play-prices-for-offline-display.md`
+  summary: The cached Play prices are for display only. The price charged and recorded must be Play's live one.
+  evidence: A cached entry can be up to 30 days old (`PriceCachePolicy.EXPIRES_AFTER`, Story 4.3 review). Play's own sheet always charges its live price, but the intent and history would record the cached `Money` if they read the cache.
+  status: |
+    Assigned:
+    - 4.12: re-query the product's `ProductDetails` at `SnoozeTapped`/`PayConfirmed` (launching billing needs the live `ProductDetails` anyway) and store the answer in the cache.
+    - 4.13: the confirm sheet shows the live price when it arrives and re-arms its 500 ms guard when the shown price changes.
+    - 4.8: `PurchaseIntent` records the live `Money` (micros and currency) of that query, never the cached entry.
+- source_spec: `_bmad-output/implementation-artifacts/spec-4-3-cache-play-prices-for-offline-display.md`
+  summary: (device row for the Story 4.18 checklist) WorkManager starts only after the first unlock, and the price refresh runs after a reboot.
+  evidence: The on-demand start and the locked-start path are tested in Robolectric only (`PriceRefreshSchedulingTest`, `BackgroundWorkWiringTest`).
+  status: assigned to Story 4.18 (human-verify). On the Oppo, reboot and let an alarm ring before unlocking (no crash, it rings). Then unlock, open the app online, and check that prices show.

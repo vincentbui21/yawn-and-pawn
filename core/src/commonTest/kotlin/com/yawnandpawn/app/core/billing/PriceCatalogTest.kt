@@ -10,6 +10,7 @@ import kotlinx.coroutines.async
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.test.advanceTimeBy
 import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
 import kotlin.test.Test
@@ -20,6 +21,7 @@ import kotlin.time.Duration
 import kotlin.time.Duration.Companion.days
 import kotlin.time.Duration.Companion.hours
 import kotlin.time.Duration.Companion.milliseconds
+import kotlin.time.Duration.Companion.seconds
 import kotlin.time.Instant
 
 /** Story 4.3: the price snapshot, its merge and staleness rules, the stored form and [CachedPriceCatalog]. */
@@ -73,6 +75,11 @@ class PriceCatalogTest {
                 30.days to PriceFreshness.Stale,
                 30.days + 1.milliseconds to PriceFreshness.Expired,
                 (-1).hours to PriceFreshness.Fresh,
+                (-1).hours - 1.milliseconds to PriceFreshness.Stale,
+                (-2).hours to PriceFreshness.Stale,
+                (-30).days to PriceFreshness.Stale,
+                (-30).days - 1.milliseconds to PriceFreshness.Expired,
+                (-40).days to PriceFreshness.Expired,
             )
         table.forEach { (age, expected) -> assertEquals(expected, entry(1).freshnessAt(t0 + age), "age $age") }
     }
@@ -108,6 +115,28 @@ class PriceCatalogTest {
         val merged = snapshot(5..5).mergedWith(result(listOf(price(5, text = "USD 9.99")), setOf("snooze_usd_05")), ids, t1)
 
         assertEquals(snapshot(5..5), merged)
+    }
+
+    @Test
+    fun `an answer that mixes currencies keeps one, and a tie keeps the cached currency`() {
+        val merged = snapshot(1..50).mergedWith(result(listOf(price(1, "EUR"), price(2))), ids, t1)
+
+        assertEquals(PriceCatalogSnapshot(snapshot(1..50).entries + snapshot(2..2, t1).entries), merged)
+    }
+
+    @Test
+    fun `an answer that mixes currencies keeps the currency of most of its prices`() {
+        val merged = snapshot(1..50).mergedWith(result(listOf(price(1, "EUR"), price(2, "EUR"), price(3))), ids, t1)
+
+        assertEquals(snapshot(1..2, t1, "EUR"), merged)
+    }
+
+    @Test
+    fun `with no cached currency, a tie keeps the first currency of the answer`() {
+        val merged = PriceCatalogSnapshot.EMPTY.mergedWith(result(listOf(price(1, "EUR"), price(2), price(3, "EUR"), price(4))), ids, t1)
+
+        assertEquals(PriceCatalogSnapshot(snapshot(1..1, t1, "EUR").entries + snapshot(3..3, t1, "EUR").entries), merged)
+        assertNull(PriceCatalogSnapshot.EMPTY.answerCurrency(emptyList()))
     }
 
     @Test
@@ -281,6 +310,46 @@ class PriceCatalogTest {
             assertEquals(Outcome.Success(Unit), second.await())
             assertEquals(2, source.requests.size)
             assertEquals(2, store.updates)
+        }
+
+    @Test
+    fun `a fetch that never answers is abandoned after the timeout, and the next refresh runs`() =
+        runTest {
+            val source = Source(Outcome.Success(result((1..50).map { price(it) }))).apply { gate = CompletableDeferred() }
+            val store = Store(snapshot(1..50))
+            val catalog = CachedPriceCatalog(source, store, clock, logger, fetchTimeout = 30.seconds)
+
+            val hung = async { catalog.refresh() }
+            advanceTimeBy(30.seconds - 1.milliseconds)
+            runCurrent()
+            assertEquals(false, hung.isCompleted)
+            advanceTimeBy(2.milliseconds)
+            runCurrent()
+
+            val timedOut = DomainError.ProductDetailsFailed(transient = true, cause = "no answer within 30s")
+            assertEquals(Outcome.Failure(timedOut), hung.await())
+            assertEquals(snapshot(1..50), store.state.value)
+            assertEquals(listOf<LogEvent>(LogEvent.OperationFailed.of(CachedPriceCatalog.FETCH_PRICES, timedOut)), logger.events)
+
+            source.gate = null
+            assertEquals(Outcome.Success(Unit), catalog.refresh())
+            assertEquals(snapshot(1..50, t1), store.state.value)
+            assertEquals(30.seconds, CachedPriceCatalog.FETCH_TIMEOUT)
+        }
+
+    @Test
+    fun `an answer that mixes currencies is logged`() =
+        runTest {
+            val store = Store(PriceCatalogSnapshot.EMPTY)
+            val catalog = CachedPriceCatalog(Source(Outcome.Success(result(listOf(price(1, "EUR"), price(2))))), store, clock, logger)
+
+            assertEquals(Outcome.Success(Unit), catalog.refresh())
+
+            assertEquals(
+                listOf<LogEvent>(LogEvent.OperationFailed(CachedPriceCatalog.FETCH_PRICES, "mixed currencies EUR, USD")),
+                logger.events,
+            )
+            assertEquals(1, store.state.value.entries.size)
         }
 
     @Test

@@ -44,8 +44,8 @@ class UnlockSignals(
     private val firebase: FirebaseStartup,
     private val scope: ApplicationScope,
     private val logger: Logger,
+    private val prices: PriceRefreshScheduler,
     private val retry: Duration = RETRY,
-    private val prices: PriceRefreshScheduler? = null,
     private val replayLedger: () -> Unit = {},
 ) {
     private var billingStarted = false
@@ -103,7 +103,7 @@ class UnlockSignals(
             }
         }
         // WorkManager waits for the unlock (Story 4.3): launched, never awaited, as this runs inside engine effects.
-        prices?.let { scheduler -> scope.launch { scheduler.start() } }
+        scope.launch { prices.start() }
         // Application.onCreate starts Firebase too: started (or waiting for the unlock), it is not asked again.
         if (!firebase.started) {
             try {

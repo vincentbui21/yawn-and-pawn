@@ -24,7 +24,7 @@ import org.koin.dsl.module
  */
 fun workModule(): Module =
     module {
-        single<BackgroundWork> { AndroidBackgroundWork(androidContext(), get()) }
+        single<BackgroundWork> { AndroidBackgroundWork(androidContext(), get(), get()) }
         // The price refresh (Story 4.3) and the consume retry of the grant ledger (Story 4.10, its one-time and 6-hour
         // periodic jobs).
         single {

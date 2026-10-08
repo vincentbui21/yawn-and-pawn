@@ -63,8 +63,8 @@ deferred:
 
 ## Decisions (fast mode: default taken, owner can change)
 
-1. **Staleness:** an entry is Fresh up to 24 h after its fetch, Stale up to 30 days (still shown: Play's own sheet shows the real price at purchase), and Expired after 30 days (treated as "Prices not loaded yet"). A fetch time in the future (clock moved back) counts as Fresh. Constants in `PriceCachePolicy`.
-2. **Currency change:** a refresh whose prices are in another currency drops the previous entries of the old currency, even for products Play did not return this time, so one snapshot never mixes a travelled-from currency with the new one.
+1. **Staleness:** an entry is Fresh up to 24 h after its fetch, Stale up to 30 days (still shown: Play's own sheet shows the real price at purchase), and Expired after 30 days (treated as "Prices not loaded yet"). A fetch time in the future counts as Fresh only within 1 h (clock jitter); further ahead it is Stale, and beyond 30 days ahead Expired (review). Constants in `PriceCachePolicy`.
+2. **Currency change:** a refresh whose prices are in another currency drops the previous entries of the old currency, even for products Play did not return this time, so one snapshot never mixes a travelled-from currency with the new one. An answer that itself mixes currencies keeps one (review): the majority; a tie keeps the cached currency, else the first in answer order; the others are dropped and the mix is logged.
 3. **Partial refresh:** products Play returns replace their entries; unfetched or missing products keep their previous entry (same currency); entries with an empty price string or a price ≤ 0 are ignored; ids outside the 50 snooze products are ignored. A result with no usable price is a success that changes nothing.
 4. **Two jobs, one task:** WorkManager unique names cannot be shared by one-time and periodic work, so app start enqueues one-time "price-refresh-now" (KEEP) and periodic "price-refresh" (every 24 h, UPDATE), both needing a network connection and running the same `PriceRefresh` task.
 5. **Session-start refresh is direct, not WorkManager:** launched on `ApplicationScope` when a real alarm (not a test alarm) starts a session and the user is unlocked. "Online" is left to the source (an offline fetch fails fast and keeps the cache) until 4.7's `Connectivity` port exists.
@@ -125,6 +125,15 @@ deferred:
 **Commands:**
 - `./gradlew qualityGate :androidApp:assembleDebugAndroidTest --no-daemon` -- expected: BUILD SUCCESSFUL.
 
+## Handoff: the cache is display-only (review)
+
+The cached price is what the ringing screen, the fee picker and the confirm sheet show first; it can be up to 30 days old. It is never the price charged or recorded:
+- **4.12:** re-query the product's `ProductDetails` at `SnoozeTapped`/`PayConfirmed` (billing needs it to launch) and store the answer in the cache.
+- **4.13:** the confirm sheet shows the live price when it arrives and re-arms its 500 ms guard when the shown price changes.
+- **4.8:** `PurchaseIntent` records the live `Money` of that query, never a cached entry.
+
+These items are in deferred-work.md.
+
 ## Auto Run Result
 
 Status: implemented in fast mode (one agent, Epic 4 Lane 1), waiting for review. Branch `story/4-3-price-cache` on main `96fba93` (4.2 merged).
@@ -136,3 +145,23 @@ Status: implemented in fast mode (one agent, Epic 4 Lane 1), waiting for review.
 - **WorkManager on real devices:** the on-demand start after the first unlock is tested in Robolectric (TestDriver) only; a reboot-then-unlock check on the Oppo belongs to the 4.18 checklist.
 - **Session-start refresh while offline:** it is attempted and fails fast (no `Connectivity` port until 4.7).
 - **Staleness constants** (24 h / 30 days) are defaults taken in fast mode; the owner can change them in `PriceCachePolicy`.
+
+## Review (2 reviewers, fast mode)
+
+Two reviewers looked at the branch, one for verification gaps and one for edge cases. Neither found a HIGH issue in production code; the two HIGH items were test gaps. Every item is fixed in `fix(4.3): review fixes`, each with a test:
+
+1. **The service never waits for the refresh:** `PriceRefreshAtSessionStartTest` holds Play's answer and sends the service a second alarm, which is merged while Play is still answering. The test also checks that the sound plays and that the wake screen draws its first frame.
+2. **App-start and unlock scheduling:**
+   - `UnlockSignals` takes the `PriceRefreshScheduler` as a required parameter.
+   - `PriceRefreshSchedulingTest` boots its own application classes. Unlocked, the app start enqueues exactly both jobs, off the main thread, and once per process. Locked, WorkManager is never looked up; after the unlock signal, both unique jobs are in WorkManager.
+3. **One catalog for both refresh paths:** the worker's refresh waits while the session-start refresh is in flight, so Play gets one request at a time.
+4. **UPDATE policy:** enqueueing the daily job with 48 h keeps its id and changes the period.
+5. **A failed update on the real DataStore:** a throwing transform is a `StorageFailure`, and after reopening the stored snapshot is unchanged.
+6. **Mixed-currency answers:** one currency is kept (decision 2, majority / tie rule), and the mix is logged.
+7. **Test alarms:** a test alarm starts no refresh.
+8. **Fetch timeout:** a fetch that gets no answer within 30 s (`CachedPriceCatalog.FETCH_TIMEOUT`) fails as a transient `ProductDetailsFailed`, and the next refresh runs.
+9. **Display-only handoff:** see the section above and deferred-work.md (4.8, 4.12, 4.13).
+10. **Read errors:** `DataStorePriceCacheStore.observe` emits empty, then reads again with a backoff (1 s doubling to 60 s) instead of finishing the flow. A test shows a store that fails once and then emits.
+11. **Future fetch times:** decision 1 (1 h tolerance, then Stale, then Expired beyond 30 days ahead).
+- **Minor, enqueue failures:** a failed WorkManager enqueue `Operation` is logged (`AndroidBackgroundWork.watch`).
+- **Allowlist:** `checkDependencyAllowlist` (in `qualityGate`) failed before the WorkManager entries were added, so it covers them. `work-runtime-ktx` is not on the classpath, because the app depends on `work-runtime` directly.

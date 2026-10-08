@@ -108,7 +108,7 @@ class UnlockDuringRingTest {
         logger: FakeLogger = FakeLogger(),
         billing: Billing = this.billing,
         firebase: FirebaseStartup = app.koin.get(),
-    ) = UnlockSignals(app.engine, billing, firebase, app.koin.get(), logger, retry = Duration.ZERO)
+    ) = UnlockSignals(app.engine, billing, firebase, app.koin.get(), logger, app.koin.get(), retry = Duration.ZERO)
 
     /** A session that rings before the first unlock, dispatched straight to the engine (no service). */
     private fun lockedSession(app: WakeApp) {

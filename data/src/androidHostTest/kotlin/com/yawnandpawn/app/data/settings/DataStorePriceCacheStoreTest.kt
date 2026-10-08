@@ -4,8 +4,10 @@ import android.content.Context
 import androidx.datastore.core.DataStore
 import androidx.datastore.preferences.core.Preferences
 import androidx.datastore.preferences.core.edit
+import androidx.datastore.preferences.core.preferencesOf
 import androidx.test.core.app.ApplicationProvider
 import com.yawnandpawn.app.core.billing.CachedPriceCatalog
+import com.yawnandpawn.app.core.billing.PriceCatalogJson
 import com.yawnandpawn.app.core.billing.PriceCatalogSnapshot
 import com.yawnandpawn.app.core.billing.SnoozeProducts
 import com.yawnandpawn.app.core.error.DomainError
@@ -20,6 +22,7 @@ import com.yawnandpawn.app.testing.productPrices
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.flow
+import kotlinx.coroutines.flow.take
 import kotlinx.coroutines.flow.toList
 import kotlinx.coroutines.test.runTest
 import org.junit.After
@@ -134,9 +137,45 @@ class DataStorePriceCacheStoreTest {
         runTest {
             val store = DataStorePriceCacheStore(UnusableStore, logger)
 
-            assertEquals(listOf(PriceCatalogSnapshot.EMPTY), store.observe().toList())
+            assertEquals(PriceCatalogSnapshot.EMPTY, store.observe().first())
             assertEquals(listOf<LogEvent>(LogEvent.OperationFailed("read price cache", "IOException")), logger.events)
             assertIs<DomainError.StorageFailure>(assertIs<Outcome.Failure<DomainError>>(store.update { it }).error)
+        }
+
+    @Test
+    fun `after a read error the flow reads again and emits the stored snapshot, so it never ends on a transient error`() =
+        runTest {
+            val stored = preferencesOf(DataStorePriceCacheStore.KEY to PriceCatalogJson.encode(aPriceSnapshot(1..3)))
+            var reads = 0
+            val flaky =
+                object : DataStore<Preferences> {
+                    override val data: Flow<Preferences> =
+                        flow {
+                            if (reads++ == 0) throw IOException("busy")
+                            emit(stored)
+                        }
+
+                    override suspend fun updateData(transform: suspend (t: Preferences) -> Preferences): Preferences = transform(stored)
+                }
+
+            val emitted = DataStorePriceCacheStore(flaky, logger).observe().take(2).toList()
+
+            assertEquals(listOf(PriceCatalogSnapshot.EMPTY, aPriceSnapshot(1..3)), emitted)
+            assertEquals(2, reads)
+            assertEquals(listOf<LogEvent>(LogEvent.OperationFailed("read price cache", "IOException")), logger.events)
+        }
+
+    @Test
+    fun `a transform that throws is a storage failure and the stored snapshot stays, also after reopening`() =
+        runTest {
+            store().update { aPriceSnapshot(1..50) }
+
+            val failed = store().update { error("boom") }
+
+            assertIs<DomainError.StorageFailure>(assertIs<Outcome.Failure<DomainError>>(failed).error)
+            cache.close()
+            cache = PriceCacheDataStore(context)
+            assertEquals(aPriceSnapshot(1..50), store().observe().first())
         }
 
     /** A DataStore whose file cannot be read or written. */

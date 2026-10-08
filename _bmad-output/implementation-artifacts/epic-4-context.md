@@ -305,3 +305,10 @@ everything ──> 4.18
   - **Recommended default:** accept it as a nudge and build nothing extra. The delete inside the window is confirmed and logged (4.6).
 - **Q5. Purchase history layout.**
   - **Recommended default:** follow the approved preview (month cards, newest first) rather than 4.16's flat list. The rows and statuses stay as specified.
+
+## Owner decisions (2026-10-08)
+1. Unlock step: S1's Unlocking rows go into the state machine in 4.8, with an unlock port and a fake (default taken, recommended).
+2. No Snooze button on the fallback check picker; keep the approved screen.
+3. Play Billing's transitive location/places libraries are allowed and declared on the Data safety form; not excluded.
+4. Deleting and recreating an alarm to get around the 8-hour lock is accepted as a nudge; nothing extra is built.
+5. Purchase history uses month cards as in the approved design preview, not 4.16's flat list.

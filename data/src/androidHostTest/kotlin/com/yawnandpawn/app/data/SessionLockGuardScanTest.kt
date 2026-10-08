@@ -39,7 +39,18 @@ class SessionLockGuardScanTest {
     @Test
     fun `the scan finds the guarded alarm use cases and every allowed writer, so it cannot pass by finding nothing`() {
         val writers = sources.flatMap { writers(it) }.toSet()
-        assertEquals(setOf("SaveAlarm", "SetAlarmEnabled", "DeleteAlarm", "DuplicateAlarm", "ReRegisterCode"), writers - ALLOWED.keys)
+        assertEquals(
+            setOf(
+                "SaveAlarm",
+                "SetAlarmEnabled",
+                "DeleteAlarm",
+                "DuplicateAlarm",
+                "ReRegisterCode",
+                "SaveGlobalSetting",
+                "RecordCommitmentEvent",
+            ),
+            writers - ALLOWED.keys,
+        )
         assertEquals(ALLOWED.keys, writers intersect ALLOWED.keys, "an allowed writer no longer writes: drop it from ALLOWED")
     }
 
@@ -369,11 +380,11 @@ class SessionLockGuardScanTest {
         const val CORE = "core/src/commonMain/kotlin/com/yawnandpawn/app/core"
 
         /**
-         * Every class and object here is checked, not only use cases. There is no `core.config` yet: settings, base-fee
-         * and "Delete all data" use cases (Epics 4 and 5) are checked as use cases wherever they live in `:core`; a
+         * Every class and object here is checked, not only use cases: `core.config` (Story 4.4) holds the settings and
+         * commitment-lock writers. "Delete all data" (Epic 5) is checked as a use case wherever it lives in `:core`; a
          * package that also holds other writers the user drives (a repository facade, a dismissal) is added here.
          */
-        val FULL_PACKAGES = listOf("alarm", "history", "stats")
+        val FULL_PACKAGES = listOf("alarm", "history", "stats", "config")
 
         /** The writers allowed to write during a session, and why. */
         val ALLOWED =
@@ -392,6 +403,10 @@ class SessionLockGuardScanTest {
                 // offers it is closed by the lock, and a test that fires during a session is ignored by the engine
                 // (TestAlarmFired while active, AD-2), so it changes nothing the user owns.
                 "ScheduleTestAlarm" to "test fires are ignored during a session",
+                // The commitment lock (Story 4.4): makes a pending change live only once the occurrence it waited for has
+                // passed and no session rings that occurrence; a running session's config is frozen (AD-16), so it changes
+                // nothing a session uses. It runs on app start, after Recorded and in rescheduleAll, which may be mid-session.
+                "PromotePendingChanges" to "only passed occurrences; session configs are frozen",
             )
 
         val DECLARATION =

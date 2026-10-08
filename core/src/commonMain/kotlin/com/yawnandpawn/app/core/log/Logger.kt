@@ -175,6 +175,7 @@ enum class WakeStage {
 fun DomainError.diagnostic(): String =
     when (this) {
         is DomainError.InvalidAlarm -> "invalid alarm field $field"
+        is DomainError.InvalidSetting -> "invalid setting $field"
         is DomainError.NotFound -> "not found: $id"
         is DomainError.StorageFailure -> "storage failure: $cause"
         DomainError.ExactAlarmNotPermitted -> "exact alarms not permitted"

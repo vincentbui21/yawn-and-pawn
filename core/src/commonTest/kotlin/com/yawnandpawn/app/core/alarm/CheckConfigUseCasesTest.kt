@@ -6,6 +6,7 @@ import com.yawnandpawn.app.core.checks.CheckType
 import com.yawnandpawn.app.core.checks.Difficulty
 import com.yawnandpawn.app.core.checks.qr.CodeFormat
 import com.yawnandpawn.app.core.checks.qr.RegisteredCode
+import com.yawnandpawn.app.core.config.InMemoryPendingChanges
 import com.yawnandpawn.app.core.error.DomainError
 import com.yawnandpawn.app.core.error.Outcome
 import com.yawnandpawn.app.core.session.SessionLockGuard
@@ -27,7 +28,8 @@ import kotlin.time.Instant
 
 /** Story 3.5: the alarm use cases store, copy and remove each alarm's checks, and validate them. */
 class CheckConfigUseCasesTest {
-    private val start = Instant.parse("2027-03-03T06:00:00Z")
+    // 07:30: the 07:00 alarm next rings tomorrow, outside the commitment lock window (Story 4.4), so edits apply at once.
+    private val start = Instant.parse("2027-03-03T07:30:00Z")
     private val clock = TestClock(start)
     private val ids = SequentialIds()
     private val repository = InMemoryAlarms()
@@ -38,7 +40,19 @@ class CheckConfigUseCasesTest {
     private val scheduling = AlarmScheduling(repository, scheduler, clock, TestZone(TimeZone.UTC), lock, RecordingLogger())
     private val sessionLock =
         SessionLockGuard(MutableStateFlow<SessionState>(SessionState.Idle), MutableStateFlow(true), MutableStateFlow(false))
-    private val save = SaveAlarm(repository, ids, clock, lock, sequence, scheduling, sessionLock, checkConfigs)
+    private val save =
+        SaveAlarm(
+            repository,
+            ids,
+            clock,
+            lock,
+            sequence,
+            scheduling,
+            sessionLock,
+            checkConfigs,
+            InMemoryPendingChanges(),
+            TestZone(TimeZone.UTC),
+        )
     private val delete = DeleteAlarm(repository, lock, scheduling, sessionLock, checkConfigs)
     private val duplicate = DuplicateAlarm(repository, ids, clock, lock, sequence, scheduling, sessionLock, checkConfigs)
 

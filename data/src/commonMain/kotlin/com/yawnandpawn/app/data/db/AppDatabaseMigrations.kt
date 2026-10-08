@@ -129,6 +129,29 @@ val MIGRATION_7_8: Migration =
         }
     }
 
+/**
+ * v8 to v9 (Story 4.4, the commitment lock): adds the empty `pending_change` table (an alarm's weakening changes waiting
+ * for an occurrence; deleted with their alarm) and its `alarm_id` index, and the empty `commitment_event` table (alarms
+ * turned off or deleted inside the lock window; no foreign key, so an event outlives its alarm). Every other table is
+ * untouched. The SQL matches the exported `9.json`; Room checks it after migrating.
+ */
+val MIGRATION_8_9: Migration =
+    object : Migration(8, 9) {
+        override suspend fun migrate(connection: SQLiteConnection) {
+            connection.execSQL(
+                "CREATE TABLE IF NOT EXISTS `pending_change` (`alarm_id` TEXT NOT NULL, `field` TEXT NOT NULL, " +
+                    "`value_json` TEXT NOT NULL, `effective_after_alarm_id` TEXT NOT NULL, " +
+                    "`effective_after_scheduled_at` INTEGER NOT NULL, PRIMARY KEY(`alarm_id`, `field`), " +
+                    "FOREIGN KEY(`alarm_id`) REFERENCES `alarm`(`id`) ON UPDATE NO ACTION ON DELETE CASCADE )",
+            )
+            connection.execSQL("CREATE INDEX IF NOT EXISTS `index_pending_change_alarm_id` ON `pending_change` (`alarm_id`)")
+            connection.execSQL(
+                "CREATE TABLE IF NOT EXISTS `commitment_event` (`id` TEXT NOT NULL, `alarm_id` TEXT NOT NULL, " +
+                    "`occurrence_at` INTEGER NOT NULL, `action` TEXT NOT NULL, `at` INTEGER NOT NULL, PRIMARY KEY(`id`))",
+            )
+        }
+    }
+
 /** Every migration of `app.db`, oldest first; `buildAppDatabase` registers them all. */
 val APP_DATABASE_MIGRATIONS: Array<Migration> =
-    arrayOf(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6, MIGRATION_6_7, MIGRATION_7_8)
+    arrayOf(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6, MIGRATION_6_7, MIGRATION_7_8, MIGRATION_8_9)

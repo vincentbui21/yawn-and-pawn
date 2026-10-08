@@ -16,12 +16,16 @@ import com.yawnandpawn.app.core.checks.CheckEntry
 import com.yawnandpawn.app.core.checks.CheckMode
 import com.yawnandpawn.app.core.checks.CheckType
 import com.yawnandpawn.app.core.checks.Difficulty
+import com.yawnandpawn.app.core.config.Occurrence
+import com.yawnandpawn.app.core.config.PendingChange
+import com.yawnandpawn.app.core.config.SettingValue
 import com.yawnandpawn.app.core.error.Outcome
 import com.yawnandpawn.app.core.history.SessionHistoryRow
 import com.yawnandpawn.app.core.history.SessionMergeRow
 import com.yawnandpawn.app.data.alarm.RoomAlarmRepository
 import com.yawnandpawn.app.data.alarm.RoomCheckConfigRepository
 import com.yawnandpawn.app.data.alarm.RoomRequestCodeSequence
+import com.yawnandpawn.app.data.config.RoomPendingChangeRepository
 import com.yawnandpawn.app.data.history.RoomSessionHistoryRepository
 import com.yawnandpawn.app.testing.AlarmUseCasesFixture
 import com.yawnandpawn.app.testing.aRegisteredCode
@@ -348,16 +352,76 @@ class AppDatabaseFactoryTest {
                 assertEquals(Outcome.Success(Unit), checks.saveWithAlarm(alarm, listOf(math, qr)))
                 assertEquals(Outcome.Success(listOf(math, qr)), checks.forAlarm("a"), "the code and its time read back")
             }
-            assertEquals(8, userVersion())
+            assertEquals(AppDatabase.SCHEMA_VERSION, userVersion())
+        }
+
+    @Test
+    fun `the exported version 9 schema adds the pending changes, deleted with their alarm, and the commitment events`() {
+        assertTrue(schema(9).exists(), "exported schema missing: ${schema(9).absolutePath}")
+        val json = schema(9).readText()
+
+        assertTrue(json.contains("\"version\": 9"), "schema version 9")
+        assertEquals(
+            listOf(
+                "alarm",
+                "request_code_sequence",
+                "session_history",
+                "session_merge",
+                "check_config",
+                "pending_change",
+                "commitment_event",
+            ),
+            tableNames(json),
+        )
+        val pending = json.substringAfter("\"tableName\": \"pending_change\"").substringBefore("\"tableName\"")
+        assertTrue(pending.contains("PRIMARY KEY(`alarm_id`, `field`)"), "one change per alarm and field")
+        assertTrue(pending.contains("REFERENCES `alarm`(`id`) ON UPDATE NO ACTION ON DELETE CASCADE"), "changes go with their alarm")
+        val events = json.substringAfter("\"tableName\": \"commitment_event\"")
+        assertFalse(events.contains("REFERENCES"), "an event outlives its alarm")
+        assertTrue(json.contains("`code_format` TEXT, `code_value` TEXT, `code_registered_at` INTEGER"), "Story 3.10's columns are kept")
+    }
+
+    @Test
+    fun `migrating a v8 database keeps alarms, checks and history and adds empty pending changes and events (Story 4-4)`() =
+        runTest {
+            val alarm = anAlarm(id = "a", requestCode = 1000)
+            val row = aSessionHistoryRow(sessionId = "session-1", alarmId = "a")
+            createDatabase(
+                version = 8,
+                alarms = listOf(alarm),
+                requestCodeMark = 1000,
+                history = listOf(row),
+                sql =
+                    listOf(
+                        "INSERT INTO check_config (id, alarm_id, position, type, difficulty, count, created_at, updated_at) " +
+                            "VALUES ('a:Math', 'a', 0, 'Math', 'Hard', 5, 1000, 2000)",
+                    ),
+            )
+
+            withDatabase { database ->
+                assertEquals(Outcome.Success(alarm), RoomAlarmRepository(database.alarmDao()).get("a"))
+                val checks =
+                    assertIs<Outcome.Success<List<CheckConfig>>>(RoomCheckConfigRepository(database.checkConfigDao()).forAlarm("a"))
+                assertEquals(listOf(CheckEntry(CheckType.Math, Difficulty.Hard, 5)), checks.value.orderedEntries())
+                assertEquals(Outcome.Success(row), RoomSessionHistoryRepository(database.sessionHistoryDao()).find("session-1"))
+                assertEquals(emptyList(), database.pendingChangeDao().all())
+                assertEquals(emptyList(), database.commitmentEventDao().all())
+
+                val pending = RoomPendingChangeRepository(database.pendingChangeDao())
+                val change = PendingChange("a", SettingValue.GraceSeconds(30), Occurrence("a", Instant.parse("2027-03-09T07:30:00Z")))
+                assertEquals(Outcome.Success(Unit), pending.put(change))
+                assertEquals(Outcome.Success(listOf(change)), pending.all())
+            }
+            assertEquals(9, userVersion())
         }
 
     @Test
     fun `the migrations cover every version step and nothing is destructive`() {
         assertEquals(
-            listOf(1 to 2, 2 to 3, 3 to 4, 4 to 5, 5 to 6, 6 to 7, 7 to 8),
+            listOf(1 to 2, 2 to 3, 3 to 4, 4 to 5, 5 to 6, 6 to 7, 7 to 8, 8 to 9),
             APP_DATABASE_MIGRATIONS.map { it.startVersion to it.endVersion },
         )
-        assertEquals(8, AppDatabase.SCHEMA_VERSION)
+        assertEquals(9, AppDatabase.SCHEMA_VERSION)
     }
 
     @Test

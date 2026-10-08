@@ -50,6 +50,8 @@ class BackupRulesTest {
             Triple("exclude", "device_sharedpref", "${SkippedRestoreNotice.PREFS}.xml"),
             // AndroidNotificationPermission's "asked once" flag (device-protected since Story 2.3), kept per device.
             Triple("exclude", "device_sharedpref", "reliability.xml"),
+            // The fire's last-known global settings (Story 4.4 review fix 11), a per-device fallback.
+            Triple("exclude", "device_sharedpref", "settings_fallback.xml"),
             Triple("exclude", "root", "."),
             Triple("exclude", "file", "."),
             Triple("exclude", "database", "."),

@@ -22,6 +22,8 @@ import com.yawnandpawn.app.core.alarm.orderedEntries
 import com.yawnandpawn.app.core.checks.AccessibilityState
 import com.yawnandpawn.app.core.checks.CheckAnswer
 import com.yawnandpawn.app.core.checks.Puzzle
+import com.yawnandpawn.app.core.config.PromotePendingChanges
+import com.yawnandpawn.app.core.config.ReadFireSettings
 import com.yawnandpawn.app.core.crash.CrashReporter
 import com.yawnandpawn.app.core.error.DomainError
 import com.yawnandpawn.app.core.error.Outcome
@@ -34,7 +36,6 @@ import com.yawnandpawn.app.core.log.WakeStage
 import com.yawnandpawn.app.core.log.diagnostic
 import com.yawnandpawn.app.core.session.CheckRun
 import com.yawnandpawn.app.core.session.ConfigResolver
-import com.yawnandpawn.app.core.session.GlobalSettings
 import com.yawnandpawn.app.core.session.SessionData
 import com.yawnandpawn.app.core.session.SessionEngine
 import com.yawnandpawn.app.core.session.SessionEvent
@@ -78,7 +79,7 @@ import kotlin.time.Instant
  *   ring-start timing ([WakeTimings]).
  * - **Alarm:** while a session rings or is snoozed it dispatches `OverlapAlarmFired` (unless the fire is not merged, see
  *   [mergeIgnoredBecause]); otherwise it reads the alarm and
- *   dispatches `AlarmFired` with a new session id, the config resolved now (`GlobalSettings` defaults until Epic 5)
+ *   dispatches `AlarmFired` with a new session id, the config resolved now (the stored global settings and pending changes, Story 4.4)
  *   and whether the phone is still locked since boot (the reducer derives the check seeds, AD-9). A deleted alarm rings
  *   nothing.
  * - **Slot (Story 2.1):** the kill-recovery path; see [onSlot]. **Restore:** it loads the stored session
@@ -97,7 +98,8 @@ import kotlin.time.Instant
  * - While a session is active it calls `SessionEngine.tick` when the next deadline (grace end or the 30-minute
  *   interaction timeout, FR-ALM-9) is due on the monotonic clock (Story 1.16). A forgotten alarm becomes Missed there.
  * - When the state is Idle, Completed or Missed and no emergency ring plays, it stops the sound and vibration, restores
- *   the alarm volume, removes the notification and stops itself: no service is left running (NFR-8).
+ *   the alarm volume, removes the notification and stops itself: no service is left running (NFR-8). It then promotes
+ *   the pending changes that waited for the session (Story 4.4, `PromotePendingChanges`).
  * - **Never silent:** if `AlarmFired` cannot be committed (or the alarm cannot be read), or a slot fire, merge or
  *   restore fails while the session is not ringing, [WakeRuntime.startEmergency] rings the default sound. An uncaught
  *   exception in this flow reaches the scope's handler: it is reported to the [CrashReporter], the player switches to
@@ -128,6 +130,8 @@ class WakeService :
     private val userLock: UserLockState by inject()
     private val accessibility: AccessibilityState by inject()
     private val sessionLock: SessionLockGuard by inject()
+    private val fireSettings: ReadFireSettings by inject()
+    private val promotePending: PromotePendingChanges by inject()
     private val unlockSignals: UnlockSignals by inject()
     private val calls: CallDetector by inject()
 
@@ -393,14 +397,18 @@ class WakeService :
             }
         // TalkBack on at the fire: the session's Memory Sequence uses the numbered variant, frozen for its snooze re-rings too (Story 3.8).
         val accessible = accessibility.isScreenReaderOn()
+        // The commitment lock (Story 4.4): the global settings and pending changes from one snapshot, the alarm's pending
+        // changes beside it, within 500 ms; the last-known settings when the store is slow or broken (review fix 11).
+        val fire = fireSettings.read(alarm.id)
         val config =
             ConfigResolver.resolve(
                 alarm,
                 checks,
-                GlobalSettings(),
+                fire.settings,
                 testMode = false,
                 scheduledAt = fired.scheduledAt,
                 accessible = accessible,
+                pendingChanges = fire.pendingChanges,
             )
         val locked = !userLock.isUserUnlocked()
         val event =
@@ -659,6 +667,8 @@ class WakeService :
         ticking?.cancel()
         unlockWatch?.cancel()
         runtime.endSession()
+        // The commitment lock (Story 4.4): a change that waited for this session's occurrence takes effect now it is over.
+        appScope.launch { promotePending() }
         stopForeground(STOP_FOREGROUND_REMOVE)
         stopSelfResult(lastStartId)
     }

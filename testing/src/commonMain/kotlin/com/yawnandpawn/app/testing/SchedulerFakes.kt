@@ -13,6 +13,7 @@ import com.yawnandpawn.app.core.alarm.RequestCodeSequence
 import com.yawnandpawn.app.core.alarm.RequestCodes
 import com.yawnandpawn.app.core.alarm.SaveAlarm
 import com.yawnandpawn.app.core.alarm.SetAlarmEnabled
+import com.yawnandpawn.app.core.config.PendingChangeRepository
 import com.yawnandpawn.app.core.error.DomainError
 import com.yawnandpawn.app.core.error.Outcome
 import com.yawnandpawn.app.core.id.IdGenerator
@@ -167,10 +168,13 @@ class AlarmUseCasesFixture(
     val sessionState: MutableStateFlow<SessionState> = MutableStateFlow(SessionState.Idle),
     /** The alarms' checks (Story 3.5), stored next to [repository]. */
     val checkConfigs: CheckConfigRepository = FakeCheckConfigRepository(repository),
+    /** The pending changes of the commitment lock (Story 4.4). */
+    val pendingChanges: PendingChangeRepository = FakePendingChangeRepository(),
 ) {
     val scheduling = AlarmScheduling(repository, scheduler, clock, timeZoneProvider, lock, logger)
     val sessionLock = SessionLockGuard(sessionState, restored = MutableStateFlow(true), emergency = MutableStateFlow(false))
-    val save = SaveAlarm(repository, ids, clock, lock, requestCodes, scheduling, sessionLock, checkConfigs)
+    val save =
+        SaveAlarm(repository, ids, clock, lock, requestCodes, scheduling, sessionLock, checkConfigs, pendingChanges, timeZoneProvider)
     val setEnabled = SetAlarmEnabled(repository, clock, lock, scheduling, sessionLock)
     val delete = DeleteAlarm(repository, lock, scheduling, sessionLock, checkConfigs)
     val duplicate = DuplicateAlarm(repository, ids, clock, lock, requestCodes, scheduling, sessionLock, checkConfigs)

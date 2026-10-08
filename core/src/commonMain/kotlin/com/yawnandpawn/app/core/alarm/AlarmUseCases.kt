@@ -2,8 +2,18 @@ package com.yawnandpawn.app.core.alarm
 
 import com.yawnandpawn.app.core.checks.CheckEntry
 import com.yawnandpawn.app.core.checks.CheckMode
+import com.yawnandpawn.app.core.checks.CheckPlan
 import com.yawnandpawn.app.core.checks.CheckType
 import com.yawnandpawn.app.core.checks.qr.RegisteredCode
+import com.yawnandpawn.app.core.config.CommitmentRules
+import com.yawnandpawn.app.core.config.LockDecision
+import com.yawnandpawn.app.core.config.LockWindow
+import com.yawnandpawn.app.core.config.LockedField
+import com.yawnandpawn.app.core.config.Occurrence
+import com.yawnandpawn.app.core.config.PendingChange
+import com.yawnandpawn.app.core.config.PendingChangeRepository
+import com.yawnandpawn.app.core.config.SettingValue
+import com.yawnandpawn.app.core.config.withCodesFrom
 import com.yawnandpawn.app.core.error.DomainError
 import com.yawnandpawn.app.core.error.Outcome
 import com.yawnandpawn.app.core.error.flatMap
@@ -11,6 +21,7 @@ import com.yawnandpawn.app.core.error.map
 import com.yawnandpawn.app.core.id.IdGenerator
 import com.yawnandpawn.app.core.session.SessionLockGuard
 import com.yawnandpawn.app.core.time.Clock
+import com.yawnandpawn.app.core.time.TimeZoneProvider
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.datetime.DayOfWeek
@@ -41,6 +52,16 @@ data class AlarmDraft(
 )
 
 /**
+ * What [SaveAlarm.save] stored: [alarm] as stored (a weakened locked field keeps its effective value), and the occurrence
+ * after which its pending changes take effect ([pendingUntil] null: everything applied at once). Story 4.6's editor shows
+ * "Saved. Takes effect after tomorrow's {time} alarm." from it.
+ */
+data class AlarmSaved(
+    val alarm: Alarm,
+    val pendingUntil: Occurrence?,
+)
+
+/**
  * Serializes the read-modify-write of every alarm use case (request-code allocation, get-then-upsert, the scheduler
  * sync after it), so two concurrent saves never pick the same code, an edit racing a delete never re-inserts the
  * deleted alarm, and the system alarms are changed in the same order as the stored ones.
@@ -64,6 +85,12 @@ class AlarmWriteLock {
  * stores the new alarm as usual. The draft's checks (Story 3.5) are validated with the alarm (`InvalidAlarm(Checks)`)
  * and stored with it in one transaction ([CheckConfigRepository.saveWithAlarm]); an identical alarm has the same checks
  * in the same order too.
+ *
+ * **Commitment lock (Story 4.4, AD-16):** an edit's locked fields (grace window and checks) go through
+ * [CommitmentRules.decide]. The alarm is locked by its stored next occurrence (when the stored alarm is on) and by its
+ * new one (when the draft is on), whichever are inside the window; a weakening change waits for the latest of them. The
+ * other fields are stored at once, the weakened ones keep their effective values in the row and are stored as
+ * [PendingChange]s after it ([save] returns when they take effect). A new alarm has no commitment yet.
  */
 class SaveAlarm(
     private val repository: AlarmRepository,
@@ -74,39 +101,138 @@ class SaveAlarm(
     private val scheduling: AlarmScheduling,
     private val sessionLock: SessionLockGuard,
     private val checkConfigRepository: CheckConfigRepository,
+    private val pendingRepository: PendingChangeRepository,
+    private val timeZoneProvider: TimeZoneProvider,
 ) {
-    suspend operator fun invoke(draft: AlarmDraft): Outcome<Alarm, DomainError> =
+    /** [save], returning the stored alarm (its locked fields hold their effective values). */
+    suspend operator fun invoke(draft: AlarmDraft): Outcome<Alarm, DomainError> = save(draft).map { it.alarm }
+
+    /** Stores [draft]; the result says whether a locked field waits ([AlarmSaved.pendingUntil]). */
+    suspend fun save(draft: AlarmDraft): Outcome<AlarmSaved, DomainError> =
         lock.withLock {
             sessionLock.whenIdle {
                 val now = clock.nowMillis()
                 val id = draft.id
-                val base: Outcome<Alarm, DomainError> =
-                    if (id == null) {
-                        val template = draft.toAlarm(id = idGenerator.newId(), requestCode = RequestCodes.FIRST_ALARM, createdAt = now)
-                        // Validate before allocating a code, so invalid input never touches storage.
-                        val invalid = validate(template) ?: validateChecks(draft.checks)
-                        if (invalid != null) {
-                            Outcome.Failure(DomainError.InvalidAlarm(invalid))
-                        } else {
-                            // A new enabled alarm identical to a stored one switches that one on instead (owner decision
-                            // 2026-10-05). A new alarm saved off is stored as usual: it must not switch anything on.
-                            if (draft.enabled) {
-                                when (val same = identicalStored(template, draft.checks)) {
-                                    is Outcome.Failure -> return@whenIdle same
-                                    is Outcome.Success -> same.value?.let { return@whenIdle switchOn(it, now) }
+                if (id == null) {
+                    val template = draft.toAlarm(id = idGenerator.newId(), requestCode = RequestCodes.FIRST_ALARM, createdAt = now)
+                    // Validate before allocating a code, so invalid input never touches storage.
+                    val invalid = validate(template) ?: validateChecks(draft.checks)
+                    if (invalid != null) {
+                        Outcome.Failure(DomainError.InvalidAlarm(invalid))
+                    } else {
+                        // A new enabled alarm identical to a stored one switches that one on instead (owner decision
+                        // 2026-10-05). A new alarm saved off is stored as usual: it must not switch anything on.
+                        if (draft.enabled) {
+                            when (val same = identicalStored(template, draft.checks)) {
+                                is Outcome.Failure -> {
+                                    return@whenIdle same
+                                }
+
+                                is Outcome.Success -> {
+                                    same.value?.let {
+                                        return@whenIdle switchOn(it, now).map { on ->
+                                            AlarmSaved(on, null)
+                                        }
+                                    }
                                 }
                             }
-                            requestCodes.next().map { code -> template.copy(requestCode = code) }
                         }
-                    } else {
-                        repository.get(id).map { stored -> draft.toAlarm(id, stored.requestCode, stored.createdAt) }
+                        requestCodes
+                            .next()
+                            .flatMap { code ->
+                                storeWithChecks(
+                                    checkConfigRepository,
+                                    template.copy(requestCode = code, updatedAt = now),
+                                    draft.checks,
+                                    now,
+                                )
+                            }.onSuccess(scheduling::sync)
+                            .map { AlarmSaved(it, null) }
                     }
-                base
-                    .flatMap { alarm ->
-                        storeWithChecks(checkConfigRepository, alarm.copy(updatedAt = now), draft.checks, now)
-                    }.onSuccess(scheduling::sync)
+                } else {
+                    // The edit arms the stored row itself, before its pending writes (storeEdit).
+                    repository.get(id).flatMap { stored -> storeEdit(stored, draft, now) }
+                }
             }
         }
+
+    /**
+     * Stores the edit [draft] of [stored] through the commitment lock: the pending changes of fields applied now are
+     * removed, then the row and its checks are stored (the locked fields at their decided live values), then the pending
+     * changes of deferred fields are put.
+     */
+    private suspend fun storeEdit(
+        stored: Alarm,
+        draft: AlarmDraft,
+        now: Instant,
+    ): Outcome<AlarmSaved, DomainError> {
+        val edited = draft.toAlarm(stored.id, stored.requestCode, stored.createdAt).copy(updatedAt = now)
+        (validate(edited) ?: validateChecks(draft.checks))?.let { return Outcome.Failure(DomainError.InvalidAlarm(it)) }
+        return checkConfigRepository.forAlarm(stored.id).flatMap { rows ->
+            pendingRepository.forAlarm(stored.id).flatMap { own ->
+                val zone = timeZoneProvider.current()
+                val window = LockWindow.latestOf(listOfNotNull(LockWindow.of(stored, now, zone), LockWindow.of(edited, now, zone)))
+                val mine = own.associateBy { it.field }
+                val liveEntries = rows.orderedEntries().ifEmpty { CheckConfig.DEFAULT_ENTRIES }
+                val grace =
+                    CommitmentRules.decide(
+                        stored.id,
+                        SettingValue.GraceSeconds(stored.graceSeconds),
+                        mine[LockedField.GraceSeconds],
+                        SettingValue.GraceSeconds(edited.graceSeconds),
+                        window,
+                        now,
+                    )
+                val checks =
+                    CommitmentRules.decide(
+                        stored.id,
+                        SettingValue.Checks(CheckPlan(stored.checkMode, liveEntries)),
+                        mine[LockedField.Checks],
+                        SettingValue.Checks(CheckPlan(edited.checkMode, draft.checks)),
+                        window,
+                        now,
+                    )
+                // A code registered in this edit is never held back (a new sticker is not a weaker plan).
+                val plan = (checks.live as SettingValue.Checks).plan.withCodesFrom(draft.checks)
+                val row = edited.copy(graceSeconds = (grace.live as SettingValue.GraceSeconds).seconds, checkMode = plan.mode)
+                // Review fix 3: a change applied now drops its pending change before the row is written, so a failure between
+                // never leaves a weaker pending value to undo it later; a deferred change is put after the row. The row is
+                // armed as soon as it is stored: a failed pending write must never leave the alarm armed at its old time.
+                clearApplied(grace, mine)
+                    .flatMap { clearApplied(checks, mine) }
+                    .flatMap { storeWithChecks(checkConfigRepository, row, plan.entries, now) }
+                    .onSuccess(scheduling::sync)
+                    .flatMap { alarm -> putDeferred(grace, mine).flatMap { putDeferred(checks, mine) }.map { alarm } }
+                    .map { alarm -> AlarmSaved(alarm, LockWindow.latestOf(listOf(grace, checks).mapNotNull { it.pendingUntil() })) }
+            }
+        }
+    }
+
+    /** Removes the field's stored pending change (from [stored]) when [decision] applies now; nothing otherwise. */
+    private suspend fun clearApplied(
+        decision: LockDecision,
+        stored: Map<LockedField, PendingChange>,
+    ): Outcome<Unit, DomainError> {
+        val before = stored[decision.live.field]
+        return if (decision is LockDecision.ApplyNow && before != null) {
+            pendingRepository.remove(before.alarmId, before.field)
+        } else {
+            Outcome.Success(Unit)
+        }
+    }
+
+    /** Puts [decision]'s pending change when it defers and differs from the stored one (from [stored]); nothing otherwise. */
+    private suspend fun putDeferred(
+        decision: LockDecision,
+        stored: Map<LockedField, PendingChange>,
+    ): Outcome<Unit, DomainError> =
+        if (decision is LockDecision.Defer && stored[decision.live.field] != decision.pending) {
+            pendingRepository.put(decision.pending)
+        } else {
+            Outcome.Success(Unit)
+        }
+
+    private fun LockDecision.pendingUntil(): Occurrence? = (this as? LockDecision.Defer)?.pending?.effectiveAfter
 
     /**
      * The stored alarm that rings exactly like [alarm] ([hasSameSettingsAs]) with the same [checks] in the same order, or
@@ -305,22 +431,32 @@ private suspend fun storeWithChecks(
 ): Outcome<Alarm, DomainError> {
     (validate(alarm) ?: validateChecks(checks))?.let { return Outcome.Failure(DomainError.InvalidAlarm(it)) }
     return checkConfigRepository.forAlarm(alarm.id).flatMap { stored ->
-        val previous = stored.associateBy { it.entry.type }
-        val configs =
-            checks.mapIndexed { position, entry ->
-                val before = previous[entry.type]
-                CheckConfig(
-                    id = CheckConfig.idFor(alarm.id, entry.type),
-                    alarmId = alarm.id,
-                    position = position,
-                    entry = entry,
-                    createdAt = before?.createdAt ?: now,
-                    updatedAt = now,
-                    codeRegisteredAt =
-                        entry.code?.let { code -> before?.codeRegisteredAt?.takeIf { before.entry.code == code } ?: now },
-                )
-            }
-        checkConfigRepository.saveWithAlarm(alarm, configs).map { alarm }
+        checkConfigRepository.saveWithAlarm(alarm, checkRowsFor(alarm.id, checks, stored, now)).map { alarm }
+    }
+}
+
+/**
+ * The `check_config` rows of [checks] for [alarmId], replacing [stored]: in the order of [checks]; a type the alarm
+ * already had keeps its creation time, and a code saved again unchanged keeps its registration time (Story 3.10).
+ */
+internal fun checkRowsFor(
+    alarmId: String,
+    checks: List<CheckEntry>,
+    stored: List<CheckConfig>,
+    now: Instant,
+): List<CheckConfig> {
+    val previous = stored.associateBy { it.entry.type }
+    return checks.mapIndexed { position, entry ->
+        val before = previous[entry.type]
+        CheckConfig(
+            id = CheckConfig.idFor(alarmId, entry.type),
+            alarmId = alarmId,
+            position = position,
+            entry = entry,
+            createdAt = before?.createdAt ?: now,
+            updatedAt = now,
+            codeRegisteredAt = entry.code?.let { code -> before?.codeRegisteredAt?.takeIf { before.entry.code == code } ?: now },
+        )
     }
 }
 

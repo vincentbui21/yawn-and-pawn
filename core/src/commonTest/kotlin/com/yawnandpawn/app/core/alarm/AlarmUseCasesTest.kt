@@ -1,5 +1,6 @@
 package com.yawnandpawn.app.core.alarm
 
+import com.yawnandpawn.app.core.config.InMemoryPendingChanges
 import com.yawnandpawn.app.core.error.DomainError
 import com.yawnandpawn.app.core.error.Outcome
 import com.yawnandpawn.app.core.error.valueOrNull
@@ -37,7 +38,19 @@ class AlarmUseCasesTest {
     private val emergency = MutableStateFlow(false)
     private val sessionLock = SessionLockGuard(sessionState, restored, emergency)
     private val checkConfigs = InMemoryCheckConfigs(repository)
-    private val save = SaveAlarm(repository, ids, clock, lock, sequence, scheduling, sessionLock, checkConfigs)
+    private val save =
+        SaveAlarm(
+            repository,
+            ids,
+            clock,
+            lock,
+            sequence,
+            scheduling,
+            sessionLock,
+            checkConfigs,
+            InMemoryPendingChanges(),
+            TestZone(TimeZone.UTC),
+        )
     private val setEnabled = SetAlarmEnabled(repository, clock, lock, scheduling, sessionLock)
     private val delete = DeleteAlarm(repository, lock, scheduling, sessionLock, checkConfigs)
     private val duplicate = DuplicateAlarm(repository, ids, clock, lock, sequence, scheduling, sessionLock, checkConfigs)

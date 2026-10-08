@@ -1,12 +1,18 @@
 package com.yawnandpawn.app.core.error
 
 import com.yawnandpawn.app.core.alarm.AlarmField
+import com.yawnandpawn.app.core.config.SettingField
 
 /** Expected failures of the domain (AD-12). Adapters map platform exceptions to these; user-facing copy is keyed by them. */
 sealed interface DomainError {
     /** An alarm value is outside its allowed range; nothing was stored. */
     data class InvalidAlarm(
         val field: AlarmField,
+    ) : DomainError
+
+    /** A global setting is outside its allowed range (base fee tier 1–10, max snoozes 1–5, Story 4.4); nothing was stored. */
+    data class InvalidSetting(
+        val field: SettingField,
     ) : DomainError
 
     /** No stored item has this [id]. */

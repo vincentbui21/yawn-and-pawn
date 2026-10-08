@@ -35,10 +35,12 @@ class SessionUnmatchedPairsTest {
                 ringSession(),
                 ringSession().copy(pausedAt = T0),
                 ringSession().copy(beforeFirstUnlock = true),
+                ringSession().copy(paying = INTENT),
+                ringSession().copy(paying = INTENT, unlocking = true),
             ).flatMap { ringStates(it) } +
             listOf(Snoozed(snoozedSession()), Completed(ringSession().noTimers()), Missed(ringSession().noTimers()))
 
-    /** The 26 AD-2 events, plus guard-failing variants. */
+    /** The 28 AD-2 events (with the S1 unlock results), plus guard-failing variants. */
     private val events: List<SessionEvent> =
         listOf(
             SessionEvent.AlarmFired(SESSION_ID, testConfig(), beforeFirstUnlock = false),
@@ -68,15 +70,18 @@ class SessionUnmatchedPairsTest {
             SessionEvent.CheckAnswerSubmitted(CheckAnswer.Placeholder),
             FALLBACK_REQUEST,
             SessionEvent.SnoozeTapped,
-            SessionEvent.PayConfirmed(INTENT),
+            PAY,
+            SessionEvent.PayConfirmed(INTENT, QUOTE.copy(productId = "snooze_usd_02")),
+            SessionEvent.UnlockSucceeded,
+            SessionEvent.UnlockFailed,
             SessionEvent.ReuseAccepted(PRODUCT, TOKEN),
             SessionEvent.ReuseDeclined(PRODUCT),
             SessionEvent.UserInteracted,
         )
 
     @Test
-    fun `the pair list covers all 26 events and all 7 states`() {
-        assertEquals(26, events.map { it::class }.toSet().size)
+    fun `the pair list covers all 28 events and all 7 states`() {
+        assertEquals(28, events.map { it::class }.toSet().size)
         assertEquals(7, states.map { it::class }.toSet().size)
     }
 
@@ -163,19 +168,32 @@ class SessionUnmatchedPairsTest {
             is Completed, is Missed -> event == SessionEvent.Recorded(SESSION_ID)
         }
 
+    /** A Pay failing its guards in a paused ring changes nothing (a call keeps the deadline) and is only logged. */
+    private fun payHasRow(
+        state: SessionState.Ring,
+        event: SessionEvent.PayConfirmed,
+    ): Boolean = !state.session.paused || (state.session.paying == null && event.livePrice.productId == PRODUCT)
+
+    private fun purchaseHasRow(event: SessionEvent.PurchaseEvent): Boolean =
+        when (event) {
+            is SessionEvent.ReuseOffered -> event.verdict == PurchaseVerdict.OfferReuse
+            is SessionEvent.PurchaseGranted -> event.verdict == PurchaseVerdict.Grant
+            SessionEvent.PurchaseFailed, SessionEvent.PurchaseCancelled, SessionEvent.PurchasePending -> true
+        }
+
     private fun ringHasRow(
         state: SessionState.Ring,
         event: SessionEvent,
     ): Boolean =
         when (event) {
+            is SessionEvent.PayConfirmed -> payHasRow(state, event)
             is SessionEvent.UserEvent, SessionEvent.SlotFired, SessionEvent.ProcessRestored, is SessionEvent.OverlapAlarmFired -> true
-            SessionEvent.PurchaseFailed, SessionEvent.PurchaseCancelled, SessionEvent.PurchasePending -> true
-            is SessionEvent.ReuseOffered -> event.verdict == PurchaseVerdict.OfferReuse
-            is SessionEvent.PurchaseGranted -> event.verdict == PurchaseVerdict.Grant
+            is SessionEvent.PurchaseEvent -> purchaseHasRow(event)
             CallStarted -> !state.session.paused
             CallEnded -> state.session.paused
             SessionEvent.GraceElapsed -> state is Grace && !state.session.paused && state.session.graceEnd?.isDue(now) == true
             is SessionEvent.ImageMatchEvent -> state !is Ringing
+            is SessionEvent.UnlockEvent -> state.session.unlocking
             SessionEvent.UserUnlocked -> state is Ringing && state.session.beforeFirstUnlock
             else -> false
         }

@@ -15,8 +15,9 @@ fun runtimeDatabaseFile(context: Context): File = context.createDeviceProtectedS
 
 /**
  * Opens `runtime.db` at [runtimeDatabaseFile]. Rollback journal (TRUNCATE) as for `app.db`: each commit is durable in
- * the one file once the transaction returns, which is what the write-ahead rule needs. There is no destructive
- * migration fallback, so a missing migration fails loudly instead of dropping an active session.
+ * the one file once the transaction returns, which is what the write-ahead rule needs. Every migration in
+ * [RUNTIME_DATABASE_MIGRATIONS] is registered; there is no destructive migration fallback, so a missing migration fails
+ * loudly instead of dropping an active session.
  */
 fun buildRuntimeDatabase(context: Context): RuntimeDatabase {
     val deviceContext = context.createDeviceProtectedStorageContext()
@@ -27,5 +28,6 @@ fun buildRuntimeDatabase(context: Context): RuntimeDatabase {
             factory = { RuntimeDatabaseConstructor.initialize() },
         ).setDriver(AndroidSQLiteDriver())
         .setJournalMode(RoomDatabase.JournalMode.TRUNCATE)
+        .addMigrations(*RUNTIME_DATABASE_MIGRATIONS)
         .build()
 }

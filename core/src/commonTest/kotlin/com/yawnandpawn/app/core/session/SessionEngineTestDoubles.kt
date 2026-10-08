@@ -1,5 +1,6 @@
 package com.yawnandpawn.app.core.session
 
+import com.yawnandpawn.app.core.billing.PurchaseIntent
 import com.yawnandpawn.app.core.error.DomainError
 import com.yawnandpawn.app.core.error.Outcome
 import com.yawnandpawn.app.core.history.SessionHistoryRepository
@@ -61,7 +62,10 @@ internal class EngineTime(
     }
 }
 
-/** An [ActiveSessionStore] holding one JSON row in memory, encoded with [SessionJson] like the Room store. */
+/**
+ * An [ActiveSessionStore] holding one JSON row in memory, encoded with [SessionJson] like the Room store, and the intents
+ * its commits wrote (Story 4.8): a commit is all or nothing, and an intent id already stored fails it, as in Room.
+ */
 internal class InMemorySessionStore : ActiveSessionStore {
     /** The stored row; null when nothing is stored. */
     var row: String? = null
@@ -76,6 +80,12 @@ internal class InMemorySessionStore : ActiveSessionStore {
     val commits = mutableListOf<SessionState>()
     var clears = 0
 
+    /** The intents written by successful commits, by id. */
+    val intents = linkedMapOf<PurchaseIntentId, PurchaseIntent>()
+
+    /** The writes of each successful commit, in order (empty for a commit without any). */
+    val writeLog = mutableListOf<List<RuntimeWrite>>()
+
     val stored: SessionState?
         get() = row?.let { (SessionJson.decode(it) as StoredSession.Found).state }
 
@@ -84,8 +94,15 @@ internal class InMemorySessionStore : ActiveSessionStore {
         return Outcome.Success(row?.let { SessionJson.decode(it) } ?: StoredSession.Empty)
     }
 
-    override suspend fun commit(state: SessionState): Outcome<Unit, DomainError> {
-        commitFailure?.let { return Outcome.Failure(it) }
+    override suspend fun commit(
+        state: SessionState,
+        writes: List<RuntimeWrite>,
+    ): Outcome<Unit, DomainError> {
+        val added = writes.map { (it as RuntimeWrite.PutPurchaseIntent).intent }
+        val duplicate = added.any { it.intentId in intents } || added.map { it.intentId }.toSet().size != added.size
+        (commitFailure ?: DomainError.StorageFailure("duplicate intent").takeIf { duplicate })?.let { return Outcome.Failure(it) }
+        added.forEach { intents[it.intentId] = it }
+        writeLog += writes
         row = if (state == SessionState.Idle) null else SessionJson.encode(state)
         commits += state
         onCommit(state)

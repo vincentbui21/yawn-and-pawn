@@ -151,13 +151,14 @@ class SessionEngineTest {
     @Test
     fun `a session killed after committing PayConfirmed is restored without billing and with paying cleared`() =
         runTest {
-            val crashing = RecordingRunner().apply { hangOn = { it is SessionEffect.PersistPurchaseIntent } }
+            val crashing = RecordingRunner().apply { hangOn = { it is SessionEffect.LaunchBilling } }
             val first = engine(effects = crashing)
             first.dispatch(alarmFired)
             // The process dies inside the first effect: that dispatch never finishes, and its engine is never used again.
-            backgroundScope.launch { first.dispatch(SessionEvent.PayConfirmed(INTENT)) }
+            backgroundScope.launch { first.dispatch(PAY) }
             runCurrent()
             assertEquals(INTENT, assertIs<SessionState.Ringing>(store.stored).session.paying, "committed before its effects")
+            assertEquals(setOf(INTENT), store.intents.keys, "the intent is committed with the state")
 
             time.advanceBy(2.minutes)
             val second = engine()
@@ -172,6 +173,7 @@ class SessionEngineTest {
             assertEquals(session, assertIs<SessionState.Ringing>(store.stored).session, "ProcessRestored committed")
             assertEquals<List<Any>>(entryEffects(restored.state()), runner.ran, "only entry effects ran")
             assertTrue((crashing.ran + runner.ran).none { it is SessionEffect.LaunchBilling || it is SessionEffect.PersistPurchaseIntent })
+            assertEquals(setOf(INTENT), store.intents.keys, "the restore keeps the intent row")
         }
 
     @Test
@@ -483,7 +485,7 @@ class SessionEngineTest {
             assertIs<SessionState.Ringing>(engine.dispatch(alarmFired).state())
             engine.dispatch(SessionEvent.SnoozeTapped)
             assertTrue(SessionEffect.ShowSnoozeConfirm(OFFER) in runner.ran)
-            assertEquals(INTENT, engine.dispatch(SessionEvent.PayConfirmed(INTENT)).session().paying)
+            assertEquals(INTENT, engine.dispatch(PAY).session().paying)
             assertTrue(runner.ran.any { it is SessionEffect.LaunchBilling })
             val grant = SessionEvent.PurchaseGranted(PRODUCT, TOKEN, PurchaseVerdict.Grant)
             val snoozed = assertIs<SessionState.Snoozed>(engine.dispatch(grant).state())

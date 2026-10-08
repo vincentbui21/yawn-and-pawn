@@ -59,7 +59,7 @@ graph TD
 - **Rule:**
   1. The session is a pure reducer in `:core`: `reduce(state, event, now): Transition(state, oneShotEffects)`, plus `entryEffects(state)` (idempotent: "sound is playing at X", "slot alarm armed at T", "wake UI shown"). Only `SessionEngine` (single instance, serialized by a Mutex) calls it.
   2. Each transition is committed to `runtime.db` in one transaction (session state, and ledger rows per AD-7) **before** its effects run. On `ProcessRestored`, only `entryEffects` run; one-shot effects are never replayed. On restore, `paying` is cleared and billing is never relaunched; the outcome is recovered by AD-7 reconciliation. A restored ring gets a fresh 30-minute interaction deadline (PRD §6.4).
-  3. `SessionState` owns: `sessionId`, frozen `SessionConfig` (AD-16), `ringIndex`, `snoozesGranted`, `CheckRun` (plan, seeds, step, failed attempts, `fallbackUsed`), `paying: PurchaseIntentId?`, `noGraceThisRing`, `paused`, `paymentPending`, `declinedReuseProduct`, `paid` (Money list for the session line), and all deadlines as `Deadline(wallMillis, elapsedMillis, bootCount)` (AD-3).
+  3. `SessionState` owns: `sessionId`, frozen `SessionConfig` (AD-16), `ringIndex`, `snoozesGranted`, `CheckRun` (plan, seeds, step, failed attempts, `fallbackUsed`), `paying: PurchaseIntentId?`, `unlocking` (with `paying`: the keyguard dismiss before billing, Spike S1), `noGraceThisRing`, `paused`, `paymentPending`, `declinedReuseProduct`, `paid` (Money list for the session line), and all deadlines as `Deadline(wallMillis, elapsedMillis, bootCount)` (AD-3).
   4. Adapters never change session state; they execute effects and feed results back as events. UI sends only user events (`ImUpTapped`, `CheckAnswerSubmitted`, `SnoozeTapped`, `PayConfirmed`, `ReuseAccepted`, `ReuseDeclined`, `FallbackRequested`, `UserInteracted`); the engine validates answers through AD-9.
   5. The table below is normative. An event with no row for the current state is **ignored and logged**, never thrown. A table-coverage test asserts every row.
 
@@ -78,7 +78,10 @@ graph TD
 | Grace, Loud | CheckAnswerSubmitted | valid, last step | Completed | stop sound; cancel slot; record outcome; play motivation |
 | Grace, Loud | FallbackRequested | fallback allowed (FR-PWK-11), not used | same | replace plan with fallback check; `fallbackUsed = true`; timers unchanged |
 | Ringing, Grace, Loud | SnoozeTapped | `snoozeAvailability` = Available (AD-7) | same | show confirm |
-| Ringing, Grace, Loud | PayConfirmed | Available | same, paying = intentId | persist `PurchaseIntent`; launch billing (with unlock step per Spike S1) |
+| Ringing, Grace, Loud | PayConfirmed | Available, not paying, live price for the offered product, keyguard not locked | same, paying = intentId | persist `PurchaseIntent` (same transaction as the state); launch billing |
+| Ringing, Grace, Loud | PayConfirmed | Available, not paying, live price for the offered product, keyguard locked (Spike S1) | same, paying = intentId, unlocking | persist `PurchaseIntent` (same transaction as the state); request keyguard dismiss |
+| Ringing, Grace, Loud (unlocking) | UnlockSucceeded | | same, unlocking = false | launch billing |
+| Ringing, Grace, Loud (unlocking) | UnlockFailed | cancelled or error | same, paying = null, unlocking = false | show "Phone still locked. No charge."; sound continues |
 | Ringing, Grace, Loud | ReuseOffered | stranded token for expected product | same, paying = null | show reuse sheet |
 | Ringing, Grace, Loud | ReuseAccepted | | Snoozed(snoozeEnd) | as PurchaseGranted, using the stranded token |
 | Ringing, Grace, Loud | ReuseDeclined | | same, declinedReuseProduct = product | hide reuse sheet; snooze at that price shows the "earlier payment is being refunded" reason (EXPERIENCE.md) |
@@ -97,7 +100,7 @@ graph TD
 | Ringing (before first unlock) | UserUnlocked | | same | lift Direct Boot substitutions at next check step; init billing |
 | Completed, Missed | Recorded | history row written | Idle | clear session from runtime.db |
 
-Grace keeps counting while `paying` is set; mute ends when it elapses (FR-RNG-5). Price of the next snooze is always `FeeLadder(config.baseFeeTier, snoozesGranted + 1)`.
+Grace keeps counting while `paying` (or `unlocking`) is set; mute ends when it elapses (FR-RNG-5). A wrong PIN sends no event, so Unlocking waits; the 30-minute timeout is the backstop. Everything that clears `paying` also clears `unlocking`. A PayConfirmed that fails its guards is ignored and logged. The keyguard state is an environment input `SessionEngine` reads (through `UnlockPort`) for PayConfirmed only (Story 4.8). Price of the next snooze is always `FeeLadder(config.baseFeeTier, snoozesGranted + 1)`.
 
 ### AD-3 — Time comes from ports only
 
@@ -145,7 +148,7 @@ Grace keeps counting while `paying` is set; mute ends when it elapses (FR-RNG-5)
 - **Rule:**
   - `FeeLadder` (core) maps `(baseFeeTier, snoozeNumber)` to `snooze_usd_NN` (01..50).
   - `snoozeAvailability(state, config, env)` (core, pure) is the only source of Available(price) / Unavailable(reason). Environment (online, user lock state via a `UserLockState` port, catalogue loaded) is read live. Reasons: test mode, offline, before first unlock, catalogue not loaded, max snoozes reached, price cap reached, payment pending, earlier payment being refunded. UI renders it; nobody else decides.
-  - Before launch, core persists `PurchaseIntent(intentId, sessionId, productId, snoozeNumber, priceMicros, currency)`. The adapter launches Play Billing with `obfuscatedProfileId = sessionId` and `obfuscatedAccountId = installId` (random, non-personal, stored in DataStore).
+  - Before launch, core persists `PurchaseIntent(intentId, sessionId, productId, snoozeNumber, price, formattedPrice, createdAt)` in `runtime.db` (`purchase_intent`), in the same transaction as the transition that sets `paying`. The price is Play's LIVE `ProductDetails` price at the Pay tap, never the cached display price. Intents are kept 7 days. The adapter launches Play Billing with `obfuscatedProfileId = sessionId` and `obfuscatedAccountId = installId` (random UUID v4, non-personal, in its own device-protected DataStore excluded from backup and device transfer).
   - Every purchase update and `queryPurchasesAsync` result goes to the pure `PurchaseReconciler`, which returns `Grant`, `ConsumeOnly`, `LeaveForAutoRefund`, `OfferReuse` or `Ignore`, following PRD §6.3. `Grant` requires: `PURCHASED`, profileId = active session id, session not Snoozed, token not in ledger, product = the expected next product.
   - **Grant ledger** rows (token, sessionId, status) live in `runtime.db` and are written in the same transaction as the `PurchaseGranted` transition. `PurchaseLedger` (core, via port) is the only writer of purchase records in `app.db` (idempotent upsert keyed by token, statuses: granted, consumed, stranded, reused). Order: commit transition + ledger → upsert record → consume (retry with backoff via AD-17) → mark consumed → delete ledger row. Restore replays from the ledger.
   - The Play catalogue (50 products) is created only by `tools/play-catalog` via the Play Developer API.

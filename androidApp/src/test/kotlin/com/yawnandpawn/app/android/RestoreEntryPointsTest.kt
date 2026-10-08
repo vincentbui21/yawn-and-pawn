@@ -208,7 +208,7 @@ class RestoreEntryPointsTest {
         val audio = app.getSystemService(AudioManager::class.java)
         audio.setStreamVolume(AudioManager.STREAM_ALARM, 2, 0)
         AlarmVolume(app, AndroidLogger()).setForRing(100)
-        runBlocking { koin().get<ActiveSessionDao>().replace(ActiveSessionEntity("s", "{not json", updatedAt = 0)) }
+        runBlocking { koin().get<ActiveSessionDao>().commit(ActiveSessionEntity("s", "{not json", updatedAt = 0)) }
         stopApp()
 
         app.onCreate()

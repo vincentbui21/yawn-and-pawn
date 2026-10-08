@@ -1,9 +1,9 @@
 package com.yawnandpawn.app.android
 
+import com.yawnandpawn.app.core.billing.PurchaseIntent
 import com.yawnandpawn.app.core.log.LogEvent
 import com.yawnandpawn.app.core.log.Logger
 import com.yawnandpawn.app.core.session.Billing
-import com.yawnandpawn.app.core.session.PurchaseIntent
 import com.yawnandpawn.app.core.session.SessionEvent
 
 /**

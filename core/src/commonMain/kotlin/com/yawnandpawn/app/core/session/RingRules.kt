@@ -22,10 +22,12 @@ internal class RingRules(
         event: SessionEvent,
         now: TimeSnapshot,
         userLocked: Boolean = false,
+        keyguardLocked: Boolean = false,
     ): Transition? =
         when (event) {
-            is SessionEvent.UserEvent -> onUserEvent(state, event, now)
+            is SessionEvent.UserEvent -> onUserEvent(state, event, now, keyguardLocked)
             is SessionEvent.PurchaseEvent -> purchases.onPurchase(state, event, now)
+            is SessionEvent.UnlockEvent -> purchases.onUnlock(state, event)
             is SessionEvent.ImageMatchEvent -> checks.onImageMatch(state, event, now)
             is SessionEvent.CallEvent -> onCall(state, event, now)
             is SessionEvent.TimerEvent -> onTimer(state, event, now)
@@ -36,11 +38,15 @@ internal class RingRules(
             is SessionEvent.AlarmFired, is SessionEvent.TestAlarmFired, is SessionEvent.Recorded -> null
         }
 
-    /** The row for [event] if one matches, else only "any user event resets the interaction deadline". */
+    /**
+     * The row for [event] if one matches, else only "any user event resets the interaction deadline" (and, for a Pay, the
+     * log line that it was ignored).
+     */
     private fun onUserEvent(
         state: Ring,
         event: SessionEvent.UserEvent,
         now: TimeSnapshot,
+        keyguardLocked: Boolean,
     ): Transition {
         val reset = state.with(state.session.freshInteractionDeadline(now))
         val row =
@@ -49,12 +55,15 @@ internal class RingRules(
                 is SessionEvent.CheckAnswerSubmitted -> checks.onAnswer(reset, event.answer, now)
                 is SessionEvent.FallbackRequested -> checks.onFallbackRequested(reset, event)
                 SessionEvent.SnoozeTapped -> purchases.onSnoozeTapped(reset)
-                is SessionEvent.PayConfirmed -> purchases.onPayConfirmed(reset, event.intentId)
+                is SessionEvent.PayConfirmed -> purchases.onPayConfirmed(reset, event, now, keyguardLocked)
                 is SessionEvent.ReuseAccepted -> purchases.onPaidSnooze(reset, event.token, now)
                 is SessionEvent.ReuseDeclined -> purchases.onReuseDeclined(reset, event.productId)
                 SessionEvent.UserInteracted -> null
             }
-        return row ?: Transition(reset, emptyList())
+        // A Pay that fails its guards (unavailable, already paying, a price for another product) is logged (Story 4.8).
+        val ignoredPay =
+            if (event is SessionEvent.PayConfirmed) listOf(SessionEffect.LogIgnored.of(event, state.session.sessionId)) else emptyList()
+        return row ?: Transition(reset, ignoredPay)
     }
 
     /** Ringing + ImUpTapped: Grace (muted) unless this ring has no grace window, then Loud. */
@@ -143,7 +152,8 @@ internal class RingRules(
         )
 
     /**
-     * AD-2 rule 2: a restored ring gets a fresh 30-minute deadline from now and `paying` is cleared; no one-shot effects.
+     * AD-2 rule 2: a restored ring gets a fresh 30-minute deadline from now and `paying` (with `unlocking`) is cleared,
+     * with no one-shot effects; the intent row stays.
      * The pause is cleared too: a call that ended during the crash or reboot sends no CallEnded, and the call adapter
      * sends CallStarted again if the call is still on. The restored ring is before the first unlock exactly when the user
      * is locked now ([userLocked], Story 2.3, for example after `LOCKED_BOOT_COMPLETED`): then its check plan gets the
@@ -160,6 +170,7 @@ internal class RingRules(
                 state.session
                     .copy(
                         paying = null,
+                        unlocking = false,
                         pausedAt = null,
                         interactionDeadline = Deadline.after(now, SessionReducer.NO_INTERACTION_TIMEOUT),
                     ).newRing(userLocked, directBootPlan),

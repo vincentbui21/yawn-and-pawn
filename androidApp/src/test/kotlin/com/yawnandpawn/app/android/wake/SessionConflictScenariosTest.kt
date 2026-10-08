@@ -39,6 +39,8 @@ import com.yawnandpawn.app.testing.FakeMonotonicClock
 import com.yawnandpawn.app.testing.FakeSnoozeAvailability
 import com.yawnandpawn.app.testing.FakeTestAlarmStore
 import com.yawnandpawn.app.testing.FakeUserLockState
+import com.yawnandpawn.app.testing.aLivePrice
+import com.yawnandpawn.app.testing.aPayConfirmed
 import com.yawnandpawn.app.testing.aSessionConfig
 import com.yawnandpawn.app.testing.anAlarm
 import kotlinx.coroutines.launch
@@ -178,6 +180,12 @@ class SessionConflictScenariosTest {
         app.awaitUntil("Loud") { state() is SessionState.Loud }
     }
 
+    /** The user pays for the snooze on sale now, at its live Play price (Story 4.8). */
+    private fun pay(intentId: String): SessionEvent.PayConfirmed {
+        val offer = (policy.availability(session()) as SnoozeAvailability.Available).offer
+        return aPayConfirmed(intentId, aLivePrice(productId = offer.productId))
+    }
+
     private fun grantSnooze() {
         val offer = (policy.availability(session()) as SnoozeAvailability.Available).offer
         val token = PurchaseToken("token-${session().snoozesGranted}")
@@ -297,7 +305,7 @@ class SessionConflictScenariosTest {
     fun `1 payment in progress when the grace window ends - Loud at the set volume while paying, then cancelled and Loud rings on`() {
         ringA()
         imUpToGrace()
-        app.dispatch(SessionEvent.SnoozeTapped, SessionEvent.PayConfirmed(PurchaseIntentId("intent-1")))
+        app.dispatch(SessionEvent.SnoozeTapped, pay("intent-1"))
         assertEquals(PurchaseIntentId("intent-1"), session().paying)
         // During the grace window the alarm stream is turned down (the volume keys while another screen is in front).
         audio.setStreamVolume(AudioManager.STREAM_ALARM, 1, 0)
@@ -398,7 +406,7 @@ class SessionConflictScenariosTest {
         val restored = deliverSlot()
         app.awaitRinging()
         assertEquals(2, session().ringIndex, "the snooze end passed while the phone was off: it rings at once")
-        app.dispatch(SessionEvent.SnoozeTapped, SessionEvent.PayConfirmed(PurchaseIntentId("intent-2")))
+        app.dispatch(SessionEvent.SnoozeTapped, pay("intent-2"))
         assertEquals(PurchaseIntentId("intent-2"), session().paying)
         assertTrue(billingLaunched(), "the confirm launched billing (logged until Epic 4)")
         val before = session().interactionDeadline
@@ -449,7 +457,7 @@ class SessionConflictScenariosTest {
     fun `a call during payment freezes grace and the timeout and keeps paying until the billing result`() {
         ringA()
         imUpToGrace()
-        app.dispatch(SessionEvent.SnoozeTapped, SessionEvent.PayConfirmed(PurchaseIntentId("intent-1")))
+        app.dispatch(SessionEvent.SnoozeTapped, pay("intent-1"))
         val grace = session().graceEnd
         val timeout = session().interactionDeadline
 

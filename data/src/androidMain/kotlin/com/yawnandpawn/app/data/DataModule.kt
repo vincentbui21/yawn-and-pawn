@@ -4,6 +4,8 @@ import android.content.Context
 import com.yawnandpawn.app.core.alarm.AlarmRepository
 import com.yawnandpawn.app.core.alarm.CheckConfigRepository
 import com.yawnandpawn.app.core.alarm.RequestCodeSequence
+import com.yawnandpawn.app.core.billing.InstallIdProvider
+import com.yawnandpawn.app.core.billing.PurchaseIntentStore
 import com.yawnandpawn.app.core.config.CommitmentEventRepository
 import com.yawnandpawn.app.core.config.GlobalSettingsRepository
 import com.yawnandpawn.app.core.config.PendingChangeRepository
@@ -30,9 +32,12 @@ import com.yawnandpawn.app.data.db.buildAppDatabase
 import com.yawnandpawn.app.data.db.buildRuntimeDatabase
 import com.yawnandpawn.app.data.history.RoomSessionHistoryRepository
 import com.yawnandpawn.app.data.session.RoomActiveSessionStore
+import com.yawnandpawn.app.data.session.RoomPurchaseIntentStore
+import com.yawnandpawn.app.data.settings.DataStoreInstallIdProvider
 import com.yawnandpawn.app.data.settings.DataStoreMissedNoteDismissals
 import com.yawnandpawn.app.data.settings.DataStoreReRegisterDismissals
 import com.yawnandpawn.app.data.settings.DataStoreTestAlarmStore
+import com.yawnandpawn.app.data.settings.InstallIdDataStore
 import com.yawnandpawn.app.data.settings.SettingsDataStore
 import org.koin.core.module.dsl.onClose
 import org.koin.core.module.dsl.withOptions
@@ -40,7 +45,8 @@ import org.koin.dsl.module
 
 /**
  * Koin bindings of :data (AD-13). Needs the Android `Context` (registered by `androidContext` in the app), the
- * `Clock` port (from the app's time module) and the `Logger` (for the settings DataStore's read errors).
+ * `Clock` port (from the app's time module), the `Logger` (for the settings DataStore's read errors) and the
+ * `IdGenerator` (for the install id).
  */
 val dataModule =
     module {
@@ -64,6 +70,11 @@ val dataModule =
         single { buildRuntimeDatabase(get<Context>()) } withOptions { onClose { it?.close() } }
         single { get<RuntimeDatabase>().activeSessionDao() }
         single<ActiveSessionStore> { RoomActiveSessionStore(get(), get()) }
+        // The purchase intents (Story 4.8): written only by the engine's commit, read and purged here.
+        single<PurchaseIntentStore> { RoomPurchaseIntentStore(get<RuntimeDatabase>().purchaseIntentDao()) }
+        // The install id (Story 4.8) in its own device-protected DataStore, excluded from backup; released like the others.
+        single { InstallIdDataStore(get<Context>()) } withOptions { onClose { it?.close() } }
+        single<InstallIdProvider> { DataStoreInstallIdProvider(get<InstallIdDataStore>().store, get(), get()) }
         // The settings DataStore (Story 1.16), device-protected; released when Koin stops, like the databases.
         single { SettingsDataStore(get<Context>()) } withOptions { onClose { it?.close() } }
         single<MissedNoteDismissals> { DataStoreMissedNoteDismissals(get<SettingsDataStore>().store, get()) }

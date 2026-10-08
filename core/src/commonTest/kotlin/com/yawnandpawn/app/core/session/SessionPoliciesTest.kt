@@ -85,8 +85,9 @@ class SessionPoliciesTest {
     @Test
     fun `a second PayConfirmed while paying never persists another intent or launches billing again`() {
         val paying = SessionState.Loud(ringSession().copy(paying = INTENT))
-        val again = reducer().reduce(paying, SessionEvent.PayConfirmed(PurchaseIntentId("intent-2")), at(5.minutes))
-        assertEquals(Transition(paying.with(paying.session.touched(at(5.minutes))), emptyList()), again)
+        val again = reducer().reduce(paying, SessionEvent.PayConfirmed(PurchaseIntentId("intent-2"), QUOTE), at(5.minutes))
+        val logged = listOf(SessionEffect.LogIgnored("PayConfirmed", SESSION_ID))
+        assertEquals(Transition(paying.with(paying.session.touched(at(5.minutes))), logged), again)
     }
 
     @Test

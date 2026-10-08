@@ -10,6 +10,7 @@ import com.yawnandpawn.app.core.error.DomainError
 import com.yawnandpawn.app.core.error.Outcome
 import com.yawnandpawn.app.core.history.SessionOutcome
 import com.yawnandpawn.app.core.session.ActiveSessionStore
+import com.yawnandpawn.app.core.session.RuntimeWrite
 import com.yawnandpawn.app.core.session.SessionEvent
 import com.yawnandpawn.app.core.session.SessionState
 import com.yawnandpawn.app.testing.FakeActiveSessionStore
@@ -208,6 +209,8 @@ private class CommitCountingStore(
 ) : ActiveSessionStore by inner {
     val commitAttempts = AtomicInteger()
 
-    override suspend fun commit(state: SessionState): Outcome<Unit, DomainError> =
-        inner.commit(state).also { commitAttempts.incrementAndGet() }
+    override suspend fun commit(
+        state: SessionState,
+        writes: List<RuntimeWrite>,
+    ): Outcome<Unit, DomainError> = inner.commit(state, writes).also { commitAttempts.incrementAndGet() }
 }

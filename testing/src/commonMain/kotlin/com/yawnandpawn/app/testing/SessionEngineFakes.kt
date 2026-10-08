@@ -1,5 +1,9 @@
 package com.yawnandpawn.app.testing
 
+import com.yawnandpawn.app.core.billing.LivePrice
+import com.yawnandpawn.app.core.billing.Money
+import com.yawnandpawn.app.core.billing.PurchaseIntent
+import com.yawnandpawn.app.core.billing.PurchaseIntentStore
 import com.yawnandpawn.app.core.checks.CheckPlan
 import com.yawnandpawn.app.core.error.DomainError
 import com.yawnandpawn.app.core.error.Outcome
@@ -8,11 +12,10 @@ import com.yawnandpawn.app.core.session.Billing
 import com.yawnandpawn.app.core.session.CheckRun
 import com.yawnandpawn.app.core.session.EffectRunner
 import com.yawnandpawn.app.core.session.EntryEffect
-import com.yawnandpawn.app.core.session.PurchaseIntent
 import com.yawnandpawn.app.core.session.PurchaseIntentId
-import com.yawnandpawn.app.core.session.PurchaseIntentStore
 import com.yawnandpawn.app.core.session.PurchaseToken
 import com.yawnandpawn.app.core.session.PurchaseVerdict
+import com.yawnandpawn.app.core.session.RuntimeWrite
 import com.yawnandpawn.app.core.session.SessionConfig
 import com.yawnandpawn.app.core.session.SessionData
 import com.yawnandpawn.app.core.session.SessionEffect
@@ -20,8 +23,11 @@ import com.yawnandpawn.app.core.session.SessionEvent
 import com.yawnandpawn.app.core.session.SessionJson
 import com.yawnandpawn.app.core.session.SessionState
 import com.yawnandpawn.app.core.session.StoredSession
+import com.yawnandpawn.app.core.session.UnlockPort
+import com.yawnandpawn.app.core.session.UnlockResult
 import com.yawnandpawn.app.core.time.Deadline
 import com.yawnandpawn.app.core.time.TimeSnapshot
+import kotlinx.coroutines.CompletableDeferred
 import kotlin.time.Duration.Companion.minutes
 import kotlin.time.Instant
 
@@ -30,9 +36,12 @@ import kotlin.time.Instant
  * deletes it. Set [commitFailure] to make every commit fail (nothing changes), [loadFailure] for load and
  * [clearFailure] for clear (the row stays; [clears] still counts the call). Put any text in
  * [row] (an unreadable one too) to stand for what an earlier process left. [commits] lists every successful commit.
+ * The writes of a commit (Story 4.8) go to [intents] in the same step, and an intent id already stored there fails the
+ * whole commit, as in Room; [writes] lists the writes of every successful commit.
  */
 class FakeActiveSessionStore(
     initial: SessionState = SessionState.Idle,
+    val intents: FakePurchaseIntentStore = FakePurchaseIntentStore(),
 ) : ActiveSessionStore {
     /** The stored JSON text; null when nothing is stored. */
     var row: String? = initial.takeIf { it != SessionState.Idle }?.let { SessionJson.encode(it) }
@@ -45,9 +54,13 @@ class FakeActiveSessionStore(
     var onCommit: suspend (SessionState) -> Unit = {}
 
     private val committed = mutableListOf<SessionState>()
+    private val written = mutableListOf<RuntimeWrite>()
 
     val commits: List<SessionState>
         get() = committed.toList()
+
+    val writes: List<RuntimeWrite>
+        get() = written.toList()
 
     var clears: Int = 0
         private set
@@ -66,8 +79,18 @@ class FakeActiveSessionStore(
         return Outcome.Success(row?.let { SessionJson.decode(it) } ?: StoredSession.Empty)
     }
 
-    override suspend fun commit(state: SessionState): Outcome<Unit, DomainError> {
-        commitFailure?.let { return Outcome.Failure(it) }
+    override suspend fun commit(
+        state: SessionState,
+        writes: List<RuntimeWrite>,
+    ): Outcome<Unit, DomainError> {
+        val newIntents = writes.map { write -> (write as RuntimeWrite.PutPurchaseIntent).intent }
+        val ids = newIntents.map { it.intentId }
+        val duplicate = ids.size != ids.toSet().size || ids.any { intents.contains(it) }
+        val failure =
+            commitFailure ?: DomainError.StorageFailure("UNIQUE constraint failed: purchase_intent.intent_id").takeIf { duplicate }
+        failure?.let { return Outcome.Failure(it) }
+        newIntents.forEach(intents::put)
+        written += writes
         row = if (state == SessionState.Idle) null else SessionJson.encode(state)
         committed += state
         onCommit(state)
@@ -159,26 +182,109 @@ class FakeBilling(
     }
 }
 
-/** In-memory [PurchaseIntentStore]. Set [failure] to make every call fail with it. */
+/**
+ * In-memory [PurchaseIntentStore] with the rules of `RoomPurchaseIntentStore`: lists oldest first, purge strictly before
+ * the instant. [FakeActiveSessionStore] writes into it on commit; [put] stands for a row an earlier commit left. Set
+ * [failure] to make every read and purge fail with it.
+ */
 class FakePurchaseIntentStore : PurchaseIntentStore {
-    private val intents = mutableMapOf<PurchaseIntentId, PurchaseIntent>()
+    private val intents = linkedMapOf<PurchaseIntentId, PurchaseIntent>()
 
     var failure: DomainError? = null
 
+    /** Every stored intent, oldest first. */
     val saved: List<PurchaseIntent>
-        get() = intents.values.toList()
+        get() = intents.values.sortedWith(ORDER)
 
-    override suspend fun save(intent: PurchaseIntent): Outcome<Unit, DomainError> {
-        failure?.let { return Outcome.Failure(it) }
+    /** Stores [intent] (test setup, and the fake commit). */
+    fun put(intent: PurchaseIntent) {
         intents[intent.intentId] = intent
-        return Outcome.Success(Unit)
     }
+
+    fun contains(intentId: PurchaseIntentId): Boolean = intentId in intents
 
     override suspend fun get(intentId: PurchaseIntentId): Outcome<PurchaseIntent, DomainError> {
         failure?.let { return Outcome.Failure(it) }
         return intents[intentId]?.let { Outcome.Success(it) } ?: Outcome.Failure(DomainError.NotFound(intentId.value))
     }
+
+    override suspend fun forSession(sessionId: String): Outcome<List<PurchaseIntent>, DomainError> {
+        failure?.let { return Outcome.Failure(it) }
+        return Outcome.Success(saved.filter { it.sessionId == sessionId })
+    }
+
+    override suspend fun forProduct(
+        sessionId: String,
+        productId: String,
+    ): Outcome<List<PurchaseIntent>, DomainError> {
+        failure?.let { return Outcome.Failure(it) }
+        return Outcome.Success(saved.filter { it.sessionId == sessionId && it.productId == productId })
+    }
+
+    override suspend fun purgeOlderThan(instant: Instant): Outcome<Int, DomainError> {
+        failure?.let { return Outcome.Failure(it) }
+        val old = intents.values.filter { it.createdAt < instant }.map { it.intentId }
+        old.forEach(intents::remove)
+        return Outcome.Success(old.size)
+    }
+
+    private companion object {
+        val ORDER = compareBy<PurchaseIntent>({ it.createdAt }, { it.intentId.value })
+    }
 }
+
+/**
+ * [UnlockPort] under test control: [locked] is the keyguard, every [requestUnlock] is counted in [requests] and returns
+ * [result]. With [hold] set, a request waits for [release] (a PIN prompt still up, or a lost callback when never
+ * released).
+ */
+class FakeUnlockPort(
+    var locked: Boolean = true,
+    var result: UnlockResult = UnlockResult.Succeeded,
+) : UnlockPort {
+    var hold: Boolean = false
+    var requests: Int = 0
+        private set
+
+    private var pending = CompletableDeferred<UnlockResult>()
+
+    override fun isKeyguardLocked(): Boolean = locked
+
+    override suspend fun requestUnlock(): UnlockResult {
+        requests++
+        return if (hold) pending.await() else result
+    }
+
+    /** Ends a held request with [with]. */
+    fun release(with: UnlockResult = result) {
+        pending.complete(with)
+        pending = CompletableDeferred()
+    }
+}
+
+/** Play's live price of [productId] at a Pay tap: $1.00 unless told otherwise. */
+fun aLivePrice(
+    productId: String = "snooze_usd_01",
+    price: Money = Money.of(1, "USD"),
+    formattedPrice: String = "$1.00",
+): LivePrice = LivePrice(productId, price, formattedPrice)
+
+/** The `PayConfirmed` of a Pay tap for [intentId] at [livePrice]. */
+fun aPayConfirmed(
+    intentId: String = "intent-1",
+    livePrice: LivePrice = aLivePrice(),
+): SessionEvent.PayConfirmed = SessionEvent.PayConfirmed(PurchaseIntentId(intentId), livePrice)
+
+/** A stored [PurchaseIntent]: snooze 1 of [sessionId] for [productId] at a live $1.00, made at [createdAt]. */
+fun aPurchaseIntent(
+    intentId: String = "intent-1",
+    sessionId: String = "session-1",
+    productId: String = "snooze_usd_01",
+    snoozeNumber: Int = 1,
+    price: Money = Money.of(1, "USD"),
+    formattedPrice: String = "$1.00",
+    createdAt: Instant = DEFAULT_FAKE_INSTANT,
+): PurchaseIntent = PurchaseIntent(PurchaseIntentId(intentId), sessionId, productId, snoozeNumber, price, formattedPrice, createdAt)
 
 /** Builds a [SessionConfig] with the alarm defaults (9 min snooze, 20 s grace, one placeholder check step). */
 fun aSessionConfig(

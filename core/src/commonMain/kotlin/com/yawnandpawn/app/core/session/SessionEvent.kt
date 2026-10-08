@@ -1,5 +1,6 @@
 package com.yawnandpawn.app.core.session
 
+import com.yawnandpawn.app.core.billing.LivePrice
 import com.yawnandpawn.app.core.checks.CheckAnswer
 import com.yawnandpawn.app.core.checks.CheckType
 import kotlin.time.Instant
@@ -134,6 +135,18 @@ sealed interface SessionEvent {
     /** Play reported the payment as pending. */
     data object PurchasePending : PurchaseEvent
 
+    /**
+     * The result of the unlock step before Play opens (Spike S1, Story 4.8), fed back by the runner from
+     * `UnlockPort.requestUnlock`. A wrong PIN sends nothing.
+     */
+    sealed interface UnlockEvent : SessionEvent
+
+    /** The user unlocked the phone (`onDismissSucceeded`): billing launches. */
+    data object UnlockSucceeded : UnlockEvent
+
+    /** The unlock was cancelled or failed (`onDismissCancelled` / `onDismissError`): no charge, back to the ring. */
+    data object UnlockFailed : UnlockEvent
+
     /** Sent by the wake UI. In a ringing state every user event also resets the 30-minute interaction deadline. */
     sealed interface UserEvent : SessionEvent
 
@@ -157,9 +170,14 @@ sealed interface SessionEvent {
     /** The user tapped Snooze. */
     data object SnoozeTapped : UserEvent
 
-    /** The user confirmed paying for the snooze; [intentId] names the `PurchaseIntent` to persist. */
+    /**
+     * The user confirmed paying for the snooze. [intentId] (a new UUID v4 per tap) names the `PurchaseIntent` to persist,
+     * and [livePrice] is the price it records: Play's live `ProductDetails` price at the tap, never the cached display
+     * price (Story 4.8).
+     */
     data class PayConfirmed(
         val intentId: PurchaseIntentId,
+        val livePrice: LivePrice,
     ) : UserEvent
 
     /** The user accepted reusing the stranded payment [token] for [productId]; the check starts over at the next ring. */

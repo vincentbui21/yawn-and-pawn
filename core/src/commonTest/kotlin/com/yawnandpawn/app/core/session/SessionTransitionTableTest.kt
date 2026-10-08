@@ -12,8 +12,8 @@ import kotlin.test.fail
 /** One test per AD-2 row (examples in [ROW_CASES]), plus the table-coverage test. */
 class SessionTransitionTableTest {
     @Test
-    fun `the table has 31 rows with unique ids and every row has examples and no others exist`() {
-        assertEquals(31, AD2_ROWS.size)
+    fun `the table has 34 rows with unique ids and every row has examples and no others exist`() {
+        assertEquals(34, AD2_ROWS.size)
         assertEquals(AD2_ROWS.size, AD2_ROWS.toSet().size, "row ids are unique")
         assertEquals(AD2_ROWS.toSet(), ROW_CASES.keys, "every AD-2 row has a case and every case is a row")
         AD2_ROWS.forEach { row -> assertTrue(ROW_CASES.getValue(row).isNotEmpty(), "$row has no examples") }
@@ -62,7 +62,8 @@ class SessionTransitionTableTest {
     fun `R13 Snooze while available shows the confirm sheet`() = assertRow("R13 Ringing|Grace|Loud+SnoozeTapped")
 
     @Test
-    fun `R14 paying persists the intent and launches billing`() = assertRow("R14 Ringing|Grace|Loud+PayConfirmed")
+    fun `R14 paying unlocked persists the intent with the confirmed price and launches billing`() =
+        assertRow("R14 Ringing|Grace|Loud+PayConfirmed keyguard not locked")
 
     @Test
     fun `R15 a reuse offer clears paying and shows the reuse sheet`() = assertRow("R15 Ringing|Grace|Loud+ReuseOffered")
@@ -120,12 +121,24 @@ class SessionTransitionTableTest {
     @Test
     fun `R31 the history row written returns to Idle and clears the runtime session`() = assertRow("R31 Completed|Missed+Recorded")
 
+    @Test
+    fun `R32 paying while locked persists the intent and asks for the unlock first`() =
+        assertRow("R32 Ringing|Grace|Loud+PayConfirmed keyguard locked")
+
+    @Test
+    fun `R33 the unlock succeeding launches billing for the persisted intent`() =
+        assertRow("R33 Ringing|Grace|Loud (unlocking)+UnlockSucceeded")
+
+    @Test
+    fun `R34 the unlock failing drops the payment with no charge and keeps ringing`() =
+        assertRow("R34 Ringing|Grace|Loud (unlocking)+UnlockFailed")
+
     private fun assertRow(row: String) {
         val examples = ROW_CASES[row] ?: fail("no examples for $row")
         assertTrue(row in AD2_ROWS, "$row is not an AD-2 row")
         assertTrue(examples.isNotEmpty(), "$row has no examples")
         examples.forEach { example ->
-            val transition = example.reducer.reduce(example.from, example.event, example.now)
+            val transition = example.reducer.reduce(example.from, example.event, example.now, keyguardLocked = example.keyguardLocked)
             assertEquals(example.expected.state, transition.state, "$row / ${example.name}: state")
             assertEquals(example.expected.effects, transition.effects, "$row / ${example.name}: effects")
             example.also(example.reducer, transition)

@@ -87,6 +87,7 @@ private class NextRing(
                 ringIndex = ringIndex,
                 noGraceThisRing = noGrace,
                 paying = null,
+                unlocking = false,
                 interactionDeadline = Deadline.after(now, SessionReducer.NO_INTERACTION_TIMEOUT),
             ),
         )

@@ -1,5 +1,6 @@
 package com.yawnandpawn.app.core.session
 
+import com.yawnandpawn.app.core.billing.PurchaseIntent
 import com.yawnandpawn.app.core.time.Deadline
 import kotlin.time.Instant
 
@@ -19,6 +20,9 @@ enum class SessionEnd {
 enum class PurchaseOutcome {
     Failed,
     Cancelled,
+
+    /** The unlock before Play was cancelled or failed (Spike S1): "Phone still locked. No charge." */
+    UnlockFailed,
 }
 
 /**
@@ -104,18 +108,29 @@ sealed interface SessionEffect {
         val offer: SnoozeOffer,
     ) : SessionEffect
 
-    /** Persist the `PurchaseIntent` (AD-7) before billing launches. */
+    /**
+     * Persist [intent] (AD-7) before billing launches. `SessionEngine` writes it in the same `runtime.db` transaction as
+     * the transition (`RuntimeWrite.PutPurchaseIntent`, Story 4.8), never through the [EffectRunner].
+     */
     data class PersistPurchaseIntent(
-        val intentId: PurchaseIntentId,
-        val sessionId: String,
-        val offer: SnoozeOffer,
+        val intent: PurchaseIntent,
     ) : SessionEffect
 
-    /** Launch Play Billing for [offer] with `obfuscatedProfileId = sessionId` (AD-7). */
+    /**
+     * Launch Play Billing for the committed intent [intentId] with `obfuscatedProfileId = sessionId` (AD-7). The runner
+     * reads the intent from the `PurchaseIntentStore`; it is committed before this runs.
+     */
     data class LaunchBilling(
         val intentId: PurchaseIntentId,
         val sessionId: String,
-        val offer: SnoozeOffer,
+    ) : SessionEffect
+
+    /**
+     * The keyguard is up: ask the user to unlock before Play opens (Spike S1). The runner calls
+     * `UnlockPort.requestUnlock` outside the engine's Mutex and dispatches `UnlockSucceeded` or `UnlockFailed`.
+     */
+    data class RequestKeyguardDismiss(
+        val intentId: PurchaseIntentId,
     ) : SessionEffect
 
     /** Consume the purchase [token] that granted a snooze. */

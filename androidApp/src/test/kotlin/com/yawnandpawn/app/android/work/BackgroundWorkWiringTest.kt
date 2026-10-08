@@ -41,6 +41,8 @@ import com.yawnandpawn.app.testing.FakeUserLockState
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.withTimeout
+import org.junit.After
 import org.junit.Before
 import org.junit.Rule
 import org.junit.Test
@@ -88,6 +90,10 @@ class BackgroundWorkWiringTest {
         )
     }
 
+    // WorkManager's test instance is process-wide: closed here, so no later test of this JVM finds its database open.
+    @After
+    fun tearDown() = WorkManagerTestInitHelper.closeWorkDatabase()
+
     private fun start(vararg overrides: Module) =
         restartKoin(
             app,
@@ -104,7 +110,10 @@ class BackgroundWorkWiringTest {
     private val workManager: WorkManager
         get() = WorkManager.getInstance(app)
 
-    private fun infos(name: String): List<WorkInfo> = workManager.getWorkInfosForUniqueWork(name).get()
+    private fun infos(name: String): List<WorkInfo> = workManager.getWorkInfosForUniqueWork(name).getBounded()
+
+    /** Every WorkManager answer within [APP_WORK_TIMEOUT_MILLIS]: a stuck one fails the test instead of hanging it. */
+    private fun <T> ListenableFuture<T>.getBounded(): T = get(APP_WORK_TIMEOUT_MILLIS, TimeUnit.MILLISECONDS)
 
     private fun awaitUntil(
         what: String,
@@ -174,13 +183,14 @@ class BackgroundWorkWiringTest {
         val sessionRefresh = assertNotNull(koin.get<SessionStartPriceRefresh>().onSessionStarted())
         awaitUntil("the session-start refresh asked Play") { source.requests.size == 1 }
         var workerResult: ListenableWorker.Result? = null
-        val worker = thread { workerResult = runWorker(BackgroundTaskKind.PriceRefresh.name) }
+        // A daemon thread: one left waiting can never keep the test JVM alive.
+        val worker = thread(isDaemon = true) { workerResult = runWorker(BackgroundTaskKind.PriceRefresh.name) }
         Thread.sleep(SETTLE_MILLIS)
 
         assertEquals(1, source.requests.size, "the worker's refresh waits for the one in flight")
         gate.complete(Unit)
         worker.join(APP_WORK_TIMEOUT_MILLIS)
-        runBlocking { sessionRefresh.join() }
+        runBlocking { withTimeout(APP_WORK_TIMEOUT_MILLIS) { sessionRefresh.join() } }
 
         assertEquals(2, source.requests.size)
         assertEquals(ListenableWorker.Result.success(), workerResult)
@@ -236,7 +246,7 @@ class BackgroundWorkWiringTest {
 
         assertNotNull(WorkManagerTestInitHelper.getTestDriver(app)).setAllConstraintsMet(id)
 
-        awaitUntil("the job succeeded") { workManager.getWorkInfoById(id).get()?.state == WorkInfo.State.SUCCEEDED }
+        awaitUntil("the job succeeded") { workManager.getWorkInfoById(id).getBounded()?.state == WorkInfo.State.SUCCEEDED }
         assertEquals(listOf(SnoozeProducts.all), source.requests)
         assertEquals(SnoozeProducts.all.size, runBlocking { koin.get<PriceCatalog>().observe().first() }.entries.size)
     }

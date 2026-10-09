@@ -92,7 +92,7 @@ fun wakeModule(): Module =
                 onConsume = { token -> koin.get<ApplicationScope>().launch { koin.get<PurchaseLedger>().settle(token) } },
                 // Story 4.11: the billing orchestration (looked up then: it depends on the engine, which depends on this).
                 onLaunchBilling = { effect -> koin.get<PurchaseCoordinator>().onLaunchBilling(effect) },
-                onKeyguardDismiss = { koin.get<PurchaseCoordinator>().onKeyguardDismiss() },
+                onKeyguardDismiss = { effect -> koin.get<PurchaseCoordinator>().onKeyguardDismiss(effect) },
             )
         }
         // The first unlock after a boot (Story 2.4): UserUnlocked, billing and crash reporting.

@@ -14,6 +14,8 @@ import com.yawnandpawn.app.core.work.BackgroundWork
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableSharedFlow
+import kotlinx.coroutines.flow.emitAll
+import kotlinx.coroutines.flow.flow
 import kotlin.time.Instant
 
 // Local doubles for the Story 4.10 ledger tests (core cannot depend on :testing, AD-1).
@@ -204,7 +206,21 @@ internal class FakePlay : Billing {
     /** Play's purchase updates; tests emit into it with [deliver] or [updates]. */
     val updates = MutableSharedFlow<PurchaseUpdate>(extraBufferCapacity = 16)
 
-    override val purchaseUpdates: Flow<PurchaseUpdate> get() = updates
+    /** Collections that fail at once (Play disconnected), before the stream works again. */
+    var failNextCollects = 0
+
+    /** Set: the next queries wait for it (a query in flight while something else happens). */
+    var queryHold: CompletableDeferred<Unit>? = null
+
+    override val purchaseUpdates: Flow<PurchaseUpdate>
+        get() =
+            flow {
+                if (failNextCollects > 0) {
+                    failNextCollects--
+                    throw IllegalStateException("disconnected")
+                }
+                emitAll(updates)
+            }
 
     /** Play now owns [snapshot] (bought, or pending). */
     fun own(snapshot: PurchaseSnapshot) {
@@ -223,6 +239,7 @@ internal class FakePlay : Billing {
 
     override suspend fun queryPurchases(): Outcome<List<PurchaseSnapshot>, DomainError> {
         queries++
+        queryHold?.await()
         queryFailure?.let { return Outcome.Failure(it) }
         return Outcome.Success(listed.values.toList())
     }

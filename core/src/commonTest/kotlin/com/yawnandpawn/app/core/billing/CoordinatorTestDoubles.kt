@@ -31,6 +31,7 @@ import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.test.TestScope
+import kotlinx.coroutines.test.advanceTimeBy
 import kotlinx.coroutines.test.runCurrent
 import kotlin.time.Instant
 
@@ -56,6 +57,9 @@ internal class CoordinatorWorld(
     val userLock = TestUserLock()
     val intents = StoreIntents(store)
     var installFailure: DomainError? = null
+
+    /** Set: reading the install id throws (an adapter bug), so the update being handled fails. */
+    var installThrows: Exception? = null
 
     /** False: the unlock request is lost on its way (no request waits in this process). */
     var forwardUnlock = true
@@ -114,10 +118,14 @@ internal class CoordinatorWorld(
                 engine = engine,
                 ledger = ledger,
                 intents = intents,
-                installIds = { installFailure?.let { Outcome.Failure(it) } ?: Outcome.Success(INSTALL) },
+                installIds = {
+                    installThrows?.let { throw it }
+                    installFailure?.let { Outcome.Failure(it) } ?: Outcome.Success(INSTALL)
+                },
                 feeLadder = UsdFeeLadder,
                 userLock = userLock,
                 unlock = unlock,
+                clock = time.monotonicClock,
                 scope = processScope,
                 logger = logger,
             )
@@ -125,6 +133,12 @@ internal class CoordinatorWorld(
 
     /** Runs everything launched so far (coordinator work, settles) as far as it goes now; background work included. */
     fun settle() = test.runCurrent()
+
+    /** Moves the coroutines' virtual time on by [duration] (the coordinator's waits), running what comes due. */
+    fun advance(duration: kotlin.time.Duration) {
+        test.advanceTimeBy(duration)
+        test.runCurrent()
+    }
 
     /** Dispatches [event], then lets everything it set off run. */
     suspend fun dispatch(event: SessionEvent): SessionState {
@@ -171,7 +185,7 @@ internal class CoordinatorWorld(
             ran += effect
             when (effect) {
                 is SessionEffect.LaunchBilling -> coordinator.onLaunchBilling(effect)
-                is SessionEffect.RequestKeyguardDismiss -> if (forwardUnlock) coordinator.onKeyguardDismiss()
+                is SessionEffect.RequestKeyguardDismiss -> if (forwardUnlock) coordinator.onKeyguardDismiss(effect)
                 is SessionEffect.Consume -> processScope.launch { ledger.settle(effect.token) }
                 else -> Unit
             }

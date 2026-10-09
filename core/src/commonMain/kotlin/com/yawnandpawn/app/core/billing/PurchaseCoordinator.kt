@@ -16,18 +16,25 @@ import com.yawnandpawn.app.core.session.SessionState
 import com.yawnandpawn.app.core.session.UnlockPort
 import com.yawnandpawn.app.core.session.UnlockResult
 import com.yawnandpawn.app.core.session.UserLockState
+import com.yawnandpawn.app.core.time.MonotonicClock
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
-import kotlinx.coroutines.flow.catch
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.getAndUpdate
 import kotlinx.coroutines.flow.update
+import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
+import kotlinx.coroutines.yield
 import kotlin.coroutines.cancellation.CancellationException
+import kotlin.time.Duration
+import kotlin.time.Duration.Companion.milliseconds
+import kotlin.time.Duration.Companion.minutes
+import kotlin.time.Duration.Companion.seconds
 
 /**
  * A stranded payment offered for this snooze (FR-RNG-10): Snooze's "already paid" sheet shows [productId]'s price. The
@@ -45,19 +52,26 @@ class ReuseOffer internal constructor(
  * The billing orchestration (AD-7, Story 4.11): it carries out the session's `LaunchBilling` and `RequestKeyguardDismiss`
  * effects, follows Play's purchase updates and runs the recovery queries, and turns every result into a session event
  * or a ledger write. Every purchase goes through [PurchaseReconciler] (the only reader of its state), every consume
- * through [PurchaseLedger] (the only caller of `Billing.consume`), and every snooze through the engine's commit.
+ * through [PurchaseLedger] (the only caller of `Billing.consume`), and every snooze through the engine's commit. It owns
+ * "the wake screen resumed while the session waits for the unlock" ([resolveLostUnlock]) and the reuse answers
+ * ([acceptReuse], [declineReuse]); the confirm sheet (Story 4.13) only calls them.
  *
  * **Alarm safety:** the wake runtime only calls the non-suspending entry points ([onLaunchBilling], [onKeyguardDismiss],
  * [onWakeScreenResumed], [onAppResumed]), which launch the work on [scope] and return at once, so nothing here ever runs
  * inside the engine's Mutex or delays "I'm up", a check or the sound. A late or lost result leaves `paying` set; any
- * result, a restore, the ring's end or the 30-minute timeout clears it, and the free path never depends on it.
+ * result, a restore, the ring's end, the 30-minute timeout or a stale sheet found on resume clears it.
  *
  * **Money safety:**
  * - only a reconciler `Grant` dispatches `PurchaseGranted`;
- * - a `Grant` or reuse offer found while launching cancels the launch, so the user is never charged twice;
+ * - a `Grant` or reuse offer found while launching cancels the launch, so the user is never charged twice; one sheet is
+ *   open at a time and each intent is launched once;
+ * - "No charge." is said only for results that are not a payment: a PURCHASED answer that gives no snooze now keeps the
+ *   payment in flight, and a later update or recovery grants it;
  * - a stranded token is only ever recorded, unless the user accepts its reuse;
  * - one Mutex serialises the reconciling of launches, updates and recoveries, and the engine refuses a second grant
- *   ledger row for a token, so a duplicate delivery gives one snooze.
+ *   ledger row for a token, so a duplicate delivery gives one snooze;
+ * - nothing is reconciled before the stored session is restored, so a payment for the ringing session is never taken
+ *   for a stranded one.
  */
 @Suppress("TooManyFunctions", "LongParameterList")
 class PurchaseCoordinator(
@@ -69,6 +83,7 @@ class PurchaseCoordinator(
     private val feeLadder: FeeLadder,
     private val userLock: UserLockState,
     private val unlock: UnlockPort,
+    private val clock: MonotonicClock,
     private val scope: CoroutineScope,
     private val logger: Logger,
 ) {
@@ -80,11 +95,14 @@ class PurchaseCoordinator(
 
     private val started = MutableStateFlow(false)
 
-    /** The launch whose sheet is open (or opening), with its install id and whether it is the one retry. */
+    /** The launch attempt whose sheet is open (or opening). */
     private val inFlight = MutableStateFlow<InFlight?>(null)
 
-    /** Unlock requests waiting for their callback in this process. */
-    private val unlockRequests = MutableStateFlow(0)
+    /** Intents whose launch has started in this process: each one opens Play at most once (plus its one retry). */
+    private val launchedIntents = MutableStateFlow<Set<PurchaseIntentId>>(emptySet())
+
+    /** The newest unlock request still waiting for its callback in this process. */
+    private val unlockWait = MutableStateFlow<UnlockWait?>(null)
 
     private val offered = MutableStateFlow<ReuseOffer?>(null)
 
@@ -100,19 +118,66 @@ class PurchaseCoordinator(
      */
     val strandedProducts: StateFlow<Set<String>> = stranded.asStateFlow()
 
+    /**
+     * One launch attempt of [intent]. [opened]: `Billing.launch` returned `Launched`, so the sheet is up and only it can be
+     * answered by a cancel, failure or `ITEM_ALREADY_OWNED` update; a result `launch` returned itself is never taken twice.
+     * Compared by identity: each attempt (and its opening) is a new object.
+     */
     private class InFlight(
         val intent: PurchaseIntent,
         val installId: String,
         val retried: Boolean,
+        val opened: Boolean = false,
+        val openedAt: Long = 0,
+    ) {
+        fun opened(at: Long): InFlight = InFlight(intent, installId, retried, opened = true, openedAt = at)
+    }
+
+    /** An unlock request for [intentId], made at [since] (monotonic). */
+    private class UnlockWait(
+        val intentId: PurchaseIntentId,
+        val since: Long,
     )
 
-    /** Collects Play's purchase updates on [scope] for the life of the process. Idempotent. */
+    /**
+     * Collects Play's purchase updates on [scope] for the life of the process. Idempotent. One update that fails is logged
+     * and the next one is still handled; a stream that fails is collected again after a backoff, so a later purchase is
+     * never left ungranted. A stream that ends (no billing adapter) is not collected again.
+     */
     fun start() {
         if (!started.compareAndSet(expect = false, update = true)) return
         scope.launch {
-            billing.purchaseUpdates
-                .catch { e -> logger.log(LogEvent.OperationFailed(UPDATES, e::class.simpleName.orEmpty())) }
-                .collect { onUpdate(it) }
+            var backoff = COLLECT_RETRY_FIRST
+            while (isActive && collectUpdates()) {
+                delay(backoff)
+                backoff = (backoff * 2).coerceAtMost(COLLECT_RETRY_MAX)
+            }
+        }
+    }
+
+    /** Collects the updates until the stream ends (false) or fails (true, logged). */
+    private suspend fun collectUpdates(): Boolean =
+        try {
+            billing.purchaseUpdates.collect { onUpdateGuarded(it) }
+            false
+        } catch (e: CancellationException) {
+            throw e
+        } catch (
+            @Suppress("TooGenericExceptionCaught") e: Exception,
+        ) {
+            logger.log(LogEvent.OperationFailed(UPDATES, e::class.simpleName.orEmpty()))
+            true
+        }
+
+    private suspend fun onUpdateGuarded(update: PurchaseUpdate) {
+        try {
+            onUpdate(update)
+        } catch (e: CancellationException) {
+            throw e
+        } catch (
+            @Suppress("TooGenericExceptionCaught") e: Exception,
+        ) {
+            logger.log(LogEvent.OperationFailed(UPDATES, e::class.simpleName.orEmpty()))
         }
     }
 
@@ -121,19 +186,20 @@ class PurchaseCoordinator(
         scope.launch { launch(effect.intentId) }
     }
 
-    /** The `RequestKeyguardDismiss` effect: the unlock request is launched on [scope], never awaited. */
-    fun onKeyguardDismiss() {
-        scope.launch { requestUnlock() }
+    /** The `RequestKeyguardDismiss` effect: the unlock request for its intent is launched on [scope], never awaited. */
+    fun onKeyguardDismiss(effect: SessionEffect.RequestKeyguardDismiss) {
+        scope.launch { requestUnlock(effect.intentId) }
     }
 
     /**
      * The wake screen opened or came back (from Play's sheet, the PIN prompt, Home): settle an unlock whose callback was
-     * lost, then run a recovery query.
+     * lost, run a recovery query, then cancel a sheet whose result never came ([STALE_SHEET], default taken).
      */
     fun onWakeScreenResumed() {
         scope.launch {
             resolveLostUnlock()
-            recover()
+            val sheet = inFlight.value?.takeIf { it.opened }
+            if (recover() && sheet != null) cancelIfStale(sheet)
         }
     }
 
@@ -143,15 +209,31 @@ class PurchaseCoordinator(
     }
 
     /**
-     * Launches the purchase of the committed intent [intentId] (Story 4.11):
+     * Launches the purchase of the committed intent [intentId] (Story 4.11), once per intent:
      * 1. the intent and the install id are read (missing: `PurchaseFailed(Error)`);
      * 2. nothing happens when the session no longer pays this intent;
      * 3. the grant ledger is settled, so a granted token Play still owns is consumed first;
      * 4. the owned purchases are reconciled with `PreLaunch`: a grant, a reuse offer or a pending payment of this product
      *    for this session ends it without opening Play;
      * 5. otherwise Play opens with the install id and the session id.
+     * Anything that throws on the way ends the payment with "No charge." (the sheet never opened).
      */
     suspend fun launch(intentId: PurchaseIntentId) {
+        if (launchedIntents.getAndUpdate { it + intentId }.contains(intentId)) return
+        try {
+            prepare(intentId)
+        } catch (e: CancellationException) {
+            throw e
+        } catch (
+            @Suppress("TooGenericExceptionCaught") e: Exception,
+        ) {
+            logger.log(LogEvent.OperationFailed(LAUNCH, e::class.simpleName.orEmpty()))
+            inFlight.update { it?.takeUnless { open -> open.intent.intentId == intentId } }
+            if (paysFor(intentId)) dispatch(SessionEvent.PurchaseFailed(PurchaseFailureKind.Error))
+        }
+    }
+
+    private suspend fun prepare(intentId: PurchaseIntentId) {
         val intent =
             when (val found = intents.get(intentId)) {
                 is Outcome.Failure -> {
@@ -182,9 +264,11 @@ class PurchaseCoordinator(
         if (!found.stopsLaunch) openSheet(InFlight(intent, installId, retried = false))
     }
 
-    /** Opens Play's sheet for [launch] while the session still pays it. */
+    /** Opens Play's sheet for [launch] while the session still pays it and no other sheet is open for it. */
     private suspend fun openSheet(launch: InFlight) {
-        if (!paysFor(launch.intent.intentId)) return
+        val open = inFlight.value
+        val anotherOpen = open != null && open.intent.intentId != launch.intent.intentId && paysFor(open.intent.intentId)
+        if (!paysFor(launch.intent.intentId) || anotherOpen) return
         inFlight.value = launch
         val result =
             try {
@@ -196,6 +280,9 @@ class PurchaseCoordinator(
             ) {
                 Outcome.Failure(DomainError.BillingUnavailable(e::class.simpleName ?: "Exception"))
             }
+        // An update Play sent while `launch` ran is received now, against this attempt before it counts as open: a result
+        // `launch` returned and Play also delivered as an update is handled once (review 12).
+        yield()
         when (result) {
             is Outcome.Failure -> {
                 log(LAUNCH, result.error)
@@ -213,7 +300,7 @@ class PurchaseCoordinator(
         result: LaunchResult,
     ) {
         when (result) {
-            LaunchResult.Launched -> Unit
+            LaunchResult.Launched -> inFlight.compareAndSet(launch, launch.opened(clock.elapsedMillis()))
             LaunchResult.Cancelled -> finish(launch.intent, SessionEvent.PurchaseCancelled)
             is LaunchResult.Failed -> finish(launch.intent, SessionEvent.PurchaseFailed(result.kind))
             LaunchResult.ItemAlreadyOwned -> alreadyOwned(launch)
@@ -223,7 +310,7 @@ class PurchaseCoordinator(
     /**
      * `ITEM_ALREADY_OWNED` for [launch]: the owned purchases are reconciled with `AlreadyOwned`. A grant, a reuse offer or
      * a pending payment answers it; a granted token consumed now retries the launch once; anything else (a second
-     * `ITEM_ALREADY_OWNED` included) is `PurchaseFailed(Error)`.
+     * `ITEM_ALREADY_OWNED` included, without another query) is `PurchaseFailed(Error)`: nothing was bought.
      */
     private suspend fun alreadyOwned(launch: InFlight) {
         if (launch.retried) return finish(launch.intent, SessionEvent.PurchaseFailed(PurchaseFailureKind.Error))
@@ -244,33 +331,40 @@ class PurchaseCoordinator(
     }
 
     /**
-     * One purchase update from Play (collected by [start]). Purchases are reconciled with `Update`; a cancel, a failure or
-     * `ITEM_ALREADY_OWNED` answers the launch in flight, and nothing else.
+     * One purchase update from Play (collected by [start]). Purchases are reconciled with `Update`, once the stored session
+     * is restored. A cancel, a failure or `ITEM_ALREADY_OWNED` answers the sheet that was open when the update arrived, and
+     * nothing else. A PURCHASED answer that gives no snooze now (a lookup or commit failure) keeps the payment in flight:
+     * it is never called "No charge.", and a later update or recovery grants it (Decision 8).
      */
     suspend fun onUpdate(update: PurchaseUpdate) {
-        val launch = inFlight.value
+        val sheet = inFlight.value?.takeIf { it.opened }
         when (update) {
             is PurchaseUpdate.Purchases -> {
+                engine.restored.first { it }
                 onPurchases(update.purchases)
-                // Play answered the open sheet with a purchase that gave no session event: never leave `paying` stuck.
-                if (launch != null && paysFor(launch.intent.intentId) && update.purchases.any { it.answers(launch.intent) }) {
-                    finish(launch.intent, SessionEvent.PurchaseFailed(PurchaseFailureKind.Error))
-                }
             }
 
             PurchaseUpdate.Cancelled -> {
-                launch?.let { finish(it.intent, SessionEvent.PurchaseCancelled) }
+                sheet?.let { answer(it, SessionEvent.PurchaseCancelled) }
             }
 
             is PurchaseUpdate.Failed -> {
-                launch?.let { finish(it.intent, SessionEvent.PurchaseFailed(update.kind)) }
+                sheet?.let { answer(it, SessionEvent.PurchaseFailed(update.kind)) }
             }
 
             PurchaseUpdate.ItemAlreadyOwned -> {
-                launch?.let { alreadyOwned(it) }
+                sheet?.takeIf { inFlight.value === it }?.let { alreadyOwned(it) }
             }
         }
         dropStaleInFlight()
+    }
+
+    /** The open [sheet] ended with [event], unless another attempt replaced it meanwhile. */
+    private suspend fun answer(
+        sheet: InFlight,
+        event: SessionEvent,
+    ) {
+        if (inFlight.value === sheet) finish(sheet.intent, event)
     }
 
     private suspend fun onPurchases(purchases: List<PurchaseSnapshot>) {
@@ -302,11 +396,23 @@ class PurchaseCoordinator(
     }
 
     /**
-     * Asks the user to unlock before Play opens (Spike S1) and dispatches `UnlockSucceeded` or `UnlockFailed`; a port that
-     * throws counts as failed.
+     * Review 15 (default taken, owner can change): the wake screen is back, a recovery query found nothing for the open
+     * [sheet], and it opened [STALE_SHEET] ago or more: its result was lost, so it is cancelled ("Payment cancelled. No
+     * charge."), and Snooze can be bought again. A PURCHASED that still comes later grants as any update (row 1).
      */
-    suspend fun requestUnlock() {
-        unlockRequests.update { it + 1 }
+    private suspend fun cancelIfStale(sheet: InFlight) {
+        val stale = clock.elapsedMillis() - sheet.openedAt >= STALE_SHEET.inWholeMilliseconds
+        if (stale) answer(sheet, SessionEvent.PurchaseCancelled)
+    }
+
+    /**
+     * Asks the user to unlock before Play opens for [intentId] (Spike S1) and dispatches `UnlockSucceeded` or
+     * `UnlockFailed`; a port that throws counts as failed. A result that comes once the session waits for another intent's
+     * unlock (a newer Pay), or for none, is dropped, so it can never apply to a newer payment.
+     */
+    suspend fun requestUnlock(intentId: PurchaseIntentId) {
+        val wait = UnlockWait(intentId, clock.elapsedMillis())
+        unlockWait.value = wait
         try {
             val result =
                 try {
@@ -319,41 +425,49 @@ class PurchaseCoordinator(
                     logger.log(LogEvent.OperationFailed(UNLOCK, e::class.simpleName.orEmpty()))
                     UnlockResult.Failed
                 }
-            dispatch(result.event())
+            if (unlockingIntent() == intentId) dispatch(result.event())
         } finally {
-            unlockRequests.update { it - 1 }
+            unlockWait.compareAndSet(wait, null)
         }
     }
 
     /**
-     * The wake screen resumed while the session waits for the unlock (Story 4.8 deferral: a lost callback, or the user
-     * unlocked another way, for example with a fingerprint):
-     * - unlocked now: Play opens (`UnlockSucceeded`); a callback that still comes is ignored, so it opens once;
-     * - still locked, and no request in this process waits for its callback: "Phone still locked. No charge."
-     *   (`UnlockFailed`);
-     * - still locked while a request waits (the PIN prompt may be up): nothing. A new Pay replaces a pending unlock, and
-     *   "I'm up" never waits for it.
+     * The wake screen resumed while the session waits for the unlock (Story 4.8 deferral; this is the one owner of the
+     * rule, Story 4.13 dispatches no unlock result itself): a lost callback, or the user unlocked another way, for example
+     * with a fingerprint.
+     * - Unlocked now: Play opens (`UnlockSucceeded`); a callback that still comes is dropped, so it opens once.
+     * - Locked: the keyguard state can lag the resume (ColorOS), so it is read again after [UNLOCK_SETTLE]. Unlocked then:
+     *   `UnlockSucceeded`. Still locked, and no request for this intent waits (lost, or waiting longer than
+     *   [UNLOCK_GRACE], so the PIN prompt is not what is up): "Phone still locked. No charge." (`UnlockFailed`). Otherwise
+     *   nothing: the PIN prompt may still be up. A new Pay replaces a pending unlock, and "I'm up" never waits.
      */
     suspend fun resolveLostUnlock() {
-        val ring = engine.state.value as? SessionState.Ring ?: return
-        if (!ring.session.unlocking) return
-        val locked = runCatching { unlock.isKeyguardLocked() }.getOrDefault(true)
+        val intentId = unlockingIntent() ?: return
+        if (keyguardLocked()) delay(UNLOCK_SETTLE)
+        if (unlockingIntent() != intentId) return
+        val wait = unlockWait.value?.takeIf { it.intentId == intentId }
+        val requestWaits = wait != null && clock.elapsedMillis() - wait.since < UNLOCK_GRACE.inWholeMilliseconds
         when {
-            !locked -> dispatch(SessionEvent.UnlockSucceeded)
-            unlockRequests.value == 0 -> dispatch(SessionEvent.UnlockFailed)
+            !keyguardLocked() -> dispatch(SessionEvent.UnlockSucceeded)
+            !requestWaits -> dispatch(SessionEvent.UnlockFailed)
             else -> Unit
         }
     }
 
+    private fun keyguardLocked(): Boolean = runCatching { unlock.isKeyguardLocked() }.getOrDefault(true)
+
+    /** The intent whose unlock the ringing session waits for, or null. */
+    private fun unlockingIntent(): PurchaseIntentId? = (engine.state.value as? SessionState.Ring)?.session?.takeIf { it.unlocking }?.paying
+
     /**
-     * "Use it" on the "already paid" sheet: `ReuseAccepted` with the offered token, for the session it was offered to.
-     * The reducer writes the grant ledger row in the Snoozed commit, and settling it turns the stranded record into
-     * reused (Story 4.10). Null when nothing is offered to the session ringing now.
+     * "Use it" on the "already paid" sheet (Story 4.13 calls it): `ReuseAccepted` with the offered token, for the session
+     * it was offered to. The reducer writes the grant ledger row in the Snoozed commit, and settling it turns the stranded
+     * record into reused (Story 4.10). Null when nothing is offered to the session ringing now.
      */
     suspend fun acceptReuse(): Outcome<SessionState, DomainError>? =
         takeOffer()?.let { dispatch(SessionEvent.ReuseAccepted(it.productId, it.token)) }
 
-    /** "Not now", Back or a swipe on the "already paid" sheet: `ReuseDeclined`. Null when nothing is offered. */
+    /** "Not now", Back or a swipe on the "already paid" sheet (Story 4.13): `ReuseDeclined`. Null when nothing is offered. */
     suspend fun declineReuse(): Outcome<SessionState, DomainError>? =
         takeOffer()?.let { dispatch(SessionEvent.ReuseDeclined(it.productId)) }
 
@@ -570,5 +684,21 @@ class PurchaseCoordinator(
         const val DISPATCH = "dispatch billing result"
         const val UNLOCK = "request unlock"
         const val UPDATES = "purchase updates"
+
+        /** The first wait before Play's update stream is collected again after it failed; it doubles up to [COLLECT_RETRY_MAX]. */
+        val COLLECT_RETRY_FIRST: Duration = 1.seconds
+        val COLLECT_RETRY_MAX: Duration = 1.minutes
+
+        /**
+         * How long the keyguard state may lag the wake screen's resume (Story 4.13 device finding on ColorOS) before a
+         * locked phone counts as still locked.
+         */
+        val UNLOCK_SETTLE: Duration = 1_500.milliseconds
+
+        /** An unlock request waiting longer than this is taken as lost: the PIN prompt is not what is up on resume. */
+        val UNLOCK_GRACE: Duration = 30.seconds
+
+        /** Review 15 (default taken): a sheet open this long whose result never came is cancelled on the next resume. */
+        val STALE_SHEET: Duration = 2.minutes
     }
 }

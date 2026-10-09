@@ -111,6 +111,21 @@ class WakeRuntimeBillingTest {
     }
 
     @Test
+    fun `a payment outcome during the grace mute never raises the alarm stream (review 9)`() {
+        enter(SessionState.Ringing(session))
+        run(SessionEffect.Mute)
+        enter(SessionState.Grace(session))
+        audio.setStreamVolume(AudioManager.STREAM_ALARM, 1, 0)
+
+        run(SessionEffect.ShowPurchaseOutcome(PurchaseOutcome.Failed))
+        run(SessionEffect.ShowPaymentPending)
+
+        assertEquals(1, alarmStream(), "muted for the grace window: the volume is left alone")
+        assertTrue(player.isMuted)
+        runtime.endSession()
+    }
+
+    @Test
     fun `the billing effects go to the orchestration and return at once`() {
         val launch = SessionEffect.LaunchBilling(PurchaseIntentId("intent-1"), session.sessionId)
 

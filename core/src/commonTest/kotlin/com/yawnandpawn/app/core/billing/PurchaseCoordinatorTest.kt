@@ -22,6 +22,7 @@ import kotlin.test.assertFalse
 import kotlin.test.assertIs
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
+import kotlin.time.Duration.Companion.seconds
 
 /**
  * Story 4.11: what `PurchaseCoordinator` does with each reconciler decision, in each way a purchase reaches it (an update,
@@ -298,6 +299,7 @@ class PurchaseCoordinatorTest {
             repeat(2) { twice.play.launchResults += Outcome.Success(LaunchResult.ItemAlreadyOwned) }
             assertNull(assertIs<SessionState.Ringing>(twice.pay()).session.paying)
             assertEquals(2, twice.play.launches.size)
+            assertEquals(2, twice.play.queries, "the pre-launch query and the first ITEM_ALREADY_OWNED's; the second asks nothing")
             assertEquals(listOf<SessionEffect>(SessionEffect.ShowPurchaseOutcome(PurchaseOutcome.Failed)), twice.outcomes)
 
             val nothing = CoordinatorWorld(this)
@@ -379,8 +381,8 @@ class PurchaseCoordinatorTest {
             w.unlock.hold = true
             w.ring()
             w.pay()
-            w.coordinator.resolveLostUnlock()
-            w.settle()
+            w.coordinator.onWakeScreenResumed()
+            w.advance(2.seconds)
             assertTrue(assertIs<SessionState.Ringing>(w.engine.state.value).session.unlocking, "locked while a request waits: nothing")
 
             // A fingerprint unlock: the keyguard is gone, the callback has not come.
@@ -405,6 +407,8 @@ class PurchaseCoordinatorTest {
 
             w.coordinator.onWakeScreenResumed()
             w.settle()
+            assertTrue(assertIs<SessionState.Ringing>(w.engine.state.value).session.unlocking, "the keyguard may lag the resume")
+            w.advance(PurchaseCoordinator.UNLOCK_SETTLE)
             val state = assertIs<SessionState.Ringing>(w.engine.state.value)
             assertNull(state.session.paying)
             assertEquals(listOf<SessionEffect>(SessionEffect.ShowPurchaseOutcome(PurchaseOutcome.UnlockFailed)), w.outcomes)

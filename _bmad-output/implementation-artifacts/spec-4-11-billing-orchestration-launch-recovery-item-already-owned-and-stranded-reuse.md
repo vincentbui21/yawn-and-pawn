@@ -3,7 +3,7 @@ title: 'Story 4.11: Billing orchestration: launch, recovery, ITEM_ALREADY_OWNED 
 type: 'feature'
 created: '2026-10-09'
 status: 'done'
-baseline_revision: '80143b5'
+baseline_revision: '8a38a11'
 context:
   - '{project-root}/_bmad-output/implementation-artifacts/epic-4-context.md'
   - '{project-root}/docs/architecture.md'
@@ -12,7 +12,7 @@ context:
   - '{project-root}/_bmad-output/implementation-artifacts/spec-4-9-purchasereconciler-for-every-recovery-case.md'
   - '{project-root}/_bmad-output/implementation-artifacts/spec-4-10-grant-ledger-purchase-records-and-consume-with-retry.md'
 warnings:
-  - 'Story 4.3 (price cache, PR #47) and Story 4.7 (snooze availability) are not merged; see the rebase notes.'
+  - 'Story 4.7 (snooze availability) is not merged; see the rebase notes.'
 deferred:
   - 'Story 4.12: implement the extended Billing port in AndroidBilling: launch returns Launched once launchBillingFlow returned OK (the result then arrives on purchaseUpdates), ItemAlreadyOwned / Cancelled / Failed(kind) from the response-code table; onPurchasesUpdated maps OK to PurchaseUpdate.Purchases (pending ones included), the rest to Cancelled / ItemAlreadyOwned / Failed(kind); purchaseUpdates must not drop an update emitted before the coordinator collects (buffer or replay-free SharedFlow started at app start); queryPurchases returns every INAPP purchase mapped in PlayPurchaseMapping.kt; bind AndroidDeviceUnlocker as the single UnlockPort (engine and coordinator share it)'
   - 'Story 4.7: feed PurchaseCoordinator.strandedProducts into the snoozeAvailability env: EarlierPaymentRefunding only while declinedReuseProduct is the offered product AND that product is in the set, so the label goes away once a recovery no longer finds the token (no event needed); the amount comes from PurchaseLedger.refundingPrice(productId)'
@@ -91,9 +91,9 @@ deferred:
 5. **Repeated pending messages:** recovery and updates dispatch `PurchasePending` for a session already marked `paymentPending` only when it answers the launch in flight. Every wake screen resume runs a recovery, so the message is not shown again on each resume.
 6. **`ReuseAccepted` guard:** the product must be the one Snooze offers now (availability Available for it), as for Pay. Accepting while billing is in flight is still allowed, so the existing payment-safety table holds: the offer cleared `paying` anyway.
 7. **Second `ITEM_ALREADY_OWNED`:** after the one retry it becomes `PurchaseFailed(Error)` without another query; the next recovery consumes the token.
-8. **Lost launch callback with nothing found:** no timeout fails it. `paying` stays until a result, a restore, the ring's end or the timeout, because a late PURCHASED still grants (row 1 needs no `paying`) and a "No charge." message could then be false.
+8. **Lost launch callback with nothing found:** no timer fails it, and it is never called "No charge." while a PURCHASED may still come. A PURCHASED answer that grants nothing now (a lookup, install id or commit failure) keeps `paying`, and a later update or recovery grants it (row 1 needs no `paying`). Review 15 (default taken, owner can change): on a wake screen resume, a sheet open for 2 minutes or more that a successful recovery query found nothing for is cancelled ("Payment cancelled. No charge."), so Snooze can be bought again. A late PURCHASED still grants.
 9. **Stranded set source:** only full queries (recovery, pre-launch and already-owned) refresh it; single updates do not.
-10. **Lost unlock on resume:** an unlocked keyguard always continues to Play (a late callback is then ignored); a locked one ends the payment only when no unlock request waits in this process, so a resume while the PIN prompt may still be up never says "Phone still locked".
+10. **Lost unlock on resume** (revised by review 16): an unlocked keyguard always continues to Play, and a late callback is then dropped. A locked keyguard is read again after a 1.5 s settle, because its state lags the resume on ColorOS. It ends the payment only when no request *for this intent* has been waiting for less than 30 s, so a resume while the PIN prompt may still be up never says "Phone still locked".
 11. **Its own app-wide scope:** the coordinator runs on a second `ApplicationScope` instance, not the shared one, because the update collector never ends and an app-start recovery may wait for a restore that a broadcast-only process never runs; the app start's finite jobs (and the tests that wait for them) are unaffected.
 
 </intent-contract>
@@ -124,12 +124,42 @@ deferred:
 **Commands:**
 - `./gradlew qualityGate :androidApp:assembleDebugAndroidTest --no-daemon` -- expected: BUILD SUCCESSFUL.
 
+## For 4.13 (integration, review 16)
+
+The coordinator owns these. When 4.13 is rebased onto 4.11:
+- **Resume while unlocking:** the coordinator owns it (`onWakeScreenResumed()` → `resolveLostUnlock()`, which already calls `WakeActivity.onResume`). It holds the 1.5 s ColorOS settle and the re-check (`UNLOCK_SETTLE`). 4.13 drops its own `onResume` `UnlockSucceeded`/`UnlockFailed` dispatch.
+- **Unlock results are tagged with their intent.** `RequestKeyguardDismiss(intentId)` reaches `requestUnlock(intentId)`, and a result is dispatched only while the session still waits for that intent's unlock, so a late result never applies to a newer Pay. The request tracking is per intent, so a lost callback no longer blocks the resume rule for a newer Pay, and a request waiting longer than `UNLOCK_GRACE` (30 s) counts as lost.
+- **One `UnlockPort` binding:** `single<UnlockPort>` in `YawnAndPawnApp` (`UnlockPort.Unlocked` until 4.12's `AndroidDeviceUnlocker`), shared by the engine and the coordinator. 4.13 removes its own binding.
+- **Reuse:** the "already paid" sheet reads `PurchaseCoordinator.reuseOffer` (product id only) and calls `acceptReuse()` / `declineReuse()`. 4.13 never builds `ReuseAccepted` itself (the token stays in the coordinator).
+
+## Review (2 reviewers, fast mode)
+
+Two reviewers read `3ad7b985`: one for verification gaps, one for edge cases (the edge-case reviewer found no HIGH). Every item was fixed in `fix(4.11): review fixes` with its test (`PurchaseCoordinatorReviewTest` unless named):
+
+1. **(HIGH) The update collector ended on its first exception.** Each update is guarded and logged. A failing stream is collected again after a backoff (1 s doubling to 60 s); a stream that ends normally is not.
+2. **(HIGH) The second `ITEM_ALREADY_OWNED` guard could not fail.** The test now asserts 2 queries.
+3. **(HIGH) "At once" never interleaved.** `FakePlay.queryHold` was added. An update for the token a held recovery is deciding grants once. A payment found by a held pre-launch query while its update arrives never opens Play.
+4. **(HIGH, real bug) "No charge." after a PURCHASED.** A PURCHASED answer that grants nothing keeps the payment in flight (Decision 8), and recovery grants it later.
+5. **`ITEM_ALREADY_OWNED` from the launch for an owned PURCHASED P:** Snoozed.
+6. **The other `ITEM_ALREADY_OWNED` branches:** stranded → reuse offer, pending → pending, a consume that does not settle → Failed with 1 launch, and an update for the retry's sheet → Failed with no third query.
+7. **(Real bug) Two launches for one intent.** Each intent launches once, and a sheet is never opened while another paying intent's sheet is open. A launch held in `settleAll` never opens after a newer Pay.
+8. **A second pending message:** a pending answer to the open sheet says pending again while `paymentPending` is set.
+9. **No volume re-assert during the grace mute** (`WakeRuntimeBillingTest`).
+10. **`RequestKeyguardDismiss` wiring:** checked in the app's Koin graph (`BillingWiringTest`). The shared `UnlockPort` is asked, and the unlock opens Play.
+11. **(Money) Updates before the restore.** `onUpdate` waits for the engine's restore before reconciling, so a payment for the ringing session is never recorded stranded.
+12. **`ITEM_ALREADY_OWNED` handled twice** (the launch result and an update). Attempts are tracked by identity. A cancel, failure or `ITEM_ALREADY_OWNED` update answers only an attempt whose launch returned `Launched`. An update already delivered when `launch` returns is received (`yield`) before the attempt counts as open. The echo is ignored: one retry, no Failed.
+13. **= 4:** an install id failure or a commit failure also keeps the payment in flight. A launch that throws before the sheet opens clears the attempt and says "No charge.".
+14. **= 1.**
+15. **Stale sheet** (default taken, owner can change): see Decision 8.
+16. **Resume while unlocking:** owned here; see "For 4.13".
+
 ## Rebase notes
 
 - **4.10 (PR #49):** it was squash-merged while this story was built. The branch was rebased with `git rebase --onto origin/main a8375d2`; the tree was the same, and there were no conflicts.
-- **4.3 (price cache, PR #47):**
-  - `DomainError`: 4.3 appends two errors at the end, and `BillingUnavailable` sits after `RecordNotReusable`, so both apply. Keep both `diagnostic()` arms.
-  - `YawnAndPawnApp.onCreate`: keep 4.3's WorkManager start next to the coordinator's `start()` / `onAppResumed()`.
+- **4.3 (price cache, PR #47):** it merged before the review fixes. The branch was rebased with `git rebase origin/main` onto `8a38a11`, keeping both sides of every conflict:
+  - `DomainError` and `diagnostic()`: merged without a conflict.
+  - `YawnAndPawnApp.onCreate`: the price refresh start and the coordinator's `start()` / `onAppResumed()` both stay.
+  - `WakeApp` (test): both `productDetails` and `unlock` stay.
 - **4.7 (snooze availability):**
   - `SessionData.paid` and the optional price on `PurchaseGranted` / `ReuseAccepted`: the coordinator builds `PurchaseGranted(productId, token, verdict, orderId)`, so add the price argument there if 4.7 needs it.
   - The refund label: see the 4.7 deferral above.
@@ -146,5 +176,6 @@ Status: implemented in fast mode (one agent, unattended Epic 4 run), with no rev
 
 **Residual risks:**
 - Nothing launches in production until 4.7 offers Snooze and 4.12 binds Play: `UnavailableBilling` fails every launch and query, so recovery only logs "query purchases" failures until then.
-- A launch whose result never arrives (no update and no listing on recovery) keeps `paying` until a restore, the ring's end or the timeout (decision 8). Snooze cannot be bought again during that ring; "I'm up" is unaffected.
-- The resume rule for a lost unlock trusts that the activity is not resumed while the PIN prompt is up. 4.12/4.18 should confirm this on the device.
+- A launch whose result never arrives keeps `paying` until the next wake screen resume 2 minutes or more after the sheet opened (review 15), a restore, the ring's end or the timeout. "I'm up" is unaffected throughout.
+- The echo rule (review 12) relies on Play's update arriving before `launch` returns plus one `yield`. An echo that arrives later, while the retry's sheet is open, would fail that sheet with "No charge.", which is still true because the retry's own result has not come. 4.12 should deliver each sheet result once.
+- The resume rule for a lost unlock relies on the 1.5 s settle and the 30 s grace; 4.12/4.18 should confirm both on the device.

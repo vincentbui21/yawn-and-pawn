@@ -191,6 +191,7 @@ val appModule =
                 feeLadder = get(),
                 userLock = get(),
                 unlock = get(),
+                clock = get(),
                 // Its own scope (same rules as ApplicationScope): it follows Play's updates for the life of the process and a
                 // recovery may wait for a session restore that a broadcast-only process never runs, so its work is not
                 // among the app start's finite jobs.

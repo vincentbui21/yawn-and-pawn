@@ -98,7 +98,7 @@ class WakeRuntime(
      * `PurchaseCoordinator`, which only launches its work on the app scope; nothing here waits for Play or the PIN.
      */
     private val onLaunchBilling: (SessionEffect.LaunchBilling) -> Unit = {},
-    private val onKeyguardDismiss: () -> Unit = {},
+    private val onKeyguardDismiss: (SessionEffect.RequestKeyguardDismiss) -> Unit = {},
 ) : EffectRunner {
     private val player = outputs.player
     private val vibrator = outputs.vibrator
@@ -165,7 +165,7 @@ class WakeRuntime(
 
             is SessionEffect.LaunchBilling -> onLaunchBilling(effect)
 
-            is SessionEffect.RequestKeyguardDismiss -> onKeyguardDismiss()
+            is SessionEffect.RequestKeyguardDismiss -> onKeyguardDismiss(effect)
 
             is SessionEffect.ShowPurchaseOutcome,
             SessionEffect.ShowPaymentPending,

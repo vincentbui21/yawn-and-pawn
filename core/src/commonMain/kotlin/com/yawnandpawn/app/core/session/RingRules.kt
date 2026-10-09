@@ -56,7 +56,7 @@ internal class RingRules(
                 is SessionEvent.FallbackRequested -> checks.onFallbackRequested(reset, event)
                 SessionEvent.SnoozeTapped -> purchases.onSnoozeTapped(reset)
                 is SessionEvent.PayConfirmed -> purchases.onPayConfirmed(reset, event, now, keyguardLocked)
-                is SessionEvent.ReuseAccepted -> purchases.onPaidSnooze(reset, PaidWith(event.productId, event.token), now)
+                is SessionEvent.ReuseAccepted -> purchases.onReuseAccepted(reset, event, now)
                 is SessionEvent.ReuseDeclined -> purchases.onReuseDeclined(reset, event.productId)
                 SessionEvent.UserInteracted -> null
             }

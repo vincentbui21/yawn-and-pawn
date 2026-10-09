@@ -103,6 +103,28 @@ class SessionPoliciesTest {
     }
 
     @Test
+    fun `a reuse pays only for the product Snooze offers now (Story 4-11)`() {
+        ringStates().forEach { from ->
+            val now = at(5.minutes)
+            val touchedOnly = Transition(from.with(from.session.touched(now)), emptyList())
+            val otherProduct = SessionEvent.ReuseAccepted("snooze_usd_02", TOKEN)
+            assertEquals(touchedOnly, reducer().reduce(from, otherProduct, now), "${from.kind}: another price")
+            val unavailable = reducer(availability = SnoozeAvailability.Unavailable(UnavailableReason.Offline))
+            assertEquals(
+                touchedOnly,
+                unavailable.reduce(from, SessionEvent.ReuseAccepted(PRODUCT, TOKEN), now),
+                "${from.kind}: unavailable",
+            )
+            assertIs<SessionState.Snoozed>(reducer().reduce(from, SessionEvent.ReuseAccepted(PRODUCT, TOKEN), now).state, from.kind)
+        }
+    }
+
+    @Test
+    fun `a reuse offer never shows its token`() {
+        assertFalse("token-1" in SessionEvent.ReuseOffered(PRODUCT, TOKEN, PurchaseVerdict.OfferReuse).toString())
+    }
+
+    @Test
     fun `a purchase token never shows its value`() {
         assertEquals("PurchaseToken(redacted)", TOKEN.toString())
         assertFalse("token-1" in SessionEvent.PurchaseGranted(PRODUCT, TOKEN, PurchaseVerdict.Grant).toString())

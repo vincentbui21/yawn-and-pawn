@@ -13,6 +13,7 @@ import com.yawnandpawn.app.android.crash.FirebaseStartup
 import com.yawnandpawn.app.awaitChildren
 import com.yawnandpawn.app.core.alarm.AlarmFired
 import com.yawnandpawn.app.core.alarm.AlarmRepository
+import com.yawnandpawn.app.core.billing.LaunchResult
 import com.yawnandpawn.app.core.billing.PurchaseIntent
 import com.yawnandpawn.app.core.billing.PurchaseRecord
 import com.yawnandpawn.app.core.billing.PurchaseRecordRepository
@@ -333,7 +334,10 @@ class UnlockDuringRingTest {
         var firebaseStarts = 0
         val flakyBilling =
             object : Billing {
-                override suspend fun launch(intent: PurchaseIntent): SessionEvent.PurchaseEvent = error("not launched here")
+                override suspend fun launch(
+                    intent: PurchaseIntent,
+                    installId: String,
+                ): Outcome<LaunchResult, DomainError> = error("not launched here")
 
                 override fun init() {
                     billingStarts++
@@ -465,7 +469,10 @@ class UnlockDuringRingTest {
     fun `BOOT_COMPLETED re-arms the alarms even when the unlock signal's start throws`() {
         val throwing =
             object : Billing {
-                override suspend fun launch(intent: PurchaseIntent): SessionEvent.PurchaseEvent = error("not launched here")
+                override suspend fun launch(
+                    intent: PurchaseIntent,
+                    installId: String,
+                ): Outcome<LaunchResult, DomainError> = error("not launched here")
 
                 override fun init() = throw IllegalStateException("Play not connected")
             }

@@ -28,6 +28,7 @@ import com.yawnandpawn.app.core.session.SessionEvent
 import com.yawnandpawn.app.core.session.SessionState
 import com.yawnandpawn.app.core.session.SnoozeAvailabilityPolicy
 import com.yawnandpawn.app.core.session.TestAlarmStore
+import com.yawnandpawn.app.core.session.UnlockPort
 import com.yawnandpawn.app.core.session.UserLockState
 import com.yawnandpawn.app.core.time.Clock
 import com.yawnandpawn.app.core.time.MonotonicClock
@@ -78,6 +79,7 @@ internal class WakeApp(
     accessibility: AccessibilityState? = null,
     globalSettings: GlobalSettingsRepository? = null,
     productDetails: ProductDetailsSource? = null,
+    unlock: UnlockPort? = null,
 ) {
     val app: YawnAndPawnApp = ApplicationProvider.getApplicationContext()
     val crashReporter = FakeCrashReporter()
@@ -111,6 +113,7 @@ internal class WakeApp(
                 accessibility?.let { replaced -> single<AccessibilityState> { replaced } }
                 globalSettings?.let { replaced -> single<GlobalSettingsRepository> { replaced } }
                 productDetails?.let { replaced -> single<ProductDetailsSource> { replaced } }
+                unlock?.let { replaced -> single<UnlockPort> { replaced } }
                 single { WakeServiceStarts(serviceStartWait) }
             },
         )

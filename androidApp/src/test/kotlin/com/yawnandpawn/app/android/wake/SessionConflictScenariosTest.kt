@@ -131,8 +131,8 @@ class SessionConflictScenariosTest {
 
     private fun bootCount(): Int = Settings.Global.getInt(app.app.contentResolver, Settings.Global.BOOT_COUNT, 1)
 
-    /** Billing is not wired before Epic 4: the runtime only logs `LaunchBilling`, so the log is what can fail. */
-    private fun billingLaunched(): Boolean = app.logs().any { "LaunchBilling" in it }
+    /** How often Play was opened (Story 4.11: the coordinator launches on its own scope, never in the engine step). */
+    private fun billingLaunches(): Int = billing.launched.size
 
     // ----- driving the phone -----
 
@@ -373,7 +373,7 @@ class SessionConflictScenariosTest {
         assertTrue(session().noGraceThisRing)
         assertEquals(1, session().snoozesGranted, "no fee")
         assertEquals(alarmA.id, session().config.alarmId, "the session keeps alarm A's frozen config")
-        assertFalse(billingLaunched(), "no payment for the merge")
+        assertEquals(0, billingLaunches(), "no payment for the merge")
         app.dispatch(SessionEvent.ImUpTapped)
         assertIs<SessionState.Loud>(state(), "no grace window")
         assertRecorded(finish(), SessionOutcome.Snoozed, snoozes = 1, merged = listOf(alarmB.id, alarmB.id))
@@ -408,7 +408,7 @@ class SessionConflictScenariosTest {
         assertEquals(2, session().ringIndex, "the snooze end passed while the phone was off: it rings at once")
         app.dispatch(SessionEvent.SnoozeTapped, pay("intent-2"))
         assertEquals(PurchaseIntentId("intent-2"), session().paying)
-        assertTrue(billingLaunched(), "the confirm launched billing (logged until Epic 4)")
+        app.awaitUntil("the confirm launched billing") { billingLaunches() == 1 }
         val before = session().interactionDeadline
 
         // Process death during the payment: restored with paying cleared, billing never relaunched, a fresh timer.
@@ -418,7 +418,7 @@ class SessionConflictScenariosTest {
         app.awaitRinging()
         assertNull(session().paying)
         assertTrue(session().interactionDeadline != before, "a fresh 30-minute timer")
-        assertFalse(billingLaunched(), "billing is never relaunched (this process's log)")
+        assertEquals(1, billingLaunches(), "billing is never relaunched")
         assertRecorded(finish(), SessionOutcome.Snoozed, snoozes = 1)
     }
 

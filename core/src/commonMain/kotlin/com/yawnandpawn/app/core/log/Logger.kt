@@ -171,13 +171,18 @@ enum class WakeStage {
     WakeScreenCreated,
 }
 
-/** Log text for [this] error: the storage cause, the missing id or the rejected field. */
+/**
+ * Log text for [this] error: the storage cause, the missing id or the rejected field. One plain arm per error kind, kept
+ * exhaustive so a new kind cannot go unlogged; its size is the number of kinds, not branching logic.
+ */
+@Suppress("CyclomaticComplexMethod")
 fun DomainError.diagnostic(): String =
     when (this) {
         is DomainError.InvalidAlarm -> "invalid alarm field $field"
         is DomainError.InvalidSetting -> "invalid setting $field"
         is DomainError.NotFound -> "not found: $id"
         is DomainError.RecordNotReusable -> "record not reusable: $status"
+        is DomainError.BillingUnavailable -> "billing unavailable: $cause"
         is DomainError.StorageFailure -> "storage failure: $cause"
         DomainError.ExactAlarmNotPermitted -> "exact alarms not permitted"
         is DomainError.SchedulerFailure -> "scheduler failure: $cause"

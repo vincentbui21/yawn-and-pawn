@@ -134,6 +134,7 @@
 - source_spec: `_bmad-output/implementation-artifacts/spec-1-11-the-complete-wake-session-state-machine-in-core.md`
   summary: Epic 4 availability and reuse: the real SnoozeAvailabilityPolicy must price through FeeLadder(baseFeeTier, snoozesGranted + 1) with a reducer-level test, and ReuseAccepted must be validated against the offered product.
   evidence: The Epic 1 reducer accepts any offer the policy returns and any ReuseAccepted outside test mode. Stories 4.7 (snoozeAvailability) and 4.9/4.11 (reconciler, orchestration) own these checks.
+  status: reuse half resolved in Story 4.11. `ReuseAccepted` snoozes only for the product Snooze offers now (the Pay guard; `SessionPoliciesTest`), and `PurchaseCoordinator` sends it only with the token it offered to that session. The pricing half stays with Story 4.7.
 - source_spec: `_bmad-output/implementation-artifacts/spec-1-13-record-every-session-in-history.md`
   summary: Implement the accepted `app.db` downgrade policy: a restored `app.db` whose `user_version` is above the installed `AppDatabase` version is skipped and logged, keeping the current file, and the user is told.
   evidence: Policy in `docs/decisions/db-downgrade.md`. With no destructive fallback Room cannot open a newer file, so a restored v4 `app.db` on a v3 install would make every alarm and history read fail. Story 1.13 changes no backup behaviour.
@@ -177,11 +178,11 @@
   status: assigned to Story 2.8 (volume keys) to decide: re-assert the alarm-stream volume while a purchase is in flight, or accept it; Epic 4 orchestration must keep the sound running under the sheet. Decided in Story 2.8:
     - The gap while the Play sheet is on top is accepted. Play's activity owns the keys then, and FR-SES-6 forbids re-applying the volume continuously.
     - The volume is re-asserted once when the purchase flow hands the screen back. `WakeRuntime.reassertRingVolume()` sets the alarm stream to the ring's volume while the session rings loud (Ringing or Loud, not paused, no emergency ring) and does nothing otherwise. It is tested in `WakeRuntimeTest`; nothing calls it in Epic 2.
-    - Story 4.11 (purchase orchestration) must call it on every payment outcome that returns to ringing, including cancelled, error, offline, unlock cancelled and pending.
+    - Story 4.11 (purchase orchestration) must call it on every payment outcome that returns to ringing, including cancelled, error, offline, unlock cancelled and pending. Resolved in Story 4.11: `WakeRuntime` calls it once for every `ShowPurchaseOutcome` (Failed, Cancelled, Offline, UnlockFailed), `ShowPaymentPending`, `ShowReuseSheet` and `HideReuseSheet` (`WakeRuntimeTest`).
 - source_spec: `docs/spikes/S1.md`
   summary: Billing results can arrive very late: offline, the Play sheet shows an error and only reports a result when the user closes it (no timeout); declines arrive as BILLING_UNAVAILABLE; consume can fail transiently with SERVICE_UNAVAILABLE.
   evidence: Spike S1 runs N1u (USER_CANCELED after 200 s), N2u (NETWORK_ERROR), C1u (BILLING_UNAVAILABLE), L5 (consume SERVICE_UNAVAILABLE, retry OK).
-  status: assigned to Stories 4.10 (consume with retry), 4.11 (orchestration must not block the session on a billing result; map codes) and 4.14 (outcome messages).
+  status: assigned to Stories 4.10 (consume with retry), 4.11 (orchestration must not block the session on a billing result; map codes) and 4.14 (outcome messages). 4.11 part resolved: `PurchaseCoordinator` runs every billing call on the app scope, never inside the engine's step (a hung consume or launch never delays "I'm up" or the check, `PurchaseCoordinatorTest`); results carry `PurchaseFailureKind` (Offline, UnlockFailed, Error). The response-code table itself (BILLING_UNAVAILABLE → Error) is Story 4.12's.
 - source_spec: `docs/spikes/S1.md`
   summary: Play shows the EU "Review and agree" (right of withdrawal) screen before every purchase on a Finnish account, so each paid snooze needs one extra tap; the first purchase also asks about purchase authentication.
   evidence: Spike S1, every run on 2026-10-05.

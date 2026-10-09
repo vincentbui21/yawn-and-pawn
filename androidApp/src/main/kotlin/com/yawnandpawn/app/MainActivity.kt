@@ -13,6 +13,7 @@ import com.yawnandpawn.app.android.qr.AndroidCameraPermission
 import com.yawnandpawn.app.android.reliability.AndroidNotificationPermission
 import com.yawnandpawn.app.android.screen.forwardToWakeScreenWhileResumed
 import com.yawnandpawn.app.android.wake.WakeRuntime
+import com.yawnandpawn.app.core.billing.PurchaseCoordinator
 import com.yawnandpawn.app.core.billing.ReplayGrantLedger
 import com.yawnandpawn.app.core.session.SessionEngine
 import com.yawnandpawn.app.ui.App
@@ -40,6 +41,8 @@ class MainActivity : ComponentActivity() {
     // Story 4.10: a granted payment left unsettled (a consume that failed, a crash) is settled again on every start.
     private val replayLedger: ReplayGrantLedger by inject()
 
+    private val purchases: PurchaseCoordinator by inject()
+
     private val cameraPermission: AndroidCameraPermission by inject()
 
     private val requestNotifications = registerForActivityResult(ActivityResultContracts.RequestPermission()) { }
@@ -63,6 +66,9 @@ class MainActivity : ComponentActivity() {
                     cameraPermission.attach(launchCamera)
                     appScope.launch { replayLedger() }
                 }
+
+                // Story 4.11: a payment whose result was lost (a crash, a kill) is found and reconciled on every resume.
+                override fun onResume(owner: LifecycleOwner) = purchases.onAppResumed()
 
                 override fun onStop(owner: LifecycleOwner) {
                     notificationPermission.detach(launch)

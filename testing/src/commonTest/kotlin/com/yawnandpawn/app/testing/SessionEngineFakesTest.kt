@@ -1,6 +1,8 @@
 package com.yawnandpawn.app.testing
 
+import com.yawnandpawn.app.core.billing.LaunchResult
 import com.yawnandpawn.app.core.billing.PurchaseIntent
+import com.yawnandpawn.app.core.billing.PurchaseUpdate
 import com.yawnandpawn.app.core.checks.CheckAnswer
 import com.yawnandpawn.app.core.error.DomainError
 import com.yawnandpawn.app.core.error.Outcome
@@ -18,6 +20,7 @@ import com.yawnandpawn.app.core.session.SessionState
 import com.yawnandpawn.app.core.session.StoredSession
 import com.yawnandpawn.app.core.session.UnlockResult
 import kotlinx.coroutines.async
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
 import kotlin.test.Test
@@ -113,14 +116,31 @@ class SessionEngineFakesTest {
     fun `FakeBilling returns its programmed result for every launch and records the intents`() =
         runTest {
             val billing = FakeBilling()
-            assertEquals(SessionEvent.PurchaseFailed, billing.launch(intent))
+            assertEquals(Outcome.Success(LaunchResult.Launched), billing.launch(intent, "install-1"))
 
-            val granted = FakeBilling.grants("snooze_usd_01")
-            listOf(granted, SessionEvent.PurchaseCancelled, SessionEvent.PurchasePending).forEach { result ->
-                billing.result = result
-                assertEquals(result, billing.launch(intent))
-            }
-            assertEquals(List(4) { intent }, billing.launched)
+            billing.launchResults += Outcome.Success(LaunchResult.ItemAlreadyOwned)
+            billing.launchResult = Outcome.Success(LaunchResult.Cancelled)
+            assertEquals(Outcome.Success(LaunchResult.ItemAlreadyOwned), billing.launch(intent, "install-1"))
+            assertEquals(Outcome.Success(LaunchResult.Cancelled), billing.launch(intent, "install-1"))
+            assertEquals(List(3) { intent }, billing.launched)
+            assertEquals(List(3) { "install-1" }, billing.installIds)
+        }
+
+    @Test
+    fun `FakeBilling lists owned purchases, emits updates and forgets a consumed token`() =
+        runTest {
+            val billing = FakeBilling()
+            val purchase = aPurchaseSnapshot()
+            val seen = async { billing.purchaseUpdates.first() }
+            runCurrent()
+            assertTrue(billing.buy(purchase))
+            assertIs<PurchaseUpdate.Purchases>(seen.await())
+            assertEquals(Outcome.Success(listOf(purchase)), billing.queryPurchases())
+            billing.consume(purchase.token)
+            assertEquals(Outcome.Success(emptyList()), billing.queryPurchases())
+            billing.queryFailure = DomainError.BillingUnavailable("offline")
+            assertIs<Outcome.Failure<DomainError>>(billing.queryPurchases())
+            assertEquals(3, billing.queries)
         }
 
     @Test
@@ -237,8 +257,9 @@ class SessionEngineFakesTest {
             val launch = runner.oneShot.filterIsInstance<SessionEffect.LaunchBilling>().single()
             val purchase = assertIs<Outcome.Success<PurchaseIntent>>(intents.get(launch.intentId)).value
             assertEquals(1, purchase.snoozeNumber)
-            billing.result = FakeBilling.grants(purchase.productId)
-            assertIs<SessionState.Snoozed>(assertIs<Outcome.Success<SessionState>>(engine.dispatch(billing.launch(purchase))).value)
+            assertEquals(Outcome.Success(LaunchResult.Launched), billing.launch(purchase, "install-1"))
+            val granted = FakeBilling.grants(purchase.productId)
+            assertIs<SessionState.Snoozed>(assertIs<Outcome.Success<SessionState>>(engine.dispatch(granted)).value)
 
             time.advanceBy(config.snoozeLengthMinutes.minutes)
             engine.dispatch(SessionEvent.SlotFired)

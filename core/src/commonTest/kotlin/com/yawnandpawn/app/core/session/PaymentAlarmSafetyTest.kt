@@ -113,11 +113,11 @@ class PaymentAlarmSafetyTest {
     fun `everything that ends the payment or the ring clears paying and unlocking together`() {
         val ends: List<Triple<String, SessionEvent, Duration>> =
             listOf(
-                Triple("failed", SessionEvent.PurchaseFailed, 1.minutes),
+                Triple("failed", SessionEvent.PurchaseFailed(), 1.minutes),
                 Triple("cancelled", SessionEvent.PurchaseCancelled, 1.minutes),
                 Triple("pending", SessionEvent.PurchasePending, 1.minutes),
                 Triple("granted", SessionEvent.PurchaseGranted(PRODUCT, TOKEN, PurchaseVerdict.Grant), 1.minutes),
-                Triple("reuse offered", SessionEvent.ReuseOffered(PRODUCT, PurchaseVerdict.OfferReuse), 1.minutes),
+                Triple("reuse offered", SessionEvent.ReuseOffered(PRODUCT, TOKEN, PurchaseVerdict.OfferReuse), 1.minutes),
                 Triple("reuse accepted", SessionEvent.ReuseAccepted(PRODUCT, TOKEN), 1.minutes),
                 Triple("restored", SessionEvent.ProcessRestored, 1.minutes),
                 Triple("unlock failed", SessionEvent.UnlockFailed, 1.minutes),

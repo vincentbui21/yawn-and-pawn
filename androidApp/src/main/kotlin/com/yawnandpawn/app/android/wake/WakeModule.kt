@@ -10,6 +10,7 @@ import com.yawnandpawn.app.android.crash.CrashlyticsSink
 import com.yawnandpawn.app.android.crash.FirebaseCrashReporter
 import com.yawnandpawn.app.android.crash.isFirebaseConfigured
 import com.yawnandpawn.app.android.sound.LibrarySoundResolver
+import com.yawnandpawn.app.core.billing.PurchaseCoordinator
 import com.yawnandpawn.app.core.billing.PurchaseLedger
 import com.yawnandpawn.app.core.billing.ReplayGrantLedger
 import com.yawnandpawn.app.core.crash.CrashReporter
@@ -89,6 +90,9 @@ fun wakeModule(): Module =
                 onRing = { koin.getOrNull<CallDetector>()?.follow() },
                 // Story 4.10: the payment of a paid snooze is settled on the app scope, never inside the engine's step.
                 onConsume = { token -> koin.get<ApplicationScope>().launch { koin.get<PurchaseLedger>().settle(token) } },
+                // Story 4.11: the billing orchestration (looked up then: it depends on the engine, which depends on this).
+                onLaunchBilling = { effect -> koin.get<PurchaseCoordinator>().onLaunchBilling(effect) },
+                onKeyguardDismiss = { effect -> koin.get<PurchaseCoordinator>().onKeyguardDismiss(effect) },
             )
         }
         // The first unlock after a boot (Story 2.4): UserUnlocked, billing and crash reporting.

@@ -1,9 +1,12 @@
 package com.yawnandpawn.app.testing
 
+import com.yawnandpawn.app.core.billing.LaunchResult
 import com.yawnandpawn.app.core.billing.LivePrice
 import com.yawnandpawn.app.core.billing.Money
 import com.yawnandpawn.app.core.billing.PurchaseIntent
 import com.yawnandpawn.app.core.billing.PurchaseIntentStore
+import com.yawnandpawn.app.core.billing.PurchaseSnapshot
+import com.yawnandpawn.app.core.billing.PurchaseUpdate
 import com.yawnandpawn.app.core.checks.CheckPlan
 import com.yawnandpawn.app.core.error.DomainError
 import com.yawnandpawn.app.core.error.Outcome
@@ -29,6 +32,8 @@ import com.yawnandpawn.app.core.session.UnlockResult
 import com.yawnandpawn.app.core.time.Deadline
 import com.yawnandpawn.app.core.time.TimeSnapshot
 import kotlinx.coroutines.CompletableDeferred
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlin.time.Duration.Companion.minutes
 import kotlin.time.Instant
 
@@ -152,37 +157,89 @@ class FakeEffectRunner : EffectRunner {
 }
 
 /**
- * [Billing] under test control: every launch returns [result] (by default [SessionEvent.PurchaseFailed]); use
- * [grants] for a `PurchaseGranted`, or `PurchaseCancelled` / `PurchasePending`. Every intent is kept in [launched].
- * Each consume (Story 4.10) takes the next of [consumeResults] and then [consumeResult] (by default
- * [ConsumeResult.Consumed]); every consumed token is kept in [consumed], in order.
+ * [Billing] under test control (Story 4.11), programmable for every call:
+ * - **launch:** each takes the next of [launchResults], then [launchResult] (by default
+ *   [LaunchResult.Launched]: the sheet is open and the result comes as an update). Every intent is kept in [launched],
+ *   with its install id in [installIds]. [ItemAlreadyOwned][LaunchResult.ItemAlreadyOwned], a cancel or a failure are
+ *   launch results; a lost callback is a [LaunchResult.Launched] with no [deliver] after it.
+ * - **purchases:** [own] makes Play list a purchase ([queryPurchases]); [deliver] emits an update, [buy] does both
+ *   (a duplicate delivery is [deliver] twice). [queryFailure] fails every query.
+ * - **consume (Story 4.10):** each takes the next of [consumeResults], then [consumeResult] (by default
+ *   [ConsumeResult.Consumed], which also drops the token from Play's list); every token is kept in [consumed], in order.
  */
 open class FakeBilling(
-    var result: SessionEvent.PurchaseEvent = SessionEvent.PurchaseFailed,
     var consumeResult: ConsumeResult = ConsumeResult.Consumed,
+    var launchResult: Outcome<LaunchResult, DomainError> = Outcome.Success(LaunchResult.Launched),
 ) : Billing {
     /** Results for the next consumes, first one first; [consumeResult] once they are used up. */
     val consumeResults: ArrayDeque<ConsumeResult> = ArrayDeque()
 
+    /** Results for the next launches, first one first; [launchResult] once they are used up. */
+    val launchResults: ArrayDeque<Outcome<LaunchResult, DomainError>> = ArrayDeque()
+
+    var queryFailure: DomainError? = null
+
+    var queries: Int = 0
+        private set
+
     private val consumes = mutableListOf<PurchaseToken>()
+    private val owned = linkedMapOf<PurchaseToken, PurchaseSnapshot>()
+    private val updates = MutableSharedFlow<PurchaseUpdate>(extraBufferCapacity = UPDATE_BUFFER)
 
     /** Every token passed to [consume], in order (a failed consume too). */
     val consumed: List<PurchaseToken>
         get() = consumes.toList()
 
+    /** What Play lists as owned now. */
+    val ownedPurchases: List<PurchaseSnapshot>
+        get() = owned.values.toList()
+
+    override val purchaseUpdates: Flow<PurchaseUpdate>
+        get() = updates
+
     override suspend fun consume(token: PurchaseToken): ConsumeResult {
         consumes += token
-        return consumeResults.removeFirstOrNull() ?: consumeResult
+        val result = consumeResults.removeFirstOrNull() ?: consumeResult
+        if (result == ConsumeResult.Consumed) owned -= token
+        return result
+    }
+
+    override suspend fun queryPurchases(): Outcome<List<PurchaseSnapshot>, DomainError> {
+        queries++
+        return queryFailure?.let { Outcome.Failure(it) } ?: Outcome.Success(ownedPurchases)
+    }
+
+    /** Play now owns [snapshot] (bought or pending) and lists it. */
+    fun own(snapshot: PurchaseSnapshot) {
+        owned[snapshot.token] = snapshot
+    }
+
+    /** Emits [update] to whoever collects [purchaseUpdates]; false when the buffer is full. */
+    fun deliver(update: PurchaseUpdate): Boolean = updates.tryEmit(update)
+
+    /** Play owns [snapshot] and reports it in an update. */
+    fun buy(snapshot: PurchaseSnapshot): Boolean {
+        own(snapshot)
+        return deliver(PurchaseUpdate.Purchases(listOf(snapshot)))
     }
 
     private val intents = mutableListOf<PurchaseIntent>()
+    private val ids = mutableListOf<String>()
 
     val launched: List<PurchaseIntent>
         get() = intents.toList()
 
-    override suspend fun launch(intent: PurchaseIntent): SessionEvent.PurchaseEvent {
+    /** The install id of each launch, in order. */
+    val installIds: List<String>
+        get() = ids.toList()
+
+    override suspend fun launch(
+        intent: PurchaseIntent,
+        installId: String,
+    ): Outcome<LaunchResult, DomainError> {
         intents += intent
-        return result
+        ids += installId
+        return launchResults.removeFirstOrNull() ?: launchResult
     }
 
     /** How often [init] was called (Story 2.4: once per unlock signal path, idempotent in the real adapter). */
@@ -194,6 +251,8 @@ open class FakeBilling(
     }
 
     companion object {
+        private const val UPDATE_BUFFER = 64
+
         /** A `PurchaseGranted` that the reconciler granted for [productId] with [token]. */
         fun grants(
             productId: String,

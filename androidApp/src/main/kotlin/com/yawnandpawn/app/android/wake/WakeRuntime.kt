@@ -93,6 +93,12 @@ class WakeRuntime(
      * (it runs inside the engine's Mutex) and never wait for Play.
      */
     private val onConsume: (PurchaseToken) -> Unit = {},
+    /**
+     * The session's billing effects (Story 4.11): `LaunchBilling` and `RequestKeyguardDismiss` go to
+     * `PurchaseCoordinator`, which only launches its work on the app scope; nothing here waits for Play or the PIN.
+     */
+    private val onLaunchBilling: (SessionEffect.LaunchBilling) -> Unit = {},
+    private val onKeyguardDismiss: (SessionEffect.RequestKeyguardDismiss) -> Unit = {},
 ) : EffectRunner {
     private val player = outputs.player
     private val vibrator = outputs.vibrator
@@ -148,14 +154,41 @@ class WakeRuntime(
     private fun runEffect(effect: SessionEffect) {
         when (effect) {
             is SessionEffect.StartWakeRuntime -> startRuntime()
+
             is SessionEffect.ArmSlot -> armSlotForRing(effect.at)
+
             SessionEffect.CancelSlot -> cancelSlot()
+
             SessionEffect.InitBilling -> onInitBilling()
+
             is SessionEffect.Consume -> onConsume(effect.token)
+
+            is SessionEffect.LaunchBilling -> onLaunchBilling(effect)
+
+            is SessionEffect.RequestKeyguardDismiss -> onKeyguardDismiss(effect)
+
+            is SessionEffect.ShowPurchaseOutcome,
+            SessionEffect.ShowPaymentPending,
+            is SessionEffect.ShowReuseSheet,
+            SessionEffect.HideReuseSheet,
+            -> backFromPayment(effect)
+
             is SessionEffect.ClearRuntimeSession -> endSession()
+
             is SessionEffect.LogIgnored -> logger.log(LogEvent.SessionEventIgnored(effect.eventType, effect.sessionId))
+
             else -> if (!runSound(effect)) logger.log(LogEvent.SessionEffectLogged(typeName(effect), entry = false))
         }
+    }
+
+    /**
+     * A payment outcome hands the screen back to the ring (Story 4.11, the Story 2.8 hand-off): the alarm stream is set
+     * back to the ring's volume once, since the volume keys may have lowered it under Play's sheet. The message itself is
+     * shown by the wake UI (Stories 4.13/4.14); until then it is logged by type name.
+     */
+    private fun backFromPayment(effect: SessionEffect) {
+        reassertRingVolume()
+        logger.log(LogEvent.SessionEffectLogged(typeName(effect), entry = false))
     }
 
     private fun applyEffect(effect: EntryEffect) {
@@ -306,8 +339,8 @@ class WakeRuntime(
      *
      * Spike S1: while Google Play's purchase sheet is on top, its activity gets the volume keys and they change the alarm
      * stream; the wake screen cannot consume them then, and FR-SES-6 forbids re-applying the volume continuously. The
-     * gap is accepted, and Epic 4's purchase orchestration calls this once on every payment outcome that hands the
-     * screen back to the ring ("alarm at full volume" again). Nothing calls it in Epic 2.
+     * gap is accepted, and the purchase orchestration calls this once on every payment outcome that hands the screen
+     * back to the ring ("alarm at full volume" again; Story 4.11: outcome, pending and reuse-sheet effects).
      */
     fun reassertRingVolume() {
         val state = session()

@@ -305,7 +305,8 @@ class PaymentOutcomeMessagesTest {
         const val ERROR = "Payment didn't go through. No charge."
         const val OFFLINE = "No connection. No charge."
         const val PENDING =
-            "Payment not confirmed yet. If it goes through before you finish, your snooze starts. Otherwise, finish the check to stop the alarm."
+            "Payment not confirmed yet. If it goes through before you finish, your snooze starts. " +
+                "Otherwise, finish the check to stop the alarm."
         val MESSAGES = listOf("Phone still locked. No charge.", CANCELLED, ERROR, OFFLINE, PENDING)
     }
 }

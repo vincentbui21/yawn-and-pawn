@@ -78,8 +78,8 @@ class PaymentOutcomeScreenshotTest {
         withScreen(PpsThemeMode.Light, content = { RingingScreen(ringing, is24Hour = false, onIntent = {}) }) {
             assertWhole(composeRule.onNodeWithText(text), "the message")
             assertWhole(composeRule.onNodeWithText("I'm up"), "I'm up")
-            val above = composeRule.onNodeWithText(text).getBoundsInRoot().bottom <= composeRule.onNodeWithText("I'm up").getBoundsInRoot().top
-            assertTrue(above, "the message sits above I'm up")
+            val messageBottom = composeRule.onNodeWithText(text).getBoundsInRoot().bottom
+            assertTrue(messageBottom <= composeRule.onNodeWithText("I'm up").getBoundsInRoot().top, "the message sits above I'm up")
             composeRule.onRoot().captureRoboImage(
                 "src/test/screenshots/wake_payment_${name}_ringing_sunrise$suffix.png",
                 roborazziOptions = screenshotOptions,
@@ -138,6 +138,7 @@ class PaymentOutcomeScreenshotTest {
         const val ERROR = "Payment didn't go through. No charge."
         const val OFFLINE = "No connection. No charge."
         const val PENDING =
-            "Payment not confirmed yet. If it goes through before you finish, your snooze starts. Otherwise, finish the check to stop the alarm."
+            "Payment not confirmed yet. If it goes through before you finish, your snooze starts. " +
+                "Otherwise, finish the check to stop the alarm."
     }
 }

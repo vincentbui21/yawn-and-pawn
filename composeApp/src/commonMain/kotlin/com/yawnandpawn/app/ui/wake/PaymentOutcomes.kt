@@ -75,10 +75,21 @@ fun paymentOutcome(result: PaymentResult): PaymentOutcomeRow =
     when (result) {
         is PaymentResult.NotCharged -> {
             when (result.outcome) {
-                PurchaseOutcome.UnlockFailed -> retry(WakeMessage.UnlockFailed)
-                PurchaseOutcome.Cancelled -> retry(WakeMessage.PaymentCancelled)
-                PurchaseOutcome.Failed -> retry(WakeMessage.PaymentError)
-                PurchaseOutcome.Offline -> PaymentOutcomeRow(WakeMessage.PaymentOffline, PaymentReturn.RingingOrCheck, SnoozeAfterPayment.UnavailableOffline)
+                PurchaseOutcome.UnlockFailed -> {
+                    retry(WakeMessage.UnlockFailed)
+                }
+
+                PurchaseOutcome.Cancelled -> {
+                    retry(WakeMessage.PaymentCancelled)
+                }
+
+                PurchaseOutcome.Failed -> {
+                    retry(WakeMessage.PaymentError)
+                }
+
+                PurchaseOutcome.Offline -> {
+                    PaymentOutcomeRow(WakeMessage.PaymentOffline, PaymentReturn.RingingOrCheck, SnoozeAfterPayment.UnavailableOffline)
+                }
             }
         }
 

@@ -33,12 +33,14 @@ class PaymentOutcomesTest {
             )
         expected.forEach { (result, row) -> assertEquals(row, paymentOutcome(result), "$result") }
         // Every PurchaseOutcome is a key above.
-        assertEquals(PurchaseOutcome.entries.map(PaymentResult::NotCharged).toSet(), expected.keys.filterIsInstance<PaymentResult.NotCharged>().toSet())
+        val keyed = expected.keys.filterIsInstance<PaymentResult.NotCharged>().toSet()
+        assertEquals(PurchaseOutcome.entries.map(PaymentResult::NotCharged).toSet(), keyed)
     }
 
     @Test
     fun `every result that charged nothing has a message, every message is used once, and a paid snooze has none`() {
-        val notCharged = PurchaseOutcome.entries.map(PaymentResult::NotCharged) + PaymentResult.Pending + PaymentResult.EarlierPaymentDeclined
+        val notCharged =
+            PurchaseOutcome.entries.map(PaymentResult::NotCharged) + PaymentResult.Pending + PaymentResult.EarlierPaymentDeclined
         val messages = notCharged.mapNotNull { paymentOutcome(it).message }
         // "Not now" returns to the ring with the refund label on Snooze and no message (EXPERIENCE.md).
         assertEquals(notCharged.size - 1, messages.size)

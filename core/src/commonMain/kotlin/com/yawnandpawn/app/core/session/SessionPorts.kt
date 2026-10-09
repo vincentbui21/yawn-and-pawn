@@ -105,7 +105,7 @@ sealed interface ConsumeResult {
 }
 
 /**
- * Port for Play Billing (AD-7). The real adapter arrives in Story 4.12; until then the app binds one that always fails.
+ * Port for Play Billing (AD-7). The app binds `AndroidBilling` (Play Billing Library 9.1, Story 4.12).
  * Only `PurchaseCoordinator` (Story 4.11) launches and queries, and only `PurchaseLedger` consumes.
  *
  * Every call may wait for the user or Play, so none is ever awaited inside an [EffectRunner] call: that would hold the
@@ -138,8 +138,8 @@ interface Billing {
         get() = emptyFlow()
 
     /**
-     * Connects to Play Billing after the user's first unlock (AD-15, Story 2.4); never before it. Idempotent. A no-op
-     * until Epic 4 brings the real adapter.
+     * Connects to Play Billing after the user's first unlock (AD-15, Story 2.4); never before it. Idempotent, and it never
+     * waits: the connection is started in the background (Story 4.12).
      */
     fun init() = Unit
 
@@ -170,8 +170,8 @@ enum class UnlockResult {
 
 /**
  * Port for the unlock step before Play opens (Spike S1 option B, owner decision 2026-10-08): the Play sheet never shows
- * over a keyguard, so "Pay" while locked asks for the PIN first. The real adapter (`requestDismissKeyguard` from the
- * resumed `WakeActivity`) arrives in Story 4.12.
+ * over a keyguard, so "Pay" while locked asks for the PIN first. The app binds `AndroidDeviceUnlocker`
+ * (`requestDismissKeyguard` from the resumed `WakeActivity`, Story 4.12).
  *
  * [requestUnlock] waits for the user, so like `Billing.launch` it must never be awaited inside an [EffectRunner] call;
  * the runner starts it outside and dispatches [UnlockResult.event]. A wrong PIN gives no result, so it may never return.
@@ -183,7 +183,7 @@ interface UnlockPort {
     /** Asks the user to unlock (PIN, pattern or swipe) and returns how it ended. */
     suspend fun requestUnlock(): UnlockResult
 
-    /** A phone that is never locked: the default until Story 4.12 binds the real adapter. */
+    /** A phone that is never locked (tests and previews; the app binds `AndroidDeviceUnlocker`). */
     object Unlocked : UnlockPort {
         override fun isKeyguardLocked(): Boolean = false
 

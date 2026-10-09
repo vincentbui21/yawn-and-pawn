@@ -31,7 +31,8 @@ class ReleaseClass(
  * Fails on: the debug fire-now hook (`DebugFireReceiver`, `DebugFireProvider`, the `com.yawnandpawn.app.debug.FIRE`
  * action), any class in the `com.yawnandpawn.app.debug` package (the design preview `debug.preview`, the
  * `ThemeShowcase`), a `ThemeShowcase` or `.debug.preview.` component, and the preview launcher label
- * ("Yawn & Pawn Preview", `preview_launcher_label`).
+ * ("Yawn & Pawn Preview", `preview_launcher_label`), and the Story 4.12 fake Play Billing toggle (`DebugFakeBilling*`,
+ * the `com.yawnandpawn.app.debug.FAKE_BILLING` action).
  */
 object ReleaseContent {
     const val DEBUG_PACKAGE_PATH = "com/yawnandpawn/app/debug/"
@@ -41,6 +42,8 @@ object ReleaseContent {
             "DebugFireReceiver",
             "DebugFireProvider",
             "com.yawnandpawn.app.debug.FIRE",
+            "com.yawnandpawn.app.debug.FAKE_BILLING",
+            "DebugFakeBilling",
             "ThemeShowcase",
             ".debug.preview.",
             "preview_launcher_label",
@@ -48,9 +51,9 @@ object ReleaseContent {
             "Yawn & Pawn Preview",
         )
 
-    private val classNameMarkers = listOf("DebugFire", "ThemeShowcase")
+    private val classNameMarkers = listOf("DebugFire", "ThemeShowcase", "DebugFakeBilling")
 
-    private val classTextMarkers = listOf("com.yawnandpawn.app.debug.FIRE", "Yawn & Pawn Preview")
+    private val classTextMarkers = listOf("com.yawnandpawn.app.debug.FIRE", "com.yawnandpawn.app.debug.FAKE_BILLING", "Yawn & Pawn Preview")
 
     private val resourceMarkers = listOf("preview_launcher_label", "Yawn &amp; Pawn Preview", "Yawn & Pawn Preview")
 

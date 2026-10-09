@@ -9,9 +9,10 @@ import com.yawnandpawn.app.android.AndroidConnectivity
 import com.yawnandpawn.app.android.AndroidLogger
 import com.yawnandpawn.app.android.AndroidUserLockState
 import com.yawnandpawn.app.android.ApplicationScope
-import com.yawnandpawn.app.android.UnavailableBilling
 import com.yawnandpawn.app.android.WordListLoader
 import com.yawnandpawn.app.android.androidTimeModule
+import com.yawnandpawn.app.android.billing.ResumedWakeScreen
+import com.yawnandpawn.app.android.billing.billingModule
 import com.yawnandpawn.app.android.crash.FirebaseStartup
 import com.yawnandpawn.app.android.qr.qrModule
 import com.yawnandpawn.app.android.reliability.reliabilityModule
@@ -58,7 +59,6 @@ import com.yawnandpawn.app.core.id.UuidV4IdGenerator
 import com.yawnandpawn.app.core.log.Logger
 import com.yawnandpawn.app.core.net.Connectivity
 import com.yawnandpawn.app.core.session.ActiveSessionStore
-import com.yawnandpawn.app.core.session.Billing
 import com.yawnandpawn.app.core.session.CameraFallbackPolicy
 import com.yawnandpawn.app.core.session.CheckValidator
 import com.yawnandpawn.app.core.session.EffectRunner
@@ -73,7 +73,6 @@ import com.yawnandpawn.app.core.session.SessionSlotRearm
 import com.yawnandpawn.app.core.session.SessionState
 import com.yawnandpawn.app.core.session.SnoozeAvailabilityPolicy
 import com.yawnandpawn.app.core.session.StoredSession
-import com.yawnandpawn.app.core.session.UnlockPort
 import com.yawnandpawn.app.core.session.UserLockState
 import com.yawnandpawn.app.core.stats.ReRegisterSuggestions
 import com.yawnandpawn.app.data.dataModule
@@ -92,7 +91,7 @@ import org.koin.dsl.module
 /** Koin bindings of :androidApp (platform adapters, core wiring). Later stories add their bindings here. */
 val appModule =
     module {
-        includes(androidTimeModule, wakeModule(), soundModule(), reliabilityModule(), qrModule(), workModule())
+        includes(androidTimeModule, wakeModule(), soundModule(), reliabilityModule(), qrModule(), workModule(), billingModule())
         single<IdGenerator> { UuidV4IdGenerator() }
         single<Logger> { AndroidLogger() }
         single { ApplicationScope(get()) }
@@ -140,8 +139,8 @@ val appModule =
         // "Test alarm" (Story 1.18): the editor's values ring as a test 10 s later, through the test request code.
         factory { ScheduleTestAlarm(get(), get(), get(), get()) }
         // The wake session (Story 1.12): the Epic 1 policies, the one engine over runtime.db (ActiveSessionStore from
-        // dataModule) and the real time ports. The wake runtime (Story 1.14) carries out its effects; billing stays
-        // unavailable until Epic 4.
+        // dataModule) and the real time ports. The wake runtime (Story 1.14) carries out its effects; Play Billing comes from
+        // billingModule (Story 4.12).
         // Before the first unlock (Story 2.3): the engine marks the ring, and snooze says "Unlock your phone to snooze".
         single<UserLockState> { AndroidUserLockState(androidContext(), get()) }
         // TalkBack (Story 3.8): the numbered Memory Sequence when a ring's plan is frozen, and the editor's notes.
@@ -176,7 +175,6 @@ val appModule =
         single { SessionReducer(get(), get(), get()) }
         // Story 4.13: the confirm sheet also sees the engine's sheet effects; the runtime carries out every effect.
         single<EffectRunner> { SheetEffectRunner(get<WakeRuntime>(), get(), get()) { get<SessionEngine>().state.value } }
-        single<Billing> { UnavailableBilling(get()) }
         // Story 4.8: intents older than 7 days are deleted on app start (runtime.db, device-protected).
         factory { PurgeOldPurchaseIntents(get(), get(), get()) }
         // Story 4.10: the only writer of purchase records and caller of consume. Its retry jobs run on WorkManager
@@ -202,9 +200,8 @@ val appModule =
         single { MissedNotes(get(), get()) }
         // Home's re-register banner (Story 3.13): 3 fallbacks for a camera check in 7 days, unless dismissed since.
         single { ReRegisterSuggestions(get(), get(), get(), get()) }
-        // The unlock before Play opens (Spike S1): a phone that is never locked until Story 4.12 binds AndroidDeviceUnlocker.
-        // One instance, shared by the engine (it reads the keyguard for a Pay) and the coordinator (it asks for the unlock).
-        single<UnlockPort> { UnlockPort.Unlocked }
+        // Billing (Story 4.12, billingModule): Play Billing 9.1 is the one Billing, and AndroidDeviceUnlocker the one UnlockPort
+        // (Spike S1: the PIN before Play opens), shared by the engine (it reads the keyguard for a Pay) and the coordinator.
         single { SessionEngine(get(), get(), get(), get(), get(), get(), get(), get(), userLock = get(), unlock = get()) }
         // Story 4.11: the billing orchestration (launch, purchase updates, recovery, ITEM_ALREADY_OWNED, stranded reuse). It
         // runs on its own app-wide scope, never inside the engine's step.
@@ -256,6 +253,9 @@ open class YawnAndPawnApp :
     override val workManagerConfiguration: Configuration
         get() = Configuration.Builder().setMinimumLoggingLevel(Log.INFO).build()
 
+    /** The resumed wake screen (Story 4.12), followed for the life of the process; billingModule binds this instance. */
+    val resumedWakeScreen: ResumedWakeScreen = ResumedWakeScreen()
+
     /** Bindings loaded after the app's own (they win); only the Robolectric test application adds any. */
     protected open val overrideModules: List<Module> = emptyList()
 
@@ -270,6 +270,9 @@ open class YawnAndPawnApp :
             }.koin
         // Crashlytics (Story 1.19): only with a Firebase configuration, and only once the user has unlocked (AD-15).
         koin.get<FirebaseStartup>().start()
+        // Story 4.12: Play's sheet and the PIN prompt open only from the resumed wake screen, followed here (once per process,
+        // so a Koin graph a test restarts still sees it).
+        registerActivityLifecycleCallbacks(resumedWakeScreen)
         val scope = koin.get<ApplicationScope>()
         // App start re-arms every alarm (AD-4); it also covers a backup restore, which restarts the app.
         val scheduling = koin.get<AlarmScheduling>()

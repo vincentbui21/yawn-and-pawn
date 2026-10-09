@@ -346,15 +346,6 @@ class BackgroundWorkWiringTest {
     }
 
     @Test
-    fun `the production source fails without retrying until the Play adapter arrives`() =
-        runBlocking {
-            val result = UnavailableProductDetailsSource().fetch(SnoozeProducts.all)
-
-            val error = assertIs<DomainError.ProductDetailsFailed>(assertIs<Outcome.Failure<DomainError>>(result).error)
-            assertFalse(error.transient)
-        }
-
-    @Test
     fun `WorkManager is not started by the manifest, and the app gives its configuration`() {
         @Suppress("DEPRECATION") // The flags are the only way to read these parts of the merged manifest.
         val provider =

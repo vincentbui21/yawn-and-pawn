@@ -270,7 +270,7 @@ class RestoreEntryPointsTest {
 
         val record = runBlocking { koin().get<PurchaseRecordRepository>().get(grant.token.hash()) }
         assertEquals(RecordStatus.Granted, assertIs<Outcome.Success<PurchaseRecord?>>(record).value?.status)
-        // Play Billing arrives in Story 4.12: until then the consume fails and the row waits for the next start or resume.
+        // Host tests have no Play (the test facade answers BILLING_UNAVAILABLE): the consume fails and the row waits.
         assertEquals(Outcome.Success(listOf(grant)), runBlocking { koin().get<GrantLedgerStore>().all() })
         assertEquals(listOf(PurchaseLedger.CONSUME_RETRY_JOB, PurchaseLedger.CONSUME_RETRY_PERIODIC), consumeRetryJobs())
     }

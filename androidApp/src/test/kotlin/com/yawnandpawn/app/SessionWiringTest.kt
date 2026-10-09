@@ -5,7 +5,7 @@ import androidx.test.core.app.ApplicationProvider
 import com.yawnandpawn.app.android.AndroidConnectivity
 import com.yawnandpawn.app.android.AndroidUserLockState
 import com.yawnandpawn.app.android.ApplicationScope
-import com.yawnandpawn.app.android.UnavailableBilling
+import com.yawnandpawn.app.android.billing.AndroidBilling
 import com.yawnandpawn.app.android.crash.FirebaseCrashReporter
 import com.yawnandpawn.app.android.crash.isFirebaseConfigured
 import com.yawnandpawn.app.android.wake.CatalogDisplayPrices
@@ -65,7 +65,7 @@ class SessionWiringTest {
     val stopApp = StopAppRule()
 
     @Test
-    fun `Koin binds one session engine, its reducer, the Room session store, the history recorder, the wake runtime and Epic 1 billing`() {
+    fun `Koin binds one session engine, its reducer, the Room session store, the history recorder, the wake runtime and Play billing`() {
         val koin = GlobalContext.get()
 
         assertSame(koin.get<SessionEngine>(), koin.get<SessionEngine>())
@@ -86,7 +86,7 @@ class SessionWiringTest {
         } else {
             assertIs<NoOpCrashReporter>(koin.get<CrashReporter>())
         }
-        assertIs<UnavailableBilling>(koin.get<Billing>())
+        assertIs<AndroidBilling>(koin.get<Billing>())
         assertSame(koin.get<SessionRecorder>(), koin.get<SessionRecorder>())
         assertIs<RoomSessionHistoryRepository>(koin.get<SessionHistoryRepository>())
     }

@@ -2,8 +2,8 @@
 title: 'Story 4.11: Billing orchestration: launch, recovery, ITEM_ALREADY_OWNED and stranded reuse'
 type: 'feature'
 created: '2026-10-09'
-status: 'in-progress'
-baseline_revision: 'a8375d2'
+status: 'done'
+baseline_revision: '80143b5'
 context:
   - '{project-root}/_bmad-output/implementation-artifacts/epic-4-context.md'
   - '{project-root}/docs/architecture.md'
@@ -12,7 +12,7 @@ context:
   - '{project-root}/_bmad-output/implementation-artifacts/spec-4-9-purchasereconciler-for-every-recovery-case.md'
   - '{project-root}/_bmad-output/implementation-artifacts/spec-4-10-grant-ledger-purchase-records-and-consume-with-retry.md'
 warnings:
-  - 'Story 4.10 (PR #49) is not merged: this branch stacks on story/4-10-grant-ledger (a8375d2). After its squash merge: git rebase --onto origin/main a8375d2.'
+  - 'Story 4.3 (price cache, PR #47) and Story 4.7 (snooze availability) are not merged; see the rebase notes.'
 deferred:
   - 'Story 4.12: implement the extended Billing port in AndroidBilling: launch returns Launched once launchBillingFlow returned OK (the result then arrives on purchaseUpdates), ItemAlreadyOwned / Cancelled / Failed(kind) from the response-code table; onPurchasesUpdated maps OK to PurchaseUpdate.Purchases (pending ones included), the rest to Cancelled / ItemAlreadyOwned / Failed(kind); purchaseUpdates must not drop an update emitted before the coordinator collects (buffer or replay-free SharedFlow started at app start); queryPurchases returns every INAPP purchase mapped in PlayPurchaseMapping.kt; bind AndroidDeviceUnlocker as the single UnlockPort (engine and coordinator share it)'
   - 'Story 4.7: feed PurchaseCoordinator.strandedProducts into the snoozeAvailability env: EarlierPaymentRefunding only while declinedReuseProduct is the offered product AND that product is in the set, so the label goes away once a recovery no longer finds the token (no event needed); the amount comes from PurchaseLedger.refundingPrice(productId)'
@@ -93,6 +93,8 @@ deferred:
 7. **Second `ITEM_ALREADY_OWNED`:** after the one retry it becomes `PurchaseFailed(Error)` without another query; the next recovery consumes the token.
 8. **Lost launch callback with nothing found:** no timeout fails it. `paying` stays until a result, a restore, the ring's end or the timeout, because a late PURCHASED still grants (row 1 needs no `paying`) and a "No charge." message could then be false.
 9. **Stranded set source:** only full queries (recovery, pre-launch and already-owned) refresh it; single updates do not.
+10. **Lost unlock on resume:** an unlocked keyguard always continues to Play (a late callback is then ignored); a locked one ends the payment only when no unlock request waits in this process, so a resume while the PIN prompt may still be up never says "Phone still locked".
+11. **Its own app-wide scope:** the coordinator runs on a second `ApplicationScope` instance, not the shared one, because the update collector never ends and an app-start recovery may wait for a restore that a broadcast-only process never runs; the app start's finite jobs (and the tests that wait for them) are unaffected.
 
 </intent-contract>
 
@@ -115,9 +117,34 @@ deferred:
 - **docs:** `docs/architecture.md` AD-2 rows R16 and R19, and the AD-7 orchestration paragraph.
 - **Tests:**
   - core: `PurchaseCoordinatorTest` (decision → action table, launch and already-owned paths, unlock), `PurchaseCoordinatorSequenceTest` (the 4.9 sequences end to end through engine, ledger and fake Play), reducer rows;
-  - androidApp: `WakeRuntimeTest` (routing and volume), the Koin wiring.
+  - androidApp: `WakeRuntimeBillingTest` (routing and volume), `SessionAdaptersTest`, `SessionConflictScenariosTest` (the launch is counted on `FakeBilling`).
 
 ## Verification
 
 **Commands:**
 - `./gradlew qualityGate :androidApp:assembleDebugAndroidTest --no-daemon` -- expected: BUILD SUCCESSFUL.
+
+## Rebase notes
+
+- **4.10 (PR #49):** it was squash-merged while this story was built. The branch was rebased with `git rebase --onto origin/main a8375d2`; the tree was the same, and there were no conflicts.
+- **4.3 (price cache, PR #47):**
+  - `DomainError`: 4.3 appends two errors at the end, and `BillingUnavailable` sits after `RecordNotReusable`, so both apply. Keep both `diagnostic()` arms.
+  - `YawnAndPawnApp.onCreate`: keep 4.3's WorkManager start next to the coordinator's `start()` / `onAppResumed()`.
+- **4.7 (snooze availability):**
+  - `SessionData.paid` and the optional price on `PurchaseGranted` / `ReuseAccepted`: the coordinator builds `PurchaseGranted(productId, token, verdict, orderId)`, so add the price argument there if 4.7 needs it.
+  - The refund label: see the 4.7 deferral above.
+  - Pay while just unavailable: the reducer ignores it (the R14 guard) and the coordinator never sees it. Closing the sheet with the reason is 4.7/4.13's.
+- **4.12:** the Billing port shape is fixed here (see the deferral). `UnavailableBilling` is the binding to replace, and `UnlockPort` is now a Koin single shared by the engine and the coordinator.
+
+## Auto Run Result
+
+Status: implemented in fast mode (one agent, unattended Epic 4 run), with no review pass yet. Branch `story/4-11-billing-orchestration`, rebased onto `origin/main` (`80143b5`, with 4.10 merged).
+
+**Verification:** `./gradlew qualityGate :androidApp:assembleDebugAndroidTest --no-daemon`: BUILD SUCCESSFUL (7 min 8 s). Two earlier runs failed only on known environment flakes:
+- `spotlessKotlin` "Could not read path ... mergeReleaseResources" (the 4.8 race);
+- `WakeServiceTest` "no service started" (the 4.10 cross-test flake), which passes alone.
+
+**Residual risks:**
+- Nothing launches in production until 4.7 offers Snooze and 4.12 binds Play: `UnavailableBilling` fails every launch and query, so recovery only logs "query purchases" failures until then.
+- A launch whose result never arrives (no update and no listing on recovery) keeps `paying` until a restore, the ring's end or the timeout (decision 8). Snooze cannot be bought again during that ring; "I'm up" is unaffected.
+- The resume rule for a lost unlock trusts that the activity is not resumed while the PIN prompt is up. 4.12/4.18 should confirm this on the device.

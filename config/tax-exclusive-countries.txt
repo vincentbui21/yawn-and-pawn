@@ -1,0 +1,5 @@
+# Play billing countries (ISO 3166-1 alpha-2) whose Play prices exclude tax. The snooze confirm sheet shows
+# "Google Play shows the final total, including any tax." for these (owner-approved default 2026-09-26, Story 4.13).
+# Keep in sync with TaxNote.TAX_EXCLUSIVE_COUNTRIES in :core (TaxExclusiveCountriesFileTest checks it).
+US
+CA

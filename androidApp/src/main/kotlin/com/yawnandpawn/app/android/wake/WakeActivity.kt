@@ -14,6 +14,7 @@ import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.key
@@ -28,7 +29,9 @@ import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.compose.currentStateAsState
 import com.yawnandpawn.app.android.ApplicationScope
 import com.yawnandpawn.app.android.screen.forwardsToWakeScreen
+import com.yawnandpawn.app.core.billing.BillingCountry
 import com.yawnandpawn.app.core.billing.PurchaseCoordinator
+import com.yawnandpawn.app.core.billing.TaxNote
 import com.yawnandpawn.app.core.checks.CheckAnswer
 import com.yawnandpawn.app.core.error.Outcome
 import com.yawnandpawn.app.core.log.WakeStage
@@ -48,11 +51,15 @@ import com.yawnandpawn.app.ui.wake.CheckScreen
 import com.yawnandpawn.app.ui.wake.CheckUiState
 import com.yawnandpawn.app.ui.wake.FallbackPickerScreen
 import com.yawnandpawn.app.ui.wake.FallbackPickerUiState
+import com.yawnandpawn.app.ui.wake.LocalWakeClock
 import com.yawnandpawn.app.ui.wake.PlaceholderStep
+import com.yawnandpawn.app.ui.wake.PriceLookup
 import com.yawnandpawn.app.ui.wake.RingingScreen
 import com.yawnandpawn.app.ui.wake.RingingUiState
+import com.yawnandpawn.app.ui.wake.SnoozeSheet
 import com.yawnandpawn.app.ui.wake.SuccessScreen
 import com.yawnandpawn.app.ui.wake.WakeIntent
+import com.yawnandpawn.app.ui.wake.WakeMessage
 import com.yawnandpawn.app.ui.wake.WakeSurface
 import com.yawnandpawn.app.ui.wake.alarmOnlyRingingUiState
 import com.yawnandpawn.app.ui.wake.checkPosition
@@ -96,6 +103,9 @@ import kotlin.time.Duration.Companion.seconds
  * Every dispatch is launched on [ApplicationScope], outside composition and outside any engine effect:
  * - "I'm up" sends `UserInteracted`, then `ImUpTapped`. In the emergency ring it stops the ring instead. Tapped while
  *   the screen still waits for the session, it is kept and sent once the session (or an emergency ring) rings.
+ * - Snooze sends `SnoozeTapped`; the engine's `ShowSnoozeConfirm` opens the confirm sheet over the Ringing or Check
+ *   screen ([ConfirmSheetHost], Story 4.13), which pays with the live price, asks to unlock first on a locked phone and
+ *   always closes back to the ring with no charge on "I'll get up", Back or a swipe.
  * - Any other tap sends `UserInteracted`.
  * - Number pad keys ([WakeCheck.onKey]): the typed digits live only on the screen; "Check" sends
  *   `CheckAnswerSubmitted(Number)` and the engine decides. A new problem or a wrong answer clears the field.
@@ -127,6 +137,13 @@ class WakeActivity : ComponentActivity() {
     private val unlockSignals: UnlockSignals by inject()
     private val purchases: PurchaseCoordinator by inject()
     private val monotonicClock: MonotonicClock by inject()
+
+    /** The snooze confirm sheet (Story 4.13); process-wide, so a recreated screen shows the same sheet. */
+    private val sheet: ConfirmSheetHost by inject()
+    private val billingCountry: BillingCountry by inject()
+
+    /** The confirm sheet on screen now: "Pay" confirms the price the user saw. */
+    private var shownSheet: SnoozeSheet? = null
 
     /** The Check screen's typed answer, grace clock and keys (Story 3.2). */
     private val check by lazy {
@@ -176,6 +193,7 @@ class WakeActivity : ComponentActivity() {
         if (userLock.isUserUnlocked()) unlockSignals.onScreenResumedUnlocked()
         // Story 4.11: back from Play's sheet or the PIN prompt (or opened after a kill): an unlock whose callback was lost
         // is settled by the keyguard, and a recovery query finds a payment whose result never came. Launched, never awaited.
+        // The confirm sheet sends no unlock result of its own (Story 4.13).
         purchases.onWakeScreenResumed()
     }
 
@@ -256,12 +274,14 @@ class WakeActivity : ComponentActivity() {
                 val zone = timeZones.current()
                 val session = (state as? SessionState.Active)?.session?.takeIf { state.isRinging() }
                 val availability = session?.let { key(unlocked) { snoozePolicy.availability(it) } }
+                // Story 4.13: the confirm sheet and its message over the session's Ringing or Check screen.
+                val overlay = sheetOverlay(session, availability)
                 // The notification's alarm time only stands in while the screen waits for its first session: once one
                 // was shown, an ended session (Missed, or Completed before Success shows, with the notification still
                 // posted) keeps its last screen, so a check never flips back to the Ringing screen (Story 3.2 review).
                 val current =
                     emergency?.let { WakeScreen.Ringing(alarmOnlyRingingUiState(it.alarmAt, zone)) }
-                        ?: sessionScreen(state, session, availability, zone, check)
+                        ?: sessionScreen(state, session, availability, zone, check, overlay)
                         ?: runtime
                             .shownAlarmAt()
                             ?.takeIf { !last.sessionShown }
@@ -269,9 +289,45 @@ class WakeActivity : ComponentActivity() {
                 if (session != null) last.sessionShown = true
                 if (current != null) last.state = current
                 val shown = current ?: last.state
-                WakeScreenWithCamera(shown, check.qr, ::onIntent, ::interacted, send = { send(*it.toTypedArray()) })
+                // The confirm sheet's 500 ms guard reads the monotonic clock (Story 4.13), never animation time.
+                CompositionLocalProvider(LocalWakeClock provides monotonicClock::elapsedMillis) {
+                    WakeScreenWithCamera(shown, check.qr, ::onIntent, ::interacted, send = ::sendAll)
+                }
             }
         }
+    }
+
+    /**
+     * The confirm sheet, its payment message and the prices to show over [session]'s screen with [availability] (Story
+     * 4.13). A sheet that no longer belongs (another ring, snooze no longer Available for its offer) closes for good, and
+     * the message ends after [MESSAGE_TIMEOUT] if no tap ended it first.
+     */
+    @Composable
+    private fun sheetOverlay(
+        session: SessionData?,
+        availability: SnoozeAvailability?,
+    ): SheetOverlay {
+        val request by sheet.request.collectAsState()
+        val livePrices by sheet.livePrices.collectAsState()
+        val message by sheet.message.collectAsState()
+        val sentPrices by sheet.sentPrices.collectAsState()
+        val shown =
+            if (session != null && availability != null) {
+                sheet.sheet(session, availability, request, livePrices, sentPrices, TaxNote.shows(billingCountry.countryCode()))
+            } else {
+                null
+            }
+        SideEffect {
+            shownSheet = shown
+            if (session != null && availability != null) sheet.follow(session, availability)
+        }
+        val ringMessage = message?.takeIf { session != null && sheet.messageFor(session, it) != null }
+        LaunchedEffect(ringMessage) {
+            ringMessage ?: return@LaunchedEffect
+            delay(MESSAGE_TIMEOUT)
+            sheet.expire(ringMessage)
+        }
+        return SheetOverlay(shown, ringMessage?.message, sheet.priceOf(livePrices))
     }
 
     /** What the screen sends by itself for [state]: the placeholder answer, and an "I'm up" kept from before the session. */
@@ -294,6 +350,8 @@ class WakeActivity : ComponentActivity() {
     }
 
     private fun onIntent(intent: WakeIntent) {
+        // Any tap ends a payment message (Story 4.13; Story 4.14 adds its 10 s minimum).
+        sheet.onTap()
         when {
             // "Done" on Success: the session is already over, so it only closes the screen.
             intent == WakeIntent.DoneClicked -> {
@@ -325,6 +383,11 @@ class WakeActivity : ComponentActivity() {
                 interacted()
             }
 
+            // Story 4.13: snooze and the confirm sheet.
+            intent in SHEET_INTENTS -> {
+                onSheetIntent(intent)
+            }
+
             intent != WakeIntent.ImUpClicked -> {
                 interacted()
             }
@@ -339,7 +402,36 @@ class WakeActivity : ComponentActivity() {
             }
 
             else -> {
+                // A Pay still asking Play for its price is dropped: "I'm up" always wins.
+                sheet.onImUp()
                 send(SessionEvent.UserInteracted, SessionEvent.ImUpTapped)
+            }
+        }
+    }
+
+    /**
+     * Snooze opens the confirm sheet through the engine (`SnoozeTapped` → `ShowSnoozeConfirm`); the sheet's upper
+     * action pays or uses the earlier payment, and its dismiss path closes it with no charge (Story 4.13). Without a
+     * ringing session (an emergency ring, a stale frame) a tap is only an interaction, and the sheet closes.
+     */
+    private fun onSheetIntent(intent: WakeIntent) {
+        val session = (engine.state.value as? SessionState.Ring)?.session
+        when {
+            session == null || runtime.emergency.value != null -> {
+                sheet.onImUp()
+                interacted()
+            }
+
+            intent == WakeIntent.SnoozeClicked -> {
+                send(SessionEvent.SnoozeTapped)
+            }
+
+            intent == WakeIntent.SheetUpperClicked -> {
+                sheet.onUpper(session, snoozePolicy.availability(session), (shownSheet as? SnoozeSheet.Confirm)?.price, ::sendAll)
+            }
+
+            else -> {
+                sheet.onDismiss(session, ::sendAll)
             }
         }
     }
@@ -358,10 +450,13 @@ class WakeActivity : ComponentActivity() {
         }
     }
 
-    /** Any tap but "I'm up" (buying a snooze arrives in Epic 4): resets the interaction deadline of the session. */
+    /** Any tap but "I'm up" and the snooze actions: resets the interaction deadline of the session. */
     private fun interacted() {
         if (runtime.emergency.value == null) send(SessionEvent.UserInteracted)
     }
+
+    /** [send] for a list. */
+    private fun sendAll(events: List<SessionEvent>) = send(*events.toTypedArray())
 
     /**
      * Sends [events] in the order the taps came: quick taps (Memory tiles, Story 3.8) must reach the engine one after the
@@ -384,6 +479,13 @@ class WakeActivity : ComponentActivity() {
 
         /** Success closes by itself after this long without "Done" (owner-approved default 2026-09-26). */
         val SUCCESS_TIMEOUT: Duration = 60.seconds
+
+        /** A payment message stays at least this long unless a tap ends it (EXPERIENCE.md wake snackbar). */
+        val MESSAGE_TIMEOUT: Duration = 10.seconds
+
+        /** The intents of snooze and the confirm sheet (Story 4.13). */
+        private val SHEET_INTENTS: Set<WakeIntent> =
+            setOf(WakeIntent.SnoozeClicked, WakeIntent.SheetUpperClicked, WakeIntent.SheetDismissed)
 
         /** The intent of the ringing notification. */
         fun intent(context: Context): Intent =
@@ -427,13 +529,23 @@ private fun sessionScreen(
     availability: SnoozeAvailability?,
     zone: TimeZone,
     check: WakeCheck,
+    overlay: SheetOverlay,
 ): WakeScreen? {
     if (session == null || availability == null) return null
-    val checkScreen = check.screen(state, availability)
+    val checkScreen = check.screen(state, availability, overlay.priceOf)
     return check.picker(state)?.let(WakeScreen::Fallback)
-        ?: checkScreen?.let(WakeScreen::Check)
-        ?: WakeScreen.Ringing(ringingUiState(session, availability, zone))
+        ?: checkScreen?.let { WakeScreen.Check(it.copy(sheet = overlay.sheet, message = overlay.message)) }
+        ?: WakeScreen.Ringing(
+            ringingUiState(session, availability, zone, overlay.priceOf).copy(sheet = overlay.sheet, message = overlay.message),
+        )
 }
+
+/** The confirm sheet and payment message over a wake screen, and the prices its snooze shows (Story 4.13). */
+private class SheetOverlay(
+    val sheet: SnoozeSheet?,
+    val message: WakeMessage?,
+    val priceOf: PriceLookup,
+)
 
 /**
  * What the wake screen shows: the Ringing screen, the Check screen of a Math entry (Story 3.2), or the Fallback check

@@ -25,6 +25,8 @@ import com.yawnandpawn.app.ui.wake.CheckPosition
 import com.yawnandpawn.app.ui.wake.CheckUiState
 import com.yawnandpawn.app.ui.wake.FallbackPickerUiState
 import com.yawnandpawn.app.ui.wake.MemoryInput
+import com.yawnandpawn.app.ui.wake.NoPrices
+import com.yawnandpawn.app.ui.wake.PriceLookup
 import com.yawnandpawn.app.ui.wake.WakeIntent
 import com.yawnandpawn.app.ui.wake.WordAnswer
 import com.yawnandpawn.app.ui.wake.checkPosition
@@ -82,12 +84,13 @@ internal class WakeCheck(
     /**
      * The Check screen for [state] with [availability] for its snooze, or null when [state] waits on no Math, Memory
      * Sequence, Word Unscramble or QR/Barcode entry. The QR check has the camera when the permission is granted (read now,
-     * never asked) and the scanner has not failed.
+     * never asked) and the scanner has not failed. The footer's snooze shows the price [priceOf] knows (Story 4.13).
      */
     @Composable
     fun screen(
         state: SessionState,
         availability: SnoozeAvailability,
+        priceOf: PriceLookup = NoPrices,
     ): CheckUiState? {
         val now by graceClock(running = state is SessionState.Grace)
         // Story 3.11 review: read here, so each resume draws the screen again and the camera permission is read again
@@ -123,10 +126,18 @@ internal class WakeCheck(
         // (for example on the next ring, once the fallback is offered again).
         SideEffect { if (!offered) fallback.pickerOpen = false }
         return (
-            mathCheckUiState(state, availability, now, shown)
-                ?: memoryCheckUiState(state, availability, now, shownMemory)
-                ?: wordCheckUiState(state, availability, now, shownWord)
-                ?: qrCheckUiState(state, availability, now, shown, cameraAvailable = cameraAvailable, torchOn = qr.torchOn)
+            mathCheckUiState(state, availability, now, shown, priceOf)
+                ?: memoryCheckUiState(state, availability, now, shownMemory, priceOf)
+                ?: wordCheckUiState(state, availability, now, shownWord, priceOf)
+                ?: qrCheckUiState(
+                    state,
+                    availability,
+                    now,
+                    shown,
+                    cameraAvailable = cameraAvailable,
+                    torchOn = qr.torchOn,
+                    priceOf = priceOf,
+                )
         )?.copy(showFallbackLink = offered)
     }
 

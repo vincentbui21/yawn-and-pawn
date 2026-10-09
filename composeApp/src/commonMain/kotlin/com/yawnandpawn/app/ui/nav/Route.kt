@@ -11,7 +11,8 @@ import kotlinx.serialization.modules.subclassesOfSealed
 /**
  * Every app-screen destination (AD-11). The wake flow is a separate activity, outside this graph. The four tabs of the
  * nav bar are routes too: [Alarms] is the root, and another tab sits on top of it ([Progress], [Settings] or [You]), so
- * Back on a tab returns to Alarms and Back on Alarms leaves the app. The editor is pushed over them.
+ * Back on a tab returns to Alarms and Back on Alarms leaves the app. The editor and Purchase history are pushed over
+ * them.
  */
 @Serializable
 sealed interface Route : NavKey {
@@ -41,6 +42,13 @@ sealed interface Route : NavKey {
         val copyOf: String? = null,
         val scanCode: Boolean = false,
     ) : Route
+
+    /**
+     * Purchase history (Story 4.16), pushed over the You tab from its Money card; Back returns to You. Not a tab, so
+     * the nav capsule hides.
+     */
+    @Serializable
+    data object PurchaseHistory : Route
 
     /**
      * The session lock (Story 2.6, FR-SES-3): while a wake session is active it is the whole back stack, showing only

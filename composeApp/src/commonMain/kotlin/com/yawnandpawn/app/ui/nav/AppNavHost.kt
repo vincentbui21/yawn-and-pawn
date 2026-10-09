@@ -36,11 +36,14 @@ import com.yawnandpawn.app.ui.home.HomeUiState
 import com.yawnandpawn.app.ui.progress.CalendarMonth
 import com.yawnandpawn.app.ui.progress.ProgressScreen
 import com.yawnandpawn.app.ui.progress.ProgressUiState
+import com.yawnandpawn.app.ui.purchases.PurchaseHistoryRoute
 import com.yawnandpawn.app.ui.settings.SettingsScreen
 import com.yawnandpawn.app.ui.settings.SettingsUiState
 import com.yawnandpawn.app.ui.shell.AppShell
 import com.yawnandpawn.app.ui.shell.AppTab
 import com.yawnandpawn.app.ui.theme.PpsTheme
+import com.yawnandpawn.app.ui.you.YouIntent
+import com.yawnandpawn.app.ui.you.YouRow
 import com.yawnandpawn.app.ui.you.YouScreen
 import com.yawnandpawn.app.ui.you.YouUiState
 import kotlinx.datetime.LocalDate
@@ -108,9 +111,10 @@ fun AppNavHost(modifier: Modifier = Modifier) {
                     }
                     entry<Route.Progress>(metadata = TabMetadata) { ProgressTab() }
                     entry<Route.Settings>(metadata = TabMetadata) { SettingsTab() }
-                    entry<Route.You>(metadata = TabMetadata) { YouTab() }
+                    entry<Route.You>(metadata = TabMetadata) { YouTab(onOpenPurchaseHistory = { backStack.openPurchaseHistory() }) }
                     entry<Route.SessionInProgress>(metadata = LockMetadata) { SessionInProgressScreen() }
                     entry<Route.AlarmEditor> { route -> EditorEntry(route, backStack, onOpenFailed = { openFailed = true }) }
+                    entry<Route.PurchaseHistory> { PurchaseHistoryRoute(onBack = { backStack.close(Route.PurchaseHistory) }) }
                 },
         )
     }
@@ -188,12 +192,22 @@ private fun SettingsTab() {
     SettingsScreen(state = state, is24Hour = is24HourClock(), onIntent = {}, rows = emptySet())
 }
 
-/** The You tab until its stories are built: the title only (every row, About too, opens something not built yet). */
+/**
+ * The You tab until its other stories are built: the Money card with "Purchase history" only (Story 4.16), which
+ * [onOpenPurchaseHistory] pushes; every other row, About too, opens something not built yet.
+ */
 @Composable
-private fun YouTab() {
+private fun YouTab(onOpenPurchaseHistory: () -> Unit) {
     val state = remember { YouUiState(appVersion = "") }
-    YouScreen(state = state, onIntent = {}, rows = emptySet())
+    YouScreen(
+        state = state,
+        onIntent = { intent -> if (intent == YouIntent.PurchaseHistoryClicked) onOpenPurchaseHistory() },
+        rows = YouTabRows,
+    )
 }
+
+/** The You rows whose screens are built. */
+private val YouTabRows: Set<YouRow> = setOf(YouRow.PurchaseHistory)
 
 /** Never shown: the Settings rows that would show the base fee are hidden until Epic 4. */
 private val HIDDEN_BASE_FEE = Money(micros = 0, currency = "USD")

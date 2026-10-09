@@ -38,6 +38,7 @@ import com.yawnandpawn.app.testing.aGrant
 import com.yawnandpawn.app.testing.aPurchaseIntent
 import com.yawnandpawn.app.testing.aPurchaseRecord
 import com.yawnandpawn.app.testing.aSession
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.test.runTest
 import org.junit.After
 import org.junit.Test
@@ -146,6 +147,29 @@ class RoomPurchaseRecordRepositoryTest {
             appDb.close()
             assertIs<Outcome.Failure<DomainError>>(records.putRecord(good))
             assertIs<Outcome.Failure<DomainError>>(records.get(good.tokenHash))
+        }
+
+    @Test
+    fun `observeAll emits the records newest first after every change and leaves damaged rows out`() =
+        runTest {
+            val older = aPurchaseRecord(token = "older")
+            val newer = aPurchaseRecord(token = "newer", purchasedAt = DEFAULT_FAKE_INSTANT + 1.minutes)
+            assertEquals(emptyList(), records.observeAll().first())
+
+            records.putRecord(older)
+            records.putRecord(newer)
+            appDb.purchaseRecordDao().upsertRecord(PurchaseRecordEntity.of(aPurchaseRecord(token = "bad")).copy(status = "voided"))
+            assertEquals(listOf(newer, older), records.observeAll().first())
+
+            records.putRecord(older.copy(status = RecordStatus.Consumed, consumedAt = DEFAULT_FAKE_INSTANT))
+            assertEquals(
+                RecordStatus.Consumed,
+                records
+                    .observeAll()
+                    .first()
+                    .last()
+                    .status,
+            )
         }
 
     /** The process dies right after this write. Not an `Exception`, so nothing in the ledger catches it. */

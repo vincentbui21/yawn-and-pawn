@@ -52,6 +52,8 @@ deferred:
 5. **Stranded rows** show their amount when it came from the intent (what was charged, then refunded); preview shows the same.
 6. **Read failure** shows "Couldn't load your purchases." with "Try again" (new string, the Home pattern; added to EXPERIENCE.md App screens states). An alarm-label or session-time read failure only drops that detail (logged), it never hides the charges.
 7. **Granted, consumed and reused** all read as normal paid snoozes ("Snooze {n}").
+8. **Large fonts:** when the month and its total do not fit on one line, the total moves under the month (right-aligned) instead of wrapping the month, like the row's price.
+9. **Entry point:** the You tab's Money card now shows "Purchase history" in production; "How payments & refunds work" stays hidden until its story.
 
 ## I/O & Edge-Case Matrix
 

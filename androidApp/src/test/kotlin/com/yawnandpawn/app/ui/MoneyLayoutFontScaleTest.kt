@@ -3,9 +3,11 @@ package com.yawnandpawn.app.ui
 import androidx.compose.ui.semantics.SemanticsActions
 import androidx.compose.ui.test.SemanticsNodeInteraction
 import androidx.compose.ui.test.getBoundsInRoot
+import androidx.compose.ui.test.hasAnyAncestor
 import androidx.compose.ui.test.hasAnyDescendant
 import androidx.compose.ui.test.hasScrollAction
 import androidx.compose.ui.test.hasText
+import androidx.compose.ui.test.isHeading
 import androidx.compose.ui.test.junit4.createEmptyComposeRule
 import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithText
@@ -76,7 +78,9 @@ class MoneyLayoutFontScaleTest {
                 val titleNode = composeRule.onNodeWithText(title, useUnmergedTree = true)
                 assertEquals(1, titleNode.lineCount(), title)
                 val titleBounds = titleNode.getBoundsInRoot()
-                val priceBounds = composeRule.onNodeWithText(price, useUnmergedTree = true).getBoundsInRoot()
+                // The row's price, not the month total above the card (a heading), which can read the same.
+                val rowPrice = hasText(price) and !hasAnyAncestor(isHeading()) and !isHeading()
+                val priceBounds = composeRule.onNode(rowPrice, useUnmergedTree = true).getBoundsInRoot()
                 val beside = priceBounds.left >= titleBounds.right
                 val below = priceBounds.top >= titleBounds.bottom
                 assertTrue(beside || below, "$price overlaps $title: $priceBounds vs $titleBounds")

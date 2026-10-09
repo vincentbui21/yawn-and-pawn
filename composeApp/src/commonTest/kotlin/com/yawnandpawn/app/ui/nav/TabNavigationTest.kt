@@ -92,6 +92,39 @@ class TabNavigationTest {
     fun `every tab has its route and back`() {
         AppTab.entries.forEach { tab -> assertEquals(tab, tab.route().tab) }
         assertNull(Route.AlarmEditor(null).tab)
+        assertNull(Route.PurchaseHistory.tab)
+    }
+
+    @Test
+    fun `Purchase history is pushed over You once, tabs and plus wait under it, and Back returns to You`() {
+        val backStack = stack(Route.Alarms)
+        backStack.selectTab(AppTab.You)
+
+        backStack.openPurchaseHistory()
+        backStack.openPurchaseHistory()
+        backStack.selectTab(AppTab.Settings)
+        backStack.openEditor(alarmId = null)
+        assertEquals(listOf<NavKey>(Route.Alarms, Route.You, Route.PurchaseHistory), backStack)
+
+        backStack.close(Route.PurchaseHistory)
+        assertEquals(listOf<NavKey>(Route.Alarms, Route.You), backStack)
+
+        backStack.openPurchaseHistory()
+        backStack.pop()
+        assertEquals(listOf<NavKey>(Route.Alarms, Route.You), backStack)
+    }
+
+    @Test
+    fun `a session replaces Purchase history with the lock, and its end lands on Home`() {
+        val backStack = stack(Route.Alarms, Route.You, Route.PurchaseHistory)
+
+        assertEquals(true, backStack.applySessionLock(active = true))
+        assertEquals(listOf<NavKey>(Route.SessionInProgress), backStack)
+        backStack.openPurchaseHistory()
+        assertEquals(listOf<NavKey>(Route.SessionInProgress), backStack)
+
+        backStack.applySessionLock(active = false)
+        assertEquals(listOf<NavKey>(Route.Alarms), backStack)
     }
 
     @Test

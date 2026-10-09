@@ -4,12 +4,14 @@ import com.yawnandpawn.app.core.billing.PurchaseRecord
 import com.yawnandpawn.app.core.billing.PurchaseRecordRepository
 import com.yawnandpawn.app.core.error.DomainError
 import com.yawnandpawn.app.core.error.Outcome
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.map
 import kotlin.coroutines.cancellation.CancellationException
 
 /**
  * [PurchaseRecordRepository] over `purchase_record` in `app.db` (Story 4.10). A row that is not a record (only a damaged
- * or newer file could hold one) is a `StorageFailure` for [get] and left out of [all]. Storage exceptions become
- * `StorageFailure`.
+ * or newer file could hold one) is a `StorageFailure` for [get] and left out of [all] and [observeAll]. Storage
+ * exceptions become `StorageFailure`, except in [observeAll], whose collector gets them.
  */
 class RoomPurchaseRecordRepository(
     private val dao: PurchaseRecordDao,
@@ -35,6 +37,8 @@ class RoomPurchaseRecordRepository(
         storage { dao.upsertRecord(PurchaseRecordEntity.of(record)) }
 
     override suspend fun all(): Outcome<List<PurchaseRecord>, DomainError> = storage { dao.all().mapNotNull { it.toRecord() } }
+
+    override fun observeAll(): Flow<List<PurchaseRecord>> = dao.observeAll().map { rows -> rows.mapNotNull { it.toRecord() } }
 
     // Same boundary as RoomAlarmRepository: every storage exception is a StorageFailure, cancellation propagates.
     @Suppress("TooGenericExceptionCaught")

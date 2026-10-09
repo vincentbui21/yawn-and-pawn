@@ -4,6 +4,7 @@ import com.yawnandpawn.app.core.checks.qr.Sha256
 import com.yawnandpawn.app.core.error.DomainError
 import com.yawnandpawn.app.core.error.Outcome
 import com.yawnandpawn.app.core.session.PurchaseToken
+import kotlinx.coroutines.flow.Flow
 import kotlin.time.Instant
 
 /**
@@ -137,6 +138,12 @@ interface PurchaseRecordRepository {
 
     /** Every record, newest purchase first. */
     suspend fun all(): Outcome<List<PurchaseRecord>, DomainError>
+
+    /**
+     * Every record, newest purchase first, again after every change (Purchase history, Story 4.16). A read only. A
+     * storage failure is thrown into the flow; the collector catches it.
+     */
+    fun observeAll(): Flow<List<PurchaseRecord>>
 }
 
 /**

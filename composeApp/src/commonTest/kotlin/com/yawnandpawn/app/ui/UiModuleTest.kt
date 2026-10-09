@@ -2,8 +2,10 @@ package com.yawnandpawn.app.ui
 
 import com.yawnandpawn.app.core.alarm.AlarmRepository
 import com.yawnandpawn.app.core.alarm.CheckConfigRepository
+import com.yawnandpawn.app.core.billing.PurchaseRecordRepository
 import com.yawnandpawn.app.core.checks.AccessibilityState
 import com.yawnandpawn.app.core.history.MissedNotes
+import com.yawnandpawn.app.core.history.SessionHistoryRepository
 import com.yawnandpawn.app.core.log.Logger
 import com.yawnandpawn.app.core.reliability.NotificationPermission
 import com.yawnandpawn.app.core.reliability.ReliabilityProbe
@@ -24,6 +26,7 @@ import com.yawnandpawn.app.testing.FakeClock
 import com.yawnandpawn.app.testing.FakeLogger
 import com.yawnandpawn.app.testing.FakeMissedNoteDismissals
 import com.yawnandpawn.app.testing.FakeNotificationPermission
+import com.yawnandpawn.app.testing.FakePurchaseRecordRepository
 import com.yawnandpawn.app.testing.FakeReRegisterDismissals
 import com.yawnandpawn.app.testing.FakeReliabilityProbe
 import com.yawnandpawn.app.testing.FakeReliabilitySettings
@@ -38,6 +41,7 @@ import com.yawnandpawn.app.testing.anAppVersion
 import com.yawnandpawn.app.ui.editor.AlarmEditorArgs
 import com.yawnandpawn.app.ui.editor.AlarmEditorViewModel
 import com.yawnandpawn.app.ui.home.HomeViewModel
+import com.yawnandpawn.app.ui.purchases.PurchaseHistoryViewModel
 import com.yawnandpawn.app.ui.qr.CameraPermission
 import com.yawnandpawn.app.ui.qr.TestCameraPermission
 import kotlinx.coroutines.Dispatchers
@@ -66,7 +70,7 @@ class UiModuleTest {
 
     @OptIn(ExperimentalCoroutinesApi::class)
     @Test
-    fun `the ui module builds the Home and editor ViewModels from the core ports`() {
+    fun `the ui module builds the Home, Purchase history and editor ViewModels from the core ports`() {
         Dispatchers.setMain(UnconfinedTestDispatcher())
         try {
             val source = anAlarm(id = "source", time = LocalTime(6, 45), label = "Gym")
@@ -85,6 +89,8 @@ class UiModuleTest {
                     single<NotificationPermission> { FakeNotificationPermission() }
                     single<AccessibilityState> { FakeAccessibilityState() }
                     single<CameraPermission> { TestCameraPermission() }
+                    single<PurchaseRecordRepository> { FakePurchaseRecordRepository() }
+                    single<SessionHistoryRepository> { FakeSessionHistoryRepository() }
                     single { AlarmUseCasesFixture(repository = get(), clock = get(), timeZoneProvider = get()) }
                     single<CheckConfigRepository> { get<AlarmUseCasesFixture>().checkConfigs }
                     factory { get<AlarmUseCasesFixture>().save }
@@ -100,11 +106,10 @@ class UiModuleTest {
                 }
             val koin = koinApplication { modules(ports, uiModule) }.koin
 
-            assertTrue(
-                koin
-                    .get<HomeViewModel>()
-                    .state.value.isLoading,
-            )
+            val home = koin.get<HomeViewModel>()
+            assertTrue(home.state.value.isLoading)
+            val purchases = koin.get<PurchaseHistoryViewModel>()
+            assertTrue(purchases.state.value.loading)
             val newEditor = koin.get<AlarmEditorViewModel> { parametersOf(AlarmEditorArgs(alarmId = null)) }
             assertTrue(newEditor.state.value.isNew)
             val editEditor = koin.get<AlarmEditorViewModel> { parametersOf(AlarmEditorArgs(alarmId = "some-id")) }

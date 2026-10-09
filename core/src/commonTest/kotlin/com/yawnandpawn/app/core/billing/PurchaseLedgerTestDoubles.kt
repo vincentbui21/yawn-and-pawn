@@ -15,6 +15,7 @@ import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.emitAll
+import kotlinx.coroutines.flow.emptyFlow
 import kotlinx.coroutines.flow.flow
 import kotlin.time.Instant
 
@@ -150,6 +151,9 @@ internal class MemoryRecords(
 
     override suspend fun all(): Outcome<List<PurchaseRecord>, DomainError> =
         world.recordFailure?.let { Outcome.Failure(it) } ?: Outcome.Success(world.recordRows.values.sortedByDescending { it.purchasedAt })
+
+    // The ledger never observes the records; Purchase history (Story 4.16) does, with its own fake.
+    override fun observeAll(): Flow<List<PurchaseRecord>> = emptyFlow()
 }
 
 internal class MemoryIntents : PurchaseIntentStore {

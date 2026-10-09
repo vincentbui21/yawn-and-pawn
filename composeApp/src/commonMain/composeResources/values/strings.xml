@@ -351,6 +351,8 @@
     <string name="settings_base_fee_lock">You can raise it anytime. Lowering it waits until after your next alarm.</string>
     <string name="settings_prices_approximate">Approximate. Your local price shows when you're online.</string>
     <string name="settings_weakening_today">Saved. Takes effect after today's %1$s alarm.</string>
+    <string name="settings_fee_ladder_1">Snooze 1: %1$s</string>
+    <string name="settings_fee_ladder_2">Snooze 1: %1$s · 2: %2$s</string>
     <string name="stepper_lower">Lower %1$s</string>
     <string name="stepper_raise">Raise %1$s</string>
     <string name="stepper_value">%1$s, %2$s</string>

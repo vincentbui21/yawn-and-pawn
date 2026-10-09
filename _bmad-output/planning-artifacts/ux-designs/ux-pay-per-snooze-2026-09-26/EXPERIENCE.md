@@ -201,7 +201,7 @@ All strings live in resources (NFR-10). `{price}`, `{nextPrice}`, `{minutes}`, `
 | Money, mixed currencies | "{amount1} + {amount2}" (one amount per currency) |
 | Snooze confirm, body at last snooze | "This one costs {price}." |
 | Settings, Snooze section | "Snooze" · "Base fee" · "Max snoozes per session" · "Default snooze length" |
-| Settings, fee ladder preview (also onboarding) | "Snooze 1: {price1} · 2: {price2} · 3: {price3}" |
+| Settings, fee ladder preview (also onboarding) | "Snooze 1: {price1} · 2: {price2} · 3: {price3}"; with max snoozes 1 or 2 (Story 4.5): "Snooze 1: {price1}" · "Snooze 1: {price1} · 2: {price2}" |
 | Settings, weakening under lock (today) | "Saved. Takes effect after today's {time} alarm." |
 | Settings, Wake section | "Wake" · "Default quiet time" · "Bright wake screen" (owner decision 2026-09-27, was "Default grace window") |
 | Settings, bright wake screen caption | "Raises screen brightness on alarm screens." |

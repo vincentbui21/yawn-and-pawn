@@ -10,4 +10,8 @@ import com.yawnandpawn.app.debug.billing.DebugFakeBillingToggle
  * build's version of this function always returns Play, and `checkReleaseContent` fails on any trace of the fake.
  */
 fun variantBillingFacade(context: Context): BillingClientFacade =
-    if (DebugFakeBillingToggle.isOn(context)) DebugFakeBillingFacade() else PlayBillingClientFacade(context)
+    if (DebugFakeBillingToggle.isOn(context)) {
+        DebugFakeBillingFacade(nowMillis = System::currentTimeMillis)
+    } else {
+        PlayBillingClientFacade(context)
+    }

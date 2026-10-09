@@ -60,9 +60,12 @@ class DebugFakeBillingReceiver : BroadcastReceiver() {
  * A pretend Play for emulator tests (debug builds only): always connected; every snooze product `snooze_usd_NN` costs
  * NN.00 USD; the billing country is US; a launch "opens the sheet" and [PURCHASE_DELAY_MS] later reports the purchase,
  * PURCHASED, with the launch's account and profile ids; an owned product answers `ITEM_ALREADY_OWNED` until consumed.
- * Nothing is charged and nothing leaves the phone. Callbacks run on the main thread, as Play's do.
+ * Nothing is charged and nothing leaves the phone. Callbacks run on the main thread, as Play's do. [nowMillis] is the
+ * wall clock (given by the adapter package, the only one that reads the system clocks).
  */
-class DebugFakeBillingFacade : BillingClientFacade {
+class DebugFakeBillingFacade(
+    private val nowMillis: () -> Long,
+) : BillingClientFacade {
     private val main = Handler(Looper.getMainLooper())
     private val owned = mutableListOf<PlayPurchase>()
     private var listener: (PlayResult, List<PlayPurchase>?) -> Unit = { _, _ -> }
@@ -126,7 +129,7 @@ class DebugFakeBillingFacade : BillingClientFacade {
                 accountId = accountId,
                 profileId = profileId,
                 orderId = "GPA.DEBUG-" + UUID.randomUUID().toString().take(ORDER_ID_LENGTH),
-                purchaseTimeMillis = System.currentTimeMillis(),
+                purchaseTimeMillis = nowMillis(),
             )
         main.postDelayed({
             synchronized(owned) { owned += purchase }

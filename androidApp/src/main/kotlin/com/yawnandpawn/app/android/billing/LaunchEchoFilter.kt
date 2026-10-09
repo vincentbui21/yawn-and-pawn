@@ -41,17 +41,13 @@ class LaunchEchoFilter(
     /** True when [update] is held or dropped, so the caller must not deliver it now. */
     @Synchronized
     fun intercept(update: Update): Boolean {
-        if (launching) {
-            held += update
-            return true
-        }
-        val armed = armedCode
-        if (armed != null && update.bare && update.result.code == armed && nowMillis() <= armedUntil) {
-            armedCode = null
-            return true
-        }
-        return false
+        val echo = !launching && isArmedEcho(update)
+        if (launching) held += update
+        if (echo) armedCode = null
+        return launching || echo
     }
+
+    private fun isArmedEcho(update: Update): Boolean = update.bare && armedCode == update.result.code && nowMillis() <= armedUntil
 
     /**
      * `launchBillingFlow` returned [code]. Returns the updates held during the call that must still be delivered, in

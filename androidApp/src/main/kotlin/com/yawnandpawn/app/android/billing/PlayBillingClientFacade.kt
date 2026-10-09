@@ -43,18 +43,17 @@ class PlayBillingClientFacade(
     }
 
     @Synchronized
-    private fun clientOrNull(): BillingClient? {
-        val existing = client
-        if (existing != null && existing.connectionState != BillingClient.ConnectionState.CLOSED) return existing
-        if (!playStoreInstalled()) return null
-        return BillingClient
+    private fun clientOrNull(): BillingClient? =
+        client?.takeIf { it.connectionState != BillingClient.ConnectionState.CLOSED }
+            ?: if (playStoreInstalled()) newClient().also { client = it } else null
+
+    private fun newClient(): BillingClient =
+        BillingClient
             .newBuilder(appContext)
             .setListener { result, purchases -> listener(result.toPlay(), purchases?.map { it.toPlayPurchase() }) }
             .enablePendingPurchases(PendingPurchasesParams.newBuilder().enableOneTimeProducts().build())
             .enableAutoServiceReconnection()
             .build()
-            .also { client = it }
-    }
 
     override fun startConnection(
         onSetup: (PlayResult) -> Unit,
@@ -122,23 +121,33 @@ class PlayBillingClientFacade(
         accountId: String,
         profileId: String,
     ): PlayResult {
-        val c = clientOrNull() ?: return NO_PLAY_STORE
-        val details =
-            product.handle as? ProductDetails ?: return PlayResult(BillingClient.BillingResponseCode.DEVELOPER_ERROR, "no details")
+        val c = clientOrNull()
+        val details = product.handle as? ProductDetails
+        return when {
+            c == null -> NO_PLAY_STORE
+            details == null -> PlayResult(BillingClient.BillingResponseCode.DEVELOPER_ERROR, "no details")
+            else -> c.launchBillingFlow(activity, flowParams(details, product, accountId, profileId)).toPlay()
+        }
+    }
+
+    private fun flowParams(
+        details: ProductDetails,
+        product: PlayProduct,
+        accountId: String,
+        profileId: String,
+    ): BillingFlowParams {
         val productParams =
             BillingFlowParams.ProductDetailsParams
                 .newBuilder()
                 .setProductDetails(details)
                 .apply { product.offerToken?.let { setOfferToken(it) } }
                 .build()
-        val params =
-            BillingFlowParams
-                .newBuilder()
-                .setProductDetailsParamsList(listOf(productParams))
-                .setObfuscatedAccountId(accountId)
-                .setObfuscatedProfileId(profileId)
-                .build()
-        return c.launchBillingFlow(activity, params).toPlay()
+        return BillingFlowParams
+            .newBuilder()
+            .setProductDetailsParamsList(listOf(productParams))
+            .setObfuscatedAccountId(accountId)
+            .setObfuscatedProfileId(profileId)
+            .build()
     }
 
     override fun queryBillingCountry(onResult: (PlayResult, String?) -> Unit) {

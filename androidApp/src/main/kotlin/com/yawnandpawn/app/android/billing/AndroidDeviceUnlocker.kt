@@ -1,5 +1,6 @@
 package com.yawnandpawn.app.android.billing
 
+import android.app.Activity
 import android.app.KeyguardManager
 import com.yawnandpawn.app.core.log.LogEvent
 import com.yawnandpawn.app.core.log.Logger
@@ -38,12 +39,26 @@ class AndroidDeviceUnlocker(
     override fun isKeyguardLocked(): Boolean = keyguard.isKeyguardLocked
 
     override suspend fun requestUnlock(): UnlockResult {
-        if (!isKeyguardLocked()) return UnlockResult.Succeeded
-        val screen = wakeScreens.await(screenWait)
-        if (screen == null) {
-            logger.log(LogEvent.OperationFailed(UNLOCK, "wake screen not resumed"))
-            return UnlockResult.Failed
+        val locked = isKeyguardLocked()
+        val screen = if (locked) wakeScreens.await(screenWait) else null
+        return when {
+            !locked -> {
+                UnlockResult.Succeeded
+            }
+
+            screen == null -> {
+                logger.log(LogEvent.OperationFailed(UNLOCK, "wake screen not resumed"))
+                UnlockResult.Failed
+            }
+
+            else -> {
+                prompt(screen)
+            }
         }
+    }
+
+    /** Shows the keyguard's prompt over [screen] and waits up to [promptLimit] for its answer (none: Failed). */
+    private suspend fun prompt(screen: Activity): UnlockResult {
         val result =
             withTimeoutOrNull(promptLimit) {
                 withContext(main) {

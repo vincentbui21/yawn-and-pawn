@@ -125,29 +125,48 @@ class AndroidBilling(
     override suspend fun launch(
         intent: PurchaseIntent,
         installId: String,
-    ): Outcome<LaunchResult, DomainError> {
-        when (val ready = ready()) {
-            is Readiness.Ready -> Unit
-            is Readiness.BeforeUnlock -> return Outcome.Failure(DomainError.BillingUnavailable(BEFORE_UNLOCK))
-            is Readiness.Failed -> return Outcome.Success(LaunchResult.Failed(ready.kind))
-        }
-        val product =
-            when (val found = productFor(intent.productId)) {
-                is Lookup.Found -> found.product
-                is Lookup.Missing -> return Outcome.Success(LaunchResult.Failed(found.kind))
+    ): Outcome<LaunchResult, DomainError> =
+        whenReady({ notReady ->
+            if (notReady.beforeUnlock) {
+                Outcome.Failure(DomainError.BillingUnavailable(notReady.cause))
+            } else {
+                Outcome.Success(LaunchResult.Failed(notReady.kind))
             }
-        val screen = wakeScreens.await(timeouts.wakeScreen)
-        if (screen == null) {
-            logger.log(LogEvent.OperationFailed(LAUNCH, "wake screen not resumed"))
-            return Outcome.Success(LaunchResult.Failed(PurchaseFailureKind.Error))
+        }) { Outcome.Success(launchConnected(intent, installId)) }
+
+    /** The launch once connected: the product, then the resumed wake screen, then `launchBillingFlow` on [main]. */
+    private suspend fun launchConnected(
+        intent: PurchaseIntent,
+        installId: String,
+    ): LaunchResult {
+        val lookup = productFor(intent.productId)
+        val screen = if (lookup is Lookup.Found) wakeScreens.await(timeouts.wakeScreen) else null
+        val answer =
+            if (lookup is Lookup.Found && screen != null) {
+                launchOnMain(screen, lookup.product, installId, intent.sessionId)
+            } else {
+                null
+            }
+        return when {
+            lookup is Lookup.Missing -> {
+                LaunchResult.Failed(lookup.kind)
+            }
+
+            screen == null -> {
+                logger.log(LogEvent.OperationFailed(LAUNCH, "wake screen not resumed"))
+                LaunchResult.Failed(PurchaseFailureKind.Error)
+            }
+
+            answer == null -> {
+                logger.log(LogEvent.OperationFailed(LAUNCH, "main thread busy"))
+                LaunchResult.Failed(PurchaseFailureKind.Error)
+            }
+
+            else -> {
+                if (answer.code != BillingResponseCode.OK) logger.log(LogEvent.OperationFailed(LAUNCH, PlayResponses.name(answer.code)))
+                PlayResponses.launchResult(answer.code)
+            }
         }
-        val answer = launchOnMain(screen, product, installId, intent.sessionId)
-        if (answer == null) {
-            logger.log(LogEvent.OperationFailed(LAUNCH, "main thread busy"))
-            return Outcome.Success(LaunchResult.Failed(PurchaseFailureKind.Error))
-        }
-        if (answer.code != BillingResponseCode.OK) logger.log(LogEvent.OperationFailed(LAUNCH, PlayResponses.name(answer.code)))
-        return Outcome.Success(PlayResponses.launchResult(answer.code))
     }
 
     /**
@@ -179,34 +198,34 @@ class AndroidBilling(
         return answer
     }
 
-    override suspend fun queryPurchases(): Outcome<List<PurchaseSnapshot>, DomainError> {
-        when (val ready = ready()) {
-            is Readiness.Ready -> Unit
-            is Readiness.BeforeUnlock -> return Outcome.Failure(DomainError.BillingUnavailable(BEFORE_UNLOCK))
-            is Readiness.Failed -> return Outcome.Failure(DomainError.BillingUnavailable(ready.cause))
+    override suspend fun queryPurchases(): Outcome<List<PurchaseSnapshot>, DomainError> =
+        whenReady({ Outcome.Failure(DomainError.BillingUnavailable(it.cause)) }) {
+            val answer = call<PurchasesQuery>(timeouts.query) { done -> facade.queryPurchases(done) }
+            when {
+                answer == null -> {
+                    Outcome.Failure(DomainError.BillingUnavailable("query purchases: no answer within ${timeouts.query}"))
+                }
+
+                answer.result.code == BillingResponseCode.OK -> {
+                    Outcome.Success(snapshotsOf(answer.purchases))
+                }
+
+                else -> {
+                    Outcome.Failure(DomainError.BillingUnavailable("query purchases: ${PlayResponses.name(answer.result.code)}"))
+                }
+            }
         }
-        val answer =
-            call<PurchasesQuery>(timeouts.query) { done -> facade.queryPurchases(done) }
-                ?: return Outcome.Failure(DomainError.BillingUnavailable("query purchases: no answer within ${timeouts.query}"))
-        return if (answer.result.code == BillingResponseCode.OK) {
-            Outcome.Success(snapshotsOf(answer.purchases))
-        } else {
-            Outcome.Failure(DomainError.BillingUnavailable("query purchases: ${PlayResponses.name(answer.result.code)}"))
-        }
-    }
 
     /** Only `PurchaseLedger` calls it (Story 4.10). `ITEM_NOT_OWNED` is [ConsumeResult.NotOwned], never consumed. */
-    override suspend fun consume(token: PurchaseToken): ConsumeResult {
-        when (val ready = ready()) {
-            is Readiness.Ready -> Unit
-            is Readiness.BeforeUnlock -> return ConsumeResult.Failed(BEFORE_UNLOCK)
-            is Readiness.Failed -> return ConsumeResult.Failed(ready.cause)
+    override suspend fun consume(token: PurchaseToken): ConsumeResult =
+        whenReady({ ConsumeResult.Failed(it.cause) }) {
+            val answer = call<PlayResult>(timeouts.consumeCall) { done -> facade.consumeAsync(token.value, done) }
+            if (answer == null) {
+                ConsumeResult.Failed("no answer within ${timeouts.consumeCall}")
+            } else {
+                PlayResponses.consumeResult(answer.code)
+            }
         }
-        val answer =
-            call<PlayResult>(timeouts.consumeCall) { done -> facade.consumeAsync(token.value, done) }
-                ?: return ConsumeResult.Failed("no answer within ${timeouts.consumeCall}")
-        return PlayResponses.consumeResult(answer.code)
-    }
 
     /**
      * Play's prices of [productIds] (`queryProductDetailsAsync`, INAPP), for the price cache (Story 4.3's
@@ -214,34 +233,33 @@ class AndroidBilling(
      * Play reported as unfetched, did not return, or returned without a usable price is reported as unfetched, and the
      * rest of the answer still counts. Queried 20 ids at a time.
      */
-    suspend fun productDetails(productIds: List<String>): Outcome<ProductDetailsResult, DomainError> {
-        when (val ready = ready()) {
-            is Readiness.Ready -> Unit
-            is Readiness.BeforeUnlock -> return Outcome.Failure(DomainError.ProductDetailsFailed(transient = true, cause = BEFORE_UNLOCK))
-            is Readiness.Failed -> return Outcome.Failure(DomainError.ProductDetailsFailed(ready.transient, ready.cause))
-        }
+    suspend fun productDetails(productIds: List<String>): Outcome<ProductDetailsResult, DomainError> =
+        whenReady({ Outcome.Failure(DomainError.ProductDetailsFailed(it.transient, it.cause)) }) { queryProducts(productIds) }
+
+    private suspend fun queryProducts(productIds: List<String>): Outcome<ProductDetailsResult, DomainError> {
         val prices = mutableListOf<ProductPrice>()
         val unfetched = mutableSetOf<String>()
+        var failure: DomainError? = null
         for (chunk in productIds.distinct().chunked(PRODUCTS_PER_QUERY)) {
-            val answer =
-                call<ProductQuery>(timeouts.query) { done -> facade.queryProducts(chunk, done) }
-                    ?: return Outcome.Failure(
-                        DomainError.ProductDetailsFailed(transient = true, cause = "no answer within ${timeouts.query}"),
-                    )
-            val code = answer.result.code
-            if (code != BillingResponseCode.OK) {
-                return Outcome.Failure(
-                    DomainError.ProductDetailsFailed(PlayResponses.isTransient(code), "query product details: ${PlayResponses.name(code)}"),
-                )
-            }
+            val answer = call<ProductQuery>(timeouts.query) { done -> facade.queryProducts(chunk, done) }
+            failure = failureOf(answer?.result?.code)
+            if (answer == null || failure != null) break
             val returned = answer.products.filter { it.productId in chunk && it.productId !in answer.unfetched }
             returned.forEach { products[it.productId] = it }
             val priced = returned.mapNotNull { it.toPrice() }
             prices += priced
             unfetched += chunk.filter { id -> priced.none { it.productId == id } }
         }
-        return Outcome.Success(ProductDetailsResult(prices, unfetched))
+        return failure?.let { Outcome.Failure(it) } ?: Outcome.Success(ProductDetailsResult(prices, unfetched))
     }
+
+    /** The failure of a product query that answered [code]; null (no answer) is a transient failure, OK none. */
+    private fun failureOf(code: Int?): DomainError? =
+        when (code) {
+            null -> DomainError.ProductDetailsFailed(transient = true, cause = "no answer within ${timeouts.query}")
+            BillingResponseCode.OK -> null
+            else -> DomainError.ProductDetailsFailed(PlayResponses.isTransient(code), "query product details: ${PlayResponses.name(code)}")
+        }
 
     /** Play's live price of [productId] now (Story 4.13's live price at Pay), or null when Play gives none. */
     suspend fun livePrice(productId: String): LivePrice? =
@@ -252,8 +270,12 @@ class AndroidBilling(
             ?.let { LivePrice(it.productId, it.price, it.formattedPrice) }
 
     private suspend fun productFor(productId: String): Lookup {
-        products[productId]?.let { return Lookup.Found(it) }
-        return when (val fetched = productDetails(listOf(productId))) {
+        val known = products[productId]
+        return if (known != null) Lookup.Found(known) else fetchProduct(productId)
+    }
+
+    private suspend fun fetchProduct(productId: String): Lookup =
+        when (val fetched = productDetails(listOf(productId))) {
             is Outcome.Success -> {
                 products[productId]?.let { Lookup.Found(it) } ?: Lookup.Missing(PurchaseFailureKind.Error)
             }
@@ -264,13 +286,12 @@ class AndroidBilling(
                 Lookup.Missing(if (transient) PurchaseFailureKind.Offline else PurchaseFailureKind.Error)
             }
         }
-    }
 
     private fun PlayProduct.toPrice(): ProductPrice? {
-        val text = formattedPrice?.takeIf { it.isNotBlank() } ?: return null
-        val micros = priceMicros?.takeIf { it > 0 } ?: return null
-        val money = Money.parse(micros, currency.orEmpty()).valueOrNull() ?: return null
-        return ProductPrice(productId, text, money)
+        val text = formattedPrice?.takeIf { it.isNotBlank() }
+        val micros = priceMicros?.takeIf { it > 0 }
+        val money = micros?.let { Money.parse(it, currency.orEmpty()).valueOrNull() }
+        return if (text != null && money != null) ProductPrice(productId, text, money) else null
     }
 
     // ---- connection -------------------------------------------------------------------------------------------------
@@ -278,13 +299,15 @@ class AndroidBilling(
     private sealed interface Readiness {
         data object Ready : Readiness
 
-        data object BeforeUnlock : Readiness
-
-        /** [kind] for a launch, [transient] for a price refresh, [cause] for the log. */
-        data class Failed(
+        /**
+         * Not connected: [beforeUnlock] (nothing connects before the first unlock), else [kind] for a launch and
+         * [transient] for a price refresh; [cause] for the log.
+         */
+        data class NotReady(
             val kind: PurchaseFailureKind,
             val transient: Boolean,
             val cause: String,
+            val beforeUnlock: Boolean = false,
         ) : Readiness
     }
 
@@ -298,31 +321,45 @@ class AndroidBilling(
         ) : Lookup
     }
 
-    /** Connected, or why not: before the first unlock nothing ever connects (AD-15). */
-    private suspend fun ready(): Readiness {
-        if (!userLock.isUserUnlocked()) return Readiness.BeforeUnlock
-        if (facade.isReady) return Readiness.Ready
-        val setup =
-            connect()
-                ?: return Readiness.Failed(
-                    PurchaseFailureKind.Error,
-                    transient = true,
-                    cause = "connect: no answer within ${timeouts.connect}",
-                )
-        return if (setup.code == BillingResponseCode.OK) {
-            Readiness.Ready
-        } else {
-            val name = PlayResponses.name(setup.code)
-            Readiness.Failed(PlayResponses.failureKind(setup.code), PlayResponses.isTransient(setup.code), "connect: $name")
+    /** Runs [onReady] once connected, else answers [notReady]. */
+    private suspend inline fun <T> whenReady(
+        notReady: (Readiness.NotReady) -> T,
+        onReady: () -> T,
+    ): T =
+        when (val state = ready()) {
+            Readiness.Ready -> onReady()
+            is Readiness.NotReady -> notReady(state)
         }
-    }
+
+    /** Connected, or why not: before the first unlock nothing ever connects (AD-15). */
+    private suspend fun ready(): Readiness =
+        when {
+            !userLock.isUserUnlocked() -> Readiness.NotReady(PurchaseFailureKind.Error, true, BEFORE_UNLOCK, beforeUnlock = true)
+            facade.isReady -> Readiness.Ready
+            else -> readinessOf(connect())
+        }
+
+    private fun readinessOf(setup: PlayResult?): Readiness =
+        when {
+            setup == null -> {
+                Readiness.NotReady(PurchaseFailureKind.Error, true, "connect: no answer within ${timeouts.connect}")
+            }
+
+            setup.code == BillingResponseCode.OK -> {
+                Readiness.Ready
+            }
+
+            else -> {
+                val name = PlayResponses.name(setup.code)
+                Readiness.NotReady(PlayResponses.failureKind(setup.code), PlayResponses.isTransient(setup.code), "connect: $name")
+            }
+        }
 
     /**
      * Starts the connection, or joins the one being set up, and waits up to [BillingTimeouts.connect] for its answer;
      * null when none came in time (the setup stays joinable: Play refuses a second `startConnection` while connecting).
      */
     private suspend fun connect(): PlayResult? {
-        if (facade.isReady) return PlayResult(BillingResponseCode.OK)
         val setup =
             setupLock.withLock {
                 pendingSetup?.takeIf { it.isActive } ?: CompletableDeferred<PlayResult>().also { started ->
@@ -354,25 +391,28 @@ class AndroidBilling(
 
     @Synchronized
     private fun reconnect() {
-        if (reconnecting?.isActive == true) return
-        reconnecting = scope.launch { reconnectWithBackoff() }
+        if (reconnecting?.isActive != true) reconnecting = scope.launch { reconnectWithBackoff() }
     }
 
+    /**
+     * Connects, retrying a transient failure after [BillingTimeouts.reconnectFirst], doubling up to
+     * [BillingTimeouts.reconnectMax], at most [BillingTimeouts.reconnectAttempts] times. A permanent answer (no Play
+     * Store, Play too old, a misconfigured app) stops it: trying again will not help until something changes.
+     */
     private suspend fun reconnectWithBackoff() {
         var wait = timeouts.reconnectFirst
-        repeat(timeouts.reconnectAttempts) { attempt ->
-            if (!userLock.isUserUnlocked()) return
-            val setup = connect()
-            if (setup?.code == BillingResponseCode.OK) return
-            logger.log(
-                LogEvent.OperationFailed(
-                    CONNECT,
-                    setup?.let { PlayResponses.name(it.code) } ?: "no answer within ${timeouts.connect}",
-                ),
-            )
-            // No Play Store, Play too old or a misconfigured app: trying again will not help until something changes.
-            if (setup != null && !PlayResponses.isTransient(setup.code)) return
-            if (attempt < timeouts.reconnectAttempts - 1) {
+        var attempts = 0
+        var done = false
+        while (!done && attempts < timeouts.reconnectAttempts && userLock.isUserUnlocked()) {
+            val setup = if (facade.isReady) PlayResult(BillingResponseCode.OK) else connect()
+            attempts++
+            val connected = setup?.code == BillingResponseCode.OK
+            if (!connected) {
+                val cause = setup?.let { PlayResponses.name(it.code) } ?: "no answer within ${timeouts.connect}"
+                logger.log(LogEvent.OperationFailed(CONNECT, cause))
+            }
+            done = connected || (setup != null && !PlayResponses.isTransient(setup.code))
+            if (!done && attempts < timeouts.reconnectAttempts) {
                 delay(wait)
                 wait = (wait * 2).coerceAtMost(timeouts.reconnectMax)
             }

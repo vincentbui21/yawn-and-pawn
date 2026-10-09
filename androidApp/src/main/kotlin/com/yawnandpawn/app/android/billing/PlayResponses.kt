@@ -17,7 +17,9 @@ import com.yawnandpawn.app.core.session.PurchaseFailureKind
  * | ITEM_ALREADY_OWNED | `ItemAlreadyOwned` | `Failed` |
  * | NETWORK_ERROR, SERVICE_UNAVAILABLE, SERVICE_DISCONNECTED | `Failed(Offline)` | `Failed` (retried) |
  * | ITEM_NOT_OWNED | `Failed(Error)` | `NotOwned` (never `Consumed`: the ledger decides by age, Story 4.10) |
- * | BILLING_UNAVAILABLE (also a declined card, S1), ERROR, DEVELOPER_ERROR, ITEM_UNAVAILABLE, FEATURE_NOT_SUPPORTED, any other | `Failed(Error)` | `Failed` |
+ * | BILLING_UNAVAILABLE (a declined card too, S1), ERROR, DEVELOPER_ERROR | `Failed(Error)` | `Failed` |
+ * | ITEM_UNAVAILABLE, FEATURE_NOT_SUPPORTED | `Failed(Error)` | `Failed` |
+ * | any other code | `Failed(Error)` | `Failed` |
  */
 object PlayResponses {
     /** Codes that mean Play could not be reached now: trying again later may help. */

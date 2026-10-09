@@ -32,8 +32,9 @@ class DebugCrashReceiver : BroadcastReceiver() {
 
 /**
  * Debug builds only (declared in the debug manifest; release builds never contain it): registers [DebugCrashReceiver]
- * and the fake billing toggle ([DebugFakeBillingReceiver], Story 4.12) at app start. A runtime receiver, because the shell's implicit `am broadcast -a` does not reach manifest receivers on
- * API 26+. Exported so the shell can send it. The provider serves no data.
+ * and the fake billing toggle ([DebugFakeBillingReceiver], Story 4.12) at app start. Runtime receivers, because the
+ * shell's implicit `am broadcast -a` does not reach manifest receivers on API 26+. Exported so the shell can send them.
+ * The provider serves no data.
  */
 class DebugHooksProvider : ContentProvider() {
     override fun onCreate(): Boolean {

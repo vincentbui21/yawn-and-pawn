@@ -314,6 +314,12 @@
     <string name="purchase_row_title">%1$s · %2$s</string>
     <string name="purchase_snooze_number">Snooze %1$d</string>
     <string name="purchase_stranded">Not used, refunded automatically by Google</string>
+    <string name="purchase_history_load_failed">Couldn't load your purchases.</string>
+    <string name="purchase_history_some_unreadable">Some purchases couldn't be read.</string>
+    <!-- TalkBack only (Story 4.16 review): the month heading with its total, a refunded amount, the loading skeleton. -->
+    <string name="purchase_month_paid_a11y">%1$s, %2$s paid</string>
+    <string name="purchase_price_refunded_a11y">%1$s refunded</string>
+    <string name="purchase_history_loading_a11y">Loading purchases</string>
 
     <!-- Settings -->
     <string name="settings_snooze">Snooze</string>

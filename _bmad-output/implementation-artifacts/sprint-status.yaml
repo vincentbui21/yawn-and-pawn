@@ -108,7 +108,7 @@ development_status:
   4-13-snooze-confirm-sheet: done  # Epic 4 auto-run, fast mode
   4-14-payment-outcome-messages: backlog
   4-15-snoozed-screen-session-line-and-snoozing-from-a-check: backlog
-  4-16-purchase-history: backlog
+  4-16-purchase-history: done  # Epic 4 auto-run, fast mode
   4-17-problem-with-a-charge: backlog
   4-18-epic-4-payment-verification-with-license-testers: backlog
   epic-4-retrospective: optional

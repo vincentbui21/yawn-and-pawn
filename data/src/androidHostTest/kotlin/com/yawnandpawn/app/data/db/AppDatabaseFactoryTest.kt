@@ -30,6 +30,7 @@ import com.yawnandpawn.app.data.billing.RoomPurchaseRecordRepository
 import com.yawnandpawn.app.data.config.RoomPendingChangeRepository
 import com.yawnandpawn.app.data.history.RoomSessionHistoryRepository
 import com.yawnandpawn.app.testing.AlarmUseCasesFixture
+import com.yawnandpawn.app.testing.FakeLogger
 import com.yawnandpawn.app.testing.aPurchaseRecord
 import com.yawnandpawn.app.testing.aRegisteredCode
 import com.yawnandpawn.app.testing.aSessionHistoryRow
@@ -474,7 +475,7 @@ class AppDatabaseFactoryTest {
                 assertEquals(1, database.commitmentEventDao().all().size)
                 assertEquals(0, database.purchaseRecordDao().count())
 
-                val records = RoomPurchaseRecordRepository(database.purchaseRecordDao())
+                val records = RoomPurchaseRecordRepository(database.purchaseRecordDao(), FakeLogger())
                 val record = aPurchaseRecord(status = RecordStatus.Stranded)
                 assertEquals(Outcome.Success(Unit), records.putRecord(record))
                 assertEquals(Outcome.Success(listOf(record)), records.all())

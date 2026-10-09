@@ -30,8 +30,12 @@ import androidx.lifecycle.Lifecycle
 import com.github.takahirom.roborazzi.captureRoboImage
 import com.yawnandpawn.app.StopAppRule
 import com.yawnandpawn.app.core.alarm.AlarmRepository
+import com.yawnandpawn.app.core.billing.Money
+import com.yawnandpawn.app.core.billing.PurchaseRecordRepository
+import com.yawnandpawn.app.core.billing.RecordStatus
 import com.yawnandpawn.app.core.error.Outcome
 import com.yawnandpawn.app.core.reliability.NotificationPermission
+import com.yawnandpawn.app.testing.aPurchaseRecord
 import com.yawnandpawn.app.testing.anAlarm
 import kotlinx.coroutines.runBlocking
 import kotlinx.datetime.LocalTime
@@ -279,6 +283,31 @@ class MainActivityTest {
         waitForText("You")
         composeRule.onNodeWithText("About").assertDoesNotExist()
         composeRule.onNodeWithText("Delete all data").assertDoesNotExist()
+    }
+
+    @Test
+    fun `You opens Purchase history, which follows the stored charges, and Back returns to You`() {
+        waitForText("No alarms yet.")
+        tab("You").performClick()
+        composeRule.onNode(hasText("Purchase history") and hasClickAction()).performClick()
+
+        waitForText("No snoozes paid. Keep it that way.")
+        // Pushed over the shell: no capsule, and no "Problem with a charge?" until Story 4.17.
+        composeRule.onAllNodes(hasContentDescription("Add alarm")).assertCountEquals(0)
+        composeRule.onNodeWithText("Problem with a charge?").assertDoesNotExist()
+
+        val charge = aPurchaseRecord(status = RecordStatus.Consumed, snoozeNumber = 2, price = Money(2_000_000, "USD"))
+        assertEquals(Outcome.Success(Unit), runBlocking { GlobalContext.get().get<PurchaseRecordRepository>().putRecord(charge) })
+        waitForText("Snooze 2")
+        composeRule.onNodeWithText("No snoozes paid. Keep it that way.").assertDoesNotExist()
+        composeRule.onAllNodes(hasText("$2.00")).assertCountEquals(1)
+        composeRule.onNode(hasContentDescription("$2.00 paid", substring = true)).assertExists() // the month's total
+
+        pressBack()
+
+        waitForGone("Snooze 2")
+        tab("You").assertIsSelected()
+        composeRule.onNode(hasText("Purchase history") and hasClickAction()).assertExists()
     }
 
     @Test

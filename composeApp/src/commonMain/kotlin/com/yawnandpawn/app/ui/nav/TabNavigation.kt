@@ -4,11 +4,11 @@ import androidx.navigation3.runtime.NavKey
 import com.yawnandpawn.app.ui.shell.AppTab
 
 // Back stack rules of the shell (Story 1.9). The stack is always [Alarms] or [Alarms, other tab], with at most the
-// editor on top; every change below keeps it that way, and a late or repeated call (a double tap) changes nothing.
-// During a session it is only [SessionInProgress] (Story 2.6): no tab is on top then, so the tab and editor calls below
-// change nothing.
+// editor or Purchase history (Story 4.16) on top; every change below keeps it that way, and a late or repeated call (a
+// double tap) changes nothing. During a session it is only [SessionInProgress] (Story 2.6): no tab is on top then, so
+// the tab and editor calls below change nothing.
 
-/** The nav-bar tab this route is, or `null` for a pushed screen (the editor). */
+/** The nav-bar tab this route is, or `null` for a pushed screen (the editor, Purchase history). */
 val Route.tab: AppTab?
     get() =
         when (this) {
@@ -17,6 +17,7 @@ val Route.tab: AppTab?
             Route.Settings -> AppTab.Settings
             Route.You -> AppTab.You
             is Route.AlarmEditor -> null
+            Route.PurchaseHistory -> null
             Route.SessionInProgress -> null
         }
 
@@ -56,6 +57,15 @@ fun MutableList<NavKey>.openEditor(
     val top = topTab() ?: return
     if (top != AppTab.Alarms) removeAt(lastIndex)
     add(Route.AlarmEditor(alarmId, copyOf, scanCode))
+}
+
+/**
+ * Pushes Purchase history over the tab on top (the You tab's Money card), so Back returns to that tab. Ignored while a
+ * pushed screen is on top, so a double tap never stacks two.
+ */
+fun MutableList<NavKey>.openPurchaseHistory() {
+    if (topTab() == null) return
+    add(Route.PurchaseHistory)
 }
 
 /** Closes [route] if it is on top; a late second close never pops the Alarms root. */

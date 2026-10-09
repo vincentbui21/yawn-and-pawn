@@ -8,6 +8,7 @@ import com.yawnandpawn.app.core.billing.PlayPurchaseState
 import com.yawnandpawn.app.core.billing.PriceSource
 import com.yawnandpawn.app.core.billing.PurchaseRecord
 import com.yawnandpawn.app.core.billing.PurchaseRecordRepository
+import com.yawnandpawn.app.core.billing.PurchaseRecordsRead
 import com.yawnandpawn.app.core.billing.PurchaseSnapshot
 import com.yawnandpawn.app.core.billing.RecordStatus
 import com.yawnandpawn.app.core.billing.hash
@@ -16,6 +17,10 @@ import com.yawnandpawn.app.core.error.Outcome
 import com.yawnandpawn.app.core.session.PurchaseToken
 import com.yawnandpawn.app.core.work.BackgroundJob
 import com.yawnandpawn.app.core.work.BackgroundWork
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.update
 import kotlin.time.Instant
 
 /**
@@ -63,27 +68,45 @@ class FakeGrantLedgerStore : GrantLedgerStore {
 
 /**
  * In-memory [PurchaseRecordRepository] with the rules of `RoomPurchaseRecordRepository` (Story 4.10): one record per
- * token hash, [all] newest purchase first. Set [failure] to make every call fail with it; [puts] counts the writes.
+ * token hash, [all] and [observeAll] newest purchase first (then by token hash). Set [failure] to make every call fail
+ * with it; set [observeFailure] to make collecting [observeAll] throw it, like a failing database; set [unreadable] to
+ * report that many damaged rows left out of [observeAll]. [puts] counts the writes.
  */
-class FakePurchaseRecordRepository : PurchaseRecordRepository {
-    private val rows = linkedMapOf<String, PurchaseRecord>()
+class FakePurchaseRecordRepository(
+    initial: List<PurchaseRecord> = emptyList(),
+) : PurchaseRecordRepository {
+    private val rows = MutableStateFlow(initial.associateBy { it.tokenHash })
 
     var failure: DomainError? = null
+
+    var observeFailure: Throwable? = null
+
+    /** Damaged rows [observeAll] reports as left out; read when the records next change. */
+    var unreadable: Int = 0
 
     var puts: Int = 0
         private set
 
     /** Every record, newest purchase first. */
     val records: List<PurchaseRecord>
-        get() = rows.values.sortedByDescending { it.purchasedAt }
+        get() = ordered(rows.value)
+
+    override fun observeAll(): Flow<PurchaseRecordsRead> =
+        rows.map { byHash ->
+            observeFailure?.let { throw it }
+            PurchaseRecordsRead(ordered(byHash), unreadable)
+        }
+
+    private fun ordered(byHash: Map<String, PurchaseRecord>): List<PurchaseRecord> =
+        byHash.values.sortedWith(compareByDescending<PurchaseRecord> { it.purchasedAt }.thenBy { it.tokenHash })
 
     override suspend fun get(tokenHash: String): Outcome<PurchaseRecord?, DomainError> =
-        failure?.let { Outcome.Failure(it) } ?: Outcome.Success(rows[tokenHash])
+        failure?.let { Outcome.Failure(it) } ?: Outcome.Success(rows.value[tokenHash])
 
     override suspend fun putRecord(record: PurchaseRecord): Outcome<Unit, DomainError> {
         failure?.let { return Outcome.Failure(it) }
         puts++
-        rows[record.tokenHash] = record
+        rows.update { it + (record.tokenHash to record) }
         return Outcome.Success(Unit)
     }
 

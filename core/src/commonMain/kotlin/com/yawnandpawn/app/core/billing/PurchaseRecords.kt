@@ -4,6 +4,7 @@ import com.yawnandpawn.app.core.checks.qr.Sha256
 import com.yawnandpawn.app.core.error.DomainError
 import com.yawnandpawn.app.core.error.Outcome
 import com.yawnandpawn.app.core.session.PurchaseToken
+import kotlinx.coroutines.flow.Flow
 import kotlin.time.Instant
 
 /**
@@ -137,7 +138,24 @@ interface PurchaseRecordRepository {
 
     /** Every record, newest purchase first. */
     suspend fun all(): Outcome<List<PurchaseRecord>, DomainError>
+
+    /**
+     * Every readable record, newest purchase first, with the count of stored rows that could not be read, again after
+     * every change (Purchase history, Story 4.16). A read only. A storage failure is thrown into the flow; the
+     * collector catches it.
+     */
+    fun observeAll(): Flow<PurchaseRecordsRead>
 }
+
+/**
+ * One read of the purchase records: the readable [records], newest purchase first, and how many stored rows could not
+ * be read ([unreadable], only a damaged or newer file has any). A row is never left out in silence: Purchase history
+ * says some purchases could not be read (Story 4.16 review).
+ */
+data class PurchaseRecordsRead(
+    val records: List<PurchaseRecord>,
+    val unreadable: Int = 0,
+)
 
 /**
  * The cached Play price of a product (the price snapshot, Story 4.3), for a record with no intent to price it, or null

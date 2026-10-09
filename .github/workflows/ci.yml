@@ -1,11 +1,15 @@
-# CI (Story 1.2, AD-14): every pull request and every push to main runs the quality gate, builds the release
-# bundle (R8, unsigned) and runs the emulator smoke test on a Gradle Managed Device.
+# CI (Story 1.2, AD-14): every pull request runs the quality gate, builds the release bundle (R8, unsigned) and runs
+# the emulator smoke test on a Gradle Managed Device. Main is verified through its pull requests (squash merges), so a
+# push to main does not run again; docs-only changes are skipped. A full run can be started by hand (workflow_dispatch).
 name: CI
 
 on:
-  push:
-    branches: [main]
   pull_request:
+    paths-ignore:
+      - "**/*.md"
+      - "docs/**"
+      - "_bmad-output/**"
+  workflow_dispatch:
 
 permissions:
   contents: read

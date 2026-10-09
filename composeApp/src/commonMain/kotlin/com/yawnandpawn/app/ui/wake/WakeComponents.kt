@@ -68,6 +68,7 @@ import androidx.compose.ui.layout.boundsInWindow
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalHapticFeedback
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.LiveRegionMode
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.clearAndSetSemantics
@@ -129,6 +130,7 @@ import com.yawnandpawn.app.ui.resources.wake_snooze_prices_not_loaded
 import com.yawnandpawn.app.ui.resources.wake_snooze_unavailable
 import com.yawnandpawn.app.ui.resources.wake_snooze_unavailable_talkback
 import com.yawnandpawn.app.ui.resources.wake_stranded_refund
+import com.yawnandpawn.app.ui.resources.wake_stranded_refund_no_amount
 import com.yawnandpawn.app.ui.resources.wake_test_no_charge
 import com.yawnandpawn.app.ui.resources.wake_unlock_to_snooze
 import com.yawnandpawn.app.ui.theme.PpsTheme
@@ -237,7 +239,7 @@ fun SnoozeButton(
 ) {
     if (offer is SnoozeOffer.Available) {
         WakeOutlinedButton(
-            text = stringResource(Res.string.wake_snooze_price, formatMoney(offer.price)),
+            text = stringResource(Res.string.wake_snooze_price, offer.formattedPrice ?: formatMoney(offer.price)),
             onClick = onClick,
             modifier = modifier,
         )
@@ -262,10 +264,12 @@ fun SnoozeButton(
         horizontalArrangement = Arrangement.Center,
         verticalAlignment = Alignment.CenterVertically,
     ) {
+        val locked = offer is SnoozeOffer.LockedBeforeUnlock
         Icon(
-            painter = painterResource(if (offer is SnoozeOffer.LockedBeforeUnlock) Res.drawable.symbol_lock else Res.drawable.symbol_block),
+            painter = painterResource(if (locked) Res.drawable.symbol_lock else Res.drawable.symbol_block),
             contentDescription = null,
-            modifier = Modifier.size(spacing.space6),
+            // Not read by TalkBack (the row's semantics are cleared); tagged so tests can tell the two icons apart.
+            modifier = Modifier.size(spacing.space6).testTag(if (locked) SNOOZE_LOCK_ICON_TAG else SNOOZE_BLOCK_ICON_TAG),
             tint = colors.disabledContent,
         )
         Text(
@@ -277,6 +281,12 @@ fun SnoozeButton(
         )
     }
 }
+
+/** Test tag of the lock icon of the disabled snooze before the first unlock (Story 4.7 review). */
+const val SNOOZE_LOCK_ICON_TAG = "snooze-lock-icon"
+
+/** Test tag of the block icon of every other disabled snooze. */
+const val SNOOZE_BLOCK_ICON_TAG = "snooze-block-icon"
 
 /** The visible label; "prices not loaded yet" alone reads "Prices not loaded yet" on one line (owner decision 2026-10-02). */
 @Composable
@@ -298,11 +308,26 @@ private fun disabledSnoozeLabel(offer: SnoozeOffer): String =
 @Composable
 private fun disabledSnoozeReason(offer: SnoozeOffer): String =
     when (offer) {
-        is SnoozeOffer.Available -> ""
-        is SnoozeOffer.Unavailable -> reasonText(offer.reason)
-        SnoozeOffer.TestMode -> stringResource(Res.string.wake_test_no_charge)
-        SnoozeOffer.LockedBeforeUnlock -> stringResource(Res.string.wake_unlock_to_snooze)
-        is SnoozeOffer.StrandedRefund -> stringResource(Res.string.wake_stranded_refund, formatMoney(offer.price))
+        is SnoozeOffer.Available -> {
+            ""
+        }
+
+        is SnoozeOffer.Unavailable -> {
+            reasonText(offer.reason)
+        }
+
+        SnoozeOffer.TestMode -> {
+            stringResource(Res.string.wake_test_no_charge)
+        }
+
+        SnoozeOffer.LockedBeforeUnlock -> {
+            stringResource(Res.string.wake_unlock_to_snooze)
+        }
+
+        is SnoozeOffer.StrandedRefund -> {
+            offer.price?.let { stringResource(Res.string.wake_stranded_refund, formatMoney(it)) }
+                ?: stringResource(Res.string.wake_stranded_refund_no_amount)
+        }
     }
 
 @Composable

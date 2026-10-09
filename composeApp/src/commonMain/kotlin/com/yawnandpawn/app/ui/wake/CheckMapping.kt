@@ -115,7 +115,7 @@ fun mathCheckUiState(
                 wrong = input.wrong,
                 wrongAttempts = run.failedAttempts,
             ),
-        snooze = snoozeOffer(availability, session, priceOf),
+        snooze = snoozeOffer(availability, priceOf),
         note = wakeNote(session),
     )
 }
@@ -139,7 +139,7 @@ fun memoryCheckUiState(
     return CheckUiState(
         grace = graceState(state, session, now),
         content = memoryCheckContent(round, playback, input.wrong, wrongAttempts = input.position?.failedAttempts ?: 0),
-        snooze = snoozeOffer(availability, session, priceOf),
+        snooze = snoozeOffer(availability, priceOf),
         note = wakeNote(session),
     )
 }
@@ -162,7 +162,7 @@ fun wordCheckUiState(
     return CheckUiState(
         grace = graceState(state, session, now),
         content = content,
-        snooze = snoozeOffer(availability, session, priceOf),
+        snooze = snoozeOffer(availability, priceOf),
         note = wakeNote(session),
     )
 }

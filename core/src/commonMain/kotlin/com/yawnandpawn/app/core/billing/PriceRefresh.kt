@@ -4,6 +4,7 @@ import com.yawnandpawn.app.core.error.DomainError
 import com.yawnandpawn.app.core.error.Outcome
 import com.yawnandpawn.app.core.log.LogEvent
 import com.yawnandpawn.app.core.log.Logger
+import com.yawnandpawn.app.core.net.Connectivity
 import com.yawnandpawn.app.core.session.UserLockState
 import com.yawnandpawn.app.core.work.BackgroundJob
 import com.yawnandpawn.app.core.work.BackgroundTask
@@ -12,9 +13,13 @@ import com.yawnandpawn.app.core.work.BackgroundWork
 import com.yawnandpawn.app.core.work.TaskResult
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
+import kotlinx.coroutines.withTimeoutOrNull
+import kotlin.time.Duration
+import kotlin.time.Duration.Companion.minutes
 
 /** The price refresh jobs (Story 4.3, AD-17): both need a network connection and run [BackgroundTaskKind.PriceRefresh]. */
 object PriceRefreshJobs {
@@ -79,15 +84,30 @@ class PriceRefreshScheduler(
 
 /**
  * The price refresh at each session start (PRD §6.2): when a real alarm starts a session and the user is unlocked,
- * one [PriceCatalog.refresh] is launched on [scope] and never awaited, so the ring never waits for Play. Before the
- * first unlock it does nothing (Play Billing starts only after it, AD-15). The wake screen renders from the cached
- * snapshot meanwhile.
+ * a job is launched on [scope] and never awaited, so the ring never waits for Play. It waits until [connectivity] says
+ * online (Story 4.7; at most [ONLINE_WAIT], then it gives up), then runs one [PriceCatalog.refresh]. Before the first
+ * unlock it does nothing (Play Billing starts only after it, AD-15). The wake screen renders from the cached snapshot
+ * meanwhile, and changes in place when the refresh stores new prices.
  */
 class SessionStartPriceRefresh(
     private val catalog: PriceCatalog,
     private val userLock: UserLockState,
     private val scope: CoroutineScope,
+    private val connectivity: Connectivity,
 ) {
-    /** The launched refresh, or null when the user is locked. */
-    fun onSessionStarted(): Job? = if (userLock.isUserUnlocked()) scope.launch { catalog.refresh() } else null
+    /** The launched job (wait for online, then refresh), or null when the user is locked. */
+    fun onSessionStarted(): Job? =
+        if (userLock.isUserUnlocked()) {
+            scope.launch {
+                val online = withTimeoutOrNull(ONLINE_WAIT) { connectivity.observeOnline().first { it } }
+                if (online != null) catalog.refresh()
+            }
+        } else {
+            null
+        }
+
+    companion object {
+        /** How long the refresh waits for a connection: the no-interaction timeout of a ring (default taken). */
+        val ONLINE_WAIT: Duration = 30.minutes
+    }
 }

@@ -1,6 +1,7 @@
 package com.yawnandpawn.app.ui.wake
 
 import com.yawnandpawn.app.core.billing.Money
+import com.yawnandpawn.app.core.billing.PriceEntry
 import com.yawnandpawn.app.core.checks.CheckEntry
 import com.yawnandpawn.app.core.checks.CheckMode
 import com.yawnandpawn.app.core.checks.CheckPlan
@@ -77,7 +78,6 @@ class RingingMappingTest {
 
     @Test
     fun `every unavailable reason maps to its snooze label`() {
-        val session = aSession().copy(declinedReuseProduct = "snooze_usd_01")
         val expected =
             mapOf(
                 UnavailableReason.TestMode to SnoozeOffer.TestMode,
@@ -87,39 +87,46 @@ class RingingMappingTest {
                 UnavailableReason.PriceCapReached to SnoozeOffer.Unavailable(SnoozeUnavailableReason.PriceCapReached),
                 UnavailableReason.PaymentPending to SnoozeOffer.Unavailable(SnoozeUnavailableReason.PaymentPending),
                 UnavailableReason.BeforeFirstUnlock to SnoozeOffer.LockedBeforeUnlock,
-                UnavailableReason.EarlierPaymentRefunding to SnoozeOffer.StrandedRefund(dollar),
+                UnavailableReason.EarlierPaymentRefunding to SnoozeOffer.StrandedRefund(),
                 UnavailableReason.InvalidFee to SnoozeOffer.Unavailable(SnoozeUnavailableReason.PricesNotLoaded),
             )
 
         assertEquals(UnavailableReason.entries.toSet(), expected.keys, "every reason is covered")
-        expected.forEach { (reason, offer) -> assertEquals(offer, snoozeOffer(unavailable(reason), session, prices), "$reason") }
+        expected.forEach { (reason, offer) -> assertEquals(offer, snoozeOffer(unavailable(reason), prices), "$reason") }
     }
 
     @Test
     fun `an available snooze shows its price, and an unknown price reads prices not loaded yet`() {
-        val session = aSession()
-
+        assertEquals(SnoozeOffer.Available(dollar), snoozeOffer(SnoozeAvailability.Available(CoreSnoozeOffer("snooze_usd_01", 1)), prices))
         assertEquals(
-            SnoozeOffer.Available(dollar),
-            snoozeOffer(SnoozeAvailability.Available(CoreSnoozeOffer("snooze_usd_01", 1)), session, prices),
+            SnoozeOffer.Unavailable(SnoozeUnavailableReason.PricesNotLoaded),
+            snoozeOffer(SnoozeAvailability.Available(CoreSnoozeOffer("snooze_usd_02", 2)), prices),
         )
         assertEquals(
             SnoozeOffer.Unavailable(SnoozeUnavailableReason.PricesNotLoaded),
-            snoozeOffer(SnoozeAvailability.Available(CoreSnoozeOffer("snooze_usd_02", 2)), session, prices),
-        )
-        assertEquals(
-            SnoozeOffer.Unavailable(SnoozeUnavailableReason.PricesNotLoaded),
-            snoozeOffer(SnoozeAvailability.Available(CoreSnoozeOffer("snooze_usd_01", 1)), session),
+            snoozeOffer(SnoozeAvailability.Available(CoreSnoozeOffer("snooze_usd_01", 1))),
         )
     }
 
     @Test
-    fun `a refund without a known product or price reads prices not loaded yet`() {
-        val refunding = unavailable(UnavailableReason.EarlierPaymentRefunding)
-        val pricesNotLoaded = SnoozeOffer.Unavailable(SnoozeUnavailableReason.PricesNotLoaded)
+    fun `the policy's price wins, shown as Play's own string (Story 4_7)`() {
+        val euro = PriceEntry("snooze_usd_02", "2,49 €", Money(2_490_000, "EUR"), Instant.parse("2027-03-03T05:00:00Z"))
 
-        assertEquals(pricesNotLoaded, snoozeOffer(refunding, aSession(), prices))
-        assertEquals(pricesNotLoaded, snoozeOffer(refunding, aSession().copy(declinedReuseProduct = "snooze_usd_09"), prices))
+        assertEquals(
+            SnoozeOffer.Available(euro.price, "2,49 €"),
+            snoozeOffer(SnoozeAvailability.Available(CoreSnoozeOffer("snooze_usd_02", 2, euro)), prices),
+        )
+    }
+
+    @Test
+    fun `a refund names the amount actually paid, or no amount, never today's cached price`() {
+        val paid = Money(1_290_000, "EUR")
+
+        assertEquals(
+            SnoozeOffer.StrandedRefund(paid),
+            snoozeOffer(SnoozeAvailability.Unavailable(UnavailableReason.EarlierPaymentRefunding, refunding = paid), prices),
+        )
+        assertEquals(SnoozeOffer.StrandedRefund(null), snoozeOffer(unavailable(UnavailableReason.EarlierPaymentRefunding), prices))
     }
 
     @Test

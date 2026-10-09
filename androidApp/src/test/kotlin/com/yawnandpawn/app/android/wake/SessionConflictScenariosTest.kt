@@ -12,6 +12,7 @@ import com.yawnandpawn.app.core.alarm.Alarm
 import com.yawnandpawn.app.core.alarm.AlarmFired
 import com.yawnandpawn.app.core.alarm.AlarmRepository
 import com.yawnandpawn.app.core.alarm.RequestCodes
+import com.yawnandpawn.app.core.billing.LiveSnoozeAvailability
 import com.yawnandpawn.app.core.checks.CheckAnswer
 import com.yawnandpawn.app.core.checks.CheckMode
 import com.yawnandpawn.app.core.checks.CheckPlan
@@ -425,8 +426,9 @@ class SessionConflictScenariosTest {
     @Test
     fun `6 before the first unlock - default sound and a locked snooze, then the unlock opens snooze in place and the plan stays`() {
         lock.unlocked = false
-        // The production policy wiring (NoBillingSnoozeAvailability over the app's UserLockState), not this test's fake.
+        // The production policy wiring (LiveSnoozeAvailability over the app's UserLockState), not this test's fake.
         app = newProcess(snoozePolicy = null)
+        assertIs<LiveSnoozeAvailability>(app.koin.get<SnoozeAvailabilityPolicy>(), "the production policy, not a fake")
         store(alarmA.copy(soundRef = systemSound))
         app.ring(AlarmFired(alarmA.id, scheduledAt))
         app.awaitRinging()
@@ -440,7 +442,8 @@ class SessionConflictScenariosTest {
         app.koin.get<UnlockSignals>().onUnlocked()
         app.awaitUntil("the engine applied the unlock") { !session().beforeFirstUnlock }
 
-        // Epic 2 has no catalogue: in place, "Unlock your phone to snooze" becomes "Prices not loaded yet".
+        // No price is cached (no Play adapter before Story 4.12): in place, "Unlock your phone to snooze" becomes "Prices not
+        // loaded yet".
         val unlocked = app.koin.get<SnoozeAvailabilityPolicy>().availability(session())
         assertEquals(SnoozeAvailability.Unavailable(UnavailableReason.CatalogueNotLoaded), unlocked, "snooze changes in place")
         assertTrue(session().directBootRing, "the substitutions stay for this ring")

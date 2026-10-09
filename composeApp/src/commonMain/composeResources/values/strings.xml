@@ -173,6 +173,7 @@
     <string name="wake_reason_prices_not_loaded">prices not loaded yet</string>
     <string name="wake_snooze_prices_not_loaded">Prices not loaded yet</string>
     <string name="wake_stranded_refund">An earlier %1$s payment is being refunded</string>
+    <string name="wake_stranded_refund_no_amount">An earlier payment is being refunded</string>
     <string name="wake_unlock_to_snooze">Unlock your phone to snooze</string>
     <string name="wake_test_no_charge">Test · no charge</string>
     <string name="wake_direct_boot_note">Your phone restarted, so today's check is Math.</string>

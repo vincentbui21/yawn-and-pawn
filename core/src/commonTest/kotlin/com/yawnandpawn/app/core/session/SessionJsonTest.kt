@@ -1,5 +1,6 @@
 package com.yawnandpawn.app.core.session
 
+import com.yawnandpawn.app.core.billing.Money
 import com.yawnandpawn.app.core.checks.CheckEntry
 import com.yawnandpawn.app.core.checks.CheckMode
 import com.yawnandpawn.app.core.checks.CheckPlan
@@ -132,6 +133,46 @@ class SessionJsonTest {
             val row = """{"type":"$name","session":$SESSION_V2}}"""
             assertEquals(StoredSession.Found(state), SessionJson.decode(row), name)
             assertEquals(StoredSession.Found(state), SessionJson.decode(SessionJson.encode(state)), "$name round trip")
+        }
+    }
+
+    @Test
+    fun `a row stored before Story 4_7 decodes with nothing paid, and the paid amounts round trip`() {
+        val before = assertIs<StoredSession.Found>(SessionJson.decode("""{"type":"Snoozed","session":$SESSION_V2}}"""))
+        assertEquals(emptyList(), (before.state as SessionState.Active).session.paid)
+
+        val paid = SessionState.Snoozed(full.copy(paid = listOf(Money.of(1, "USD"), Money(2_490_000, "EUR"), Money(0, "JPY"))))
+        val encoded = SessionJson.encode(paid)
+        assertTrue(""""paid":[{"micros":1000000,"currency":"USD"},""" in encoded, encoded)
+        assertEquals(StoredSession.Found(paid), SessionJson.decode(encoded))
+    }
+
+    @Test
+    fun `a malformed paid amount is dropped, the session and the other amounts are kept`() {
+        val state = SessionState.Snoozed(full.copy(paid = listOf(Money.of(1, "USD"), Money.of(2, "USD"))))
+        val damaged = SessionJson.encode(state).replaceFirst(""""currency":"USD"""", """"currency":"usd"""")
+
+        assertEquals(StoredSession.Found(SessionState.Snoozed(full.copy(paid = listOf(Money.of(2, "USD"))))), SessionJson.decode(damaged))
+    }
+
+    @Test
+    fun `a partly broken or missing paid list never loses the session (review fix)`() {
+        val state = SessionState.Snoozed(full.copy(paid = listOf(Money.of(2, "USD"))))
+        val encoded = SessionJson.encode(state)
+        val stored = """"paid":[{"micros":2000000,"currency":"USD"}]"""
+        assertTrue(stored in encoded, encoded)
+        val broken =
+            listOf(
+                """"paid":[{"micros":"x","currency":"USD"},{"micros":2000000,"currency":"USD"}]""" to listOf(Money.of(2, "USD")),
+                """"paid":[{"currency":"USD"},{"micros":2000000},{"micros":2000000,"currency":"USD"}]""" to listOf(Money.of(2, "USD")),
+                """"paid":[{"micros":1.5,"currency":"USD"},7,"USD",null,{"micros":2000000,"currency":5}]""" to emptyList(),
+                """"paid":null""" to emptyList(),
+                """"paid":"USD 2"""" to emptyList(),
+                """"paid":{"micros":2000000,"currency":"USD"}""" to emptyList(),
+            )
+        broken.forEach { (paid, expected) ->
+            val text = encoded.replace(stored, paid)
+            assertEquals(StoredSession.Found(SessionState.Snoozed(full.copy(paid = expected))), SessionJson.decode(text), paid)
         }
     }
 

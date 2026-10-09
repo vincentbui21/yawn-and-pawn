@@ -13,6 +13,7 @@ import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.flowOf
+import kotlinx.coroutines.test.advanceTimeBy
 import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
 import kotlin.test.Test
@@ -22,8 +23,13 @@ import kotlin.test.assertNotNull
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
 import kotlin.time.Duration.Companion.hours
+import kotlin.time.Duration.Companion.minutes
+import kotlin.time.Duration.Companion.seconds
 
-/** Story 4.3: the price refresh jobs, their task, the scheduler at app start and the refresh at session start. */
+/**
+ * Story 4.3: the price refresh jobs, their task, the scheduler at app start and the refresh at session start (once
+ * online, Story 4.7).
+ */
 class PriceRefreshTest {
     private class Catalog(
         var result: Outcome<Unit, DomainError> = Outcome.Success(Unit),
@@ -129,7 +135,7 @@ class PriceRefreshTest {
     fun `a session start launches one refresh and never waits for it`() =
         runTest {
             val catalog = Catalog().apply { gate = CompletableDeferred() }
-            val refresh = SessionStartPriceRefresh(catalog, Lock(unlocked = true), this)
+            val refresh = SessionStartPriceRefresh(catalog, Lock(unlocked = true), this, TestConnectivity(online = true))
 
             val job = assertNotNull(refresh.onSessionStarted())
             runCurrent()
@@ -148,9 +154,36 @@ class PriceRefreshTest {
         runTest {
             val catalog = Catalog()
 
-            assertNull(SessionStartPriceRefresh(catalog, Lock(unlocked = false), this).onSessionStarted())
+            assertNull(SessionStartPriceRefresh(catalog, Lock(unlocked = false), this, TestConnectivity(online = true)).onSessionStarted())
             runCurrent()
 
+            assertEquals(0, catalog.refreshes)
+        }
+
+    @Test
+    fun `a session start while offline waits for the connection, then refreshes once`() =
+        runTest {
+            val catalog = Catalog()
+            val connectivity = TestConnectivity(online = false)
+            val job = assertNotNull(SessionStartPriceRefresh(catalog, Lock(unlocked = true), this, connectivity).onSessionStarted())
+
+            advanceTimeBy(10.minutes)
+            assertEquals(0, catalog.refreshes, "no fetch while offline")
+
+            connectivity.online = true
+            job.join()
+            assertEquals(1, catalog.refreshes)
+        }
+
+    @Test
+    fun `a session start that never gets online gives up after the wait, without a refresh`() =
+        runTest {
+            val catalog = Catalog()
+            val refresh = SessionStartPriceRefresh(catalog, Lock(unlocked = true), this, TestConnectivity(online = false))
+            val job = assertNotNull(refresh.onSessionStarted())
+
+            advanceTimeBy(SessionStartPriceRefresh.ONLINE_WAIT + 1.seconds)
+            assertTrue(job.isCompleted)
             assertEquals(0, catalog.refreshes)
         }
 }

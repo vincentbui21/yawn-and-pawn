@@ -17,7 +17,7 @@ import org.koin.dsl.module
 /**
  * Koin bindings of deferred work and the price cache (Story 4.3, AD-17), included by `appModule`: WorkManager behind
  * [BackgroundWork], the task of each job, the cached Play prices over the price cache store (`dataModule`), the
- * scheduler of the refresh jobs and the refresh at session start. Play's product details are unavailable until the
+ * scheduler of the refresh jobs and the refresh at session start (once online, Story 4.7). Play's product details are unavailable until the
  * Play Billing adapter (Story 4.12) replaces [UnavailableProductDetailsSource].
  *
  * A function, like `wakeModule()`: each call has its own definitions.
@@ -38,5 +38,5 @@ fun workModule(): Module =
         single<ProductDetailsSource> { UnavailableProductDetailsSource() }
         single<PriceCatalog> { CachedPriceCatalog(get(), get(), get(), get()) }
         single { PriceRefreshScheduler(get(), get(), get()) }
-        single { SessionStartPriceRefresh(get(), get(), get<ApplicationScope>()) }
+        single { SessionStartPriceRefresh(get(), get(), get<ApplicationScope>(), get()) }
     }

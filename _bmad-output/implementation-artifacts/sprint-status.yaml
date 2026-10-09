@@ -99,7 +99,7 @@ development_status:
   4-4-commitment-lock-and-pending-changes-in-core: done  # 2026-10-08 (Epic 4 auto-run, fast mode)
   4-5-snooze-settings-base-fee-and-max-snoozes: backlog
   4-6-fee-ladder-lock-notes-and-turn-off-confirmation-in-the-edito: backlog
-  4-7-snoozeavailability-with-every-reason: backlog
+  4-7-snoozeavailability-with-every-reason: done  # Epic 4 auto-run, fast mode
   4-8-purchase-intents-install-id-and-the-runtime-db-intent-table: done  # Epic 4 auto-run, fast mode
   4-9-purchasereconciler-for-every-recovery-case: done  # Epic 4 auto-run, fast mode
   4-10-grant-ledger-purchase-records-and-consume-with-retry: done  # Epic 4 auto-run, fast mode

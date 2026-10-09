@@ -24,6 +24,7 @@ import com.yawnandpawn.app.core.crash.CrashReporter
 import com.yawnandpawn.app.core.error.Outcome
 import com.yawnandpawn.app.core.history.SessionHistoryRepository
 import com.yawnandpawn.app.core.history.SessionMergeRow
+import com.yawnandpawn.app.core.net.Connectivity
 import com.yawnandpawn.app.core.session.ActiveSessionStore
 import com.yawnandpawn.app.core.session.Billing
 import com.yawnandpawn.app.core.session.FallbackPolicy
@@ -58,11 +59,12 @@ import kotlin.time.Duration
  * The real app's Koin graph, restarted with a [FakeCrashReporter] and optionally a replaced session [store], alarm
  * [repository], service [starter], session [history] repository, wall [clock], [monotonic] clock, pending [testAlarms],
  * [billing], the alarms' [checkConfigs], the fallback policy, the camera scanner or the screen reader
- * ([accessibility], Story 3.12), the global settings ([globalSettings], Story 4.4) or Play's product details
- * ([productDetails], Story 4.3). The alarm receiver waits [serviceStartWait] for the wake service (none by default: the
- * tests start it themselves, as the system would). The real `MediaPlayer` adapter plays over Robolectric's media shadow
- * (every source opens). The service's coroutines run on the main looper: [awaitUntil] idles it (and the Room threads)
- * until a condition holds. Tear down with `StopAppRule`.
+ * ([accessibility], Story 3.12), the global settings ([globalSettings], Story 4.4), Play's product details
+ * ([productDetails], Story 4.3) or the connection ([connectivity], Story 4.7; online by default). The alarm receiver
+ * waits [serviceStartWait] for the wake service (none by default: the tests start it themselves, as the system would).
+ * The real `MediaPlayer` adapter plays over Robolectric's media shadow (every source opens). The service's coroutines
+ * run on the main looper: [awaitUntil] idles it (and the Room threads) until a condition holds. Tear down with
+ * `StopAppRule`.
  */
 internal class WakeApp(
     store: ActiveSessionStore? = null,
@@ -90,6 +92,7 @@ internal class WakeApp(
     reuseChoices: ReuseChoices? = null,
     purchaseIntents: PurchaseIntentStore? = null,
     billingCountry: BillingCountry? = null,
+    connectivity: Connectivity? = null,
 ) {
     val app: YawnAndPawnApp = ApplicationProvider.getApplicationContext()
     val crashReporter = FakeCrashReporter()
@@ -129,6 +132,7 @@ internal class WakeApp(
                 reuseChoices?.let { replaced -> single<ReuseChoices> { replaced } }
                 purchaseIntents?.let { replaced -> single<PurchaseIntentStore> { replaced } }
                 billingCountry?.let { replaced -> single<BillingCountry> { replaced } }
+                connectivity?.let { replaced -> single<Connectivity> { replaced } }
                 single { WakeServiceStarts(serviceStartWait) }
             },
         )

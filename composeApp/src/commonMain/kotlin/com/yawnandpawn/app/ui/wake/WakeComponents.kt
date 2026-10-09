@@ -130,6 +130,7 @@ import com.yawnandpawn.app.ui.resources.wake_snooze_prices_not_loaded
 import com.yawnandpawn.app.ui.resources.wake_snooze_unavailable
 import com.yawnandpawn.app.ui.resources.wake_snooze_unavailable_talkback
 import com.yawnandpawn.app.ui.resources.wake_stranded_refund
+import com.yawnandpawn.app.ui.resources.wake_stranded_refund_no_amount
 import com.yawnandpawn.app.ui.resources.wake_test_no_charge
 import com.yawnandpawn.app.ui.resources.wake_unlock_to_snooze
 import com.yawnandpawn.app.ui.theme.PpsTheme
@@ -307,11 +308,26 @@ private fun disabledSnoozeLabel(offer: SnoozeOffer): String =
 @Composable
 private fun disabledSnoozeReason(offer: SnoozeOffer): String =
     when (offer) {
-        is SnoozeOffer.Available -> ""
-        is SnoozeOffer.Unavailable -> reasonText(offer.reason)
-        SnoozeOffer.TestMode -> stringResource(Res.string.wake_test_no_charge)
-        SnoozeOffer.LockedBeforeUnlock -> stringResource(Res.string.wake_unlock_to_snooze)
-        is SnoozeOffer.StrandedRefund -> stringResource(Res.string.wake_stranded_refund, offer.formattedPrice ?: formatMoney(offer.price))
+        is SnoozeOffer.Available -> {
+            ""
+        }
+
+        is SnoozeOffer.Unavailable -> {
+            reasonText(offer.reason)
+        }
+
+        SnoozeOffer.TestMode -> {
+            stringResource(Res.string.wake_test_no_charge)
+        }
+
+        SnoozeOffer.LockedBeforeUnlock -> {
+            stringResource(Res.string.wake_unlock_to_snooze)
+        }
+
+        is SnoozeOffer.StrandedRefund -> {
+            offer.price?.let { stringResource(Res.string.wake_stranded_refund, formatMoney(it)) }
+                ?: stringResource(Res.string.wake_stranded_refund_no_amount)
+        }
     }
 
 @Composable

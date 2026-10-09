@@ -144,6 +144,7 @@
 - source_spec: `_bmad-output/implementation-artifacts/spec-4-7-snoozeavailability-with-every-reason.md` (review, below the bar)
   summary: Stories 4.10/4.11: "An earlier {price} payment is being refunded" shows today's cached price of the declined product, not the amount actually paid. Use the stranded purchase record's amount once 4.10/4.11 supply it.
   evidence: `snoozeAvailability` took the price from `PriceCatalogSnapshot.displayablePriceFor(declinedReuseProduct)`; a price change since the payment would show a different amount.
+  status: Resolved on the rebase onto main with 4.10: `SnoozeConditions` asks `PurchaseLedger.refundingPrice` for each stranded product, `SnoozeAvailability.Unavailable.refunding` carries the amount actually paid, and with no known amount the label reads "An earlier payment is being refunded" (no amount, never today's price). The stranded set itself still arrives with Story 4.11.
 - source_spec: `_bmad-output/implementation-artifacts/spec-1-13-record-every-session-in-history.md`
   summary: Implement the accepted `app.db` downgrade policy: a restored `app.db` whose `user_version` is above the installed `AppDatabase` version is skipped and logged, keeping the current file, and the user is told.
   evidence: Policy in `docs/decisions/db-downgrade.md`. With no destructive fallback Room cannot open a newer file, so a restored v4 `app.db` on a v3 install would make every alarm and history read fail. Story 1.13 changes no backup behaviour.

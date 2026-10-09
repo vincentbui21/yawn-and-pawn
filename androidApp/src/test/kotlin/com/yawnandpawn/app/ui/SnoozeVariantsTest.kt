@@ -144,6 +144,14 @@ class SnoozeVariantsTest {
     fun `ringing earlier payment refunding at 200 percent`() = ringing(SnoozeVariant.Refunding, suffix = "_font200")
 
     @Test
+    fun `ringing earlier payment refunding with no known amount`() = ringing(SnoozeVariant.RefundingNoAmount)
+
+    @Test
+    @Config(fontScale = 2.0f)
+    fun `ringing earlier payment refunding with no known amount at 200 percent`() =
+        ringing(SnoozeVariant.RefundingNoAmount, suffix = "_font200")
+
+    @Test
     fun `ringing offline`() = ringing(SnoozeVariant.Offline, shot = false)
 
     @Test
@@ -197,6 +205,14 @@ class SnoozeVariantsTest {
     @Test
     @Config(fontScale = 2.0f)
     fun `check earlier payment refunding at 200 percent`() = check(SnoozeVariant.Refunding, suffix = "_font200")
+
+    @Test
+    fun `check earlier payment refunding with no known amount`() = check(SnoozeVariant.RefundingNoAmount)
+
+    @Test
+    @Config(fontScale = 2.0f)
+    fun `check earlier payment refunding with no known amount at 200 percent`() =
+        check(SnoozeVariant.RefundingNoAmount, suffix = "_font200")
 
     @Test
     fun `check offline`() = check(SnoozeVariant.Offline)

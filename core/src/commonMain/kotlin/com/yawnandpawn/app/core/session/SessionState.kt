@@ -107,7 +107,7 @@ sealed interface SessionState {
 }
 
 /**
- * What every active session state holds (AD-2 rule 3). The display-only `paid` list arrives with `Money` in Epic 4.
+ * What every active session state holds (AD-2 rule 3), with the display-only `paid` list (Story 4.7).
  *
  * @property ringIndex 1 for the first ring, +1 for each ring after a snooze or a merge.
  * @property paying the purchase in flight, if any; cleared on restore (billing is never relaunched).

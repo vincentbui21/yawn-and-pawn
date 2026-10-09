@@ -23,8 +23,9 @@ import kotlin.time.Instant
 
 /**
  * What snooze availability needs beyond the session (Story 4.7, AD-7): whether the phone is [online], the cached Play
- * [prices] and the time [now] to judge their age, whether the user has unlocked since boot ([userUnlocked]), and the
- * products with a stranded payment ([strandedProducts], from the reconciler in Story 4.11).
+ * [prices] and the time [now] to judge their age, whether the user has unlocked since boot ([userUnlocked]), the
+ * products with a stranded payment ([strandedProducts], from the reconciler in Story 4.11) and, for those whose amount
+ * paid is known, what they cost ([refundingPrices], from the purchase records: `PurchaseLedger.refundingPrice`).
  */
 data class SnoozeEnv(
     val online: Boolean,
@@ -32,6 +33,7 @@ data class SnoozeEnv(
     val now: Instant,
     val userUnlocked: Boolean,
     val strandedProducts: Set<String> = emptySet(),
+    val refundingPrices: Map<String, Money> = emptyMap(),
 )
 
 /**
@@ -44,7 +46,8 @@ data class SnoozeEnv(
  *    ladder's answer for snooze `snoozesGranted + 1` ([nextAvailability]).
  * 5. [UnavailableReason.PaymentPending]: Play reported a pending payment this session.
  * 6. [UnavailableReason.EarlierPaymentRefunding]: the user declined reusing the stranded payment of exactly this
- *    product and it is still stranded; the result carries that product's cached price, if any. A stranded payment the
+ *    product and it is still stranded; the result carries what that payment actually cost when known
+ *    ([SnoozeEnv.refundingPrices]), never today's cached price. A stranded payment the
  *    user has not declined keeps snooze Available: the reuse offer comes on "Pay" (Story 4.11).
  * 7. [UnavailableReason.Offline].
  * 8. [UnavailableReason.CatalogueNotLoaded]: no displayable (cached, not expired) price for the product. Until the
@@ -91,7 +94,7 @@ private fun onSale(
     val refunding = session.declinedReuseProduct == offer.productId && offer.productId in env.strandedProducts
     return when {
         session.paymentPending -> SnoozeAvailability.Unavailable(UnavailableReason.PaymentPending)
-        refunding -> SnoozeAvailability.Unavailable(UnavailableReason.EarlierPaymentRefunding, price)
+        refunding -> SnoozeAvailability.Unavailable(UnavailableReason.EarlierPaymentRefunding, env.refundingPrices[offer.productId])
         !env.online -> SnoozeAvailability.Unavailable(UnavailableReason.Offline)
         price == null -> SnoozeAvailability.Unavailable(UnavailableReason.CatalogueNotLoaded)
         else -> SnoozeAvailability.Available(offer.copy(price = price))
@@ -100,7 +103,9 @@ private fun onSale(
 
 /**
  * The live [SnoozeEnv] (Story 4.7): [connectivity], the cached prices of [catalog], the [userLock] state and the
- * [stranded] products (none until Story 4.11), with "now" from [clock].
+ * [stranded] products (none until Story 4.11), with "now" from [clock]. [refundingPrice] says what a stranded payment
+ * actually cost (the purchase records, Story 4.10), or null when that is not known; it is asked for each stranded
+ * product whenever the stranded set changes.
  *
  * [observe] combines them and emits a new env on every change, so the wake screen re-renders the snooze control in
  * place. [current] is the latest env [observe] produced (the time and lock state read again), so the reducer accepts a
@@ -115,17 +120,19 @@ class SnoozeConditions(
     private val userLock: UserLockState,
     private val clock: Clock,
     private val stranded: Flow<Set<String>> = flowOf(emptySet()),
+    private val refundingPrice: suspend (productId: String) -> Money? = { null },
 ) {
     private val latest = MutableStateFlow(SAFE)
     private val collectors = MutableStateFlow(0)
 
     /** The latest env: the last inputs [observe] saw, with the time and the lock state read now. */
-    fun current(): SnoozeEnv = latest.value.let { SnoozeEnv(it.online, it.prices, clock.now(), userLock.isUserUnlocked(), it.stranded) }
+    fun current(): SnoozeEnv =
+        latest.value.let { SnoozeEnv(it.online, it.prices, clock.now(), userLock.isUserUnlocked(), it.stranded, it.refunding) }
 
     /** The env now and after every change of an input (connectivity, prices, unlock, stranded payments). */
     fun observe(): Flow<SnoozeEnv> =
-        combine(connectivity.observeOnline(), catalog.observe(), stranded, userLock.observe()) { online, prices, stranded, _ ->
-            Inputs(online, prices, stranded)
+        combine(connectivity.observeOnline(), catalog.observe(), strandedWithPrices(), userLock.observe()) { online, prices, stranded, _ ->
+            Inputs(online, prices, stranded.first, stranded.second)
         }.onEach { latest.value = it }
             .map { current() }
             .onStart { collectors.update { it + 1 } }
@@ -134,10 +141,15 @@ class SnoozeConditions(
                 if (collectors.updateAndGet { it - 1 } == 0) latest.value = SAFE
             }
 
+    /** The stranded products with the amount paid for each, where known. */
+    private fun strandedWithPrices(): Flow<Pair<Set<String>, Map<String, Money>>> =
+        stranded.map { ids -> ids to ids.mapNotNull { id -> refundingPrice(id)?.let { id to it } }.toMap() }
+
     private data class Inputs(
         val online: Boolean,
         val prices: PriceCatalogSnapshot,
         val stranded: Set<String>,
+        val refunding: Map<String, Money> = emptyMap(),
     )
 
     private companion object {

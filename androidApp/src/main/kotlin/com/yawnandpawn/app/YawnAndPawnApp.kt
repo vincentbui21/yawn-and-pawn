@@ -148,7 +148,12 @@ val appModule =
         // the lock state; stranded payments arrive with Story 4.11). Billing stays unavailable until Story 4.12: nothing
         // fills the price cache, so snooze reads "Prices not loaded yet".
         single<Connectivity> { AndroidConnectivity(androidContext(), get()) }
-        single { SnoozeConditions(get(), get(), get(), get()) }
+        // "An earlier {price} payment is being refunded" names what was actually paid (the purchase records, Story
+        // 4.10), looked up only when a stranded product appears (Story 4.11 feeds them); unknown, it names no amount.
+        single {
+            val scope = this
+            SnoozeConditions(get(), get(), get(), get(), refundingPrice = { scope.get<PurchaseLedger>().refundingPrice(it) })
+        }
         single<SnoozeAvailabilityPolicy> { LiveSnoozeAvailability(get(), get(), get()) }
         single<CheckValidator> { PluginCheckValidator }
         single<FallbackPolicy> { CameraFallbackPolicy() }

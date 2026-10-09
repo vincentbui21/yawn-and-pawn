@@ -1,5 +1,6 @@
 package com.yawnandpawn.app.core.session
 
+import com.yawnandpawn.app.core.billing.Money
 import com.yawnandpawn.app.core.billing.PriceEntry
 import com.yawnandpawn.app.core.checks.CheckAnswer
 import com.yawnandpawn.app.core.checks.CheckEntry
@@ -11,8 +12,8 @@ import com.yawnandpawn.app.core.checks.Difficulty
 
 /**
  * The next snooze on sale: Play product [productId] (`snooze_usd_NN`, AD-7) for snooze [snoozeNumber] of the session.
- * [price] is the cached Play price the button shows (Story 4.7), carried to the confirm sheet and the purchase intent;
- * null where no price is attached (the fee ladder alone, test doubles).
+ * [price] is the cached Play price the button shows (Story 4.7), carried to the confirm sheet; null where no price is
+ * attached (the fee ladder alone, test doubles). The purchase intent records Play's live price at the tap (Story 4.8).
  */
 data class SnoozeOffer(
     val productId: String,
@@ -45,12 +46,13 @@ sealed interface SnoozeAvailability {
     ) : SnoozeAvailability
 
     /**
-     * Not on sale for [reason]. [price] is the price of the earlier payment being refunded
-     * ([UnavailableReason.EarlierPaymentRefunding], when cached); null for every other reason.
+     * Not on sale for [reason]. [refunding] is what the earlier payment being refunded actually cost
+     * ([UnavailableReason.EarlierPaymentRefunding], from the purchase record, Story 4.10); null when that amount is not
+     * known (the label then names no amount) and for every other reason.
      */
     data class Unavailable(
         val reason: UnavailableReason,
-        val price: PriceEntry? = null,
+        val refunding: Money? = null,
     ) : SnoozeAvailability
 }
 

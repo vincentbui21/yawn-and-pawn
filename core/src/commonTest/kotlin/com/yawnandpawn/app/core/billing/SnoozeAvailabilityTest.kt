@@ -2,6 +2,7 @@ package com.yawnandpawn.app.core.billing
 
 import com.yawnandpawn.app.core.alarm.RecordingLogger
 import com.yawnandpawn.app.core.alarm.TestClock
+import com.yawnandpawn.app.core.billing.LivePrice
 import com.yawnandpawn.app.core.error.DomainError
 import com.yawnandpawn.app.core.error.Outcome
 import com.yawnandpawn.app.core.log.LogEvent
@@ -65,7 +66,11 @@ class SnoozeAvailabilityTest {
         prices: PriceCatalogSnapshot = allPrices,
         userUnlocked: Boolean = true,
         stranded: Set<String> = emptySet(),
-    ) = SnoozeEnv(online, prices, now, userUnlocked, stranded)
+        refunding: Map<String, Money> = emptyMap(),
+    ) = SnoozeEnv(online, prices, now, userUnlocked, stranded, refunding)
+
+    /** What the stranded payment of product 01 actually cost (from its record), unlike today's price. */
+    private val paid01 = Money(1_290_000, "EUR")
 
     private fun session(
         testMode: Boolean = false,
@@ -83,8 +88,8 @@ class SnoozeAvailabilityTest {
 
     private fun unavailable(
         reason: UnavailableReason,
-        price: PriceEntry? = null,
-    ) = SnoozeAvailability.Unavailable(reason, price)
+        refunding: Money? = null,
+    ) = SnoozeAvailability.Unavailable(reason, refunding)
 
     private fun available(
         tier: Int,
@@ -156,18 +161,24 @@ class SnoozeAvailabilityTest {
                 unavailable(UnavailableReason.PaymentPending),
             ),
             Triple(
-                "refunding",
-                session(declined = p01) to env(stranded = setOf(p01)),
-                unavailable(UnavailableReason.EarlierPaymentRefunding, price(1)),
+                "refunding: the amount actually paid, not today's price",
+                session(declined = p01) to env(stranded = setOf(p01), refunding = mapOf(p01 to paid01)),
+                unavailable(UnavailableReason.EarlierPaymentRefunding, paid01),
             ),
             Triple(
                 "refunding and offline",
-                session(declined = p01) to env(online = false, stranded = setOf(p01)),
-                unavailable(UnavailableReason.EarlierPaymentRefunding, price(1)),
+                session(declined = p01) to env(online = false, stranded = setOf(p01), refunding = mapOf(p01 to paid01)),
+                unavailable(UnavailableReason.EarlierPaymentRefunding, paid01),
             ),
             Triple(
                 "refunding with no cached price",
-                session(declined = p01) to env(prices = PriceCatalogSnapshot.EMPTY, stranded = setOf(p01)),
+                session(declined = p01) to
+                    env(prices = PriceCatalogSnapshot.EMPTY, stranded = setOf(p01), refunding = mapOf(p01 to paid01)),
+                unavailable(UnavailableReason.EarlierPaymentRefunding, paid01),
+            ),
+            Triple(
+                "refunding with the amount paid unknown: no amount",
+                session(declined = p01) to env(stranded = setOf(p01)),
                 unavailable(UnavailableReason.EarlierPaymentRefunding),
             ),
             Triple("declined, the stranded payment cleared", session(declined = p01) to env(), available(1, 1)),
@@ -264,7 +275,8 @@ class SnoozeAvailabilityTest {
         val catalog = Prices(prices)
         val lock = Lock(unlocked)
         val stranded = MutableStateFlow(emptySet<String>())
-        val conditions = SnoozeConditions(connectivity, catalog, lock, clock, stranded)
+        val refunding = mutableMapOf<String, Money>()
+        val conditions = SnoozeConditions(connectivity, catalog, lock, clock, stranded) { refunding[it] }
     }
 
     private fun TestScope.collecting(env: Env) = env.conditions.observe().launchIn(backgroundScope)
@@ -295,8 +307,9 @@ class SnoozeAvailabilityTest {
             assertEquals(unavailable(UnavailableReason.CatalogueNotLoaded), policy.availability(declined))
             env.catalog.state.value = allPrices
             assertEquals(available(1, 1), policy.availability(declined))
+            env.refunding[p01] = paid01
             env.stranded.value = setOf(p01)
-            assertEquals(unavailable(UnavailableReason.EarlierPaymentRefunding, price(1)), policy.availability(declined))
+            assertEquals(unavailable(UnavailableReason.EarlierPaymentRefunding, paid01), policy.availability(declined))
             env.stranded.value = emptySet()
             assertEquals(available(1, 1), policy.availability(declined))
             env.connectivity.online = false
@@ -332,13 +345,18 @@ class SnoozeAvailabilityTest {
                 live.connectivity.online = env.online
                 live.catalog.state.value = env.prices
                 live.lock.state.value = env.userUnlocked
+                live.refunding.clear()
+                live.refunding.putAll(env.refundingPrices)
+                live.stranded.value = emptySet()
                 live.stranded.value = env.strandedProducts
                 assertEquals(expected, policy.availability(session), name)
 
                 val ringing = SessionState.Ringing(session)
                 val tapped = reducer.reduce(ringing, SessionEvent.SnoozeTapped, T0)
                 val sheet = tapped.effects.filterIsInstance<SessionEffect.ShowSnoozeConfirm>()
-                val paid = reducer.reduce(ringing, SessionEvent.PayConfirmed(PurchaseIntentId("intent-1")), T0)
+                val offered = (expected as? SnoozeAvailability.Available)?.offer?.productId ?: p01
+                val livePrice = LivePrice(offered, Money.of(1, "USD"), "US$1.00")
+                val paid = reducer.reduce(ringing, SessionEvent.PayConfirmed(PurchaseIntentId("intent-1"), livePrice), T0)
                 val paying = (paid.state as? SessionState.Active)?.session?.paying
                 if (expected is SnoozeAvailability.Available) {
                     assertEquals(listOf(SessionEffect.ShowSnoozeConfirm(expected.offer)), sheet, name)

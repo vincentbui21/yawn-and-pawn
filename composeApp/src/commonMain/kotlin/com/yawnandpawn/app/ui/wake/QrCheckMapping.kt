@@ -38,7 +38,7 @@ fun qrCheckUiState(
                 torchOn = torchOn,
                 wrongAttempts = run.failedAttempts,
             ),
-        snooze = snoozeOffer(availability, session, priceOf),
+        snooze = snoozeOffer(availability, priceOf),
         note = wakeNote(session),
     )
 }

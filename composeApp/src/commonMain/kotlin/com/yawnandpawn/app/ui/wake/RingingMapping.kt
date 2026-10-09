@@ -33,7 +33,7 @@ fun ringingUiState(
         time = at.time,
         date = at.date,
         label = session.config.label?.takeIf { it.isNotBlank() },
-        snooze = snoozeOffer(availability, session, priceOf),
+        snooze = snoozeOffer(availability, priceOf),
         note = wakeNote(session),
     )
 }
@@ -57,7 +57,6 @@ fun alarmOnlyRingingUiState(
  */
 fun snoozeOffer(
     availability: SnoozeAvailability,
-    session: SessionData,
     priceOf: PriceLookup = NoPrices,
 ): SnoozeOffer =
     when (availability) {
@@ -68,15 +67,11 @@ fun snoozeOffer(
         }
 
         is SnoozeAvailability.Unavailable -> {
-            unavailableOffer(availability, session, priceOf)
+            unavailableOffer(availability)
         }
     }
 
-private fun unavailableOffer(
-    availability: SnoozeAvailability.Unavailable,
-    session: SessionData,
-    priceOf: PriceLookup,
-): SnoozeOffer =
+private fun unavailableOffer(availability: SnoozeAvailability.Unavailable): SnoozeOffer =
     when (availability.reason) {
         UnavailableReason.TestMode -> {
             SnoozeOffer.TestMode
@@ -107,11 +102,9 @@ private fun unavailableOffer(
             SnoozeOffer.Unavailable(SnoozeUnavailableReason.PaymentPending)
         }
 
-        // The refunded payment's price: the policy's cached one, else [priceOf]; with none, no price is invented.
+        // What the refunded payment actually cost (purchase records, Story 4.10); unknown, the label names no amount.
         UnavailableReason.EarlierPaymentRefunding -> {
-            availability.price?.let { SnoozeOffer.StrandedRefund(it.price, it.formattedPrice) }
-                ?: session.declinedReuseProduct?.let(priceOf)?.let { SnoozeOffer.StrandedRefund(it) }
-                ?: pricesNotLoaded()
+            SnoozeOffer.StrandedRefund(availability.refunding)
         }
     }
 

@@ -39,7 +39,10 @@ enum class SnoozeVariant(
     MaxSnoozes("Snooze unavailable: max snoozes reached", "Snooze unavailable, max snoozes reached"),
     PriceCap("Snooze unavailable: price cap reached", "Snooze unavailable, price cap reached"),
     PaymentPending("Snooze unavailable: payment pending", "Snooze unavailable, payment pending"),
-    Refunding("An earlier US$1.00 payment is being refunded", "Snooze unavailable, An earlier US$1.00 payment is being refunded"),
+
+    // The amount actually paid (the purchase record, Story 4.10), formatted by the app: never today's Play price.
+    Refunding("An earlier $0.99 payment is being refunded", "Snooze unavailable, An earlier $0.99 payment is being refunded"),
+    RefundingNoAmount("An earlier payment is being refunded", "Snooze unavailable, An earlier payment is being refunded"),
     Offline("Snooze unavailable: offline", "Snooze unavailable, offline"),
     PricesNotLoaded("Prices not loaded yet", "Snooze unavailable, prices not loaded yet"),
     ;
@@ -99,6 +102,12 @@ object SnoozeVariantSamples {
             }
 
             SnoozeVariant.Refunding -> {
+                val stranded = setOf(firstProduct)
+                session.copy(declinedReuseProduct = firstProduct) to
+                    env.copy(strandedProducts = stranded, refundingPrices = mapOf(firstProduct to Money(990_000, "USD")))
+            }
+
+            SnoozeVariant.RefundingNoAmount -> {
                 session.copy(declinedReuseProduct = firstProduct) to env.copy(strandedProducts = setOf(firstProduct))
             }
 

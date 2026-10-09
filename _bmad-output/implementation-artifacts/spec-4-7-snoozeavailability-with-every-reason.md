@@ -49,7 +49,7 @@ deferred:
 | 4 | `PriceCapReached` | ladder: B × (snoozesGranted + 1) > 50 | "Snooze unavailable: price cap reached" | "Snooze unavailable, price cap reached" |
 | 4b | `InvalidFee` | ladder: frozen B outside 1..10 (damaged config, logged) | "Prices not loaded yet" | "Snooze unavailable, prices not loaded yet" |
 | 5 | `PaymentPending` | `session.paymentPending` | "Snooze unavailable: payment pending" | "Snooze unavailable, payment pending" |
-| 6 | `EarlierPaymentRefunding(price)` | `declinedReuseProduct` = expected product and it is in `env.strandedProducts` | "An earlier {price} payment is being refunded" (Play's string; "Prices not loaded yet" when no price is cached) | "Snooze unavailable, An earlier {price} payment is being refunded" |
+| 6 | `EarlierPaymentRefunding(amount paid)` | `declinedReuseProduct` = expected product and it is in `env.strandedProducts` | "An earlier {price} payment is being refunded" with the amount actually paid (`PurchaseLedger.refundingPrice`, Story 4.10); "An earlier payment is being refunded" when that amount is not known | "Snooze unavailable, An earlier {price} payment is being refunded" (or without the amount) |
 | 7 | `Offline` | `!env.online` | "Snooze unavailable: offline" | "Snooze unavailable, offline" |
 | 8 | `CatalogueNotLoaded` | no displayable (cached, not expired) price for the expected product | "Prices not loaded yet" | "Snooze unavailable, prices not loaded yet" |
 | — | `Available(offer + price)` | otherwise | "Snooze · {formattedPrice}" | "Snooze · {formattedPrice}" |
@@ -74,7 +74,7 @@ deferred:
 1. **Env before the first emission:** until the combined flows have emitted once (nobody collected yet), `current()` is online with no prices and the live lock state: the result is at best "Prices not loaded yet", never Available, and never a false "offline".
 2. **"Online"** = the default network has `NET_CAPABILITY_INTERNET` and `NET_CAPABILITY_VALIDATED` (captive portals read as offline; Play may still fail offline, 4.14 handles it). A failing system service reads as online (logged once), so Play gets to decide.
 3. **Expired prices** (30 days, 4.3) count as not loaded (row 8); stale prices are shown.
-4. **Refunding without a cached price** shows "Prices not loaded yet" (no invented price).
+4. **Refunding** names the amount actually paid, from the purchase record (`PurchaseLedger.refundingPrice`, Story 4.10, wired on the rebase onto main); when it is not known the label names no amount ("An earlier payment is being refunded", a new string, default taken). Never today's cached price.
 5. **`paid` amounts** come from the event (`PurchaseGranted.price`, `ReuseAccepted.price`, default null); 4.8/4.11 fill them from the intent. A malformed stored amount is dropped on decode, not the whole session.
 6. **Session-start refresh** waits for online for at most 30 minutes (the no-interaction timeout), then gives up.
 7. **Fallback picker:** no Snooze footer (owner decision Q2, 2026-10-08).

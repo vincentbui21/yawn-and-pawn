@@ -31,12 +31,12 @@ sealed interface SnoozeOffer {
     data object LockedBeforeUnlock : SnoozeOffer
 
     /**
-     * After "Not now" on an already-paid purchase: "An earlier {price} payment is being refunded", with Play's
-     * [formattedPrice] when known.
+     * After "Not now" on an already-paid purchase: "An earlier {price} payment is being refunded", with the amount
+     * actually paid ([price], from the purchase record); "An earlier payment is being refunded" when that amount is not
+     * known (never today's price instead).
      */
     data class StrandedRefund(
-        val price: Money,
-        val formattedPrice: String? = null,
+        val price: Money? = null,
     ) : SnoozeOffer
 }
 

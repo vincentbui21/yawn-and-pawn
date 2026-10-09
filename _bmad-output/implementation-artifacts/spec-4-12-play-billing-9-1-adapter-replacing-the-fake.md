@@ -2,7 +2,7 @@
 title: 'Story 4.12: Play Billing 9.1 adapter replacing the fake'
 type: 'feature'
 created: '2026-10-09'
-status: 'in-progress'
+status: 'done'
 baseline_revision: '8d6d7a8'
 context:
   - '{project-root}/_bmad-output/implementation-artifacts/epic-4-context.md'
@@ -121,3 +121,34 @@ deferred:
 **Commands:**
 - `./gradlew qualityGate :androidApp:assembleDebugAndroidTest --no-daemon` -- expected: BUILD SUCCESSFUL.
 - `./gradlew :androidApp:bundleRelease` -- expected: the R8 release bundle builds (Play Billing ships its own consumer keep rules; no app rule needed).
+
+## Rebase notes
+
+- **4.13 (confirm sheet):** not merged when this story finished (origin/main `8d6d7a8`), so its `LivePriceSource`, `DisplayPrices` and `BillingCountry` ports (`core/billing/SnoozePrices.kt` on its branch) do not exist here yet. The real adapters are built and bound as concrete singles in `billingModule()`, with the same method shapes as 4.13's ports:
+  - `PlayLivePrices.livePrice(productId): LivePrice?`;
+  - `CachedDisplayPrices.priceOf(productId): Money?`;
+  - `PlayBillingCountry.countryCode(): String?`.
+- **Swap when 4.13 lands** (whichever merges second):
+  - add `: LivePriceSource`, `: DisplayPrices`, `: BillingCountry` with `override`;
+  - in 4.13's `confirmSheetModule`, replace the three `None` bindings with `get<PlayLivePrices>()`, `get<CachedDisplayPrices>()` and `get<PlayBillingCountry>()`;
+  - remove 4.13's own `single<UnlockPort>` if it still has one (4.11 review 16): `AndroidDeviceUnlocker` is the one binding.
+- **4.13's intent id:** `ConfirmSheetHost` mints a new UUID per Pay tap (the 4.8 deferral). The engine refuses a reused id, and the adapter needs nothing more.
+- **4.7 (PR #51):** no overlap in files. `SnoozeAvailability` reads the price cache, which the live price now also refreshes.
+
+## Auto Run Result
+
+Status: implemented in fast mode (one agent, unattended Epic 4 run), with no review pass. Branch `story/4-12-play-billing-adapter` on `origin/main` `8d6d7a8`.
+
+**Verification:**
+- `./gradlew qualityGate :androidApp:assembleDebugAndroidTest --no-daemon`: BUILD SUCCESSFUL (32 min 21 s, on `b039c1f`).
+- `:androidApp:bundleRelease`: R8 (`minifyReleaseWithR8`), `checkReleaseContent` and the bundle all built. Play Billing ships its own consumer keep rules, so `proguard-rules.pro` needs no change.
+- Gate fixes along the way:
+  - the ledger scan caught `timeouts.consume` as a second `.consume` caller (renamed `consumeCall`);
+  - detekt `ReturnCount` and `NoDirectTimeAccess` (the debug fake now takes the wall clock from the adapter package).
+- One gate run hit the 30-minute test-task cap after 121 of about 128 test classes, while other lanes loaded the PC. There was no watchdog output, so no test was hung.
+
+**Residual risks:**
+- Nothing here has run against real Play. The S1 timings (the sheet after the PIN, the echo window, the 2-minute PIN limit) are for the 4.18 device rows (deferred-work.md).
+- **Billing country:** it is null until the first connection after an app start, so the tax note can be missing on a sheet opened in the first seconds after a cold start.
+- **ProductDetails reuse:** the launch reuses the in-memory `ProductDetails` from the latest query. A price changed in Play Console since then still shows correctly on Play's own sheet.
+- **Crashlytics mapping upload:** a release build with a local `google-services.json` runs `uploadCrashlyticsMappingFileRelease`, as every release build on this machine does.

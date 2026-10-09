@@ -65,7 +65,7 @@ class AndroidBillingTest {
         BillingTimeouts(
             connect = 200.milliseconds,
             query = 200.milliseconds,
-            consume = 200.milliseconds,
+            consumeCall = 200.milliseconds,
             launch = 200.milliseconds,
             wakeScreen = 50.milliseconds,
             reconnectFirst = 10.milliseconds,

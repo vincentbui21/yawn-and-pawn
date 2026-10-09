@@ -56,7 +56,7 @@ fun interface WakeScreens {
 data class BillingTimeouts(
     val connect: Duration = 10.seconds,
     val query: Duration = 10.seconds,
-    val consume: Duration = 15.seconds,
+    val consumeCall: Duration = 15.seconds,
     /** Reaching the main thread to call `launchBillingFlow`; the call itself returns at once. */
     val launch: Duration = 5.seconds,
     /** The wake screen resuming, for example a moment after the PIN prompt closed. */
@@ -203,8 +203,8 @@ class AndroidBilling(
             is Readiness.Failed -> return ConsumeResult.Failed(ready.cause)
         }
         val answer =
-            call<PlayResult>(timeouts.consume) { done -> facade.consumeAsync(token.value, done) }
-                ?: return ConsumeResult.Failed("no answer within ${timeouts.consume}")
+            call<PlayResult>(timeouts.consumeCall) { done -> facade.consumeAsync(token.value, done) }
+                ?: return ConsumeResult.Failed("no answer within ${timeouts.consumeCall}")
         return PlayResponses.consumeResult(answer.code)
     }
 

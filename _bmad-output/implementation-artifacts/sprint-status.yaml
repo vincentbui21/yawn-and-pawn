@@ -105,7 +105,7 @@ development_status:
   4-10-grant-ledger-purchase-records-and-consume-with-retry: done  # Epic 4 auto-run, fast mode
   4-11-billing-orchestration-launch-recovery-item_already_owned-and: done  # Epic 4 auto-run, fast mode
   4-12-play-billing-9-1-adapter-replacing-the-fake: backlog
-  4-13-snooze-confirm-sheet: backlog
+  4-13-snooze-confirm-sheet: done  # Epic 4 auto-run, fast mode
   4-14-payment-outcome-messages: backlog
   4-15-snoozed-screen-session-line-and-snoozing-from-a-check: backlog
   4-16-purchase-history: backlog

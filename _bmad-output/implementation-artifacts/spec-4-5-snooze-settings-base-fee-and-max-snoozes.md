@@ -108,7 +108,8 @@ still shows only its title (`AppNavHost.SettingsTab`, `rows = emptySet()`), so t
 
 - `composeApp/.../ui/settings/`:
   - `SettingsContract.kt`: the state now holds display strings, the tier and the two notes;
-  - `SettingsScreen.kt`: the ladder variants, both notes and the max snoozes note;
+  - `SettingsScreen.kt`, `SnoozePanes.kt` (new; the Base fee and Max snoozes panes moved out of `SettingsScreen.kt`):
+    the ladder variants, both notes and the max snoozes note;
   - `SnoozePrices.kt` (new): the pure price and note mapping;
   - `SettingsViewModel.kt` (new);
   - `SettingsRoute.kt` (new): the ViewModel, Back on sub-screens.
@@ -116,7 +117,9 @@ still shows only its title (`AppNavHost.SettingsTab`, `rows = emptySet()`), so t
 - `composeApp/.../ui/nav/AppNavHost.kt`: the Settings tab uses `SettingsRoute`.
 - `composeApp/.../ui/UiModule.kt`: the `SettingsViewModel` binding.
 - `composeApp/.../composeResources/values/strings.xml`: two ladder strings.
-- `androidApp/src/debug/.../preview/`: the samples and the reducer use the new state.
+- `androidApp/src/debug/.../preview/`: the samples and the reducer use the new state. The Settings samples are getters
+  and the catalogue takes them as lambdas, because they format prices with the phone's `MoneyFormatter` (ICU), which
+  is not available when the parameterized tests build their case list.
 - Tests:
   - `composeApp/src/commonTest/.../ui/settings/` (ViewModel and `SnoozePrices`);
   - `androidApp/src/test/.../ui/SnoozeSettingsScreenshotTest.kt`, `SnoozeSettingsSemanticsTest.kt`,

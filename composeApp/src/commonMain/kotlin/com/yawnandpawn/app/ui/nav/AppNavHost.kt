@@ -22,7 +22,6 @@ import androidx.navigation3.runtime.rememberNavBackStack
 import androidx.navigation3.runtime.rememberSaveableStateHolderNavEntryDecorator
 import androidx.navigation3.scene.Scene
 import androidx.navigation3.ui.NavDisplay
-import com.yawnandpawn.app.core.billing.Money
 import com.yawnandpawn.app.core.session.SessionLockGuard
 import com.yawnandpawn.app.core.time.Clock
 import com.yawnandpawn.app.core.time.TimeZoneProvider
@@ -37,8 +36,7 @@ import com.yawnandpawn.app.ui.progress.CalendarMonth
 import com.yawnandpawn.app.ui.progress.ProgressScreen
 import com.yawnandpawn.app.ui.progress.ProgressUiState
 import com.yawnandpawn.app.ui.purchases.PurchaseHistoryRoute
-import com.yawnandpawn.app.ui.settings.SettingsScreen
-import com.yawnandpawn.app.ui.settings.SettingsUiState
+import com.yawnandpawn.app.ui.settings.SettingsRoute
 import com.yawnandpawn.app.ui.shell.AppShell
 import com.yawnandpawn.app.ui.shell.AppTab
 import com.yawnandpawn.app.ui.theme.PpsTheme
@@ -185,11 +183,10 @@ internal fun emptyProgress(today: LocalDate): ProgressUiState =
             ),
     )
 
-/** Settings until its stories are built (Epics 4 and 5): the title, no rows. */
+/** Settings: the Snooze card's base fee and max snoozes (Story 4.5); Epic 5 adds the other rows. */
 @Composable
 private fun SettingsTab() {
-    val state = remember { SettingsUiState(baseFee = HIDDEN_BASE_FEE) }
-    SettingsScreen(state = state, is24Hour = is24HourClock(), onIntent = {}, rows = emptySet())
+    SettingsRoute(is24Hour = is24HourClock())
 }
 
 /**
@@ -208,9 +205,6 @@ private fun YouTab(onOpenPurchaseHistory: () -> Unit) {
 
 /** The You rows whose screens are built. */
 private val YouTabRows: Set<YouRow> = setOf(YouRow.PurchaseHistory)
-
-/** Never shown: the Settings rows that would show the base fee are hidden until Epic 4. */
-private val HIDDEN_BASE_FEE = Money(micros = 0, currency = "USD")
 
 /** The editor of [route] on [backStack]; [onOpenFailed] after it closed because its alarm could not be read. */
 @Composable

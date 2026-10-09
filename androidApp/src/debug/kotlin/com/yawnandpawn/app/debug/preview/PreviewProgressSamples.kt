@@ -6,6 +6,7 @@ import com.yawnandpawn.app.ui.daydetail.AlarmChange
 import com.yawnandpawn.app.ui.daydetail.DayDetailUiState
 import com.yawnandpawn.app.ui.daydetail.MorningEvent
 import com.yawnandpawn.app.ui.daydetail.SessionDetail
+import com.yawnandpawn.app.ui.format.formatMoney
 import com.yawnandpawn.app.ui.progress.CalendarDay
 import com.yawnandpawn.app.ui.progress.CalendarMonth
 import com.yawnandpawn.app.ui.progress.DaySelection
@@ -23,6 +24,7 @@ import com.yawnandpawn.app.ui.reliability.ItemStatus
 import com.yawnandpawn.app.ui.reliability.ReliabilityUiState
 import com.yawnandpawn.app.ui.settings.SettingsPane
 import com.yawnandpawn.app.ui.settings.SettingsUiState
+import com.yawnandpawn.app.ui.settings.SnoozePrices
 import com.yawnandpawn.app.ui.settings.WeakeningNote
 import com.yawnandpawn.app.ui.you.YouUiState
 import kotlinx.datetime.DateTimeUnit
@@ -269,9 +271,9 @@ object PreviewProgressSamples {
 
     // Settings -----------------------------------------------------------------------------------------------------
 
-    val settings = SettingsUiState(baseFee = price(1), lowerFee = null, higherFee = price(2), vibrateDuringQuietTime = true)
+    val settings: SettingsUiState get() = SettingsUiState(baseFee = "", vibrateDuringQuietTime = true).withPreviewFee(1)
 
-    val settingsReliability = settings.copy(reliabilityProblem = true)
+    val settingsReliability: SettingsUiState get() = settings.copy(reliabilityProblem = true)
 
     // You -----------------------------------------------------------------------------------------------------------
 
@@ -281,22 +283,26 @@ object PreviewProgressSamples {
 
     val youNoBrowser = you.copy(noBrowser = true)
 
-    val settingsSession = settings.copy(sessionInProgress = true)
+    val settingsSession: SettingsUiState get() = settings.copy(sessionInProgress = true)
 
-    val settingsBaseFee = settings.copy(pane = SettingsPane.BaseFee)
+    val settingsBaseFee: SettingsUiState get() = settings.copy(pane = SettingsPane.BaseFee)
 
     /** F6: lowered from 3 to 1 at 23:40; the lower fee waits for tomorrow's 7:30 alarm. */
-    val settingsBaseFeeWeakening = settingsBaseFee.copy(weakening = WeakeningNote(standUp))
+    val settingsBaseFeeWeakening: SettingsUiState get() = settingsBaseFee.copy(baseFeeNote = WeakeningNote(standUp))
 
     /** Prices never loaded: US dollar tiers with the approximate-price note. */
-    val settingsBaseFeeApproximate =
-        settingsBaseFee.copy(baseFee = Money.of(1, "USD"), higherFee = Money.of(2, "USD"), pricesApproximate = true)
+    val settingsBaseFeeApproximate: SettingsUiState get() =
+        settingsBaseFee.copy(
+            baseFee = formatMoney(Money.of(1, "USD")),
+            feeLadder = (1..SnoozePrices.LADDER_ENTRIES).map { formatMoney(Money.of(it, "USD")) },
+            pricesApproximate = true,
+        )
 
-    val settingsMaxSnoozes = settings.copy(pane = SettingsPane.MaxSnoozes)
+    val settingsMaxSnoozes: SettingsUiState get() = settings.copy(pane = SettingsPane.MaxSnoozes)
 
-    val settingsSnoozeLength = settings.copy(pane = SettingsPane.SnoozeLength)
+    val settingsSnoozeLength: SettingsUiState get() = settings.copy(pane = SettingsPane.SnoozeLength)
 
-    val settingsQuietTime = settings.copy(pane = SettingsPane.QuietTime)
+    val settingsQuietTime: SettingsUiState get() = settings.copy(pane = SettingsPane.QuietTime)
 
     // Reliability checklist and payments ------------------------------------------------------------------------------
 
@@ -345,3 +351,14 @@ object PreviewProgressSamples {
     /** `DayOfWeek.SATURDAY.ordinal`: August's sample mornings are weekdays. */
     private const val WEEKEND_ORDINAL = 5
 }
+
+/**
+ * Settings at the preview's base fee [tier]: snooze N costs N x [tier] x the preview base fee, in the phone's currency
+ * ([PreviewSamples.price]), with a ladder of min(3, max snoozes) prices, as the real screen shows Play's prices.
+ */
+internal fun SettingsUiState.withPreviewFee(tier: Int): SettingsUiState =
+    copy(
+        baseFeeTier = tier,
+        baseFee = formatMoney(PreviewSamples.price(tier)),
+        feeLadder = (1..minOf(SnoozePrices.LADDER_ENTRIES, maxSnoozes)).map { formatMoney(PreviewSamples.price(tier * it)) },
+    )

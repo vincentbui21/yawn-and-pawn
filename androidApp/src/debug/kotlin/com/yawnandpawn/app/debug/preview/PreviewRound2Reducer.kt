@@ -1,6 +1,5 @@
 package com.yawnandpawn.app.debug.preview
 
-import com.yawnandpawn.app.core.billing.Money
 import com.yawnandpawn.app.ui.progress.ProgressIntent
 import com.yawnandpawn.app.ui.progress.ProgressUiState
 import com.yawnandpawn.app.ui.reliability.ChecklistItem
@@ -9,6 +8,7 @@ import com.yawnandpawn.app.ui.reliability.ReliabilityUiState
 import com.yawnandpawn.app.ui.settings.SettingsIntent
 import com.yawnandpawn.app.ui.settings.SettingsPane
 import com.yawnandpawn.app.ui.settings.SettingsUiState
+import com.yawnandpawn.app.ui.settings.WeakeningNote
 import com.yawnandpawn.app.ui.you.YouIntent
 import com.yawnandpawn.app.ui.you.YouUiState
 
@@ -42,11 +42,12 @@ internal fun reduceSettings(
         }
 
         SettingsIntent.LowerBaseFee -> {
-            state.withFee(state.lowerFee).copy(weakening = WEAKENING)
+            if (state.canLowerFee) state.withPreviewFee(state.baseFeeTier - 1).copy(baseFeeNote = WEAKENING) else state
         }
 
+        // Raising is never held by the lock: it applies at once and drops a waiting lower fee.
         SettingsIntent.RaiseBaseFee -> {
-            state.withFee(state.higherFee)
+            if (state.canRaiseFee) state.withPreviewFee(state.baseFeeTier + 1).copy(baseFeeNote = null) else state
         }
 
         else -> {
@@ -60,7 +61,7 @@ private fun reduceSettingValues(
     intent: SettingsIntent,
 ): SettingsUiState =
     when (intent) {
-        is SettingsIntent.MaxSnoozesChanged -> state.copy(maxSnoozes = intent.value)
+        is SettingsIntent.MaxSnoozesChanged -> state.copy(maxSnoozes = intent.value).withPreviewFee(state.baseFeeTier)
         is SettingsIntent.SnoozeLengthSelected -> state.copy(defaultSnoozeMinutes = intent.minutes)
         is SettingsIntent.QuietTimeChanged -> state.copy(defaultQuietSeconds = intent.seconds)
         is SettingsIntent.VibrateDuringQuietTimeToggled -> state.copy(vibrateDuringQuietTime = intent.on)
@@ -71,19 +72,7 @@ private fun reduceSettingValues(
         else -> state
     }
 
-private val WEAKENING = PreviewProgressSamples.settingsBaseFeeWeakening.weakening
-
-/** One price tier down or up: the fee steps in whole multiples of the preview base fee. */
-private fun SettingsUiState.withFee(fee: Money?): SettingsUiState {
-    if (fee == null) return this
-    val unit = PreviewSamples.price(1)
-    val multiple = (fee.micros / unit.micros).toInt()
-    return copy(
-        baseFee = fee,
-        lowerFee = if (multiple > 1) PreviewSamples.price(multiple - 1) else null,
-        higherFee = if (multiple < MAX_FEE_MULTIPLE) PreviewSamples.price(multiple + 1) else null,
-    )
-}
+private val WEAKENING: WeakeningNote? get() = PreviewProgressSamples.settingsBaseFeeWeakening.baseFeeNote
 
 /** "Fix" returns from the system setting with the item OK; the manufacturer steps open first. */
 internal fun ReliabilityUiState.fixed(item: ChecklistItem): ReliabilityUiState =
@@ -92,9 +81,6 @@ internal fun ReliabilityUiState.fixed(item: ChecklistItem): ReliabilityUiState =
     } else {
         copy(rows = rows.map { if (it.item == item) it.copy(status = ItemStatus.Ok) else it }, showManufacturerSteps = false)
     }
-
-/** The preview's base fee goes up to 5 tiers. */
-private const val MAX_FEE_MULTIPLE = 5
 
 /** The You tab in the tap-through: links show what a phone without a browser sees, "Delete all data" asks first. */
 internal fun reduceYou(

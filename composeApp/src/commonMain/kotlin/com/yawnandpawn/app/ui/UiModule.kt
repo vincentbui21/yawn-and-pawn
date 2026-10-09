@@ -5,6 +5,7 @@ import com.yawnandpawn.app.ui.editor.AlarmEditorViewModel
 import com.yawnandpawn.app.ui.home.AlarmActions
 import com.yawnandpawn.app.ui.home.HomeViewModel
 import com.yawnandpawn.app.ui.purchases.PurchaseHistoryViewModel
+import com.yawnandpawn.app.ui.settings.SettingsViewModel
 import org.koin.core.module.dsl.viewModel
 import org.koin.dsl.module
 
@@ -18,6 +19,20 @@ val uiModule =
         factory { AlarmActions(get(), get(), get(), get()) }
         viewModel { HomeViewModel(get(), get(), get(), get(), get(), get(), get(), get(), get()) }
         viewModel { PurchaseHistoryViewModel(get(), get(), get(), get(), get()) }
+        viewModel {
+            SettingsViewModel(
+                globalSettings = get(),
+                pendingChanges = get(),
+                priceCatalog = get(),
+                setBaseFee = get(),
+                setMaxSnoozes = get(),
+                clock = get(),
+                timeZoneProvider = get(),
+                timeChanges = get(),
+                moneyFormatter = get(),
+                logger = get(),
+            )
+        }
         viewModel { params ->
             AlarmEditorViewModel(
                 alarmId = params.get<AlarmEditorArgs>().alarmId,

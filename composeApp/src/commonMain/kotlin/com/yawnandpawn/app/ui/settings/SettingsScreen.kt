@@ -23,7 +23,6 @@ import com.yawnandpawn.app.ui.components.NavRow
 import com.yawnandpawn.app.ui.components.NoteInline
 import com.yawnandpawn.app.ui.components.PpsBackground
 import com.yawnandpawn.app.ui.components.PpsSegmentedControl
-import com.yawnandpawn.app.ui.components.PpsStepper
 import com.yawnandpawn.app.ui.components.RadioRow
 import com.yawnandpawn.app.ui.components.ScreenTitle
 import com.yawnandpawn.app.ui.components.SessionInProgressPanel
@@ -34,22 +33,17 @@ import com.yawnandpawn.app.ui.components.TabScreen
 import com.yawnandpawn.app.ui.components.rowIf
 import com.yawnandpawn.app.ui.components.subScreenTransition
 import com.yawnandpawn.app.ui.editor.EditorForm
-import com.yawnandpawn.app.ui.format.formatClockTime
-import com.yawnandpawn.app.ui.format.formatMoney
 import com.yawnandpawn.app.ui.resources.Res
 import com.yawnandpawn.app.ui.resources.editor_back
-import com.yawnandpawn.app.ui.resources.editor_fee_ladder
 import com.yawnandpawn.app.ui.resources.editor_grace_seconds
 import com.yawnandpawn.app.ui.resources.editor_quiet_time_note
 import com.yawnandpawn.app.ui.resources.editor_snooze_minutes
 import com.yawnandpawn.app.ui.resources.editor_vibrate_quiet_time
-import com.yawnandpawn.app.ui.resources.editor_weakening_under_lock
 import com.yawnandpawn.app.ui.resources.home_fix
 import com.yawnandpawn.app.ui.resources.home_reliability_banner
 import com.yawnandpawn.app.ui.resources.nav_settings
 import com.yawnandpawn.app.ui.resources.settings_appearance
 import com.yawnandpawn.app.ui.resources.settings_base_fee
-import com.yawnandpawn.app.ui.resources.settings_base_fee_lock
 import com.yawnandpawn.app.ui.resources.settings_bright_wake
 import com.yawnandpawn.app.ui.resources.settings_bright_wake_caption
 import com.yawnandpawn.app.ui.resources.settings_default_quiet_time
@@ -62,7 +56,6 @@ import com.yawnandpawn.app.ui.resources.settings_delete_title
 import com.yawnandpawn.app.ui.resources.settings_max_snoozes
 import com.yawnandpawn.app.ui.resources.settings_no_browser
 import com.yawnandpawn.app.ui.resources.settings_payments
-import com.yawnandpawn.app.ui.resources.settings_prices_approximate
 import com.yawnandpawn.app.ui.resources.settings_privacy
 import com.yawnandpawn.app.ui.resources.settings_reliability
 import com.yawnandpawn.app.ui.resources.settings_snooze
@@ -73,11 +66,7 @@ import com.yawnandpawn.app.ui.resources.settings_theme_light
 import com.yawnandpawn.app.ui.resources.settings_theme_system
 import com.yawnandpawn.app.ui.resources.settings_usage_stats
 import com.yawnandpawn.app.ui.resources.settings_wake
-import com.yawnandpawn.app.ui.resources.settings_weakening_today
 import com.yawnandpawn.app.ui.resources.settings_weekly_summary
-import com.yawnandpawn.app.ui.resources.stepper_lower
-import com.yawnandpawn.app.ui.resources.stepper_raise
-import com.yawnandpawn.app.ui.resources.stepper_value
 import com.yawnandpawn.app.ui.theme.PpsTheme
 import com.yawnandpawn.app.ui.theme.PpsThemeMode
 import org.jetbrains.compose.resources.StringResource
@@ -145,7 +134,7 @@ private fun SettingsMain(
                     rowIf(SettingsRow.BaseFee in rows) {
                         NavRow(
                             label = stringResource(Res.string.settings_base_fee),
-                            value = formatMoney(state.baseFee),
+                            value = state.baseFee,
                             onClick = { onIntent(SettingsIntent.OpenPane(SettingsPane.BaseFee)) },
                         )
                     },
@@ -284,7 +273,7 @@ private fun SettingsSubScreen(
         when (pane) {
             SettingsPane.Main -> Unit
             SettingsPane.BaseFee -> BaseFeePane(state = state, is24Hour = is24Hour, onIntent = onIntent)
-            SettingsPane.MaxSnoozes -> MaxSnoozesPane(state = state, onIntent = onIntent)
+            SettingsPane.MaxSnoozes -> MaxSnoozesPane(state = state, is24Hour = is24Hour, onIntent = onIntent)
             SettingsPane.SnoozeLength -> SnoozeLengthPane(state = state, onIntent = onIntent)
             SettingsPane.QuietTime -> QuietTimePane(state = state, onIntent = onIntent)
         }
@@ -299,76 +288,6 @@ private fun SettingsPane.title(): StringResource =
         SettingsPane.SnoozeLength -> Res.string.settings_default_snooze_length
         SettingsPane.QuietTime -> Res.string.settings_default_quiet_time
     }
-
-/**
- * Base fee: the `stepper` over the price tiers, the fee ladder preview, the commitment-lock note, and (prices never
- * loaded) the approximate-price note; after a weakening change, "Saved. Takes effect after ...".
- */
-@Composable
-private fun BaseFeePane(
-    state: SettingsUiState,
-    is24Hour: Boolean,
-    onIntent: (SettingsIntent) -> Unit,
-) {
-    val title = stringResource(Res.string.settings_base_fee)
-    val fee = formatMoney(state.baseFee)
-    val notePadding = Modifier.padding(horizontal = PpsTheme.spacing.cardPadding)
-    GroupCard {
-        PpsStepper(
-            valueText = fee,
-            valueDescription = stringResource(Res.string.stepper_value, title, fee),
-            decreaseLabel = stringResource(Res.string.stepper_lower, title),
-            increaseLabel = stringResource(Res.string.stepper_raise, title),
-            onDecrease = { onIntent(SettingsIntent.LowerBaseFee) },
-            onIncrease = { onIntent(SettingsIntent.RaiseBaseFee) },
-            canDecrease = state.lowerFee != null,
-            canIncrease = state.higherFee != null,
-        )
-    }
-    NoteInline(
-        text =
-            stringResource(
-                Res.string.editor_fee_ladder,
-                formatMoney(state.baseFee),
-                formatMoney(state.baseFee * 2),
-                formatMoney(state.baseFee * FEE_LADDER_THIRD),
-            ),
-        modifier = notePadding,
-    )
-    state.weakening?.let { note ->
-        NoteInline(
-            text =
-                stringResource(
-                    if (note.today) Res.string.settings_weakening_today else Res.string.editor_weakening_under_lock,
-                    formatClockTime(note.time, is24Hour),
-                ),
-            modifier = notePadding,
-        )
-    } ?: NoteInline(text = stringResource(Res.string.settings_base_fee_lock), modifier = notePadding)
-    if (state.pricesApproximate) NoteInline(text = stringResource(Res.string.settings_prices_approximate), modifier = notePadding)
-}
-
-/** Max snoozes per session: a `stepper` from 1 to 5 (the default; FR-SET-1). */
-@Composable
-private fun MaxSnoozesPane(
-    state: SettingsUiState,
-    onIntent: (SettingsIntent) -> Unit,
-) {
-    val title = stringResource(Res.string.settings_max_snoozes)
-    val value = state.maxSnoozes.toString()
-    GroupCard {
-        PpsStepper(
-            valueText = value,
-            valueDescription = stringResource(Res.string.stepper_value, title, value),
-            decreaseLabel = stringResource(Res.string.stepper_lower, title),
-            increaseLabel = stringResource(Res.string.stepper_raise, title),
-            onDecrease = { onIntent(SettingsIntent.MaxSnoozesChanged(state.maxSnoozes - 1)) },
-            onIncrease = { onIntent(SettingsIntent.MaxSnoozesChanged(state.maxSnoozes + 1)) },
-            canDecrease = state.maxSnoozes > SettingsUiState.MIN_MAX_SNOOZES,
-            canIncrease = state.maxSnoozes < SettingsUiState.DEFAULT_MAX_SNOOZES,
-        )
-    }
-}
 
 /** Default snooze length: 5 / 9 / 10 / 15 min. */
 @Composable
@@ -410,6 +329,3 @@ private fun QuietTimePane(
         modifier = Modifier.padding(horizontal = PpsTheme.spacing.cardPadding),
     )
 }
-
-/** The fee ladder preview shows snoozes 1 to 3. */
-private const val FEE_LADDER_THIRD = 3

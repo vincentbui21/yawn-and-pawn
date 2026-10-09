@@ -62,14 +62,19 @@ object PreviewRound2 {
         PurchaseHistoryScreen(state = state, is24Hour = is24, onBack = {}, onProblemWithCharge = {})
     }
 
+    /**
+     * A Settings item. Its [sample] is read when the item is shown, not when the catalogue is built: the samples format
+     * their prices with the phone's `MoneyFormatter`, which needs the running app (and its current locale).
+     */
     private fun settings(
         id: String,
         title: String,
-        state: SettingsUiState,
+        sample: () -> SettingsUiState,
         group: String = "Settings",
         primary: Boolean = false,
         hasDialog: Boolean = false,
     ) = item(id, group, title, primary = primary, hasDialog = hasDialog) { is24 ->
+        val state = sample()
         if (state.pane == SettingsPane.Main) {
             AppShell(selected = AppTab.Settings, onSelect = {}, showNavBar = !state.sessionInProgress) {
                 SettingsScreen(state = state, is24Hour = is24, onIntent = {})
@@ -116,28 +121,28 @@ object PreviewRound2 {
             day("day_skipped", "Skipped day", s.daySkipped),
             purchases("purchases_list", "Charges by month, one refunded", s.purchases, primary = true),
             purchases("purchases_empty", "Empty", s.purchasesEmpty),
-            settings("settings_main", "All sections", s.settings, primary = true),
-            settings("settings_reliability_banner", "Permission missing banner", s.settingsReliability),
+            settings("settings_main", "All sections", { s.settings }, primary = true),
+            settings("settings_reliability_banner", "Permission missing banner", { s.settingsReliability }),
             you("you_main", "Money, privacy and your data, help", s.you, primary = true),
             you("you_delete_dialog", "Delete all data", s.youDeleteDialog, hasDialog = true),
             you("you_no_browser", "Link without a browser", s.youNoBrowser),
-            settings("settings_session", "During a session (session lock)", s.settingsSession),
-            settings("settings_base_fee", "Base fee", s.settingsBaseFee, group = "Settings sub-screens", primary = true),
+            settings("settings_session", "During a session (session lock)", { s.settingsSession }),
+            settings("settings_base_fee", "Base fee", { s.settingsBaseFee }, group = "Settings sub-screens", primary = true),
             settings(
                 "settings_base_fee_weakening",
                 "Base fee lowered under lock",
-                s.settingsBaseFeeWeakening,
+                { s.settingsBaseFeeWeakening },
                 group = "Settings sub-screens",
             ),
             settings(
                 "settings_base_fee_approximate",
                 "Base fee, prices never loaded",
-                s.settingsBaseFeeApproximate,
+                { s.settingsBaseFeeApproximate },
                 group = "Settings sub-screens",
             ),
-            settings("settings_max_snoozes", "Max snoozes per session", s.settingsMaxSnoozes, group = "Settings sub-screens"),
-            settings("settings_snooze_length", "Default snooze length", s.settingsSnoozeLength, group = "Settings sub-screens"),
-            settings("settings_quiet_time", "Default quiet time", s.settingsQuietTime, group = "Settings sub-screens"),
+            settings("settings_max_snoozes", "Max snoozes per session", { s.settingsMaxSnoozes }, group = "Settings sub-screens"),
+            settings("settings_snooze_length", "Default snooze length", { s.settingsSnoozeLength }, group = "Settings sub-screens"),
+            settings("settings_quiet_time", "Default quiet time", { s.settingsQuietTime }, group = "Settings sub-screens"),
             reliability("reliability_missing", "Items missing and revoked", s.reliabilityMissing, primary = true),
             reliability("reliability_all_ok", "All OK", s.reliabilityAllOk),
             reliability("reliability_manufacturer", "Manufacturer steps (Xiaomi)", s.reliabilityManufacturer),

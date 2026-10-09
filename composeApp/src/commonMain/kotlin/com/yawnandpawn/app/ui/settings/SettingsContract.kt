@@ -1,6 +1,6 @@
 package com.yawnandpawn.app.ui.settings
 
-import com.yawnandpawn.app.core.billing.Money
+import com.yawnandpawn.app.core.billing.FeeRules
 import com.yawnandpawn.app.ui.theme.PpsThemeMode
 import kotlinx.datetime.LocalTime
 
@@ -33,11 +33,15 @@ data class WeakeningNote(
 
 /** What Settings renders. */
 data class SettingsUiState(
-    /** Snooze 1 costs the base fee B; snooze N costs B x N (FR-SET-1). */
-    val baseFee: Money,
-    /** The next base fee below or above [baseFee] (a price tier), `null` at either end. */
-    val lowerFee: Money? = null,
-    val higherFee: Money? = null,
+    /** The price of [baseFeeTier] as shown: Play's own `formattedPrice`, or a USD approximation ([pricesApproximate]). */
+    val baseFee: String,
+    /**
+     * The base fee tier B the user chose (1 to 10; the pending value once a lower fee waits under the lock): snooze N
+     * costs B x N (FR-SET-1).
+     */
+    val baseFeeTier: Int = FeeRules.BASE_FEE_TIERS.first,
+    /** The fee ladder preview: the prices of snoozes 1 to min(3, [maxSnoozes]) as shown. */
+    val feeLadder: List<String> = emptyList(),
     /** Prices never loaded: USD tiers with "Approximate. Your local price shows when you're online.". */
     val pricesApproximate: Boolean = false,
     val maxSnoozes: Int = DEFAULT_MAX_SNOOZES,
@@ -53,12 +57,21 @@ data class SettingsUiState(
     /** A session is active: Settings is not reachable, only `panel-session-in-progress` shows (session lock). */
     val sessionInProgress: Boolean = false,
     val pane: SettingsPane = SettingsPane.Main,
-    /** A weakening change was saved under the commitment lock. */
-    val weakening: WeakeningNote? = null,
+    /** A lower base fee was saved under the commitment lock and waits for an alarm. */
+    val baseFeeNote: WeakeningNote? = null,
+    /** More snoozes per session were saved under the commitment lock and wait for an alarm. */
+    val maxSnoozesNote: WeakeningNote? = null,
 ) {
+    /** − is enabled above tier 1. */
+    val canLowerFee: Boolean get() = baseFeeTier > FeeRules.BASE_FEE_TIERS.first
+
+    /** + is enabled below tier 10. */
+    val canRaiseFee: Boolean get() = baseFeeTier < FeeRules.BASE_FEE_TIERS.last
+
     companion object {
-        const val DEFAULT_MAX_SNOOZES = 5
-        const val MIN_MAX_SNOOZES = 1
+        /** 5, the default and the most (FR-SET-1). */
+        val DEFAULT_MAX_SNOOZES: Int = FeeRules.MAX_SNOOZES.last
+        val MIN_MAX_SNOOZES: Int = FeeRules.MAX_SNOOZES.first
         const val DEFAULT_SNOOZE_MINUTES = 9
         const val DEFAULT_QUIET_SECONDS = 20
     }

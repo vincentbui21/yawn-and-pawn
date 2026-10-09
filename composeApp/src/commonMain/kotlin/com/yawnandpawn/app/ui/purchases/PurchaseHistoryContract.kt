@@ -33,12 +33,14 @@ data class Purchase(
 
 /**
  * What Purchase history renders: every charge, newest first ([purchases]); [loading] until the first read, [loadFailed]
- * when the records could not be read (never shown as the empty state).
+ * when the records could not be read (never shown as the empty state); [someUnreadable] when some stored records could
+ * not be read and are missing from [purchases].
  */
 data class PurchaseHistoryUiState(
     val purchases: List<Purchase> = emptyList(),
     val loading: Boolean = false,
     val loadFailed: Boolean = false,
+    val someUnreadable: Boolean = false,
 )
 
 /** Everything the user can do on Purchase history besides leaving it. */

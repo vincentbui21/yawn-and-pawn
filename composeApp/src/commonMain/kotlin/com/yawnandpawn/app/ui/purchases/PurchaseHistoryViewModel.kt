@@ -6,6 +6,7 @@ import com.yawnandpawn.app.core.alarm.Alarm
 import com.yawnandpawn.app.core.alarm.AlarmRepository
 import com.yawnandpawn.app.core.billing.PurchaseRecord
 import com.yawnandpawn.app.core.billing.PurchaseRecordRepository
+import com.yawnandpawn.app.core.billing.PurchaseRecordsRead
 import com.yawnandpawn.app.core.error.Outcome
 import com.yawnandpawn.app.core.history.SessionHistoryRepository
 import com.yawnandpawn.app.core.history.SessionHistoryRow
@@ -31,8 +32,10 @@ import kotlinx.coroutines.flow.update
  * rang for from [history]. The screen follows every change of the records.
  *
  * A failing read of the records shows the load failure with "Try again" (resubscribes), never the empty state, which
- * would say no charge exists. The alarm labels and session times only name the alarm: a failing read of them is logged
- * and drops that detail, never the charges. A session's ring time never changes, so it is read once per session.
+ * would say no charge exists; so do stored rows none of which can be read. When only some cannot be read (the
+ * repository logs how many), the readable ones show with a note saying some could not be read. The alarm labels and
+ * session times only name the alarm: a failing read of them is logged and drops that detail, never the charges. A
+ * session's ring time never changes, so it is read once per session.
  */
 class PurchaseHistoryViewModel(
     private val records: PurchaseRecordRepository,
@@ -60,7 +63,7 @@ class PurchaseHistoryViewModel(
     val state: StateFlow<PurchaseHistoryUiState> =
         loads
             .flatMapLatest {
-                combine(records.observeAll(), alarmsById) { rows, byId -> PurchaseHistoryUiState(purchases = render(rows, byId)) }
+                combine(records.observeAll(), alarmsById) { read, byId -> stateOf(read, byId) }
                     .onStart { emit(PurchaseHistoryUiState(loading = true)) }
                     .catch { cause ->
                         logFailure("load purchase history", cause)
@@ -73,6 +76,20 @@ class PurchaseHistoryViewModel(
             PurchaseHistoryIntent.RetryLoad -> loads.update { it + 1 }
         }
     }
+
+    /**
+     * The screen for [read]: its records, with the note that some could not be read when rows were left out; the load
+     * failure when no row could be read at all (never the empty state, which would say there is no charge).
+     */
+    private suspend fun stateOf(
+        read: PurchaseRecordsRead,
+        alarms: Map<String, Alarm>,
+    ): PurchaseHistoryUiState =
+        if (read.records.isEmpty() && read.unreadable > 0) {
+            PurchaseHistoryUiState(loadFailed = true)
+        } else {
+            PurchaseHistoryUiState(purchases = render(read.records, alarms), someUnreadable = read.unreadable > 0)
+        }
 
     private suspend fun render(
         rows: List<PurchaseRecord>,

@@ -13,11 +13,13 @@ import com.yawnandpawn.app.core.billing.PriceSource
 import com.yawnandpawn.app.core.billing.PurchaseLedger
 import com.yawnandpawn.app.core.billing.PurchaseRecord
 import com.yawnandpawn.app.core.billing.PurchaseRecordRepository
+import com.yawnandpawn.app.core.billing.PurchaseRecordsRead
 import com.yawnandpawn.app.core.billing.RecordStatus
 import com.yawnandpawn.app.core.billing.SettleResult
 import com.yawnandpawn.app.core.billing.hash
 import com.yawnandpawn.app.core.error.DomainError
 import com.yawnandpawn.app.core.error.Outcome
+import com.yawnandpawn.app.core.log.LogEvent
 import com.yawnandpawn.app.core.session.ConsumeResult
 import com.yawnandpawn.app.core.session.PurchaseToken
 import com.yawnandpawn.app.core.session.RuntimeWrite
@@ -67,7 +69,8 @@ class RoomPurchaseRecordRepositoryTest {
             .inMemoryDatabaseBuilder<RuntimeDatabase>(context, factory = { RuntimeDatabaseConstructor.initialize() })
             .setDriver(AndroidSQLiteDriver())
             .build()
-    private val records = RoomPurchaseRecordRepository(appDb.purchaseRecordDao())
+    private val recordLog = FakeLogger()
+    private val records = RoomPurchaseRecordRepository(appDb.purchaseRecordDao(), recordLog)
     private val ledger = RoomGrantLedgerStore(runtimeDb.grantLedgerDao())
     private val sessions = RoomActiveSessionStore(runtimeDb.activeSessionDao(), FakeClock())
     private val intents = RoomPurchaseIntentStore(runtimeDb.purchaseIntentDao())
@@ -132,7 +135,7 @@ class RoomPurchaseRecordRepositoryTest {
         }
 
     @Test
-    fun `a damaged row is a storage failure for get and left out of the list, and a closed database fails`() =
+    fun `a damaged row is a storage failure for get, left out of the list but logged by count, and a closed database fails`() =
         runTest {
             val good = aPurchaseRecord(token = "good")
             records.putRecord(good)
@@ -143,6 +146,10 @@ class RoomPurchaseRecordRepositoryTest {
             val bad = records.get(PurchaseToken("bad").hash())
             assertEquals(Outcome.Failure(DomainError.StorageFailure("unreadable purchase record")), bad)
             assertEquals(Outcome.Success(listOf(good)), records.all())
+            // Never in silence: the count is logged, never a token or its hash.
+            val logged = LogEvent.OperationFailed("read purchase records", "unreadable rows left out: 3")
+            assertEquals(listOf<LogEvent>(logged), recordLog.events)
+            assertTrue(recordLog.events.none { it.toString().contains(PurchaseToken("bad").hash()) })
 
             appDb.close()
             assertIs<Outcome.Failure<DomainError>>(records.putRecord(good))
@@ -150,16 +157,20 @@ class RoomPurchaseRecordRepositoryTest {
         }
 
     @Test
-    fun `observeAll emits the records newest first after every change and leaves damaged rows out`() =
+    fun `observeAll emits the records newest first after every change and reports the damaged rows it leaves out`() =
         runTest {
             val older = aPurchaseRecord(token = "older")
             val newer = aPurchaseRecord(token = "newer", purchasedAt = DEFAULT_FAKE_INSTANT + 1.minutes)
-            assertEquals(emptyList(), records.observeAll().first())
+            assertEquals(PurchaseRecordsRead(emptyList()), records.observeAll().first())
 
             records.putRecord(older)
             records.putRecord(newer)
             appDb.purchaseRecordDao().upsertRecord(PurchaseRecordEntity.of(aPurchaseRecord(token = "bad")).copy(status = "voided"))
-            assertEquals(listOf(newer, older), records.observeAll().first())
+            assertEquals(PurchaseRecordsRead(listOf(newer, older), unreadable = 1), records.observeAll().first())
+            assertEquals(
+                listOf<LogEvent>(LogEvent.OperationFailed("read purchase records", "unreadable rows left out: 1")),
+                recordLog.events,
+            )
 
             records.putRecord(older.copy(status = RecordStatus.Consumed, consumedAt = DEFAULT_FAKE_INSTANT))
             assertEquals(
@@ -167,6 +178,7 @@ class RoomPurchaseRecordRepositoryTest {
                 records
                     .observeAll()
                     .first()
+                    .records
                     .last()
                     .status,
             )

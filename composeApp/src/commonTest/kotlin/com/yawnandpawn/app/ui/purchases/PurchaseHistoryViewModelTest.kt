@@ -35,6 +35,7 @@ import kotlin.test.assertFalse
 import kotlin.test.assertTrue
 import kotlin.time.Duration.Companion.hours
 import kotlin.time.Duration.Companion.minutes
+import kotlin.time.Instant
 
 /** Story 4.16: Purchase history's ordering, status mapping, amounts, alarm naming, month cards and failures. */
 @OptIn(ExperimentalCoroutinesApi::class)
@@ -167,6 +168,59 @@ class PurchaseHistoryViewModelTest {
             // 22:05 UTC is 00:05 the next day in Helsinki (UTC+2 in March).
             assertEquals(LocalDate(2027, 3, 4), purchase.date)
             assertEquals(LocalTime(0, 0), purchase.alarmTime)
+        }
+
+    @Test
+    fun `behind UTC, a purchase late on March 31 lands in March's card and March's total`() =
+        runTest(dispatcher) {
+            zone.set(TimeZone.of("America/New_York"))
+            // 23:30 on March 31 in New York (UTC-4 in daylight time) is 03:30 UTC on April 1.
+            val lateMarch = Instant.parse("2027-04-01T03:30:00Z")
+            records.putRecord(aPurchaseRecord(token = "march", price = Money.of(2, "USD"), purchasedAt = lateMarch))
+            records.putRecord(aPurchaseRecord(token = "april", price = Money.of(1, "USD"), purchasedAt = lateMarch + 1.hours))
+
+            val months = monthsOf(screen().purchases())
+
+            assertEquals(listOf(LocalDate(2027, 4, 1), LocalDate(2027, 3, 1)), months.map { it.month })
+            assertEquals(listOf(LocalDate(2027, 3, 31)), months[1].purchases.map { it.date })
+            assertEquals(listOf(Money.of(2, "USD")), months[1].paid)
+            assertEquals(listOf(Money.of(1, "USD")), months[0].paid)
+        }
+
+    @Test
+    fun `a record with no alarm id is named by its session's alarm`() =
+        runTest(dispatcher) {
+            alarms.upsert(anAlarm(id = "gym", time = LocalTime(6, 45), label = "Gym", requestCode = 1001))
+            history.upsert(aSessionHistoryRow(sessionId = "s", alarmId = "gym").copy(scheduledAt = now + 1.hours))
+            records.putRecord(aPurchaseRecord(status = RecordStatus.Stranded, sessionId = "s", alarmId = null, snoozeNumber = null))
+
+            val purchase = screen().purchases().single()
+
+            assertEquals("Gym", purchase.alarmLabel)
+            assertEquals(LocalTime(7, 0), purchase.alarmTime)
+            assertTrue(purchase.stranded)
+        }
+
+    @Test
+    fun `rows that cannot be read are never dropped in silence`() =
+        runTest(dispatcher) {
+            records.putRecord(aPurchaseRecord())
+            records.unreadable = 2
+            records.putRecord(aPurchaseRecord(token = "second", purchasedAt = now + 1.minutes))
+            val viewModel = screen()
+
+            // Some readable: they show, with the note that some could not be read.
+            assertTrue(viewModel.state.value.someUnreadable)
+            assertEquals(2, viewModel.purchases().size)
+        }
+
+    @Test
+    fun `when no stored row can be read, it is the load failure, never the empty state`() =
+        runTest(dispatcher) {
+            records.unreadable = 3
+            val viewModel = screen()
+
+            assertEquals(PurchaseHistoryUiState(loadFailed = true), viewModel.state.value)
         }
 
     @Test

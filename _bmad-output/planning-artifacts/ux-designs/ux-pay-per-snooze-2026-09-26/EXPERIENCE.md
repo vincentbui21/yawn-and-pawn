@@ -168,6 +168,7 @@ All strings live in resources (NFR-10). `{price}`, `{nextPrice}`, `{minutes}`, `
 | Home and editor, alarm change not saved (snackbar) | "Couldn't save the alarm. Try again." when Save, Delete or a card's on/off switch cannot be stored; the switch goes back to the stored value (owner decision 2026-10-02) |
 | Purchase history empty | "No snoozes paid. Keep it that way." |
 | Purchase history, load failure | "Couldn't load your purchases." · "Try again" |
+| Purchase history, some records unreadable | "Some purchases couldn't be read." |
 | Recordings empty | "Record a message for your morning self." |
 | Math check, progress | "Problem {n} of {count}" |
 | Math check, problem (TalkBack) | Spoken form with "plus" / "minus" / "times", e.g. "47 plus 38", "47 minus 38" |
@@ -337,7 +338,7 @@ Behavioural rules. Visual specs for every row live in `DESIGN.md > Components` u
 | `header-collapsing` | Home | Continuous and tied to the scroll position, never a snap (owner decision 2026-09-28, Samsung Weather): the title stays pinned and gains its glass chip as content scrolls under it; the hero collapses into the compact "{streak} days on time" chip; alarm cards scroll underneath and fade out as they enter the header zone (no card text readable behind or above the chips); the title shrinks to `title` size so the compact chip stays on its row. Scrolled to the end, the last card is fully above the nav capsule. Reduced motion: each part switches instantly at the halfway point. The compact chip is not read by TalkBack (the hero card says the same). |
 | `glass-bar` | Bottom pill, nav bar, snooze confirm sheet | Translucent glass over moving content; blurs it on Android 12+, plain translucent below. |
 | `background-gradient` | Every screen | Static; never animates. |
-| `purchase-row` | Purchase history | Read-only. Shows what was charged; stranded purchases read "Not used, refunded automatically by Google". Self-requested refunds are not detectable (PRD §6.3). |
+| `purchase-row` | Purchase history | Read-only. Shows what was charged; stranded purchases read "Not used, refunded automatically by Google", their amount in `text-secondary` and read by TalkBack as "{price} refunded" (Story 4.16 review). Self-requested refunds are not detectable (PRD §6.3). |
 | `sound-row` | Sound picker | Tap selects; play button previews at alarm volume, stops on leaving. Missing custom file shows "File missing. Default sound will play." |
 | `recorder` | Recordings | Tap to record (mic permission asked on first use), tap to stop, auto-stop at 60 s. Then Play, Re-record, Save, Delete. |
 | `motivation-player` | Success | Plays automatically when set to "After I'm up". Pause / replay. "Done" stops playback and closes. |
@@ -410,7 +411,8 @@ Behavioural rules. Visual specs for every row live in `DESIGN.md > Components` u
 | Empty | Progress | "Your first morning shows up here." |
 | Test or skipped day | Day detail | Outcome label only; excluded from rates and streaks. |
 | Empty | Purchase history | "No snoozes paid. Keep it that way." |
-| Storage read failure | Purchase history | "Couldn't load your purchases." + `button-text` "Try again" instead of the list (never the empty state; Story 4.16). |
+| Storage read failure | Purchase history | "Couldn't load your purchases." + `button-text` "Try again" instead of the list (never the empty state; Story 4.16). Also when no stored record can be read. |
+| Some records unreadable | Purchase history | `note-inline` "Some purchases couldn't be read." above the month cards; the readable records show (Story 4.16 review). |
 | All OK | Reliability checklist | Every row "OK"; `button-outlined` "Ring a test alarm" stays. |
 | Session active | Settings | Not reachable (session lock). |
 | Large font (200%) and TalkBack | All | See Accessibility Floor. |

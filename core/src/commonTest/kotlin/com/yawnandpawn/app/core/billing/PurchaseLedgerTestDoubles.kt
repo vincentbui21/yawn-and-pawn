@@ -153,7 +153,7 @@ internal class MemoryRecords(
         world.recordFailure?.let { Outcome.Failure(it) } ?: Outcome.Success(world.recordRows.values.sortedByDescending { it.purchasedAt })
 
     // The ledger never observes the records; Purchase history (Story 4.16) does, with its own fake.
-    override fun observeAll(): Flow<List<PurchaseRecord>> = emptyFlow()
+    override fun observeAll(): Flow<PurchaseRecordsRead> = emptyFlow()
 }
 
 internal class MemoryIntents : PurchaseIntentStore {

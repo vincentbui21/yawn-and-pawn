@@ -1,10 +1,13 @@
 package com.yawnandpawn.app.ui
 
+import androidx.compose.ui.semantics.LiveRegionMode
 import androidx.compose.ui.semantics.SemanticsProperties
 import androidx.compose.ui.test.SemanticsMatcher
+import androidx.compose.ui.test.assert
 import androidx.compose.ui.test.assertCountEquals
 import androidx.compose.ui.test.getBoundsInRoot
 import androidx.compose.ui.test.hasClickAction
+import androidx.compose.ui.test.hasContentDescription
 import androidx.compose.ui.test.hasText
 import androidx.compose.ui.test.isHeading
 import androidx.compose.ui.test.junit4.createEmptyComposeRule
@@ -30,8 +33,9 @@ import kotlin.test.assertTrue
 
 /**
  * Story 4.16: what TalkBack reads on Purchase history and its targets. Each row is one item (date and alarm, snooze
- * number or status, price), 64 dp tall; each month title is a heading with its total; the skeleton is skipped and shows
- * only after 300 ms; "Try again" is a 48 dp button that reads again.
+ * number or status, price; a refunded amount says so), 64 dp tall; each month title is a heading read with what was
+ * paid; the skeleton shows only after 300 ms and is announced as loading; "Try again" is a 48 dp button that reads
+ * again.
  */
 @RunWith(RobolectricTestRunner::class)
 @GraphicsMode(GraphicsMode.Mode.NATIVE)
@@ -73,7 +77,8 @@ class PurchaseHistorySemanticsTest {
                 listOf(
                     item("Wed, Sep 23 · Gym", "Snooze 2", "$2.00"),
                     item("Tue, Sep 22 · 7:30 AM", "Snooze 1"),
-                    item("Sun, Sep 6 · 7:30 AM", "Not used, refunded automatically by Google", "$1.00"),
+                    // Refunded, not paid: TalkBack hears "refunded" after the amount (Story 4.16 review, M2).
+                    item("Sun, Sep 6 · 7:30 AM", "Not used, refunded automatically by Google", "$1.00 refunded"),
                     item("Thu, Aug 27", "Not used, refunded automatically by Google"),
                 )
             rows.forEach { matcher ->
@@ -85,18 +90,30 @@ class PurchaseHistorySemanticsTest {
         }
 
     @Test
-    fun `each month title is a heading with what was paid that month, one total per currency`() {
+    fun `each month title is a heading read with what was paid that month, one total per currency`() {
         show(PurchaseHistorySamples.mixed) {
-            composeRule.onNode(isHeading() and item("September 2026", "$5.00")).assertExists()
+            composeRule.onNode(isHeading() and hasContentDescription("September 2026, $5.00 paid")).assertExists()
+            // The visible title is unchanged: the month and the total, which TalkBack reads only through the heading.
+            composeRule.onNodeWithText("$5.00").assertDoesNotExist()
             // August had only a payment that was not used: no total.
-            composeRule.onNode(isHeading() and item("August 2026")).assertExists()
+            composeRule.onNode(isHeading() and hasContentDescription("August 2026")).assertExists()
         }
     }
 
     @Test
+    fun `some unreadable purchases are said, above the ones that could be read`() =
+        show(PurchaseHistorySamples.mixed.copy(someUnreadable = true)) {
+            composeRule.onNodeWithText("Some purchases couldn't be read.").assertExists()
+            assertTrue(
+                composeRule.spokenOrder().indexOf("Some purchases couldn't be read.") <
+                    composeRule.spokenOrder().indexOf("September 2026, $5.00 paid"),
+            )
+        }
+
+    @Test
     fun `two currencies are never summed together`() =
         show(PurchaseHistorySamples.twoCurrencies) {
-            composeRule.onNode(isHeading() and item("September 2026", "€3.57 + $3.00")).assertExists()
+            composeRule.onNode(isHeading() and hasContentDescription("September 2026, €3.57 + $3.00 paid")).assertExists()
             composeRule.onNode(item("Wed, Sep 23 · 7:30 AM", "Snooze 2", "€2.38")).assertExists()
         }
 
@@ -112,7 +129,7 @@ class PurchaseHistorySemanticsTest {
     }
 
     @Test
-    fun `loading shows nothing for 300 ms, then a skeleton TalkBack skips, and never the empty line`() =
+    fun `loading shows nothing for 300 ms, then a skeleton TalkBack announces as loading, and never the empty line`() =
         show(PurchaseHistorySamples.loading) {
             composeRule.mainClock.autoAdvance = false
             composeRule.mainClock.advanceTimeBy(200)
@@ -123,7 +140,10 @@ class PurchaseHistorySemanticsTest {
             composeRule.mainClock.autoAdvance = true
 
             composeRule.onNodeWithText("No snoozes paid. Keep it that way.").assertDoesNotExist()
-            assertEquals(listOf("Back", "Purchase history"), composeRule.spokenOrder())
+            assertEquals(listOf("Back", "Purchase history", "Loading purchases"), composeRule.spokenOrder())
+            composeRule
+                .onNode(hasContentDescription("Loading purchases"))
+                .assert(SemanticsMatcher.expectValue(SemanticsProperties.LiveRegion, LiveRegionMode.Polite))
         }
 
     @Test

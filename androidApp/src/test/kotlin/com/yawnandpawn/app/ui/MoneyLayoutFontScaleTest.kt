@@ -78,8 +78,8 @@ class MoneyLayoutFontScaleTest {
                 val titleNode = composeRule.onNodeWithText(title, useUnmergedTree = true)
                 assertEquals(1, titleNode.lineCount(), title)
                 val titleBounds = titleNode.getBoundsInRoot()
-                // The row's price, not the month total above the card (a heading), which can read the same.
-                val rowPrice = hasText(price) and !hasAnyAncestor(isHeading()) and !isHeading()
+                // The row's price ("$1.00", or "$1.00 refunded" to TalkBack), never the month total above the card.
+                val rowPrice = hasText(price, substring = true) and !hasAnyAncestor(isHeading()) and !isHeading()
                 val priceBounds = composeRule.onNode(rowPrice, useUnmergedTree = true).getBoundsInRoot()
                 val beside = priceBounds.left >= titleBounds.right
                 val below = priceBounds.top >= titleBounds.bottom

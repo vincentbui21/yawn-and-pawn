@@ -52,8 +52,8 @@ import org.koin.dsl.module
 
 /**
  * Koin bindings of :data (AD-13). Needs the Android `Context` (registered by `androidContext` in the app), the
- * `Clock` port (from the app's time module), the `Logger` (for the settings DataStore's read errors) and the
- * `IdGenerator` (for the install id).
+ * `Clock` port (from the app's time module), the `Logger` (for the settings DataStore's read errors and unreadable
+ * purchase records) and the `IdGenerator` (for the install id).
  */
 val dataModule =
     module {
@@ -103,7 +103,7 @@ val dataModule =
         // Story 4.10: the grant ledger in runtime.db (rows inserted only by the engine's commit; the raw tokens live only
         // there) and the purchase records in app.db (backed up, keyed by token hash; written only by PurchaseLedger).
         single<GrantLedgerStore> { RoomGrantLedgerStore(get<RuntimeDatabase>().grantLedgerDao()) }
-        single<PurchaseRecordRepository> { RoomPurchaseRecordRepository(get<AppDatabase>().purchaseRecordDao()) }
+        single<PurchaseRecordRepository> { RoomPurchaseRecordRepository(get<AppDatabase>().purchaseRecordDao(), get()) }
         // The cached Play prices (Story 4.3): their own device-protected DataStore, never backed up; released like the others.
         single { PriceCacheDataStore(get<Context>()) } withOptions { onClose { it?.close() } }
         single<PriceCacheStore> { DataStorePriceCacheStore(get<PriceCacheDataStore>().store, get()) }

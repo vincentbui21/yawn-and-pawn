@@ -300,7 +300,8 @@ class MainActivityTest {
         assertEquals(Outcome.Success(Unit), runBlocking { GlobalContext.get().get<PurchaseRecordRepository>().putRecord(charge) })
         waitForText("Snooze 2")
         composeRule.onNodeWithText("No snoozes paid. Keep it that way.").assertDoesNotExist()
-        composeRule.onAllNodes(hasText("$2.00")).assertCountEquals(2) // the row and March's total
+        composeRule.onAllNodes(hasText("$2.00")).assertCountEquals(1)
+        composeRule.onNode(hasContentDescription("$2.00 paid", substring = true)).assertExists() // the month's total
 
         pressBack()
 

@@ -58,6 +58,10 @@ class PurchaseHistoryScreenshotTest {
     fun `mixed statuses at 200 percent`() = capture("purchase_history_mixed_light_font200", PurchaseHistorySamples.mixed)
 
     @Test
+    fun `some unreadable light`() =
+        capture("purchase_history_some_unreadable_light", PurchaseHistorySamples.mixed.copy(someUnreadable = true))
+
+    @Test
     fun `two currencies light`() = capture("purchase_history_two_currencies_light", PurchaseHistorySamples.twoCurrencies)
 
     @Test

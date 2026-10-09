@@ -8,6 +8,7 @@ import com.yawnandpawn.app.core.billing.PlayPurchaseState
 import com.yawnandpawn.app.core.billing.PriceSource
 import com.yawnandpawn.app.core.billing.PurchaseRecord
 import com.yawnandpawn.app.core.billing.PurchaseRecordRepository
+import com.yawnandpawn.app.core.billing.PurchaseRecordsRead
 import com.yawnandpawn.app.core.billing.PurchaseSnapshot
 import com.yawnandpawn.app.core.billing.RecordStatus
 import com.yawnandpawn.app.core.billing.hash
@@ -68,8 +69,8 @@ class FakeGrantLedgerStore : GrantLedgerStore {
 /**
  * In-memory [PurchaseRecordRepository] with the rules of `RoomPurchaseRecordRepository` (Story 4.10): one record per
  * token hash, [all] and [observeAll] newest purchase first (then by token hash). Set [failure] to make every call fail
- * with it; set [observeFailure] to make collecting [observeAll] throw it, like a failing database. [puts] counts the
- * writes.
+ * with it; set [observeFailure] to make collecting [observeAll] throw it, like a failing database; set [unreadable] to
+ * report that many damaged rows left out of [observeAll]. [puts] counts the writes.
  */
 class FakePurchaseRecordRepository(
     initial: List<PurchaseRecord> = emptyList(),
@@ -80,6 +81,9 @@ class FakePurchaseRecordRepository(
 
     var observeFailure: Throwable? = null
 
+    /** Damaged rows [observeAll] reports as left out; read when the records next change. */
+    var unreadable: Int = 0
+
     var puts: Int = 0
         private set
 
@@ -87,10 +91,10 @@ class FakePurchaseRecordRepository(
     val records: List<PurchaseRecord>
         get() = ordered(rows.value)
 
-    override fun observeAll(): Flow<List<PurchaseRecord>> =
+    override fun observeAll(): Flow<PurchaseRecordsRead> =
         rows.map { byHash ->
             observeFailure?.let { throw it }
-            ordered(byHash)
+            PurchaseRecordsRead(ordered(byHash), unreadable)
         }
 
     private fun ordered(byHash: Map<String, PurchaseRecord>): List<PurchaseRecord> =

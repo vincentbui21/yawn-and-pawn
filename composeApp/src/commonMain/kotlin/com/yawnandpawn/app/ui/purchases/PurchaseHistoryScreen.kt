@@ -21,9 +21,14 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.layout.Layout
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.semantics.LiveRegionMode
 import androidx.compose.ui.semantics.clearAndSetSemantics
+import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.heading
+import androidx.compose.ui.semantics.liveRegion
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.text
+import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.Constraints
 import androidx.compose.ui.unit.Dp
@@ -31,6 +36,7 @@ import androidx.compose.ui.unit.dp
 import com.yawnandpawn.app.ui.components.GroupCard
 import com.yawnandpawn.app.ui.components.GroupDivider
 import com.yawnandpawn.app.ui.components.NavRow
+import com.yawnandpawn.app.ui.components.NoteInline
 import com.yawnandpawn.app.ui.components.PpsTextButton
 import com.yawnandpawn.app.ui.components.SubScreen
 import com.yawnandpawn.app.ui.format.DateStyle
@@ -43,7 +49,11 @@ import com.yawnandpawn.app.ui.resources.home_try_again
 import com.yawnandpawn.app.ui.resources.problem_title
 import com.yawnandpawn.app.ui.resources.purchase_history_empty
 import com.yawnandpawn.app.ui.resources.purchase_history_load_failed
+import com.yawnandpawn.app.ui.resources.purchase_history_loading_a11y
+import com.yawnandpawn.app.ui.resources.purchase_history_some_unreadable
 import com.yawnandpawn.app.ui.resources.purchase_history_title
+import com.yawnandpawn.app.ui.resources.purchase_month_paid_a11y
+import com.yawnandpawn.app.ui.resources.purchase_price_refunded_a11y
 import com.yawnandpawn.app.ui.resources.purchase_row_title
 import com.yawnandpawn.app.ui.resources.purchase_snooze_number
 import com.yawnandpawn.app.ui.resources.purchase_stranded
@@ -78,10 +88,27 @@ fun PurchaseHistoryScreen(
         modifier = modifier,
     ) {
         when {
-            state.loadFailed -> LoadFailed(onRetry = { onIntent(PurchaseHistoryIntent.RetryLoad) })
-            state.loading -> DelayedSkeleton()
-            state.purchases.isEmpty() -> Empty()
-            else -> monthsOf(state.purchases).forEach { month -> MonthCard(month = month, is24Hour = is24Hour) }
+            state.loadFailed -> {
+                LoadFailed(onRetry = { onIntent(PurchaseHistoryIntent.RetryLoad) })
+            }
+
+            state.loading -> {
+                DelayedSkeleton()
+            }
+
+            state.purchases.isEmpty() -> {
+                Empty()
+            }
+
+            else -> {
+                if (state.someUnreadable) {
+                    NoteInline(
+                        text = stringResource(Res.string.purchase_history_some_unreadable),
+                        modifier = Modifier.padding(horizontal = PpsTheme.spacing.cardPadding),
+                    )
+                }
+                monthsOf(state.purchases).forEach { month -> MonthCard(month = month, is24Hour = is24Hour) }
+            }
         }
         if (showProblemWithCharge && !state.loading) {
             GroupCard {
@@ -132,7 +159,13 @@ private fun MonthCard(
     is24Hour: Boolean,
 ) {
     Column(modifier = Modifier.fillMaxWidth()) {
-        MonthTitle(title = formatDate(month.month, DateStyle.MonthYear), total = month.paid.takeIf { it.isNotEmpty() }?.let(::formatMoney))
+        val title = formatDate(month.month, DateStyle.MonthYear)
+        val total = month.paid.takeIf { it.isNotEmpty() }?.let(::formatMoney)
+        MonthTitle(
+            title = title,
+            total = total,
+            description = total?.let { stringResource(Res.string.purchase_month_paid_a11y, title, it) } ?: title,
+        )
         GroupCard {
             month.purchases.forEachIndexed { index, purchase ->
                 if (index > 0) GroupDivider()
@@ -144,7 +177,8 @@ private fun MonthCard(
 
 /**
  * The month (`label`, `text-secondary`) with the month's [total] right-aligned in `text` (money is neutral), tabular
- * figures; one heading for TalkBack ("September 2026, $11.00"). No total when nothing with a known amount was paid.
+ * figures; one heading for TalkBack read as [description] ("September 2026, $11.00 paid"), the visible title unchanged.
+ * No total when nothing with a known amount was paid.
  * The month never wraps for the total's sake: when both do not fit on one line (large font scales, several
  * currencies), the total moves under the month, still right-aligned.
  */
@@ -152,6 +186,7 @@ private fun MonthCard(
 private fun MonthTitle(
     title: String,
     total: String?,
+    description: String,
 ) {
     val spacing = PpsTheme.spacing
     val typography = PpsTheme.typography
@@ -176,7 +211,10 @@ private fun MonthTitle(
             Modifier
                 .fillMaxWidth()
                 .padding(start = spacing.cardPadding, end = spacing.cardPadding, bottom = spacing.space2)
-                .semantics(mergeDescendants = true) { heading() },
+                .clearAndSetSemantics {
+                    heading()
+                    contentDescription = description
+                },
     ) { (titles, totals), constraints ->
         val width = constraints.maxWidth
         val totalPlaceable = totals.firstOrNull()?.measure(Constraints(maxWidth = width))
@@ -211,7 +249,14 @@ private fun DelayedSkeleton() {
     }
     if (!visible) return
     val spacing = PpsTheme.spacing
-    GroupCard(modifier = Modifier.testTag(PURCHASE_HISTORY_SKELETON_TAG).clearAndSetSemantics { }) {
+    val loading = stringResource(Res.string.purchase_history_loading_a11y)
+    GroupCard(
+        modifier =
+            Modifier.testTag(PURCHASE_HISTORY_SKELETON_TAG).clearAndSetSemantics {
+                contentDescription = loading
+                liveRegion = LiveRegionMode.Polite
+            },
+    ) {
         repeat(SKELETON_ROWS) { index ->
             if (index > 0) GroupDivider()
             Row(
@@ -283,20 +328,26 @@ private fun PurchaseRow(
                 Text(text = detail, style = PpsTheme.typography.caption, color = colors.textSecondary)
             }
         },
-        price = {
-            val price = purchase.price
-            if (price == null) {
-                Spacer(Modifier)
-            } else {
-                Text(
-                    text = formatMoney(price),
-                    style = PpsTheme.typography.body.copy(fontFeatureSettings = TABULAR_FIGURES),
-                    color = colors.text,
-                    maxLines = 1,
-                    softWrap = false,
-                )
-            }
-        },
+        price = { PurchasePrice(purchase) },
+    )
+}
+
+/**
+ * The row's price in `text`, tabular figures; nothing when the amount is not known. A refunded (stranded) amount is
+ * muted in `text-secondary`, and TalkBack hears it as refunded ("$1.00 refunded") with no new visible copy.
+ */
+@Composable
+private fun PurchasePrice(purchase: Purchase) {
+    val price = purchase.price ?: return Spacer(Modifier)
+    val amount = formatMoney(price)
+    val refunded = stringResource(Res.string.purchase_price_refunded_a11y, amount)
+    Text(
+        text = amount,
+        modifier = if (purchase.stranded) Modifier.clearAndSetSemantics { text = AnnotatedString(refunded) } else Modifier,
+        style = PpsTheme.typography.body.copy(fontFeatureSettings = TABULAR_FIGURES),
+        color = if (purchase.stranded) PpsTheme.colors.textSecondary else PpsTheme.colors.text,
+        maxLines = 1,
+        softWrap = false,
     )
 }
 

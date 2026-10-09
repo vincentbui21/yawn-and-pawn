@@ -49,7 +49,7 @@ deferred:
 2. **Month totals in the card title row**, right-aligned in `text` (the coordinator's "totals per currency"). The epic's "nothing sums across currencies" holds: one total per currency.
 3. **Totals leave out** payments that were not used (stranded, refunded automatically by Google) and payments with no known amount.
 4. **Row date** is the purchase time in the phone's current zone. **Alarm** is the alarm's label when the alarm still exists and has one; otherwise the time the session rang for (`session_history.scheduled_at`), otherwise the alarm's current time; with none of them (a stranded payment with no profile id) the row shows the date only.
-5. **Stranded rows** show their amount when it came from the intent (what was charged, then refunded); preview shows the same.
+5. **Stranded rows** keep their amount when it came from the intent (what was charged, then refunded), as in the approved preview, but it reads as refunded: the amount is in `text-secondary` (not the paid `text`), and TalkBack reads "{price} refunded" (TalkBack-only string, no new visible copy). Review M2, default taken, owner can change (for example to hide the amount).
 6. **Read failure** shows "Couldn't load your purchases." with "Try again" (new string, the Home pattern; added to EXPERIENCE.md App screens states). An alarm-label or session-time read failure only drops that detail (logged), it never hides the charges.
 7. **Granted, consumed and reused** all read as normal paid snoozes ("Snooze {n}").
 8. **Large fonts:** when the month and its total do not fit on one line, the total moves under the month (right-aligned) instead of wrapping the month, like the row's price.
@@ -61,7 +61,7 @@ deferred:
 |---|---|
 | No records | "No snoozes paid. Keep it that way." |
 | Loading under 300 ms | nothing |
-| Loading over 300 ms | `skeleton` card (decorative, hidden from TalkBack) |
+| Loading over 300 ms | `skeleton` card, announced "Loading purchases" |
 | Records read throws | "Couldn't load your purchases." + "Try again" (resubscribes) |
 | Consumed / granted / reused, intent price | "{date} · {alarm}", "Snooze {n}", price |
 | Stranded with alarm | "{date} · {alarm}", "Not used, refunded automatically by Google", price if intent |
@@ -90,12 +90,23 @@ deferred:
 - [x] Light and Dark checked with screenshots (`purchases_*_light`, `purchases_*_dark`), and Light at 200%. No wake surface, so no Sunrise.
 - [x] Every colour pair is in the contrast table: `text` and `text-secondary` on `glass+gradient-top` and on `gradient-top` (Light and Dark rows). The skeleton is decorative and carries no information.
 - [x] Targets: rows are 64 dp (asserted), the back arrow, "Try again" and the Purchase history row ≥ 48 dp (asserted). No wake actions.
-- [x] Works at 200% (screenshots; the row moves the price under the title instead of wrapping) and with TalkBack: one merged item per row, month titles are headings with their total, the skeleton is hidden. No outcome glyphs on this surface (statuses are words).
+- [x] Works at 200% (screenshots; the row moves the price under the title instead of wrapping) and with TalkBack: one merged item per row, month titles are headings read "{month}, {total} paid", the skeleton is announced as loading, a refunded amount reads "{price} refunded". No outcome glyphs on this surface (statuses are words).
 - [x] Reduced motion: no animation added (the skeleton has no shimmer; the pushed screen uses the existing slide, instant with reduced motion).
 - [x] Copy from EXPERIENCE.md verbatim ("Purchase history", "No snoozes paid. Keep it that way.", "Snooze {n}", "Not used, refunded automatically by Google", mixed currencies "{amount1} + {amount2}"); one new string "Couldn't load your purchases." added to EXPERIENCE.md; strings in resources, `CopyRulesTest` passes.
 - [x] State rows: Purchase history empty, Loading (skeleton after 300 ms), and the new storage read failure row are handled.
 - [x] Wake rules: not a wake screen.
 - [x] Previews: `purchases_list` and `purchases_empty` stay in the design preview; `purchases_list_*` re-recorded on purpose for the totals, every other preview baseline unchanged; new Roborazzi baselines `purchase_history_*`.
+
+## Review (fast mode)
+
+One review pass, nothing HIGH. Fixed in `fix(4.16): review fixes`, each with a test:
+
+- **M1, damaged rows dropped in silence:** `observeAll()` now returns `PurchaseRecordsRead(records, unreadable)`; `RoomPurchaseRecordRepository` logs the count ("read purchase records", "unreadable rows left out: N", no token or hash) for `all()` and `observeAll()`. The screen shows `note-inline` "Some purchases couldn't be read." above the cards, or the load failure when no row can be read. The silent-drop assertions are replaced by ones that assert the report.
+- **M2, a stranded amount read like a paid one:** muted amount and "{price} refunded" for TalkBack (decision 5). Preview `purchases_list_*` re-recorded again (the August refunded amount is now muted).
+- **M3, missing tests:** a purchase at 23:30 on March 31 in America/New_York lands in March's card and total; a record with no alarm id is named by its session's alarm.
+- **LOW, accessibility:** the month heading is read "September 2026, $5.00 paid" (TalkBack-only description, visible title unchanged); the skeleton is announced "Loading purchases" (polite live region).
+
+New TalkBack-only strings: "{month}, {total} paid", "{price} refunded", "Loading purchases". New visible string: "Some purchases couldn't be read." (added to EXPERIENCE.md).
 
 ## Verification
 

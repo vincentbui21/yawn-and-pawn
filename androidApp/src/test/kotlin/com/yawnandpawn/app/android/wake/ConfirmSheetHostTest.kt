@@ -192,26 +192,69 @@ class ConfirmSheetHostTest {
             host.onEffect(SessionEffect.ShowPurchaseOutcome(PurchaseOutcome.UnlockFailed), SessionState.Ringing(session))
             assertEquals(WakeMessage.UnlockFailed, host.messageFor(session, host.message.value))
             assertNull(host.messageFor(session.copy(ringIndex = 2), host.message.value))
+            // Story 4.14: a tap during the 10 s minimum does not end it; the minimum's end then does.
             host.onTap()
+            assertEquals(WakeMessage.UnlockFailed, host.messageFor(session, host.message.value))
+            host.onMinimumShown(host.message.value!!)
             assertNull(host.message.value)
         }
 
     @Test
-    fun `other outcomes close the sheet without a 4_13 message, and the message expires only for itself`() =
+    fun `every outcome closes the sheet and shows its own message on this ring (Story 4_14)`() =
         scope.runTest {
-            open()
-            host.onEffect(SessionEffect.ShowPurchaseOutcome(PurchaseOutcome.Cancelled), SessionState.Ringing(session))
-            assertNull(host.request.value)
-            assertNull(host.message.value)
+            val expected =
+                mapOf(
+                    PurchaseOutcome.UnlockFailed to WakeMessage.UnlockFailed,
+                    PurchaseOutcome.Cancelled to WakeMessage.PaymentCancelled,
+                    PurchaseOutcome.Failed to WakeMessage.PaymentError,
+                    PurchaseOutcome.Offline to WakeMessage.PaymentOffline,
+                )
+            PurchaseOutcome.entries.forEach { outcome ->
+                open()
+                host.onEffect(SessionEffect.ShowPurchaseOutcome(outcome), SessionState.Ringing(session))
+                assertNull(host.request.value, "$outcome closes the sheet")
+                assertEquals(expected.getValue(outcome), host.messageFor(session, host.message.value), "$outcome")
+            }
             open()
             host.onEffect(SessionEffect.ShowPaymentPending, SessionState.Ringing(session))
             assertNull(host.request.value)
+            assertEquals(WakeMessage.PaymentPending, host.messageFor(session, host.message.value))
+        }
 
-            host.onEffect(SessionEffect.ShowPurchaseOutcome(PurchaseOutcome.UnlockFailed), SessionState.Ringing(session))
-            val shownMessage = host.message.value!!
-            host.expire(shownMessage.copy(ringIndex = 9))
-            assertEquals(shownMessage, host.message.value)
-            host.expire(shownMessage)
+    @Test
+    fun `a message stays after its minimum until the next tap, and a newer one replaces it with its own minimum`() =
+        scope.runTest {
+            cancelled()
+            val first = host.message.value!!
+            host.onMinimumShown(first)
+            assertEquals(WakeMessage.PaymentCancelled, host.messageFor(session, host.message.value), "no tap yet: it stays")
+
+            // A newer outcome replaces it; the older showing's minimum no longer touches it.
+            host.onEffect(SessionEffect.ShowPurchaseOutcome(PurchaseOutcome.Offline), SessionState.Ringing(session))
+            val second = host.message.value!!
+            assertTrue(second.serial != first.serial)
+            host.onMinimumShown(first)
+            host.onTap()
+            assertEquals(WakeMessage.PaymentOffline, host.messageFor(session, host.message.value), "inside its own minimum")
+            host.onMinimumShown(second)
+            assertNull(host.message.value, "the tap during the minimum ends it with the minimum")
+
+            // The same message twice is two showings.
+            cancelled()
+            val again = host.message.value!!
+            host.onMinimumShown(again)
+            host.onTap()
+            assertNull(host.message.value, "after the minimum the next tap ends it")
+        }
+
+    @Test
+    fun `no message outside a ring, and none for the already-paid sheet`() =
+        scope.runTest {
+            host.onEffect(SessionEffect.ShowPurchaseOutcome(PurchaseOutcome.Cancelled), SessionState.Idle)
+            host.onEffect(SessionEffect.ShowPaymentPending, SessionState.Idle)
+            assertNull(host.message.value)
+            host.onEffect(SessionEffect.ShowReuseSheet("snooze_usd_01"), SessionState.Ringing(session))
+            host.onEffect(SessionEffect.HideReuseSheet, SessionState.Ringing(session))
             assertNull(host.message.value)
         }
 

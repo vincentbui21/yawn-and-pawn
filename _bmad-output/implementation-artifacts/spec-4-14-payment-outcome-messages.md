@@ -72,3 +72,35 @@ Every string above is already a resource copied from EXPERIENCE.md Key strings; 
 
 **Commands:**
 - `./gradlew qualityGate :androidApp:assembleDebugAndroidTest --no-daemon` -- expected: BUILD SUCCESSFUL.
+
+## Auto Run Result
+
+Status: implemented in fast mode (one agent, unattended Epic 4 run), with no review pass. Branch `story/4-14-payment-outcomes` on `origin/main` (`79aa8b4`).
+
+- **Built:** `PaymentOutcomes.kt` (the table, exhaustive over the domain results; `WakeMessage.text` is the one resource per message and `WakeSnackbar` draws it). `ConfirmSheetHost` shows every `ShowPurchaseOutcome` and `ShowPaymentPending`, which replaces 4.13's UnlockFailed-only branch. `RingMessage` carries `serial`, `tapped` and `minimumShown`. `WakeActivity` runs the 10 s minimum per showing (`MESSAGE_MINIMUM`, renamed from `MESSAGE_TIMEOUT`), and taps on empty space or on the message count as taps.
+- **Tests:** `PaymentOutcomesTest` (composeApp: the rows; `PurchaseFailureKind`, `LaunchResult` and `PurchaseUpdate` through exhaustive `when`s), `PaymentOutcomeCopyTest` (each row of EXPERIENCE.md's table matches its resource word for word, and "none" rows have no message), `ConfirmSheetHostTest` (every outcome, the minimum and tap rules, replacement, no message outside a ring or for reuse), `PaymentOutcomeMessagesTest` (Robolectric, real engine and wake screen: cancelled, error and offline above "I'm up" with the sound on; "I'm up" at once; check footer above Snooze with keys typing at once; offline back in place with no new message; pending; a grant shows none), `PaymentOutcomeScreenshotTest` (20 new `wake_payment_*` baselines: 5 messages × Ringing/Check × 100%/200%, asserting that the message, "I'm up" and the Check key are whole on screen).
+- **Changed tests:** `SnoozeConfirmSheetTest` (a tap during the minimum keeps the message; after 10 s the next tap ends it).
+- **Strings:** none new. Every message was already a resource copied word for word from EXPERIENCE.md Key strings, and nothing is marked "(EXPERIENCE.md Key strings)".
+
+**Rebase notes:**
+- **4.7:** its live `SnoozeConditions` re-renders the button in place. No message code depends on it. If 4.7 changed `WakeActivity.sheetOverlay` or the `onIntent` head, keep `sheet.onTap()` first, and keep `::screenTapped` as the screen's `onInteracted`.
+- **4.12:** nothing to do here. Its response-code table only has to keep producing `PurchaseFailureKind` values, and a new kind fails to compile in `PurchaseRules.outcomeOf` and in `PaymentOutcomesTest`.
+- **4.15:** the Snoozed surface owns the Purchased and "Use it" rows (no message). The 4.14 message is per ring, so a re-ring shows none.
+
+**Risks:**
+- The message has no timeout if nobody taps (Decision 1); it stays for that ring.
+- At 200% on a check, the pending message pushes the problem line up under the pinned area (PinnedFit scrolls it); the keys and Snooze stay whole on screen.
+- TalkBack polite announcement and the minimum are Robolectric-only until 4.18.
+
+## pps-design Done checklist
+
+- [x] Only tokens from `DESIGN.md` used: the existing `WakeSnackbar` (`inverse-surface`, `inverse-text`, `rounded.sm`); no new token.
+- [x] Light, Dark (and Sunrise where relevant) checked: wake screens are Sunrise only; `wake_payment_*` screenshots at 100% and 200%.
+- [x] Every colour pair used is in the `DESIGN.md` contrast table: no new pair.
+- [x] Touch targets ≥ 48 dp; wake actions ≥ 64 dp: unchanged; the message takes no tap.
+- [x] Works at 200% font scale and with TalkBack: whole on screen at 200% (asserted); polite live region, no action (asserted); "No charge." in words, never colour.
+- [x] Reduced-motion path works: the message does not animate; the minimum is a plain delay.
+- [x] Copy matches `EXPERIENCE.md > Voice and Tone`: `PaymentOutcomeCopyTest` and `CopyRulesTest`.
+- [x] Every state row in `EXPERIENCE.md > State Patterns > Payment outcomes` is handled (all 8 rows).
+- [x] "I'm up" is the most prominent wake action; snooze is visible, plain and priced: unchanged, and the message sits above them in the flow.
+- [x] Compose previews for each state exist (design preview `payment_*`); Roborazzi screenshots added.

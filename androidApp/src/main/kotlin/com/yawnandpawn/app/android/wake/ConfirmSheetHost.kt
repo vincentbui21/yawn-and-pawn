@@ -14,16 +14,17 @@ import com.yawnandpawn.app.core.log.Logger
 import com.yawnandpawn.app.core.session.EffectRunner
 import com.yawnandpawn.app.core.session.EntryEffect
 import com.yawnandpawn.app.core.session.PurchaseIntentId
-import com.yawnandpawn.app.core.session.PurchaseOutcome
 import com.yawnandpawn.app.core.session.SessionData
 import com.yawnandpawn.app.core.session.SessionEffect
 import com.yawnandpawn.app.core.session.SessionEvent
 import com.yawnandpawn.app.core.session.SessionState
 import com.yawnandpawn.app.core.session.SnoozeAvailability
+import com.yawnandpawn.app.ui.wake.PaymentResult
 import com.yawnandpawn.app.ui.wake.PriceLookup
 import com.yawnandpawn.app.ui.wake.SheetRequest
 import com.yawnandpawn.app.ui.wake.SnoozeSheet
 import com.yawnandpawn.app.ui.wake.WakeMessage
+import com.yawnandpawn.app.ui.wake.paymentOutcome
 import com.yawnandpawn.app.ui.wake.snoozeSheet
 import com.yawnandpawn.app.ui.wake.stillWanted
 import kotlinx.coroutines.CoroutineScope
@@ -34,15 +35,24 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withTimeoutOrNull
+import java.util.concurrent.atomic.AtomicLong
 import kotlin.coroutines.cancellation.CancellationException
 import kotlin.time.Duration
 import kotlin.time.Duration.Companion.seconds
 
-/** A payment message for one ring of one session (Story 4.13: only "Phone still locked. No charge." so far). */
+/**
+ * A payment message for one ring of one session (Story 4.14), shown as a wake `snackbar`: at least
+ * [WakeActivity.MESSAGE_MINIMUM], then until the next tap. [serial] tells one showing from the next (the same message
+ * can come twice); [tapped] is a tap during the minimum (the message then ends when the minimum is over), and
+ * [minimumShown] that the minimum is over (the next tap ends it).
+ */
 data class RingMessage(
     val sessionId: String,
     val ringIndex: Int,
     val message: WakeMessage,
+    val serial: Long = 0,
+    val tapped: Boolean = false,
+    val minimumShown: Boolean = false,
 )
 
 /**
@@ -67,6 +77,9 @@ data class RingMessage(
  *   `acceptReuse()` / `declineReuse()` ([reuse]); the stranded token never reaches the UI (Story 4.11).
  * - The sheet closes for good when its ring ends or snooze stops being Available for that offer ([stillWanted]): the
  *   snooze button then shows why.
+ * - **Payment messages** (Story 4.14): every `ShowPurchaseOutcome` and `ShowPaymentPending` shows its row of the
+ *   Payment outcomes table ([paymentOutcome]) on the session's current ring ([message]); a paid snooze shows none. It
+ *   stays at least 10 s ([onMinimumShown]), then until the next tap ([onTap]); a newer outcome replaces it.
  */
 @Suppress("LongParameterList", "TooManyFunctions") // The sheet's ports; one handler per action.
 class ConfirmSheetHost(
@@ -83,6 +96,7 @@ class ConfirmSheetHost(
     private val prices = MutableStateFlow<Map<String, LivePrice>>(emptyMap())
     private val sent = MutableStateFlow<Map<PurchaseIntentId, Money>>(emptyMap())
     private val shownMessage = MutableStateFlow<RingMessage?>(null)
+    private val messageSerial = AtomicLong()
 
     /** Orders "is the request still open, then send" against closing it, so nothing is sent after a close. */
     private val lock = Any()
@@ -172,16 +186,15 @@ class ConfirmSheetHost(
                 requested.update { it.takeUnless { request -> request is SheetRequest.AlreadyPaid } }
             }
 
+            // Story 4.14: nothing was charged; the sheet closes and the outcome's message shows on this ring.
             is SessionEffect.ShowPurchaseOutcome -> {
                 requested.value = null
-                // Story 4.14 maps every outcome; 4.13 shows the unlock one its "Cancel" leads to.
-                if (effect.outcome == PurchaseOutcome.UnlockFailed && session != null) {
-                    shownMessage.value = RingMessage(session.sessionId, session.ringIndex, WakeMessage.UnlockFailed)
-                }
+                show(session, PaymentResult.NotCharged(effect.outcome))
             }
 
             SessionEffect.ShowPaymentPending -> {
                 requested.value = null
+                show(session, PaymentResult.Pending)
             }
 
             else -> {
@@ -308,14 +321,33 @@ class ConfirmSheetHost(
         }
     }
 
-    /** Any tap on the wake screen ends the payment message (Story 4.14 adds the 10 s minimum). */
-    fun onTap() {
-        shownMessage.value = null
+    /** The message of [result] (none for a paid snooze) on [session]'s current ring, replacing any earlier one. */
+    private fun show(
+        session: SessionData?,
+        result: PaymentResult,
+    ) {
+        val message = paymentOutcome(result).message ?: return
+        session ?: return
+        shownMessage.value = RingMessage(session.sessionId, session.ringIndex, message, messageSerial.incrementAndGet())
     }
 
-    /** The message's own end, [message] only (a newer one stays). */
-    fun expire(message: RingMessage) {
-        shownMessage.compareAndSet(message, null)
+    /**
+     * Any tap on the wake screen (Story 4.14): once the message's minimum is over it ends the message; during the minimum
+     * the message ends when the minimum does. The tap's own action is not held up either way.
+     */
+    fun onTap() {
+        shownMessage.update { it?.takeUnless(RingMessage::minimumShown)?.copy(tapped = true) }
+    }
+
+    /** [message]'s minimum is over (a newer one is not touched): it ends if a tap came meanwhile, else at the next tap. */
+    fun onMinimumShown(message: RingMessage) {
+        shownMessage.update { current ->
+            when {
+                current == null || current.serial != message.serial -> current
+                current.tapped -> null
+                else -> current.copy(minimumShown = true)
+            }
+        }
     }
 
     private fun close(request: SheetRequest) {

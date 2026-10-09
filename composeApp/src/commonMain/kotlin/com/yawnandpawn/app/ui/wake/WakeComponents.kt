@@ -98,11 +98,6 @@ import com.yawnandpawn.app.ui.resources.Res
 import com.yawnandpawn.app.ui.resources.grace_ended
 import com.yawnandpawn.app.ui.resources.grace_running
 import com.yawnandpawn.app.ui.resources.grace_seconds_left
-import com.yawnandpawn.app.ui.resources.payment_cancelled
-import com.yawnandpawn.app.ui.resources.payment_error
-import com.yawnandpawn.app.ui.resources.payment_offline
-import com.yawnandpawn.app.ui.resources.payment_pending_body
-import com.yawnandpawn.app.ui.resources.payment_unlock_failed
 import com.yawnandpawn.app.ui.resources.snooze_already_paid_body
 import com.yawnandpawn.app.ui.resources.snooze_cancel
 import com.yawnandpawn.app.ui.resources.snooze_confirm_body
@@ -364,8 +359,9 @@ fun WakeNoteView(
 }
 
 /**
- * A wake-screen `snackbar`: `inverse-surface`, `rounded.sm`, message only (no action), announced politely. The
- * screen's state decides how long it stays (at least 10 s or until the next tap).
+ * A wake-screen `snackbar`: `inverse-surface`, `rounded.sm`, message only (no action, never takes a tap), announced
+ * politely. It sits in the layout above "I'm up" or the check footer's Snooze, never over them. The screen's state
+ * decides how long it stays (Story 4.14: at least 10 s, then until the next tap).
  */
 @Composable
 fun WakeSnackbar(
@@ -374,16 +370,7 @@ fun WakeSnackbar(
 ) {
     val colors = PpsTheme.colors
     Text(
-        text =
-            stringResource(
-                when (message) {
-                    WakeMessage.UnlockFailed -> Res.string.payment_unlock_failed
-                    WakeMessage.PaymentCancelled -> Res.string.payment_cancelled
-                    WakeMessage.PaymentError -> Res.string.payment_error
-                    WakeMessage.PaymentOffline -> Res.string.payment_offline
-                    WakeMessage.PaymentPending -> Res.string.payment_pending_body
-                },
-            ),
+        text = stringResource(message.text),
         modifier =
             modifier
                 .fillMaxWidth()

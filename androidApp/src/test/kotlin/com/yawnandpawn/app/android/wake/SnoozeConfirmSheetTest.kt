@@ -350,10 +350,10 @@ class SnoozeConfirmSheetTest {
             composeRule.onNodeWithText("Unlock to pay $1.00").assertDoesNotExist()
             assertTrue(app.lastMediaPlayer().isReallyPlaying, "the sound continues")
 
-            // The next tap ends the message; snooze is still offered.
+            // Story 4.14: snooze is still offered; a tap during the 10 s minimum acts at once but the message stays.
             composeRule.onNodeWithText("Snooze · $1.00").performClick()
             await(app, "the sheet opens again") { host(app).request.value != null }
-            composeRule.onNodeWithText("Phone still locked. No charge.").assertDoesNotExist()
+            assertNotNull(host(app).message.value, "the message stays for its 10 s")
         }
     }
 
@@ -622,7 +622,7 @@ class SnoozeConfirmSheetTest {
     }
 
     @Test
-    fun `a keyguard that cannot be read asks to unlock first, and the unlock message ends after 10 s`() {
+    fun `a keyguard that cannot be read asks to unlock first, and the unlock message stays 10 s, then until a tap`() {
         val app = app()
         ring(app)
         launch(app).use {
@@ -636,7 +636,11 @@ class SnoozeConfirmSheetTest {
             await(app, "cancelled") { session(app).paying == null }
             composeRule.onNodeWithText("Phone still locked. No charge.").assertExists()
 
-            composeRule.mainClock.advanceTimeBy(WakeActivity.MESSAGE_TIMEOUT.inWholeMilliseconds + FRAME_MILLIS)
+            composeRule.mainClock.advanceTimeBy(WakeActivity.MESSAGE_MINIMUM.inWholeMilliseconds + FRAME_MILLIS)
+            composeRule.waitForIdle()
+            composeRule.onNodeWithText("Phone still locked. No charge.").assertExists()
+            // Story 4.14: after the minimum, the next tap (here on the message itself) ends it.
+            composeRule.onNodeWithText("Phone still locked. No charge.").performClick()
             composeRule.waitForIdle()
             composeRule.onNodeWithText("Phone still locked. No charge.").assertDoesNotExist()
         }

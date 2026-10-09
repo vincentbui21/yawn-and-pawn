@@ -184,7 +184,7 @@ class WakeRuntime(
     /**
      * A payment outcome hands the screen back to the ring (Story 4.11, the Story 2.8 hand-off): the alarm stream is set
      * back to the ring's volume once, since the volume keys may have lowered it under Play's sheet. The message itself is
-     * shown by the wake UI (Stories 4.13/4.14); until then it is logged by type name.
+     * shown by the wake UI (`ConfirmSheetHost`, Story 4.14); the effect is also logged by type name.
      */
     private fun backFromPayment(effect: SessionEffect) {
         reassertRingVolume()

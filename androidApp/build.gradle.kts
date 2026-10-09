@@ -102,9 +102,15 @@ android {
     testOptions {
         unitTests {
             isIncludeAndroidResources = true
-            // One JVM runs every Robolectric test with native graphics and screenshots; Gradle's 512 MB default ran
-            // out late in the run (OutOfMemoryError in the last screenshot tests) once Story 3.3 added its wake tests.
-            all { it.maxHeapSize = "1g" }
+            // Gradle's 512 MB default ran out late in the run (OutOfMemoryError in the last screenshot tests) once Story
+            // 3.3 added its wake tests. A fresh JVM every 40 test classes (about 120 in all) drops what Robolectric's
+            // sandboxes and WorkManager's process-wide instance keep, so the run stays inside the CI runner's memory
+            // (2 vCPU, about 8 GB with the Gradle and Kotlin daemons); one JVM at a time.
+            all {
+                it.maxHeapSize = "1g"
+                it.forkEvery = 40
+                it.maxParallelForks = 1
+            }
         }
         // Gradle Managed Device for CI: ./gradlew :androidApp:atdApi34DebugAndroidTest (needs KVM).
         managedDevices {
@@ -147,6 +153,9 @@ dependencies {
     implementation(libs.camerax.lifecycle)
     implementation(libs.camerax.view)
     implementation(libs.mlkit.barcode.scanning)
+    // Story 4.3 (AD-17): deferred non-alarm work (the price refresh). Started on demand after the first unlock only;
+    // the default initializer is removed from the merged manifest.
+    implementation(libs.workmanager.runtime)
 
     testImplementation(project(":testing"))
     testImplementation(libs.kotlin.test)
@@ -157,6 +166,7 @@ dependencies {
     testImplementation(libs.roborazzi)
     testImplementation(libs.roborazzi.compose)
     testImplementation(libs.roborazzi.junit.rule)
+    testImplementation(libs.workmanager.testing)
 
     androidTestImplementation(libs.androidx.test.runner)
     androidTestImplementation(libs.androidx.test.core)

@@ -72,11 +72,28 @@ jobs:
             echo "GOOGLE_SERVICES_JSON_DEBUG is not set: building without Firebase."
           fi
 
+      # Within the runner's memory (2 vCPU, about 8 GB): a 2 GB Gradle daemon and a 1.5 GB Kotlin daemon next to the
+      # 1 GB Robolectric test JVM (gradle.properties asks 4 GB and 3 GB for local builds). The memory is logged every
+      # 30 s, so a step the runner kills (exit 143, no Gradle error) still shows how close it came.
       - name: Quality gate
         run: |
           set -o pipefail
           mkdir -p "$LOG_DIR"
-          ./gradlew qualityGate --continue 2>&1 | tee "$LOG_DIR/qualityGate.log"
+          ( while true; do echo "[mem] $(date -u +%T)"; free -m | head -2; sleep 30; done ) &
+          memlog=$!
+          trap 'kill $memlog 2>/dev/null || true' EXIT
+          ./gradlew qualityGate --continue \
+            -Dorg.gradle.jvmargs="-Xmx2g -XX:MaxMetaspaceSize=768m -Dfile.encoding=UTF-8" \
+            -Pkotlin.daemon.jvmargs=-Xmx1536m \
+            2>&1 | tee "$LOG_DIR/qualityGate.log"
+
+      # A killed or cancelled step skips the failure-only steps; this one says why memory ran out, when it did.
+      - name: Memory diagnostics
+        if: failure() || cancelled()
+        run: |
+          free -m || true
+          sudo dmesg 2>/dev/null | tail -50 || true
+          journalctl -u systemd-oomd --no-pager 2>/dev/null | tail -20 || true
 
       - name: Release bundle (R8, unsigned)
         run: |

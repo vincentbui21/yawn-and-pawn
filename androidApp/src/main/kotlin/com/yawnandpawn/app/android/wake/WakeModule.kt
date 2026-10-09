@@ -95,7 +95,7 @@ fun wakeModule(): Module =
         single {
             val koin = this
             // Story 4.10: every unlock signal replays the grant ledger (looked up then: the ledger is in appModule).
-            UnlockSignals(get(), get(), get(), get(), get(), replayLedger = {
+            UnlockSignals(get(), get(), get(), get(), get(), get(), replayLedger = {
                 koin.get<ApplicationScope>().launch { koin.get<ReplayGrantLedger>()() }
             })
         }

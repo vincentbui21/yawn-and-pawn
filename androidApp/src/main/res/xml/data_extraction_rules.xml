@@ -17,6 +17,8 @@
         settings_fallback.xml: the last-known global settings a fire falls back on (Story 4.4), per device;
       - datastore/install_id.preferences_pb: this install's id (Story 4.8, the obfuscatedAccountId of every payment),
         so a restored or transferred phone makes its own and never claims this install's payments;
+      - datastore/price_cache.preferences_pb: the cached Play prices (Story 4.3), in the phone's Play country and
+        currency, so a phone restored in another country never shows the old currency; refreshed from Play;
       - the whole credential-protected storage (root, file, database, sharedpref), where media will live (Epic 7).
     Because there are includes, anything not included is not backed up either. Lint calls an exclude outside every
     include redundant (FullBackupContent); it is ignored on those elements on purpose.
@@ -37,6 +39,7 @@
         <exclude domain="device_sharedpref" path="reliability.xml" tools:ignore="FullBackupContent" />
         <exclude domain="device_sharedpref" path="settings_fallback.xml" tools:ignore="FullBackupContent" />
         <exclude domain="device_file" path="datastore/install_id.preferences_pb" tools:ignore="FullBackupContent" />
+        <exclude domain="device_file" path="datastore/price_cache.preferences_pb" tools:ignore="FullBackupContent" />
         <exclude domain="root" path="." tools:ignore="FullBackupContent" />
         <exclude domain="file" path="." tools:ignore="FullBackupContent" />
         <exclude domain="database" path="." tools:ignore="FullBackupContent" />
@@ -57,6 +60,7 @@
         <exclude domain="device_sharedpref" path="reliability.xml" tools:ignore="FullBackupContent" />
         <exclude domain="device_sharedpref" path="settings_fallback.xml" tools:ignore="FullBackupContent" />
         <exclude domain="device_file" path="datastore/install_id.preferences_pb" tools:ignore="FullBackupContent" />
+        <exclude domain="device_file" path="datastore/price_cache.preferences_pb" tools:ignore="FullBackupContent" />
         <exclude domain="root" path="." tools:ignore="FullBackupContent" />
         <exclude domain="file" path="." tools:ignore="FullBackupContent" />
         <exclude domain="database" path="." tools:ignore="FullBackupContent" />

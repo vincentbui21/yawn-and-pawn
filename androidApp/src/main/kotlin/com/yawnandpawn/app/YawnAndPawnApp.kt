@@ -1,12 +1,13 @@
 package com.yawnandpawn.app
 
 import android.app.Application
+import android.util.Log
+import androidx.work.Configuration
 import com.yawnandpawn.app.android.AndroidAccessibilityState
 import com.yawnandpawn.app.android.AndroidAlarmScheduler
 import com.yawnandpawn.app.android.AndroidLogger
 import com.yawnandpawn.app.android.AndroidUserLockState
 import com.yawnandpawn.app.android.ApplicationScope
-import com.yawnandpawn.app.android.InProcessBackgroundWork
 import com.yawnandpawn.app.android.UnavailableBilling
 import com.yawnandpawn.app.android.WordListLoader
 import com.yawnandpawn.app.android.androidTimeModule
@@ -18,6 +19,7 @@ import com.yawnandpawn.app.android.sound.soundModule
 import com.yawnandpawn.app.android.wake.WakeAlarmFiredHandler
 import com.yawnandpawn.app.android.wake.WakeRuntime
 import com.yawnandpawn.app.android.wake.wakeModule
+import com.yawnandpawn.app.android.work.workModule
 import com.yawnandpawn.app.core.alarm.AlarmFiredHandler
 import com.yawnandpawn.app.core.alarm.AlarmScheduler
 import com.yawnandpawn.app.core.alarm.AlarmScheduling
@@ -27,9 +29,10 @@ import com.yawnandpawn.app.core.alarm.ReRegisterCode
 import com.yawnandpawn.app.core.alarm.RearmOnFire
 import com.yawnandpawn.app.core.alarm.SaveAlarm
 import com.yawnandpawn.app.core.alarm.SetAlarmEnabled
-import com.yawnandpawn.app.core.billing.ConsumeRetryTask
 import com.yawnandpawn.app.core.billing.FeeLadder
 import com.yawnandpawn.app.core.billing.MoneyFormatter
+import com.yawnandpawn.app.core.billing.PriceCatalog
+import com.yawnandpawn.app.core.billing.PriceRefreshScheduler
 import com.yawnandpawn.app.core.billing.PriceSnapshotLookup
 import com.yawnandpawn.app.core.billing.PurchaseLedger
 import com.yawnandpawn.app.core.billing.PurgeOldPurchaseIntents
@@ -67,12 +70,11 @@ import com.yawnandpawn.app.core.session.SnoozeAvailabilityPolicy
 import com.yawnandpawn.app.core.session.StoredSession
 import com.yawnandpawn.app.core.session.UserLockState
 import com.yawnandpawn.app.core.stats.ReRegisterSuggestions
-import com.yawnandpawn.app.core.work.BackgroundTaskKind
-import com.yawnandpawn.app.core.work.BackgroundWork
 import com.yawnandpawn.app.data.dataModule
 import com.yawnandpawn.app.ui.format.moneyFormatter
 import com.yawnandpawn.app.ui.nav.WakeScreenOpener
 import com.yawnandpawn.app.ui.uiModule
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import org.koin.android.ext.koin.androidContext
 import org.koin.core.context.startKoin
@@ -82,7 +84,7 @@ import org.koin.dsl.module
 /** Koin bindings of :androidApp (platform adapters, core wiring). Later stories add their bindings here. */
 val appModule =
     module {
-        includes(androidTimeModule, wakeModule(), soundModule(), reliabilityModule(), qrModule())
+        includes(androidTimeModule, wakeModule(), soundModule(), reliabilityModule(), qrModule(), workModule())
         single<IdGenerator> { UuidV4IdGenerator() }
         single<Logger> { AndroidLogger() }
         single { ApplicationScope(get()) }
@@ -148,17 +150,21 @@ val appModule =
         single<Billing> { UnavailableBilling(get()) }
         // Story 4.8: intents older than 7 days are deleted on app start (runtime.db, device-protected).
         factory { PurgeOldPurchaseIntents(get(), get(), get()) }
-        // Story 4.10: the only writer of purchase records and caller of consume. Its retry job runs in this process until
-        // Story 4.3's WorkManager adapter is bound instead; records with no intent are priced by the product's USD tier
-        // until 4.3's price snapshot is wired in.
+        // Story 4.10: the only writer of purchase records and caller of consume. Its retry jobs run on WorkManager
+        // (workModule, Story 4.3); a record with no intent is priced from the cached Play prices (the price snapshot),
+        // else by the product's USD tier.
         single {
-            val koin = this
-            InProcessBackgroundWork(get<ApplicationScope>(), get()) {
-                mapOf(BackgroundTaskKind.ConsumeRetry to ConsumeRetryTask(koin.get()))
-            }
+            val catalog = get<PriceCatalog>()
+            val snapshot =
+                PriceSnapshotLookup { productId ->
+                    catalog
+                        .observe()
+                        .first()
+                        .priceFor(productId)
+                        ?.price
+                }
+            PurchaseLedger(get(), get(), get(), get(), get(), snapshot, get(), get())
         }
-        single<BackgroundWork> { get<InProcessBackgroundWork>() }
-        single { PurchaseLedger(get(), get(), get(), get(), get(), PriceSnapshotLookup.None, get(), get()) }
         factory { ReplayGrantLedger(get(), get()) }
         // The only writer of session history (Story 1.13, AD-18), over the Room repository from dataModule; the engine
         // drives it itself, so the runner never sees the history effects.
@@ -188,8 +194,16 @@ val appModule =
  * The app process: starts Koin and re-arms alarms. It never restores the session (Story 2.1): a process started for a
  * broadcast must not run the ringing entry effects or start a foreground service. `WakeService`, `MainActivity` and
  * `WakeActivity` restore it; a system event arms the session slot instead. Open for the Robolectric test application.
+ *
+ * It provides WorkManager's configuration (Story 4.3): the default initializer is removed from the manifest, so
+ * WorkManager starts on demand at its first use, which happens only after the first unlock (`AndroidBackgroundWork`).
  */
-open class YawnAndPawnApp : Application() {
+open class YawnAndPawnApp :
+    Application(),
+    Configuration.Provider {
+    override val workManagerConfiguration: Configuration
+        get() = Configuration.Builder().setMinimumLoggingLevel(Log.INFO).build()
+
     /** Bindings loaded after the app's own (they win); only the Robolectric test application adds any. */
     protected open val overrideModules: List<Module> = emptyList()
 
@@ -220,6 +234,10 @@ open class YawnAndPawnApp : Application() {
         // The settled markers that refuse a token twice are kept 30 days, then deleted.
         val purchaseLedger = koin.get<PurchaseLedger>()
         scope.launch { purchaseLedger.purgeSettled() }
+        // The price refresh jobs (Story 4.3): enqueued off the main thread, so an alarm's cold start never waits for
+        // WorkManager; locked (Direct Boot) they wait for the unlock signals, which call the scheduler again.
+        val prices = koin.get<PriceRefreshScheduler>()
+        scope.launch { prices.start() }
         // With no session left in runtime.db (nothing, an unreadable row or a stored Idle), an alarm volume a crashed session
         // saved is put back (AD-5). Only a read: the session itself is restored by WakeService, MainActivity or
         // WakeActivity (Story 2.1).

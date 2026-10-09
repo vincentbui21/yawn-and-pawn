@@ -108,7 +108,7 @@ class UnlockDuringRingTest {
         logger: FakeLogger = FakeLogger(),
         billing: Billing = this.billing,
         firebase: FirebaseStartup = app.koin.get(),
-    ) = UnlockSignals(app.engine, billing, firebase, app.koin.get(), logger, retry = Duration.ZERO)
+    ) = UnlockSignals(app.engine, billing, firebase, app.koin.get(), logger, app.koin.get(), retry = Duration.ZERO)
 
     /** A session that rings before the first unlock, dispatched straight to the engine (no service). */
     private fun lockedSession(app: WakeApp) {
@@ -182,7 +182,8 @@ class UnlockDuringRingTest {
         val app = WakeApp(billing = billing)
         var replays = 0
         val replay: () -> Unit = { replays++ }
-        val signals = UnlockSignals(app.engine, billing, app.koin.get(), app.koin.get(), FakeLogger(), Duration.ZERO, replay)
+        val signals =
+            UnlockSignals(app.engine, billing, app.koin.get(), app.koin.get(), FakeLogger(), app.koin.get(), Duration.ZERO, replay)
 
         signals.onUnlocked()
         signals.onScreenResumedUnlocked()

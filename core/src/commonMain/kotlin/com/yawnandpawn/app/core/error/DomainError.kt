@@ -72,4 +72,18 @@ sealed interface DomainError {
         val baseFeeTier: Int,
         val snoozeNumber: Int,
     ) : DomainError
+
+    /**
+     * Play could not give the snooze prices (Story 4.3, the `ProductDetailsSource` port). [transient] is true when trying
+     * again later may help (offline, Play busy); [cause] is diagnostic text for logs only.
+     */
+    data class ProductDetailsFailed(
+        val transient: Boolean,
+        val cause: String,
+    ) : DomainError
+
+    /** Deferred work (AD-17) could not be scheduled, for example before the first unlock. [cause] is for logs only. */
+    data class BackgroundWorkFailure(
+        val cause: String,
+    ) : DomainError
 }

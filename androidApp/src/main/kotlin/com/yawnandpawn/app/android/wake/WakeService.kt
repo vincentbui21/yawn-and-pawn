@@ -19,6 +19,7 @@ import com.yawnandpawn.app.core.alarm.AlarmFired
 import com.yawnandpawn.app.core.alarm.AlarmRepository
 import com.yawnandpawn.app.core.alarm.CheckConfigRepository
 import com.yawnandpawn.app.core.alarm.orderedEntries
+import com.yawnandpawn.app.core.billing.SessionStartPriceRefresh
 import com.yawnandpawn.app.core.checks.AccessibilityState
 import com.yawnandpawn.app.core.checks.CheckAnswer
 import com.yawnandpawn.app.core.checks.Puzzle
@@ -134,6 +135,7 @@ class WakeService :
     private val promotePending: PromotePendingChanges by inject()
     private val unlockSignals: UnlockSignals by inject()
     private val calls: CallDetector by inject()
+    private val prices: SessionStartPriceRefresh by inject()
 
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate + CoroutineExceptionHandler { _, e -> onCrash(e) })
     private val commands = Mutex()
@@ -417,6 +419,9 @@ class WakeService :
                 config = config,
                 beforeFirstUnlock = locked,
             )
+        // Resolved before the dispatch suspends: nothing is looked up from Koin after it, so a dispatch that outlives
+        // the app's Koin (a test teardown) cannot crash the service on the way out.
+        val refresh = prices
         when (val started = engine.dispatch(event)) {
             is Outcome.Failure -> {
                 runtime.startEmergency(fired.scheduledAt, alarm.volumePercent, "session not started: ${started.error.diagnostic()}", fired)
@@ -427,7 +432,13 @@ class WakeService :
             is Outcome.Success -> {
                 val found = started.value
                 val foundId = (found as? SessionState.Active)?.session?.sessionId
-                if (found.isOngoing() && foundId != event.sessionId) route(fired, found)
+                if (found.isOngoing() && foundId != event.sessionId) {
+                    route(fired, found)
+                } else if (foundId == event.sessionId) {
+                    // PRD §6.2: prices are refreshed at each session start. Launched after the ring started, never
+                    // awaited; the wake screen renders from the cached prices meanwhile (Story 4.3).
+                    refresh.onSessionStarted()
+                }
             }
         }
     }

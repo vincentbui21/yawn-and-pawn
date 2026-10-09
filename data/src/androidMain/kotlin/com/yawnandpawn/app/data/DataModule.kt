@@ -6,6 +6,7 @@ import com.yawnandpawn.app.core.alarm.CheckConfigRepository
 import com.yawnandpawn.app.core.alarm.RequestCodeSequence
 import com.yawnandpawn.app.core.billing.GrantLedgerStore
 import com.yawnandpawn.app.core.billing.InstallIdProvider
+import com.yawnandpawn.app.core.billing.PriceCacheStore
 import com.yawnandpawn.app.core.billing.PurchaseIntentStore
 import com.yawnandpawn.app.core.billing.PurchaseRecordRepository
 import com.yawnandpawn.app.core.config.CommitmentEventRepository
@@ -39,9 +40,11 @@ import com.yawnandpawn.app.data.session.RoomGrantLedgerStore
 import com.yawnandpawn.app.data.session.RoomPurchaseIntentStore
 import com.yawnandpawn.app.data.settings.DataStoreInstallIdProvider
 import com.yawnandpawn.app.data.settings.DataStoreMissedNoteDismissals
+import com.yawnandpawn.app.data.settings.DataStorePriceCacheStore
 import com.yawnandpawn.app.data.settings.DataStoreReRegisterDismissals
 import com.yawnandpawn.app.data.settings.DataStoreTestAlarmStore
 import com.yawnandpawn.app.data.settings.InstallIdDataStore
+import com.yawnandpawn.app.data.settings.PriceCacheDataStore
 import com.yawnandpawn.app.data.settings.SettingsDataStore
 import org.koin.core.module.dsl.onClose
 import org.koin.core.module.dsl.withOptions
@@ -101,4 +104,7 @@ val dataModule =
         // there) and the purchase records in app.db (backed up, keyed by token hash; written only by PurchaseLedger).
         single<GrantLedgerStore> { RoomGrantLedgerStore(get<RuntimeDatabase>().grantLedgerDao()) }
         single<PurchaseRecordRepository> { RoomPurchaseRecordRepository(get<AppDatabase>().purchaseRecordDao()) }
+        // The cached Play prices (Story 4.3): their own device-protected DataStore, never backed up; released like the others.
+        single { PriceCacheDataStore(get<Context>()) } withOptions { onClose { it?.close() } }
+        single<PriceCacheStore> { DataStorePriceCacheStore(get<PriceCacheDataStore>().store, get()) }
     }

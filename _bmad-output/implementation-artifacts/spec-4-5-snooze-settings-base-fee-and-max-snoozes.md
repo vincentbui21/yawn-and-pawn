@@ -176,6 +176,35 @@ still shows only its title (`AppNavHost.SettingsTab`, `rows = emptySet()`), so t
 
 - `./gradlew qualityGate :androidApp:assembleDebugAndroidTest --no-daemon`.
 
+## Review (fast mode)
+
+No HIGH findings. Every item below is fixed in `fix(4.5): review fixes`, each with its test.
+
+1. **The stepper could flicker back and step from the old value.** The echo check and the screen read the store
+   through separate subscriptions.
+   - Fix: a request now carries `saved`, and the render pass that sees the store hold it lets it go
+     (`forgetEchoed`). The save loop no longer reads the store itself.
+   - Test: with the screen's copy of the store late, the shown value never goes back, and a tap after the echo saves
+     the next step (`SettingsViewModelSequenceTest`).
+2. **TalkBack never heard that a weakening waits.**
+   - Fix: the "Saved. Takes effect after…" notes are polite live regions.
+   - Test: a semantics test on both sub-screens.
+3. **The quick-steps test could not fail.**
+   - Fix: it now holds the first save at a gate. Four taps show 7 before any save finishes, and the writes are
+     [4, 5, 6, 7].
+4. **Failed-save sequences were not covered.** New tests:
+   - a failed save(4) with 5 queued keeps 5, which is then saved;
+   - a failed save moves the stepper at once, then back;
+   - the stored note is hidden while another value is being saved.
+5. **Today and tomorrow were tested in UTC only.** The 23:40 and 01:00 cases now also run in UTC+7 and on the
+   Europe/Helsinki spring-forward night of 2027-03-28.
+6. **The hold-repeat test used a fixed state.** A host now applies the intents:
+   - hold − from 3 down to 1, then release;
+   - tap +, then tap − once;
+   - exactly one `LowerBaseFee` follows, which checks that `repeated` resets on Cancel.
+- **Minor:** saves still queued or running when the ViewModel is cleared are logged as dropped (tested through a
+  `ViewModelStore`).
+
 ## Auto Run Result
 
 See the commit `feat(4.5)` and the coordinator's report.

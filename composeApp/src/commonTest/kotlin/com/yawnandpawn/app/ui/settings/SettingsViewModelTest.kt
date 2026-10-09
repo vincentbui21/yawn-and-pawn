@@ -283,17 +283,6 @@ class SettingsViewModelTest {
         }
 
     @Test
-    fun `quick steps add up and are saved in order`() =
-        runTest {
-            val viewModel = viewModel()
-
-            repeat(4) { viewModel.onIntent(SettingsIntent.RaiseBaseFee) }
-
-            assertEquals(7, settings.current.baseFeeTier)
-            assertEquals(7, viewModel.shown.baseFeeTier)
-        }
-
-    @Test
     fun `a failed save is logged and the stepper returns to the stored value`() =
         runTest {
             val viewModel = viewModel()

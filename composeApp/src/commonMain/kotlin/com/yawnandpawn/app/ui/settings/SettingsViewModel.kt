@@ -27,13 +27,10 @@ import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.catch
 import kotlinx.coroutines.flow.combine
-import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.onStart
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.withTimeoutOrNull
-import kotlin.time.Duration.Companion.seconds
 
 /**
  * Settings › Snooze (Story 4.5): the base fee and max snoozes per session, set through the commitment lock.
@@ -45,10 +42,13 @@ import kotlin.time.Duration.Companion.seconds
  * - **Prices:** the cached Play prices from [priceCatalog], or USD approximations by [moneyFormatter] when a tier is
  *   missing ([SnoozePrices]). Nothing waits for a refresh, so the screen works offline.
  * - **Saving:** each step calls [setBaseFee] / [setMaxSnoozes] through one queue, in order, so a long-press repeat
- *   never races itself. The stepper moves at once. The requested value holds until the store shows it, or until its
- *   save fails: the failure is logged and the stored value comes back.
+ *   never races itself. The stepper moves at once to the requested value. A saved request is let go only by the same
+ *   render that sees the store hold it (review fix 1), so the stepper never shows the old value in between and the next
+ *   step starts from the new one. A failed save is logged and the stored value comes back, unless a newer request
+ *   replaced it.
  *
- * [state] is null until the stored settings are read, so no default value flashes.
+ * [state] is null until the stored settings are read, so no default value flashes. Saves still queued when the
+ * ViewModel is cleared are logged as dropped.
  */
 class SettingsViewModel(
     globalSettings: GlobalSettingsRepository,
@@ -64,6 +64,9 @@ class SettingsViewModel(
 ) : ViewModel() {
     private val local = MutableStateFlow(Local())
     private val saves = Channel<SettingValue>(Channel.UNLIMITED)
+
+    /** The save running now, if any (logged as dropped when the ViewModel is cleared under it). */
+    private var saving: SettingValue? = null
 
     /** The stored settings and their global pending changes; an unreadable store is logged and reads as the defaults. */
     private val stored: Flow<Stored> =
@@ -81,11 +84,19 @@ class SettingsViewModel(
     private val ticks: Flow<Unit> = timeChanges.changes().onStart { emit(Unit) }
 
     val state: StateFlow<SettingsUiState?> =
-        combine(stored, priceCatalog.observe(), ticks, local) { saved, prices, _, ui -> render(saved, prices, ui) }
-            .stateIn(viewModelScope, SharingStarted.WhileSubscribed(STOP_TIMEOUT_MILLIS), null)
+        combine(stored, priceCatalog.observe(), ticks, local) { saved, prices, _, ui ->
+            forgetEchoed(saved, ui)
+            render(saved, prices, ui)
+        }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(STOP_TIMEOUT_MILLIS), null)
 
     init {
-        viewModelScope.launch { for (value in saves) save(value) }
+        viewModelScope.launch {
+            for (value in saves) {
+                saving = value
+                save(value)
+                saving = null
+            }
+        }
     }
 
     fun onIntent(intent: SettingsIntent) {
@@ -105,18 +116,24 @@ class SettingsViewModel(
         }
     }
 
+    override fun onCleared() {
+        val dropped = listOfNotNull(saving) + generateSequence { saves.tryReceive().getOrNull() }.toList()
+        if (dropped.isNotEmpty()) logger.log(LogEvent.OperationFailed(SAVE_SETTING, "dropped ${dropped.size} on close"))
+        saves.close()
+    }
+
     /**
      * The tier a step starts from: the last one requested (set at once, so taps faster than a frame still add up), else
      * the one shown; null before the store was read.
      */
-    private fun currentTier(): Int? = local.value.requestedTier ?: state.value?.baseFeeTier
+    private fun currentTier(): Int? = local.value.fee?.value ?: state.value?.baseFeeTier
 
     /** Shows [value] at once and queues its save; a value outside its range is ignored (the stepper end is disabled). */
     private fun request(value: SettingValue) {
         val shown: (Local) -> Local =
             when {
-                value is SettingValue.BaseFeeTier && value.tier in FeeRules.BASE_FEE_TIERS -> { ui -> ui.copy(requestedTier = value.tier) }
-                value is SettingValue.MaxSnoozes && value.count in FeeRules.MAX_SNOOZES -> { ui -> ui.copy(requestedMax = value.count) }
+                value is SettingValue.BaseFeeTier && value.tier in FeeRules.BASE_FEE_TIERS -> { ui -> ui.copy(fee = Request(value.tier)) }
+                value is SettingValue.MaxSnoozes && value.count in FeeRules.MAX_SNOOZES -> { ui -> ui.copy(max = Request(value.count)) }
                 else -> return
             }
         local.update(shown)
@@ -130,17 +147,29 @@ class SettingsViewModel(
                 is SettingValue.MaxSnoozes -> setMaxSnoozes(value.count)
                 is SettingValue.GraceSeconds, is SettingValue.Checks -> return
             }
-        when (result) {
-            is Outcome.Failure -> {
-                logger.log(LogEvent.OperationFailed.of(SAVE_SETTING, result.error))
-            }
+        if (result is Outcome.Failure) logger.log(LogEvent.OperationFailed.of(SAVE_SETTING, result.error))
+        local.update { it.settled(value, saved = result is Outcome.Success) }
+    }
 
-            // Hold the requested value until the store shows it, so the stepper never flickers back.
-            is Outcome.Success -> {
-                withTimeoutOrNull(STORE_ECHO_TIMEOUT) { stored.first { it.chosen(value.field) == value } }
+    /**
+     * Lets go of a saved request once the store holds it, in the same pass that renders the store's value, so the two
+     * never disagree on screen. A request still being saved, or one the store does not show yet, stays.
+     */
+    private fun forgetEchoed(
+        saved: Stored,
+        ui: Local,
+    ) {
+        val feeEchoed = ui.fee?.takeIf { it.saved && saved.tier == it.value }
+        val maxEchoed = ui.max?.takeIf { it.saved && saved.maxSnoozes == it.value }
+        if (feeEchoed != null || maxEchoed != null) {
+            // Only the very request that was seen: a newer one made meanwhile stays.
+            local.update {
+                it.copy(
+                    fee = it.fee.takeUnless { request -> request == feeEchoed },
+                    max = it.max.takeUnless { request -> request == maxEchoed },
+                )
             }
         }
-        local.update { it.settled(value) }
     }
 
     private fun render(
@@ -150,10 +179,8 @@ class SettingsViewModel(
     ): SettingsUiState {
         val now = clock.now()
         val zone = timeZoneProvider.current()
-        val storedTier = (saved.chosen(LockedField.BaseFee) as SettingValue.BaseFeeTier).tier
-        val storedMax = (saved.chosen(LockedField.MaxSnoozes) as SettingValue.MaxSnoozes).count
-        val tier = ui.requestedTier ?: storedTier
-        val max = ui.requestedMax ?: storedMax
+        val tier = ui.fee?.value ?: saved.tier
+        val max = ui.max?.value ?: saved.maxSnoozes
         val fees = SnoozePrices.of(tier, max, prices, now, moneyFormatter)
         return SettingsUiState(
             baseFee = fees.baseFee,
@@ -163,8 +190,8 @@ class SettingsViewModel(
             maxSnoozes = max,
             pane = ui.pane,
             // While a new value is still being saved, the stored note may be the old one: wait for the store.
-            baseFeeNote = weakeningNoteOf(saved.pending(LockedField.BaseFee), now, zone).takeIf { tier == storedTier },
-            maxSnoozesNote = weakeningNoteOf(saved.pending(LockedField.MaxSnoozes), now, zone).takeIf { max == storedMax },
+            baseFeeNote = weakeningNoteOf(saved.pending(LockedField.BaseFee), now, zone).takeIf { tier == saved.tier },
+            maxSnoozesNote = weakeningNoteOf(saved.pending(LockedField.MaxSnoozes), now, zone).takeIf { max == saved.maxSnoozes },
         )
     }
 
@@ -180,26 +207,49 @@ class SettingsViewModel(
     ) {
         fun pending(field: LockedField): PendingChange? = pending.firstOrNull { it.field == field }
 
-        /** The value the user chose for a global [field]: the pending one if any, else the live one. */
-        fun chosen(field: LockedField): SettingValue =
-            pending(field)?.value ?: when (field) {
-                LockedField.BaseFee -> SettingValue.BaseFeeTier(settings.baseFeeTier)
-                else -> SettingValue.MaxSnoozes(settings.maxSnoozes)
-            }
+        /** The base fee tier the user chose: the pending one if any, else the live one. */
+        val tier: Int
+            get() = (pending(LockedField.BaseFee)?.value as? SettingValue.BaseFeeTier)?.tier ?: settings.baseFeeTier
+
+        /** Max snoozes the user chose: the pending value if any, else the live one. */
+        val maxSnoozes: Int
+            get() = (pending(LockedField.MaxSnoozes)?.value as? SettingValue.MaxSnoozes)?.count ?: settings.maxSnoozes
     }
 
-    /** What only this screen holds: the pane and the values requested but not stored yet. */
+    /** A value the user asked for; [saved] once its save succeeded (it goes when the store shows it). */
+    private data class Request(
+        val value: Int,
+        val saved: Boolean = false,
+    )
+
+    /** What only this screen holds: the pane and the values requested but not shown by the store yet. */
     private data class Local(
         val pane: SettingsPane = SettingsPane.Main,
-        val requestedTier: Int? = null,
-        val requestedMax: Int? = null,
+        val fee: Request? = null,
+        val max: Request? = null,
     ) {
-        /** [value]'s save is over: its request goes, unless a newer one replaced it. */
-        fun settled(value: SettingValue): Local =
+        /**
+         * [value]'s save is over. A newer request of the same field stays as it is. Otherwise a saved request waits for
+         * the store ([forgetEchoed]) and a failed one goes, so the stored value comes back.
+         */
+        fun settled(
+            value: SettingValue,
+            saved: Boolean,
+        ): Local =
             when (value) {
-                is SettingValue.BaseFeeTier -> if (requestedTier == value.tier) copy(requestedTier = null) else this
-                is SettingValue.MaxSnoozes -> if (requestedMax == value.count) copy(requestedMax = null) else this
+                is SettingValue.BaseFeeTier -> copy(fee = fee.settled(value.tier, saved))
+                is SettingValue.MaxSnoozes -> copy(max = max.settled(value.count, saved))
                 is SettingValue.GraceSeconds, is SettingValue.Checks -> this
+            }
+
+        private fun Request?.settled(
+            value: Int,
+            saved: Boolean,
+        ): Request? =
+            when {
+                this == null || this.value != value -> this
+                saved -> copy(saved = true)
+                else -> null
             }
     }
 
@@ -210,8 +260,5 @@ class SettingsViewModel(
         const val LOAD_PENDING = "load pending changes"
 
         private const val STOP_TIMEOUT_MILLIS = 5_000L
-
-        /** How long a saved value is held on screen while the store's flow catches up. */
-        private val STORE_ECHO_TIMEOUT = 2.seconds
     }
 }

@@ -1,5 +1,8 @@
 package com.yawnandpawn.app.ui
 
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.semantics.LiveRegionMode
 import androidx.compose.ui.semantics.SemanticsProperties
 import androidx.compose.ui.test.SemanticsMatcher
@@ -20,7 +23,9 @@ import com.yawnandpawn.app.ui.settings.BuiltSettingsRows
 import com.yawnandpawn.app.ui.settings.SettingsIntent
 import com.yawnandpawn.app.ui.settings.SettingsScreen
 import com.yawnandpawn.app.ui.settings.SettingsUiState
+import com.yawnandpawn.app.ui.settings.WeakeningNote
 import com.yawnandpawn.app.ui.theme.PpsThemeMode
+import kotlinx.datetime.LocalTime
 import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -116,7 +121,58 @@ class SnoozeSettingsSemanticsTest {
         }
     }
 
+    @Test
+    fun `holding − down to tier 1 ends the press, so the next single tap on − steps once`() {
+        val intents = mutableListOf<SettingsIntent>()
+        var tier by mutableStateOf(3)
+        withScreen(
+            PpsThemeMode.Light,
+            content = {
+                SettingsScreen(
+                    state = SnoozeSettingsSamples.baseFee.copy(baseFeeTier = tier, baseFee = "\$$tier.00"),
+                    is24Hour = false,
+                    onIntent = { intent ->
+                        intents += intent
+                        if (intent == SettingsIntent.LowerBaseFee) tier--
+                        if (intent == SettingsIntent.RaiseBaseFee) tier++
+                    },
+                    rows = BuiltSettingsRows,
+                )
+            },
+        ) {
+            val lower = composeRule.onNodeWithContentDescription("Lower Base fee")
+            lower.assertIsEnabled()
+            composeRule.mainClock.autoAdvance = false
+            lower.performTouchInput { down(center) }
+            composeRule.mainClock.advanceTimeBy(HELD_TO_END_MILLIS)
+            lower.performTouchInput { up() }
+            composeRule.mainClock.advanceTimeBy(AFTER_RELEASE_MILLIS)
+            composeRule.mainClock.autoAdvance = true
+            assertEquals(1, tier, "held from 3 down to the end of the range: $intents")
+            lower.assertIsNotEnabled()
+
+            intents.clear()
+            composeRule.onNodeWithContentDescription("Raise Base fee").performClick()
+            lower.performClick()
+
+            assertEquals(listOf(SettingsIntent.RaiseBaseFee, SettingsIntent.LowerBaseFee), intents)
+            assertEquals(1, tier)
+        }
+    }
+
+    @Test
+    fun `the saved-under-lock notes are polite live regions, so TalkBack hears that the change waits`() {
+        val polite = SemanticsMatcher.expectValue(SemanticsProperties.LiveRegion, LiveRegionMode.Polite)
+        show(SnoozeSettingsSamples.lowered) {
+            composeRule.onNode(hasText("Takes effect after", substring = true) and polite).assertExists()
+        }
+        show(SnoozeSettingsSamples.maxSnoozesFive.copy(maxSnoozesNote = WeakeningNote(LocalTime(7, 30), today = true))) {
+            composeRule.onNode(hasText("Saved. Takes effect after today's 7:30 AM alarm.") and polite).assertExists()
+        }
+    }
+
     private companion object {
+        const val HELD_TO_END_MILLIS = 1_000L
         const val HELD_MILLIS = 750L
         const val AFTER_RELEASE_MILLIS = 500L
         const val MIN_REPEATS = 3

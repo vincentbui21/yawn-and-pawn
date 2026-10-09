@@ -3,6 +3,9 @@ package com.yawnandpawn.app.ui.settings
 import androidx.compose.foundation.layout.padding
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.semantics.LiveRegionMode
+import androidx.compose.ui.semantics.liveRegion
+import androidx.compose.ui.semantics.semantics
 import com.yawnandpawn.app.ui.components.GroupCard
 import com.yawnandpawn.app.ui.components.NoteInline
 import com.yawnandpawn.app.ui.components.PpsStepper
@@ -67,7 +70,10 @@ private fun feeLadderText(ladder: List<String>): String? =
         else -> stringResource(Res.string.editor_fee_ladder, ladder[0], ladder[1], ladder[2])
     }
 
-/** "Saved. Takes effect after tomorrow's {time} alarm." (or "today's"), {time} per the system 12/24 h setting. */
+/**
+ * "Saved. Takes effect after tomorrow's {time} alarm." (or "today's"), {time} per the system 12/24 h setting. A polite
+ * live region, so TalkBack also says that the step just made waits for the alarm (review fix 2).
+ */
 @Composable
 private fun WeakeningNoteInline(
     note: WeakeningNote,
@@ -80,7 +86,7 @@ private fun WeakeningNoteInline(
                 if (note.today) Res.string.settings_weakening_today else Res.string.editor_weakening_under_lock,
                 formatClockTime(note.time, is24Hour),
             ),
-        modifier = modifier,
+        modifier = modifier.semantics { liveRegion = LiveRegionMode.Polite },
     )
 }
 

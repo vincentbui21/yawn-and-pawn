@@ -27,6 +27,7 @@ fun billingModule(): Module =
         single { (androidContext() as? YawnAndPawnApp)?.resumedWakeScreen ?: ResumedWakeScreen() }
         single<BillingClientFacade> { variantBillingFacade(androidContext()) }
         single {
+            val keyguard = androidContext().getSystemService(KeyguardManager::class.java)
             AndroidBilling(
                 facade = get(),
                 userLock = get(),
@@ -35,6 +36,8 @@ fun billingModule(): Module =
                 logger = get(),
                 scope = ApplicationScope(get()),
                 main = Dispatchers.Main,
+                // Review 11: read again right before Play opens, so the sheet never waits behind a keyguard.
+                keyguardLocked = { keyguard.isKeyguardLocked },
             )
         }
         single<Billing> { get<AndroidBilling>() }

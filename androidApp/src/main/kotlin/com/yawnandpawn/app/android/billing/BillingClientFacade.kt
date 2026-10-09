@@ -81,6 +81,12 @@ interface BillingClientFacade {
         onDisconnected: () -> Unit,
     )
 
+    /**
+     * `endConnection`: drops the client, for example after a setup that never answered; the next [startConnection]
+     * builds a fresh one.
+     */
+    fun endConnection()
+
     /** `queryProductDetailsAsync` for the INAPP products [productIds]. */
     fun queryProducts(
         productIds: List<String>,

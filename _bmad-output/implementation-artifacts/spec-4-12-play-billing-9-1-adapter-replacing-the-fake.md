@@ -135,6 +135,32 @@ deferred:
 - **4.13's intent id:** `ConfirmSheetHost` mints a new UUID per Pay tap (the 4.8 deferral). The engine refuses a reused id, and the adapter needs nothing more.
 - **4.7 (PR #51):** no overlap in files. `SnoozeAvailability` reads the price cache, which the live price now also refreshes.
 
+## Review (2 reviewers, fast mode)
+
+Two reviewers read `fea363ac`: one for verification gaps, one for edge cases. The edge-case reviewer found no HIGH and confirmed the echo filter, the consume mapping, the updates, PENDING, the ids and the alarm path. Every item was fixed in `fix(4.12): review fixes`, with its test:
+
+1. **(HIGH) `ResumedWakeScreen` had no test.** `ResumedWakeScreenTest` drives the application's lifecycle callbacks: another screen is never current, a wait ends when the wake screen resumes, and a paused or destroyed screen is no longer current.
+2. **(Real bug) A setup that never answered stayed joinable for ever.** After `connect` with no answer, the client is ended (new facade `endConnection()`), the waiting callers are answered, and the next call builds a fresh client. A service dropped during the setup answers the waiting call at once.
+3. **Backoff bounds:** with virtual time, tries land at 0/1/3/7/11/15 s, with no seventh by 100 s.
+4. **No connection before the first unlock, in the app's own Koin graph.** A locked boot that rings, recovers and is asked directly makes 0 connections, and the unlock makes 1. Real bug found: `init()` called before the unlock marked billing started and then never connected. It now waits for the unlock.
+5. **The never-connecting wiring test now proves its name:** Play answers OK at last, with the product known and a wake screen resumed, and no sheet opens for the ended session.
+6. **The real facade is tested** (`PlayBillingClientFacadeTest`). Without the Play Store, every call answers `BILLING_UNAVAILABLE` at once. The launch request (`FlowRequest`, now plain values) sends the install id as `obfuscatedAccountId` and the session id as `obfuscatedProfileId`.
+7. **"Main thread busy":** the launch is now posted to the main thread and waited for with a limit. A blocked main thread gives `Failed(Error)` at once, and the abandoned call never runs (it is claimed first). The old `withContext` version could not time out at all: it waited for the blocked thread.
+8. **(Real bug) An `Error` thrown by `launchBillingFlow` left the echo filter launching for ever,** so every later update, a PURCHASED included, was held. Any throwable is now caught, the filter is always closed in `finally`, and a later purchase is delivered.
+9. **PENDING → PURCHASED through Play's own `Purchase` JSON** (`purchaseState` 4, then 0): two updates in order, neither dropped as an echo.
+10. **`DEVELOPER_ERROR` on a setup** (Play reconnecting by itself) is not permanent. The next call connects, and the backoff retries. Only `BILLING_UNAVAILABLE` and `FEATURE_NOT_SUPPORTED` stop it.
+11. **(Alarm, money) Never behind the keyguard.** Right before `launchBillingFlow`, on the main thread, the keyguard is read again. If it is locked, nothing opens and the launch fails as `UnlockFailed` ("Phone still locked. No charge."). Tested with Robolectric's keyguard shadow.
+12. **= 2.**
+13. **The backoff keeps growing across drops** until a connection stays up 60 s (`stableConnection`), so a flapping Play Store is not rebound in a storm. At most 4 connections in 5 s of virtual time. The billing country is read only while unknown.
+
+**Weak assertions:**
+- The cancelled PIN prompt must answer within 100 ms, and `onDismissError` is driven too.
+- The live-price limit test now fails without the 8 s limit: the billing query there waits 10 s.
+
+**Minors:**
+- A later product query that fails keeps the earlier queries' prices and reports the rest as unfetched.
+- Single quantity is documented in `tools/play-catalog/README.md` and `docs/decisions/play-billing-dependencies.md`. The adapter ignores a purchase's quantity, so multi-quantity must stay off.
+
 ## Auto Run Result
 
 Status: implemented in fast mode (one agent, unattended Epic 4 run), with no review pass. Branch `story/4-12-play-billing-adapter` on `origin/main` `8d6d7a8`.

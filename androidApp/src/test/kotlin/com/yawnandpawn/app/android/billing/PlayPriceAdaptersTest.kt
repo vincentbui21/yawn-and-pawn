@@ -24,8 +24,11 @@ import org.junit.After
 import org.junit.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertNull
+import kotlin.test.assertTrue
 import kotlin.time.Duration.Companion.days
 import kotlin.time.Duration.Companion.milliseconds
+import kotlin.time.Duration.Companion.seconds
+import kotlin.time.TimeSource
 
 /** Story 4.12: the product details source, the live price, the billing country and the display prices over Play. */
 class PlayPriceAdaptersTest {
@@ -87,8 +90,22 @@ class PlayPriceAdaptersTest {
             val cache = FakePriceCacheStore()
             assertNull(PlayLivePrices(billing, cache, clock, logger).livePrice("snooze_usd_01"))
 
+            // Only the live price's own limit (50 ms) can end this: the billing query would wait 10 s.
             facade.holdProducts = true
-            assertNull(PlayLivePrices(billing, cache, clock, logger, timeout = 50.milliseconds).livePrice("snooze_usd_01"))
+            val slowQueries =
+                AndroidBilling(
+                    facade,
+                    FakeUserLockState(unlocked = true),
+                    { null },
+                    FakeMonotonicClock(),
+                    logger,
+                    scope,
+                    Dispatchers.Unconfined,
+                    BillingTimeouts(connect = 100.milliseconds, query = 10.seconds),
+                )
+            val started = TimeSource.Monotonic.markNow()
+            assertNull(PlayLivePrices(slowQueries, cache, clock, logger, timeout = 50.milliseconds).livePrice("snooze_usd_01"))
+            assertTrue(started.elapsedNow() < 2.seconds, "ended by the live price limit")
 
             facade.holdProducts = false
             facade.products["snooze_usd_01"] = FakeBillingClientFacade.product("snooze_usd_01")

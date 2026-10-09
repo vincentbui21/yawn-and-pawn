@@ -27,3 +27,7 @@ Billing's other dependencies were already on the classpath and in `config/depend
 ## Open-source notices
 
 Play Billing and the Play services libraries are proprietary Google SDKs. List them, with WorkManager (Apache-2.0, Story 4.3), when the notices screen is built (Epic 5/8).
+
+## Single-quantity products
+
+The adapter ignores `Purchase.getQuantity()`: one purchase grants one snooze and is consumed once (Story 4.10). Multi-quantity must stay off on every snooze product's Buy option. `tools/play-catalog` creates them that way and flags any that is not (see its README); never turn it on in Play Console.

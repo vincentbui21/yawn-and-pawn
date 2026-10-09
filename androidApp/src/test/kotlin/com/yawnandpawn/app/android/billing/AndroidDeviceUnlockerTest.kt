@@ -23,6 +23,7 @@ import kotlin.test.assertEquals
 import kotlin.test.assertFalse
 import kotlin.test.assertTrue
 import kotlin.time.Duration.Companion.milliseconds
+import kotlin.time.TimeSource
 
 /** Story 4.12 (Spike S1 option B): the PIN before Play, through `requestDismissKeyguard` from the wake screen. */
 @RunWith(RobolectricTestRunner::class)
@@ -78,10 +79,28 @@ class AndroidDeviceUnlockerTest {
             shadow.setKeyguardLocked(true)
             val unlocker = unlocker()
 
+            val started = TimeSource.Monotonic.markNow()
             val result = async(Dispatchers.Unconfined, start = CoroutineStart.UNDISPATCHED) { unlocker.requestUnlock() }
             shadow.setKeyguardLocked(true) // Robolectric: re-locking answers onDismissCancelled
 
             assertEquals(UnlockResult.Failed, result.await())
+            assertTrue(started.elapsedNow() < 100.milliseconds, "answered by the callback, not the limit")
+        }
+
+    @Test
+    fun `onDismissError gives Failed at once`() =
+        runBlocking<Unit> {
+            shadow.setKeyguardLocked(true)
+            val unlocker = unlocker()
+            val first = async(Dispatchers.Unconfined, start = CoroutineStart.UNDISPATCHED) { unlocker.requestUnlock() }
+
+            // Robolectric answers onDismissError to a second request while one is pending.
+            val started = TimeSource.Monotonic.markNow()
+            assertEquals(UnlockResult.Failed, unlocker.requestUnlock())
+            assertTrue(started.elapsedNow() < 100.milliseconds, "answered by onDismissError, not the limit")
+
+            shadow.setKeyguardLocked(false)
+            first.await() // Robolectric answers the pending request too; only the second one's answer is checked
         }
 
     @Test

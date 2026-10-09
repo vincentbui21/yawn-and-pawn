@@ -18,6 +18,18 @@ class FakeBillingClientFacade(
     var startConnections = 0
         private set
 
+    /** Setup answers used before [setupCode], first to last (for example a `DEVELOPER_ERROR` while Play reconnects). */
+    val nextSetupCodes = ArrayDeque<Int>()
+
+    /** Play drops the service right after each OK setup (a flapping Play Store). */
+    var dropAfterConnect = false
+
+    /** Called at each `startConnection` (tests record the time). */
+    var onStartConnection: () -> Unit = {}
+
+    var endConnections = 0
+        private set
+
     private var connected = false
     private var onDisconnectedCallback: () -> Unit = {}
     private var listener: (PlayResult, List<PlayPurchase>?) -> Unit = { _, _ -> }
@@ -42,7 +54,7 @@ class FakeBillingClientFacade(
     /** `launchBillingFlow`'s answer; a non-OK answer is also sent to the listener, as Play does (the echo). */
     var launchCode: Int = BillingResponseCode.OK
     var echoLaunchErrors = true
-    var throwOnLaunch: RuntimeException? = null
+    var throwOnLaunch: Throwable? = null
     val launches = mutableListOf<Launch>()
 
     var countryCode: String? = "US"
@@ -68,14 +80,22 @@ class FakeBillingClientFacade(
         onDisconnected: () -> Unit,
     ) {
         startConnections++
+        onStartConnection()
         onDisconnectedCallback = onDisconnected
-        val code = setupCode
+        val code = nextSetupCodes.removeFirstOrNull() ?: setupCode
         if (code == null) {
             heldSetup = onSetup
             return
         }
         connected = code == BillingResponseCode.OK
         onSetup(PlayResult(code))
+        if (connected && dropAfterConnect) disconnect()
+    }
+
+    override fun endConnection() {
+        endConnections++
+        heldSetup = null
+        connected = false
     }
 
     private var heldSetup: ((PlayResult) -> Unit)? = null

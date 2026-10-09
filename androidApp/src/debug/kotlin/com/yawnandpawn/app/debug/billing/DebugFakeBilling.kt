@@ -88,6 +88,10 @@ class DebugFakeBillingFacade(
         main.post { onSetup(OK) }
     }
 
+    override fun endConnection() {
+        connected = false
+    }
+
     override fun queryProducts(
         productIds: List<String>,
         onResult: (ProductQuery) -> Unit,

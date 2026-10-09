@@ -69,6 +69,13 @@ class PlayBillingClientFacade(
         )
     }
 
+    @Synchronized
+    override fun endConnection() {
+        val ended = client
+        client = null
+        ended?.endConnection()
+    }
+
     override fun queryProducts(
         productIds: List<String>,
         onResult: (ProductQuery) -> Unit,
@@ -122,32 +129,12 @@ class PlayBillingClientFacade(
         profileId: String,
     ): PlayResult {
         val c = clientOrNull()
-        val details = product.handle as? ProductDetails
+        val request = flowRequest(product, accountId, profileId)
         return when {
             c == null -> NO_PLAY_STORE
-            details == null -> PlayResult(BillingClient.BillingResponseCode.DEVELOPER_ERROR, "no details")
-            else -> c.launchBillingFlow(activity, flowParams(details, product, accountId, profileId)).toPlay()
+            request == null -> PlayResult(BillingClient.BillingResponseCode.DEVELOPER_ERROR, "no details")
+            else -> c.launchBillingFlow(activity, request.toParams()).toPlay()
         }
-    }
-
-    private fun flowParams(
-        details: ProductDetails,
-        product: PlayProduct,
-        accountId: String,
-        profileId: String,
-    ): BillingFlowParams {
-        val productParams =
-            BillingFlowParams.ProductDetailsParams
-                .newBuilder()
-                .setProductDetails(details)
-                .apply { product.offerToken?.let { setOfferToken(it) } }
-                .build()
-        return BillingFlowParams
-            .newBuilder()
-            .setProductDetailsParamsList(listOf(productParams))
-            .setObfuscatedAccountId(accountId)
-            .setObfuscatedProfileId(profileId)
-            .build()
     }
 
     override fun queryBillingCountry(onResult: (PlayResult, String?) -> Unit) {
@@ -184,3 +171,37 @@ class PlayBillingClientFacade(
         }
     }
 }
+
+/**
+ * What one `launchBillingFlow` asks Play for (Story 4.12): the product's [details] and the offer [offerToken], with
+ * `obfuscatedAccountId` = [accountId] (the install id) and `obfuscatedProfileId` = [profileId] (the session id), the ids
+ * the reconciler later matches (AD-7). Plain values, so a test can read them: Play's params have no getters.
+ */
+class FlowRequest(
+    val details: ProductDetails,
+    val offerToken: String?,
+    val accountId: String,
+    val profileId: String,
+) {
+    fun toParams(): BillingFlowParams {
+        val productParams =
+            BillingFlowParams.ProductDetailsParams
+                .newBuilder()
+                .setProductDetails(details)
+                .apply { offerToken?.let { setOfferToken(it) } }
+                .build()
+        return BillingFlowParams
+            .newBuilder()
+            .setProductDetailsParamsList(listOf(productParams))
+            .setObfuscatedAccountId(accountId)
+            .setObfuscatedProfileId(profileId)
+            .build()
+    }
+}
+
+/** The request for [product] (null without Play's `ProductDetails`): the install id as account id, the session as profile. */
+fun flowRequest(
+    product: PlayProduct,
+    accountId: String,
+    profileId: String,
+): FlowRequest? = (product.handle as? ProductDetails)?.let { FlowRequest(it, product.offerToken, accountId, profileId) }

@@ -35,6 +35,7 @@ import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.Density
+import com.yawnandpawn.app.android.AndroidMonotonicClock
 import com.yawnandpawn.app.ui.components.DismissButton
 import com.yawnandpawn.app.ui.components.GroupCard
 import com.yawnandpawn.app.ui.components.GroupDivider
@@ -45,6 +46,7 @@ import com.yawnandpawn.app.ui.format.is24HourClock
 import com.yawnandpawn.app.ui.shell.AppTab
 import com.yawnandpawn.app.ui.theme.PpsTheme
 import com.yawnandpawn.app.ui.theme.PpsThemeMode
+import com.yawnandpawn.app.ui.wake.LocalWakeClock
 
 /**
  * [content] as the preview shows it: [mode] (Light or Dark; wake screens switch to Sunrise themselves) and, with
@@ -58,10 +60,13 @@ fun PreviewFrame(
 ) {
     val density = LocalDensity.current
     val scaled = if (largeFont) Density(density.density, LARGE_FONT_SCALE) else density
-    CompositionLocalProvider(LocalDensity provides scaled) {
+    // The confirm sheet's 500 ms guard reads the app's monotonic clock, as on the real wake screen (Story 4.13).
+    CompositionLocalProvider(LocalDensity provides scaled, LocalWakeClock provides previewClock::elapsedMillis) {
         PpsTheme(mode = mode, content = content)
     }
 }
+
+private val previewClock = AndroidMonotonicClock()
 
 /** Where a tap-through starts: the tabs, onboarding, or the editor on its Wake-up check or Motivation sub-screen. */
 enum class FlowStart { Tabs, Onboarding, CheckPicker, Recordings }

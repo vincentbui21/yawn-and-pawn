@@ -11,7 +11,10 @@ import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.ScrollState
 import androidx.compose.foundation.background
+import androidx.compose.foundation.gestures.Orientation
 import androidx.compose.foundation.gestures.detectTapGestures
+import androidx.compose.foundation.gestures.draggable
+import androidx.compose.foundation.gestures.rememberDraggableState
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxScope
@@ -57,6 +60,9 @@ import androidx.compose.ui.graphics.CompositingStrategy
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
+import androidx.compose.ui.input.nestedscroll.NestedScrollConnection
+import androidx.compose.ui.input.nestedscroll.NestedScrollSource
+import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.boundsInWindow
 import androidx.compose.ui.layout.onGloballyPositioned
@@ -67,10 +73,14 @@ import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.disabled
+import androidx.compose.ui.semantics.dismiss
+import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.liveRegion
+import androidx.compose.ui.semantics.paneTitle
 import androidx.compose.ui.semantics.role
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.unit.Velocity
 import androidx.compose.ui.unit.dp
 import androidx.navigationevent.NavigationEventInfo
 import androidx.navigationevent.compose.NavigationBackHandler
@@ -122,7 +132,6 @@ import com.yawnandpawn.app.ui.resources.wake_stranded_refund
 import com.yawnandpawn.app.ui.resources.wake_test_no_charge
 import com.yawnandpawn.app.ui.resources.wake_unlock_to_snooze
 import com.yawnandpawn.app.ui.theme.PpsTheme
-import kotlinx.coroutines.delay
 import org.jetbrains.compose.resources.painterResource
 import org.jetbrains.compose.resources.stringResource
 
@@ -434,8 +443,10 @@ fun GraceHeader(
  * `sheet-snooze-confirm` over a wake screen: a `glass-bar` bottom sheet (`glass-strong`, blurred backdrop on Android
  * 12+), top corners `rounded.lg`, 24 dp padding. The upper
  * outlined action pays (or uses the earlier payment); the filled bottom one, a tap outside and Back all run
- * [onDismiss] ("I'll get up", "Not now", "Cancel"). Every input is ignored for 500 ms after the sheet opens or changes
- * state, whatever the animation setting. Neither button is pre-selected.
+ * [onDismiss] ("I'll get up", "Not now", "Cancel"), and so do a swipe down and TalkBack's dismiss action. Every input
+ * is ignored for 500 ms after the sheet opens or its state or displayed price changes ([InputGuard] on the monotonic
+ * [LocalWakeClock], whatever the animation setting; Story 4.13). Neither button is pre-selected or focused: the sheet is
+ * a pane titled by its first line, a heading, which TalkBack reads first.
  *
  * With [keepClearAboveY] (a window y in px, the bottom of Ringing's clock) the sheet never grows over that line, but
  * keeps at least [MIN_SHEET_FRACTION] of the screen: at large font scales its text scrolls and the buttons stay whole.
@@ -452,16 +463,15 @@ fun SnoozeConfirmSheet(
 ) {
     val colors = PpsTheme.colors
     val spacing = PpsTheme.spacing
-    var inputLocked by remember(sheet::class) { mutableStateOf(true) }
-    LaunchedEffect(sheet::class) {
-        inputLocked = true
-        delay(INPUT_LOCK_MILLIS)
-        inputLocked = false
-    }
-    val guardedUpper = { if (!inputLocked) onUpper() }
-    val guardedDismiss = { if (!inputLocked) onDismiss() }
+    // A new guard (armed now) whenever the sheet's content changes: its state, or a live price that differs.
+    val clock = LocalWakeClock.current
+    val guard = remember(sheet) { InputGuard(clock) }
+    val guardedUpper = { if (guard.accepts()) onUpper() }
+    val guardedDismiss = { if (guard.accepts()) onDismiss() }
     val guardedDismissState = rememberUpdatedState(guardedDismiss)
     NavigationBackHandler(state = rememberNavigationEventState(NavigationEventInfo.None), isBackEnabled = true) { guardedDismiss() }
+    val title = sheetTitle(sheet)
+    val swipe = rememberSwipeDown(with(LocalDensity.current) { spacing.targetWake.toPx() }) { guardedDismissState.value() }
     var box by remember { mutableStateOf<Rect?>(null) }
     val maxSheetHeight =
         box?.let { bounds ->
@@ -472,15 +482,7 @@ fun SnoozeConfirmSheet(
             }
         }
     Box(modifier = modifier.fillMaxSize().onGloballyPositioned { box = it.boundsInWindow() }) {
-        // Scrim: a tap outside the sheet is the "I'll get up" path.
-        Box(
-            modifier =
-                Modifier
-                    .fillMaxSize()
-                    .background(colors.text.copy(alpha = SCRIM_ALPHA))
-                    .pointerInput(Unit) { detectTapGestures { guardedDismissState.value() } }
-                    .clearAndSetSemantics { },
-        )
+        SheetScrim { guardedDismissState.value() }
         Column(
             modifier =
                 Modifier
@@ -491,7 +493,9 @@ fun SnoozeConfirmSheet(
                         PpsTheme.shapes.lg.copy(bottomStart = ZeroCornerSize, bottomEnd = ZeroCornerSize),
                         strong = true,
                         backdrop = backdrop,
-                    ).navigationBarsPadding()
+                    ).then(swipe)
+                    .sheetPane(title) { guardedDismissState.value() }
+                    .navigationBarsPadding()
                     .padding(spacing.space6),
             verticalArrangement = Arrangement.spacedBy(spacing.space3),
         ) {
@@ -507,6 +511,7 @@ fun SnoozeConfirmSheet(
             ) {
                 SheetContent(sheet)
             }
+            SheetTaxNote(sheet)
             SheetButtons(sheet = sheet, onUpper = guardedUpper, onDismiss = guardedDismiss)
         }
     }
@@ -576,8 +581,19 @@ private fun SheetContent(sheet: SnoozeSheet) {
     when (sheet) {
         is SnoozeSheet.Confirm -> {
             val price = formatMoney(sheet.price)
-            Text(text = stringResource(Res.string.snooze_confirm_title, sheet.minutes), style = typography.headline, color = colors.text)
-            Text(text = price, style = typography.display, color = colors.text)
+            Text(
+                text = stringResource(Res.string.snooze_confirm_title, sheet.minutes),
+                modifier = Modifier.semantics { heading() },
+                style = typography.headline,
+                color = colors.text,
+            )
+            // A live price that differs replaces this one; TalkBack says the new price (review fix 15).
+            Text(
+                text = price,
+                modifier = Modifier.semantics { liveRegion = LiveRegionMode.Polite },
+                style = typography.display,
+                color = colors.text,
+            )
             Text(
                 text =
                     sheet.nextPrice?.let { stringResource(Res.string.snooze_confirm_body, price, formatMoney(it)) }
@@ -590,9 +606,6 @@ private fun SheetContent(sheet: SnoozeSheet) {
                 style = typography.body,
                 color = colors.textSecondary,
             )
-            if (sheet.showTaxNote) {
-                Text(text = stringResource(Res.string.snooze_confirm_tax_note), style = typography.caption, color = colors.textSecondary)
-            }
         }
 
         is SnoozeSheet.Unlocking -> {
@@ -600,7 +613,7 @@ private fun SheetContent(sheet: SnoozeSheet) {
                 Icon(painter = painterResource(Res.drawable.symbol_lock), contentDescription = null, tint = colors.text)
                 Text(
                     text = stringResource(Res.string.snooze_unlock_to_pay, formatMoney(sheet.price)),
-                    modifier = Modifier.padding(start = PpsTheme.spacing.space3),
+                    modifier = Modifier.padding(start = PpsTheme.spacing.space3).semantics { heading() },
                     style = typography.headline,
                     color = colors.text,
                 )
@@ -610,10 +623,118 @@ private fun SheetContent(sheet: SnoozeSheet) {
         is SnoozeSheet.AlreadyPaid -> {
             Text(
                 text = stringResource(Res.string.snooze_already_paid_body, formatMoney(sheet.price)),
+                modifier = Modifier.semantics { heading() },
                 style = typography.body,
                 color = colors.text,
             )
         }
+    }
+}
+
+/**
+ * The tax note of a confirm [sheet] that shows one: part of the price, so it sits above the buttons outside the scrolling
+ * text and never scrolls away at 200% font (Story 4.13 review fix 1).
+ */
+@Composable
+private fun SheetTaxNote(sheet: SnoozeSheet) {
+    if (sheet is SnoozeSheet.Confirm && sheet.showTaxNote) {
+        Text(
+            text = stringResource(Res.string.snooze_confirm_tax_note),
+            style = PpsTheme.typography.caption,
+            color = PpsTheme.colors.textSecondary,
+        )
+    }
+}
+
+/** The scrim over the wake screen: a tap outside the sheet ([onTap]) is the "I'll get up" path. */
+@Composable
+private fun SheetScrim(onTap: () -> Unit) {
+    val latest = rememberUpdatedState(onTap)
+    Box(
+        modifier =
+            Modifier
+                .fillMaxSize()
+                .background(PpsTheme.colors.text.copy(alpha = SCRIM_ALPHA))
+                .pointerInput(Unit) { detectTapGestures { latest.value() } }
+                .clearAndSetSemantics { },
+    )
+}
+
+/** TalkBack announces the sheet by its first line ([title]) and can close it like Back ([onDismiss], "I'll get up"). */
+private fun Modifier.sheetPane(
+    title: String,
+    onDismiss: () -> Unit,
+): Modifier =
+    semantics {
+        paneTitle = title
+        dismiss {
+            onDismiss()
+            true
+        }
+    }
+
+/** The first line of [sheet], its TalkBack pane title. */
+@Composable
+private fun sheetTitle(sheet: SnoozeSheet): String =
+    when (sheet) {
+        is SnoozeSheet.Confirm -> stringResource(Res.string.snooze_confirm_title, sheet.minutes)
+        is SnoozeSheet.Unlocking -> stringResource(Res.string.snooze_unlock_to_pay, formatMoney(sheet.price))
+        is SnoozeSheet.AlreadyPaid -> stringResource(Res.string.snooze_already_paid_body, formatMoney(sheet.price))
+    }
+
+/**
+ * Swipe down to close (Story 4.13, the "I'll get up" path): a downward drag of at least [thresholdPx] on the sheet,
+ * on its fixed part or past the top of its scrolling text (what the text does not scroll reaches this through nested
+ * scrolling), runs [onSwiped] when the finger lifts.
+ */
+@Composable
+private fun rememberSwipeDown(
+    thresholdPx: Float,
+    onSwiped: () -> Unit,
+): Modifier {
+    val latest = rememberUpdatedState(onSwiped)
+    val tracker = remember(thresholdPx) { SwipeTracker(thresholdPx) }
+    val connection =
+        remember(tracker) {
+            object : NestedScrollConnection {
+                override fun onPostScroll(
+                    consumed: Offset,
+                    available: Offset,
+                    source: NestedScrollSource,
+                ): Offset {
+                    if (source == NestedScrollSource.UserInput) tracker.add(available.y)
+                    return Offset.Zero
+                }
+
+                override suspend fun onPostFling(
+                    consumed: Velocity,
+                    available: Velocity,
+                ): Velocity {
+                    if (tracker.end()) latest.value()
+                    return Velocity.Zero
+                }
+            }
+        }
+    val drag = rememberDraggableState { tracker.add(it) }
+    return Modifier
+        .nestedScroll(connection)
+        .draggable(drag, Orientation.Vertical, onDragStopped = { if (tracker.end()) latest.value() })
+}
+
+/** The downward distance of one drag; [end] says whether it reached [threshold] and starts over. */
+private class SwipeTracker(
+    private val threshold: Float,
+) {
+    private var total = 0f
+
+    fun add(dy: Float) {
+        total += dy
+    }
+
+    fun end(): Boolean {
+        val swiped = total >= threshold
+        total = 0f
+        return swiped
     }
 }
 

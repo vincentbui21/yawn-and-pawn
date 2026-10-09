@@ -10,6 +10,10 @@ import com.yawnandpawn.app.android.crash.CrashlyticsSink
 import com.yawnandpawn.app.android.crash.FirebaseCrashReporter
 import com.yawnandpawn.app.android.crash.isFirebaseConfigured
 import com.yawnandpawn.app.android.sound.LibrarySoundResolver
+import com.yawnandpawn.app.core.billing.BillingCountry
+import com.yawnandpawn.app.core.billing.DisplayPrices
+import com.yawnandpawn.app.core.billing.LivePriceSource
+import com.yawnandpawn.app.core.billing.PriceCatalog
 import com.yawnandpawn.app.core.billing.PurchaseCoordinator
 import com.yawnandpawn.app.core.billing.PurchaseLedger
 import com.yawnandpawn.app.core.billing.ReplayGrantLedger
@@ -103,4 +107,24 @@ fun wakeModule(): Module =
                 koin.get<ApplicationScope>().launch { koin.get<ReplayGrantLedger>()() }
             })
         }
+        includes(confirmSheetModule())
+    }
+
+/**
+ * The snooze confirm sheet (Story 4.13), included by [wakeModule]: display prices from Story 4.3's price cache, "Use it"
+ * and "Not now" through Story 4.11's coordinator. Until the Play adapter (4.12) binds them, no live price and no billing
+ * country is known.
+ */
+private fun confirmSheetModule(): Module =
+    module {
+        single<LivePriceSource> { LivePriceSource.None }
+        // Its own app-wide scope (as the coordinator's): it follows the cache for the life of the process, so it is not among
+        // the app start's finite jobs.
+        single<DisplayPrices> { CatalogDisplayPrices(get<PriceCatalog>(), get(), ApplicationScope(get())) }
+        single<BillingCountry> { BillingCountry.None }
+        single<ReuseChoices> {
+            val koin = this
+            ReuseChoices.of { koin.get<PurchaseCoordinator>() }
+        }
+        single { ConfirmSheetHost(get(), get(), get(), get(), get(), get(), get<ApplicationScope>(), get()) }
     }

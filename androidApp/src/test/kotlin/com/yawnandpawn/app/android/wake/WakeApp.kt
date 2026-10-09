@@ -13,7 +13,11 @@ import com.yawnandpawn.app.buildService
 import com.yawnandpawn.app.core.alarm.AlarmFired
 import com.yawnandpawn.app.core.alarm.AlarmRepository
 import com.yawnandpawn.app.core.alarm.CheckConfigRepository
+import com.yawnandpawn.app.core.billing.BillingCountry
+import com.yawnandpawn.app.core.billing.DisplayPrices
+import com.yawnandpawn.app.core.billing.LivePriceSource
 import com.yawnandpawn.app.core.billing.ProductDetailsSource
+import com.yawnandpawn.app.core.billing.PurchaseIntentStore
 import com.yawnandpawn.app.core.checks.AccessibilityState
 import com.yawnandpawn.app.core.config.GlobalSettingsRepository
 import com.yawnandpawn.app.core.crash.CrashReporter
@@ -80,6 +84,12 @@ internal class WakeApp(
     globalSettings: GlobalSettingsRepository? = null,
     productDetails: ProductDetailsSource? = null,
     unlock: UnlockPort? = null,
+    // Story 4.13: the confirm sheet's ports.
+    livePrices: LivePriceSource? = null,
+    displayPrices: DisplayPrices? = null,
+    reuseChoices: ReuseChoices? = null,
+    purchaseIntents: PurchaseIntentStore? = null,
+    billingCountry: BillingCountry? = null,
 ) {
     val app: YawnAndPawnApp = ApplicationProvider.getApplicationContext()
     val crashReporter = FakeCrashReporter()
@@ -114,6 +124,11 @@ internal class WakeApp(
                 globalSettings?.let { replaced -> single<GlobalSettingsRepository> { replaced } }
                 productDetails?.let { replaced -> single<ProductDetailsSource> { replaced } }
                 unlock?.let { replaced -> single<UnlockPort> { replaced } }
+                livePrices?.let { replaced -> single<LivePriceSource> { replaced } }
+                displayPrices?.let { replaced -> single<DisplayPrices> { replaced } }
+                reuseChoices?.let { replaced -> single<ReuseChoices> { replaced } }
+                purchaseIntents?.let { replaced -> single<PurchaseIntentStore> { replaced } }
+                billingCountry?.let { replaced -> single<BillingCountry> { replaced } }
                 single { WakeServiceStarts(serviceStartWait) }
             },
         )

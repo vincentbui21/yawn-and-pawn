@@ -275,9 +275,16 @@
   status: |
     Assigned:
     - 4.12: re-query the product's `ProductDetails` at `SnoozeTapped`/`PayConfirmed` (launching billing needs the live `ProductDetails` anyway) and store the answer in the cache.
-    - 4.13: the confirm sheet shows the live price when it arrives and re-arms its 500 ms guard when the shown price changes.
+    - 4.13 (done): the confirm sheet shows the live price when it arrives and re-arms its 500 ms guard when the shown price changes; Pay sends only the live price.
     - 4.8: `PurchaseIntent` records the live `Money` (micros and currency) of that query, never the cached entry.
 - source_spec: `_bmad-output/implementation-artifacts/spec-4-3-cache-play-prices-for-offline-display.md`
   summary: (device row for the Story 4.18 checklist) WorkManager starts only after the first unlock, and the price refresh runs after a reboot.
   evidence: The on-demand start and the locked-start path are tested in Robolectric only (`PriceRefreshSchedulingTest`, `BackgroundWorkWiringTest`).
   status: assigned to Story 4.18 (human-verify). On the Oppo, reboot and let an alarm ring before unlocking (no crash, it rings). Then unlock, open the app online, and check that prices show.
+- source_spec: `_bmad-output/implementation-artifacts/spec-4-13-snooze-confirm-sheet.md`
+  summary: Story 4.13 wires the confirm sheet over ports whose real adapters come later, and two of its behaviours need the phone.
+  evidence: |
+    - Ports with `None` defaults in `WakeModule`: `LivePriceSource` (4.12: ProductDetails) and `BillingCountry` (4.12: cached `getBillingConfigAsync` country for the tax note). `DisplayPrices` reads the 4.3 price cache (`CatalogDisplayPrices`); "Use it" / "Not now" go through the 4.11 coordinator (`ReuseChoices`); the only `UnlockPort` binding is 4.11's.
+    - Lost unlock callbacks are resolved by the 4.11 coordinator (`onWakeScreenResumed` from `WakeActivity.onResume`); the sheet sends no unlock result of its own.
+    - Only `PurchaseOutcome.UnlockFailed` shows a message (until the next tap or 10 s); 4.14 maps every outcome with the full snackbar rules.
+  status: adapters assigned to Story 4.12; device checks (Pay on a locked Oppo with PIN, fingerprint and cancel; the EU "Review and agree" extra tap; a price change between open and Pay) assigned to Story 4.18.

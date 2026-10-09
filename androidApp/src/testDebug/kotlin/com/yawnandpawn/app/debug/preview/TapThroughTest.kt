@@ -80,7 +80,7 @@ class TapThroughTest {
         tapThrough(startInSession = true) {
             composeRule.onNodeWithText("Back to alarm").performClick()
             composeRule.onNodeWithText("I'm up").assertExists()
-            // Effect delays run on the test clock: the 500 ms lock only runs out when the test advances it.
+            // The 500 ms lock reads the monotonic clock (Story 4.13), which only the main looper's time moves.
             composeRule.onNode(hasText("Snooze · ", substring = true)).performClick()
             idleFor(FRAMES_MILLIS)
 
@@ -89,7 +89,7 @@ class TapThroughTest {
             idleFor(FRAMES_MILLIS)
             composeRule.onNodeWithText("I'll get up").assertExists()
 
-            composeRule.mainClock.advanceTimeBy(600)
+            idleFor(GUARD_PASSED_MILLIS)
             pay.performClick()
             idleFor(FRAMES_MILLIS)
             composeRule.onNode(hasText("Snoozed. Next ring at 7:39 AM.")).assertExists()
@@ -149,6 +149,9 @@ class TapThroughTest {
 }
 
 private const val FRAMES_MILLIS = 48L
+
+/** Past the confirm sheet's 500 ms input lock. */
+private const val GUARD_PASSED_MILLIS = 600L
 
 /** Lets [millis] of main-looper time pass (delays and frames due in that time run). */
 private fun idleFor(millis: Long) = Shadows.shadowOf(Looper.getMainLooper()).idleFor(Duration.ofMillis(millis))

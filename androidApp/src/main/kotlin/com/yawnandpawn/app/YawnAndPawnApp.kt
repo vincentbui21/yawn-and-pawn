@@ -16,6 +16,7 @@ import com.yawnandpawn.app.android.qr.qrModule
 import com.yawnandpawn.app.android.reliability.reliabilityModule
 import com.yawnandpawn.app.android.screen.AndroidWakeScreenOpener
 import com.yawnandpawn.app.android.sound.soundModule
+import com.yawnandpawn.app.android.wake.SheetEffectRunner
 import com.yawnandpawn.app.android.wake.WakeAlarmFiredHandler
 import com.yawnandpawn.app.android.wake.WakeRuntime
 import com.yawnandpawn.app.android.wake.wakeModule
@@ -148,7 +149,8 @@ val appModule =
         // Money as text (AD-8): the phone's locale and the currency's own digits; the UI uses the same formatter.
         single<MoneyFormatter> { moneyFormatter }
         single { SessionReducer(get(), get(), get()) }
-        single<EffectRunner> { get<WakeRuntime>() }
+        // Story 4.13: the confirm sheet also sees the engine's sheet effects; the runtime carries out every effect.
+        single<EffectRunner> { SheetEffectRunner(get<WakeRuntime>(), get(), get()) { get<SessionEngine>().state.value } }
         single<Billing> { UnavailableBilling(get()) }
         // Story 4.8: intents older than 7 days are deleted on app start (runtime.db, device-protected).
         factory { PurgeOldPurchaseIntents(get(), get(), get()) }

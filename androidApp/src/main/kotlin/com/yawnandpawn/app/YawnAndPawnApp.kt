@@ -80,7 +80,9 @@ import com.yawnandpawn.app.data.dataModule
 import com.yawnandpawn.app.ui.format.moneyFormatter
 import com.yawnandpawn.app.ui.nav.WakeScreenOpener
 import com.yawnandpawn.app.ui.uiModule
+import kotlinx.coroutines.flow.emitAll
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.launch
 import org.koin.android.ext.koin.androidContext
 import org.koin.core.context.startKoin
@@ -148,11 +150,21 @@ val appModule =
         // the lock state; stranded payments arrive with Story 4.11). Billing stays unavailable until Story 4.12: nothing
         // fills the price cache, so snooze reads "Prices not loaded yet".
         single<Connectivity> { AndroidConnectivity(androidContext(), get()) }
-        // "An earlier {price} payment is being refunded" names what was actually paid (the purchase records, Story
-        // 4.10), looked up only when a stranded product appears (Story 4.11 feeds them); unknown, it names no amount.
+        // The stranded products come from the purchase coordinator's latest full query (Story 4.11), so "An earlier
+        // {price} payment is being refunded" shows while the declined product is still stranded and goes away once Play
+        // no longer lists it. Its amount is what was actually paid (the purchase records, Story 4.10); unknown, the label
+        // names no amount. Both are looked up when the wake screen collects: the coordinator needs the engine, whose
+        // reducer needs this policy, so resolving them here would be a cycle.
         single {
             val scope = this
-            SnoozeConditions(get(), get(), get(), get(), refundingPrice = { scope.get<PurchaseLedger>().refundingPrice(it) })
+            SnoozeConditions(
+                get(),
+                get(),
+                get(),
+                get(),
+                stranded = flow { emitAll(scope.get<PurchaseCoordinator>().strandedProducts) },
+                refundingPrice = { scope.get<PurchaseLedger>().refundingPrice(it) },
+            )
         }
         single<SnoozeAvailabilityPolicy> { LiveSnoozeAvailability(get(), get(), get()) }
         single<CheckValidator> { PluginCheckValidator }

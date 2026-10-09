@@ -128,8 +128,10 @@ internal class PurchaseRules(
         state: Ring,
         event: SessionEvent.ReuseAccepted,
         now: TimeSnapshot,
-    ): Transition? =
-        if (offer(state)?.productId == event.productId) onPaidSnooze(state, PaidWith(event.productId, event.token, price = event.price), now) else null
+    ): Transition? {
+        val paid = PaidWith(event.productId, event.token, price = event.price)
+        return if (offer(state)?.productId == event.productId) onPaidSnooze(state, paid, now) else null
+    }
 
     /** The wake message for a payment that failed for [kind]. */
     private fun outcomeOf(kind: PurchaseFailureKind): PurchaseOutcome =

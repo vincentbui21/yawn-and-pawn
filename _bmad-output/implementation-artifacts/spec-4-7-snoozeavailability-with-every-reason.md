@@ -162,3 +162,12 @@ Two reviewers looked at the branch, one for verification gaps and one for edge c
 9. **Sharper tests:** the wiring test checks the shared instance; scenario 6 pins the production policy type; the reducer test drives `SnoozeTapped` and `PayConfirmed` through the live policy for every row of the reasons table; the in-place test checks the exact sequence of envs.
 10. **Stale env across rings:** when the last collector of `SnoozeConditions.observe()` stops, `current()` falls back to the safe env (online, no prices), so the next ring never starts from the previous ring's connection or prices.
 11. **Pay while just unavailable:** deferred to 4.11/4.13 in deferred-work.md (the sheet closes with the reason, or a new AD-2 row answers `PayConfirmed` while unavailable). Also deferred: the refund label should show the amount paid (4.10/4.11), not today's cached price.
+
+## Rebases onto main (4.8, 4.10, 4.11)
+
+- **4.8 / 4.10:** `SessionData.paid` sits next to `unlocking`. The optional price rides on 4.10's `PaidWith` next to `orderId`, so the grant ledger row is unchanged. `PayConfirmed` carries 4.8's live price.
+- **4.10 refund amount:** "An earlier {price} payment is being refunded" names what was actually paid (`PurchaseLedger.refundingPrice`). With no known amount it reads "An earlier payment is being refunded": a new string, default taken, owner can change. It never shows today's cached price.
+- **4.11:**
+  - `ReuseAccepted` keeps 4.11's offered-product guard and adds the price.
+  - `PurchaseCoordinator.strandedProducts` is the stranded set in `SnoozeConditions`. It is looked up when the wake screen collects, because resolving it at construction is a Koin cycle (coordinator → engine → reducer → policy).
+  - `SnoozeInPlaceTest`: the coordinator finds a payment stranded for the declined product, and the button shows the refund reason in place. Once Play no longer lists it, Snooze comes back.

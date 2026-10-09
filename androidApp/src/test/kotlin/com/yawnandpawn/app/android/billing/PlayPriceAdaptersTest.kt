@@ -13,7 +13,6 @@ import com.yawnandpawn.app.testing.FakeClock
 import com.yawnandpawn.app.testing.FakeLogger
 import com.yawnandpawn.app.testing.FakeMonotonicClock
 import com.yawnandpawn.app.testing.FakePriceCacheStore
-import com.yawnandpawn.app.testing.FakePriceCatalog
 import com.yawnandpawn.app.testing.FakeUserLockState
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -125,17 +124,4 @@ class PlayPriceAdaptersTest {
 
             assertEquals("CA", country.countryCode())
         }
-
-    @Test
-    fun `display prices follow the cache and never show an expired price`() {
-        val fresh = PriceEntry("snooze_usd_01", "$1.00", Money(1_000_000, "USD"), clock.now())
-        val expired = PriceEntry("snooze_usd_02", "$2.00", Money(2_000_000, "USD"), clock.now() - 31.days)
-        val catalog = FakePriceCatalog(PriceCatalogSnapshot(mapOf(fresh.productId to fresh, expired.productId to expired)))
-
-        val prices = CachedDisplayPrices(catalog, clock, scope)
-
-        assertEquals(Money(1_000_000, "USD"), prices.priceOf("snooze_usd_01"))
-        assertNull(prices.priceOf("snooze_usd_02"))
-        assertNull(prices.priceOf("snooze_usd_03"))
-    }
 }

@@ -2,6 +2,8 @@ package com.yawnandpawn.app.android.wake
 
 import android.media.AudioManager
 import com.yawnandpawn.app.android.ApplicationScope
+import com.yawnandpawn.app.android.billing.PlayBillingCountry
+import com.yawnandpawn.app.android.billing.PlayLivePrices
 import com.yawnandpawn.app.android.call.AudioModeCallState
 import com.yawnandpawn.app.android.call.CallDetector
 import com.yawnandpawn.app.android.call.CallState
@@ -111,17 +113,17 @@ fun wakeModule(): Module =
     }
 
 /**
- * The snooze confirm sheet (Story 4.13), included by [wakeModule]: display prices from Story 4.3's price cache, "Use it"
- * and "Not now" through Story 4.11's coordinator. Until the Play adapter (4.12) binds them, no live price and no billing
- * country is known.
+ * The snooze confirm sheet (Story 4.13), included by [wakeModule]: display prices from Story 4.3's price cache, the live
+ * price and the billing country from Play (Story 4.12's adapters in `billingModule()`), "Use it" and "Not now" through
+ * Story 4.11's coordinator.
  */
 private fun confirmSheetModule(): Module =
     module {
-        single<LivePriceSource> { LivePriceSource.None }
+        single<LivePriceSource> { get<PlayLivePrices>() }
         // Its own app-wide scope (as the coordinator's): it follows the cache for the life of the process, so it is not among
         // the app start's finite jobs.
         single<DisplayPrices> { CatalogDisplayPrices(get<PriceCatalog>(), get(), ApplicationScope(get())) }
-        single<BillingCountry> { BillingCountry.None }
+        single<BillingCountry> { get<PlayBillingCountry>() }
         single<ReuseChoices> {
             val koin = this
             ReuseChoices.of { koin.get<PurchaseCoordinator>() }

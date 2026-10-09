@@ -6,6 +6,8 @@ import com.yawnandpawn.app.android.AndroidConnectivity
 import com.yawnandpawn.app.android.AndroidUserLockState
 import com.yawnandpawn.app.android.ApplicationScope
 import com.yawnandpawn.app.android.billing.AndroidBilling
+import com.yawnandpawn.app.android.billing.PlayBillingCountry
+import com.yawnandpawn.app.android.billing.PlayLivePrices
 import com.yawnandpawn.app.android.crash.FirebaseCrashReporter
 import com.yawnandpawn.app.android.crash.isFirebaseConfigured
 import com.yawnandpawn.app.android.wake.CatalogDisplayPrices
@@ -75,9 +77,9 @@ class SessionWiringTest {
         assertIs<SheetEffectRunner>(koin.get<EffectRunner>(), "the wake runtime is the one effect runner, behind the sheet's tap")
         assertSame(koin.get<EffectRunner>(), koin.get<EffectRunner>())
         // Until 4.12 binds the Play adapter, no live price or billing country is known.
-        assertSame(LivePriceSource.None, koin.get<LivePriceSource>())
+        assertIs<PlayLivePrices>(koin.get<LivePriceSource>(), "the live price comes from Play (Story 4.12)")
         assertIs<CatalogDisplayPrices>(koin.get<DisplayPrices>(), "display prices come from the 4.3 price cache")
-        assertSame(BillingCountry.None, koin.get<BillingCountry>())
+        assertIs<PlayBillingCountry>(koin.get<BillingCountry>(), "the billing country comes from Play (Story 4.12)")
         assertSame(koin.get<WakeRuntime>(), koin.get<WakeRuntime>())
         // With a CI google-services.json the app is configured and binds Crashlytics; without it, the no-op reporter.
         val app = ApplicationProvider.getApplicationContext<Context>()

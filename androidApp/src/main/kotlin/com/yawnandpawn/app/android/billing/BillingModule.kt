@@ -17,7 +17,8 @@ import org.koin.dsl.module
  *   toggle on, the fake);
  * - [AndroidProductDetailsSource] is the [ProductDetailsSource] of the price cache;
  * - [AndroidDeviceUnlocker] is the one [UnlockPort], shared by the engine and the coordinator;
- * - the live price, billing country and display prices for the confirm sheet (Story 4.13's ports).
+ * - the live price and the billing country, bound as Story 4.13's `LivePriceSource` and `BillingCountry` in
+ *   `confirmSheetModule` (its display prices are its own `CatalogDisplayPrices` over the 4.3 cache).
  *
  * The billing work runs on its own app-wide scope (same rules as [ApplicationScope]): the reconnect backoff may run for a
  * minute, and it is not among the app start's finite jobs. A function, like `wakeModule()`.
@@ -52,5 +53,4 @@ fun billingModule(): Module =
         }
         single { PlayLivePrices(get(), get(), get(), get()) }
         single { PlayBillingCountry(get()) }
-        single { CachedDisplayPrices(get(), get(), get<ApplicationScope>()) }
     }

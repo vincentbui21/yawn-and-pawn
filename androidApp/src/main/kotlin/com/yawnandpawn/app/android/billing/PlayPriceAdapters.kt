@@ -1,10 +1,9 @@
 package com.yawnandpawn.app.android.billing
 
+import com.yawnandpawn.app.core.billing.BillingCountry
 import com.yawnandpawn.app.core.billing.LivePrice
-import com.yawnandpawn.app.core.billing.Money
+import com.yawnandpawn.app.core.billing.LivePriceSource
 import com.yawnandpawn.app.core.billing.PriceCacheStore
-import com.yawnandpawn.app.core.billing.PriceCatalog
-import com.yawnandpawn.app.core.billing.PriceCatalogSnapshot
 import com.yawnandpawn.app.core.billing.ProductDetailsResult
 import com.yawnandpawn.app.core.billing.ProductDetailsSource
 import com.yawnandpawn.app.core.billing.ProductPrice
@@ -14,10 +13,6 @@ import com.yawnandpawn.app.core.error.Outcome
 import com.yawnandpawn.app.core.log.LogEvent
 import com.yawnandpawn.app.core.log.Logger
 import com.yawnandpawn.app.core.time.Clock
-import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.flow.SharingStarted
-import kotlinx.coroutines.flow.StateFlow
-import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.withTimeoutOrNull
 import kotlin.time.Duration
 import kotlin.time.Duration.Companion.seconds
@@ -46,8 +41,8 @@ class PlayLivePrices(
     private val clock: Clock,
     private val logger: Logger,
     private val timeout: Duration = LIVE_PRICE_TIMEOUT,
-) {
-    suspend fun livePrice(productId: String): LivePrice? {
+) : LivePriceSource {
+    override suspend fun livePrice(productId: String): LivePrice? {
         val live = withTimeoutOrNull(timeout) { billing.livePrice(productId) } ?: return null
         val answer = ProductDetailsResult(listOf(ProductPrice(live.productId, live.formattedPrice, live.price)))
         val fetchedAt = clock.now()
@@ -69,26 +64,6 @@ class PlayLivePrices(
  */
 class PlayBillingCountry(
     private val billing: AndroidBilling,
-) {
-    fun countryCode(): String? = billing.billingCountry.value
-}
-
-/**
- * The cached display prices (Story 4.3's cache, for Story 4.13's `DisplayPrices`): the snooze button and the sheet
- * before the live price arrives. Display only, and never a price that has expired ([PriceCatalogSnapshot.displayablePriceFor]).
- * Follows the cache on [scope] from the first use, so a read never waits.
- */
-class CachedDisplayPrices(
-    catalog: PriceCatalog,
-    private val clock: Clock,
-    scope: CoroutineScope,
-) {
-    private val snapshot: StateFlow<PriceCatalogSnapshot> =
-        catalog.observe().stateIn(
-            scope,
-            SharingStarted.Eagerly,
-            PriceCatalogSnapshot.EMPTY,
-        )
-
-    fun priceOf(productId: String): Money? = snapshot.value.displayablePriceFor(productId, clock.now())?.price
+) : BillingCountry {
+    override fun countryCode(): String? = billing.billingCountry.value
 }

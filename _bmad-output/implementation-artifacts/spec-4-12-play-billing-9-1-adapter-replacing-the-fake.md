@@ -124,16 +124,18 @@ deferred:
 
 ## Rebase notes
 
-- **4.13 (confirm sheet):** not merged when this story finished (origin/main `8d6d7a8`), so its `LivePriceSource`, `DisplayPrices` and `BillingCountry` ports (`core/billing/SnoozePrices.kt` on its branch) do not exist here yet. The real adapters are built and bound as concrete singles in `billingModule()`, with the same method shapes as 4.13's ports:
-  - `PlayLivePrices.livePrice(productId): LivePrice?`;
-  - `CachedDisplayPrices.priceOf(productId): Money?`;
-  - `PlayBillingCountry.countryCode(): String?`.
-- **Swap when 4.13 lands** (whichever merges second):
-  - add `: LivePriceSource`, `: DisplayPrices`, `: BillingCountry` with `override`;
-  - in 4.13's `confirmSheetModule`, replace the three `None` bindings with `get<PlayLivePrices>()`, `get<CachedDisplayPrices>()` and `get<PlayBillingCountry>()`;
-  - remove 4.13's own `single<UnlockPort>` if it still has one (4.11 review 16): `AndroidDeviceUnlocker` is the one binding.
-- **4.13's intent id:** `ConfirmSheetHost` mints a new UUID per Pay tap (the 4.8 deferral). The engine refuses a reused id, and the adapter needs nothing more.
-- **4.7 (PR #51):** no overlap in files. `SnoozeAvailability` reads the price cache, which the live price now also refreshes.
+- **Rebased after review** onto origin/main `79aa8b4`, which has 4.13 (PR #53, confirm sheet) and 4.16 (PR #52, purchase history). Conflicts:
+  - `YawnAndPawnApp`: 4.13's `SheetEffectRunner` stays as the `EffectRunner`, and its `UnavailableBilling` binding goes.
+  - `WakeApp` (test): both sides' parameters stay.
+  - `deferred-work.md` and `sprint-status.yaml`: both sides kept.
+- **4.13's ports are now bound to Play** in `confirmSheetModule`:
+  - `PlayLivePrices` implements `LivePriceSource`;
+  - `PlayBillingCountry` implements `BillingCountry`;
+  - their `None` bindings are gone.
+- **`DisplayPrices`:** 4.13 had already bound `CatalogDisplayPrices`, a real adapter over the 4.3 price cache that is the same as this story's `CachedDisplayPrices`. So `CachedDisplayPrices` and its test were deleted, and `CatalogDisplayPrices` stays (default taken, owner can change).
+- **`UnlockPort`:** `AndroidDeviceUnlocker` in `billingModule` is the only binding. 4.13 added none.
+- **4.13's intent id:** `ConfirmSheetHost` mints a new UUID for every Pay tap (the 4.8 deferral).
+- **4.16 (purchase history)** shares no files with this story.
 
 ## Review (2 reviewers, fast mode)
 

@@ -555,7 +555,7 @@ internal val ROW_CASES: Map<String, List<RowExample>> =
                 RowExample(
                     name = from.kind,
                     from = from,
-                    event = SessionEvent.ReuseOffered(PRODUCT, PurchaseVerdict.OfferReuse),
+                    event = SessionEvent.ReuseOffered(PRODUCT, TOKEN, PurchaseVerdict.OfferReuse),
                     now = N,
                     expected = Transition(from.with(from.session.copy(paying = null)), listOf(SessionEffect.ShowReuseSheet(PRODUCT))),
                 )
@@ -605,7 +605,11 @@ internal val ROW_CASES: Map<String, List<RowExample>> =
             },
         "R19 Ringing|Grace|Loud+PurchaseFailed|PurchaseCancelled" to
             listOf(
-                SessionEvent.PurchaseFailed to PurchaseOutcome.Failed,
+                SessionEvent.PurchaseFailed() to PurchaseOutcome.Failed,
+                // Story 4.11: each failure kind has its own "No charge." message.
+                SessionEvent.PurchaseFailed(PurchaseFailureKind.Error) to PurchaseOutcome.Failed,
+                SessionEvent.PurchaseFailed(PurchaseFailureKind.Offline) to PurchaseOutcome.Offline,
+                SessionEvent.PurchaseFailed(PurchaseFailureKind.UnlockFailed) to PurchaseOutcome.UnlockFailed,
                 SessionEvent.PurchaseCancelled to PurchaseOutcome.Cancelled,
             ).flatMap { (event, outcome) ->
                 ringStates(ringSession().copy(paying = INTENT)).map { from ->

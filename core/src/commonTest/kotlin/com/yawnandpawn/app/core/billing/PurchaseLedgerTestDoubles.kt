@@ -8,11 +8,12 @@ import com.yawnandpawn.app.core.session.Billing
 import com.yawnandpawn.app.core.session.ConsumeResult
 import com.yawnandpawn.app.core.session.PurchaseIntentId
 import com.yawnandpawn.app.core.session.PurchaseToken
-import com.yawnandpawn.app.core.session.SessionEvent
 import com.yawnandpawn.app.core.time.Clock
 import com.yawnandpawn.app.core.work.BackgroundJob
 import com.yawnandpawn.app.core.work.BackgroundWork
 import kotlinx.coroutines.CompletableDeferred
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlin.time.Instant
 
 // Local doubles for the Story 4.10 ledger tests (core cannot depend on :testing, AD-1).
@@ -185,7 +186,46 @@ internal class FakePlay : Billing {
     var hold: CompletableDeferred<Unit>? = null
     lateinit var world: LedgerWorld
 
-    override suspend fun launch(intent: PurchaseIntent): SessionEvent.PurchaseEvent = SessionEvent.PurchaseFailed
+    /** Play's owned purchases as `queryPurchases` lists them (Story 4.11); a successful consume removes the token. */
+    val listed = linkedMapOf<PurchaseToken, PurchaseSnapshot>()
+
+    /** What the next launches answer, first one first; [LaunchResult.Launched] once used up. */
+    val launchResults = ArrayDeque<Outcome<LaunchResult, DomainError>>()
+
+    /** Every launch, with the install id it carried. */
+    val launches = mutableListOf<Pair<PurchaseIntent, String>>()
+
+    /** Runs at each launch (after it is counted), for a purchase that completes while the sheet is open. */
+    var onLaunch: (PurchaseIntent) -> Unit = {}
+
+    var queryFailure: DomainError? = null
+    var queries = 0
+
+    /** Play's purchase updates; tests emit into it with [deliver] or [updates]. */
+    val updates = MutableSharedFlow<PurchaseUpdate>(extraBufferCapacity = 16)
+
+    override val purchaseUpdates: Flow<PurchaseUpdate> get() = updates
+
+    /** Play now owns [snapshot] (bought, or pending). */
+    fun own(snapshot: PurchaseSnapshot) {
+        listed[snapshot.token] = snapshot
+        owned += snapshot.token
+    }
+
+    override suspend fun launch(
+        intent: PurchaseIntent,
+        installId: String,
+    ): Outcome<LaunchResult, DomainError> {
+        launches += intent to installId
+        onLaunch(intent)
+        return launchResults.removeFirstOrNull() ?: Outcome.Success(LaunchResult.Launched)
+    }
+
+    override suspend fun queryPurchases(): Outcome<List<PurchaseSnapshot>, DomainError> {
+        queries++
+        queryFailure?.let { return Outcome.Failure(it) }
+        return Outcome.Success(listed.values.toList())
+    }
 
     override suspend fun consume(token: PurchaseToken): ConsumeResult {
         calls += token
@@ -194,6 +234,7 @@ internal class FakePlay : Billing {
         val result = results.removeFirstOrNull() ?: if (token in gone) ConsumeResult.NotOwned else ConsumeResult.Consumed
         if (result == ConsumeResult.Consumed) {
             owned -= token
+            listed -= token
             gone += token
             if (::world.isInitialized) world.crash(CrashPoint.AfterConsume)
         }

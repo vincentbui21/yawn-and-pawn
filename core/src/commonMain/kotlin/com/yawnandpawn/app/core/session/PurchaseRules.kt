@@ -105,8 +105,8 @@ internal class PurchaseRules(
                 if (event.verdict == PurchaseVerdict.Grant) onPaidSnooze(state, paid, now) else null
             }
 
-            SessionEvent.PurchaseFailed -> {
-                Transition(state.with(notPaying), listOf(SessionEffect.ShowPurchaseOutcome(PurchaseOutcome.Failed)))
+            is SessionEvent.PurchaseFailed -> {
+                Transition(state.with(notPaying), listOf(SessionEffect.ShowPurchaseOutcome(outcomeOf(event.kind))))
             }
 
             SessionEvent.PurchaseCancelled -> {
@@ -118,6 +118,25 @@ internal class PurchaseRules(
             }
         }
     }
+
+    /**
+     * ReuseAccepted (Story 4.11): the stranded payment pays for this snooze only when it is for the product Snooze offers
+     * now (the same availability guard as Pay), so a reuse can never pay for another price. Otherwise no row matches.
+     */
+    fun onReuseAccepted(
+        state: Ring,
+        event: SessionEvent.ReuseAccepted,
+        now: TimeSnapshot,
+    ): Transition? =
+        if (offer(state)?.productId == event.productId) onPaidSnooze(state, PaidWith(event.productId, event.token), now) else null
+
+    /** The wake message for a payment that failed for [kind]. */
+    private fun outcomeOf(kind: PurchaseFailureKind): PurchaseOutcome =
+        when (kind) {
+            PurchaseFailureKind.Offline -> PurchaseOutcome.Offline
+            PurchaseFailureKind.UnlockFailed -> PurchaseOutcome.UnlockFailed
+            PurchaseFailureKind.Error -> PurchaseOutcome.Failed
+        }
 
     /** A paid snooze (a grant, or ReuseAccepted); ignored in a test session, which can never charge. */
     fun onPaidSnooze(

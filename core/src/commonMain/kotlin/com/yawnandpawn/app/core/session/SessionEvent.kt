@@ -19,6 +19,21 @@ class PurchaseToken(
     override fun toString(): String = "PurchaseToken(redacted)"
 }
 
+/**
+ * Why a payment failed (Story 4.11): Play's response codes map onto these in the billing adapter (Story 4.12), and each
+ * has its own "No charge." message (Story 4.14).
+ */
+enum class PurchaseFailureKind {
+    /** No connection to Play (network error, service unavailable or disconnected). */
+    Offline,
+
+    /** The unlock before Play opens was cancelled or failed (Spike S1 alternative branch). */
+    UnlockFailed,
+
+    /** Any other failure: billing unavailable, a developer or item error, a missing intent. */
+    Error,
+}
+
 /** What `PurchaseReconciler` (AD-7, Epic 4) decided about a purchase update; it arrives inside the event. */
 enum class PurchaseVerdict {
     Grant,
@@ -110,9 +125,14 @@ sealed interface SessionEvent {
     /** A billing result for the session (AD-7), fed back by the billing adapter through the reconciler. */
     sealed interface PurchaseEvent : SessionEvent
 
-    /** A stranded payment for [productId] can be reused for this snooze when [verdict] is [PurchaseVerdict.OfferReuse]. */
+    /**
+     * The stranded payment [token] for [productId] can be reused for this snooze when [verdict] is
+     * [PurchaseVerdict.OfferReuse] (Story 4.11). The token stays with `PurchaseCoordinator`, which sends it back in
+     * `ReuseAccepted`; it is never shown, and [PurchaseToken] hides it in [toString].
+     */
     data class ReuseOffered(
         val productId: String,
+        val token: PurchaseToken,
         val verdict: PurchaseVerdict,
     ) : PurchaseEvent
 
@@ -128,8 +148,10 @@ sealed interface SessionEvent {
         val orderId: String? = null,
     ) : PurchaseEvent
 
-    /** The purchase failed. */
-    data object PurchaseFailed : PurchaseEvent
+    /** The purchase failed for [kind] (Story 4.11); nothing was charged. */
+    data class PurchaseFailed(
+        val kind: PurchaseFailureKind = PurchaseFailureKind.Error,
+    ) : PurchaseEvent
 
     /** The user cancelled the payment sheet. */
     data object PurchaseCancelled : PurchaseEvent

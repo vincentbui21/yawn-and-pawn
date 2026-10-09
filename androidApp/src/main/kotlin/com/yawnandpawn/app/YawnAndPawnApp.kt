@@ -34,6 +34,7 @@ import com.yawnandpawn.app.core.billing.MoneyFormatter
 import com.yawnandpawn.app.core.billing.PriceCatalog
 import com.yawnandpawn.app.core.billing.PriceRefreshScheduler
 import com.yawnandpawn.app.core.billing.PriceSnapshotLookup
+import com.yawnandpawn.app.core.billing.PurchaseCoordinator
 import com.yawnandpawn.app.core.billing.PurchaseLedger
 import com.yawnandpawn.app.core.billing.PurgeOldPurchaseIntents
 import com.yawnandpawn.app.core.billing.ReplayGrantLedger
@@ -68,6 +69,7 @@ import com.yawnandpawn.app.core.session.SessionSlotRearm
 import com.yawnandpawn.app.core.session.SessionState
 import com.yawnandpawn.app.core.session.SnoozeAvailabilityPolicy
 import com.yawnandpawn.app.core.session.StoredSession
+import com.yawnandpawn.app.core.session.UnlockPort
 import com.yawnandpawn.app.core.session.UserLockState
 import com.yawnandpawn.app.core.stats.ReRegisterSuggestions
 import com.yawnandpawn.app.data.dataModule
@@ -173,7 +175,29 @@ val appModule =
         single { MissedNotes(get(), get()) }
         // Home's re-register banner (Story 3.13): 3 fallbacks for a camera check in 7 days, unless dismissed since.
         single { ReRegisterSuggestions(get(), get(), get(), get()) }
-        single { SessionEngine(get(), get(), get(), get(), get(), get(), get(), get(), userLock = get()) }
+        // The unlock before Play opens (Spike S1): a phone that is never locked until Story 4.12 binds AndroidDeviceUnlocker.
+        // One instance, shared by the engine (it reads the keyguard for a Pay) and the coordinator (it asks for the unlock).
+        single<UnlockPort> { UnlockPort.Unlocked }
+        single { SessionEngine(get(), get(), get(), get(), get(), get(), get(), get(), userLock = get(), unlock = get()) }
+        // Story 4.11: the billing orchestration (launch, purchase updates, recovery, ITEM_ALREADY_OWNED, stranded reuse). It
+        // runs on its own app-wide scope, never inside the engine's step.
+        single {
+            PurchaseCoordinator(
+                billing = get(),
+                engine = get(),
+                ledger = get(),
+                intents = get(),
+                installIds = get(),
+                feeLadder = get(),
+                userLock = get(),
+                unlock = get(),
+                // Its own scope (same rules as ApplicationScope): it follows Play's updates for the life of the process and a
+                // recovery may wait for a session restore that a broadcast-only process never runs, so its work is not
+                // among the app start's finite jobs.
+                scope = ApplicationScope(get()),
+                logger = get(),
+            )
+        }
         // The session lock (Story 2.6): until the stored session is restored, and while a ring, a snooze or the emergency
         // ring is in progress, the alarm use cases refuse to write and the app shows only "Alarm in progress", whose
         // "Back to alarm" opens the wake screen.
@@ -238,6 +262,11 @@ open class YawnAndPawnApp :
         // WorkManager; locked (Direct Boot) they wait for the unlock signals, which call the scheduler again.
         val prices = koin.get<PriceRefreshScheduler>()
         scope.launch { prices.start() }
+        // Story 4.11: Play's purchase updates are followed for the life of the process, and a recovery query runs once the
+        // user has unlocked and a restore entry point (WakeService, MainActivity, WakeActivity) has restored the session.
+        val coordinator = koin.get<PurchaseCoordinator>()
+        coordinator.start()
+        coordinator.onAppResumed()
         // With no session left in runtime.db (nothing, an unreadable row or a stored Idle), an alarm volume a crashed session
         // saved is put back (AD-5). Only a read: the session itself is restored by WakeService, MainActivity or
         // WakeActivity (Story 2.1).

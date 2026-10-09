@@ -19,8 +19,14 @@ enum class SessionEnd {
 
 /** Which payment message the wake screen shows after a failed or cancelled purchase. */
 enum class PurchaseOutcome {
+    /** "Payment didn't go through. No charge." */
     Failed,
+
+    /** "Payment cancelled. No charge." */
     Cancelled,
+
+    /** "No connection. No charge." (Story 4.11: `PurchaseFailed(Offline)`). */
+    Offline,
 
     /** The unlock before Play was cancelled or failed (Spike S1): "Phone still locked. No charge." */
     UnlockFailed,

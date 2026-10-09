@@ -28,6 +28,7 @@ import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.compose.currentStateAsState
 import com.yawnandpawn.app.android.ApplicationScope
 import com.yawnandpawn.app.android.screen.forwardsToWakeScreen
+import com.yawnandpawn.app.core.billing.PurchaseCoordinator
 import com.yawnandpawn.app.core.checks.CheckAnswer
 import com.yawnandpawn.app.core.error.Outcome
 import com.yawnandpawn.app.core.log.WakeStage
@@ -124,6 +125,7 @@ class WakeActivity : ComponentActivity() {
     private val timings: WakeTimings by inject()
     private val userLock: UserLockState by inject()
     private val unlockSignals: UnlockSignals by inject()
+    private val purchases: PurchaseCoordinator by inject()
     private val monotonicClock: MonotonicClock by inject()
 
     /** The Check screen's typed answer, grace clock and keys (Story 3.2). */
@@ -172,6 +174,9 @@ class WakeActivity : ComponentActivity() {
         super.onResume()
         volumeKeys.resumed = true
         if (userLock.isUserUnlocked()) unlockSignals.onScreenResumedUnlocked()
+        // Story 4.11: back from Play's sheet or the PIN prompt (or opened after a kill): an unlock whose callback was lost
+        // is settled by the keyguard, and a recovery query finds a payment whose result never came. Launched, never awaited.
+        purchases.onWakeScreenResumed()
     }
 
     override fun onPause() {

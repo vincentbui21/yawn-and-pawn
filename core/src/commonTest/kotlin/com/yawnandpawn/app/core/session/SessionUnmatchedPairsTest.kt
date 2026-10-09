@@ -59,11 +59,12 @@ class SessionUnmatchedPairsTest {
             SessionEvent.ImageMatchCompleted(matched = true),
             SessionEvent.ImageMatchCompleted(matched = false),
             SessionEvent.ImageMatchFailed,
-            SessionEvent.ReuseOffered(PRODUCT, PurchaseVerdict.OfferReuse),
-            SessionEvent.ReuseOffered(PRODUCT, PurchaseVerdict.Ignore),
+            SessionEvent.ReuseOffered(PRODUCT, TOKEN, PurchaseVerdict.OfferReuse),
+            SessionEvent.ReuseOffered(PRODUCT, TOKEN, PurchaseVerdict.Ignore),
             SessionEvent.PurchaseGranted(PRODUCT, TOKEN, PurchaseVerdict.Grant),
             SessionEvent.PurchaseGranted(PRODUCT, TOKEN, PurchaseVerdict.ConsumeOnly),
-            SessionEvent.PurchaseFailed,
+            SessionEvent.PurchaseFailed(),
+            SessionEvent.PurchaseFailed(PurchaseFailureKind.Offline),
             SessionEvent.PurchaseCancelled,
             SessionEvent.PurchasePending,
             SessionEvent.ImUpTapped,
@@ -75,6 +76,7 @@ class SessionUnmatchedPairsTest {
             SessionEvent.UnlockSucceeded,
             SessionEvent.UnlockFailed,
             SessionEvent.ReuseAccepted(PRODUCT, TOKEN),
+            SessionEvent.ReuseAccepted("snooze_usd_02", TOKEN),
             SessionEvent.ReuseDeclined(PRODUCT),
             SessionEvent.UserInteracted,
         )
@@ -182,7 +184,7 @@ class SessionUnmatchedPairsTest {
         when (event) {
             is SessionEvent.ReuseOffered -> event.verdict == PurchaseVerdict.OfferReuse
             is SessionEvent.PurchaseGranted -> event.verdict == PurchaseVerdict.Grant
-            SessionEvent.PurchaseFailed, SessionEvent.PurchaseCancelled, SessionEvent.PurchasePending -> true
+            is SessionEvent.PurchaseFailed, SessionEvent.PurchaseCancelled, SessionEvent.PurchasePending -> true
         }
 
     private fun ringHasRow(

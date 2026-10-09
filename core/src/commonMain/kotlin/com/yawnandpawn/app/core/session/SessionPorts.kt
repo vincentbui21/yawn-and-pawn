@@ -1,9 +1,14 @@
 package com.yawnandpawn.app.core.session
 
 import com.yawnandpawn.app.core.billing.GrantLedgerEntry
+import com.yawnandpawn.app.core.billing.LaunchResult
 import com.yawnandpawn.app.core.billing.PurchaseIntent
+import com.yawnandpawn.app.core.billing.PurchaseSnapshot
+import com.yawnandpawn.app.core.billing.PurchaseUpdate
 import com.yawnandpawn.app.core.error.DomainError
 import com.yawnandpawn.app.core.error.Outcome
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.emptyFlow
 
 /** What the store holds for the active session (AD-2), as read by [ActiveSessionStore.load]. */
 sealed interface StoredSession {
@@ -100,15 +105,37 @@ sealed interface ConsumeResult {
 }
 
 /**
- * Port for Play Billing (AD-7). The real adapter arrives in Epic 4; Epic 1 binds one that always fails.
+ * Port for Play Billing (AD-7). The real adapter arrives in Story 4.12; until then the app binds one that always fails.
+ * Only `PurchaseCoordinator` (Story 4.11) launches and queries, and only `PurchaseLedger` consumes.
  *
- * [launch] waits for the user and Play, so it must never be awaited inside an [EffectRunner] call: that would hold the
- * engine's Mutex for the whole purchase and block every other event. The runner starts it outside the effect (for
- * example launched on a scope) and the result comes back as an event dispatched from outside.
+ * Every call may wait for the user or Play, so none is ever awaited inside an [EffectRunner] call: that would hold the
+ * engine's Mutex and block every other event. The coordinator runs them on the app scope and dispatches the results
+ * as events from outside.
  */
-fun interface Billing {
-    /** Launches the purchase of [intent] and returns its result as the event to dispatch. */
-    suspend fun launch(intent: PurchaseIntent): SessionEvent.PurchaseEvent
+interface Billing {
+    /**
+     * Opens Play's purchase sheet for [intent] with `obfuscatedAccountId = installId` and `obfuscatedProfileId =
+     * intent.sessionId` (AD-7). [LaunchResult.Launched] means the sheet is open: the purchase (or the cancel or error) then
+     * arrives on [purchaseUpdates]. A failure is a [DomainError] (for example billing not connected); no sheet opened.
+     */
+    suspend fun launch(
+        intent: PurchaseIntent,
+        installId: String,
+    ): Outcome<LaunchResult, DomainError>
+
+    /**
+     * The purchases Play lists as owned now (`queryPurchasesAsync`, INAPP): purchased and pending, not consumed. Fails
+     * until an adapter can ask Play.
+     */
+    suspend fun queryPurchases(): Outcome<List<PurchaseSnapshot>, DomainError> =
+        Outcome.Failure(DomainError.BillingUnavailable("no adapter"))
+
+    /**
+     * Play's purchase updates (`onPurchasesUpdated`), solicited or not: purchases and the results of the open sheet. A
+     * hot stream: updates nobody collects are lost, so the coordinator collects it from app start.
+     */
+    val purchaseUpdates: Flow<PurchaseUpdate>
+        get() = emptyFlow()
 
     /**
      * Connects to Play Billing after the user's first unlock (AD-15, Story 2.4); never before it. Idempotent. A no-op

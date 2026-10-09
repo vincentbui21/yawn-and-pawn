@@ -29,6 +29,14 @@ sealed interface DomainError {
     ) : DomainError
 
     /**
+     * Play Billing cannot answer now (Story 4.11): not connected, before the first unlock (AD-15), or no billing adapter.
+     * [cause] is diagnostic text for logs only, never a purchase token.
+     */
+    data class BillingUnavailable(
+        val cause: String,
+    ) : DomainError
+
+    /**
      * The storage layer failed (for example a constraint violation or an I/O error). [cause] is diagnostic text for
      * logs only and must never be shown to users; user-facing copy is keyed by the error type.
      */

@@ -59,10 +59,11 @@ internal fun BaseFeePane(
 
 /**
  * The fee ladder preview line for [ladder] (1 to 3 prices): "Snooze 1: {price1} · 2: {price2} · 3: {price3}", or its
- * first one or two entries when max snoozes is below 3. Null for an empty ladder.
+ * first one or two entries when max snoozes is below 3. Null for an empty ladder. Also the editor's Snooze sub-screen
+ * (Story 4.6).
  */
 @Composable
-private fun feeLadderText(ladder: List<String>): String? =
+internal fun feeLadderText(ladder: List<String>): String? =
     when (ladder.size) {
         0 -> null
         1 -> stringResource(Res.string.settings_fee_ladder_1, ladder[0])
@@ -72,23 +73,31 @@ private fun feeLadderText(ladder: List<String>): String? =
 
 /**
  * "Saved. Takes effect after tomorrow's {time} alarm." (or "today's"), {time} per the system 12/24 h setting. A polite
- * live region, so TalkBack also says that the step just made waits for the alarm (review fix 2).
+ * live region, so TalkBack also says that the step just made waits for the alarm (review fix 2). Also the editor's
+ * pending-field notes (Story 4.6).
  */
 @Composable
-private fun WeakeningNoteInline(
+internal fun WeakeningNoteInline(
     note: WeakeningNote,
     is24Hour: Boolean,
     modifier: Modifier = Modifier,
 ) {
     NoteInline(
-        text =
-            stringResource(
-                if (note.today) Res.string.settings_weakening_today else Res.string.editor_weakening_under_lock,
-                formatClockTime(note.time, is24Hour),
-            ),
+        text = weakeningNoteText(note, is24Hour),
         modifier = modifier.semantics { liveRegion = LiveRegionMode.Polite },
     )
 }
+
+/** The text of [note]: "Saved. Takes effect after tomorrow's {time} alarm." or "...today's...", {time} per [is24Hour]. */
+@Composable
+internal fun weakeningNoteText(
+    note: WeakeningNote,
+    is24Hour: Boolean,
+): String =
+    stringResource(
+        if (note.today) Res.string.settings_weakening_today else Res.string.editor_weakening_under_lock,
+        formatClockTime(note.time, is24Hour),
+    )
 
 /**
  * Max snoozes per session: a `stepper` from 1 to 5 (the default; FR-SET-1), and after raising it under the commitment

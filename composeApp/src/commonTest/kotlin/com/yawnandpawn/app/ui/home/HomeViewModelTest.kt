@@ -17,6 +17,7 @@ import com.yawnandpawn.app.testing.AlarmUseCasesFixture
 import com.yawnandpawn.app.testing.FakeAlarmRepository
 import com.yawnandpawn.app.testing.FakeCheckConfigRepository
 import com.yawnandpawn.app.testing.FakeClock
+import com.yawnandpawn.app.testing.FakeCommitmentEventRepository
 import com.yawnandpawn.app.testing.FakeIdGenerator
 import com.yawnandpawn.app.testing.FakeLogger
 import com.yawnandpawn.app.testing.FakeMissedNoteDismissals
@@ -88,6 +89,9 @@ class HomeViewModelTest {
     /** The session the use cases' lock reads (Story 2.6); Idle unless a test starts one. */
     private val sessionState = MutableStateFlow<SessionState>(SessionState.Idle)
 
+    /** Turning an alarm off or deleting it inside its lock window (Story 4.6). */
+    private val commitmentEvents = FakeCommitmentEventRepository()
+
     @BeforeTest
     fun setUp() {
         Dispatchers.setMain(dispatcher)
@@ -123,10 +127,12 @@ class HomeViewModelTest {
                 zone,
                 ids,
                 requestCodes = FakeRequestCodeSequence(lastUsed = 1999),
+                logger = logger,
                 lock = lock,
                 sessionState = sessionState,
+                commitmentEvents = commitmentEvents,
             )
-        return AlarmActions(alarms.setEnabled, alarms.delete, clock, logger)
+        return AlarmActions(alarms.setEnabled, alarms.delete, logger)
     }
 
     /** Home over [repository]'s alarms; [checkConfigs] then holds their checks. */
@@ -335,9 +341,9 @@ class HomeViewModelTest {
         }
 
     @Test
-    fun `a switch turns the alarm off at once and the countdown follows`() =
+    fun `outside the lock window a switch turns the alarm off at once and the countdown follows`() =
         runTest(dispatcher) {
-            val repository = FakeAlarmRepository(listOf(alarm(1, LocalTime(7, 0))))
+            val repository = FakeAlarmRepository(listOf(alarm(1, LocalTime(15, 0))))
             val viewModel = home(repository)
 
             viewModel.onIntent(HomeIntent.AlarmToggled(FakeIdGenerator.fakeUuid(1), enabled = false))
@@ -355,7 +361,7 @@ class HomeViewModelTest {
     @Test
     fun `a failed toggle reverts the switch to the stored value, is logged and says Couldn't save`() =
         runTest(dispatcher) {
-            val repository = FakeAlarmRepository(listOf(alarm(1, LocalTime(7, 0))))
+            val repository = FakeAlarmRepository(listOf(alarm(1, LocalTime(15, 0))))
             val viewModel = home(repository)
             repository.failure = DomainError.StorageFailure("disk full")
 
@@ -377,7 +383,7 @@ class HomeViewModelTest {
     @Test
     fun `a stored change after a toggle shows, so the switch never sticks`() =
         runTest(dispatcher) {
-            val repository = FakeAlarmRepository(listOf(alarm(1, LocalTime(7, 0))))
+            val repository = FakeAlarmRepository(listOf(alarm(1, LocalTime(15, 0))))
             val viewModel = home(repository)
             viewModel.onIntent(HomeIntent.AlarmToggled(FakeIdGenerator.fakeUuid(1), enabled = false))
 
@@ -411,7 +417,7 @@ class HomeViewModelTest {
     @Test
     fun `a newer snackbar replaces the one showing and gets its own 4 seconds`() =
         runTest(dispatcher) {
-            val repository = FakeAlarmRepository(listOf(alarm(1, LocalTime(7, 0))))
+            val repository = FakeAlarmRepository(listOf(alarm(1, LocalTime(15, 0))))
             val viewModel = home(repository)
             viewModel.onIntent(HomeIntent.EditorOpenFailed)
             advanceTimeBy(3_000)
@@ -480,7 +486,7 @@ class HomeViewModelTest {
     @Test
     fun `a toggle or delete refused because a session just started is neither logged nor shown as Couldn't save (Story 2-6)`() =
         runTest(dispatcher) {
-            val repository = FakeAlarmRepository(listOf(alarm(1, LocalTime(7, 0))))
+            val repository = FakeAlarmRepository(listOf(alarm(1, LocalTime(15, 0))))
             val viewModel = home(repository)
             viewModel.onIntent(HomeIntent.DeleteClicked(FakeIdGenerator.fakeUuid(1)))
             // The alarm fires between the tap and the write.

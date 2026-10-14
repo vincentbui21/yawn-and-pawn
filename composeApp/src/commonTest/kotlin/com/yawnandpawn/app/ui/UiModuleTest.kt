@@ -2,8 +2,12 @@ package com.yawnandpawn.app.ui
 
 import com.yawnandpawn.app.core.alarm.AlarmRepository
 import com.yawnandpawn.app.core.alarm.CheckConfigRepository
+import com.yawnandpawn.app.core.billing.MoneyFormatter
+import com.yawnandpawn.app.core.billing.PriceCatalog
 import com.yawnandpawn.app.core.billing.PurchaseRecordRepository
 import com.yawnandpawn.app.core.checks.AccessibilityState
+import com.yawnandpawn.app.core.config.GlobalSettingsRepository
+import com.yawnandpawn.app.core.config.PendingChangeRepository
 import com.yawnandpawn.app.core.history.MissedNotes
 import com.yawnandpawn.app.core.history.SessionHistoryRepository
 import com.yawnandpawn.app.core.log.Logger
@@ -23,9 +27,13 @@ import com.yawnandpawn.app.testing.FakeAccessibilityState
 import com.yawnandpawn.app.testing.FakeAlarmRepository
 import com.yawnandpawn.app.testing.FakeAlarmScheduler
 import com.yawnandpawn.app.testing.FakeClock
+import com.yawnandpawn.app.testing.FakeGlobalSettingsRepository
 import com.yawnandpawn.app.testing.FakeLogger
 import com.yawnandpawn.app.testing.FakeMissedNoteDismissals
+import com.yawnandpawn.app.testing.FakeMoneyFormatter
 import com.yawnandpawn.app.testing.FakeNotificationPermission
+import com.yawnandpawn.app.testing.FakePendingChangeRepository
+import com.yawnandpawn.app.testing.FakePriceCatalog
 import com.yawnandpawn.app.testing.FakePurchaseRecordRepository
 import com.yawnandpawn.app.testing.FakeReRegisterDismissals
 import com.yawnandpawn.app.testing.FakeReliabilityProbe
@@ -91,6 +99,11 @@ class UiModuleTest {
                     single<CameraPermission> { TestCameraPermission() }
                     single<PurchaseRecordRepository> { FakePurchaseRecordRepository() }
                     single<SessionHistoryRepository> { FakeSessionHistoryRepository() }
+                    // Story 4.6: the editor's pending values and fee ladder.
+                    single<PendingChangeRepository> { FakePendingChangeRepository() }
+                    single<GlobalSettingsRepository> { FakeGlobalSettingsRepository() }
+                    single<PriceCatalog> { FakePriceCatalog() }
+                    single<MoneyFormatter> { FakeMoneyFormatter() }
                     single { AlarmUseCasesFixture(repository = get(), clock = get(), timeZoneProvider = get()) }
                     single<CheckConfigRepository> { get<AlarmUseCasesFixture>().checkConfigs }
                     factory { get<AlarmUseCasesFixture>().save }

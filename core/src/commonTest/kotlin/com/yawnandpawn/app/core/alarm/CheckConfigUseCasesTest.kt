@@ -6,6 +6,8 @@ import com.yawnandpawn.app.core.checks.CheckType
 import com.yawnandpawn.app.core.checks.Difficulty
 import com.yawnandpawn.app.core.checks.qr.CodeFormat
 import com.yawnandpawn.app.core.checks.qr.RegisteredCode
+import com.yawnandpawn.app.core.config.CommitmentLog
+import com.yawnandpawn.app.core.config.InMemoryCommitmentEvents
 import com.yawnandpawn.app.core.config.InMemoryPendingChanges
 import com.yawnandpawn.app.core.error.DomainError
 import com.yawnandpawn.app.core.error.Outcome
@@ -53,7 +55,10 @@ class CheckConfigUseCasesTest {
             InMemoryPendingChanges(),
             TestZone(TimeZone.UTC),
         )
-    private val delete = DeleteAlarm(repository, lock, scheduling, sessionLock, checkConfigs)
+    private val commitmentEvents = InMemoryCommitmentEvents()
+    private val useCaseLogger = RecordingLogger()
+    private val commitments = CommitmentLog(commitmentEvents, SequentialIds(), TestZone(TimeZone.UTC))
+    private val delete = DeleteAlarm(repository, lock, scheduling, sessionLock, checkConfigs, clock, commitments, useCaseLogger)
     private val duplicate = DuplicateAlarm(repository, ids, clock, lock, sequence, scheduling, sessionLock, checkConfigs)
 
     private val mathHard = CheckEntry(CheckType.Math, Difficulty.Hard, count = 5)

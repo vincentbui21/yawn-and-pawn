@@ -121,7 +121,11 @@ fun HomeScreen(
         } else {
             HomeList(state = state, is24Hour = is24Hour, onIntent = onIntent, listState = listState)
         }
-        HomeSnackbar(state = state, modifier = Modifier.align(Alignment.BottomCenter).padding(bottom = LocalNavBarClearance.current))
+        HomeSnackbar(
+            state = state,
+            is24Hour = is24Hour,
+            modifier = Modifier.align(Alignment.BottomCenter).padding(bottom = LocalNavBarClearance.current),
+        )
     }
     state.disableDialog?.let { dialog -> DisableDialog(dialog = dialog, is24Hour = is24Hour, onIntent = onIntent) }
     state.deleteDialog?.let { dialog ->

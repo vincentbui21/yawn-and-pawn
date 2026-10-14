@@ -10,6 +10,7 @@ import com.yawnandpawn.app.core.alarm.CheckConfigRepository
 import com.yawnandpawn.app.core.alarm.durationUntil
 import com.yawnandpawn.app.core.alarm.nextOccurrence
 import com.yawnandpawn.app.core.alarm.orderedEntries
+import com.yawnandpawn.app.core.config.LockWindow
 import com.yawnandpawn.app.core.error.DomainError
 import com.yawnandpawn.app.core.error.Outcome
 import com.yawnandpawn.app.core.error.errorOrNull
@@ -27,6 +28,7 @@ import com.yawnandpawn.app.core.time.TimeZoneProvider
 import com.yawnandpawn.app.ui.checks.toUi
 import com.yawnandpawn.app.ui.format.Countdown
 import com.yawnandpawn.app.ui.format.countdownOf
+import com.yawnandpawn.app.ui.settings.WeakeningNote
 import com.yawnandpawn.app.ui.wake.uiCheckType
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.Job
@@ -39,6 +41,7 @@ import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.catch
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.merge
@@ -71,9 +74,10 @@ import com.yawnandpawn.app.ui.checks.CheckType as UiCheckType
  * again on every tick (the 7-day window moves), named by [uiTypeOf]; "Re-register" opens that alarm's editor until QR
  * registration arrives (Story 3.10), "Dismiss" stores the dismissal.
  */
+@Suppress("TooManyFunctions") // One small handler per Home action (toggle, turn-off dialog, delete, banners, snackbars).
 class HomeViewModel(
     /** The stored alarms with their checks (the card's check icons, Story 3.5), from one read of both tables. */
-    checkConfigs: CheckConfigRepository,
+    private val checkConfigs: CheckConfigRepository,
     private val actions: AlarmActions,
     private val clock: Clock,
     private val timeZoneProvider: TimeZoneProvider,
@@ -125,6 +129,9 @@ class HomeViewModel(
                 true
             }.onStart { emit(null) }
 
+    /** The alarms the cards show, as stored: the turn-off dialog reads the switched alarm's next ring from them. */
+    private var listed: List<Alarm> = emptyList()
+
     /** The suggestion the banner shows now, so "Re-register" and "Dismiss" act on exactly that alarm and check. */
     private var shownSuggestion: ReRegisterSuggestion? = null
 
@@ -160,10 +167,6 @@ class HomeViewModel(
                 _effects.trySend(HomeEffect.OpenEditor(intent.id))
             }
 
-            is HomeIntent.AlarmToggled -> {
-                toggle(intent.id, intent.enabled)
-            }
-
             is HomeIntent.DuplicateClicked -> {
                 // Nothing is stored until the editor saves (owner decision 2026-10-05).
                 _effects.trySend(HomeEffect.OpenDuplicate(intent.id))
@@ -183,7 +186,7 @@ class HomeViewModel(
 
             HomeIntent.RetryLoad -> {
                 // A dialog left open when the list failed must not come back by itself.
-                local.update { it.copy(deleteDialog = null) }
+                local.update { it.copy(deleteDialog = null, disableDialog = null) }
                 loads.update { it + 1 }
             }
 
@@ -202,9 +205,44 @@ class HomeViewModel(
             }
 
             else -> {
-                onReliabilityIntent(intent)
+                if (!onLockIntent(intent)) onReliabilityIntent(intent)
             }
         }
+    }
+
+    /**
+     * The switch and the commitment lock on Home (Story 4.6): switching off asks first inside the lock window, "Turn
+     * off" or "Keep it on" in the turn-off dialog, and the editor's
+     * "Saved. Takes effect after ..." snackbar; false for any other intent.
+     */
+    private fun onLockIntent(intent: HomeIntent): Boolean {
+        when (intent) {
+            is HomeIntent.AlarmToggled -> {
+                if (intent.enabled) toggle(intent.id, enabled = true) else requestTurnOff(intent.id)
+            }
+
+            // Cleared first, so a second tap on "Turn off" cannot write twice.
+            HomeIntent.DisableConfirmed -> {
+                local.value.disableDialog?.let { dialog ->
+                    local.update { it.copy(disableDialog = null) }
+                    toggle(dialog.alarmId, enabled = false)
+                }
+            }
+
+            // "Keep it on", Back or a tap outside: nothing is written, the switch stays on.
+            HomeIntent.DisableCancelled -> {
+                local.update { it.copy(disableDialog = null) }
+            }
+
+            is HomeIntent.SavedUnderLock -> {
+                showMessage(HomeMessage.SavedUnderLock(intent.note))
+            }
+
+            else -> {
+                return false
+            }
+        }
+        return true
     }
 
     /**
@@ -270,6 +308,42 @@ class HomeViewModel(
         }
     }
 
+    /**
+     * Switching [id] off: inside its lock window (an enabled alarm ringing within 8 h, PRD §6.2) the turn-off dialog asks
+     * first, with how long until it rings (whole hours rounded down, or minutes under 1 h); otherwise it turns off at once
+     * (Story 1.9). The card shows on, so the alarm is taken as on even while turning it on is still being stored. An
+     * alarm the cards do not hold yet is read from the store first (review fix 4); one the store does not have (or cannot
+     * read) is left as it is, never turned off without the dialog.
+     */
+    private fun requestTurnOff(id: String) {
+        val known = listed.firstOrNull { it.id == id }
+        if (known != null) {
+            turnOffAsking(known)
+            return
+        }
+        viewModelScope.launch {
+            checkConfigs
+                .observeAlarmsWithChecks()
+                .map<List<AlarmWithChecks>, Alarm?> { all -> all.firstOrNull { it.alarm.id == id }?.alarm }
+                .catch { cause ->
+                    actions.logFailure("load alarm to turn off", cause)
+                    emit(null)
+                }.first()
+                ?.let(::turnOffAsking)
+        }
+    }
+
+    /** [alarm] off: the turn-off dialog inside its lock window, otherwise at once. */
+    private fun turnOffAsking(alarm: Alarm) {
+        val now = clock.now()
+        val occurrence = LockWindow.of(alarm.copy(enabled = true), now, timeZoneProvider.current())
+        if (occurrence == null) {
+            toggle(alarm.id, enabled = false)
+        } else {
+            local.update { it.copy(disableDialog = DisableUnderLock(alarm.id, alarm.time, lockCountdownOf(occurrence.scheduledAt - now))) }
+        }
+    }
+
     private fun checkReliability(): ReliabilityStatus =
         reliability.check().also { status -> local.update { it.copy(reliability = status) } }
 
@@ -332,6 +406,7 @@ class HomeViewModel(
                     loadFailed = true,
                     openFailed = ui.message == HomeMessage.OpenFailed,
                     saveFailed = ui.message == HomeMessage.SaveFailed,
+                    savedUnderLock = (ui.message as? HomeMessage.SavedUnderLock)?.note,
                     missedAlarmAt = missedAlarmAt,
                     missedSessionId = missedSessionId,
                     reliabilityProblem = !ui.reliability.allOk,
@@ -341,13 +416,16 @@ class HomeViewModel(
             is StoredAlarms.Loaded -> {
                 val sorted = stored.alarms.sortedWith(compareBy(AlarmListOrder) { it.alarm })
                 val alarms = sorted.map { it.alarm }
+                listed = alarms
                 val cards = sorted.map { it.alarm.toCard(ui.toggles[it.alarm.id], it.checks) }
                 HomeUiState(
                     nextAlarm = nextAlarm(alarms.filterIndexed { index, _ -> cards[index].enabled }),
                     alarms = cards,
                     deleteDialog = ui.deleteDialog?.takeIf { dialog -> cards.any { it.id == dialog.alarmId } },
+                    disableDialog = ui.disableDialog?.takeIf { dialog -> cards.any { it.id == dialog.alarmId } },
                     openFailed = ui.message == HomeMessage.OpenFailed,
                     saveFailed = ui.message == HomeMessage.SaveFailed,
+                    savedUnderLock = (ui.message as? HomeMessage.SavedUnderLock)?.note,
                     missedAlarmAt = missedAlarmAt,
                     missedSessionId = missedSessionId,
                     reliabilityProblem = !ui.reliability.allOk,
@@ -376,6 +454,22 @@ class HomeViewModel(
 private val MISSED_RETRY_FIRST: Duration = 1.seconds
 private val MISSED_RETRY_MAX: Duration = 1.minutes
 private const val MISSED_RETRY_MAX_DOUBLINGS = 6L
+
+/**
+ * How long until a ring inside the lock window, as the turn-off dialog says it (Story 4.6, EXPERIENCE.md Key strings):
+ * whole hours rounded down ("It rings in 7 h" at 7 h 59 min), or under 1 h whole minutes rounded down, at least 1 ("It
+ * rings in 1 min" at 30 s).
+ */
+internal fun lockCountdownOf(untilRing: Duration): Countdown {
+    val minutes = untilRing.inWholeMinutes.coerceAtLeast(1)
+    return if (minutes < MINUTES_PER_HOUR) {
+        Countdown.Minutes(minutes.toInt())
+    } else {
+        Countdown.HoursMinutes((minutes / MINUTES_PER_HOUR).toInt(), (minutes % MINUTES_PER_HOUR).toInt())
+    }
+}
+
+private const val MINUTES_PER_HOUR = 60L
 
 /** The pause after failed missed-note read [attempt] (0 first): 1 s, doubling, at most a minute. */
 internal fun missedRetryDelay(attempt: Long): Duration {
@@ -414,18 +508,25 @@ private data class PendingToggle(
 )
 
 /** Home's snackbars; one shows at a time. */
-private enum class HomeMessage {
+private sealed interface HomeMessage {
     /** The editor could not read its alarm: "Couldn't open this alarm.". */
-    OpenFailed,
+    data object OpenFailed : HomeMessage
 
     /** A switch, Duplicate or Delete could not be stored: "Couldn't save the alarm. Try again.". */
-    SaveFailed,
+    data object SaveFailed : HomeMessage
+
+    /** The editor saved a weakening change under the lock (Story 4.6): "Saved. Takes effect after ...". */
+    data class SavedUnderLock(
+        val note: WeakeningNote,
+    ) : HomeMessage
 }
 
 /** Home state that is not in the store. */
 private data class LocalState(
     val toggles: Map<String, PendingToggle> = emptyMap(),
     val deleteDialog: DeleteAlarmDialog? = null,
+    /** "Turn off your {time} alarm? ..." for an alarm switched off inside its lock window (Story 4.6). */
+    val disableDialog: DisableUnderLock? = null,
     /** The snackbar showing, if any. */
     val message: HomeMessage? = null,
     /** What the reliability probe found when Home last started (Story 1.19). */

@@ -25,7 +25,6 @@ import com.yawnandpawn.app.ui.format.formatMoney
 import com.yawnandpawn.app.ui.resources.Res
 import com.yawnandpawn.app.ui.resources.editor_after_im_up
 import com.yawnandpawn.app.ui.resources.editor_back
-import com.yawnandpawn.app.ui.resources.editor_fee_ladder
 import com.yawnandpawn.app.ui.resources.editor_grace_seconds
 import com.yawnandpawn.app.ui.resources.editor_gradual_volume
 import com.yawnandpawn.app.ui.resources.editor_message
@@ -45,7 +44,11 @@ import com.yawnandpawn.app.ui.resources.editor_vibrate_quiet_time
 import com.yawnandpawn.app.ui.resources.editor_volume
 import com.yawnandpawn.app.ui.resources.editor_wake_check
 import com.yawnandpawn.app.ui.resources.editor_when_it_plays
+import com.yawnandpawn.app.ui.resources.settings_prices_approximate
 import com.yawnandpawn.app.ui.resources.sound_file_missing
+import com.yawnandpawn.app.ui.settings.WeakeningNote
+import com.yawnandpawn.app.ui.settings.WeakeningNoteInline
+import com.yawnandpawn.app.ui.settings.feeLadderText
 import com.yawnandpawn.app.ui.sound.SoundList
 import com.yawnandpawn.app.ui.theme.PpsTheme
 import org.jetbrains.compose.resources.StringResource
@@ -59,6 +62,7 @@ import org.jetbrains.compose.resources.stringResource
 internal fun EditorSubScreen(
     pane: EditorPane,
     state: EditorUiState,
+    is24Hour: Boolean,
     onIntent: (EditorIntent) -> Unit,
 ) {
     val full = state.full
@@ -85,11 +89,11 @@ internal fun EditorSubScreen(
             }
 
             EditorPane.WakeCheck -> {
-                full?.let { WakeCheckPane(full = it, onIntent = onIntent) }
+                full?.let { WakeCheckPane(full = it, is24Hour = is24Hour, onIntent = onIntent) }
             }
 
             EditorPane.QuietTime -> {
-                QuietTimePane(form = state.form, onIntent = onIntent)
+                QuietTimePane(form = state.form, note = full?.graceNote, is24Hour = is24Hour, onIntent = onIntent)
             }
 
             EditorPane.Motivation -> {
@@ -184,7 +188,11 @@ private fun SoundPane(
     }
 }
 
-/** Snooze: the length 5 / 9 / 10 / 15 min, then (full editor) the fee ladder. */
+/**
+ * Snooze: the length 5 / 9 / 10 / 15 min, then (full editor) the fee ladder "Snooze 1: {price1} · 2: {price2} · 3:
+ * {price3}" (fewer entries with max snoozes 1 or 2), and with prices never loaded "Approximate. Your local price shows
+ * when you're online." (Story 4.6).
+ */
 @Composable
 private fun SnoozePane(
     state: EditorUiState,
@@ -200,15 +208,17 @@ private fun SnoozePane(
             )
         }
     }
-    state.full
-        ?.feeLadder
-        ?.takeIf { it.size >= FEE_LADDER_STEPS }
-        ?.let { ladder ->
-            NoteInline(
-                text = stringResource(Res.string.editor_fee_ladder, formatMoney(ladder[0]), formatMoney(ladder[1]), formatMoney(ladder[2])),
-                modifier = Modifier.padding(horizontal = PpsTheme.spacing.cardPadding),
-            )
-        }
+    val full = state.full ?: return
+    val notePadding = Modifier.padding(horizontal = PpsTheme.spacing.cardPadding)
+    full.feeLadder
+        ?.map { price ->
+            when (price) {
+                is LadderPrice.Text -> price.text
+                is LadderPrice.Amount -> formatMoney(price.money)
+            }
+        }?.let { feeLadderText(it) }
+        ?.let { NoteInline(text = it, modifier = notePadding) }
+    if (full.pricesApproximate) NoteInline(text = stringResource(Res.string.settings_prices_approximate), modifier = notePadding)
 }
 
 /**
@@ -219,6 +229,7 @@ private fun SnoozePane(
 @Composable
 private fun WakeCheckPane(
     full: FullEditorSections,
+    is24Hour: Boolean,
     onIntent: (EditorIntent) -> Unit,
 ) {
     CheckPickerContent(
@@ -248,12 +259,21 @@ private fun WakeCheckPane(
             }
         },
     )
+    // Story 4.6: the easier checks shown wait under the commitment lock.
+    full.checksNote?.let {
+        WeakeningNoteInline(note = it, is24Hour = is24Hour, modifier = Modifier.padding(horizontal = PpsTheme.spacing.cardPadding))
+    }
 }
 
-/** Quiet time (the grace window): 15 to 30 s and "Vibrate during quiet time". */
+/**
+ * Quiet time (the grace window): 15 to 30 s and "Vibrate during quiet time", and while the longer quiet time shown waits
+ * under the commitment lock, [note] (Story 4.6).
+ */
 @Composable
 private fun QuietTimePane(
     form: EditorForm,
+    note: WeakeningNote?,
+    is24Hour: Boolean,
     onIntent: (EditorIntent) -> Unit,
 ) {
     GroupCard {
@@ -277,6 +297,13 @@ private fun QuietTimePane(
         text = stringResource(Res.string.editor_quiet_time_note),
         modifier = Modifier.padding(horizontal = PpsTheme.spacing.cardPadding),
     )
+    note?.let {
+        WeakeningNoteInline(
+            note = it,
+            is24Hour = is24Hour,
+            modifier = Modifier.padding(horizontal = PpsTheme.spacing.cardPadding),
+        )
+    }
 }
 
 /** Motivation: which message plays (none, random, one recording), "Record a message", and when it plays. */
@@ -319,6 +346,3 @@ private fun MotivationPane(
         }
     }
 }
-
-/** The fee ladder preview shows the first three snooze prices. */
-private const val FEE_LADDER_STEPS = 3

@@ -47,6 +47,7 @@ import com.yawnandpawn.app.core.billing.SnoozeConditions
 import com.yawnandpawn.app.core.billing.UsdFeeLadder
 import com.yawnandpawn.app.core.checks.AccessibilityState
 import com.yawnandpawn.app.core.checks.word.WordBank
+import com.yawnandpawn.app.core.config.CommitmentLog
 import com.yawnandpawn.app.core.config.PromotePendingChanges
 import com.yawnandpawn.app.core.config.ReadFireSettings
 import com.yawnandpawn.app.core.config.RecordCommitmentEvent
@@ -128,6 +129,8 @@ val appModule =
         factory { SetBaseFee(get()) }
         factory { SetMaxSnoozes(get()) }
         factory { RecordCommitmentEvent(get(), get(), get(), get(), get()) }
+        // Story 4.6: turning an alarm off or deleting it inside its lock window is logged by the alarm use cases.
+        factory { CommitmentLog(get(), get(), get()) }
         single { RearmOnFire(get(), get(), get(), get(), get()) }
         single<AlarmFiredHandler> {
             WakeAlarmFiredHandler(get(), get<RearmOnFire>(), get(), get(), starts = get(), timings = get(), rearm = get())
@@ -135,10 +138,10 @@ val appModule =
         // The session slot armed from runtime.db without the engine (Story 2.1): after system events and refused starts.
         single { SessionSlotRearm(get(), get(), get(), get(), get(), get()) }
         factory { SaveAlarm(get(), get(), get(), get(), get(), get(), get(), get(), get(), get()) }
-        factory { SetAlarmEnabled(get(), get(), get(), get(), get()) }
+        factory { SetAlarmEnabled(get(), get(), get(), get(), get(), get(), get()) }
         // Story 3.10: Home's "Re-register" stores a new code alone.
         factory { ReRegisterCode(get(), get(), get(), get(), get()) }
-        factory { DeleteAlarm(get(), get(), get(), get(), get()) }
+        factory { DeleteAlarm(get(), get(), get(), get(), get(), get(), get(), get()) }
         // "Test alarm" (Story 1.18): the editor's values ring as a test 10 s later, through the test request code.
         factory { ScheduleTestAlarm(get(), get(), get(), get()) }
         // The wake session (Story 1.12): the Epic 1 policies, the one engine over runtime.db (ActiveSessionStore from

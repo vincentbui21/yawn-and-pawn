@@ -2,6 +2,7 @@ package com.yawnandpawn.app.ui
 
 import com.yawnandpawn.app.ui.editor.AlarmEditorArgs
 import com.yawnandpawn.app.ui.editor.AlarmEditorViewModel
+import com.yawnandpawn.app.ui.editor.EditorFeeSources
 import com.yawnandpawn.app.ui.home.AlarmActions
 import com.yawnandpawn.app.ui.home.HomeViewModel
 import com.yawnandpawn.app.ui.payments.ProblemWithChargeViewModel
@@ -17,7 +18,7 @@ import org.koin.dsl.module
  */
 val uiModule =
     module {
-        factory { AlarmActions(get(), get(), get(), get()) }
+        factory { AlarmActions(get(), get(), get()) }
         viewModel { HomeViewModel(get(), get(), get(), get(), get(), get(), get(), get(), get()) }
         viewModel { PurchaseHistoryViewModel(get(), get(), get(), get(), get()) }
         viewModel {
@@ -53,6 +54,8 @@ val uiModule =
                 cameraPermission = get(),
                 scanCode = params.get<AlarmEditorArgs>().scanCode,
                 reRegisterCode = get(),
+                pendingChanges = get(),
+                fees = EditorFeeSources(globalSettings = get(), priceCatalog = get(), moneyFormatter = get()),
             )
         }
     }

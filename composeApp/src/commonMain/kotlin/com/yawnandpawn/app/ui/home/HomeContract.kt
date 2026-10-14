@@ -3,6 +3,7 @@ package com.yawnandpawn.app.ui.home
 import com.yawnandpawn.app.core.billing.Money
 import com.yawnandpawn.app.ui.checks.CheckType
 import com.yawnandpawn.app.ui.format.Countdown
+import com.yawnandpawn.app.ui.settings.WeakeningNote
 import kotlinx.datetime.DayOfWeek
 import kotlinx.datetime.LocalTime
 
@@ -23,7 +24,10 @@ data class AlarmCard(
     val enabled: Boolean,
 )
 
-/** "Turn off your {time} alarm? It rings in ..." for an enabled alarm switched off within 8 h (commitment lock). */
+/**
+ * "Turn off your {time} alarm? It rings in ..." for an enabled alarm switched off within 8 h (commitment lock, Story
+ * 4.6); [ringsIn] is [Countdown.HoursMinutes] (the dialog says the whole hours) or, under 1 h, [Countdown.Minutes].
+ */
 data class DisableUnderLock(
     val alarmId: String,
     val time: LocalTime,
@@ -68,6 +72,11 @@ data class HomeUiState(
      * decision 2026-10-02; a switch has already gone back to the stored value).
      */
     val saveFailed: Boolean = false,
+    /**
+     * The editor saved a weakening change under the commitment lock (Story 4.6): the snackbar "Saved. Takes effect after
+     * tomorrow's {time} alarm." (or "today's").
+     */
+    val savedUnderLock: WeakeningNote? = null,
 )
 
 /** Everything the user can do on Home. */
@@ -98,9 +107,16 @@ sealed interface HomeIntent {
 
     data object BackToAlarm : HomeIntent
 
+    /** "Turn off" in the turn-off dialog: the alarm is switched off (and the commitment event written, Story 4.6). */
     data object DisableConfirmed : HomeIntent
 
+    /** "Keep it on", Back or a tap outside the turn-off dialog: the alarm stays on. */
     data object DisableCancelled : HomeIntent
+
+    /** The editor closed after saving a weakening change under the lock (a navigation result): shows its snackbar. */
+    data class SavedUnderLock(
+        val note: WeakeningNote,
+    ) : HomeIntent
 
     /** "Duplicate" in a card's long-press menu (or its TalkBack action): opens a new alarm prefilled from it (nothing stored). */
     data class DuplicateClicked(

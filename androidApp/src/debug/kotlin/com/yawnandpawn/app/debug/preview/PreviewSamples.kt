@@ -10,6 +10,7 @@ import com.yawnandpawn.app.ui.editor.EditorPane
 import com.yawnandpawn.app.ui.editor.EditorSound
 import com.yawnandpawn.app.ui.editor.EditorUiState
 import com.yawnandpawn.app.ui.editor.FullEditorSections
+import com.yawnandpawn.app.ui.editor.LadderPrice
 import com.yawnandpawn.app.ui.editor.MotivationChoice
 import com.yawnandpawn.app.ui.editor.MotivationTiming
 import com.yawnandpawn.app.ui.format.Countdown
@@ -17,6 +18,7 @@ import com.yawnandpawn.app.ui.home.AlarmCard
 import com.yawnandpawn.app.ui.home.DisableUnderLock
 import com.yawnandpawn.app.ui.home.HomeHero
 import com.yawnandpawn.app.ui.home.HomeUiState
+import com.yawnandpawn.app.ui.settings.WeakeningNote
 import com.yawnandpawn.app.ui.sound.SoundOption
 import com.yawnandpawn.app.ui.sound.SoundPickerUiState
 import com.yawnandpawn.app.ui.sound.SoundSource
@@ -135,7 +137,7 @@ object PreviewSamples {
             checks = listOf(CheckChip(CheckType.Math, Difficulty.Medium), CheckChip(CheckType.QrBarcode, Difficulty.Easy)),
             checkMode = CheckMode.Random,
             qrCodeSaved = true,
-            feeLadder = listOf(price(1), price(2), price(3)),
+            feeLadder = listOf(price(1), price(2), price(3)).map(LadderPrice::Amount),
         )
 
     /** The editor's sound section: "Sunrise" chosen from the sample list. */
@@ -146,7 +148,7 @@ object PreviewSamples {
             ringsIn = Countdown.HoursMinutes(23, 0),
             full =
                 FullEditorSections(
-                    feeLadder = listOf(price(1), price(2), price(3)),
+                    feeLadder = listOf(price(1), price(2), price(3)).map(LadderPrice::Amount),
                     recordings = recordings,
                 ),
             sound = editorSound,
@@ -187,7 +189,7 @@ object PreviewSamples {
 
     val editorNoCheckPane = editorNoCheck.copy(pane = EditorPane.WakeCheck)
 
-    val editorWeakening = editorEdit.copy(full = editorEdit.full?.copy(weakeningAppliesAfter = LocalTime(7, 30)))
+    val editorWeakening = editorEdit.copy(full = editorEdit.full?.copy(weakeningNote = WeakeningNote(LocalTime(7, 30))))
 
     val editorSoundMissing = editorEdit.copy(sound = editorSound.copy(name = "morning-mix.mp3", missing = true))
 

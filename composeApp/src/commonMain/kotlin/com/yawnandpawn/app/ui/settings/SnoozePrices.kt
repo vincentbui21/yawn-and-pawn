@@ -60,8 +60,18 @@ fun weakeningNoteOf(
     pending: PendingChange?,
     now: Instant,
     zone: TimeZone,
+): WeakeningNote? = weakeningNoteOf(pending?.effectiveAfter?.scheduledAt, now, zone)
+
+/**
+ * The note for a change that waits for the ring at [after] (`SaveAlarm`'s `pendingUntil`, Story 4.6): its local time and
+ * whether that is today in [zone]; null without one, or once it is no longer in the future.
+ */
+fun weakeningNoteOf(
+    after: Instant?,
+    now: Instant,
+    zone: TimeZone,
 ): WeakeningNote? {
-    val at = pending?.effectiveAfter?.scheduledAt?.takeIf { it > now } ?: return null
+    val at = after?.takeIf { it > now } ?: return null
     val local = at.toLocalDateTime(zone)
     return WeakeningNote(time = local.time, today = local.date == now.toLocalDateTime(zone).date)
 }

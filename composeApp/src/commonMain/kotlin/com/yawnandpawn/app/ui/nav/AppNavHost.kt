@@ -12,6 +12,7 @@ import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.Saver
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
@@ -38,6 +39,7 @@ import com.yawnandpawn.app.ui.progress.ProgressScreen
 import com.yawnandpawn.app.ui.progress.ProgressUiState
 import com.yawnandpawn.app.ui.purchases.PurchaseHistoryRoute
 import com.yawnandpawn.app.ui.settings.SettingsRoute
+import com.yawnandpawn.app.ui.settings.WeakeningNote
 import com.yawnandpawn.app.ui.shell.AppShell
 import com.yawnandpawn.app.ui.shell.AppTab
 import com.yawnandpawn.app.ui.theme.PpsTheme
@@ -46,6 +48,7 @@ import com.yawnandpawn.app.ui.you.YouRow
 import com.yawnandpawn.app.ui.you.YouScreen
 import com.yawnandpawn.app.ui.you.YouUiState
 import kotlinx.datetime.LocalDate
+import kotlinx.datetime.LocalTime
 import kotlinx.datetime.toLocalDateTime
 import org.koin.compose.koinInject
 
@@ -75,6 +78,8 @@ fun AppNavHost(modifier: Modifier = Modifier) {
     val shown: List<NavKey> = if (locked) LockedStack else backStack
     // The editor's result for Home: its alarm could not be read, so Home shows "Couldn't open this alarm.".
     var openFailed by rememberSaveable { mutableStateOf(false) }
+    // The editor's other result (Story 4.6): a weakening change waits under the lock, so Home says until when.
+    var savedUnderLock by rememberSaveable(stateSaver = WeakeningNoteSaver) { mutableStateOf<WeakeningNote?>(null) }
     val topTab = (shown.lastOrNull() as? Route)?.tab
     // Under the editor the capsule is hidden; it keeps the tab the stack returns to.
     val selected = topTab ?: shown.asReversed().firstNotNullOfOrNull { (it as? Route)?.tab } ?: AppTab.Alarms
@@ -105,6 +110,8 @@ fun AppNavHost(modifier: Modifier = Modifier) {
                             onOpenDuplicate = { id -> backStack.openEditor(alarmId = null, copyOf = id) },
                             openFailed = openFailed,
                             onOpenFailedShown = { openFailed = false },
+                            savedUnderLock = savedUnderLock,
+                            onSavedUnderLockShown = { savedUnderLock = null },
                             onOpenQrRegistration = { id -> backStack.openEditor(id, scanCode = true) },
                         )
                     }
@@ -112,18 +119,23 @@ fun AppNavHost(modifier: Modifier = Modifier) {
                     entry<Route.Settings>(metadata = TabMetadata) { SettingsTab() }
                     entry<Route.You>(metadata = TabMetadata) { YouTab(onOpenPurchaseHistory = { backStack.openPurchaseHistory() }) }
                     entry<Route.SessionInProgress>(metadata = LockMetadata) { SessionInProgressScreen() }
-                    entry<Route.AlarmEditor> { route -> EditorEntry(route, backStack, onOpenFailed = { openFailed = true }) }
-                    entry<Route.PurchaseHistory> {
-                        PurchaseHistoryRoute(
-                            onBack = { backStack.close(Route.PurchaseHistory) },
-                            onProblemWithCharge = { backStack.openProblemWithCharge() },
-                        )
+                    entry<Route.AlarmEditor> { route ->
+                        EditorEntry(route, backStack, onOpenFailed = { openFailed = true }, onSavedUnderLock = { savedUnderLock = it })
                     }
+                    entry<Route.PurchaseHistory> { PurchaseHistoryEntry(backStack) }
                     entry<Route.ProblemWithCharge> { ProblemWithChargeRoute(onBack = { backStack.close(Route.ProblemWithCharge) }) }
                 },
         )
     }
 }
+
+/** Purchase history on [backStack]: Back closes it, "Problem with a charge?" opens its screen (Story 4.17). */
+@Composable
+private fun PurchaseHistoryEntry(backStack: MutableList<NavKey>) =
+    PurchaseHistoryRoute(
+        onBack = { backStack.close(Route.PurchaseHistory) },
+        onProblemWithCharge = { backStack.openProblemWithCharge() },
+    )
 
 /** Marks the tab entries, so moving between two tabs is instant (the shared capsule stays put). */
 private const val TAB_ENTRY = "yawnandpawn.tab"
@@ -213,12 +225,16 @@ private fun YouTab(onOpenPurchaseHistory: () -> Unit) {
 /** The You rows whose screens are built. */
 private val YouTabRows: Set<YouRow> = setOf(YouRow.PurchaseHistory)
 
-/** The editor of [route] on [backStack]; [onOpenFailed] after it closed because its alarm could not be read. */
+/**
+ * The editor of [route] on [backStack]; [onOpenFailed] after it closed because its alarm could not be read, and
+ * [onSavedUnderLock] when a save left a weakening change waiting under the commitment lock (Story 4.6).
+ */
 @Composable
 private fun EditorEntry(
     route: Route.AlarmEditor,
     backStack: MutableList<NavKey>,
     onOpenFailed: () -> Unit,
+    onSavedUnderLock: (WeakeningNote) -> Unit,
 ) {
     AlarmEditorRoute(
         alarmId = route.alarmId,
@@ -230,5 +246,15 @@ private fun EditorEntry(
             onOpenFailed()
         },
         onOpenCopy = { copyId -> backStack.replaceEditor(route, copyId) },
+        onSavedUnderLock = onSavedUnderLock,
     )
 }
+
+/** Keeps the editor's "Saved. Takes effect after ..." result for Home across a configuration change. */
+private val WeakeningNoteSaver: Saver<WeakeningNote?, Any> =
+    Saver(
+        save = { note -> note?.let { listOf(it.time.toSecondOfDay(), it.today) } },
+        restore = { saved ->
+            (saved as? List<*>)?.let { WeakeningNote(LocalTime.fromSecondOfDay(it[0] as Int), it[1] as Boolean) }
+        },
+    )

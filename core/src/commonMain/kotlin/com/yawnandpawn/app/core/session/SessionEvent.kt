@@ -21,8 +21,8 @@ class PurchaseToken(
 }
 
 /**
- * Why a payment failed (Story 4.11): Play's response codes map onto these in the billing adapter (Story 4.12), and each
- * has its own "No charge." message (Story 4.14).
+ * Why a payment ended without a snooze (Story 4.11): Play's response codes map onto these in the billing adapter (Story
+ * 4.12). Each kind but [Unconfirmed] means nothing was charged and has its own "No charge." message (Story 4.14).
  */
 enum class PurchaseFailureKind {
     /** No connection to Play (network error, service unavailable or disconnected). */
@@ -33,6 +33,12 @@ enum class PurchaseFailureKind {
 
     /** Any other failure: billing unavailable, a developer or item error, a missing intent. */
     Error,
+
+    /**
+     * Play's result never came (Story 4.11 review 15: the sheet was open 2 minutes or more and a recovery found nothing).
+     * A charge can still follow and would still grant, so this is never "No charge." (Story 4.14 review).
+     */
+    Unconfirmed,
 }
 
 /** What `PurchaseReconciler` (AD-7, Epic 4) decided about a purchase update; it arrives inside the event. */
@@ -151,7 +157,7 @@ sealed interface SessionEvent {
         val price: Money? = null,
     ) : PurchaseEvent
 
-    /** The purchase failed for [kind] (Story 4.11); nothing was charged. */
+    /** The purchase ended for [kind] (Story 4.11); nothing was charged, except perhaps for [PurchaseFailureKind.Unconfirmed]. */
     data class PurchaseFailed(
         val kind: PurchaseFailureKind = PurchaseFailureKind.Error,
     ) : PurchaseEvent

@@ -295,7 +295,7 @@ class WakeActivity : ComponentActivity() {
                 val shown = current ?: last.state
                 // The confirm sheet's 500 ms guard reads the monotonic clock (Story 4.13), never animation time.
                 CompositionLocalProvider(LocalWakeClock provides monotonicClock::elapsedMillis) {
-                    WakeScreenWithCamera(shown, check.qr, ::onIntent, ::interacted, send = ::sendAll)
+                    WakeScreenWithCamera(shown, check.qr, ::onIntent, ::screenTapped, send = ::sendAll)
                 }
             }
         }
@@ -303,8 +303,8 @@ class WakeActivity : ComponentActivity() {
 
     /**
      * The confirm sheet, its payment message and the prices to show over [session]'s screen with [availability] (Story
-     * 4.13). A sheet that no longer belongs (another ring, snooze no longer Available for its offer) closes for good, and
-     * the message ends after [MESSAGE_TIMEOUT] if no tap ended it first.
+     * 4.13). A sheet that no longer belongs (another ring, snooze no longer Available for its offer) closes for good. The
+     * payment message stays at least [MESSAGE_MINIMUM], then until the next tap (Story 4.14).
      */
     @Composable
     private fun sheetOverlay(
@@ -326,10 +326,11 @@ class WakeActivity : ComponentActivity() {
             if (session != null && availability != null) sheet.follow(session, availability)
         }
         val ringMessage = message?.takeIf { session != null && sheet.messageFor(session, it) != null }
-        LaunchedEffect(ringMessage) {
+        // Keyed on the showing, not on its tap state: a tap during the minimum must not restart it.
+        LaunchedEffect(ringMessage?.serial) {
             ringMessage ?: return@LaunchedEffect
-            delay(MESSAGE_TIMEOUT)
-            sheet.expire(ringMessage)
+            delay(MESSAGE_MINIMUM)
+            sheet.onMinimumShown(ringMessage)
         }
         return SheetOverlay(shown, ringMessage?.message, sheet.priceOf(livePrices))
     }
@@ -354,7 +355,7 @@ class WakeActivity : ComponentActivity() {
     }
 
     private fun onIntent(intent: WakeIntent) {
-        // Any tap ends a payment message (Story 4.13; Story 4.14 adds its 10 s minimum).
+        // Any tap ends a payment message once it has shown for 10 s (Story 4.14); the tap's action goes on at once.
         sheet.onTap()
         when {
             // "Done" on Success: the session is already over, so it only closes the screen.
@@ -454,6 +455,12 @@ class WakeActivity : ComponentActivity() {
         }
     }
 
+    /** A tap no action takes (the clock, the message, empty space): it counts for the payment message too (Story 4.14). */
+    private fun screenTapped() {
+        sheet.onTap()
+        interacted()
+    }
+
     /** Any tap but "I'm up" and the snooze actions: resets the interaction deadline of the session. */
     private fun interacted() {
         if (runtime.emergency.value == null) send(SessionEvent.UserInteracted)
@@ -484,8 +491,8 @@ class WakeActivity : ComponentActivity() {
         /** Success closes by itself after this long without "Done" (owner-approved default 2026-09-26). */
         val SUCCESS_TIMEOUT: Duration = 60.seconds
 
-        /** A payment message stays at least this long unless a tap ends it (EXPERIENCE.md wake snackbar). */
-        val MESSAGE_TIMEOUT: Duration = 10.seconds
+        /** A payment message stays at least this long, then until the next tap (EXPERIENCE.md wake snackbar, Story 4.14). */
+        val MESSAGE_MINIMUM: Duration = 10.seconds
 
         /** The intents of snooze and the confirm sheet (Story 4.13). */
         private val SHEET_INTENTS: Set<WakeIntent> =

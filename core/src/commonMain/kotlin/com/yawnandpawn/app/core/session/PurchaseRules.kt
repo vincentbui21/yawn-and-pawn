@@ -139,6 +139,7 @@ internal class PurchaseRules(
             PurchaseFailureKind.Offline -> PurchaseOutcome.Offline
             PurchaseFailureKind.UnlockFailed -> PurchaseOutcome.UnlockFailed
             PurchaseFailureKind.Error -> PurchaseOutcome.Failed
+            PurchaseFailureKind.Unconfirmed -> PurchaseOutcome.Unconfirmed
         }
 
     /** A paid snooze (a grant, or ReuseAccepted); ignored in a test session, which can never charge. */

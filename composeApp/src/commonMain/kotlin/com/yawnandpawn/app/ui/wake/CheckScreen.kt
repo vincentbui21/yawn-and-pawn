@@ -30,6 +30,7 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
@@ -45,6 +46,7 @@ import androidx.compose.ui.graphics.drawOutline
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
+import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.semantics.LiveRegionMode
@@ -270,7 +272,18 @@ private fun CheckFooter(
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.spacedBy(spacing.space2),
     ) {
-        state.message?.let { WakeSnackbar(message = it) }
+        // Story 4.14 review: once a payment message has shown, its room stays for the rest of this check screen (the
+        // ring), so the input and its keys never move when the message ends or a shorter one replaces it.
+        var messageRoom by remember { mutableIntStateOf(0) }
+        val room = with(LocalDensity.current) { messageRoom.toDp() }
+        val message = state.message
+        if (message != null || messageRoom > 0) {
+            Box(modifier = Modifier.fillMaxWidth().heightIn(min = room), contentAlignment = Alignment.BottomCenter) {
+                message?.let {
+                    WakeSnackbar(message = it, modifier = Modifier.onSizeChanged { size -> messageRoom = maxOf(messageRoom, size.height) })
+                }
+            }
+        }
         if (state.showFallbackLink) {
             PpsTextButton(text = stringResource(Res.string.fallback_link), onClick = { onIntent(WakeIntent.FallbackLinkClicked) })
         }

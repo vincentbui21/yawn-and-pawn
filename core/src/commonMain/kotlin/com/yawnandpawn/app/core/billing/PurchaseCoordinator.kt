@@ -2,6 +2,7 @@ package com.yawnandpawn.app.core.billing
 
 import com.yawnandpawn.app.core.error.DomainError
 import com.yawnandpawn.app.core.error.Outcome
+import com.yawnandpawn.app.core.error.valueOrNull
 import com.yawnandpawn.app.core.log.LogEvent
 import com.yawnandpawn.app.core.log.Logger
 import com.yawnandpawn.app.core.session.Billing
@@ -466,7 +467,7 @@ class PurchaseCoordinator(
      * record into reused (Story 4.10). Null when nothing is offered to the session ringing now.
      */
     suspend fun acceptReuse(): Outcome<SessionState, DomainError>? =
-        takeOffer()?.let { dispatch(SessionEvent.ReuseAccepted(it.productId, it.token)) }
+        takeOffer()?.let { dispatch(SessionEvent.ReuseAccepted(it.productId, it.token, ledger.paidPrice(it.token))) }
 
     /** "Not now", Back or a swipe on the "already paid" sheet (Story 4.13): `ReuseDeclined`. Null when nothing is offered. */
     suspend fun declineReuse(): Outcome<SessionState, DomainError>? =
@@ -543,7 +544,8 @@ class PurchaseCoordinator(
     ) {
         when (decision) {
             is PurchaseDecision.Grant -> {
-                dispatch(SessionEvent.PurchaseGranted(snapshot.productId, snapshot.token, PurchaseVerdict.Grant, snapshot.orderId))
+                val price = intentPrice(snapshot.profileId, snapshot.productId)
+                dispatch(SessionEvent.PurchaseGranted(snapshot.productId, snapshot.token, PurchaseVerdict.Grant, snapshot.orderId, price))
                 // The snooze is paid by this token: opening Play now would charge a second time (Story 4.9 row A).
                 if (decision.abortLaunch) pass.stopsLaunch = true
             }
@@ -568,6 +570,19 @@ class PurchaseCoordinator(
             }
         }
     }
+
+    /**
+     * What a granted payment cost, for the wake screen's "{paid} paid this morning" (Story 4.15): the price of the newest
+     * intent of [sessionId] for [productId] (the rule the ledger prices its record with). Null when no intent is known.
+     */
+    private suspend fun intentPrice(
+        sessionId: String?,
+        productId: String,
+    ): Money? =
+        sessionId
+            ?.let { intents.forProduct(it, productId).valueOrNull() }
+            ?.maxWithOrNull(compareBy<PurchaseIntent>({ it.createdAt }, { it.intentId.value }))
+            ?.price
 
     /**
      * The first reusable token of a launch is offered (`ReuseOffered`), recorded stranded first when it has no record

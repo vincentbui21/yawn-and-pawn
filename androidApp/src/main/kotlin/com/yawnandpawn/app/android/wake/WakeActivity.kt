@@ -58,6 +58,8 @@ import com.yawnandpawn.app.ui.wake.PriceLookup
 import com.yawnandpawn.app.ui.wake.RingingScreen
 import com.yawnandpawn.app.ui.wake.RingingUiState
 import com.yawnandpawn.app.ui.wake.SnoozeSheet
+import com.yawnandpawn.app.ui.wake.SnoozedScreen
+import com.yawnandpawn.app.ui.wake.SnoozedUiState
 import com.yawnandpawn.app.ui.wake.SuccessScreen
 import com.yawnandpawn.app.ui.wake.WakeIntent
 import com.yawnandpawn.app.ui.wake.WakeMessage
@@ -66,6 +68,7 @@ import com.yawnandpawn.app.ui.wake.alarmOnlyRingingUiState
 import com.yawnandpawn.app.ui.wake.checkPosition
 import com.yawnandpawn.app.ui.wake.placeholderStepDue
 import com.yawnandpawn.app.ui.wake.ringingUiState
+import com.yawnandpawn.app.ui.wake.snoozedUiState
 import com.yawnandpawn.app.ui.wake.successUiState
 import kotlinx.coroutines.CoroutineStart
 import kotlinx.coroutines.delay
@@ -117,6 +120,9 @@ import kotlin.time.Duration.Companion.seconds
  *   filled the word is sent as `CheckAnswerSubmitted(Word)`. A wrong word clears the slots.
  * - Grace or Loud on a placeholder entry (only a session stored by Epics 1–2): the screen answers it
  *   (`CheckAnswerSubmitted(Placeholder)`), so "I'm up" alone ends that session; a failed dispatch is retried while due.
+ *
+ * Snoozed (Story 4.15), it shows "Snoozed. Next ring at {time}." for [SNOOZED_SCREEN_TIME], then stops keeping the
+ * screen on and closes; the next ring opens a new wake screen through the ringing notification (Epic 2).
  *
  * Once a session it showed completes (the engine's [SessionEngine.ended], since its `state` may skip from Completed to
  * Idle), it shows the basic Success screen for that session instead (Story 3.3): UI-only state keyed by `sessionId`,
@@ -293,6 +299,8 @@ class WakeActivity : ComponentActivity() {
                 if (session != null) last.sessionShown = true
                 if (current != null) last.state = current
                 val shown = current ?: last.state
+                // Story 4.15: the Snoozed note shows for 3 s, then the screen closes; the next ring opens a new one.
+                (current as? WakeScreen.Snoozed)?.let { SnoozedClose(it.key) }
                 // The confirm sheet's 500 ms guard reads the monotonic clock (Story 4.13), never animation time.
                 CompositionLocalProvider(LocalWakeClock provides monotonicClock::elapsedMillis) {
                     WakeScreenWithCamera(shown, check.qr, ::onIntent, ::screenTapped, send = ::sendAll)
@@ -333,6 +341,24 @@ class WakeActivity : ComponentActivity() {
             sheet.onMinimumShown(ringMessage)
         }
         return SheetOverlay(shown, ringMessage?.message, sheet.priceOf(livePrices))
+    }
+
+    /**
+     * Closes the Snoozed note [key] after [SNOOZED_SCREEN_TIME] (Story 4.15): it stops keeping the screen on, so the system
+     * turns it off (the app never forces it off), and finishes, only if that snooze still goes on. Leaving Snoozed first
+     * (a merged alarm rings early) leaves composition and cancels it. The slot armed at the snooze end is the service's,
+     * so nothing here can stop the next ring.
+     */
+    @Composable
+    private fun SnoozedClose(key: SnoozedKey) {
+        LaunchedEffect(key) {
+            delay(SNOOZED_SCREEN_TIME)
+            val still = (engine.state.value as? SessionState.Snoozed)?.session?.let { SnoozedKey.of(it) } == key
+            if (still) {
+                window.clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+                finish()
+            }
+        }
     }
 
     /** What the screen sends by itself for [state]: the placeholder answer, and an "I'm up" kept from before the session. */
@@ -494,6 +520,9 @@ class WakeActivity : ComponentActivity() {
         /** A payment message stays at least this long, then until the next tap (EXPERIENCE.md wake snackbar, Story 4.14). */
         val MESSAGE_MINIMUM: Duration = 10.seconds
 
+        /** How long the Snoozed note shows before the screen closes (EXPERIENCE.md State Patterns, Story 4.15). */
+        val SNOOZED_SCREEN_TIME: Duration = 3.seconds
+
         /** The intents of snooze and the confirm sheet (Story 4.13). */
         private val SHEET_INTENTS: Set<WakeIntent> =
             setOf(WakeIntent.SnoozeClicked, WakeIntent.SheetUpperClicked, WakeIntent.SheetDismissed)
@@ -529,8 +558,8 @@ private class LastShown {
 }
 
 /**
- * The screen of a ringing or snoozed [session] (null otherwise): the Fallback check picker while open (Story 3.9); in
- * Grace or Loud on a check entry the Check screen
+ * The screen of a ringing or snoozed [session] (null otherwise): the Snoozed note while snoozed (Story 4.15); the
+ * Fallback check picker while open (Story 3.9); in Grace or Loud on a check entry the Check screen
  * (Story 3.2), whichever way the wake screen was opened; else its Ringing screen.
  */
 @Composable
@@ -543,6 +572,7 @@ private fun sessionScreen(
     overlay: SheetOverlay,
 ): WakeScreen? {
     if (session == null || availability == null) return null
+    if (state is SessionState.Snoozed) return snoozedUiState(session, zone)?.let { WakeScreen.Snoozed(it, SnoozedKey.of(session)) }
     val checkScreen = check.screen(state, availability, overlay.priceOf)
     return check.picker(state)?.let(WakeScreen::Fallback)
         ?: checkScreen?.let { WakeScreen.Check(it.copy(sheet = overlay.sheet, message = overlay.message)) }
@@ -574,6 +604,22 @@ private sealed interface WakeScreen {
     data class Fallback(
         val state: FallbackPickerUiState,
     ) : WakeScreen
+
+    /** "Snoozed. Next ring at {time}." for the snooze [key] (Story 4.15). */
+    data class Snoozed(
+        val state: SnoozedUiState,
+        val key: SnoozedKey,
+    ) : WakeScreen
+}
+
+/** One paid snooze of a session: its id and how many snoozes it has had ([SessionData.snoozesGranted]). */
+private data class SnoozedKey(
+    val sessionId: String,
+    val snoozesGranted: Int,
+) {
+    companion object {
+        fun of(session: SessionData): SnoozedKey = SnoozedKey(session.sessionId, session.snoozesGranted)
+    }
 }
 
 /**
@@ -616,8 +662,14 @@ private fun WakeContent(
     val taps = Modifier.pointerInput(Unit) { detectTapGestures { onInteracted() } }
     when (state) {
         null -> WakeSurface(modifier = taps) {}
+
         is WakeScreen.Ringing -> RingingScreen(state = state.state, is24Hour = is24HourClock(), onIntent = onIntent, modifier = taps)
+
         is WakeScreen.Check -> CheckScreen(state = state.state, onIntent = onIntent, modifier = taps)
+
         is WakeScreen.Fallback -> FallbackPickerScreen(state = state.state, onIntent = onIntent, modifier = taps)
+
+        // No actions and no taps: a snooze has no interaction deadline, so a touch here sends nothing (Story 4.15).
+        is WakeScreen.Snoozed -> SnoozedScreen(state = state.state, is24Hour = is24HourClock())
     }
 }

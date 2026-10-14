@@ -92,7 +92,7 @@ class PreviewWakeFlow {
 
     private fun offer(): SnoozeOffer = if (test) SnoozeOffer.TestMode else SnoozeOffer.Available(PreviewSamples.price(snoozes + 1))
 
-    private fun paid() = PreviewSamples.price((1..snoozes).sum())
+    private fun paid() = listOf(PreviewSamples.price((1..snoozes).sum()))
 
     private fun check() =
         WakeStep.Check(

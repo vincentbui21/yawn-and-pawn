@@ -302,7 +302,7 @@ class CheckFontScaleTest {
             SuccessScreen(
                 state =
                     SuccessUiState(
-                        SuccessKind.AfterSnooze(paidThisMorning = Money(micros = 2_000_000, currency = "EUR")),
+                        SuccessKind.AfterSnooze(paidThisMorning = listOf(Money(micros = 2_000_000, currency = "EUR"))),
                         pendingNotUsed = true,
                     ),
                 onIntent = {},

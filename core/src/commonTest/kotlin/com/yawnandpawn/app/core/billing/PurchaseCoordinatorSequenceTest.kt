@@ -223,6 +223,8 @@ class PurchaseCoordinatorSequenceTest {
             w.settle()
             val snoozed = assertIs<SessionState.Snoozed>(accepted.value)
             assertEquals(1, snoozed.session.snoozesGranted)
+            // Story 4.15: the reused payment adds what it actually cost (its record, priced by yesterday's intent).
+            assertEquals(listOf(QUOTE_1.price), snoozed.session.paid)
             assertEquals(1, w.world.recordRows.size, "exactly one record")
             val record = w.world.recordRows.getValue(tok.hash())
             assertEquals(RecordStatus.Reused, record.status)

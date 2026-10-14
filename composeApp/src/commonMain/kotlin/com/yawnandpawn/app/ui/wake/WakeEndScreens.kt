@@ -145,7 +145,7 @@ fun SuccessScreen(
 
                         is SuccessKind.AfterSnooze -> {
                             Headline(stringResource(Res.string.success_after_snooze))
-                            kind.paidThisMorning?.let { paid ->
+                            kind.paidThisMorning.takeIf { it.isNotEmpty() }?.let { paid ->
                                 Text(
                                     text = stringResource(Res.string.success_paid_this_morning, formatMoney(paid)),
                                     style = PpsTheme.typography.body,

@@ -248,6 +248,17 @@ class PurchaseLedger(
             ?.takeIf { it.priceSource.isAmountPaid }
             ?.price
 
+    /**
+     * What the payment [token] actually cost, from its record (Story 4.15: "Use it" adds it to the session's paid
+     * amounts). Null when it has no record, when its price is only an estimate, or when the records cannot be read.
+     */
+    suspend fun paidPrice(token: PurchaseToken): Money? =
+        records
+            .get(token.hash())
+            .valueOrNull()
+            ?.takeIf { it.priceSource.isAmountPaid }
+            ?.price
+
     /** Steps 2 to 5 for one ledger row; the Mutex is held. Each step runs only when the one before succeeded. */
     private suspend fun settleEntry(entry: GrantLedgerEntry): SettleResult {
         if (entry.settledAt != null) return SettleResult.Settled

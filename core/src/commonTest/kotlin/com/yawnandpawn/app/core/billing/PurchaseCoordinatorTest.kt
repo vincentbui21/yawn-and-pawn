@@ -175,6 +175,18 @@ class PurchaseCoordinatorTest {
             val snoozed = assertIs<SessionState.Snoozed>(w.buy(purchase()))
             assertEquals(1, snoozed.session.snoozesGranted)
             assertEquals(listOf(tok), w.play.calls)
+            // Story 4.15: the grant carries what the intent priced, for "{paid} paid this morning".
+            assertEquals(listOf(QUOTE_1.price), snoozed.session.paid)
+        }
+
+    @Test
+    fun `a grant with no intent of its session adds no amount`() =
+        runTest {
+            val w = CoordinatorWorld(this)
+            w.ring()
+            val snoozed = assertIs<SessionState.Snoozed>(w.buy(purchase()))
+            assertEquals(1, snoozed.session.snoozesGranted)
+            assertEquals(emptyList(), snoozed.session.paid, "never an estimate")
         }
 
     @Test

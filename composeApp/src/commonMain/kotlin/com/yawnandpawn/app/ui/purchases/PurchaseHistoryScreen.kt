@@ -69,7 +69,7 @@ import kotlin.math.roundToInt
  * automatically by Google") and the price right-aligned in `text` (never accent, green or red), or no price when the
  * amount is not known. Each month's title shows what was paid that month, one total per currency. Empty: "No snoozes
  * paid. Keep it that way." Loading: a `skeleton` after 300 ms. A failed read: "Couldn't load your purchases." with
- * "Try again". A "Problem with a charge?" row follows when [showProblemWithCharge] (Story 4.17 builds its screen).
+ * "Try again". A "Problem with a charge?" row follows when [showProblemWithCharge] and opens its screen (Story 4.17).
  */
 @Composable
 fun PurchaseHistoryScreen(

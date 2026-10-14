@@ -32,6 +32,7 @@ import com.yawnandpawn.app.ui.home.HomeIntent
 import com.yawnandpawn.app.ui.home.HomeRoute
 import com.yawnandpawn.app.ui.home.HomeScreen
 import com.yawnandpawn.app.ui.home.HomeUiState
+import com.yawnandpawn.app.ui.payments.ProblemWithChargeRoute
 import com.yawnandpawn.app.ui.progress.CalendarMonth
 import com.yawnandpawn.app.ui.progress.ProgressScreen
 import com.yawnandpawn.app.ui.progress.ProgressUiState
@@ -112,7 +113,13 @@ fun AppNavHost(modifier: Modifier = Modifier) {
                     entry<Route.You>(metadata = TabMetadata) { YouTab(onOpenPurchaseHistory = { backStack.openPurchaseHistory() }) }
                     entry<Route.SessionInProgress>(metadata = LockMetadata) { SessionInProgressScreen() }
                     entry<Route.AlarmEditor> { route -> EditorEntry(route, backStack, onOpenFailed = { openFailed = true }) }
-                    entry<Route.PurchaseHistory> { PurchaseHistoryRoute(onBack = { backStack.close(Route.PurchaseHistory) }) }
+                    entry<Route.PurchaseHistory> {
+                        PurchaseHistoryRoute(
+                            onBack = { backStack.close(Route.PurchaseHistory) },
+                            onProblemWithCharge = { backStack.openProblemWithCharge() },
+                        )
+                    }
+                    entry<Route.ProblemWithCharge> { ProblemWithChargeRoute(onBack = { backStack.close(Route.ProblemWithCharge) }) }
                 },
         )
     }

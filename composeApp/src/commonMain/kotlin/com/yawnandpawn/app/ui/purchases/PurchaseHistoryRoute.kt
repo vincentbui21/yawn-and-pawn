@@ -8,12 +8,12 @@ import org.koin.compose.viewmodel.koinViewModel
 
 /**
  * The Purchase history route (Story 4.16): [PurchaseHistoryViewModel] (scoped to the nav entry) feeding
- * [PurchaseHistoryScreen]. [onBack] leaves it. The "Problem with a charge?" row stays hidden until Story 4.17 builds
- * its screen, so no row leads nowhere.
+ * [PurchaseHistoryScreen]. [onBack] leaves it; its "Problem with a charge?" row calls [onProblemWithCharge] (Story 4.17).
  */
 @Composable
 fun PurchaseHistoryRoute(
     onBack: () -> Unit,
+    onProblemWithCharge: () -> Unit,
     viewModel: PurchaseHistoryViewModel = koinViewModel(),
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
@@ -21,8 +21,8 @@ fun PurchaseHistoryRoute(
         state = state,
         is24Hour = is24HourClock(),
         onBack = onBack,
-        onProblemWithCharge = {},
+        onProblemWithCharge = onProblemWithCharge,
         onIntent = viewModel::onIntent,
-        showProblemWithCharge = false,
+        showProblemWithCharge = true,
     )
 }

@@ -293,9 +293,9 @@ class MainActivityTest {
         composeRule.onNode(hasText("Purchase history") and hasClickAction()).performClick()
 
         waitForText("No snoozes paid. Keep it that way.")
-        // Pushed over the shell: no capsule, and no "Problem with a charge?" until Story 4.17.
+        // Pushed over the shell: no capsule; "Problem with a charge?" leads to its screen (Story 4.17).
         composeRule.onAllNodes(hasContentDescription("Add alarm")).assertCountEquals(0)
-        composeRule.onNodeWithText("Problem with a charge?").assertDoesNotExist()
+        composeRule.onNode(hasText("Problem with a charge?") and hasClickAction()).assertExists()
 
         val charge = aPurchaseRecord(status = RecordStatus.Consumed, snoozeNumber = 2, price = Money(2_000_000, "USD"))
         assertEquals(Outcome.Success(Unit), runBlocking { GlobalContext.get().get<PurchaseRecordRepository>().putRecord(charge) })
@@ -309,6 +309,45 @@ class MainActivityTest {
         waitForGone("Snooze 2")
         tab("You").assertIsSelected()
         composeRule.onNode(hasText("Purchase history") and hasClickAction()).assertExists()
+    }
+
+    @Test
+    fun `Problem with a charge opens from Purchase history, emails support about the picked charge, and Back walks back`() {
+        val charge =
+            aPurchaseRecord(status = RecordStatus.Consumed, snoozeNumber = 2, price = Money(2_000_000, "USD"), orderId = "GPA.1234-5678")
+        assertEquals(Outcome.Success(Unit), runBlocking { GlobalContext.get().get<PurchaseRecordRepository>().putRecord(charge) })
+        waitForText("No alarms yet.")
+        tab("You").performClick()
+        composeRule.onNode(hasText("Purchase history") and hasClickAction()).performClick()
+        waitForText("Snooze 2")
+        composeRule.onNode(hasText("Problem with a charge?") and hasClickAction()).performScrollTo().performClick()
+        waitForText("Google lets you request a refund yourself within 48 hours of a charge.")
+        val app = composeRule.activity.application
+        shadowOf(app).clearNextStartedActivities()
+
+        composeRule.onNode(hasText("Open Google Play order history") and hasClickAction()).performClick()
+        assertEquals("https://play.google.com/store/account/orderhistory", shadowOf(app).nextStartedActivity?.dataString)
+
+        composeRule.onNode(hasText("Email support") and hasClickAction()).performClick()
+        waitForText("Which charge?")
+        composeRule.waitForIdle() // the picker has slid in: only its button is "Email support" now
+        composeRule.onNode(hasText("Email support") and hasClickAction()).performClick()
+        // The email is written from the string resources off the main thread, then opened.
+        composeRule.waitUntil(timeoutMillis = APP_WORK_TIMEOUT_MILLIS) { shadowOf(app).peekNextStartedActivity() != null }
+        val email = assertNotNull(shadowOf(app).nextStartedActivity)
+        assertEquals("android.intent.action.SENDTO", email.action)
+        assertEquals("Charge question", email.getStringExtra("android.intent.extra.SUBJECT"))
+        val body = assertNotNull(email.getStringExtra("android.intent.extra.TEXT"))
+        assertTrue(body.startsWith("Order ID: GPA.1234-5678\nDate: "), body)
+        assertTrue(body.endsWith("\nPrice: $2.00\nStatus: Snooze 2"), body)
+        // The picker closes once the email app opened.
+        waitForGone("Which charge?")
+
+        pressBack()
+        waitForText("Snooze 2")
+        pressBack()
+        waitForGone("Snooze 2")
+        tab("You").assertIsSelected()
     }
 
     @Test

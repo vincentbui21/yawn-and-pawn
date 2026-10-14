@@ -51,6 +51,13 @@ sealed interface Route : NavKey {
     data object PurchaseHistory : Route
 
     /**
+     * "Problem with a charge?" (Story 4.17), pushed over Purchase history; Back returns to it. Its "Email support" picker
+     * is a pane of the same entry. Not a tab, so the nav capsule hides.
+     */
+    @Serializable
+    data object ProblemWithCharge : Route
+
+    /**
      * The session lock (Story 2.6, FR-SES-3): while a wake session is active it is the whole back stack, showing only
      * "Alarm in progress" with "Back to alarm" ([applySessionLock]). It is not a tab, so the nav capsule hides.
      */

@@ -101,6 +101,20 @@ fun ProblemWithChargeScreen(
     modifier: Modifier = Modifier,
     noBrowser: Boolean = false,
 ) {
+    ProblemWithChargeMain(
+        onIntent = onIntent,
+        modifier = modifier,
+        snackbar = if (noBrowser) stringResource(Res.string.settings_no_browser) else null,
+    )
+}
+
+/** The "Problem with a charge?" screen with the [snackbar] text showing at the bottom, if any. */
+@Composable
+internal fun ProblemWithChargeMain(
+    onIntent: (PaymentsIntent) -> Unit,
+    modifier: Modifier = Modifier,
+    snackbar: String? = null,
+) {
     Box(modifier = modifier.fillMaxSize()) {
         SubScreen(
             title = stringResource(Res.string.problem_title),
@@ -121,6 +135,6 @@ fun ProblemWithChargeScreen(
                 NavRow(label = stringResource(Res.string.problem_email_support), onClick = { onIntent(PaymentsIntent.EmailSupportClicked) })
             }
         }
-        if (noBrowser) AppSnackbar(text = stringResource(Res.string.settings_no_browser), modifier = Modifier.align(Alignment.BottomCenter))
+        if (snackbar != null) AppSnackbar(text = snackbar, modifier = Modifier.align(Alignment.BottomCenter))
     }
 }

@@ -84,6 +84,19 @@ deferred:
 - **androidApp** semantics: TalkBack reads clock, session line, then "I'm up"; the Snoozed note is a polite live region.
 - **Roborazzi** (new baselines, Sunrise, 100% and 200%): Snoozed; re-ring with the session line (USD 1 of 5, EUR 4 of 5); check footer during a paid session; Success after snooze with paid; Success with pending not used.
 
+## Auto Run Result
+
+Status: implemented in fast mode (one agent, unattended Epic 4 run), no review pass yet. Branch `story/4-15-snoozed-screen` on `origin/main` (`0c3665c1`).
+
+- **Tests:** `PurchaseCoordinatorTest` (grant price, no intent no amount), `PurchaseCoordinatorSequenceTest` (reuse price), `SessionLineMappingTest`, `SuccessMappingTest`, `SnoozedScreenTest` (6 Robolectric flows on the real engine and wake screen), `SnoozedScreenshotTest` (12 new baselines: `wake_snoozed_*`, `wake_ringing_session_line_{usd,eur}_*`, `wake_check_paid_session_*`, `wake_success_after_snooze_paid_*`, `wake_success_pending_not_used_*`). No existing baseline changed.
+- **Changed tests:** `CheckFontScaleTest`, `CheckSemanticsSuiteTest` and the debug design preview only follow the `List<Money>` types.
+- **Run locally** (coordinator instruction: the PC ran out of memory, so CI runs the full `qualityGate`): `:core:jvmTest` (PurchaseCoordinatorTest, PurchaseCoordinatorSequenceTest); `:composeApp:testAndroidHostTest` (SessionLineMappingTest, SuccessMappingTest, RingingMappingTest); `detekt spotlessCheck :androidApp:compileDebugUnitTestKotlin :androidApp:compileDebugAndroidTestKotlin :androidApp:testDebugUnitTest` (SnoozedScreenTest, SnoozedScreenshotTest, CheckFontScaleTest, CheckSemanticsSuiteTest, SnoozeConfirmSheetTest) with `--no-daemon --max-workers=2`: BUILD SUCCESSFUL. A first full `qualityGate` run crashed (out of native memory); the second stopped only at detekt `ReturnCount` in `WakeActivity.sessionScreen`, fixed in `fix(4.15)`.
+
+**Residual risks:**
+- If the screen closes at the very moment the snooze ends, the re-ring may post its notification without the full-screen intent; the next heartbeat posts the full one (existing Epic 2 behaviour for a screen left while ringing).
+- A session stored before this story has `paid` empty, so its re-ring shows no session line (Decision 1).
+- The re-ring clock shows the alarm's scheduled time, not the re-ring time (Decision 4; differs from the preview).
+
 ## pps-design Done checklist
 
 - [x] Only tokens from `DESIGN.md` used (no raw hex, no new radii, no new font sizes): the approved composables, unchanged.

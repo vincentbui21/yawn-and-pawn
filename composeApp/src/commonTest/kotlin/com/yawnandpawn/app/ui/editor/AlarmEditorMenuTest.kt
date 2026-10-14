@@ -65,6 +65,7 @@ class AlarmEditorMenuTest {
             ids = ids,
             requestCodes = FakeRequestCodeSequence(lastUsed = RequestCodes.FIRST_ALARM),
             scheduler = FakeAlarmScheduler(),
+            logger = logger,
         )
 
     private val stored =
@@ -95,7 +96,7 @@ class AlarmEditorMenuTest {
             saveAlarm = alarms.save,
             clock = clock,
             timeZoneProvider = zone,
-            actions = AlarmActions(alarms.setEnabled, alarms.delete, clock, logger),
+            actions = AlarmActions(alarms.setEnabled, alarms.delete, logger),
             soundLibrary = FakeSoundLibrary(),
             soundPreview = FakeSoundPreview(),
             notificationPermission = FakeNotificationPermission(),
@@ -193,7 +194,7 @@ class AlarmEditorMenuTest {
             saveAlarm = alarms.save,
             clock = clock,
             timeZoneProvider = zone,
-            actions = AlarmActions(alarms.setEnabled, alarms.delete, clock, logger),
+            actions = AlarmActions(alarms.setEnabled, alarms.delete, logger),
             soundLibrary = FakeSoundLibrary(),
             soundPreview = FakeSoundPreview(),
             notificationPermission = FakeNotificationPermission(),

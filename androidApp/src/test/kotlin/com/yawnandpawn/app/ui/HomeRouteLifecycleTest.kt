@@ -63,7 +63,7 @@ class HomeRouteLifecycleTest {
         val viewModel =
             HomeViewModel(
                 FakeCheckConfigRepository(repository),
-                AlarmActions(alarms.setEnabled, alarms.delete, alarms.clock, FakeLogger()),
+                AlarmActions(alarms.setEnabled, alarms.delete, FakeLogger()),
                 FakeClock(),
                 FakeTimeZoneProvider(),
                 FakeTimeChangeSignal(),

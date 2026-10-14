@@ -13,15 +13,19 @@ import com.yawnandpawn.app.core.alarm.ReRegisterCode
 import com.yawnandpawn.app.core.alarm.SaveAlarm
 import com.yawnandpawn.app.core.alarm.nextOccurrence
 import com.yawnandpawn.app.core.alarm.orderedEntries
+import com.yawnandpawn.app.core.billing.PriceCatalogSnapshot
 import com.yawnandpawn.app.core.checks.AccessibilityState
 import com.yawnandpawn.app.core.checks.CheckEntry
 import com.yawnandpawn.app.core.checks.qr.RegisteredCode
+import com.yawnandpawn.app.core.config.PendingChange
+import com.yawnandpawn.app.core.config.PendingChangeRepository
 import com.yawnandpawn.app.core.error.DomainError
 import com.yawnandpawn.app.core.error.Outcome
 import com.yawnandpawn.app.core.error.errorOrNull
 import com.yawnandpawn.app.core.error.flatMap
 import com.yawnandpawn.app.core.error.map
 import com.yawnandpawn.app.core.reliability.NotificationPermission
+import com.yawnandpawn.app.core.session.GlobalSettings
 import com.yawnandpawn.app.core.session.ScheduleTestAlarm
 import com.yawnandpawn.app.core.sound.SoundLibrary
 import com.yawnandpawn.app.core.sound.SoundPreview
@@ -43,6 +47,8 @@ import com.yawnandpawn.app.ui.format.countdownOf
 import com.yawnandpawn.app.ui.home.AlarmActions
 import com.yawnandpawn.app.ui.qr.CameraPermission
 import com.yawnandpawn.app.ui.qr.allowsCameraCheck
+import com.yawnandpawn.app.ui.settings.WeakeningNote
+import com.yawnandpawn.app.ui.settings.weakeningNoteOf
 import com.yawnandpawn.app.ui.wake.WakeIntent
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.NonCancellable
@@ -52,6 +58,9 @@ import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.catch
+import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.receiveAsFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
@@ -115,6 +124,13 @@ class AlarmEditorViewModel(
     private val scanCode: Boolean = false,
     /** Stores a re-registered code alone (the alarm unchanged); null in tests that never re-register. */
     private val reRegisterCode: ReRegisterCode? = null,
+    /**
+     * The commitment lock's pending changes (Story 4.6): a stored alarm opens with its pending values selected and their
+     * notes, and the fee ladder applies the global ones. Null in tests that never meet the lock: none pending.
+     */
+    private val pendingChanges: PendingChangeRepository? = null,
+    /** The fee ladder's settings and prices (Story 4.6); null shows no ladder (tests that do not price snoozes). */
+    private val fees: EditorFeeSources? = null,
 ) : ViewModel() {
     /**
      * The editor opened on QR registration for "Re-register" (only when the alarm has a QR/Barcode check): "Use this
@@ -159,9 +175,16 @@ class AlarmEditorViewModel(
     /** What "Discard" in the open "Discard changes?" dialog does. */
     private var afterDiscard = AfterDiscard.Close
 
+    /** The stored alarm's pending locked fields (Story 4.6), selected when it opened. */
+    private var pendingFields = PendingFields()
+
+    /** The latest fee ladder inputs (Story 4.6); null until read, or without [fees]. */
+    private var feeInputs: FeeInputs? = null
+
     init {
         // A preview never outlives the editor.
         addCloseable { sounds.stopPreview() }
+        fees?.let(::watchFees)
         when {
             alarmId != null -> {
                 viewModelScope.launch { load(alarmId, asCopy = false) }
@@ -511,11 +534,17 @@ class AlarmEditorViewModel(
         id: String,
         asCopy: Boolean,
     ) {
-        when (val result = repository.get(id).flatMap { alarm -> checkConfigs.forAlarm(id).map { alarm to it } }) {
+        // A duplicate is a new alarm with no commitment: it opens with the stored (live) values.
+        val read =
+            repository.get(id).flatMap { alarm ->
+                checkConfigs.forAlarm(id).flatMap { checks -> pendingOf(id, asCopy).map { Triple(alarm, checks, it) } }
+            }
+        when (read) {
             is Outcome.Success -> {
-                val (alarm, checks) = result.value
+                val (alarm, checks, pending) = read.value
                 stored = alarm
-                val form = alarm.toForm(checks)
+                pendingFields = PendingFields.of(pending, checks.orderedEntries(), ::chipsOf)
+                val form = alarm.toForm(checks).withPending(pendingFields)
                 initialForm = form
                 changedOnOpen = hasUnshownChecks(checks)
                 val custom = form.repeatDays.isNotEmpty() && form.repeatDays != Weekdays
@@ -528,13 +557,15 @@ class AlarmEditorViewModel(
                         .let { opened -> if (scan) opened.copy(pane = EditorPane.ScanCode, setupType = CheckType.QrBarcode) else opened }
                         .withRings(form, clock.now(), timeZoneProvider.current())
                         .withChecks()
+                        .withLock()
                 }
                 sounds.opened()
             }
 
-            // Deleted meanwhile, or storage unreadable: there is nothing to edit, and Home says so.
+            // Deleted meanwhile, or storage unreadable (its pending changes too, which a save must not cancel unseen):
+            // there is nothing to edit, and Home says so.
             is Outcome.Failure -> {
-                actions.logFailure("open alarm", result.error)
+                actions.logFailure("open alarm", read.error)
                 _effects.send(EditorEffect.OpenFailed)
             }
         }
@@ -545,8 +576,61 @@ class AlarmEditorViewModel(
             if (current.isLoading) return@update current
             val form = change(current.form)
             val fieldError = current.fieldError?.takeUnless { it != AlarmField.Label && form != current.form }
-            current.copy(form = form, fieldError = fieldError).withRings(form, clock.now(), timeZoneProvider.current()).withChecks()
+            current
+                .copy(form = form, fieldError = fieldError)
+                .withRings(form, clock.now(), timeZoneProvider.current())
+                .withChecks()
+                .withLock()
         }
+    }
+
+    /**
+     * Keeps the fee ladder's inputs (Story 4.6): the live global settings, the global pending changes and the cached
+     * prices, each re-read on every change. A store that cannot be read is logged and counts as the defaults, none
+     * pending, or no cached prices (the ladder then shows USD approximations); the editor never waits for a price.
+     */
+    private fun watchFees(sources: EditorFeeSources) {
+        val settings = sources.globalSettings.observe().catch { cause -> logFee(cause).also { emit(GlobalSettings()) } }
+        val pending = (pendingChanges?.observe() ?: flowOf(emptyList())).catch { cause -> logFee(cause).also { emit(emptyList()) } }
+        val prices = sources.priceCatalog.observe().catch { cause -> logFee(cause).also { emit(PriceCatalogSnapshot.EMPTY) } }
+        viewModelScope.launch {
+            combine(settings, pending, prices) { live, waiting, cached -> FeeInputs(live, waiting, cached) }.collect { inputs ->
+                feeInputs = inputs
+                _state.update { it.withLock() }
+            }
+        }
+    }
+
+    private fun logFee(cause: Throwable) = actions.logFailure("load fee ladder", cause)
+
+    /** The stored alarm's own pending changes (Story 4.6); none for a duplicate or without [pendingChanges]. */
+    private suspend fun pendingOf(
+        id: String,
+        asCopy: Boolean,
+    ): Outcome<List<PendingChange>, DomainError> = pendingChanges?.takeUnless { asCopy }?.forAlarm(id) ?: Outcome.Success(emptyList())
+
+    /**
+     * The commitment-lock parts of the screen (Story 4.6): the fee ladder for the form's next ring, and the
+     * "Saved. Takes effect after ..." notes of the fields that hold their pending value (a field set to another value
+     * shows none: saving that would replace or cancel the waiting change).
+     */
+    private fun EditorUiState.withLock(): EditorUiState {
+        val full = full ?: return this
+        val now = clock.now()
+        val zone = timeZoneProvider.current()
+        val graceAt = pendingFields.grace?.takeIf { (seconds, _) -> form.graceSeconds == seconds }?.second
+        val checksAt = pendingFields.checks?.takeIf { (shown, _) -> shown == (form.checks to form.checkMode) }?.second
+        val ladder = fees?.let { sources -> feeInputs?.let { feeLadderOf(form, alarmId, it, now, zone, sources.moneyFormatter) } }
+        return copy(
+            full =
+                full.copy(
+                    feeLadder = ladder?.first,
+                    pricesApproximate = ladder?.second == true,
+                    graceNote = weakeningNoteOf(graceAt, now, zone),
+                    checksNote = weakeningNoteOf(checksAt, now, zone),
+                    weakeningNote = weakeningNoteOf(listOfNotNull(graceAt, checksAt).maxOrNull(), now, zone),
+                ),
+        )
     }
 
     private fun editLabel(label: String) {
@@ -582,14 +666,16 @@ class AlarmEditorViewModel(
         if (current.isLoading || current.isSaving || checksBlockSave(current.form)) return
         _state.update { it.copy(isSaving = true) }
         viewModelScope.launch {
-            when (val result = saveAlarm(current.form.toDraft(alarmId))) {
+            when (val result = saveAlarm.save(current.form.toDraft(alarmId))) {
                 // Stays saving until the screen leaves, so a quick second tap cannot store the alarm twice.
                 is Outcome.Success -> {
                     // The first save of an enabled alarm (every editor save is one) asks for notifications, once
                     // (Story 1.19); the dialog shows over Home after the editor closes. The alarm is saved, so the
                     // editor closes even when asking fails.
                     notificationPermission.askOnce(actions)
-                    close()
+                    // Story 4.6: a weakening change waits under the lock, and Home says until when.
+                    val waits = weakeningNoteOf(result.value.pendingUntil?.scheduledAt, clock.now(), timeZoneProvider.current())
+                    if (waits == null) close() else closeSavedUnderLock(waits)
                 }
 
                 is Outcome.Failure -> {
@@ -717,6 +803,11 @@ class AlarmEditorViewModel(
     private fun close() {
         _state.update { it.copy(showDiscardDialog = false) }
         _effects.trySend(EditorEffect.Close)
+    }
+
+    private fun closeSavedUnderLock(note: WeakeningNote) {
+        _state.update { it.copy(showDiscardDialog = false) }
+        _effects.trySend(EditorEffect.CloseSavedUnderLock(note))
     }
 
     /**
@@ -867,14 +958,7 @@ private fun EditorUiState.withRings(
  */
 private fun Alarm.toForm(checks: List<CheckConfig>): EditorForm =
     EditorForm(
-        checks =
-            checks
-                .orderedEntries()
-                .mapNotNull { entry ->
-                    entry.type.toUi()?.let {
-                        CheckChip(it, entry.difficulty.toUi(), entry.count.coerceIn(entry.type.countRange), code = entry.code)
-                    }
-                }.ifEmpty { EditorForm.DEFAULT_CHECKS },
+        checks = chipsOf(checks.orderedEntries()),
         checkMode = CheckMode.valueOf(checkMode.name),
         time = time,
         repeatDays = repeatDays,

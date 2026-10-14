@@ -7,13 +7,16 @@ import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.compose.LifecycleEventEffect
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.yawnandpawn.app.ui.format.is24HourClock
+import com.yawnandpawn.app.ui.settings.WeakeningNote
 import org.koin.compose.viewmodel.koinViewModel
 
 /**
  * The Alarms tab route: [HomeViewModel] (scoped to the nav entry) feeding [HomeScreen]. [onOpenEditor] opens the editor
  * (`null` for a new alarm); [onOpenDuplicate] opens it on a new, unsaved alarm prefilled from the alarm it gets.
  * [openFailed] is the editor's result when its alarm could not be read: Home shows "Couldn't open this alarm." and
- * calls [onOpenFailedShown]. [onOpenQrRegistration] opens QR registration of an alarm's code ("Re-register", Story 3.10;
+ * calls [onOpenFailedShown]. [savedUnderLock] is its result after a save that left a weakening change waiting under the
+ * commitment lock: Home shows "Saved. Takes effect after ..." and calls [onSavedUnderLockShown] (Story 4.6).
+ * [onOpenQrRegistration] opens QR registration of an alarm's code ("Re-register", Story 3.10;
  * the editor by default). The countdown is recomputed whenever Home resumes, and the reliability settings are checked
  * again whenever it starts or resumes (Story 1.19).
  */
@@ -24,6 +27,8 @@ fun HomeRoute(
     openFailed: Boolean,
     onOpenFailedShown: () -> Unit,
     onOpenQrRegistration: (String) -> Unit = onOpenEditor,
+    savedUnderLock: WeakeningNote? = null,
+    onSavedUnderLockShown: () -> Unit = {},
     viewModel: HomeViewModel = koinViewModel(),
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
@@ -40,6 +45,12 @@ fun HomeRoute(
         if (openFailed) {
             viewModel.onIntent(HomeIntent.EditorOpenFailed)
             onOpenFailedShown()
+        }
+    }
+    LaunchedEffect(savedUnderLock) {
+        savedUnderLock?.let {
+            viewModel.onIntent(HomeIntent.SavedUnderLock(it))
+            onSavedUnderLockShown()
         }
     }
     LifecycleEventEffect(Lifecycle.Event.ON_START) { viewModel.onIntent(HomeIntent.Started) }

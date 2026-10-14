@@ -102,11 +102,12 @@ import com.yawnandpawn.app.ui.resources.editor_test_alarm
 import com.yawnandpawn.app.ui.resources.editor_test_scheduled
 import com.yawnandpawn.app.ui.resources.editor_vibration
 import com.yawnandpawn.app.ui.resources.editor_wake_check
-import com.yawnandpawn.app.ui.resources.editor_weakening_under_lock
 import com.yawnandpawn.app.ui.resources.repeat_custom
 import com.yawnandpawn.app.ui.resources.repeat_once
 import com.yawnandpawn.app.ui.resources.repeat_weekdays
 import com.yawnandpawn.app.ui.resources.sound_file_missing
+import com.yawnandpawn.app.ui.settings.WeakeningNote
+import com.yawnandpawn.app.ui.settings.WeakeningNoteInline
 import com.yawnandpawn.app.ui.theme.PpsTheme
 import com.yawnandpawn.app.ui.wake.CheckContent
 import kotlinx.coroutines.launch
@@ -129,6 +130,7 @@ fun AlarmEditorRoute(
     onClose: () -> Unit,
     onOpenFailed: () -> Unit,
     onOpenCopy: (String) -> Unit,
+    onSavedUnderLock: (WeakeningNote) -> Unit = {},
     copyOf: String? = null,
     scanCode: Boolean = false,
     viewModel: AlarmEditorViewModel = koinViewModel { parametersOf(AlarmEditorArgs(alarmId, copyOf, scanCode)) },
@@ -143,16 +145,32 @@ fun AlarmEditorRoute(
     LaunchedEffect(viewModel) {
         viewModel.effects.collect { effect ->
             when (effect) {
-                EditorEffect.Close -> onClose()
+                EditorEffect.Close -> {
+                    onClose()
+                }
 
-                EditorEffect.OpenFailed -> onOpenFailed()
+                // Story 4.6: Home says when the weakening change takes effect.
+                is EditorEffect.CloseSavedUnderLock -> {
+                    onSavedUnderLock(effect.note)
+                    onClose()
+                }
 
-                is EditorEffect.OpenCopy -> onOpenCopy(effect.sourceId)
+                EditorEffect.OpenFailed -> {
+                    onOpenFailed()
+                }
+
+                is EditorEffect.OpenCopy -> {
+                    onOpenCopy(effect.sourceId)
+                }
 
                 // Its own coroutine: showSnackbar suspends until the snackbar goes, which must not hold back a Close.
-                EditorEffect.ShowSaveFailed -> launch { snackbarHostState.showSnackbar(saveFailed) }
+                EditorEffect.ShowSaveFailed -> {
+                    launch { snackbarHostState.showSnackbar(saveFailed) }
+                }
 
-                EditorEffect.ShowTestScheduled -> launch { snackbarHostState.showSnackbar(testScheduled) }
+                EditorEffect.ShowTestScheduled -> {
+                    launch { snackbarHostState.showSnackbar(testScheduled) }
+                }
             }
         }
     }
@@ -207,7 +225,7 @@ fun AlarmEditorScreen(
                     }
 
                     else -> {
-                        EditorPaneContent(pane = pane, state = state, onIntent = onIntent, resumed = resumed)
+                        EditorPaneContent(pane = pane, state = state, is24Hour = is24Hour, onIntent = onIntent, resumed = resumed)
                     }
                 }
             }
@@ -266,9 +284,8 @@ private fun EditorMain(
                 RepeatCard(state = state, onIntent = onIntent)
                 NameSoundCard(state = state, onIntent = onIntent)
                 RowsCard(state = state, onIntent = onIntent)
-                state.full?.weakeningAppliesAfter?.let { time ->
-                    NoteInline(text = stringResource(Res.string.editor_weakening_under_lock, formatClockTime(time, is24Hour)))
-                }
+                // Story 4.6: a weakening change of this alarm waits under the commitment lock.
+                state.full?.weakeningNote?.let { WeakeningNoteInline(note = it, is24Hour = is24Hour) }
                 // Under the cards in every editor (Story 1.18); Save and Cancel stay in the pill.
                 PpsTextButton(
                     text = stringResource(Res.string.editor_test_alarm),
@@ -454,6 +471,7 @@ private fun TryItFeed(
 private fun EditorPaneContent(
     pane: EditorPane,
     state: EditorUiState,
+    is24Hour: Boolean,
     onIntent: (EditorIntent) -> Unit,
     resumed: Int,
 ) {
@@ -482,7 +500,7 @@ private fun EditorPaneContent(
         }
 
         else -> {
-            EditorSubScreen(pane = pane, state = state, onIntent = onIntent)
+            EditorSubScreen(pane = pane, state = state, is24Hour = is24Hour, onIntent = onIntent)
         }
     }
 }

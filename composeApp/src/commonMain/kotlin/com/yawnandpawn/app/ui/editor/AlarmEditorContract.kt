@@ -14,6 +14,7 @@ import com.yawnandpawn.app.ui.checksetup.CheckSetupIntent
 import com.yawnandpawn.app.ui.format.Countdown
 import com.yawnandpawn.app.ui.format.Weekdays
 import com.yawnandpawn.app.ui.qr.ScanEvent
+import com.yawnandpawn.app.ui.settings.WeakeningNote
 import com.yawnandpawn.app.ui.sound.SoundPickerIntent
 import com.yawnandpawn.app.ui.sound.SoundPickerUiState
 import com.yawnandpawn.app.ui.wake.WakeIntent
@@ -196,14 +197,26 @@ data class FullEditorSections(
     val cameraUnavailable: Boolean = false,
     /** House Hunt reference photos taken, 0 to 3. */
     val houseHuntPhotos: Int = 0,
-    /** The first three snooze prices of the fee ladder, or `null` while prices are not known. */
-    val feeLadder: List<Money>? = null,
+    /**
+     * The fee ladder under the snooze length (Story 4.6): snoozes 1 to min(3, max snoozes) at the base fee the alarm's
+     * next ring will charge; `null` shows no ladder.
+     */
+    val feeLadder: List<LadderPrice>? = null,
+    /** Prices never loaded: the ladder is in USD with "Approximate. Your local price shows when you're online.". */
+    val pricesApproximate: Boolean = false,
     /** Names of the recorded motivation messages ("Message 1"). */
     val recordings: List<String> = emptyList(),
     val motivation: MotivationChoice = MotivationChoice.None,
     val motivationTiming: MotivationTiming = MotivationTiming.AfterImUp,
-    /** A weakening change was saved under the commitment lock; it applies after the alarm at this time. */
-    val weakeningAppliesAfter: LocalTime? = null,
+    /**
+     * A weakening change of this alarm waits under the commitment lock (Story 4.6): "Saved. Takes effect after
+     * tomorrow's {time} alarm." (or "today's") under the rows card. It shows while a field holds its pending value.
+     */
+    val weakeningNote: WeakeningNote? = null,
+    /** The quiet time shows its pending (longer) value: the same note under it in its sub-screen. */
+    val graceNote: WeakeningNote? = null,
+    /** The checks show their pending (easier) plan: the same note under them in the Wake-up check sub-screen. */
+    val checksNote: WeakeningNote? = null,
     /**
      * The full-editor rows shown on the main screen ([EditorPane.WakeCheck], [EditorPane.QuietTime],
      * [EditorPane.Motivation]): all of them in the design preview; the app shows each once its story wires it (Story 3.5:
@@ -215,6 +228,20 @@ data class FullEditorSections(
     /** TalkBack is on (Story 3.8): Memory Sequence says "Uses numbered tiles with TalkBack." in the picker and its setup. */
     val talkBackOn: Boolean = false,
 )
+
+/**
+ * One price of the fee ladder: [Text] as shown (Play's own `formattedPrice`, or a USD approximation already formatted by
+ * the `MoneyFormatter`), or an [Amount] the screen formats in the phone's locale (the design preview's samples).
+ */
+sealed interface LadderPrice {
+    data class Text(
+        val text: String,
+    ) : LadderPrice
+
+    data class Amount(
+        val money: Money,
+    ) : LadderPrice
+}
 
 /** Everything the user can do in the editor. */
 sealed interface EditorIntent {
@@ -362,6 +389,14 @@ sealed interface EditorIntent {
 sealed interface EditorEffect {
     /** Leave the editor (saved, discarded, or nothing to lose). */
     data object Close : EditorEffect
+
+    /**
+     * Leave the editor after a save that left a weakening change waiting under the commitment lock (Story 4.6): Home
+     * shows [note] as "Saved. Takes effect after tomorrow's {time} alarm." (or "today's").
+     */
+    data class CloseSavedUnderLock(
+        val note: WeakeningNote,
+    ) : EditorEffect
 
     /** Show "Couldn't save the alarm. Try again." (the storage error itself is never shown). */
     data object ShowSaveFailed : EditorEffect

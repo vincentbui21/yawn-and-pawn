@@ -66,6 +66,7 @@ import com.yawnandpawn.app.ui.shell.AppShell
 import com.yawnandpawn.app.ui.shell.AppTab
 import com.yawnandpawn.app.ui.theme.PpsThemeMode
 import kotlinx.datetime.LocalTime
+import kotlinx.datetime.TimeZone
 import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -74,6 +75,7 @@ import org.robolectric.annotation.Config
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
 import kotlin.test.assertTrue
+import kotlin.time.Instant
 
 /**
  * Accessibility floor for the Story 1.8 and 1.9 screens (editor, Home): every touch target is at least 48 dp, and
@@ -335,7 +337,7 @@ class AlarmScreensSemanticsTest {
 
     private fun actions(repository: FakeAlarmRepository): AlarmActions {
         val alarms = AlarmUseCasesFixture(repository = repository)
-        return AlarmActions(alarms.setEnabled, alarms.delete, alarms.clock, FakeLogger())
+        return AlarmActions(alarms.setEnabled, alarms.delete, FakeLogger())
     }
 
     @Test
@@ -544,8 +546,9 @@ class AlarmScreensSemanticsTest {
             HomeViewModel(
                 FakeCheckConfigRepository(repository),
                 actions(repository),
-                FakeClock(),
-                FakeTimeZoneProvider(),
+                // Noon: the 6:30 ring is outside the 8-hour lock window, so the switch turns off at once (Story 4.6).
+                FakeClock(Instant.parse("2027-03-03T12:00:00Z")),
+                FakeTimeZoneProvider(TimeZone.UTC),
                 FakeTimeChangeSignal(),
                 MissedNotes(FakeSessionHistoryRepository(), FakeMissedNoteDismissals()),
                 FakeReliabilityProbe(),

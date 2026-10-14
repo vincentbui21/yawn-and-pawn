@@ -5,6 +5,8 @@ import com.yawnandpawn.app.core.checks.CheckMode
 import com.yawnandpawn.app.core.checks.CheckPlan
 import com.yawnandpawn.app.core.checks.CheckType
 import com.yawnandpawn.app.core.checks.qr.RegisteredCode
+import com.yawnandpawn.app.core.config.CommitmentAction
+import com.yawnandpawn.app.core.config.CommitmentLog
 import com.yawnandpawn.app.core.config.CommitmentRules
 import com.yawnandpawn.app.core.config.LockDecision
 import com.yawnandpawn.app.core.config.LockWindow
@@ -19,6 +21,8 @@ import com.yawnandpawn.app.core.error.Outcome
 import com.yawnandpawn.app.core.error.flatMap
 import com.yawnandpawn.app.core.error.map
 import com.yawnandpawn.app.core.id.IdGenerator
+import com.yawnandpawn.app.core.log.LogEvent
+import com.yawnandpawn.app.core.log.Logger
 import com.yawnandpawn.app.core.session.SessionLockGuard
 import com.yawnandpawn.app.core.time.Clock
 import com.yawnandpawn.app.core.time.TimeZoneProvider
@@ -293,7 +297,10 @@ class SaveAlarm(
 /**
  * Turns an alarm on or off; `updatedAt = now`. `NotFound(id)` when there is no such alarm. Other fields are not
  * re-validated, so a stored alarm with an out-of-range value can still be switched off. Once stored, the alarm is
- * armed (on) or cancelled (off).
+ * armed (on) or cancelled (off). Turning an enabled alarm off inside its lock window also writes a
+ * `CommitmentEvent(Disabled)` for the occurrence it gave up ([CommitmentLog], Story 4.6), in the same guarded write. The
+ * alarm change comes first: a failed write leaves the alarm on and armed, with no event; a failed event write is logged
+ * and the alarm stays off (the user asked for that, and it is stored).
  */
 class SetAlarmEnabled(
     private val repository: AlarmRepository,
@@ -301,6 +308,8 @@ class SetAlarmEnabled(
     private val lock: AlarmWriteLock,
     private val scheduling: AlarmScheduling,
     private val sessionLock: SessionLockGuard,
+    private val commitments: CommitmentLog,
+    private val logger: Logger,
 ) {
     suspend operator fun invoke(
         id: String,
@@ -308,12 +317,15 @@ class SetAlarmEnabled(
     ): Outcome<Alarm, DomainError> =
         lock.withLock {
             sessionLock.whenIdle {
-                repository
-                    .get(id)
-                    .flatMap { stored ->
-                        val changed = stored.copy(enabled = enabled, updatedAt = clock.nowMillis())
-                        repository.upsert(changed).map { changed }
-                    }.onSuccess(scheduling::sync)
+                repository.get(id).flatMap { stored ->
+                    val now = clock.nowMillis()
+                    val changed = stored.copy(enabled = enabled, updatedAt = now)
+                    repository
+                        .upsert(changed)
+                        .map { changed }
+                        .onSuccess(scheduling::sync)
+                        .onSuccess { if (!enabled) recordCommitment(commitments, logger, stored, CommitmentAction.Disabled, now) }
+                }
             }
         }
 }
@@ -321,7 +333,10 @@ class SetAlarmEnabled(
 /**
  * Removes an alarm with its checks in one transaction ([CheckConfigRepository.deleteWithAlarm]) and then cancels its
  * system alarm. `NotFound(id)` when there is no such alarm, and nothing changes; a failed delete changes and cancels
- * nothing, so the alarm stays stored with its checks and armed.
+ * nothing, so the alarm stays stored with its checks and armed. A deletion is logged as `AlarmDeleted(id, now)` (the
+ * dialog says "This is logged."), and inside the alarm's lock window a `CommitmentEvent(Deleted)` is written too
+ * ([CommitmentLog], Story 4.6), both here so no caller can skip them. A failed event write is logged; the alarm stays
+ * deleted.
  */
 class DeleteAlarm(
     private val repository: AlarmRepository,
@@ -329,12 +344,20 @@ class DeleteAlarm(
     private val scheduling: AlarmScheduling,
     private val sessionLock: SessionLockGuard,
     private val checkConfigRepository: CheckConfigRepository,
+    private val clock: Clock,
+    private val commitments: CommitmentLog,
+    private val logger: Logger,
 ) {
     suspend operator fun invoke(id: String): Outcome<Unit, DomainError> =
         lock.withLock {
             sessionLock.whenIdle {
                 repository.get(id).flatMap { stored ->
-                    checkConfigRepository.deleteWithAlarm(id).onSuccess { scheduling.cancel(stored.requestCode) }
+                    checkConfigRepository.deleteWithAlarm(id).onSuccess {
+                        scheduling.cancel(stored.requestCode)
+                        val now = clock.nowMillis()
+                        logger.log(LogEvent.AlarmDeleted(id, now))
+                        recordCommitment(commitments, logger, stored, CommitmentAction.Deleted, now)
+                    }
                 }
             }
         }
@@ -416,6 +439,23 @@ class ReRegisterCode(
                 }
             }
         }
+}
+
+/**
+ * Writes the commitment event of [action] on [alarm] (as it was before the change) when it was inside its lock window
+ * ([CommitmentLog.eventFor]); called inside the caller's `whenIdle`, after the alarm change succeeded. A failed write is
+ * logged: the alarm change it records already happened.
+ */
+private suspend fun recordCommitment(
+    commitments: CommitmentLog,
+    logger: Logger,
+    alarm: Alarm,
+    action: CommitmentAction,
+    now: Instant,
+) {
+    val event = commitments.eventFor(alarm, action, now) ?: return
+    val written = commitments.repository.insert(event)
+    if (written is Outcome.Failure) logger.log(LogEvent.OperationFailed.of("record commitment event", written.error))
 }
 
 /**

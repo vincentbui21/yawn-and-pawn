@@ -96,7 +96,7 @@ class HomeReRegisterBannerTest {
         suggestions: ReRegisterSuggestions = reRegister,
     ): HomeViewModel {
         val alarms = AlarmUseCasesFixture(repository, clock, zone)
-        val actions = AlarmActions(alarms.setEnabled, alarms.delete, clock, logger)
+        val actions = AlarmActions(alarms.setEnabled, alarms.delete, logger)
         val probe = FakeReliabilityProbe()
         val viewModel =
             HomeViewModel(

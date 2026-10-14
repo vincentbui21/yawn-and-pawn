@@ -1,5 +1,7 @@
 package com.yawnandpawn.app.core.alarm
 
+import com.yawnandpawn.app.core.config.CommitmentLog
+import com.yawnandpawn.app.core.config.InMemoryCommitmentEvents
 import com.yawnandpawn.app.core.config.InMemoryPendingChanges
 import com.yawnandpawn.app.core.error.DomainError
 import com.yawnandpawn.app.core.error.Outcome
@@ -51,8 +53,11 @@ class AlarmUseCasesTest {
             InMemoryPendingChanges(),
             TestZone(TimeZone.UTC),
         )
-    private val setEnabled = SetAlarmEnabled(repository, clock, lock, scheduling, sessionLock)
-    private val delete = DeleteAlarm(repository, lock, scheduling, sessionLock, checkConfigs)
+    private val commitmentEvents = InMemoryCommitmentEvents()
+    private val useCaseLogger = RecordingLogger()
+    private val commitments = CommitmentLog(commitmentEvents, SequentialIds(), TestZone(TimeZone.UTC))
+    private val setEnabled = SetAlarmEnabled(repository, clock, lock, scheduling, sessionLock, commitments, useCaseLogger)
+    private val delete = DeleteAlarm(repository, lock, scheduling, sessionLock, checkConfigs, clock, commitments, useCaseLogger)
     private val duplicate = DuplicateAlarm(repository, ids, clock, lock, sequence, scheduling, sessionLock, checkConfigs)
 
     private val draft = AlarmDraft(time = LocalTime(7, 0), repeatDays = setOf(DayOfWeek.MONDAY), label = "Gym")

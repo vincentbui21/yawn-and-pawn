@@ -10,6 +10,8 @@ import android.content.IntentFilter
 import android.database.Cursor
 import android.net.Uri
 import android.os.Build
+import com.yawnandpawn.app.debug.billing.DebugFakeBillingReceiver
+import com.yawnandpawn.app.debug.billing.DebugFakeBillingToggle
 
 /** The debug-only test crash (Story 1.19): `adb shell am broadcast -a com.yawnandpawn.app.debug.CRASH`. */
 class DebugTestCrash : RuntimeException("Debug test crash (adb broadcast com.yawnandpawn.app.debug.CRASH)")
@@ -30,20 +32,30 @@ class DebugCrashReceiver : BroadcastReceiver() {
 
 /**
  * Debug builds only (declared in the debug manifest; release builds never contain it): registers [DebugCrashReceiver]
- * at app start. A runtime receiver, because the shell's implicit `am broadcast -a` does not reach manifest receivers on
- * API 26+. Exported so the shell can send it. The provider serves no data.
+ * and the fake billing toggle ([DebugFakeBillingReceiver], Story 4.12) at app start. Runtime receivers, because the
+ * shell's implicit `am broadcast -a` does not reach manifest receivers on API 26+. Exported so the shell can send them.
+ * The provider serves no data.
  */
 class DebugHooksProvider : ContentProvider() {
-    @SuppressLint("UnspecifiedRegisterReceiverFlag") // Below API 33 there is no flag; runtime receivers are exported.
     override fun onCreate(): Boolean {
         val context = context ?: return false
-        val filter = IntentFilter(DebugCrashReceiver.ACTION_CRASH)
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-            context.registerReceiver(DebugCrashReceiver(), filter, Context.RECEIVER_EXPORTED)
-        } else {
-            context.registerReceiver(DebugCrashReceiver(), filter)
-        }
+        register(context, DebugCrashReceiver(), IntentFilter(DebugCrashReceiver.ACTION_CRASH))
+        // Story 4.12: the hidden fake billing toggle (read at the next app start).
+        register(context, DebugFakeBillingReceiver(), IntentFilter(DebugFakeBillingToggle.ACTION))
         return true
+    }
+
+    @SuppressLint("UnspecifiedRegisterReceiverFlag") // Below API 33 there is no flag; runtime receivers are exported.
+    private fun register(
+        context: Context,
+        receiver: BroadcastReceiver,
+        filter: IntentFilter,
+    ) {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            context.registerReceiver(receiver, filter, Context.RECEIVER_EXPORTED)
+        } else {
+            context.registerReceiver(receiver, filter)
+        }
     }
 
     override fun query(

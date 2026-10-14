@@ -192,7 +192,7 @@
 - source_spec: `docs/spikes/S1.md`
   summary: Billing results can arrive very late: offline, the Play sheet shows an error and only reports a result when the user closes it (no timeout); declines arrive as BILLING_UNAVAILABLE; consume can fail transiently with SERVICE_UNAVAILABLE.
   evidence: Spike S1 runs N1u (USER_CANCELED after 200 s), N2u (NETWORK_ERROR), C1u (BILLING_UNAVAILABLE), L5 (consume SERVICE_UNAVAILABLE, retry OK).
-  status: assigned to Stories 4.10 (consume with retry), 4.11 (orchestration must not block the session on a billing result; map codes) and 4.14 (outcome messages). 4.11 part resolved: `PurchaseCoordinator` runs every billing call on the app scope, never inside the engine's step (a hung consume or launch never delays "I'm up" or the check, `PurchaseCoordinatorTest`); results carry `PurchaseFailureKind` (Offline, UnlockFailed, Error). The response-code table itself (BILLING_UNAVAILABLE → Error) is Story 4.12's.
+  status: assigned to Stories 4.10 (consume with retry), 4.11 (orchestration must not block the session on a billing result; map codes) and 4.14 (outcome messages). 4.11 part resolved: `PurchaseCoordinator` runs every billing call on the app scope, never inside the engine's step (a hung consume or launch never delays "I'm up" or the check, `PurchaseCoordinatorTest`); results carry `PurchaseFailureKind` (Offline, UnlockFailed, Error). The response-code table itself (BILLING_UNAVAILABLE → Error) is Story 4.12's. Resolved in Story 4.12: `PlayResponses` is the table (BILLING_UNAVAILABLE → Error, the offline codes → Offline, consume ITEM_NOT_OWNED → NotOwned), unit-tested row by row in `PlayMappingTest`, and every Play call is time-bound in `AndroidBilling`.
 - source_spec: `docs/spikes/S1.md`
   summary: Play shows the EU "Review and agree" (right of withdrawal) screen before every purchase on a Finnish account, so each paid snooze needs one extra tap; the first purchase also asks about purchase authentication.
   evidence: Spike S1, every run on 2026-10-05.
@@ -284,7 +284,7 @@
   evidence: A cached entry can be up to 30 days old (`PriceCachePolicy.EXPIRES_AFTER`, Story 4.3 review). Play's own sheet always charges its live price, but the intent and history would record the cached `Money` if they read the cache.
   status: |
     Assigned:
-    - 4.12: re-query the product's `ProductDetails` at `SnoozeTapped`/`PayConfirmed` (launching billing needs the live `ProductDetails` anyway) and store the answer in the cache.
+    - 4.12: re-query the product's `ProductDetails` at `SnoozeTapped`/`PayConfirmed` (launching billing needs the live `ProductDetails` anyway) and store the answer in the cache. Resolved in Story 4.12: `PlayLivePrices.livePrice` asks Play now and stores the answer in the price cache; the launch reuses that `ProductDetails`. 4.13's sheet calls it (the `LivePriceSource` binding).
     - 4.13 (done): the confirm sheet shows the live price when it arrives and re-arms its 500 ms guard when the shown price changes; Pay sends only the live price.
     - 4.8: `PurchaseIntent` records the live `Money` (micros and currency) of that query, never the cached entry.
 - source_spec: `_bmad-output/implementation-artifacts/spec-4-3-cache-play-prices-for-offline-display.md`
@@ -297,4 +297,8 @@
     - Ports with `None` defaults in `WakeModule`: `LivePriceSource` (4.12: ProductDetails) and `BillingCountry` (4.12: cached `getBillingConfigAsync` country for the tax note). `DisplayPrices` reads the 4.3 price cache (`CatalogDisplayPrices`); "Use it" / "Not now" go through the 4.11 coordinator (`ReuseChoices`); the only `UnlockPort` binding is 4.11's.
     - Lost unlock callbacks are resolved by the 4.11 coordinator (`onWakeScreenResumed` from `WakeActivity.onResume`); the sheet sends no unlock result of its own.
     - Only `PurchaseOutcome.UnlockFailed` shows a message (until the next tap or 10 s); 4.14 maps every outcome with the full snackbar rules.
-  status: adapters assigned to Story 4.12; device checks (Pay on a locked Oppo with PIN, fingerprint and cancel; the EU "Review and agree" extra tap; a price change between open and Pay) assigned to Story 4.18.
+  status: adapters resolved in Story 4.12 (`PlayLivePrices` and `PlayBillingCountry` bound in `confirmSheetModule`); device checks (Pay on a locked Oppo with PIN, fingerprint and cancel; the EU "Review and agree" extra tap; a price change between open and Pay) assigned to Story 4.18.
+- source_spec: `_bmad-output/implementation-artifacts/spec-4-12-play-billing-9-1-adapter-replacing-the-fake.md`
+  summary: (device row for the Story 4.18 checklist) The Play adapter's timings are host-tested only: Play's sheet opens from `WakeActivity` after the PIN (the adapter waits up to 5 s for the wake screen to resume after `onDismissSucceeded`), Play's posted copy of a failed launch's code arrives within the 5 s echo window, and an unanswered PIN prompt is given up after 2 minutes.
+  evidence: `AndroidBillingTest` and `AndroidDeviceUnlockerTest` run on a fake facade and Robolectric's keyguard shadow; nothing has run against Play on the phone since Spike S1.
+  status: assigned to Story 4.18 (human-verify). On the Oppo with a licence tester: a locked Pay (PIN, then the sheet), a Pay while Play still owns the product (`ITEM_ALREADY_OWNED` is handled once: one outcome, never two), and a wrong PIN left alone for 2 minutes ("Phone still locked. No charge.").

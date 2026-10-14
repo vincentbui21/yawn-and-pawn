@@ -152,8 +152,8 @@ fun ProductDetailsResult.usablePrices(requested: Set<String>): List<ProductPrice
 private fun ProductPrice.isUsable(): Boolean = formattedPrice.isNotBlank() && price.micros > 0
 
 /**
- * Port for Play's product details (AD-7). The Play adapter arrives in Story 4.12; until then the app binds one that
- * always fails. Returns [DomainError.ProductDetailsFailed] (or another error) instead of throwing.
+ * Port for Play's product details (AD-7). The app binds the Play adapter (`AndroidProductDetailsSource`, Story 4.12).
+ * Returns [DomainError.ProductDetailsFailed] (or another error) instead of throwing.
  */
 fun interface ProductDetailsSource {
     suspend fun fetch(productIds: List<String>): Outcome<ProductDetailsResult, DomainError>

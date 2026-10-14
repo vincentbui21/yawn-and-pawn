@@ -337,3 +337,16 @@ androidx.room:room-common-jvm
 androidx.room:room-runtime
 androidx.room:room-runtime-android
 androidx.work:work-runtime
+
+# Play Billing Library 9.1.0 (Story 4.12, AD-7; Stack table). Reviewed 2026-10-09. Licence: Android Software Development
+# Kit License / Google Play terms (proprietary; listed in the open-source notices with Epics 5/8). billing and billing-ktx
+# talk only to the Play Store app on the phone (bound service), only after the first unlock. billing 9.1.0 declares
+# play-services-location 19.0.0 and its play-services-places-placereport 17.0.0 (Google Play services SDK terms,
+# proprietary): allowed by owner decision 3 (2026-10-08) and declared for the Epic 8 Data safety form
+# (docs/decisions/play-billing-dependencies.md). The app calls no location API and declares no location permission;
+# the merged manifest adds only com.android.vending.BILLING (already allowlisted). Billing's other dependencies
+# (play-services-base, -basement, -tasks, the datatransport stack) are already listed above.
+com.android.billingclient:billing
+com.android.billingclient:billing-ktx
+com.google.android.gms:play-services-location
+com.google.android.gms:play-services-places-placereport

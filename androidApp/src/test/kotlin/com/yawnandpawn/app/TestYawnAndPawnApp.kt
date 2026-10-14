@@ -1,5 +1,7 @@
 package com.yawnandpawn.app
 
+import com.yawnandpawn.app.android.billing.BillingClientFacade
+import com.yawnandpawn.app.android.billing.FakeBillingClientFacade
 import com.yawnandpawn.app.android.crash.FirebaseStartup
 import com.yawnandpawn.app.core.net.Connectivity
 import com.yawnandpawn.app.core.reliability.ReliabilityProbe
@@ -21,6 +23,8 @@ import org.koin.dsl.module
  * - Background jobs are only recorded ([FakeBackgroundWork]): app start enqueues the price refresh jobs (Story 4.3) and
  *   a failed consume its retry jobs (Story 4.10), which would start WorkManager's database and threads in every test.
  *   `BackgroundWorkWiringTest` tests the real WorkManager adapter with WorkManager's test driver.
+ * - No Play (Story 4.12): the billing adapter talks to a fake `BillingClientFacade` that answers like a phone without the
+ *   Play Store, so no test ever binds to Play; `AndroidBillingTest` drives the adapter through a programmable one.
  */
 val testAppModule: Module =
     module {
@@ -30,6 +34,7 @@ val testAppModule: Module =
         // An online phone (Story 4.7), so snooze reasons and the session-start refresh never depend on the host's
         // network. AndroidConnectivityTest tests the real adapter.
         single<Connectivity> { FakeConnectivity(online = true) }
+        single<BillingClientFacade> { FakeBillingClientFacade() }
     }
 
 /**

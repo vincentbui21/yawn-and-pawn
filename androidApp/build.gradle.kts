@@ -156,6 +156,10 @@ dependencies {
     // Story 4.3 (AD-17): deferred non-alarm work (the price refresh). Started on demand after the first unlock only;
     // the default initializer is removed from the merged manifest.
     implementation(libs.workmanager.runtime)
+    // Story 4.12 (AD-7): Play Billing Library 9.1 behind BillingClientFacade. It connects only after the first unlock
+    // (AD-15). Its transitive location/places libraries are allowed (owner decision 3, 2026-10-08) and declared for the
+    // Data safety form; the app never calls a location API and declares no location permission.
+    implementation(libs.play.billing)
 
     testImplementation(project(":testing"))
     testImplementation(libs.kotlin.test)

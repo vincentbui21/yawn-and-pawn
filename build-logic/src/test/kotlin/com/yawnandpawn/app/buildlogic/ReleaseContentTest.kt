@@ -96,4 +96,20 @@ class ReleaseContentTest {
         assertEquals(2, found.size, "$found")
         assertTrue(found.all { "values/preview.xml" in it })
     }
+
+    @Test
+    fun `the Story 4_12 fake billing toggle is found by class name and action`() {
+        val classes =
+            cleanClasses +
+                listOf(
+                    ReleaseClass("com/yawnandpawn/app/android/billing/DebugFakeBillingFacade.class", ByteArray(0)),
+                    ReleaseClass("com/yawnandpawn/app/Toggle.class", "x com.yawnandpawn.app.debug.FAKE_BILLING x".toByteArray()),
+                )
+
+        val found = ReleaseContent.violations(cleanManifest, classes, cleanResources)
+
+        assertEquals(2, found.size, "$found")
+        assertTrue(found.any { "DebugFakeBillingFacade" in it })
+        assertTrue(found.any { "Toggle.class contains 'com.yawnandpawn.app.debug.FAKE_BILLING'" in it })
+    }
 }

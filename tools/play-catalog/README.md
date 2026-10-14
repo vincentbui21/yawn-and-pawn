@@ -119,3 +119,7 @@ To take a product off sale, deactivate it in Play Console. The tool would reacti
 - `./gradlew :play-catalog:checkToolDependencyAllowlist` checks every runtime dependency against `config/tool-dependency-allowlist.txt` (licences listed there).
 - Both run in `./gradlew qualityGate`.
 - The tool is a top-level included build. It runs in its own JVM through the root `playCatalog` task (`JavaExec`), so the Google API client is on no build-script or app classpath.
+
+## Single quantity only
+
+Every snooze product's Buy option must keep multi-quantity off: the tool creates it that way and reports one that is not as needing attention. The app's Play Billing adapter (Story 4.12) ignores a purchase's quantity. One purchase grants one snooze and is consumed once, so a quantity of 2 would charge twice for one snooze. Never turn multi-quantity on in Play Console.

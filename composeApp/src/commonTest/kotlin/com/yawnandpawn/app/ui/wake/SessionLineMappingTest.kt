@@ -57,6 +57,14 @@ class SessionLineMappingTest {
     }
 
     @Test
+    fun `a partial list of amounts shows no line rather than a part of the total`() {
+        val session = aSession().copy(snoozesGranted = 2, ringIndex = 3, paid = listOf(Money.of(2, "EUR")))
+
+        assertNull(sessionLine(session))
+        assertNull(ringingUiState(session, available(3), TimeZone.UTC).sessionLine)
+    }
+
+    @Test
     fun `no amount known or a test session shows no line`() {
         assertNull(sessionLine(aSession().copy(snoozesGranted = 1)), "never an invented amount")
         assertNull(sessionLine(aSession(config = aSessionConfig(testMode = true)).copy(snoozesGranted = 1, paid = listOf(usd1))))

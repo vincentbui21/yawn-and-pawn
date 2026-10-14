@@ -257,7 +257,8 @@ class WakeRuntime(
         visible: Boolean,
         ringing: Boolean,
         changingConfigurations: Boolean = false,
-    ) = notifier.wakeScreenShown(visible, ringing, changingConfigurations)
+        finishing: Boolean = false,
+    ) = notifier.wakeScreenShown(visible, ringing, changingConfigurations, finishing)
 
     /** The alarm time the posted ringing notification shows, or null when none is posted. */
     fun shownAlarmAt(): Instant? = notifier.shownFor

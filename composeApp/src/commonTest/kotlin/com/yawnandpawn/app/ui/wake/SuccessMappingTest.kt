@@ -35,19 +35,38 @@ class SuccessMappingTest {
     }
 
     @Test
-    fun `a pending payment that never granted a snooze adds the not used note, never in a test`() {
+    fun `a partial list of amounts shows no amount rather than a part of the total`() {
+        // Two snoozes, only one price known: "€2.00 paid this morning" would understate what was paid.
+        val session = aSession().copy(snoozesGranted = 2, paid = listOf(Money.of(2, "EUR")))
+
+        assertEquals(SuccessUiState(SuccessKind.AfterSnooze(paidThisMorning = emptyList())), successUiState(session))
+    }
+
+    @Test
+    fun `the pending note shows only while Play still lists a pending purchase for the session, never in a test`() {
         val dollar = listOf(Money.of(1, "USD"))
+        val pending = aSession().copy(snoozesGranted = 1, paid = dollar, paymentPending = true)
         assertEquals(
             SuccessUiState(SuccessKind.AfterSnooze(dollar), pendingNotUsed = true),
-            successUiState(aSession().copy(snoozesGranted = 1, paid = dollar, paymentPending = true)),
+            successUiState(pending, pendingStillListed = true),
+        )
+        assertEquals(
+            SuccessUiState(SuccessKind.AfterSnooze(dollar)),
+            successUiState(pending, pendingStillListed = false),
+            "Play no longer lists it (declined, or never charged): no refund to promise",
         )
         assertEquals(
             SuccessUiState(SuccessKind.OnTime(streakDays = 0), pendingNotUsed = true),
-            successUiState(aSession().copy(paymentPending = true)),
+            successUiState(aSession().copy(paymentPending = true), pendingStillListed = true),
+        )
+        assertEquals(
+            SuccessUiState(SuccessKind.OnTime(streakDays = 0)),
+            successUiState(aSession(), pendingStillListed = true),
+            "listed, but the session never saw it pending",
         )
         assertEquals(
             SuccessUiState(SuccessKind.Test),
-            successUiState(aSession(config = aSessionConfig(testMode = true)).copy(paymentPending = true)),
+            successUiState(aSession(config = aSessionConfig(testMode = true)).copy(paymentPending = true), pendingStillListed = true),
         )
     }
 

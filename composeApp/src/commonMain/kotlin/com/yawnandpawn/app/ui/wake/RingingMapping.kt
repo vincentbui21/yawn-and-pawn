@@ -42,11 +42,14 @@ fun ringingUiState(
 /**
  * "Snooze {n} of {max} · {paid} paid this morning" for [session] (Story 4.15): n = snoozes granted so far, max = the
  * frozen max snoozes, paid = `SessionData.paid` (one total per currency). None on the first ring, in a test session, or
- * while no amount is known (never an invented one). Pure.
+ * unless the amount of every granted snooze is known ([knownPaid]: never a partial total shown as the whole, never an
+ * invented one). Pure.
  */
-fun sessionLine(session: SessionData): SessionLine? =
-    SessionLine(session.snoozesGranted, session.config.maxSnoozes, session.paid)
-        .takeIf { session.snoozesGranted > 0 && session.paid.isNotEmpty() && !session.config.testMode }
+fun sessionLine(session: SessionData): SessionLine? {
+    val paid = knownPaid(session)
+    return SessionLine(session.snoozesGranted, session.config.maxSnoozes, paid)
+        .takeIf { session.snoozesGranted > 0 && paid.isNotEmpty() && !session.config.testMode }
+}
 
 /**
  * The Snoozed screen for [session] (Story 4.15): "Snoozed. Next ring at {time}." with the snooze end's wall time in

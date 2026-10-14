@@ -188,6 +188,8 @@ class WakeActivity : ComponentActivity() {
             visible = false,
             ringing = forwardsToWakeScreen(engine.state.value, runtime.emergency.value),
             changingConfigurations = isChangingConfigurations,
+            // Story 4.15 review: the Snoozed note closed just as the snooze ended, so the ring needs its full-screen intent.
+            finishing = isFinishing,
         )
         super.onStop()
     }
@@ -265,9 +267,11 @@ class WakeActivity : ComponentActivity() {
             val last = remember { LastShown() }
             val success = end.success()
             if (success != null) {
+                // Story 4.15 review: the pending note only while Play's latest list still holds this session's pending payment.
+                val pendingSessions by purchases.pendingSessions.collectAsState()
                 key(success.sessionId) {
                     SuccessScreen(
-                        state = successUiState(success),
+                        state = successUiState(success, pendingStillListed = success.sessionId in pendingSessions),
                         onIntent = ::onIntent,
                         basic = true,
                         claimHaptic = { end.claimHaptic(success.sessionId) },

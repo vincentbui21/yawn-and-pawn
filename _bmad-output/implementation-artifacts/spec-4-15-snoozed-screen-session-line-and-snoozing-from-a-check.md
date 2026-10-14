@@ -54,7 +54,8 @@ deferred:
 2. **Mixed currencies** show one total per currency joined by " + " (EXPERIENCE.md "Money, mixed currencies"), in the session line and on Success.
 3. **The 3 s are counted per wake screen.** A screen recreated (rotation) or reopened ("Back to alarm") during a snooze shows the Snoozed note for 3 s again, then closes.
 4. **The Ringing clock keeps the alarm's scheduled time on a re-ring** (as the notification does). The design preview shows the re-ring time (7:39); changing the clock and the notification together is left for the owner.
-5. **Pending not used** shows whenever the session ended with `paymentPending` set (also with no paid snooze), never for a test.
+5. **Pending not used** (changed by the review): shows only when the session ended with `paymentPending` set **and** the coordinator's latest full query (`PurchaseCoordinator.pendingSessions`) still lists a PENDING purchase for this session; otherwise no note, so the app never promises a refund for a payment that was declined or never charged. Also with no paid snooze; never for a test.
+7. **No partial totals** (review): "{paid} paid this morning" shows, in the session line and on Success, only when `paid.size == snoozesGranted`; otherwise no amount line at all.
 6. **Grant price** is the newest intent of the session for that product (the same rule the ledger uses to price its record).
 
 ## Code Map
@@ -96,6 +97,23 @@ Status: implemented in fast mode (one agent, unattended Epic 4 run), no review p
 - If the screen closes at the very moment the snooze ends, the re-ring may post its notification without the full-screen intent; the next heartbeat posts the full one (existing Epic 2 behaviour for a screen left while ringing).
 - A session stored before this story has `paid` empty, so its re-ring shows no session line (Decision 1).
 - The re-ring clock shows the alarm's scheduled time, not the re-ring time (Decision 4; differs from the preview).
+
+## Review (fast mode)
+
+The PR #57 review found nothing HIGH and nothing that stops the next ring. Fixed in `fix(4.15): review fixes`, each with a test:
+
+1. **Partial totals:** the amount shows only when every granted snooze has one (Decision 7). Tests: snoozesGranted 2 with paid [€2] shows no line on the re-ring and no amount on Success.
+2. **Price tests:** the reused record is priced €0.99 against today's €1.19 quote and the snooze carries €0.99; two intents for one product at different prices, the newer (whose id sorts first) wins; reusing an estimate-priced record adds nothing.
+3. **Close at the snooze end:** `WakeActivity.onStop` passes `isFinishing`; a finishing screen that stops while the alarm rings makes `WakeNotifier` post the full notification with its full-screen intent at once (not the no-intent heads-up). Tests: `WakeNotifierTest` (unit) and a slot fired right as the note closes.
+4. **Close test:** now waits for DESTROYED, then checks the session is still Snoozed and the slot armed, and after the snooze end that the ringing notification has the full-screen intent.
+5. **Pending note:** Decision 5 (default taken, owner can change). `PurchaseCoordinator.pendingSessions` holds the profile ids of this install's PENDING purchases from the latest full query; Success reads it. Tests: coordinator (listed, other install, cleared) and both Success cases end to end.
+6. **End to end through the coordinator:** a real `PurchaseCoordinator` grant from a FakeBilling update fills `paid` with the intent's live price and the re-ring line; a re-ring after two snoozes shows "Snooze 2 of 5 · $1.00 + €1.19 paid this morning" and Success "$1.00 + €1.19 paid this morning".
+
+7. **CI flake (not 4.15 code):** `AndroidLogAndTimeSignalTest` read every line under `AndroidLogger.TAG`, so work the app starts on a background thread after `ShadowLog.clear()` could interleave. Each logger test now keeps only the lines whose message it wrote itself, then asserts their order and levels.
+
+Robolectric does not stop and destroy a finishing activity on its own under `ActivityScenario`, so the close tests drive that step with `moveToState(DESTROYED)` as the system would; this also makes the slot-at-close test deterministic (the slot fires while the closing screen is still started).
+
+**Rebase note added:** `WakeRuntime.wakeScreenShown` and `WakeNotifier.wakeScreenShown` gain `finishing` (default false).
 
 ## pps-design Done checklist
 

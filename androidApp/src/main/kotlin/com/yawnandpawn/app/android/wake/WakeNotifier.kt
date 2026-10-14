@@ -178,11 +178,17 @@ class WakeNotifier(
      * way back (Story 2.5), without its full-screen intent, so leaving with the power key does not bring the screen
      * straight back; the next ring step posts the full one ([show]). Left in a snooze, the quiet one stays and the snooze
      * end's `WakeUiShown` posts the full one.
+     *
+     * A screen that stops because it is [finishing] (the Snoozed note closing by itself, Story 4.15) while the alarm
+     * rings did not leave by the user's choice: the snooze ended at that very moment and its `WakeUiShown` found the
+     * screen still shown. The full notification is posted then, with its full-screen intent, so the ring brings the wake
+     * screen back at once instead of waiting for the next ring step.
      */
     fun wakeScreenShown(
         visible: Boolean,
         ringing: Boolean,
         changingConfigurations: Boolean = false,
+        finishing: Boolean = false,
     ) {
         synchronized(lock) {
             when {
@@ -199,9 +205,10 @@ class WakeNotifier(
                     posted = Posted.OnScreen
                 }
 
+                // Left while ringing: the heads-up without its full-screen intent, or with it when the screen closed itself.
                 !screenShown && posted == Posted.OnScreen && ringing -> {
-                    manager.notify(NOTIFICATION_ID, buildRinging(alarmAt, fullScreen = false))
-                    posted = Posted.Away
+                    manager.notify(NOTIFICATION_ID, buildRinging(alarmAt, fullScreen = finishing))
+                    posted = Posted.left(finishing)
                 }
             }
         }
@@ -247,7 +254,17 @@ class WakeNotifier(
     }
 
     /** The posted version: [Full] (Alarms channel with the full-screen intent), [Away] (without it), [OnScreen] (quiet). */
-    private enum class Posted { Full, Away, OnScreen }
+    private enum class Posted {
+        Full,
+        Away,
+        OnScreen,
+        ;
+
+        companion object {
+            /** What leaving a wake screen posts: [Full] when it closed itself ([finishing]), else [Away]. */
+            fun left(finishing: Boolean): Posted = if (finishing) Full else Away
+        }
+    }
 
     companion object {
         const val CHANNEL_ID = "alarms"

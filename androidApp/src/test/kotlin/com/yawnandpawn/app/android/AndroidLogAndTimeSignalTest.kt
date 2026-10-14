@@ -45,6 +45,13 @@ class AndroidLogAndTimeSignalTest {
         assertIs<AndroidTimeChangeSignal>(koin.get<TimeChangeSignal>())
     }
 
+    /**
+     * The log lines under [AndroidLogger.TAG] whose message is one of [expected], in order. Work the app starts on its own
+     * (on a background thread, after `ShadowLog.clear()`) logs under the same tag, so only the test's own lines count.
+     */
+    private fun ownLogs(vararg expected: String): List<ShadowLog.LogItem> =
+        ShadowLog.getLogsForTag(AndroidLogger.TAG).filter { it.msg in expected }
+
     @Test
     fun `the logger writes deletions at info and failures at warning level`() {
         ShadowLog.clear()
@@ -53,10 +60,14 @@ class AndroidLogAndTimeSignalTest {
         logger.log(LogEvent.AlarmDeleted("a1", Instant.parse("2027-03-03T06:00:00Z")))
         logger.log(LogEvent.OperationFailed("load alarms", "storage failure: closed"))
 
-        val logs = ShadowLog.getLogsForTag(AndroidLogger.TAG)
+        val expected =
+            listOf(
+                "AlarmDeleted alarmId=a1 at=2027-03-03T06:00:00Z",
+                "OperationFailed operation=load alarms cause=storage failure: closed",
+            )
+        val logs = ownLogs(*expected.toTypedArray())
+        assertEquals(expected, logs.map { it.msg })
         assertEquals(listOf(Log.INFO, Log.WARN), logs.map { it.type })
-        assertEquals("AlarmDeleted alarmId=a1 at=2027-03-03T06:00:00Z", logs[0].msg)
-        assertEquals("OperationFailed operation=load alarms cause=storage failure: closed", logs[1].msg)
     }
 
     @Test
@@ -68,11 +79,15 @@ class AndroidLogAndTimeSignalTest {
         logger.log(LogEvent.AlarmsRescheduled(scheduled = 2, disabled = 1, failed = 0))
         logger.log(LogEvent.OneTimeAlarmPassed("a2", Instant.parse("2027-03-03T06:00:00Z")))
 
-        val logs = ShadowLog.getLogsForTag(AndroidLogger.TAG)
+        val expected =
+            listOf(
+                "FireIgnored kind=Alarm alarmId=a1 reason=alarm disabled",
+                "AlarmsRescheduled scheduled=2 disabled=1 failed=0",
+                "OneTimeAlarmPassed alarmId=a2 missedAt=2027-03-03T06:00:00Z",
+            )
+        val logs = ownLogs(*expected.toTypedArray())
+        assertEquals(expected, logs.map { it.msg })
         assertEquals(listOf(Log.INFO, Log.INFO, Log.INFO), logs.map { it.type })
-        assertEquals("FireIgnored kind=Alarm alarmId=a1 reason=alarm disabled", logs[0].msg)
-        assertEquals("AlarmsRescheduled scheduled=2 disabled=1 failed=0", logs[1].msg)
-        assertEquals("OneTimeAlarmPassed alarmId=a2 missedAt=2027-03-03T06:00:00Z", logs[2].msg)
     }
 
     @Test
@@ -83,10 +98,10 @@ class AndroidLogAndTimeSignalTest {
         logger.log(LogEvent.SessionEffectLogged("SoundAt", entry = true))
         logger.log(LogEvent.SessionEventIgnored("ImUpTapped", sessionId = null))
 
-        val logs = ShadowLog.getLogsForTag(AndroidLogger.TAG)
+        val expected = listOf("SessionEffectLogged type=SoundAt entry=true", "SessionEventIgnored type=ImUpTapped sessionId=null")
+        val logs = ownLogs(*expected.toTypedArray())
+        assertEquals(expected, logs.map { it.msg })
         assertEquals(listOf(Log.INFO, Log.INFO), logs.map { it.type })
-        assertEquals("SessionEffectLogged type=SoundAt entry=true", logs[0].msg)
-        assertEquals("SessionEventIgnored type=ImUpTapped sessionId=null", logs[1].msg)
     }
 
     @Test

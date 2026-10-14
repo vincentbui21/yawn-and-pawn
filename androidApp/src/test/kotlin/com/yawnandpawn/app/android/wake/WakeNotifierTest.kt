@@ -151,6 +151,22 @@ class WakeNotifierTest {
     }
 
     @Test
+    fun `a screen that closes itself just as the snooze ends posts the full-screen ring at once (Story 4_15 review)`() {
+        // The Snoozed note is up, its close has started, and the snooze end's ring step finds the screen still shown.
+        notifier.wakeScreenShown(visible = true, ringing = false)
+        notifier.show(sevenAm)
+        assertNull(posted().fullScreenIntent, "quiet while the note shows")
+
+        notifier.wakeScreenShown(visible = false, ringing = true, finishing = true)
+
+        val ring = posted()
+        assertEquals(WakeNotifier.CHANNEL_ID, ring.channelId)
+        opensWakeActivity(ring)
+        notifier.show(sevenAm)
+        assertSame(ring, posted(), "the next step posts nothing new")
+    }
+
+    @Test
     fun `a second wake screen started before the first stopped keeps it quiet (PR 41 review)`() {
         notifier.show(sevenAm)
         notifier.wakeScreenShown(visible = true, ringing = true) // A

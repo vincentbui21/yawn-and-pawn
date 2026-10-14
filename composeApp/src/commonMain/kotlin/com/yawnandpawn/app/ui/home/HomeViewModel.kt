@@ -41,6 +41,7 @@ import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.catch
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.merge
@@ -76,7 +77,7 @@ import com.yawnandpawn.app.ui.checks.CheckType as UiCheckType
 @Suppress("TooManyFunctions") // One small handler per Home action (toggle, turn-off dialog, delete, banners, snackbars).
 class HomeViewModel(
     /** The stored alarms with their checks (the card's check icons, Story 3.5), from one read of both tables. */
-    checkConfigs: CheckConfigRepository,
+    private val checkConfigs: CheckConfigRepository,
     private val actions: AlarmActions,
     private val clock: Clock,
     private val timeZoneProvider: TimeZoneProvider,
@@ -310,17 +311,37 @@ class HomeViewModel(
     /**
      * Switching [id] off: inside its lock window (an enabled alarm ringing within 8 h, PRD §6.2) the turn-off dialog asks
      * first, with how long until it rings (whole hours rounded down, or minutes under 1 h); otherwise it turns off at once
-     * (Story 1.9). The card shows on, so the alarm is taken as on even while turning it on is still being stored.
+     * (Story 1.9). The card shows on, so the alarm is taken as on even while turning it on is still being stored. An
+     * alarm the cards do not hold yet is read from the store first (review fix 4); one the store does not have (or cannot
+     * read) is left as it is, never turned off without the dialog.
      */
     private fun requestTurnOff(id: String) {
-        val alarm = listed.firstOrNull { it.id == id }
-        val now = clock.now()
-        val occurrence = alarm?.let { LockWindow.of(it.copy(enabled = true), now, timeZoneProvider.current()) }
-        if (alarm == null || occurrence == null) {
-            toggle(id, enabled = false)
+        val known = listed.firstOrNull { it.id == id }
+        if (known != null) {
+            turnOffAsking(known)
             return
         }
-        local.update { it.copy(disableDialog = DisableUnderLock(id, alarm.time, lockCountdownOf(occurrence.scheduledAt - now))) }
+        viewModelScope.launch {
+            checkConfigs
+                .observeAlarmsWithChecks()
+                .map<List<AlarmWithChecks>, Alarm?> { all -> all.firstOrNull { it.alarm.id == id }?.alarm }
+                .catch { cause ->
+                    actions.logFailure("load alarm to turn off", cause)
+                    emit(null)
+                }.first()
+                ?.let(::turnOffAsking)
+        }
+    }
+
+    /** [alarm] off: the turn-off dialog inside its lock window, otherwise at once. */
+    private fun turnOffAsking(alarm: Alarm) {
+        val now = clock.now()
+        val occurrence = LockWindow.of(alarm.copy(enabled = true), now, timeZoneProvider.current())
+        if (occurrence == null) {
+            toggle(alarm.id, enabled = false)
+        } else {
+            local.update { it.copy(disableDialog = DisableUnderLock(alarm.id, alarm.time, lockCountdownOf(occurrence.scheduledAt - now))) }
+        }
     }
 
     private fun checkReliability(): ReliabilityStatus =

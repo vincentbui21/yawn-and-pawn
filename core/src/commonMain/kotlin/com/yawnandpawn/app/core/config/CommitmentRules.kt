@@ -45,8 +45,10 @@ object CommitmentRules {
      *   is still Weakening.
      * - Strengthening, no change, or any change outside the window: [LockDecision.ApplyNow].
      * - Weakening inside the window: [LockDecision.Defer] with the effective value live (a due change is promoted on the
-     *   way) and a pending change for [window]. Saving again the value already pending keeps that change as it is, so
-     *   re-saving never moves its date later.
+     *   way) and a pending change for [window]. Saving again the value already pending (the same by [classify], so a
+     *   re-registered code or a reordered plan counts as the same) keeps its date, so re-saving never moves it later; the
+     *   value saved replaces it. Its date is kept only when it is not earlier than [window] (Story 4.6 review fix 1): an
+     *   alarm moved to a later ring inside the window must not ring that later ring with the weaker value.
      */
     fun decide(
         alarmId: String?,
@@ -58,8 +60,11 @@ object CommitmentRules {
     ): LockDecision {
         val effective = effective(live, pending, now)
         return if (window != null && classify(effective, new) == ChangeKind.Weakening) {
-            val kept = pending?.takeIf { !it.isDue(now) && it.value == new }
-            LockDecision.Defer(effective, kept ?: PendingChange(alarmId, new, window))
+            val kept =
+                pending?.takeIf {
+                    !it.isDue(now) && it.effectiveAfter.scheduledAt >= window.scheduledAt && classify(it.value, new) == ChangeKind.NoChange
+                }
+            LockDecision.Defer(effective, kept?.copy(value = new) ?: PendingChange(alarmId, new, window))
         } else {
             LockDecision.ApplyNow(new)
         }

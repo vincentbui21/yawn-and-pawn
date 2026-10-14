@@ -35,6 +35,7 @@ import com.yawnandpawn.app.ui.checks.Difficulty
 import com.yawnandpawn.app.ui.checksetup.CheckSetupIntent
 import com.yawnandpawn.app.ui.home.AlarmActions
 import com.yawnandpawn.app.ui.settings.WeakeningNote
+import com.yawnandpawn.app.ui.settings.weakeningNoteOf
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.toList
@@ -73,6 +74,7 @@ class AlarmEditorLockTest {
     /** Monday 2027-03-08, 23:40 UTC. */
     private val lateEvening = Instant.parse("2027-03-08T23:40:00Z")
     private val sevenThirty = Instant.parse("2027-03-09T07:30:00Z")
+    private val sevenFortyFive = Instant.parse("2027-03-09T07:45:00Z")
     private val clock = FakeClock(lateEvening - 12.hours)
     private val zone = FakeTimeZoneProvider(TimeZone.UTC)
     private val logger = FakeLogger()
@@ -210,6 +212,43 @@ class AlarmEditorLockTest {
             assertEquals(emptyList(), pending.current)
             assertEquals(listOf<EditorEffect>(EditorEffect.Close), effects)
         }
+
+    @Test
+    fun `a pending quiet time moved to a later ring says and waits for that ring (review fix 1)`() =
+        runTest(dispatcher) {
+            storeAlarm()
+            pending.put(waitingGrace(30))
+            val viewModel = viewModel()
+            val effects = effectsOf(viewModel)
+
+            viewModel.onIntent(EditorIntent.TimeChanged(LocalTime(7, 45)))
+            assertEquals(WeakeningNote(LocalTime(7, 45)), viewModel.state.value.full!!.graceNote)
+            viewModel.onIntent(EditorIntent.SaveClicked)
+
+            assertEquals(Occurrence(id, sevenFortyFive), pending.current.single().effectiveAfter)
+            assertEquals(listOf<EditorEffect>(EditorEffect.CloseSavedUnderLock(WeakeningNote(LocalTime(7, 45)))), effects)
+        }
+
+    @Test
+    fun `saving pending easier checks again with only a label change keeps the change as it is (review fix 3)`() =
+        runTest(dispatcher) {
+            storeAlarm()
+            val easier = CheckPlan(CoreCheckMode.Random, listOf(CheckEntry(CoreCheckType.Math, CoreDifficulty.Easy, 3)))
+            pending.put(PendingChange(id, SettingValue.Checks(easier), Occurrence(id, sevenThirty)))
+            val before = pending.current
+            val viewModel = viewModel()
+
+            viewModel.onIntent(EditorIntent.LabelChanged("Gym"))
+            viewModel.onIntent(EditorIntent.SaveClicked)
+
+            assertEquals(before, pending.current)
+        }
+
+    @Test
+    fun `a note saved at 23:59 before a 00:30 ring says tomorrow's`() {
+        val note = weakeningNoteOf(Instant.parse("2027-03-09T00:30:00Z"), Instant.parse("2027-03-08T23:59:00Z"), TimeZone.UTC)
+        assertEquals(WeakeningNote(LocalTime(0, 30), today = false), note)
+    }
 
     @Test
     fun `pending easier checks open selected with their note`() =
@@ -354,6 +393,18 @@ class AlarmEditorLockTest {
             val viewModel = viewModel()
 
             assertEquals(listOf("EUR 1.00", "EUR 2.00", "EUR 3.00"), ladderOf(viewModel))
+        }
+
+    @Test
+    fun `a lower fee waiting for this alarm is still not shown after moving the alarm later (review fix 2)`() =
+        runTest(dispatcher) {
+            storeAlarm()
+            pending.put(PendingChange(null, SettingValue.BaseFeeTier(1), Occurrence(id, sevenThirty)))
+            val viewModel = viewModel()
+
+            viewModel.onIntent(EditorIntent.TimeChanged(LocalTime(7, 45)))
+
+            assertEquals(listOf("EUR 2.00", "EUR 4.00", "EUR 6.00"), ladderOf(viewModel))
         }
 
     @Test

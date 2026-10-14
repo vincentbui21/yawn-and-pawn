@@ -17,6 +17,7 @@ import com.yawnandpawn.app.core.billing.PriceCatalogSnapshot
 import com.yawnandpawn.app.core.checks.AccessibilityState
 import com.yawnandpawn.app.core.checks.CheckEntry
 import com.yawnandpawn.app.core.checks.qr.RegisteredCode
+import com.yawnandpawn.app.core.config.LockWindow
 import com.yawnandpawn.app.core.config.PendingChange
 import com.yawnandpawn.app.core.config.PendingChangeRepository
 import com.yawnandpawn.app.core.error.DomainError
@@ -618,8 +619,15 @@ class AlarmEditorViewModel(
         val full = full ?: return this
         val now = clock.now()
         val zone = timeZoneProvider.current()
-        val graceAt = pendingFields.grace?.takeIf { (seconds, _) -> form.graceSeconds == seconds }?.second
-        val checksAt = pendingFields.checks?.takeIf { (shown, _) -> shown == (form.checks to form.checkMode) }?.second
+        // Saving waits for the latest of the ring the change waits for and the form's ring, when that is in the window
+        // (review fix 1: an alarm moved later never rings the later ring with the weaker value).
+        val formRing = nextOccurrence(AlarmRule(form.time, form.repeatDays), now, zone).takeIf { LockWindow.contains(it, now) }
+        val graceAt = pendingFields.grace?.takeIf { (seconds, _) -> form.graceSeconds == seconds }?.second?.let { maxOf(it, formRing ?: it) }
+        val checksAt =
+            pendingFields.checks
+                ?.takeIf { (shown, _) -> shown == (form.checks to form.checkMode) }
+                ?.second
+                ?.let { maxOf(it, formRing ?: it) }
         val ladder = fees?.let { sources -> feeInputs?.let { feeLadderOf(form, alarmId, it, now, zone, sources.moneyFormatter) } }
         return copy(
             full =

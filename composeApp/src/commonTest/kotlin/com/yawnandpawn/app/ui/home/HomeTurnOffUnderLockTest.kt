@@ -1,6 +1,10 @@
 package com.yawnandpawn.app.ui.home
 
 import com.yawnandpawn.app.core.alarm.AlarmWriteLock
+import kotlinx.coroutines.CompletableDeferred
+import com.yawnandpawn.app.core.error.Outcome
+import com.yawnandpawn.app.core.alarm.AlarmRepository
+import com.yawnandpawn.app.core.alarm.Alarm
 import com.yawnandpawn.app.core.config.CommitmentAction
 import com.yawnandpawn.app.core.config.CommitmentEvent
 import com.yawnandpawn.app.core.error.DomainError
@@ -82,10 +86,13 @@ class HomeTurnOffUnderLockTest {
         Dispatchers.resetMain()
     }
 
-    private fun TestScope.home(): HomeViewModel {
+    private fun TestScope.home(
+        store: AlarmRepository = repository,
+        collect: Boolean = true,
+    ): HomeViewModel {
         val alarms =
             AlarmUseCasesFixture(
-                repository,
+                store,
                 clock,
                 zone,
                 FakeIdGenerator(),
@@ -98,7 +105,7 @@ class HomeTurnOffUnderLockTest {
             )
         val viewModel =
             HomeViewModel(
-                FakeCheckConfigRepository(repository),
+                FakeCheckConfigRepository(store),
                 AlarmActions(alarms.setEnabled, alarms.delete, logger),
                 clock,
                 zone,
@@ -108,7 +115,7 @@ class HomeTurnOffUnderLockTest {
                 FakeReliabilitySettings(),
                 noReRegisterSuggestions(clock),
             )
-        backgroundScope.launch { viewModel.state.collect { } }
+        if (collect) backgroundScope.launch { viewModel.state.collect { } }
         return viewModel
     }
 
@@ -223,6 +230,66 @@ class HomeTurnOffUnderLockTest {
     }
 
     @Test
+    fun `switched off before Home has read the alarms, it is read first and the dialog still asks (review fix 4)`() =
+        runTest(dispatcher) {
+            val viewModel = home(collect = false)
+
+            viewModel.switchOff()
+            backgroundScope.launch { viewModel.state.collect { } }
+
+            assertEquals(DisableUnderLock(ID, LocalTime(7, 30), Countdown.HoursMinutes(7, 59)), viewModel.state.value.disableDialog)
+            assertTrue(repository.current.single().enabled)
+            assertEquals(emptyList(), events.current)
+        }
+
+    @Test
+    fun `an alarm the store does not have is never turned off without the dialog`() =
+        runTest(dispatcher) {
+            val viewModel = home(collect = false)
+
+            viewModel.onIntent(HomeIntent.AlarmToggled("unknown", enabled = false))
+
+            assertTrue(scheduler.calls.none { it is SchedulerCall.Cancel })
+            assertTrue(repository.current.single().enabled)
+        }
+
+    @Test
+    fun `switched on and at once off again while the first write waits, the dialog asks and Turn off logs once (decision 7)`() =
+        runTest(dispatcher) {
+            repository.upsert(repository.current.single().copy(enabled = false))
+            val gated = GatedAlarms(repository)
+            val viewModel = home(store = gated)
+            gated.gate = CompletableDeferred()
+
+            viewModel.onIntent(HomeIntent.AlarmToggled(ID, enabled = true))
+            viewModel.switchOff()
+            assertEquals(Countdown.HoursMinutes(7, 59), viewModel.state.value.disableDialog?.ringsIn)
+
+            viewModel.onIntent(HomeIntent.DisableConfirmed)
+            gated.gate?.complete(Unit)
+
+            assertFalse(repository.current.single().enabled)
+            assertEquals(listOf(CommitmentAction.Disabled), events.current.map { it.action })
+        }
+
+    @Test
+    fun `on the Berlin spring-forward night the dialog counts real hours, and exactly 8 h asks`() =
+        runTest(dispatcher) {
+            zone.set(TimeZone.of("Europe/Berlin"))
+            // 23:40 CET on Saturday 2027-03-27; the alarm rings at 07:30 CEST on Sunday, 6 h 50 min later.
+            clock.set(Instant.parse("2027-03-27T22:40:00Z"))
+            val viewModel = home()
+
+            viewModel.switchOff()
+            assertEquals(Countdown.HoursMinutes(6, 50), viewModel.state.value.disableDialog?.ringsIn)
+
+            viewModel.onIntent(HomeIntent.DisableCancelled)
+            clock.set(Instant.parse("2027-03-28T05:30:00Z") - 8.hours)
+            viewModel.switchOff()
+            assertEquals(Countdown.HoursMinutes(8, 0), viewModel.state.value.disableDialog?.ringsIn)
+        }
+
+    @Test
     fun `switching an alarm on never asks`() =
         runTest(dispatcher) {
             repository.upsert(repository.current.single().copy(enabled = false))
@@ -277,5 +344,17 @@ class HomeTurnOffUnderLockTest {
 
     private companion object {
         const val ID = "a1"
+    }
+}
+
+/** [inner] whose writes wait for [gate] while it is set, like a slow database (decision 7). */
+private class GatedAlarms(
+    private val inner: FakeAlarmRepository,
+) : AlarmRepository by inner {
+    var gate: CompletableDeferred<Unit>? = null
+
+    override suspend fun upsert(alarm: Alarm): Outcome<Unit, DomainError> {
+        gate?.await()
+        return inner.upsert(alarm)
     }
 }

@@ -160,6 +160,7 @@ class CommitmentEventsOnAlarmChangeTest {
             assertIs<Outcome.Failure<DomainError>>(delete("a"))
 
             assertTrue("a" in repository.alarms.value)
+            assertTrue(scheduler.calls.none { it is Call.Cancel }, "the alarm stays armed")
             assertEquals(emptyList(), logger.events)
             assertEquals(emptyList(), events.events)
         }

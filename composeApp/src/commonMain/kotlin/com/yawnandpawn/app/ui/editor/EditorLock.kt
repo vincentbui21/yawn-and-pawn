@@ -43,7 +43,8 @@ internal data class FeeInputs(
  * The fee ladder of an alarm ringing as [form] says (Story 4.6): the base fee and max snoozes its next ring after [now]
  * will charge, which are the live global settings with the global pending changes that apply to that ring (a change
  * waiting for a later ring is not shown), priced by [SnoozePrices] (Play's prices, or all USD approximations). A new
- * alarm ([alarmId] null) only has the global changes.
+ * alarm ([alarmId] null) only has the global changes. A change still waiting for one of this alarm's own rings is never
+ * shown: saving the alarm with a later time moves it to the new ring (`SaveAlarm`, Story 4.6 review fix 2).
  */
 internal fun feeLadderOf(
     form: EditorForm,
@@ -54,7 +55,9 @@ internal fun feeLadderOf(
     formatter: MoneyFormatter,
 ): Pair<List<LadderPrice>, Boolean> {
     val next = nextOccurrence(AlarmRule(form.time, form.repeatDays), now, zone)
-    val settings = inputs.settings.withPending(inputs.pending.filter { it.alarmId == null }.applyingTo(alarmId.orEmpty(), next))
+    val waitingForThisAlarm: (PendingChange) -> Boolean = { it.effectiveAfter.alarmId == alarmId && it.effectiveAfter.scheduledAt > now }
+    val global = inputs.pending.filter { it.alarmId == null }.filterNot(waitingForThisAlarm)
+    val settings = inputs.settings.withPending(global.applyingTo(alarmId.orEmpty(), next))
     val prices = SnoozePrices.of(settings.baseFeeTier, settings.maxSnoozes, inputs.prices, now, formatter)
     return prices.ladder.map(LadderPrice::Text) to prices.approximate
 }

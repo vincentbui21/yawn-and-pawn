@@ -30,6 +30,7 @@ import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.datetime.DayOfWeek
 import kotlinx.datetime.LocalTime
+import kotlinx.datetime.TimeZone
 import kotlin.time.Instant
 
 /**
@@ -202,13 +203,40 @@ class SaveAlarm(
                 // Review fix 3: a change applied now drops its pending change before the row is written, so a failure between
                 // never leaves a weaker pending value to undo it later; a deferred change is put after the row. The row is
                 // armed as soon as it is stored: a failed pending write must never leave the alarm armed at its old time.
-                clearApplied(grace, mine)
+                // Review fix 2 (Story 4.6): a global change waiting for this alarm's ring keeps waiting when the ring moves
+                // later. Moved first: a failure after it only makes the change wait longer.
+                moveGlobalWaits(stored.id, edited, now, zone)
+                    .flatMap { clearApplied(grace, mine) }
                     .flatMap { clearApplied(checks, mine) }
                     .flatMap { storeWithChecks(checkConfigRepository, row, plan.entries, now) }
                     .onSuccess(scheduling::sync)
                     .flatMap { alarm -> putDeferred(grace, mine).flatMap { putDeferred(checks, mine) }.map { alarm } }
                     .map { alarm -> AlarmSaved(alarm, LockWindow.latestOf(listOf(grace, checks).mapNotNull { it.pendingUntil() })) }
             }
+        }
+    }
+
+    /**
+     * Story 4.6 review fix 2 (default taken, owner can change): when the alarm [alarmId] now rings later than a ring a
+     * global pending change (a lower base fee, more snoozes) still waits for, that change moves to the new ring, so
+     * moving the alarm never hands the weaker setting to the very morning it was saved against. A ring moved earlier
+     * needs nothing (the change still waits for the later time), and an alarm switched off keeps it as it is.
+     */
+    private suspend fun moveGlobalWaits(
+        alarmId: String,
+        edited: Alarm,
+        now: Instant,
+        zone: TimeZone,
+    ): Outcome<Unit, DomainError> {
+        if (!edited.enabled) return Outcome.Success(Unit)
+        val next = nextOccurrence(edited.toRule(), now, zone)
+        return pendingRepository.all().flatMap { all ->
+            all
+                .filter { it.alarmId == null && it.effectiveAfter.alarmId == alarmId }
+                .filter { it.effectiveAfter.scheduledAt > now && it.effectiveAfter.scheduledAt < next }
+                .fold<PendingChange, Outcome<Unit, DomainError>>(Outcome.Success(Unit)) { done, change ->
+                    done.flatMap { pendingRepository.put(change.copy(effectiveAfter = Occurrence(alarmId, next))) }
+                }
         }
     }
 

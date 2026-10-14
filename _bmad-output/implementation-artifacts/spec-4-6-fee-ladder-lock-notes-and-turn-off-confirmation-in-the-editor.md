@@ -229,6 +229,48 @@ online." is used in the editor's Snooze sub-screen.
     (the new screenshot and semantics tests, the Home and editor route tests, `AlarmWiringTest`, `HomeScreenshotTest` and
     the design-preview `PreviewScreenshotTest`, whose baselines are unchanged).
 
+## Change log
+
+### Review fixes (1 reviewer, fast mode, PR #59)
+
+1. **HIGH: a kept pending change ignored a moved window.**
+   - The problem: the editor now saves the pending values back, so `CommitmentRules.decide` kept the old change (for
+     example "after 07:30") even when the alarm was moved to 07:45 inside the window. The 07:45 ring then used the
+     weaker value. Checks were affected the same way.
+   - The fix: a pending change keeps its date only when that date is not earlier than the new window. Otherwise it
+     waits for the new ring.
+   - The editor's field notes name the later of the pending ring and the form's ring.
+   - Tests: core `SaveAlarmMovedRingTest` (quiet time and checks moved to 07:45, and `resolve` at 07:45 gives the live
+     20 s) and the editor test `TimeChanged(07:45)` then save.
+2. **HIGH: a global pending change moved with the alarm's ring.** Moving an alarm later handed a waiting lower base
+   fee or extra snoozes to the very ring it was saved against.
+   - **Default taken (owner can change):** in `SaveAlarm.storeEdit`, when the alarm's next ring moves later, every
+     global pending change still waiting for one of this alarm's rings moves to the new ring, in the same guarded
+     write and before the row. A failure there only makes the change wait longer.
+   - A ring moved earlier, an unchanged ring, a change waiting for another alarm, and an alarm switched off are left
+     as they are.
+   - The editor's fee ladder never applies a global change waiting for this alarm, so it shows what the save will do.
+   - Tests: core (`BaseFeeTier(1)` waiting for (a, 07:30), alarm moved to 07:45: the change waits for 07:45 and
+     `resolve` gives the live tier), and the editor ladder after `TimeChanged(07:45)`.
+3. **MEDIUM: re-saving pending checks could rewrite the change.**
+   - The fix: "the same value" is now `classify(...) == NoChange`, so a re-registered code or a reordered plan keeps
+     the change's date. The value saved replaces it, so the newest code is stored.
+   - Tests: a label-only re-save leaves the pending change unchanged (core and editor), and a QR code re-registered
+     after the pending change keeps its date and takes the new code.
+4. **MEDIUM: an alarm the cards did not hold yet was turned off without the dialog.** This happened when the toggle
+   came before the first read, or while the state was not collected.
+   - The fix: Home reads the alarm from the store first. An alarm the store does not have, or cannot read, is left on.
+   - Tests: a toggle before the state is collected still opens the dialog; an unknown id turns nothing off.
+5. **LOW, tests:**
+   - "Turn off" sent twice gives one cancel and one event (already covered).
+   - A failed delete cancels nothing.
+   - Decision 7: switched on, then off while the first write waits. The dialog shows, and "Turn off" leaves the alarm off
+     with one event.
+   - The Europe/Berlin spring-forward night: at 23:40 before 07:30 the dialog says "6 h", and exactly 8 h opens the
+     dialog.
+   - A note saved at 23:59 before a 00:30 ring says "tomorrow's".
+6. Skipped, as spec decision 2 accepts it: the alarm row and the event are written in separate transactions.
+
 ## Auto Run Result
 
 See the commit `feat(4.6)` and the coordinator's report.

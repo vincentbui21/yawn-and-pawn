@@ -203,7 +203,7 @@ object PreviewSamples {
         ringingFirst.copy(
             time = LocalTime(7, 39),
             snooze = SnoozeOffer.Available(price(2)),
-            sessionLine = SessionLine(snoozeNumber = 1, maxSnoozes = 5, paid = price(1)),
+            sessionLine = SessionLine(snoozeNumber = 1, maxSnoozes = 5, paid = listOf(price(1))),
         )
 
     val ringingTest = ringingFirst.copy(label = null, snooze = SnoozeOffer.TestMode)
@@ -215,7 +215,7 @@ object PreviewSamples {
     val ringingMaxSnoozes =
         ringingAfterSnooze.copy(
             snooze = SnoozeOffer.Unavailable(SnoozeUnavailableReason.MaxSnoozesReached),
-            sessionLine = SessionLine(5, 5, price(15)),
+            sessionLine = SessionLine(5, 5, listOf(price(15))),
         )
 
     val ringingStranded = ringingFirst.copy(snooze = SnoozeOffer.StrandedRefund(price(1)))
@@ -314,9 +314,9 @@ object PreviewSamples {
 
     val successFirst = SuccessUiState(SuccessKind.OnTime(streakDays = 0))
 
-    val successAfterSnooze = SuccessUiState(SuccessKind.AfterSnooze(paidThisMorning = price(3)))
+    val successAfterSnooze = SuccessUiState(SuccessKind.AfterSnooze(paidThisMorning = listOf(price(3))))
 
-    val successPending = SuccessUiState(SuccessKind.AfterSnooze(paidThisMorning = price(1)), pendingNotUsed = true)
+    val successPending = SuccessUiState(SuccessKind.AfterSnooze(paidThisMorning = listOf(price(1))), pendingNotUsed = true)
 
     val successTest = SuccessUiState(SuccessKind.Test)
 

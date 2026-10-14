@@ -22,6 +22,7 @@ import kotlin.test.assertFalse
 import kotlin.test.assertIs
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
+import kotlin.time.Duration.Companion.minutes
 import kotlin.time.Duration.Companion.seconds
 
 /**
@@ -175,6 +176,36 @@ class PurchaseCoordinatorTest {
             val snoozed = assertIs<SessionState.Snoozed>(w.buy(purchase()))
             assertEquals(1, snoozed.session.snoozesGranted)
             assertEquals(listOf(tok), w.play.calls)
+            // Story 4.15: the grant carries what the intent priced, for "{paid} paid this morning".
+            assertEquals(listOf(QUOTE_1.price), snoozed.session.paid)
+        }
+
+    @Test
+    fun `a grant carries the price of the newest intent for its product, not the first or the highest id`() =
+        runTest {
+            val w = CoordinatorWorld(this)
+            w.ring()
+            w.play.launchResults += Outcome.Success(LaunchResult.Cancelled)
+            w.pay("intent-1")
+            assertNull(assertIs<SessionState.Ringing>(w.engine.state.value).session.paying, "the first Pay was cancelled")
+
+            // A minute later Play's price changed; the new intent's id sorts before the old one.
+            w.time.advanceBy(1.minutes)
+            val newer = LivePrice(PRODUCT_1, Money(1_290_000, "EUR"), "€1.29")
+            w.dispatch(SessionEvent.PayConfirmed(PurchaseIntentId("intent-0"), newer))
+            val snoozed = assertIs<SessionState.Snoozed>(w.buy(purchase()))
+
+            assertEquals(listOf(newer.price), snoozed.session.paid)
+        }
+
+    @Test
+    fun `a grant with no intent of its session adds no amount`() =
+        runTest {
+            val w = CoordinatorWorld(this)
+            w.ring()
+            val snoozed = assertIs<SessionState.Snoozed>(w.buy(purchase()))
+            assertEquals(1, snoozed.session.snoozesGranted)
+            assertEquals(emptyList(), snoozed.session.paid, "never an estimate")
         }
 
     @Test
@@ -446,6 +477,23 @@ class PurchaseCoordinatorTest {
             w.play.listed.clear()
             w.recover()
             assertEquals(emptySet(), w.coordinator.strandedProducts.value, "refunded: no longer listed")
+        }
+
+    @Test
+    fun `the pending sessions list this install's pending payments from the latest full query (Story 4_15 review)`() =
+        runTest {
+            val w = CoordinatorWorld(this)
+            w.ring()
+            w.play.own(purchase(token = "a", pending = true))
+            w.play.own(purchase(token = "b", pending = true, profileId = "yesterday"))
+            w.play.own(purchase(token = "c", pending = true, profileId = "elsewhere", accountId = "other-phone"))
+            w.play.own(purchase(token = "d", productId = PRODUCT_3, profileId = "stranded"))
+            w.recover()
+            assertEquals(setOf(SESSION, "yesterday"), w.coordinator.pendingSessions.value, "pending only, this install only")
+
+            w.play.listed.clear()
+            w.recover()
+            assertEquals(emptySet(), w.coordinator.pendingSessions.value, "declined or never charged: no longer listed")
         }
 
     @Test

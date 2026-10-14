@@ -19,8 +19,8 @@ val NoPrices: PriceLookup = { null }
 /**
  * The Ringing screen for [session] (Story 1.15): the alarm's time and date in [zone] (`config.scheduledAt`, as in the
  * notification), its label (none when blank), its note ([wakeNote]: a paused call, or the Direct Boot check), and the snooze that
- * [availability] (the `SnoozeAvailabilityPolicy` result) allows. The session line (from `SessionData.paid`) is Story
- * 4.15's, so it is not shown yet. Pure.
+ * [availability] (the `SnoozeAvailabilityPolicy` result) allows, and after a paid snooze the session line
+ * ([sessionLine], Story 4.15). Pure.
  */
 fun ringingUiState(
     session: SessionData,
@@ -34,9 +34,34 @@ fun ringingUiState(
         date = at.date,
         label = session.config.label?.takeIf { it.isNotBlank() },
         snooze = snoozeOffer(availability, priceOf),
+        sessionLine = sessionLine(session),
         note = wakeNote(session),
     )
 }
+
+/**
+ * "Snooze {n} of {max} · {paid} paid this morning" for [session] (Story 4.15): n = snoozes granted so far, max = the
+ * frozen max snoozes, paid = `SessionData.paid` (one total per currency). None on the first ring, in a test session, or
+ * unless the amount of every granted snooze is known ([knownPaid]: never a partial total shown as the whole, never an
+ * invented one). Pure.
+ */
+fun sessionLine(session: SessionData): SessionLine? {
+    val paid = knownPaid(session)
+    return SessionLine(session.snoozesGranted, session.config.maxSnoozes, paid)
+        .takeIf { session.snoozesGranted > 0 && paid.isNotEmpty() && !session.config.testMode }
+}
+
+/**
+ * The Snoozed screen for [session] (Story 4.15): "Snoozed. Next ring at {time}." with the snooze end's wall time in
+ * [zone]. Null without a snooze end (the session rings again at once). Pure.
+ */
+fun snoozedUiState(
+    session: SessionData,
+    zone: TimeZone,
+): SnoozedUiState? =
+    session.snoozeEnd?.let { end ->
+        SnoozedUiState(nextRingAt = Instant.fromEpochMilliseconds(end.wallMillis).toLocalDateTime(zone).time)
+    }
 
 /**
  * The Ringing screen of an emergency ring (no session could start, NFR-2) or of a wake screen opened just before the

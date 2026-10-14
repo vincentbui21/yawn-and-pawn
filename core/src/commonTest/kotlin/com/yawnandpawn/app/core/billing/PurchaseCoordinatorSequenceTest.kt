@@ -188,7 +188,8 @@ class PurchaseCoordinatorSequenceTest {
         runTest {
             val w = CoordinatorWorld(this)
             w.ring()
-            w.pay()
+            // Yesterday's price differs from today's quote, so the snooze must carry what was actually paid.
+            w.dispatch(SessionEvent.PayConfirmed(PurchaseIntentId("intent-1"), YESTERDAY))
             w.deliver(PurchaseUpdate.Failed(PurchaseFailureKind.Error))
             assertEquals(listOf<SessionEffect>(SessionEffect.ShowPurchaseOutcome(PurchaseOutcome.Failed)), w.outcomes)
             w.dispatch(SessionEvent.ImUpTapped)
@@ -223,6 +224,8 @@ class PurchaseCoordinatorSequenceTest {
             w.settle()
             val snoozed = assertIs<SessionState.Snoozed>(accepted.value)
             assertEquals(1, snoozed.session.snoozesGranted)
+            // Story 4.15: the reused payment adds what it actually cost (its record, priced by yesterday's intent).
+            assertEquals(listOf(YESTERDAY.price), snoozed.session.paid)
             assertEquals(1, w.world.recordRows.size, "exactly one record")
             val record = w.world.recordRows.getValue(tok.hash())
             assertEquals(RecordStatus.Reused, record.status)
@@ -251,7 +254,9 @@ class PurchaseCoordinatorSequenceTest {
                 "recorded before the offer",
             )
             assertEquals(emptyList(), w.play.launches)
-            assertIs<SessionState.Snoozed>(assertIs<Outcome.Success<SessionState>>(w.coordinator.acceptReuse()).value)
+            val reused = assertIs<SessionState.Snoozed>(assertIs<Outcome.Success<SessionState>>(w.coordinator.acceptReuse()).value)
+            // Story 4.15: no intent priced that record (only an estimate), so the snooze adds no amount.
+            assertEquals(emptyList(), reused.session.paid)
             w.settle()
             assertEquals(
                 RecordStatus.Reused,
@@ -356,3 +361,6 @@ class PurchaseCoordinatorSequenceTest {
             assertEquals(emptyList(), w.outcomes, "nothing is in flight in this process")
         }
 }
+
+/** What snooze 1 cost yesterday: not today's [QUOTE_1]. */
+private val YESTERDAY = LivePrice(PRODUCT_1, Money(990_000, "EUR"), "€0.99")

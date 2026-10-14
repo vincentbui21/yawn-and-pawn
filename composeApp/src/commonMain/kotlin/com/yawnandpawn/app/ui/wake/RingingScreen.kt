@@ -89,7 +89,8 @@ fun RingingScreen(
                 state.sessionLine?.let { line ->
                     Text(
                         text = stringResource(Res.string.wake_session_line, line.snoozeNumber, line.maxSnoozes, formatMoney(line.paid)),
-                        modifier = Modifier.fillMaxWidth(),
+                        // Story 4.15: TalkBack reads it after the clock and before "I'm up".
+                        modifier = Modifier.fillMaxWidth().semantics { traversalIndex = SESSION_LINE_TRAVERSAL_INDEX },
                         style = PpsTheme.typography.body,
                         color = colors.textSecondary,
                         textAlign = TextAlign.Center,
@@ -173,5 +174,10 @@ private fun fitOnOneLine(
 /** Each correction step of [fitOnOneLine] shrinks the size by 2%. */
 private const val FIT_STEP = 0.98f
 
-/** TalkBack order on Ringing: the clock (traversal index -1) first, then "I'm up", then the rest in reading order. */
+/**
+ * TalkBack order on Ringing: the clock (traversal index -1) first, then the session line, then "I'm up", then the rest
+ * in reading order.
+ */
 private const val IM_UP_TRAVERSAL_INDEX: Float = -0.5f
+
+private const val SESSION_LINE_TRAVERSAL_INDEX: Float = -0.75f

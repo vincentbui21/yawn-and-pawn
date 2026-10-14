@@ -40,11 +40,14 @@ sealed interface SnoozeOffer {
     ) : SnoozeOffer
 }
 
-/** "Snooze {n} of {max} · {paid} paid this morning", after at least one snooze. */
+/**
+ * "Snooze {n} of {max} · {paid} paid this morning", after at least one paid snooze (Story 4.15). [paid] holds what each
+ * snooze cost; it is shown as one total per currency ("{amount1} + {amount2}").
+ */
 data class SessionLine(
     val snoozeNumber: Int,
     val maxSnoozes: Int,
-    val paid: Money,
+    val paid: List<Money>,
 )
 
 /** A payment outcome shown as a wake `snackbar` (no action, stays until the next tap or at least 10 s). */
@@ -206,9 +209,12 @@ sealed interface SuccessKind {
         val streakDays: Int,
     ) : SuccessKind
 
-    /** After at least one paid snooze; [paidThisMorning] null shows no "{paid} paid this morning" line (Money is Epic 4). */
+    /**
+     * After at least one paid snooze: "{paid} paid this morning" with one total per currency of [paidThisMorning]; no
+     * such line while no amount is known (Story 4.15).
+     */
     data class AfterSnooze(
-        val paidThisMorning: Money?,
+        val paidThisMorning: List<Money>,
     ) : SuccessKind
 
     /** A test alarm. */

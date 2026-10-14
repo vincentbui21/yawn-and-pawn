@@ -423,8 +423,8 @@ class CheckSemanticsSuiteTest {
             listOf(
                 SuccessUiState(SuccessKind.OnTime(streakDays = 0)) to "Up on time.",
                 SuccessUiState(SuccessKind.OnTime(streakDays = 4)) to "Up on time.",
-                SuccessUiState(SuccessKind.AfterSnooze(paidThisMorning = null)) to "You're up. That's what counts.",
-                SuccessUiState(SuccessKind.AfterSnooze(paidThisMorning = Money(micros = 2_000_000, currency = "EUR"))) to
+                SuccessUiState(SuccessKind.AfterSnooze(paidThisMorning = emptyList())) to "You're up. That's what counts.",
+                SuccessUiState(SuccessKind.AfterSnooze(paidThisMorning = listOf(Money(micros = 2_000_000, currency = "EUR")))) to
                     "You're up. That's what counts.",
                 SuccessUiState(SuccessKind.Test, pendingNotUsed = true) to "Test finished. Your alarm works.",
             )

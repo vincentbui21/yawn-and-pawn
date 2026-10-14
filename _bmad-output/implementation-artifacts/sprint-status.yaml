@@ -107,7 +107,7 @@ development_status:
   4-12-play-billing-9-1-adapter-replacing-the-fake: done  # Epic 4 auto-run, fast mode
   4-13-snooze-confirm-sheet: done  # Epic 4 auto-run, fast mode
   4-14-payment-outcome-messages: done  # Epic 4 auto-run, fast mode
-  4-15-snoozed-screen-session-line-and-snoozing-from-a-check: backlog
+  4-15-snoozed-screen-session-line-and-snoozing-from-a-check: done  # Epic 4 auto-run, fast mode
   4-16-purchase-history: done  # Epic 4 auto-run, fast mode
   4-17-problem-with-a-charge: done  # Epic 4 auto-run, fast mode
   4-18-epic-4-payment-verification-with-license-testers: backlog

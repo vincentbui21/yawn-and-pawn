@@ -122,17 +122,20 @@ fun AppNavHost(modifier: Modifier = Modifier) {
                     entry<Route.AlarmEditor> { route ->
                         EditorEntry(route, backStack, onOpenFailed = { openFailed = true }, onSavedUnderLock = { savedUnderLock = it })
                     }
-                    entry<Route.PurchaseHistory> {
-                        PurchaseHistoryRoute(
-                            onBack = { backStack.close(Route.PurchaseHistory) },
-                            onProblemWithCharge = { backStack.openProblemWithCharge() },
-                        )
-                    }
+                    entry<Route.PurchaseHistory> { PurchaseHistoryEntry(backStack) }
                     entry<Route.ProblemWithCharge> { ProblemWithChargeRoute(onBack = { backStack.close(Route.ProblemWithCharge) }) }
                 },
         )
     }
 }
+
+/** Purchase history on [backStack]: Back closes it, "Problem with a charge?" opens its screen (Story 4.17). */
+@Composable
+private fun PurchaseHistoryEntry(backStack: MutableList<NavKey>) =
+    PurchaseHistoryRoute(
+        onBack = { backStack.close(Route.PurchaseHistory) },
+        onProblemWithCharge = { backStack.openProblemWithCharge() },
+    )
 
 /** Marks the tab entries, so moving between two tabs is instant (the shared capsule stays put). */
 private const val TAB_ENTRY = "yawnandpawn.tab"

@@ -75,15 +75,20 @@ Every string above is already a resource copied from EXPERIENCE.md Key strings; 
 
 ## Auto Run Result
 
-Status: implemented in fast mode (one agent, unattended Epic 4 run), with no review pass. Branch `story/4-14-payment-outcomes` on `origin/main` (`79aa8b4`).
+Status: implemented in fast mode (one agent, unattended Epic 4 run), with no review pass. Branch `story/4-14-payment-outcomes`, built on `79aa8b4` and rebased onto `origin/main` `0c3665c` (4.7 and 4.5 merged) with no conflicts.
 
 - **Built:** `PaymentOutcomes.kt` (the table, exhaustive over the domain results; `WakeMessage.text` is the one resource per message and `WakeSnackbar` draws it). `ConfirmSheetHost` shows every `ShowPurchaseOutcome` and `ShowPaymentPending`, which replaces 4.13's UnlockFailed-only branch. `RingMessage` carries `serial`, `tapped` and `minimumShown`. `WakeActivity` runs the 10 s minimum per showing (`MESSAGE_MINIMUM`, renamed from `MESSAGE_TIMEOUT`), and taps on empty space or on the message count as taps.
 - **Tests:** `PaymentOutcomesTest` (composeApp: the rows; `PurchaseFailureKind`, `LaunchResult` and `PurchaseUpdate` through exhaustive `when`s), `PaymentOutcomeCopyTest` (each row of EXPERIENCE.md's table matches its resource word for word, and "none" rows have no message), `ConfirmSheetHostTest` (every outcome, the minimum and tap rules, replacement, no message outside a ring or for reuse), `PaymentOutcomeMessagesTest` (Robolectric, real engine and wake screen: cancelled, error and offline above "I'm up" with the sound on; "I'm up" at once; check footer above Snooze with keys typing at once; offline back in place with no new message; pending; a grant shows none), `PaymentOutcomeScreenshotTest` (20 new `wake_payment_*` baselines: 5 messages × Ringing/Check × 100%/200%, asserting that the message, "I'm up" and the Check key are whole on screen).
 - **Changed tests:** `SnoozeConfirmSheetTest` (a tap during the minimum keeps the message; after 10 s the next tap ends it).
 - **Strings:** none new. Every message was already a resource copied word for word from EXPERIENCE.md Key strings, and nothing is marked "(EXPERIENCE.md Key strings)".
 
+**Verification:**
+- Targeted runs pass on the pre-rebase branch: `PaymentOutcomesTest`, `PaymentOutcomeCopyTest`, `CopyRulesTest`, `ConfirmSheetHostTest`, `SnoozeConfirmSheetTest`, `PaymentOutcomeMessagesTest` and `PaymentOutcomeScreenshotTest` (verify), plus `spotlessApply` and `detekt`.
+- Full gate before the rebase: 1896 tests, 1 failure, `DirectBootRingTest`. Its assertion lists a database path from a different test, the known cross-test leak; the test is unrelated to this story.
+- Full gate after the rebase onto `0c3665c`: not green, for environment reasons only. Run 1 hit a build-cache lock held by another lane. Run 2: the Gradle daemon disappeared. Run 3: `Gradle Test Executor 1` exited with code 1 after a connection reset, with about 130 MB free RAM and 20 Java processes from parallel lanes. None of the 106 result files written before the crash has a failure. The gate must be rerun on a quiet machine before merging.
+
 **Rebase notes:**
-- **4.7:** its live `SnoozeConditions` re-renders the button in place. No message code depends on it. If 4.7 changed `WakeActivity.sheetOverlay` or the `onIntent` head, keep `sheet.onTap()` first, and keep `::screenTapped` as the screen's `onInteracted`.
+- **4.7 (merged, rebased cleanly):** its live `SnoozeConditions` re-renders the button in place (the Offline row's "Snooze unavailable: offline" until connectivity returns). No message code depends on it; `sheet.onTap()` stays first in `onIntent` and `::screenTapped` is the screen's `onInteracted`.
 - **4.12:** nothing to do here. Its response-code table only has to keep producing `PurchaseFailureKind` values, and a new kind fails to compile in `PurchaseRules.outcomeOf` and in `PaymentOutcomesTest`.
 - **4.15:** the Snoozed surface owns the Purchased and "Use it" rows (no message). The 4.14 message is per ring, so a re-ring shows none.
 

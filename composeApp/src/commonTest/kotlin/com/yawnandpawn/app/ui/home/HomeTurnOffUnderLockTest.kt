@@ -1,13 +1,12 @@
 package com.yawnandpawn.app.ui.home
 
-import com.yawnandpawn.app.core.alarm.AlarmWriteLock
-import kotlinx.coroutines.CompletableDeferred
-import com.yawnandpawn.app.core.error.Outcome
-import com.yawnandpawn.app.core.alarm.AlarmRepository
 import com.yawnandpawn.app.core.alarm.Alarm
+import com.yawnandpawn.app.core.alarm.AlarmRepository
+import com.yawnandpawn.app.core.alarm.AlarmWriteLock
 import com.yawnandpawn.app.core.config.CommitmentAction
 import com.yawnandpawn.app.core.config.CommitmentEvent
 import com.yawnandpawn.app.core.error.DomainError
+import com.yawnandpawn.app.core.error.Outcome
 import com.yawnandpawn.app.core.history.MissedNotes
 import com.yawnandpawn.app.core.log.LogEvent
 import com.yawnandpawn.app.core.session.SessionState
@@ -31,6 +30,7 @@ import com.yawnandpawn.app.testing.anAlarm
 import com.yawnandpawn.app.testing.noReRegisterSuggestions
 import com.yawnandpawn.app.ui.format.Countdown
 import com.yawnandpawn.app.ui.settings.WeakeningNote
+import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -263,7 +263,11 @@ class HomeTurnOffUnderLockTest {
 
             viewModel.onIntent(HomeIntent.AlarmToggled(ID, enabled = true))
             viewModel.switchOff()
-            assertEquals(Countdown.HoursMinutes(7, 59), viewModel.state.value.disableDialog?.ringsIn)
+            assertEquals(
+                Countdown.HoursMinutes(7, 59),
+                viewModel.state.value.disableDialog
+                    ?.ringsIn,
+            )
 
             viewModel.onIntent(HomeIntent.DisableConfirmed)
             gated.gate?.complete(Unit)
@@ -281,12 +285,20 @@ class HomeTurnOffUnderLockTest {
             val viewModel = home()
 
             viewModel.switchOff()
-            assertEquals(Countdown.HoursMinutes(6, 50), viewModel.state.value.disableDialog?.ringsIn)
+            assertEquals(
+                Countdown.HoursMinutes(6, 50),
+                viewModel.state.value.disableDialog
+                    ?.ringsIn,
+            )
 
             viewModel.onIntent(HomeIntent.DisableCancelled)
             clock.set(Instant.parse("2027-03-28T05:30:00Z") - 8.hours)
             viewModel.switchOff()
-            assertEquals(Countdown.HoursMinutes(8, 0), viewModel.state.value.disableDialog?.ringsIn)
+            assertEquals(
+                Countdown.HoursMinutes(8, 0),
+                viewModel.state.value.disableDialog
+                    ?.ringsIn,
+            )
         }
 
     @Test

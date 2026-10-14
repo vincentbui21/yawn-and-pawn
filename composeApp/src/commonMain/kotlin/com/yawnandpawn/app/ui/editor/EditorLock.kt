@@ -9,6 +9,7 @@ import com.yawnandpawn.app.core.billing.PriceCatalog
 import com.yawnandpawn.app.core.billing.PriceCatalogSnapshot
 import com.yawnandpawn.app.core.checks.CheckEntry
 import com.yawnandpawn.app.core.config.GlobalSettingsRepository
+import com.yawnandpawn.app.core.config.LockWindow
 import com.yawnandpawn.app.core.config.LockedField
 import com.yawnandpawn.app.core.config.PendingChange
 import com.yawnandpawn.app.core.config.SettingValue
@@ -18,6 +19,7 @@ import com.yawnandpawn.app.core.config.withPending
 import com.yawnandpawn.app.core.session.GlobalSettings
 import com.yawnandpawn.app.ui.checks.toUi
 import com.yawnandpawn.app.ui.settings.SnoozePrices
+import com.yawnandpawn.app.ui.settings.weakeningNoteOf
 import kotlinx.datetime.TimeZone
 import kotlin.time.Instant
 
@@ -117,4 +119,41 @@ internal fun EditorForm.withPending(pending: PendingFields): EditorForm {
     val grace = pending.grace?.first?.coerceIn(Alarm.GRACE_SECONDS_RANGE) ?: graceSeconds
     val checks = pending.checks?.first
     return copy(graceSeconds = grace, checks = checks?.first ?: this.checks, checkMode = checks?.second ?: checkMode)
+}
+
+/**
+ * The commitment-lock parts of the editor (Story 4.6): the fee ladder for [form]'s next ring (when [ladder]'s inputs
+ * and formatter are known), and the "Saved. Takes effect after ..." notes of the fields that hold their [pending]
+ * value (a field set to another value shows none: saving that would replace or cancel the waiting change). A note
+ * names the ring a save would wait for: the later of the one the change waits for and the form's ring when that is in
+ * the window (review fix 1: an alarm moved later never rings the later ring with the weaker value).
+ */
+internal fun FullEditorSections.lockSections(
+    form: EditorForm,
+    alarmId: String?,
+    pending: PendingFields,
+    ladder: Pair<FeeInputs, MoneyFormatter>?,
+    now: Instant,
+    zone: TimeZone,
+): FullEditorSections {
+    val formRing = nextOccurrence(AlarmRule(form.time, form.repeatDays), now, zone).takeIf { LockWindow.contains(it, now) }
+    val waitsUntil: (Instant) -> Instant = { maxOf(it, formRing ?: it) }
+    val graceAt =
+        pending.grace
+            ?.takeIf { (seconds, _) -> form.graceSeconds == seconds }
+            ?.second
+            ?.let(waitsUntil)
+    val checksAt =
+        pending.checks
+            ?.takeIf { (shown, _) -> shown == (form.checks to form.checkMode) }
+            ?.second
+            ?.let(waitsUntil)
+    val prices = ladder?.let { (inputs, formatter) -> feeLadderOf(form, alarmId, inputs, now, zone, formatter) }
+    return copy(
+        feeLadder = prices?.first,
+        pricesApproximate = prices?.second == true,
+        graceNote = weakeningNoteOf(graceAt, now, zone),
+        checksNote = weakeningNoteOf(checksAt, now, zone),
+        weakeningNote = weakeningNoteOf(listOfNotNull(graceAt, checksAt).maxOrNull(), now, zone),
+    )
 }

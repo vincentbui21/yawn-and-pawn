@@ -31,8 +31,8 @@ import kotlin.time.Instant
  * same checks (with a re-registered code) keeps the change's date.
  */
 class SaveAlarmMovedRingTest {
-    /** Monday 2027-03-08, 23:40 UTC; the alarm rings at 07:30 and 07:45 is the moved ring. */
-    private val lateEvening = Instant.parse("2027-03-08T23:40:00Z")
+    /** Monday 2027-03-08, 23:50 UTC; the alarm rings at 07:30, and 07:45 (the moved ring) is inside the window too. */
+    private val lateEvening = Instant.parse("2027-03-08T23:50:00Z")
     private val sevenThirty = Instant.parse("2027-03-09T07:30:00Z")
     private val sevenFortyFive = Instant.parse("2027-03-09T07:45:00Z")
     private val clock = TestClock(Instant.parse("2027-03-08T12:00:00Z"))
@@ -70,14 +70,32 @@ class SaveAlarmMovedRingTest {
         runTest {
             val alarm = stored()
             edit(alarm) { it.copy(graceSeconds = 30) }
-            assertEquals(Occurrence(alarm.id, sevenThirty), pending.changes.value.single().effectiveAfter)
+            assertEquals(
+                Occurrence(alarm.id, sevenThirty),
+                pending.changes.value
+                    .single()
+                    .effectiveAfter,
+            )
 
             // The editor opens with 30 s selected and the user moves the alarm to 07:45.
             val saved = edit(alarm) { it.copy(graceSeconds = 30, time = LocalTime(7, 45)) }
 
             assertEquals(Occurrence(alarm.id, sevenFortyFive), saved.pendingUntil)
-            assertEquals(Occurrence(alarm.id, sevenFortyFive), pending.changes.value.single().effectiveAfter)
-            val config = ConfigResolver.resolve(saved.alarm, listOf(math), GlobalSettings(), false, sevenFortyFive, pendingChanges = pending.changes.value)
+            assertEquals(
+                Occurrence(alarm.id, sevenFortyFive),
+                pending.changes.value
+                    .single()
+                    .effectiveAfter,
+            )
+            val config =
+                ConfigResolver.resolve(
+                    saved.alarm,
+                    listOf(math),
+                    GlobalSettings(),
+                    false,
+                    sevenFortyFive,
+                    pendingChanges = pending.changes.value,
+                )
             assertEquals(20, config.graceSeconds)
         }
 
@@ -90,7 +108,12 @@ class SaveAlarmMovedRingTest {
 
             val saved = edit(alarm) { it.copy(checks = listOf(easy), time = LocalTime(7, 45)) }
 
-            assertEquals(Occurrence(alarm.id, sevenFortyFive), pending.changes.value.single().effectiveAfter)
+            assertEquals(
+                Occurrence(alarm.id, sevenFortyFive),
+                pending.changes.value
+                    .single()
+                    .effectiveAfter,
+            )
             assertEquals(Occurrence(alarm.id, sevenFortyFive), saved.pendingUntil)
         }
 
@@ -116,7 +139,12 @@ class SaveAlarmMovedRingTest {
             val alarm = stored(draft.copy(checks = listOf(qr, math), checkMode = CheckMode.All))
             // Easier: Random instead of All.
             edit(alarm) { it.copy(checks = listOf(qr, math), checkMode = CheckMode.Random) }
-            assertEquals(Occurrence(alarm.id, sevenThirty), pending.changes.value.single().effectiveAfter)
+            assertEquals(
+                Occurrence(alarm.id, sevenThirty),
+                pending.changes.value
+                    .single()
+                    .effectiveAfter,
+            )
 
             // The sticker is re-registered, and the editor saves the pending plan with the new code.
             val renewed = qr.copy(code = new)
@@ -135,7 +163,12 @@ class SaveAlarmMovedRingTest {
 
             edit(alarm) { it.copy(time = LocalTime(7, 45)) }
 
-            assertEquals(Occurrence(alarm.id, sevenFortyFive), pending.changes.value.single().effectiveAfter)
+            assertEquals(
+                Occurrence(alarm.id, sevenFortyFive),
+                pending.changes.value
+                    .single()
+                    .effectiveAfter,
+            )
             val config =
                 ConfigResolver.resolve(
                     alarm.copy(time = LocalTime(7, 45)),

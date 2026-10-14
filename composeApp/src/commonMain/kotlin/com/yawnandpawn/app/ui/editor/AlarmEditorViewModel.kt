@@ -17,7 +17,6 @@ import com.yawnandpawn.app.core.billing.PriceCatalogSnapshot
 import com.yawnandpawn.app.core.checks.AccessibilityState
 import com.yawnandpawn.app.core.checks.CheckEntry
 import com.yawnandpawn.app.core.checks.qr.RegisteredCode
-import com.yawnandpawn.app.core.config.LockWindow
 import com.yawnandpawn.app.core.config.PendingChange
 import com.yawnandpawn.app.core.config.PendingChangeRepository
 import com.yawnandpawn.app.core.error.DomainError
@@ -610,35 +609,10 @@ class AlarmEditorViewModel(
         asCopy: Boolean,
     ): Outcome<List<PendingChange>, DomainError> = pendingChanges?.takeUnless { asCopy }?.forAlarm(id) ?: Outcome.Success(emptyList())
 
-    /**
-     * The commitment-lock parts of the screen (Story 4.6): the fee ladder for the form's next ring, and the
-     * "Saved. Takes effect after ..." notes of the fields that hold their pending value (a field set to another value
-     * shows none: saving that would replace or cancel the waiting change).
-     */
+    /** The fee ladder and the lock notes for the form as it is now ([lockSections], Story 4.6). */
     private fun EditorUiState.withLock(): EditorUiState {
-        val full = full ?: return this
-        val now = clock.now()
-        val zone = timeZoneProvider.current()
-        // Saving waits for the latest of the ring the change waits for and the form's ring, when that is in the window
-        // (review fix 1: an alarm moved later never rings the later ring with the weaker value).
-        val formRing = nextOccurrence(AlarmRule(form.time, form.repeatDays), now, zone).takeIf { LockWindow.contains(it, now) }
-        val graceAt = pendingFields.grace?.takeIf { (seconds, _) -> form.graceSeconds == seconds }?.second?.let { maxOf(it, formRing ?: it) }
-        val checksAt =
-            pendingFields.checks
-                ?.takeIf { (shown, _) -> shown == (form.checks to form.checkMode) }
-                ?.second
-                ?.let { maxOf(it, formRing ?: it) }
-        val ladder = fees?.let { sources -> feeInputs?.let { feeLadderOf(form, alarmId, it, now, zone, sources.moneyFormatter) } }
-        return copy(
-            full =
-                full.copy(
-                    feeLadder = ladder?.first,
-                    pricesApproximate = ladder?.second == true,
-                    graceNote = weakeningNoteOf(graceAt, now, zone),
-                    checksNote = weakeningNoteOf(checksAt, now, zone),
-                    weakeningNote = weakeningNoteOf(listOfNotNull(graceAt, checksAt).maxOrNull(), now, zone),
-                ),
-        )
+        val ladder = fees?.let { sources -> feeInputs?.let { it to sources.moneyFormatter } }
+        return copy(full = full?.lockSections(form, alarmId, pendingFields, ladder, clock.now(), timeZoneProvider.current()))
     }
 
     private fun editLabel(label: String) {

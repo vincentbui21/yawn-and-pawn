@@ -217,12 +217,18 @@ class AlarmEditorLockTest {
     fun `a pending quiet time moved to a later ring says and waits for that ring (review fix 1)`() =
         runTest(dispatcher) {
             storeAlarm()
+            // 23:50: the moved ring at 07:45 is inside the window too (7 h 55 min).
+            clock.set(Instant.parse("2027-03-08T23:50:00Z"))
             pending.put(waitingGrace(30))
             val viewModel = viewModel()
             val effects = effectsOf(viewModel)
 
             viewModel.onIntent(EditorIntent.TimeChanged(LocalTime(7, 45)))
-            assertEquals(WeakeningNote(LocalTime(7, 45)), viewModel.state.value.full!!.graceNote)
+            assertEquals(
+                WeakeningNote(LocalTime(7, 45)),
+                viewModel.state.value.full!!
+                    .graceNote,
+            )
             viewModel.onIntent(EditorIntent.SaveClicked)
 
             assertEquals(Occurrence(id, sevenFortyFive), pending.current.single().effectiveAfter)
@@ -245,7 +251,7 @@ class AlarmEditorLockTest {
         }
 
     @Test
-    fun `a note saved at 23:59 before a 00:30 ring says tomorrow's`() {
+    fun `a note saved at 23 59 before a ring at 00 30 says tomorrow's`() {
         val note = weakeningNoteOf(Instant.parse("2027-03-09T00:30:00Z"), Instant.parse("2027-03-08T23:59:00Z"), TimeZone.UTC)
         assertEquals(WeakeningNote(LocalTime(0, 30), today = false), note)
     }

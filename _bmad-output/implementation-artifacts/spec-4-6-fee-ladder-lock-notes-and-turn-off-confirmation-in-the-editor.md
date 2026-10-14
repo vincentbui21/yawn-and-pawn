@@ -237,8 +237,12 @@ online." is used in the editor's Snooze sub-screen.
    - The problem: the editor now saves the pending values back, so `CommitmentRules.decide` kept the old change (for
      example "after 07:30") even when the alarm was moved to 07:45 inside the window. The 07:45 ring then used the
      weaker value. Checks were affected the same way.
-   - The fix: a pending change keeps its date only when that date is not earlier than the new window. Otherwise it
-     waits for the new ring.
+   - The fix: an alarm's own pending change keeps its date only when that date is not earlier than the new window.
+     Otherwise it waits for the new ring.
+   - Global changes keep 4.4's rule (the same value keeps its date, and the `CommitmentRulesTest` row stands). Fix 2
+     covers their moved ring.
+   - A ring moved out of the window (for example to 07:45 at 23:40, 8 h 05 min away) stays 4.4 decision 2's accepted
+     nudge.
    - The editor's field notes name the later of the pending ring and the form's ring.
    - Tests: core `SaveAlarmMovedRingTest` (quiet time and checks moved to 07:45, and `resolve` at 07:45 gives the live
      20 s) and the editor test `TimeChanged(07:45)` then save.

@@ -2,7 +2,7 @@
 title: 'Story 4.14: Payment outcome messages'
 type: 'feature'
 created: '2026-10-09'
-status: 'in-progress'
+status: 'done'
 baseline_revision: '79aa8b4'
 context:
   - '{project-root}/_bmad-output/implementation-artifacts/epic-4-context.md'
@@ -89,7 +89,8 @@ Status: implemented in fast mode (one agent, unattended Epic 4 run), with no rev
 **Verification:**
 - Targeted runs pass on the pre-rebase branch: `PaymentOutcomesTest`, `PaymentOutcomeCopyTest`, `CopyRulesTest`, `ConfirmSheetHostTest`, `SnoozeConfirmSheetTest`, `PaymentOutcomeMessagesTest` and `PaymentOutcomeScreenshotTest` (verify), plus `spotlessApply` and `detekt`.
 - Full gate before the rebase: 1896 tests, 1 failure, `DirectBootRingTest`. Its assertion lists a database path from a different test, the known cross-test leak; the test is unrelated to this story.
-- Full gate after the rebase onto `0c3665c`: not green, for environment reasons only. Run 1 hit a build-cache lock held by another lane. Run 2: the Gradle daemon disappeared. Run 3: `Gradle Test Executor 1` exited with code 1 after a connection reset, with about 130 MB free RAM and 20 Java processes from parallel lanes. None of the 106 result files written before the crash has a failure. The gate must be rerun on a quiet machine before merging.
+- Full gate after the rebase onto `0c3665c`: not green, for environment reasons only. Run 1 hit a build-cache lock held by another lane. Run 2: the Gradle daemon disappeared. Run 3: `Gradle Test Executor 1` exited with code 1 after a connection reset, with about 130 MB free RAM and 20 Java processes from parallel lanes. None of the 106 result files written before the crash has a failure. The gate must be rerun on a quiet machine before merging. CI runs the full gate on PR #55.
+- After the review fixes, rebased onto `a44901e` (4.12 merged; a `deferred-work.md` conflict, both sides kept). Targeted run with `--no-daemon --max-workers=2`: `spotlessCheck`, `detekt`, `core` `PurchaseCoordinator*` and `SessionTransition*`, `composeApp` `PaymentOutcomesTest`, `PaymentOutcomeCopyTest` and `CopyRulesTest`, and `androidApp` `ConfirmSheetHostTest`, `SnoozeConfirmSheetTest`, `PaymentOutcomeMessagesTest`, `PaymentOutcomeScreenshotTest`, `CheckFontScaleTest` and `CheckScreenshotTest`: BUILD SUCCESSFUL. 4.12 needs no change for `PurchaseFailureKind.Unconfirmed` (its adapter has no exhaustive `when` over the kind).
 
 **Rebase notes:**
 - **4.7 (merged, rebased cleanly):** its live `SnoozeConditions` re-renders the button in place (the Offline row's "Snooze unavailable: offline" until connectivity returns). No message code depends on it; `sheet.onTap()` stays first in `onIntent` and `::screenTapped` is the screen's `onInteracted`.

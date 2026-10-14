@@ -136,6 +136,10 @@ deferred:
 - **`UnlockPort`:** `AndroidDeviceUnlocker` in `billingModule` is the only binding. 4.13 added none.
 - **4.13's intent id:** `ConfirmSheetHost` mints a new UUID for every Pay tap (the 4.8 deferral).
 - **4.16 (purchase history)** shares no files with this story.
+- **Second rebase** onto origin/main `0c3665c`, which adds 4.7 (snooze availability) and 4.5 (settings).
+  - Conflicts, both sides kept: the `WorkModule` KDoc, `TestYawnAndPawnApp` (4.7's online `FakeConnectivity` plus the no-Play billing facade) and `WakeApp` (`connectivity` plus `billingFacade`).
+  - 4.7's comment-only edit to `UnavailableBilling` was dropped with the file.
+  - With Play bound, `LiveSnoozeAvailability` now gets real cached prices (from the refresh and the live price at the sheet).
 
 ## Review (2 reviewers, fast mode)
 

@@ -49,29 +49,20 @@ sealed interface SupportEmailFact {
 fun supportEmailBody(lines: List<String>): String = lines.joinToString(separator = "\n")
 
 /**
- * The support email about each of [charges] and about none, in the app's strings: subject "Charge question" and, about
- * a charge, the body "Order ID: …", "Date: …", "Price: …", "Status: …" ([supportEmailFacts]); about none, an empty
- * body. Resolved in composition, so opening the email never waits on a resource read.
+ * The support email's templates in the app's strings ([SupportEmailTemplates]), resolved in composition so opening the
+ * email never waits on a resource read; each line keeps [SupportEmailTemplates.SLOT] where [SupportEmailTemplates.write]
+ * puts the charge's value.
  */
 @Composable
-fun supportEmailWriter(charges: List<ChargeOption>): SupportEmailWriter {
-    val subject = stringResource(Res.string.problem_email_subject)
-    val bodies = charges.associate { charge -> charge.key to supportEmailBody(supportEmailFacts(charge).map { line(it) }) }
-    return SupportEmailWriter { charge -> SupportEmail(subject = subject, body = charge?.let { bodies[it.key] }.orEmpty()) }
+fun supportEmailTemplates(): SupportEmailTemplates {
+    val slot = SupportEmailTemplates.SLOT
+    return SupportEmailTemplates(
+        subject = stringResource(Res.string.problem_email_subject),
+        orderIdLine = stringResource(Res.string.problem_email_order_id, slot),
+        dateLine = stringResource(Res.string.problem_email_date, slot),
+        priceLine = stringResource(Res.string.problem_email_price, slot),
+        statusLine = stringResource(Res.string.problem_email_status, slot),
+        snoozeStatus = stringResource(Res.string.purchase_snooze_number, slot),
+        notUsedStatus = stringResource(Res.string.purchase_stranded),
+    )
 }
-
-@Composable
-private fun line(fact: SupportEmailFact): String =
-    when (fact) {
-        is SupportEmailFact.OrderId -> stringResource(Res.string.problem_email_order_id, fact.orderId)
-        is SupportEmailFact.Date -> stringResource(Res.string.problem_email_date, fact.iso)
-        is SupportEmailFact.Price -> stringResource(Res.string.problem_email_price, fact.price)
-        is SupportEmailFact.Status -> stringResource(Res.string.problem_email_status, statusText(fact.status))
-    }
-
-@Composable
-private fun statusText(status: ChargeStatus): String =
-    when (status) {
-        is ChargeStatus.Snooze -> stringResource(Res.string.purchase_snooze_number, status.number)
-        ChargeStatus.NotUsed -> stringResource(Res.string.purchase_stranded)
-    }

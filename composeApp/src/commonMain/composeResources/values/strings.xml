@@ -415,9 +415,12 @@
     <string name="problem_email_price">Price: %1$s</string>
     <string name="problem_email_status">Status: %1$s</string>
     <!-- Story 4.17, new (default taken, owner can change; added to EXPERIENCE.md): the picker's card title, and the
-         snackbar when no email app can open the email, naming the address so the user can still write. -->
+         note when no email app can open the email: the address on its own line under it, with "Copy address"
+         (review M1), and the confirmation where the phone shows none (before Android 13). -->
     <string name="problem_pick_charge">Which charge?</string>
-    <string name="problem_no_email_app">No email app found. Write to %1$s.</string>
+    <string name="problem_no_email_app">No email app found. Write to:</string>
+    <string name="problem_copy_address">Copy address</string>
+    <string name="problem_address_copied">Address copied.</string>
     <!-- A picker row: "{price} · {status}" (layout only, no words). -->
     <string name="problem_charge_detail">%1$s · %2$s</string>
 

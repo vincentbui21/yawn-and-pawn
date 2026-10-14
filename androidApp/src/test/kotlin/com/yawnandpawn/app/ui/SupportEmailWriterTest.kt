@@ -9,9 +9,9 @@ import com.yawnandpawn.app.core.billing.RecordStatus
 import com.yawnandpawn.app.testing.aPurchaseRecord
 import com.yawnandpawn.app.ui.payments.ChargeOption
 import com.yawnandpawn.app.ui.payments.SupportEmail
-import com.yawnandpawn.app.ui.payments.SupportEmailWriter
+import com.yawnandpawn.app.ui.payments.SupportEmailTemplates
 import com.yawnandpawn.app.ui.payments.chargeOptionOf
-import com.yawnandpawn.app.ui.payments.supportEmailWriter
+import com.yawnandpawn.app.ui.payments.supportEmailTemplates
 import com.yawnandpawn.app.ui.theme.PpsThemeMode
 import kotlinx.datetime.TimeZone
 import org.junit.Rule
@@ -36,14 +36,14 @@ class SupportEmailWriterTest {
 
     private val helsinki = TimeZone.of("Europe/Helsinki")
 
-    /** The email [supportEmailWriter] writes about [charge] (or about none) when the screen shows [charges]. */
-    private fun write(
-        charge: ChargeOption?,
-        charges: List<ChargeOption> = listOfNotNull(charge),
-    ): SupportEmail {
-        var writer: SupportEmailWriter? = null
-        withScreen(PpsThemeMode.Light, content = { writer = supportEmailWriter(charges) }) { composeRule.waitForIdle() }
-        return checkNotNull(writer).write(charge)
+    /**
+     * The email the app's templates ([supportEmailTemplates], resolved in composition like the screen does) write about
+     * [charge], or about none. The templates know no charge list, so any charge the user picks gets its lines.
+     */
+    private fun write(charge: ChargeOption?): SupportEmail {
+        var templates: SupportEmailTemplates? = null
+        withScreen(PpsThemeMode.Light, content = { templates = supportEmailTemplates() }) { composeRule.waitForIdle() }
+        return checkNotNull(templates).write(charge)
     }
 
     private fun PurchaseRecord.charge(zone: TimeZone = TimeZone.UTC) = chargeOptionOf(this, zone)
@@ -67,8 +67,9 @@ class SupportEmailWriterTest {
             "Order ID: GPA.3301-2345-6789-01234\nDate: 2027-03-03T08:00:00+02:00\nPrice: $2.00\nStatus: Snooze 2",
             email.body,
         )
-        // Nothing the user cannot see: no token (raw or hashed), session, alarm or label.
-        listOf("raw-purchase-token", record.tokenHash, "session-7f3a", "alarm-gym", "Gym").forEach { secret ->
+        // Nothing the user cannot see: no token (raw or hashed), session or alarm. The alarm's label is checked through
+        // the real path in MainActivityTest.
+        listOf("raw-purchase-token", record.tokenHash, "session-7f3a", "alarm-gym").forEach { secret ->
             assertFalse(secret in email.body || secret in email.subject, "the email carries $secret")
         }
     }
@@ -85,9 +86,17 @@ class SupportEmailWriterTest {
 
     @Test
     fun `with no charge the email has the subject and no order details`() {
-        val email = write(charge = null, charges = listOf(aPurchaseRecord().charge()))
+        val email = write(charge = null)
 
         assertEquals("Charge question", email.subject)
         assertEquals("", email.body)
+    }
+
+    @Test
+    fun `a charge the screen has not loaded still gets all its lines, never an empty body`() {
+        // Review M2: the body comes from the charge given, not from a map of the charges loaded so far.
+        val unseen = aPurchaseRecord(token = "never-listed", snoozeNumber = 5, orderId = "GPA.9").charge()
+
+        assertEquals("Order ID: GPA.9\nDate: 2027-03-03T06:00:00+00:00\nPrice: $1.00\nStatus: Snooze 5", write(unseen).body)
     }
 }

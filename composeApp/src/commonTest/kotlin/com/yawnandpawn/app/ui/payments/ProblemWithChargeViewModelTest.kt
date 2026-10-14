@@ -2,6 +2,8 @@ package com.yawnandpawn.app.ui.payments
 
 import com.yawnandpawn.app.core.billing.Money
 import com.yawnandpawn.app.core.billing.PriceSource
+import com.yawnandpawn.app.core.billing.PurchaseRecordRepository
+import com.yawnandpawn.app.core.billing.PurchaseRecordsRead
 import com.yawnandpawn.app.core.billing.RecordStatus
 import com.yawnandpawn.app.core.log.LogEvent
 import com.yawnandpawn.app.testing.DEFAULT_FAKE_INSTANT
@@ -13,6 +15,9 @@ import com.yawnandpawn.app.ui.links.AppLinks
 import com.yawnandpawn.app.ui.links.ExternalLinks
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.awaitCancellation
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.test.TestScope
 import kotlinx.coroutines.test.UnconfinedTestDispatcher
 import kotlinx.coroutines.test.advanceTimeBy
@@ -143,7 +148,7 @@ class ProblemWithChargeViewModelTest {
         }
 
     @Test
-    fun `with no email app the picker stays and says where to write, for 4 s`() =
+    fun `with no email app the picker stays and the address note stays until the user moves on`() =
         runTest(dispatcher) {
             records.putRecord(aPurchaseRecord(purchasedAt = now))
             links.canSendEmail = false
@@ -153,11 +158,74 @@ class ProblemWithChargeViewModelTest {
             viewModel.onIntent(PaymentsIntent.SendEmailClicked, writer)
 
             assertTrue(viewModel.state.value.picking)
-            assertEquals(ChargeSnackbar.NoEmailApp, viewModel.state.value.snackbar)
+            assertTrue(viewModel.state.value.noEmailApp)
             assertEquals("help@example.com", viewModel.state.value.supportEmail)
+            // Not a 4 s snackbar: the address stays usable.
+            advanceTimeBy(ProblemWithChargeViewModel.SNACKBAR_MILLIS * 10)
+            assertTrue(viewModel.state.value.noEmailApp)
+
+            viewModel.onIntent(PaymentsIntent.Back, writer)
+            assertFalse(viewModel.state.value.noEmailApp)
+        }
+
+    @Test
+    fun `Copy address puts the support address on the clipboard, confirmed only where the phone does not`() =
+        runTest(dispatcher) {
+            links.canSendEmail = false
+            val viewModel = screen()
+            viewModel.onIntent(PaymentsIntent.EmailSupportClicked, writer)
+            assertTrue(viewModel.state.value.noEmailApp)
+
+            viewModel.onIntent(PaymentsIntent.CopyAddressClicked, writer)
+            assertEquals(listOf("help@example.com"), links.copied)
+            assertEquals(ChargeSnackbar.AddressCopied, viewModel.state.value.snackbar)
             advanceTimeBy(ProblemWithChargeViewModel.SNACKBAR_MILLIS + 1)
             assertNull(viewModel.state.value.snackbar)
+
+            links.phoneConfirmsCopy = true
+            viewModel.onIntent(PaymentsIntent.CopyAddressClicked, writer)
+            assertEquals(2, links.copied.size)
+            assertNull(viewModel.state.value.snackbar)
         }
+
+    @Test
+    fun `before the charges are read Email support does nothing, so it never sends without the order details`() =
+        runTest(dispatcher) {
+            records.putRecord(aPurchaseRecord(purchasedAt = now))
+            val notYetRead =
+                object : PurchaseRecordRepository by records {
+                    override fun observeAll(): Flow<PurchaseRecordsRead> = flow { awaitCancellation() }
+                }
+            val viewModel = ProblemWithChargeViewModel(notYetRead, zone, links, appLinks, logger)
+
+            viewModel.onIntent(PaymentsIntent.EmailSupportClicked, writer)
+
+            assertFalse(viewModel.state.value.loaded)
+            assertFalse(viewModel.state.value.picking)
+            assertTrue(links.emails.isEmpty())
+        }
+
+    @Test
+    fun `the email's templates fill in the charge they are given, whatever the screen has loaded`() {
+        val templates =
+            SupportEmailTemplates(
+                subject = "Charge question",
+                orderIdLine = "Order ID: ${SupportEmailTemplates.SLOT}",
+                dateLine = "Date: ${SupportEmailTemplates.SLOT}",
+                priceLine = "Price: ${SupportEmailTemplates.SLOT}",
+                statusLine = "Status: ${SupportEmailTemplates.SLOT}",
+                snoozeStatus = "Snooze ${SupportEmailTemplates.SLOT}",
+                notUsedStatus = "Not used, refunded automatically by Google",
+            )
+        // A charge on no list at all (and no price, so no money is formatted here).
+        val charge = chargeOptionOf(aPurchaseRecord(orderId = "GPA.1", snoozeNumber = 3, priceSource = PriceSource.Tier), TimeZone.UTC)
+
+        assertEquals(
+            SupportEmail("Charge question", "Order ID: GPA.1\nDate: 2027-03-03T06:00:00+00:00\nStatus: Snooze 3"),
+            templates.write(charge),
+        )
+        assertEquals(SupportEmail("Charge question", ""), templates.write(null))
+    }
 
     @Test
     fun `Back closes the picker and nothing is sent`() =
@@ -265,8 +333,15 @@ class ProblemWithChargeViewModelTest {
     private class RecordingLinks : ExternalLinks {
         var canOpenUrls = true
         var canSendEmail = true
+        var phoneConfirmsCopy = false
         val urls = mutableListOf<String>()
         val emails = mutableListOf<SentEmail>()
+        val copied = mutableListOf<String>()
+
+        override fun copyText(text: String): Boolean {
+            copied += text
+            return !phoneConfirmsCopy
+        }
 
         override fun openUrl(url: String): Boolean = canOpenUrls.also { if (it) urls += url }
 

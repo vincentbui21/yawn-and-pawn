@@ -223,7 +223,7 @@ All strings live in resources (NFR-10). `{price}`, `{nextPrice}`, `{minutes}`, `
 | Problem with a charge?, actions | "Open Google Play order history" · "Email support" |
 | Problem with a charge?, support email subject | "Charge question" |
 | Problem with a charge?, Email support picker (Story 4.17, default taken) | Title "Email support" · card "Which charge?" · rows "{date} · {time}" over "{price} · {status}" (status as in Purchase history) · `button-filled` "Email support" |
-| Problem with a charge?, no email app (snackbar, Story 4.17, default taken) | "No email app found. Write to {email}." |
+| Problem with a charge?, no email app (note, Story 4.17 review, default taken) | "No email app found. Write to:" · then the address on its own line · `button-text` "Copy address" · snackbar "Address copied." (only before Android 13, which confirms copies itself) |
 | Reliability checklist, rows (title · reason) | "Notifications" · "Needed to show your alarm." / "Full-screen alarm" · "Shows the alarm over the lock screen." / "Exact alarms" · "Lets the alarm ring on time." / "Do Not Disturb" · "Do Not Disturb must allow alarms." / "Battery" · "Stops Android from pausing your alarm." / "Manufacturer settings" · "Your phone may stop apps in the background." / "Camera" · "Needed for your QR/Barcode and House Hunt checks." / "Microphone" · "Needed to record messages." / "Test alarm" · "Ring a test with your phone locked." |
 | Reliability checklist, revoked | "Alarm may not ring: battery optimization turned back on" · "Alarm may not ring: notifications turned off" · "Alarm may not ring: full-screen alarm turned off" · "Alarm may not ring: exact alarms turned off" · "Alarm may not ring: Do Not Disturb blocks alarms" · "Alarm may not ring: check your phone's background settings again" |
 | Reliability checklist, manufacturer guidance | "Open settings" · "I've done this" (steps in Long-form copy) |
@@ -416,8 +416,8 @@ Behavioural rules. Visual specs for every row live in `DESIGN.md > Components` u
 | Storage read failure | Purchase history | "Couldn't load your purchases." + `button-text` "Try again" instead of the list (never the empty state; Story 4.16). Also when no stored record can be read. |
 | Some records unreadable | Purchase history | `note-inline` "Some purchases couldn't be read." above the month cards; the readable records show (Story 4.16 review). |
 | No browser | Problem with a charge? | `snackbar` "No browser found." for 4 s (Story 4.17). |
-| No email app | Problem with a charge?, Email support picker | `snackbar` "No email app found. Write to {email}." for 4 s above "Email support"; the picker stays (Story 4.17). |
-| No purchase records (or they can't be read) | Problem with a charge? | "Email support" opens the email at once, without order details (Story 4.17). |
+| No email app | Problem with a charge?, Email support picker | Glass note "No email app found. Write to:" with the address (wraps only after "@" or ".") and "Copy address", announced politely; under the actions on the screen, above "Email support" in the picker, never over a row; stays until the user leaves the pane or an email opens (Story 4.17 review). |
+| No purchase records (or they can't be read) | Problem with a charge? | "Email support" opens the email at once, without order details (Story 4.17). Before the first read it does nothing. |
 | All OK | Reliability checklist | Every row "OK"; `button-outlined` "Ring a test alarm" stays. |
 | Session active | Settings | Not reachable (session lock). |
 | Large font (200%) and TalkBack | All | See Accessibility Floor. |

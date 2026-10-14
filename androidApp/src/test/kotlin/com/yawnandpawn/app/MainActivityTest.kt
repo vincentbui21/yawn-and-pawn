@@ -48,6 +48,7 @@ import org.robolectric.Shadows.shadowOf
 import org.robolectric.annotation.Config
 import org.robolectric.annotation.GraphicsMode
 import kotlin.test.assertEquals
+import kotlin.test.assertFalse
 import kotlin.test.assertNotNull
 import kotlin.test.assertSame
 import kotlin.test.assertTrue
@@ -313,13 +314,21 @@ class MainActivityTest {
 
     @Test
     fun `Problem with a charge opens from Purchase history, emails support about the picked charge, and Back walks back`() {
+        // A charge of the labelled "Gym" alarm: Purchase history names the alarm, the email never does (review M4).
+        addGymAlarm()
         val charge =
-            aPurchaseRecord(status = RecordStatus.Consumed, snoozeNumber = 2, price = Money(2_000_000, "USD"), orderId = "GPA.1234-5678")
+            aPurchaseRecord(
+                status = RecordStatus.Consumed,
+                alarmId = "gym",
+                snoozeNumber = 2,
+                price = Money(2_000_000, "USD"),
+                orderId = "GPA.1234-5678",
+            )
         assertEquals(Outcome.Success(Unit), runBlocking { GlobalContext.get().get<PurchaseRecordRepository>().putRecord(charge) })
-        waitForText("No alarms yet.")
         tab("You").performClick()
         composeRule.onNode(hasText("Purchase history") and hasClickAction()).performClick()
         waitForText("Snooze 2")
+        composeRule.onNode(hasText("· Gym", substring = true)).assertExists()
         composeRule.onNode(hasText("Problem with a charge?") and hasClickAction()).performScrollTo().performClick()
         waitForText("Google lets you request a refund yourself within 48 hours of a charge.")
         val app = composeRule.activity.application
@@ -332,7 +341,6 @@ class MainActivityTest {
         waitForText("Which charge?")
         composeRule.waitForIdle() // the picker has slid in: only its button is "Email support" now
         composeRule.onNode(hasText("Email support") and hasClickAction()).performClick()
-        // The email is written from the string resources off the main thread, then opened.
         composeRule.waitUntil(timeoutMillis = APP_WORK_TIMEOUT_MILLIS) { shadowOf(app).peekNextStartedActivity() != null }
         val email = assertNotNull(shadowOf(app).nextStartedActivity)
         assertEquals("android.intent.action.SENDTO", email.action)
@@ -340,6 +348,9 @@ class MainActivityTest {
         val body = assertNotNull(email.getStringExtra("android.intent.extra.TEXT"))
         assertTrue(body.startsWith("Order ID: GPA.1234-5678\nDate: "), body)
         assertTrue(body.endsWith("\nPrice: $2.00\nStatus: Snooze 2"), body)
+        listOf("Gym", "gym", charge.tokenHash, "session-1").forEach { hidden ->
+            assertFalse(hidden in body || hidden in email.dataString.orEmpty(), "the email carries $hidden")
+        }
         // The picker closes once the email app opened.
         waitForGone("Which charge?")
 

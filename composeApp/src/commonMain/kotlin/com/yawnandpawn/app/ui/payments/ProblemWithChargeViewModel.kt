@@ -24,7 +24,8 @@ import kotlinx.coroutines.launch
  * "Email support" opens the picker of the [SUPPORT_PICKER_CHARGES] most recent charges from [records] (newest picked),
  * whose "Email support" writes about the picked charge, or, with no charge at all, writes straight away without order
  * details. The email goes to [AppLinks.supportEmail] through the user's email app; the user sends it. When no app can
- * open the link or the email, a snackbar says so for 4 s instead of nothing happening.
+ * open the link, a snackbar says so for 4 s; when no app can open the email, a note shows the address with "Copy
+ * address" until the user moves on. "Email support" does nothing until the charges have been read once.
  *
  * The email's text comes from the screen ([SupportEmailWriter], the app's strings resolved where it is shown), so
  * opening it is immediate and never waits on a resource read.
@@ -58,7 +59,7 @@ class ProblemWithChargeViewModel(
                     logger.log(LogEvent.OperationFailed("load charges for support", cause.message ?: cause::class.simpleName.orEmpty()))
                     emit(emptyList())
                 }.collect { charges ->
-                    mutableState.update { it.copy(charges = charges, picking = it.picking && charges.isNotEmpty()) }
+                    mutableState.update { it.copy(charges = charges, loaded = true, picking = it.picking && charges.isNotEmpty()) }
                 }
         }
     }
@@ -70,7 +71,7 @@ class ProblemWithChargeViewModel(
     ) {
         when (intent) {
             PaymentsIntent.Back -> {
-                mutableState.update { it.copy(picking = false) }
+                mutableState.update { it.copy(picking = false, noEmailApp = false) }
             }
 
             PaymentsIntent.OpenOrderHistoryClicked -> {
@@ -78,12 +79,18 @@ class ProblemWithChargeViewModel(
             }
 
             PaymentsIntent.EmailSupportClicked -> {
+                // Before the first read nothing is known yet: an email now could leave out the order it is about.
+                if (!state.value.loaded) return
                 val newest = state.value.charges.firstOrNull()
                 if (newest == null) {
                     send(writer.write(null))
                 } else {
-                    mutableState.update { it.copy(picking = true, selectedKey = newest.key, snackbar = null) }
+                    mutableState.update { it.copy(picking = true, selectedKey = newest.key, snackbar = null, noEmailApp = false) }
                 }
+            }
+
+            PaymentsIntent.CopyAddressClicked -> {
+                if (links.copyText(appLinks.supportEmail)) show(ChargeSnackbar.AddressCopied)
             }
 
             is PaymentsIntent.ChargePicked -> {
@@ -100,12 +107,15 @@ class ProblemWithChargeViewModel(
         }
     }
 
-    /** Opens [email]; back on the screen once it opened, or says no email app could. */
+    /**
+     * Opens [email]; back on the screen once it opened. With no email app the note with the address and "Copy address"
+     * shows and stays (not a 4 s snackbar), so the address can still be used.
+     */
     private fun send(email: SupportEmail) {
         if (links.sendEmail(appLinks.supportEmail, email.subject, email.body)) {
-            mutableState.update { it.copy(picking = false) }
+            mutableState.update { it.copy(picking = false, noEmailApp = false) }
         } else {
-            show(ChargeSnackbar.NoEmailApp)
+            mutableState.update { it.copy(noEmailApp = true) }
         }
     }
 

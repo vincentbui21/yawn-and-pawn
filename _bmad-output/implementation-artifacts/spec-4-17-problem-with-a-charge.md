@@ -79,6 +79,18 @@ deferred:
 - [x] Wake rules: not a wake screen.
 - [x] Previews: `payments_problem*` are unchanged (same composable). New Roborazzi baselines are `problem_with_charge_*` (with and without charges, picker, no browser, no email app).
 
+## Review (fast mode)
+
+One review pass, nothing HIGH (privacy and money-truth checks clean). Fixed in `fix(4.17): review fixes`, each with a test:
+
+- **M1, the address fallback was a 4 s snackbar that broke mid-word at 200%:** with no email app a glass note now stays (until the pane is left or an email opens): "No email app found. Write to:", the address on its own line with break opportunities only after "@" and "." (TalkBack reads the plain address), and `button-text` "Copy address" (clipboard through `ExternalLinks.copyText`; "Address copied." only before Android 13, which confirms itself). It sits under the actions on the screen and above "Email support" in the picker, never over a row. Tests: screenshots `problem_with_charge_no_email_app_*` (incl. 200%) and the picker ones re-recorded; semantics assert no overlap (main at 200%; picker at 200% on h780dp: `button.top >= note.bottom`, every visible row above the note) and 48 dp "Copy address".
+- **M2, an email without details before the first read:** `loaded` flag; "Email support" does nothing until the charges were read. The email's text is now `SupportEmailTemplates` (templates resolved in composition, filled at write time from the `ChargeOption` given), so a charge the screen hasn't listed still gets every line. Tests: a repository that never emits, then a tap, sends nothing; an unlisted charge gets its full body.
+- **M3, weak encoding test:** subject and order id with `A&body=x#?+%20` decode exactly, no fragment, query keys exactly `subject, body`.
+- **M4, tests claiming more than they check:** the label check runs a labelled "Gym" alarm through the real path (MainActivityTest: history shows "· Gym", the email and its URI never do); the picker layout check is the h780dp one above.
+- **Low:** samples, tests and baselines use `support@example.com`; the real address stays only in `config/app-links.properties`.
+
+Strings changed or added for the owner (EXPERIENCE.md updated): "No email app found. Write to:" (was "… Write to {email}."), "Copy address", "Address copied.".
+
 ## Verification
 
 - Coordinator gate policy (2026-10-14, PC out of memory): locally, only this story's test classes, `spotlessCheck`, `detekt` and the affected modules' compile (`--no-daemon --max-workers=2`); CI runs the full `qualityGate` on the PR.

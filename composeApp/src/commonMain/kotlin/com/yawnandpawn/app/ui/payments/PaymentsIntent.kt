@@ -21,4 +21,7 @@ sealed interface PaymentsIntent {
 
     /** "Email support" in the picker: the email about the picked charge. */
     data object SendEmailClicked : PaymentsIntent
+
+    /** "Copy address" in the no-email-app note: the support address to the clipboard. */
+    data object CopyAddressClicked : PaymentsIntent
 }

@@ -108,12 +108,17 @@ fun ProblemWithChargeScreen(
     )
 }
 
-/** The "Problem with a charge?" screen with the [snackbar] text showing at the bottom, if any. */
+/**
+ * The "Problem with a charge?" screen with the [snackbar] text showing at the bottom, if any. With [noEmailAppAddress]
+ * no email app could open the email: the note with that address and "Copy address" follows the actions, in the
+ * scrolling content (never over a row).
+ */
 @Composable
 internal fun ProblemWithChargeMain(
     onIntent: (PaymentsIntent) -> Unit,
     modifier: Modifier = Modifier,
     snackbar: String? = null,
+    noEmailAppAddress: String? = null,
 ) {
     Box(modifier = modifier.fillMaxSize()) {
         SubScreen(
@@ -133,6 +138,9 @@ internal fun ProblemWithChargeMain(
                 NavRow(label = stringResource(Res.string.problem_open_play), onClick = { onIntent(PaymentsIntent.OpenOrderHistoryClicked) })
                 GroupDivider()
                 NavRow(label = stringResource(Res.string.problem_email_support), onClick = { onIntent(PaymentsIntent.EmailSupportClicked) })
+            }
+            if (noEmailAppAddress != null) {
+                NoEmailAppNote(address = noEmailAppAddress, onCopy = { onIntent(PaymentsIntent.CopyAddressClicked) })
             }
         }
         if (snackbar != null) AppSnackbar(text = snackbar, modifier = Modifier.align(Alignment.BottomCenter))

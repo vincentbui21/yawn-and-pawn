@@ -39,16 +39,19 @@ internal object ProblemWithChargeSamples {
         )
 
     /** The screen with charges behind it (it looks the same without: the charges show only in the picker). */
-    val withCharges = ProblemWithChargeUiState(charges = charges, supportEmail = "vincentbui2108@gmail.com")
+    val withCharges = ProblemWithChargeUiState(charges = charges, loaded = true, supportEmail = "support@example.com")
 
     /** No charge at all: "Email support" opens the email without order details. */
-    val noCharges = ProblemWithChargeUiState(supportEmail = "vincentbui2108@gmail.com")
+    val noCharges = ProblemWithChargeUiState(loaded = true, supportEmail = "support@example.com")
 
     /** The picker, newest picked. */
     val picker = withCharges.copy(picking = true, selectedKey = "4")
 
-    /** The picker after "Email support" found no email app. */
-    val pickerNoEmailApp = picker.copy(snackbar = ChargeSnackbar.NoEmailApp)
+    /** The picker after "Email support" found no email app: the address note above the button. */
+    val pickerNoEmailApp = picker.copy(noEmailApp = true)
+
+    /** No charge, and no email app for the email without order details: the address note under the actions. */
+    val noChargesNoEmailApp = noCharges.copy(noEmailApp = true)
 
     /** "Open Google Play order history" found no browser. */
     val noBrowser = withCharges.copy(snackbar = ChargeSnackbar.NoBrowser)

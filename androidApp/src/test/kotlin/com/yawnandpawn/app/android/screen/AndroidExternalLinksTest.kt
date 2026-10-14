@@ -1,6 +1,7 @@
 package com.yawnandpawn.app.android.screen
 
 import android.app.Application
+import android.content.ClipboardManager
 import android.content.Intent
 import android.net.Uri
 import androidx.test.core.app.ApplicationProvider
@@ -13,6 +14,7 @@ import org.junit.Test
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
 import org.robolectric.Shadows.shadowOf
+import org.robolectric.annotation.Config
 import java.io.File
 import java.util.Properties
 import kotlin.test.assertContentEquals
@@ -48,28 +50,49 @@ class AndroidExternalLinksTest {
 
     @Test
     fun `the support email opens ACTION_SENDTO mailto with the address, subject and body in the URI and the extras`() {
-        val body = "Order ID: GPA.3301-2345\nDate: 2027-03-03T08:00:00+02:00\nPrice: €2,38\nStatus: Snooze 2"
+        // URI-special characters in the subject and the order id must survive exactly, adding no key and no fragment.
+        val tricky = "A&body=x#?+%20"
+        val subject = "Charge question $tricky"
+        val body = "Order ID: $tricky\nDate: 2027-03-03T08:00:00+02:00\nPrice: €2,38\nStatus: Snooze 2"
 
-        assertTrue(links.sendEmail("help@example.com", "Charge question", body))
+        assertTrue(links.sendEmail("help@example.com", subject, body))
 
         val started = shadowOf(app).nextStartedActivity
         assertEquals(Intent.ACTION_SENDTO, started.action)
-        val data = assertNotNullUri(started.data)
+        val data = Uri.parse(assertNotNullUri(started.data).toString())
         assertEquals("mailto", data.scheme)
-        assertTrue(data.toString().startsWith("mailto:help@example.com?subject="), data.toString())
-        // The mailto: URI decodes back to exactly the subject and body.
-        val query =
-            data
-                .toString()
-                .substringAfter('?')
-                .split('&')
-                .associate { it.substringBefore('=') to Uri.decode(it.substringAfter('=')) }
-        assertEquals("Charge question", query["subject"])
-        assertEquals(body, query["body"])
+        assertNull(data.fragment)
+        val (address, query) = data.encodedSchemeSpecificPart.split('?', limit = 2)
+        assertEquals("help@example.com", Uri.decode(address))
+        val pairs = query.split('&').map { it.substringBefore('=') to Uri.decode(it.substringAfter('=')) }
+        assertEquals(listOf("subject", "body"), pairs.map { it.first })
+        assertEquals(subject, pairs.toMap()["subject"])
+        assertEquals(body, pairs.toMap()["body"])
         assertContentEquals(arrayOf("help@example.com"), started.getStringArrayExtra(Intent.EXTRA_EMAIL))
-        assertEquals("Charge question", started.getStringExtra(Intent.EXTRA_SUBJECT))
+        assertEquals(subject, started.getStringExtra(Intent.EXTRA_SUBJECT))
         assertEquals(body, started.getStringExtra(Intent.EXTRA_TEXT))
         assertTrue(started.flags and Intent.FLAG_ACTIVITY_NEW_TASK != 0)
+    }
+
+    @Test
+    @Config(sdk = [34])
+    fun `Copy address puts the plain address on the clipboard, and from Android 13 leaves the confirmation to the phone`() {
+        assertFalse(links.copyText("help@example.com"))
+
+        val clipboard = app.getSystemService(ClipboardManager::class.java)
+        assertEquals(
+            "help@example.com",
+            clipboard.primaryClip
+                ?.getItemAt(0)
+                ?.text
+                .toString(),
+        )
+    }
+
+    @Test
+    @Config(sdk = [32])
+    fun `before Android 13 the app confirms the copy itself`() {
+        assertTrue(links.copyText("help@example.com"))
     }
 
     @Test

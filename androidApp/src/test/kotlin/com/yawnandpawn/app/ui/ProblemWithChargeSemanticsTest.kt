@@ -11,12 +11,15 @@ import androidx.compose.ui.test.getBoundsInRoot
 import androidx.compose.ui.test.hasClickAction
 import androidx.compose.ui.test.hasText
 import androidx.compose.ui.test.junit4.createEmptyComposeRule
+import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.onRoot
 import androidx.compose.ui.test.performClick
+import androidx.compose.ui.test.performScrollTo
 import androidx.compose.ui.unit.dp
 import com.yawnandpawn.app.StopAppRule
 import com.yawnandpawn.app.ui.TalkBackRules.spokenOrder
+import com.yawnandpawn.app.ui.payments.NO_EMAIL_APP_NOTE_TAG
 import com.yawnandpawn.app.ui.payments.PaymentsIntent
 import com.yawnandpawn.app.ui.payments.ProblemWithChargeFlow
 import com.yawnandpawn.app.ui.payments.ProblemWithChargeUiState
@@ -127,16 +130,56 @@ class ProblemWithChargeSemanticsTest {
             assertEquals(listOf(PaymentsIntent.ChargePicked("2"), PaymentsIntent.SendEmailClicked, PaymentsIntent.Back), intents)
         }
 
+    private fun noteBounds() = composeRule.onNodeWithTag(NO_EMAIL_APP_NOTE_TAG, useUnmergedTree = true).assertExists().getBoundsInRoot()
+
+    /** The no-email-app note reads its line and the plain address as one polite announcement. */
+    private fun assertNoteAnnounced() {
+        composeRule
+            .onNode(
+                SemanticsMatcher("note texts") { node ->
+                    node.config.getOrElseNullable(SemanticsProperties.Text) { null }?.map { it.text } ==
+                        listOf("No email app found. Write to:", "support@example.com")
+                },
+            ).assert(SemanticsMatcher.expectValue(SemanticsProperties.LiveRegion, LiveRegionMode.Polite))
+    }
+
     @Test
-    @Config(fontScale = 2.0f)
-    fun `at 200 percent the picker's Email support stays on screen above the list`() =
+    @Config(qualifiers = "w411dp-h780dp-mdpi", fontScale = 2.0f)
+    fun `at 200 percent on a short screen the picker's note sits between the list and Email support, overlapping neither`() =
         show(ProblemWithChargeSamples.pickerNoEmailApp) {
             val root = composeRule.onRoot().getBoundsInRoot()
             val button = composeRule.onNode(hasText("Email support") and hasClickAction()).getBoundsInRoot()
+            val note = noteBounds()
             assertTrue(button.bottom <= root.bottom && button.top >= root.top, "Email support at $button in $root")
+            assertTrue(button.top >= note.bottom, "Email support at $button under the note at $note")
+            val rows =
+                composeRule
+                    .onAllNodes(SemanticsMatcher.expectValue(SemanticsProperties.Role, Role.RadioButton))
+                    .fetchSemanticsNodes()
+                    .map { it.boundsInRoot }
+                    .filter { it.height > 0f }
+            // Rows are compared in px, like the semantics nodes report them (clipped to the scrolling list).
+            val notePx = composeRule.onNodeWithTag(NO_EMAIL_APP_NOTE_TAG, useUnmergedTree = true).fetchSemanticsNode().boundsInRoot
+            assertTrue(rows.isNotEmpty(), "some rows show")
+            rows.forEach { row -> assertTrue(row.bottom <= notePx.top, "row at $row overlaps the note at $notePx") }
             assertTallEnough(hasText("Email support") and hasClickAction())
-            composeRule
-                .onNodeWithText("No email app found. Write to vincentbui2108@gmail.com.")
-                .assert(SemanticsMatcher.expectValue(SemanticsProperties.LiveRegion, LiveRegionMode.Polite))
+            assertTallEnough(hasText("Copy address") and hasClickAction())
+            assertNoteAnnounced()
+
+            composeRule.onNode(hasText("Copy address") and hasClickAction()).performClick()
+            assertEquals(listOf<PaymentsIntent>(PaymentsIntent.CopyAddressClicked), intents)
+        }
+
+    @Test
+    @Config(fontScale = 2.0f)
+    fun `at 200 percent the main screen's note follows Email support without overlapping it, with a 48 dp Copy address`() =
+        show(ProblemWithChargeSamples.noChargesNoEmailApp) {
+            val emailSupport = composeRule.onNode(hasText("Email support") and hasClickAction()).getBoundsInRoot()
+            composeRule.onNode(hasText("Copy address") and hasClickAction()).performScrollTo()
+            val row = composeRule.onNode(hasText("Email support") and hasClickAction()).getBoundsInRoot()
+            val note = noteBounds()
+            assertTrue(note.top >= row.bottom, "note at $note overlaps Email support at $row (before scrolling: $emailSupport)")
+            assertTallEnough(hasText("Copy address") and hasClickAction())
+            assertNoteAnnounced()
         }
 }

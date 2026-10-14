@@ -56,6 +56,19 @@ class ProblemWithChargeScreenshotTest {
     fun `no charges dark`() = capture("problem_with_charge_no_charges_dark", ProblemWithChargeSamples.noCharges, PpsThemeMode.Dark)
 
     @Test
+    fun `no charges with no email app light`() =
+        capture("problem_with_charge_no_email_app_light", ProblemWithChargeSamples.noChargesNoEmailApp)
+
+    @Test
+    fun `no charges with no email app dark`() =
+        capture("problem_with_charge_no_email_app_dark", ProblemWithChargeSamples.noChargesNoEmailApp, PpsThemeMode.Dark)
+
+    @Test
+    @Config(fontScale = 2.0f)
+    fun `no charges with no email app at 200 percent`() =
+        capture("problem_with_charge_no_email_app_light_font200", ProblemWithChargeSamples.noChargesNoEmailApp)
+
+    @Test
     fun `no browser light`() = capture("problem_with_charge_no_browser_light", ProblemWithChargeSamples.noBrowser)
 
     @Test

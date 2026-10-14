@@ -20,7 +20,7 @@ fun ProblemWithChargeRoute(
     viewModel: ProblemWithChargeViewModel = koinViewModel(),
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
-    val writer = supportEmailWriter(state.charges)
+    val writer = supportEmailTemplates()
     // Only while the picker is open; otherwise system Back pops the route like any pushed screen.
     NavigationBackHandler(state = rememberNavigationEventState(NavigationEventInfo.None), isBackEnabled = state.picking) {
         viewModel.onIntent(PaymentsIntent.Back, writer)

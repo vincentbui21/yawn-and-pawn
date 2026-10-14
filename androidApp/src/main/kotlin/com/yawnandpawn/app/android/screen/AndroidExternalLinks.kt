@@ -1,9 +1,12 @@
 package com.yawnandpawn.app.android.screen
 
 import android.content.ActivityNotFoundException
+import android.content.ClipData
+import android.content.ClipboardManager
 import android.content.Context
 import android.content.Intent
 import android.net.Uri
+import android.os.Build
 import com.yawnandpawn.app.core.log.LogEvent
 import com.yawnandpawn.app.core.log.Logger
 import com.yawnandpawn.app.ui.links.ExternalLinks
@@ -24,6 +27,13 @@ class AndroidExternalLinks(
         subject: String,
         body: String,
     ): Boolean = start(emailIntent(to, subject, body), "open support email")
+
+    override fun copyText(text: String): Boolean {
+        val clipboard = context.getSystemService(ClipboardManager::class.java)
+        clipboard?.setPrimaryClip(ClipData.newPlainText(text, text))
+        // Android 13+ shows its own "Copied" confirmation; before that the app confirms.
+        return clipboard == null || Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU
+    }
 
     private fun start(
         intent: Intent,

@@ -25,4 +25,10 @@ interface ExternalLinks {
         subject: String,
         body: String,
     ): Boolean
+
+    /**
+     * Puts [text] on the clipboard. True when the app should confirm it itself: from Android 13 the phone shows its
+     * own confirmation, so a second one from the app would repeat it.
+     */
+    fun copyText(text: String): Boolean
 }

@@ -572,13 +572,20 @@ private fun sessionScreen(
     overlay: SheetOverlay,
 ): WakeScreen? {
     if (session == null || availability == null) return null
-    if (state is SessionState.Snoozed) return snoozedUiState(session, zone)?.let { WakeScreen.Snoozed(it, SnoozedKey.of(session)) }
-    val checkScreen = check.screen(state, availability, overlay.priceOf)
-    return check.picker(state)?.let(WakeScreen::Fallback)
-        ?: checkScreen?.let { WakeScreen.Check(it.copy(sheet = overlay.sheet, message = overlay.message)) }
-        ?: WakeScreen.Ringing(
-            ringingUiState(session, availability, zone, overlay.priceOf).copy(sheet = overlay.sheet, message = overlay.message),
-        )
+    return when (state) {
+        is SessionState.Snoozed -> {
+            snoozedUiState(session, zone)?.let { WakeScreen.Snoozed(it, SnoozedKey.of(session)) }
+        }
+
+        else -> {
+            val checkScreen = check.screen(state, availability, overlay.priceOf)
+            check.picker(state)?.let(WakeScreen::Fallback)
+                ?: checkScreen?.let { WakeScreen.Check(it.copy(sheet = overlay.sheet, message = overlay.message)) }
+                ?: WakeScreen.Ringing(
+                    ringingUiState(session, availability, zone, overlay.priceOf).copy(sheet = overlay.sheet, message = overlay.message),
+                )
+        }
+    }
 }
 
 /** The confirm sheet and payment message over a wake screen, and the prices its snooze shows (Story 4.13). */

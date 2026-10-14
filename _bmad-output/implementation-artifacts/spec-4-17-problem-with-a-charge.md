@@ -3,7 +3,7 @@ title: 'Story 4.17: "Problem with a charge?"'
 type: 'feature'
 created: '2026-10-09'
 status: 'review'
-baseline_revision: '79aa8b40'
+baseline_revision: '0c3665c1'
 review_loop_iteration: 0
 context:
   - '{project-root}/_bmad-output/implementation-artifacts/epic-4-context.md'
@@ -31,7 +31,7 @@ deferred:
   - With no records, or when they can't be read, the button opens the same email straight away with an empty body.
   - With no email app, the snackbar "No email app found. Write to {email}." shows and the picker stays open.
 - **Config:** `config/app-links.properties` (`support.email`, `play.orderHistory`) is read by the build into `BuildConfig`, so a change is one edit.
-- **Ports:** `ExternalLinks` (composeApp) is implemented by `AndroidExternalLinks` (in `android.screen`, starts on the user's tap only). `AppLinks` comes from BuildConfig, and `SupportEmailWriter` from string resources.
+- **Ports:** `ExternalLinks` (composeApp) is implemented by `AndroidExternalLinks` (in `android.screen`, starts on the user's tap only). `AppLinks` comes from BuildConfig. The email text (`supportEmailWriter`) is resolved from string resources in composition and handed to the ViewModel with each intent, so opening the email never waits on a suspend resource read (a Robolectric end-to-end run hung on `getString` from `viewModelScope`).
 
 ## Boundaries & Constraints
 
@@ -81,5 +81,5 @@ deferred:
 
 ## Verification
 
-- `./gradlew qualityGate :androidApp:assembleDebugAndroidTest --no-daemon`: BUILD SUCCESSFUL.
+- Coordinator gate policy (2026-10-14, PC out of memory): locally, only this story's test classes, `spotlessCheck`, `detekt` and the affected modules' compile (`--no-daemon --max-workers=2`); CI runs the full `qualityGate` on the PR.
 - Owner, in 4.18 #14 on the phone: the order history opens in Play, and the email opens pre-filled in Gmail without a duplicated body.

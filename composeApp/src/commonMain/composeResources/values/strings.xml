@@ -408,6 +408,21 @@
     <string name="problem_pending_body">A pending payment only charges you if it goes through.</string>
     <string name="problem_open_play">Open Google Play order history</string>
     <string name="problem_email_support">Email support</string>
+    <!-- Story 4.17: the support email (EXPERIENCE.md Key strings and Long-form copy, verbatim). -->
+    <string name="problem_email_subject">Charge question</string>
+    <string name="problem_email_order_id">Order ID: %1$s</string>
+    <string name="problem_email_date">Date: %1$s</string>
+    <string name="problem_email_price">Price: %1$s</string>
+    <string name="problem_email_status">Status: %1$s</string>
+    <!-- Story 4.17, new (default taken, owner can change; added to EXPERIENCE.md): the picker's card title, and the
+         note when no email app can open the email: the address on its own line under it, with "Copy address"
+         (review M1), and the confirmation where the phone shows none (before Android 13). -->
+    <string name="problem_pick_charge">Which charge?</string>
+    <string name="problem_no_email_app">No email app found. Write to:</string>
+    <string name="problem_copy_address">Copy address</string>
+    <string name="problem_address_copied">Address copied.</string>
+    <!-- A picker row: "{price} · {status}" (layout only, no words). -->
+    <string name="problem_charge_detail">%1$s · %2$s</string>
 
     <!-- Design preview round 3: setup flows. EXPERIENCE.md key strings verbatim; drafts are listed in docs/design-preview/copy-to-approve.md. -->
     <!-- Onboarding (FR-ONB-1/5/6). The mission "how it works" line and the analytics choice are split into their sentences, verbatim. -->

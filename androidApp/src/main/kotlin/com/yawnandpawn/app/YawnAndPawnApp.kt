@@ -16,6 +16,7 @@ import com.yawnandpawn.app.android.billing.billingModule
 import com.yawnandpawn.app.android.crash.FirebaseStartup
 import com.yawnandpawn.app.android.qr.qrModule
 import com.yawnandpawn.app.android.reliability.reliabilityModule
+import com.yawnandpawn.app.android.screen.AndroidExternalLinks
 import com.yawnandpawn.app.android.screen.AndroidWakeScreenOpener
 import com.yawnandpawn.app.android.sound.soundModule
 import com.yawnandpawn.app.android.wake.SheetEffectRunner
@@ -77,6 +78,8 @@ import com.yawnandpawn.app.core.session.UserLockState
 import com.yawnandpawn.app.core.stats.ReRegisterSuggestions
 import com.yawnandpawn.app.data.dataModule
 import com.yawnandpawn.app.ui.format.moneyFormatter
+import com.yawnandpawn.app.ui.links.AppLinks
+import com.yawnandpawn.app.ui.links.ExternalLinks
 import com.yawnandpawn.app.ui.nav.WakeScreenOpener
 import com.yawnandpawn.app.ui.uiModule
 import kotlinx.coroutines.flow.emitAll
@@ -237,6 +240,10 @@ val appModule =
                 get<WakeRuntime>().emergencyRinging,
             )
         }
+        // "Problem with a charge?" (Story 4.17): the order history link and the support email, from
+        // config/app-links.properties through BuildConfig.
+        single { AppLinks(supportEmail = BuildConfig.SUPPORT_EMAIL, orderHistoryUrl = BuildConfig.PLAY_ORDER_HISTORY_URL) }
+        single<ExternalLinks> { AndroidExternalLinks(androidContext(), get()) }
     }
 
 /**

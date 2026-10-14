@@ -4,6 +4,7 @@ import com.yawnandpawn.app.ui.editor.AlarmEditorArgs
 import com.yawnandpawn.app.ui.editor.AlarmEditorViewModel
 import com.yawnandpawn.app.ui.home.AlarmActions
 import com.yawnandpawn.app.ui.home.HomeViewModel
+import com.yawnandpawn.app.ui.payments.ProblemWithChargeViewModel
 import com.yawnandpawn.app.ui.purchases.PurchaseHistoryViewModel
 import com.yawnandpawn.app.ui.settings.SettingsViewModel
 import org.koin.core.module.dsl.viewModel
@@ -12,7 +13,7 @@ import org.koin.dsl.module
 /**
  * Koin bindings of :composeApp (AD-13): one ViewModel per screen. The core ports and use cases they take
  * (`AlarmRepository`, the alarm use cases, `Clock`, `TimeZoneProvider`, `TimeChangeSignal`, `Logger`, `SoundLibrary`,
- * `SoundPreview`) are bound by :androidApp and :data.
+ * `SoundPreview`, `ExternalLinks`, `AppLinks`) are bound by :androidApp and :data.
  */
 val uiModule =
     module {
@@ -33,6 +34,7 @@ val uiModule =
                 logger = get(),
             )
         }
+        viewModel { ProblemWithChargeViewModel(get(), get(), get(), get(), get()) }
         viewModel { params ->
             AlarmEditorViewModel(
                 alarmId = params.get<AlarmEditorArgs>().alarmId,

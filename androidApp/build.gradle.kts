@@ -1,4 +1,5 @@
 import com.yawnandpawn.app.buildlogic.versionCodeOf
+import java.util.Properties
 
 // :androidApp — the Android application: manifest, platform adapters, Koin wiring, screenshot tests.
 // Uses AGP 9 built-in Kotlin (no separate Kotlin Android plugin).
@@ -34,6 +35,23 @@ val uploadSigning =
             }
         }
 
+// Story 4.17: the support address and Google Play's order history come from config/app-links.properties, so changing
+// either is one edit there. Read through a provider (configuration-cache safe); a missing or blank key fails the build.
+val appLinks =
+    Properties().apply {
+        load(
+            providers
+                .fileContents(rootProject.layout.projectDirectory.file("config/app-links.properties"))
+                .asText
+                .get()
+                .reader(),
+        )
+    }
+
+fun appLink(key: String): String =
+    appLinks.getProperty(key)?.trim()?.takeIf { it.isNotEmpty() && '"' !in it && '\\' !in it }
+        ?: throw GradleException("config/app-links.properties: $key is missing or not a plain value")
+
 kotlin {
     jvmToolchain(
         libs.versions.jvm.toolchain
@@ -63,6 +81,8 @@ android {
         // major * 10000 + minor * 100 + patch (unit-tested in build-logic and :core AppVersion).
         versionCode = versionCodeOf(appVersionName)
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
+        buildConfigField("String", "SUPPORT_EMAIL", "\"${appLink("support.email")}\"")
+        buildConfigField("String", "PLAY_ORDER_HISTORY_URL", "\"${appLink("play.orderHistory")}\"")
     }
 
     signingConfigs {
@@ -97,6 +117,8 @@ android {
 
     buildFeatures {
         compose = true
+        // Story 4.17: the app links above.
+        buildConfig = true
     }
 
     testOptions {

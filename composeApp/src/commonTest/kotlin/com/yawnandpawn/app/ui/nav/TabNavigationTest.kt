@@ -115,6 +115,28 @@ class TabNavigationTest {
     }
 
     @Test
+    fun `Problem with a charge is pushed over Purchase history once, only from there, and Back returns to it`() {
+        val backStack = stack(Route.Alarms, Route.You)
+        backStack.openProblemWithCharge()
+        assertEquals(listOf<NavKey>(Route.Alarms, Route.You), backStack)
+        assertNull(Route.ProblemWithCharge.tab)
+
+        backStack.openPurchaseHistory()
+        backStack.openProblemWithCharge()
+        backStack.openProblemWithCharge()
+        backStack.openPurchaseHistory()
+        assertEquals(listOf<NavKey>(Route.Alarms, Route.You, Route.PurchaseHistory, Route.ProblemWithCharge), backStack)
+
+        backStack.close(Route.ProblemWithCharge)
+        assertEquals(listOf<NavKey>(Route.Alarms, Route.You, Route.PurchaseHistory), backStack)
+
+        backStack.openProblemWithCharge()
+        assertEquals(true, backStack.applySessionLock(active = true))
+        backStack.openProblemWithCharge()
+        assertEquals(listOf<NavKey>(Route.SessionInProgress), backStack)
+    }
+
+    @Test
     fun `a session replaces Purchase history with the lock, and its end lands on Home`() {
         val backStack = stack(Route.Alarms, Route.You, Route.PurchaseHistory)
 

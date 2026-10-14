@@ -7,6 +7,7 @@ import com.yawnandpawn.app.core.session.EffectRunner
 import com.yawnandpawn.app.core.session.EntryEffect
 import com.yawnandpawn.app.core.session.PurchaseIntentId
 import com.yawnandpawn.app.core.session.PurchaseOutcome
+import com.yawnandpawn.app.core.session.PurchaseToken
 import com.yawnandpawn.app.core.session.SessionData
 import com.yawnandpawn.app.core.session.SessionEffect
 import com.yawnandpawn.app.core.session.SessionEvent
@@ -208,6 +209,7 @@ class ConfirmSheetHostTest {
                     PurchaseOutcome.Cancelled to WakeMessage.PaymentCancelled,
                     PurchaseOutcome.Failed to WakeMessage.PaymentError,
                     PurchaseOutcome.Offline to WakeMessage.PaymentOffline,
+                    PurchaseOutcome.Unconfirmed to WakeMessage.PaymentPending,
                 )
             PurchaseOutcome.entries.forEach { outcome ->
                 open()
@@ -245,6 +247,34 @@ class ConfirmSheetHostTest {
             host.onMinimumShown(again)
             host.onTap()
             assertNull(host.message.value, "after the minimum the next tap ends it")
+        }
+
+    @Test
+    fun `review - an earlier message is hidden while a payment is in flight, and a new Pay ends it`() =
+        scope.runTest {
+            cancelled()
+            assertEquals(WakeMessage.PaymentCancelled, host.messageFor(session, host.message.value))
+            assertNull(host.messageFor(session.copy(paying = PurchaseIntentId("intent-9")), host.message.value), "hidden while paying")
+
+            open()
+            host.onUpper(session, available, dollar, send)
+            assertTrue(sent.any { it is SessionEvent.PayConfirmed })
+            assertNull(host.message.value, "the Pay ended the earlier No charge.")
+        }
+
+    @Test
+    fun `review - a lost Play result shows the pending message, never No charge`() =
+        scope.runTest {
+            host.onEffect(SessionEffect.ShowPurchaseOutcome(PurchaseOutcome.Unconfirmed), SessionState.Ringing(session))
+            assertEquals(WakeMessage.PaymentPending, host.messageFor(session, host.message.value))
+        }
+
+    @Test
+    fun `review - the message ends when the session leaves the ring (a grant to Snoozed)`() =
+        scope.runTest {
+            cancelled()
+            host.onEffect(SessionEffect.Consume(PurchaseToken("token-1")), SessionState.Snoozed(session))
+            assertNull(host.message.value)
         }
 
     @Test

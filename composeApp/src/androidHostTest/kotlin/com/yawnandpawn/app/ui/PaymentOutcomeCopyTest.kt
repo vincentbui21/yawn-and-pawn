@@ -1,17 +1,21 @@
 package com.yawnandpawn.app.ui
 
 import com.yawnandpawn.app.core.session.PurchaseOutcome
-import com.yawnandpawn.app.ui.wake.PaymentResult
+import com.yawnandpawn.app.ui.wake.PaymentOutcomeRow
+import com.yawnandpawn.app.ui.wake.PaymentPendingRow
 import com.yawnandpawn.app.ui.wake.paymentOutcome
 import com.yawnandpawn.app.ui.wake.text
 import java.io.File
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertFalse
 import kotlin.test.assertNull
+import kotlin.test.assertTrue
 
 /**
- * Story 4.14 (FR-MSG-4): each row of EXPERIENCE.md's Payment outcomes table shows exactly its message, verbatim, through
- * the one string resource of its `WakeMessage`; the rows with "none" show no message.
+ * Story 4.14 (FR-MSG-4): each row of EXPERIENCE.md's Payment outcomes table that has a message shows exactly it, verbatim,
+ * through the one string resource of its `WakeMessage`. The rows with "none" (a paid snooze, "Use it", "Not now") have no
+ * outcome at all; that no message shows for them is tested on the real screen (`PaymentOutcomeMessagesTest`).
  */
 class PaymentOutcomeCopyTest {
     private val composeResources =
@@ -44,37 +48,33 @@ class PaymentOutcomeCopyTest {
                 cells[1] to Regex("^\"(.*)\"$").find(cells[2])?.groupValues?.get(1)
             }
 
-    private val rows =
+    private val rows: Map<String, PaymentOutcomeRow> =
         mapOf(
-            "Unlock cancelled or failed" to PaymentResult.NotCharged(PurchaseOutcome.UnlockFailed),
-            "Play sheet cancelled" to PaymentResult.NotCharged(PurchaseOutcome.Cancelled),
-            "Billing error" to PaymentResult.NotCharged(PurchaseOutcome.Failed),
-            "No connection" to PaymentResult.NotCharged(PurchaseOutcome.Offline),
-            "Pending" to PaymentResult.Pending,
-            "Purchased" to PaymentResult.Purchased,
-            "Already paid, \"Use it\"" to PaymentResult.EarlierPaymentUsed,
-            "Already paid, \"Not now\"" to PaymentResult.EarlierPaymentDeclined,
+            "Unlock cancelled or failed" to paymentOutcome(PurchaseOutcome.UnlockFailed),
+            "Play sheet cancelled" to paymentOutcome(PurchaseOutcome.Cancelled),
+            "Billing error" to paymentOutcome(PurchaseOutcome.Failed),
+            "No connection" to paymentOutcome(PurchaseOutcome.Offline),
+            "Pending" to PaymentPendingRow,
         )
 
+    private val withoutMessage = setOf("Purchased", "Already paid, \"Use it\"", "Already paid, \"Not now\"")
+
+    private fun textOf(row: PaymentOutcomeRow): String = strings.getValue(row.message.text.key)
+
     @Test
-    fun `every row of the EXPERIENCE table is mapped, with its message verbatim or none`() {
-        assertEquals(rows.keys, table.keys, "the table's rows")
-        rows.forEach { (label, result) ->
-            val expected = table.getValue(label)
-            val message = paymentOutcome(result).message
-            if (expected == null) {
-                assertNull(message, label)
-            } else {
-                assertEquals(expected, strings[checkNotNull(message) { label }.text.key], label)
-            }
-        }
+    fun `every row of the EXPERIENCE table with a message shows it verbatim, and the others have no outcome`() {
+        assertEquals(rows.keys + withoutMessage, table.keys, "the table's rows")
+        rows.forEach { (label, row) -> assertEquals(table.getValue(label), textOf(row), label) }
+        withoutMessage.forEach { label -> assertNull(table.getValue(label), label) }
     }
 
     @Test
-    fun `every failed or cancelled payment says No charge`() {
-        PurchaseOutcome.entries.forEach { outcome ->
-            val message = checkNotNull(paymentOutcome(PaymentResult.NotCharged(outcome)).message) { "$outcome" }
-            assertEquals(true, strings.getValue(message.text.key).endsWith("No charge."), "$outcome")
+    fun `every payment where nothing was charged says No charge, and a lost Play result never does`() {
+        (PurchaseOutcome.entries - PurchaseOutcome.Unconfirmed).forEach { outcome ->
+            assertTrue(textOf(paymentOutcome(outcome)).endsWith("No charge."), "$outcome")
         }
+        // Review: a charge can still follow a lost result, so it says the pending copy instead.
+        assertFalse(textOf(paymentOutcome(PurchaseOutcome.Unconfirmed)).contains("No charge"))
+        assertEquals(table.getValue("Pending"), textOf(paymentOutcome(PurchaseOutcome.Unconfirmed)))
     }
 }

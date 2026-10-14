@@ -8,6 +8,7 @@ import androidx.compose.ui.semantics.SemanticsNode
 import androidx.compose.ui.semantics.SemanticsProperties
 import androidx.compose.ui.semantics.getOrNull
 import androidx.compose.ui.test.SemanticsMatcher
+import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.assertIsNotFocused
 import androidx.compose.ui.test.click
 import androidx.compose.ui.test.hasText
@@ -350,10 +351,14 @@ class SnoozeConfirmSheetTest {
             composeRule.onNodeWithText("Unlock to pay $1.00").assertDoesNotExist()
             assertTrue(app.lastMediaPlayer().isReallyPlaying, "the sound continues")
 
-            // Story 4.14: snooze is still offered; a tap during the 10 s minimum acts at once but the message stays.
+            // Story 4.14: a tap during the 10 s minimum (here on the clock, which takes no action) leaves the message on
+            // screen; snooze is still offered and opens the sheet at once.
+            composeRule.onRoot().performTouchInput { click(Offset(centerX, OUTSIDE_Y)) }
+            composeRule.waitForIdle()
+            composeRule.onNodeWithText("Phone still locked. No charge.").assertIsDisplayed()
             composeRule.onNodeWithText("Snooze · $1.00").performClick()
             await(app, "the sheet opens again") { host(app).request.value != null }
-            assertNotNull(host(app).message.value, "the message stays for its 10 s")
+            composeRule.onNodeWithText("Phone still locked. No charge.").assertExists()
         }
     }
 

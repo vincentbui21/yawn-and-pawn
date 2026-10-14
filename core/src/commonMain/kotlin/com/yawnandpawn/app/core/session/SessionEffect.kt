@@ -30,6 +30,12 @@ enum class PurchaseOutcome {
 
     /** The unlock before Play was cancelled or failed (Spike S1): "Phone still locked. No charge." */
     UnlockFailed,
+
+    /**
+     * Play's result never came (`PurchaseFailed(Unconfirmed)`): a charge may still follow and grant, so the message is
+     * the pending one, never "No charge." (Story 4.14 review).
+     */
+    Unconfirmed,
 }
 
 /**

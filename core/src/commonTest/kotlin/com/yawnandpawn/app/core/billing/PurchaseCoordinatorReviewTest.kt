@@ -298,7 +298,8 @@ class PurchaseCoordinatorReviewTest {
             w.coordinator.onWakeScreenResumed()
             w.settle()
             assertNull(w.paying())
-            assertEquals(listOf<SessionEffect>(SessionEffect.ShowPurchaseOutcome(PurchaseOutcome.Cancelled)), w.outcomes)
+            // Story 4.14 review: never "Payment cancelled. No charge.", since a charge can still follow.
+            assertEquals(listOf<SessionEffect>(SessionEffect.ShowPurchaseOutcome(PurchaseOutcome.Unconfirmed)), w.outcomes)
 
             assertEquals(1, assertIs<SessionState.Snoozed>(w.buy(purchase())).session.snoozesGranted)
         }

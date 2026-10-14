@@ -610,6 +610,8 @@ internal val ROW_CASES: Map<String, List<RowExample>> =
                 SessionEvent.PurchaseFailed(PurchaseFailureKind.Error) to PurchaseOutcome.Failed,
                 SessionEvent.PurchaseFailed(PurchaseFailureKind.Offline) to PurchaseOutcome.Offline,
                 SessionEvent.PurchaseFailed(PurchaseFailureKind.UnlockFailed) to PurchaseOutcome.UnlockFailed,
+                // Story 4.14 review: a lost Play result is not "No charge.".
+                SessionEvent.PurchaseFailed(PurchaseFailureKind.Unconfirmed) to PurchaseOutcome.Unconfirmed,
                 SessionEvent.PurchaseCancelled to PurchaseOutcome.Cancelled,
             ).flatMap { (event, outcome) ->
                 ringStates(ringSession().copy(paying = INTENT)).map { from ->

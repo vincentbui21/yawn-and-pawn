@@ -397,12 +397,13 @@ class PurchaseCoordinator(
 
     /**
      * Review 15 (default taken, owner can change): the wake screen is back, a recovery query found nothing for the open
-     * [sheet], and it opened [STALE_SHEET] ago or more: its result was lost, so it is cancelled ("Payment cancelled. No
-     * charge."), and Snooze can be bought again. A PURCHASED that still comes later grants as any update (row 1).
+     * [sheet], and it opened [STALE_SHEET] ago or more: its result was lost, so the payment ends as
+     * `PurchaseFailed(Unconfirmed)` and Snooze can be bought again. A PURCHASED that still comes later grants as any update
+     * (row 1), so the message is the pending one, never "No charge." (Story 4.14 review).
      */
     private suspend fun cancelIfStale(sheet: InFlight) {
         val stale = clock.elapsedMillis() - sheet.openedAt >= STALE_SHEET.inWholeMilliseconds
-        if (stale) answer(sheet, SessionEvent.PurchaseCancelled)
+        if (stale) answer(sheet, SessionEvent.PurchaseFailed(PurchaseFailureKind.Unconfirmed))
     }
 
     /**

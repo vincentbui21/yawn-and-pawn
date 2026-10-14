@@ -19,12 +19,11 @@ import com.yawnandpawn.app.core.session.SessionEffect
 import com.yawnandpawn.app.core.session.SessionEvent
 import com.yawnandpawn.app.core.session.SessionState
 import com.yawnandpawn.app.core.session.SnoozeAvailability
-import com.yawnandpawn.app.ui.wake.PaymentResult
 import com.yawnandpawn.app.ui.wake.PriceLookup
 import com.yawnandpawn.app.ui.wake.SheetRequest
 import com.yawnandpawn.app.ui.wake.SnoozeSheet
 import com.yawnandpawn.app.ui.wake.WakeMessage
-import com.yawnandpawn.app.ui.wake.paymentOutcome
+import com.yawnandpawn.app.ui.wake.paymentOutcomeOf
 import com.yawnandpawn.app.ui.wake.snoozeSheet
 import com.yawnandpawn.app.ui.wake.stillWanted
 import kotlinx.coroutines.CoroutineScope
@@ -78,8 +77,9 @@ data class RingMessage(
  * - The sheet closes for good when its ring ends or snooze stops being Available for that offer ([stillWanted]): the
  *   snooze button then shows why.
  * - **Payment messages** (Story 4.14): every `ShowPurchaseOutcome` and `ShowPaymentPending` shows its row of the
- *   Payment outcomes table ([paymentOutcome]) on the session's current ring ([message]); a paid snooze shows none. It
- *   stays at least 10 s ([onMinimumShown]), then until the next tap ([onTap]); a newer outcome replaces it.
+ *   Payment outcomes table ([paymentOutcomeOf]) on the session's current ring ([message]); a paid snooze shows none. It
+ *   stays at least 10 s ([onMinimumShown]), then until the next tap ([onTap]); a newer outcome replaces it, a new Pay or
+ *   the end of the ring (Snoozed, ended) ends it, and it is hidden while a payment is in flight ([messageFor]).
  */
 @Suppress("LongParameterList", "TooManyFunctions") // The sheet's ports; one handler per action.
 class ConfirmSheetHost(
@@ -142,11 +142,17 @@ class ConfirmSheetHost(
         return snoozeSheet(request, session, availability, priceOf, ladder, showTaxNote, unlocking)
     }
 
-    /** The message to show on [session]'s screen: only one of its current ring. */
+    /**
+     * The message to show on [session]'s screen: only one of its current ring, and none while a payment is in flight (Story
+     * 4.14 review: an earlier "No charge." must not sit next to a payment that may charge).
+     */
     fun messageFor(
         session: SessionData,
         shown: RingMessage?,
-    ): WakeMessage? = shown?.takeIf { it.sessionId == session.sessionId && it.ringIndex == session.ringIndex }?.message
+    ): WakeMessage? =
+        shown
+            ?.takeIf { session.paying == null && it.sessionId == session.sessionId && it.ringIndex == session.ringIndex }
+            ?.message
 
     /**
      * Follows [session] with [availability]: a sheet that no longer belongs on its screen ([stillWanted]) closes for good,
@@ -186,19 +192,15 @@ class ConfirmSheetHost(
                 requested.update { it.takeUnless { request -> request is SheetRequest.AlreadyPaid } }
             }
 
-            // Story 4.14: nothing was charged; the sheet closes and the outcome's message shows on this ring.
-            is SessionEffect.ShowPurchaseOutcome -> {
+            // Story 4.14: the sheet closes and the outcome's message (its Payment outcomes row) shows on this ring.
+            is SessionEffect.ShowPurchaseOutcome, SessionEffect.ShowPaymentPending -> {
                 requested.value = null
-                show(session, PaymentResult.NotCharged(effect.outcome))
-            }
-
-            SessionEffect.ShowPaymentPending -> {
-                requested.value = null
-                show(session, PaymentResult.Pending)
+                show(session, effect)
             }
 
             else -> {
-                Unit
+                // Story 4.14 review: a session no longer ringing (Snoozed after a grant, ended) keeps no message.
+                if (session == null) shownMessage.value = null
             }
         }
     }
@@ -262,6 +264,8 @@ class ConfirmSheetHost(
                     val intentId = PurchaseIntentId(ids.newId())
                     sent.update { it + (intentId to price.price) }
                     paidRequest = request
+                    // Story 4.14 review: the last payment's message ends with a new payment.
+                    shownMessage.value = null
                     listOf(SessionEvent.PayConfirmed(intentId, price))
                 }
             }
@@ -321,12 +325,12 @@ class ConfirmSheetHost(
         }
     }
 
-    /** The message of [result] (none for a paid snooze) on [session]'s current ring, replacing any earlier one. */
+    /** The message of [effect]'s Payment outcomes row on [session]'s current ring, replacing any earlier one. */
     private fun show(
         session: SessionData?,
-        result: PaymentResult,
+        effect: SessionEffect,
     ) {
-        val message = paymentOutcome(result).message ?: return
+        val message = paymentOutcomeOf(effect)?.message ?: return
         session ?: return
         shownMessage.value = RingMessage(session.sessionId, session.ringIndex, message, messageSerial.incrementAndGet())
     }

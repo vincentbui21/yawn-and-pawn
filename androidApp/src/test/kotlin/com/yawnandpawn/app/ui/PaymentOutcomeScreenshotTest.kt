@@ -1,5 +1,8 @@
 package com.yawnandpawn.app.ui
 
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.test.SemanticsNodeInteraction
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.getBoundsInRoot
@@ -15,7 +18,8 @@ import com.yawnandpawn.app.core.session.PurchaseOutcome
 import com.yawnandpawn.app.screenshotOptions
 import com.yawnandpawn.app.ui.theme.PpsThemeMode
 import com.yawnandpawn.app.ui.wake.CheckScreen
-import com.yawnandpawn.app.ui.wake.PaymentResult
+import com.yawnandpawn.app.ui.wake.PaymentOutcomeRow
+import com.yawnandpawn.app.ui.wake.PaymentPendingRow
 import com.yawnandpawn.app.ui.wake.RingingScreen
 import com.yawnandpawn.app.ui.wake.SnoozeAfterPayment
 import com.yawnandpawn.app.ui.wake.SnoozeOffer
@@ -27,6 +31,7 @@ import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
 import org.robolectric.annotation.Config
 import org.robolectric.annotation.GraphicsMode
+import kotlin.test.assertEquals
 import kotlin.test.assertTrue
 
 /**
@@ -47,12 +52,11 @@ class PaymentOutcomeScreenshotTest {
     private val dollar = Money.of(1, "USD")
 
     /** Snooze as the row leaves it on this ring. */
-    private fun snoozeAfter(result: PaymentResult): SnoozeOffer =
-        when (paymentOutcome(result).snooze) {
+    private fun snoozeAfter(row: PaymentOutcomeRow): SnoozeOffer =
+        when (row.snooze) {
             SnoozeAfterPayment.UnavailableOffline -> SnoozeOffer.Unavailable(SnoozeUnavailableReason.Offline)
             SnoozeAfterPayment.UnavailablePaymentPending -> SnoozeOffer.Unavailable(SnoozeUnavailableReason.PaymentPending)
-            SnoozeAfterPayment.EarlierPaymentRefunding -> SnoozeOffer.StrandedRefund(dollar)
-            SnoozeAfterPayment.Offered, SnoozeAfterPayment.NotApplicable -> SnoozeOffer.Available(dollar)
+            SnoozeAfterPayment.Offered -> SnoozeOffer.Available(dollar)
         }
 
     /** [node] is whole inside the window, without scrolling. */
@@ -67,12 +71,12 @@ class PaymentOutcomeScreenshotTest {
 
     private fun shoot(
         name: String,
-        result: PaymentResult,
+        row: PaymentOutcomeRow,
         text: String,
         font200: Boolean,
     ) {
-        val message = checkNotNull(paymentOutcome(result).message)
-        val snooze = snoozeAfter(result)
+        val message = row.message
+        val snooze = snoozeAfter(row)
         val suffix = if (font200) "_font200" else ""
         val ringing = RingingSamples.enabledSnooze.copy(message = message, snooze = snooze)
         withScreen(PpsThemeMode.Light, content = { RingingScreen(ringing, is24Hour = false, onIntent = {}) }) {
@@ -97,40 +101,61 @@ class PaymentOutcomeScreenshotTest {
     }
 
     @Test
-    fun `unlock failed`() = shoot("unlock_failed", PaymentResult.NotCharged(PurchaseOutcome.UnlockFailed), UNLOCK_FAILED, font200 = false)
+    fun `unlock failed`() = shoot("unlock_failed", paymentOutcome(PurchaseOutcome.UnlockFailed), UNLOCK_FAILED, font200 = false)
 
     @Test
     @Config(fontScale = 2.0f)
     fun `unlock failed at 200 percent`() =
-        shoot("unlock_failed", PaymentResult.NotCharged(PurchaseOutcome.UnlockFailed), UNLOCK_FAILED, font200 = true)
+        shoot("unlock_failed", paymentOutcome(PurchaseOutcome.UnlockFailed), UNLOCK_FAILED, font200 = true)
 
     @Test
-    fun cancelled() = shoot("cancelled", PaymentResult.NotCharged(PurchaseOutcome.Cancelled), CANCELLED, font200 = false)
-
-    @Test
-    @Config(fontScale = 2.0f)
-    fun `cancelled at 200 percent`() = shoot("cancelled", PaymentResult.NotCharged(PurchaseOutcome.Cancelled), CANCELLED, font200 = true)
-
-    @Test
-    fun error() = shoot("error", PaymentResult.NotCharged(PurchaseOutcome.Failed), ERROR, font200 = false)
+    fun cancelled() = shoot("cancelled", paymentOutcome(PurchaseOutcome.Cancelled), CANCELLED, font200 = false)
 
     @Test
     @Config(fontScale = 2.0f)
-    fun `error at 200 percent`() = shoot("error", PaymentResult.NotCharged(PurchaseOutcome.Failed), ERROR, font200 = true)
+    fun `cancelled at 200 percent`() = shoot("cancelled", paymentOutcome(PurchaseOutcome.Cancelled), CANCELLED, font200 = true)
 
     @Test
-    fun offline() = shoot("offline", PaymentResult.NotCharged(PurchaseOutcome.Offline), OFFLINE, font200 = false)
-
-    @Test
-    @Config(fontScale = 2.0f)
-    fun `offline at 200 percent`() = shoot("offline", PaymentResult.NotCharged(PurchaseOutcome.Offline), OFFLINE, font200 = true)
-
-    @Test
-    fun pending() = shoot("pending", PaymentResult.Pending, PENDING, font200 = false)
+    fun error() = shoot("error", paymentOutcome(PurchaseOutcome.Failed), ERROR, font200 = false)
 
     @Test
     @Config(fontScale = 2.0f)
-    fun `pending at 200 percent`() = shoot("pending", PaymentResult.Pending, PENDING, font200 = true)
+    fun `error at 200 percent`() = shoot("error", paymentOutcome(PurchaseOutcome.Failed), ERROR, font200 = true)
+
+    @Test
+    fun offline() = shoot("offline", paymentOutcome(PurchaseOutcome.Offline), OFFLINE, font200 = false)
+
+    @Test
+    @Config(fontScale = 2.0f)
+    fun `offline at 200 percent`() = shoot("offline", paymentOutcome(PurchaseOutcome.Offline), OFFLINE, font200 = true)
+
+    @Test
+    fun pending() = shoot("pending", PaymentPendingRow, PENDING, font200 = false)
+
+    @Test
+    @Config(fontScale = 2.0f)
+    fun `pending at 200 percent`() = shoot("pending", PaymentPendingRow, PENDING, font200 = true)
+
+    /**
+     * Review: on a 360 × 640 dp phone at 200% the pending message makes the check's footer tall; when it ends (the next
+     * tap after its 10 s) its room stays, so the number pad does not move under the user's finger.
+     */
+    @Test
+    @Config(qualifiers = "w360dp-h640dp-mdpi", fontScale = 2.0f)
+    fun `the number pad stays put when the message ends on a 360 x 640 phone at 200 percent`() {
+        val pending = CheckSamples.grace.copy(message = PaymentPendingRow.message, snooze = snoozeAfter(PaymentPendingRow))
+        var state by mutableStateOf(pending)
+        withScreen(PpsThemeMode.Light, content = { CheckScreen(state, onIntent = {}) }) {
+            composeRule.waitForIdle()
+            val keys = listOf("1", "5", "Check").associateWith { composeRule.onNode(hasText(it) and hasClickAction()).getBoundsInRoot() }
+            state = pending.copy(message = null)
+            composeRule.waitForIdle()
+            composeRule.onNodeWithText(PENDING).assertDoesNotExist()
+            keys.forEach { (key, before) ->
+                assertEquals(before, composeRule.onNode(hasText(key) and hasClickAction()).getBoundsInRoot(), "key $key did not move")
+            }
+        }
+    }
 
     private companion object {
         const val UNLOCK_FAILED = "Phone still locked. No charge."

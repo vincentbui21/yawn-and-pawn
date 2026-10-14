@@ -35,6 +35,7 @@ deferred:
 | Play sheet cancelled (`PurchaseOutcome.Cancelled`) | "Payment cancelled. No charge." | Ringing or Check | same | same |
 | Billing error (`PurchaseOutcome.Failed`) | "Payment didn't go through. No charge." | Ringing or Check | same | same |
 | No connection (`PurchaseOutcome.Offline`) | "No connection. No charge." | Ringing or Check; Snooze reads "Snooze unavailable: offline" until connectivity returns (4.7 policy) and comes back in place with no new message | same | same |
+| Play's result lost (`PurchaseOutcome.Unconfirmed`, review: the 4.11 stale-sheet cancel) | "Payment not confirmed yet. If it goes through before you finish, your snooze starts. Otherwise, finish the check to stop the alarm." (the Pending copy, never "No charge.") | Ringing or Check; Snooze still offered; a late PURCHASED still grants | same | same |
 | Pending (`ShowPaymentPending`) | "Payment not confirmed yet. If it goes through before you finish, your snooze starts. Otherwise, finish the check to stop the alarm." | Ringing or Check; Snooze reads "Snooze unavailable: payment pending" for this session | same | same |
 | Purchased (`PurchaseGranted`) | none | Snoozed (4.15) | n/a | n/a |
 | Already paid, "Use it" (`ReuseAccepted`) | none | Snoozed (4.15) | n/a | n/a |
@@ -59,6 +60,9 @@ Every string above is already a resource copied from EXPERIENCE.md Key strings; 
 3. **Offline when the network looks online** (a captive portal): Snooze follows 4.7's Connectivity hint, so it can stay offered; another Pay fails again with "No connection. No charge." and nothing is charged. No separate offline latch.
 4. **The message stays under a newly opened confirm sheet** and the next outcome replaces it; a new ring (after a snooze, a merge) shows none.
 5. **A recreated wake screen** restarts the 10 s minimum (it can show longer, never shorter).
+6. **A lost Play result** (review): 4.11's stale-sheet cancel now ends the payment as `PurchaseFailed(Unconfirmed)` → `PurchaseOutcome.Unconfirmed`, and the screen shows the existing Pending copy (no new string). A charge can still follow and grants, so it never says "No charge.". Snooze stays offered.
+7. **The message and a new payment** (review): the message is hidden while a payment is in flight, a new Pay ends it, and the session leaving the ring (Snoozed after a grant, ended) ends it.
+8. **The check footer keeps the message's room** (review) for the rest of the check screen once a message has shown, so the pad never moves when the message ends or a shorter one replaces it.
 
 </intent-contract>
 
@@ -94,8 +98,25 @@ Status: implemented in fast mode (one agent, unattended Epic 4 run), with no rev
 
 **Risks:**
 - The message has no timeout if nobody taps (Decision 1); it stays for that ring.
+- The check footer keeps an empty message-height gap after the message ends, until the ring's check screen goes (Decision 8).
 - At 200% on a check, the pending message pushes the problem line up under the pinned area (PinnedFit scrolls it); the keys and Snooze stay whole on screen.
 - TalkBack polite announcement and the minimum are Robolectric-only until 4.18.
+
+## Review (fast mode)
+
+One review pass on PR #55 found 1 HIGH and 4 MEDIUM issues. All were fixed in `fix(4.14): review fixes`, each with a test:
+
+1. **(HIGH) A stale-sheet cancel said "No charge." although a late PURCHASED still grants.** New `PurchaseFailureKind.Unconfirmed` and `PurchaseOutcome.Unconfirmed`. `PurchaseCoordinator.cancelIfStale` dispatches `PurchaseFailed(Unconfirmed)`, and the outcome maps to the Pending copy (Decision 6). Tests: reducer row R19, `PurchaseCoordinatorReviewTest` review 15, `PaymentOutcomeCopyTest`, and the end-to-end `PaymentOutcomeMessagesTest` (stale sheet → Pending copy, no "No charge." anywhere → a late PURCHASED snoozes → no message on the next ring).
+2. **An old "No charge." stayed visible while a new payment was in flight.** `messageFor` hides it while `paying` is set, and a Pay clears it (Decision 7). Tested in `ConfirmSheetHostTest`, and end to end: after each result, pay again within 10 s and no message shows while Play's sheet is open.
+3. **The keys moved when the message ended at 200%.** The check footer reserves the message's room (Decision 8). `PaymentOutcomeScreenshotTest` checks at 360 × 640 dp and 200% with the pending message that the "1", "5" and "Check" keys keep their bounds when the message ends.
+4. **Tests used a copy of the mapping.** The copied `outcomeOf` / `resultOf` are gone. `PaymentOutcomeMessagesTest` drives every `LaunchResult` (Cancelled, Failed(each kind)) and every `PurchaseUpdate` (Cancelled, Failed(each kind), a pending purchase) through the real `PurchaseCoordinator`, `SessionEngine` and `ConfirmSheetHost` with Story 4.7's live policy, and asserts the message on screen.
+5. **Weak tests:**
+   - A paid snooze after a cancelled one shows no message on Snoozed or on the next ring.
+   - The unused table rows (Purchased, "Use it", "Not now") are removed: they have no engine outcome. `paymentOutcomeOf(effect)` keys the table by the engine's effects only, and `PaymentOutcomeCopyTest` checks that those EXPERIENCE rows say "none".
+   - The offline test relies on 4.7's live connectivity re-render (`FakeConnectivity`, no engine event).
+   - The 4.13 Snooze-tap test asserts that the message stays on screen after an early tap.
+
+**Rebase note for 4.12:** `PurchaseFailureKind` has a fourth value, `Unconfirmed`. A `when` over the kind in the Play adapter needs a branch for it (the adapter never produces it).
 
 ## pps-design Done checklist
 

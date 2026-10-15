@@ -26,8 +26,10 @@ import com.yawnandpawn.app.core.log.Logger
 import com.yawnandpawn.app.core.session.SessionLockGuard
 import com.yawnandpawn.app.core.time.Clock
 import com.yawnandpawn.app.core.time.TimeZoneProvider
+import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
+import kotlinx.coroutines.withContext
 import kotlinx.datetime.DayOfWeek
 import kotlinx.datetime.LocalTime
 import kotlinx.datetime.TimeZone
@@ -328,7 +330,9 @@ class SaveAlarm(
  * armed (on) or cancelled (off). Turning an enabled alarm off inside its lock window also writes a
  * `CommitmentEvent(Disabled)` for the occurrence it gave up ([CommitmentLog], Story 4.6), in the same guarded write. The
  * alarm change comes first: a failed write leaves the alarm on and armed, with no event; a failed event write is logged
- * and the alarm stays off (the user asked for that, and it is stored).
+ * and the alarm stays off (the user asked for that, and it is stored). The guarded write runs to its end even when the
+ * caller is cancelled meanwhile (Home's scope cleared right after "Turn off"): a stored change always gets its system
+ * alarm and its event.
  */
 class SetAlarmEnabled(
     private val repository: AlarmRepository,
@@ -345,14 +349,16 @@ class SetAlarmEnabled(
     ): Outcome<Alarm, DomainError> =
         lock.withLock {
             sessionLock.whenIdle {
-                repository.get(id).flatMap { stored ->
-                    val now = clock.nowMillis()
-                    val changed = stored.copy(enabled = enabled, updatedAt = now)
-                    repository
-                        .upsert(changed)
-                        .map { changed }
-                        .onSuccess(scheduling::sync)
-                        .onSuccess { if (!enabled) recordCommitment(commitments, logger, stored, CommitmentAction.Disabled, now) }
+                withContext(NonCancellable) {
+                    repository.get(id).flatMap { stored ->
+                        val now = clock.nowMillis()
+                        val changed = stored.copy(enabled = enabled, updatedAt = now)
+                        repository
+                            .upsert(changed)
+                            .map { changed }
+                            .onSuccess(scheduling::sync)
+                            .onSuccess { if (!enabled) recordCommitment(commitments, logger, stored, CommitmentAction.Disabled, now) }
+                    }
                 }
             }
         }
@@ -364,7 +370,7 @@ class SetAlarmEnabled(
  * nothing, so the alarm stays stored with its checks and armed. A deletion is logged as `AlarmDeleted(id, now)` (the
  * dialog says "This is logged."), and inside the alarm's lock window a `CommitmentEvent(Deleted)` is written too
  * ([CommitmentLog], Story 4.6), both here so no caller can skip them. A failed event write is logged; the alarm stays
- * deleted.
+ * deleted. Like [SetAlarmEnabled], the guarded write runs to its end even when the caller is cancelled meanwhile.
  */
 class DeleteAlarm(
     private val repository: AlarmRepository,
@@ -379,12 +385,14 @@ class DeleteAlarm(
     suspend operator fun invoke(id: String): Outcome<Unit, DomainError> =
         lock.withLock {
             sessionLock.whenIdle {
-                repository.get(id).flatMap { stored ->
-                    checkConfigRepository.deleteWithAlarm(id).onSuccess {
-                        scheduling.cancel(stored.requestCode)
-                        val now = clock.nowMillis()
-                        logger.log(LogEvent.AlarmDeleted(id, now))
-                        recordCommitment(commitments, logger, stored, CommitmentAction.Deleted, now)
+                withContext(NonCancellable) {
+                    repository.get(id).flatMap { stored ->
+                        checkConfigRepository.deleteWithAlarm(id).onSuccess {
+                            scheduling.cancel(stored.requestCode)
+                            val now = clock.nowMillis()
+                            logger.log(LogEvent.AlarmDeleted(id, now))
+                            recordCommitment(commitments, logger, stored, CommitmentAction.Deleted, now)
+                        }
                     }
                 }
             }

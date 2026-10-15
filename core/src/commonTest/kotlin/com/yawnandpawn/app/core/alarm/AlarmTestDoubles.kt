@@ -55,6 +55,9 @@ internal class InMemoryAlarms : AlarmRepository {
     var deleteFailure: DomainError.StorageFailure? = null
     var upserts = 0
 
+    /** Runs after each stored upsert or delete, before it returns (a test suspends the write there). */
+    var afterWrite: suspend () -> Unit = {}
+
     override fun observeAll(): Flow<List<Alarm>> = alarms.map { it.values.sortedWith(AlarmListOrder) }
 
     override suspend fun listAll(): Outcome<List<Alarm>, DomainError> {
@@ -72,6 +75,7 @@ internal class InMemoryAlarms : AlarmRepository {
         upserts++
         failure?.let { return Outcome.Failure(it) }
         alarms.value += alarm.id to alarm
+        afterWrite()
         return Outcome.Success(Unit)
     }
 
@@ -81,7 +85,7 @@ internal class InMemoryAlarms : AlarmRepository {
             storageFailure != null -> Outcome.Failure(storageFailure)
             id !in alarms.value -> Outcome.Failure(DomainError.NotFound(id))
             else -> Outcome.Success(Unit).also { alarms.value -= id }
-        }
+        }.also { if (it is Outcome.Success) afterWrite() }
     }
 }
 

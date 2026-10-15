@@ -10,12 +10,18 @@ import com.yawnandpawn.app.core.log.LogEvent
 import com.yawnandpawn.app.core.session.SessionLockGuard
 import com.yawnandpawn.app.core.session.SessionState
 import com.yawnandpawn.app.core.session.ringSession
+import kotlinx.coroutines.CompletableDeferred
+import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.test.advanceUntilIdle
+import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
 import kotlinx.datetime.LocalTime
 import kotlinx.datetime.TimeZone
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertFalse
 import kotlin.test.assertIs
 import kotlin.test.assertTrue
 import kotlin.time.Duration.Companion.hours
@@ -25,8 +31,10 @@ import kotlin.time.Instant
 /**
  * Story 4.6: turning an alarm off or deleting it inside its lock window writes a commitment event in the same guarded
  * write (PRD §6.2), and a delete is always logged as `AlarmDeleted`, so no caller can skip either. A failed alarm write
- * leaves the alarm armed and writes no event.
+ * leaves the alarm armed and writes no event. A caller cancelled once the alarm is written (Home's scope cleared right
+ * after "Turn off") still gets its event: the write is not left half done.
  */
+@OptIn(ExperimentalCoroutinesApi::class)
 class CommitmentEventsOnAlarmChangeTest {
     /** The 07:30 UTC ring the alarm gives up. */
     private val sevenThirty = Instant.parse("2027-03-09T07:30:00Z")
@@ -138,6 +146,53 @@ class CommitmentEventsOnAlarmChangeTest {
 
             assertEquals(listOf<LogEvent>(LogEvent.AlarmDeleted("a", clock.now)), logger.events)
             assertEquals(listOf(CommitmentEvent("id-1", "a", sevenThirty, CommitmentAction.Deleted, clock.now)), events.events)
+        }
+
+    @Test
+    fun `a turn-off whose caller is cancelled after the alarm is stored still writes its Disabled event`() =
+        runTest {
+            store()
+            val gate = CompletableDeferred<Unit>()
+            repository.afterWrite = { gate.await() }
+
+            val call = launch { setEnabled("a", enabled = false) }
+            runCurrent()
+            assertFalse(
+                repository.alarms.value
+                    .getValue("a")
+                    .enabled,
+                "the alarm is stored off, the write still suspended",
+            )
+            call.cancel()
+            gate.complete(Unit)
+            advanceUntilIdle()
+
+            assertFalse(
+                repository.alarms.value
+                    .getValue("a")
+                    .enabled,
+            )
+            assertEquals(listOf(CommitmentEvent("id-1", "a", sevenThirty, CommitmentAction.Disabled, clock.now)), events.events)
+            assertTrue(scheduler.calls.any { it is Call.Cancel }, "the system alarm is cancelled too")
+        }
+
+    @Test
+    fun `a delete whose caller is cancelled after the alarm is deleted still logs it and writes its Deleted event`() =
+        runTest {
+            store()
+            val gate = CompletableDeferred<Unit>()
+            repository.afterWrite = { gate.await() }
+
+            val call = launch { delete("a") }
+            runCurrent()
+            assertFalse("a" in repository.alarms.value, "the alarm is deleted, the write still suspended")
+            call.cancel()
+            gate.complete(Unit)
+            advanceUntilIdle()
+
+            assertEquals(listOf<LogEvent>(LogEvent.AlarmDeleted("a", clock.now)), logger.events)
+            assertEquals(listOf(CommitmentEvent("id-1", "a", sevenThirty, CommitmentAction.Deleted, clock.now)), events.events)
+            assertTrue(scheduler.calls.any { it is Call.Cancel }, "the system alarm is cancelled too")
         }
 
     @Test

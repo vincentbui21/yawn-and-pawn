@@ -26,7 +26,7 @@ import androidx.compose.ui.test.assertWidthIsAtLeast
 import androidx.compose.ui.test.hasClickAction
 import androidx.compose.ui.test.hasContentDescription
 import androidx.compose.ui.test.hasText
-import androidx.compose.ui.test.junit4.createEmptyComposeRule
+import androidx.compose.ui.test.junit4.v2.createEmptyComposeRule
 import androidx.compose.ui.unit.dp
 import com.yawnandpawn.app.StopAppRule
 import com.yawnandpawn.app.core.billing.Money

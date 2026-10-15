@@ -3,7 +3,7 @@ package com.yawnandpawn.app.android.call
 import android.content.Context
 import android.media.AudioManager
 import android.os.Looper
-import androidx.compose.ui.test.junit4.createEmptyComposeRule
+import androidx.compose.ui.test.junit4.v2.createEmptyComposeRule
 import androidx.test.core.app.ApplicationProvider
 import com.yawnandpawn.app.StopAppRule
 import com.yawnandpawn.app.android.wake.WakeApp

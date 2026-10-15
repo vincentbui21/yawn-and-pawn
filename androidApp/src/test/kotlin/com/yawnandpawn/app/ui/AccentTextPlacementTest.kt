@@ -6,7 +6,7 @@ import androidx.compose.ui.test.SemanticsMatcher
 import androidx.compose.ui.test.captureToImage
 import androidx.compose.ui.test.hasClickAction
 import androidx.compose.ui.test.hasText
-import androidx.compose.ui.test.junit4.createEmptyComposeRule
+import androidx.compose.ui.test.junit4.v2.createEmptyComposeRule
 import androidx.compose.ui.test.onRoot
 import androidx.compose.ui.test.performScrollTo
 import com.yawnandpawn.app.StopAppRule

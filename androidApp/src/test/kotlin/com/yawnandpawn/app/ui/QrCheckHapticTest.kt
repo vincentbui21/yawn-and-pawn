@@ -7,7 +7,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.hapticfeedback.HapticFeedback
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.platform.LocalHapticFeedback
-import androidx.compose.ui.test.junit4.createEmptyComposeRule
+import androidx.compose.ui.test.junit4.v2.createEmptyComposeRule
 import com.yawnandpawn.app.StopAppRule
 import com.yawnandpawn.app.ui.theme.PpsThemeMode
 import com.yawnandpawn.app.ui.wake.CheckContent

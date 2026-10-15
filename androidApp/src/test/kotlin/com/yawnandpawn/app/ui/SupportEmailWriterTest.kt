@@ -1,6 +1,6 @@
 package com.yawnandpawn.app.ui
 
-import androidx.compose.ui.test.junit4.createEmptyComposeRule
+import androidx.compose.ui.test.junit4.v2.createEmptyComposeRule
 import com.yawnandpawn.app.StopAppRule
 import com.yawnandpawn.app.core.billing.Money
 import com.yawnandpawn.app.core.billing.PriceSource

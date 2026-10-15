@@ -4,7 +4,7 @@ import android.content.Intent
 import androidx.compose.ui.test.assertIsEnabled
 import androidx.compose.ui.test.hasContentDescription
 import androidx.compose.ui.test.hasText
-import androidx.compose.ui.test.junit4.createEmptyComposeRule
+import androidx.compose.ui.test.junit4.v2.createEmptyComposeRule
 import androidx.compose.ui.test.onNodeWithText
 import androidx.lifecycle.Lifecycle
 import com.yawnandpawn.app.APP_WORK_TIMEOUT_MILLIS

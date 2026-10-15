@@ -6,7 +6,7 @@ import android.os.Bundle
 import android.view.HapticFeedbackConstants
 import android.view.View
 import android.view.ViewGroup
-import androidx.compose.ui.test.junit4.createEmptyComposeRule
+import androidx.compose.ui.test.junit4.v2.createEmptyComposeRule
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import com.yawnandpawn.app.APP_WORK_TIMEOUT_MILLIS

@@ -4,7 +4,7 @@ import android.app.AlarmManager
 import android.content.Intent
 import android.os.Looper
 import android.os.UserManager
-import androidx.compose.ui.test.junit4.createEmptyComposeRule
+import androidx.compose.ui.test.junit4.v2.createEmptyComposeRule
 import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.lifecycle.Lifecycle
 import com.yawnandpawn.app.StopAppRule

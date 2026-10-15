@@ -153,6 +153,8 @@ class PaymentOutcomeMessagesTest {
     ) {
         val launches = billing.launched.size
         billing.launchResults.add(Outcome.Success(launch))
+        // After an earlier outcome the button comes back once the closed sheet's last frames ran (the rule runs them).
+        await(app, "snooze on sale") { composeRule.onAllNodes(snoozeOnSale).fetchSemanticsNodes().isNotEmpty() }
         composeRule.onNode(snoozeOnSale).performClick()
         await(app, "the sheet opens") {
             host(app).request.value != null && composeRule.onAllNodes(hasText("Snooze for 9 min?")).fetchSemanticsNodes().isNotEmpty()

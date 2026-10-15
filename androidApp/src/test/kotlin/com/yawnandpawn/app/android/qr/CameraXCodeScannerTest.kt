@@ -126,6 +126,8 @@ class CameraXCodeScannerTest {
             composeRule.waitForIdle()
             scenario.onActivity { block(it.window.decorView) }
         }
+        // The scan releases the camera when its effect is cancelled, which the compose rule runs: let it.
+        composeRule.waitForIdle()
     }
 
     private fun View.previewViews(): List<PreviewView> =

@@ -2,19 +2,24 @@ package com.yawnandpawn.app.android.reliability
 
 import android.Manifest
 import android.annotation.SuppressLint
+import android.app.ActivityManager
 import android.app.AlarmManager
 import android.app.NotificationManager
+import android.app.usage.UsageStatsManager
 import android.content.ActivityNotFoundException
 import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
 import android.net.Uri
 import android.os.Build
+import android.os.PowerManager
 import android.provider.Settings
 import androidx.core.app.NotificationManagerCompat
 import com.yawnandpawn.app.android.wake.WakeNotifier
 import com.yawnandpawn.app.core.log.LogEvent
 import com.yawnandpawn.app.core.log.Logger
+import com.yawnandpawn.app.core.reliability.DeviceInfo
+import com.yawnandpawn.app.core.reliability.DeviceInfoSource
 import com.yawnandpawn.app.core.reliability.NotificationPermission
 import com.yawnandpawn.app.core.reliability.ReliabilityItem
 import com.yawnandpawn.app.core.reliability.ReliabilityProbe
@@ -28,6 +33,14 @@ import com.yawnandpawn.app.core.reliability.ReliabilityStatus
  * - full-screen intent: `NotificationManager.canUseFullScreenIntent()` on API 34+, always allowed below;
  * - exact alarms: `AlarmManager.canScheduleExactAlarms()` on API 31-32 only; API 33+ holds `USE_EXACT_ALARM`, and 30 and
  *   below need no grant.
+ *
+ * Story 5.3 adds, each read only on the API level that has it (below it the value is the good one):
+ * - Do Not Disturb: `NotificationManager.getCurrentInterruptionFilter()`; total silence blocks alarms, "alarms only"
+ *   lets them through, and otherwise on API 28+ the policy (`getNotificationPolicy()`, no permission needed; a scheduled
+ *   rule's too) must have the alarms category. No policy counts as allowed;
+ * - battery: `PowerManager.isIgnoringBatteryOptimizations`, `ActivityManager.isBackgroundRestricted()` (API 28+) and
+ *   the standby bucket `STANDBY_BUCKET_RESTRICTED` (API 30+, `UsageStatsManager.getAppStandbyBucket()`, the app's own);
+ * - camera: `checkSelfPermission(CAMERA)`.
  */
 class AndroidReliabilityProbe(
     private val context: Context,
@@ -35,7 +48,7 @@ class AndroidReliabilityProbe(
     /** The API 34+ full-screen intent grant; a seam because Robolectric has no shadow for it. */
     private val canUseFullScreenIntent: () -> Boolean = { platformCanUseFullScreenIntent(context) },
 ) : ReliabilityProbe {
-    @SuppressLint("NewApi") // Each call is behind its own SDK check (sdkInt is injectable for tests).
+    @SuppressLint("NewApi", "InlinedApi") // Each call is behind its own SDK check (sdkInt is injectable for tests).
     override fun check(): ReliabilityStatus =
         ReliabilityStatus(
             notificationsAllowed = NotificationManagerCompat.from(context).areNotificationsEnabled() && alarmChannelOn(),
@@ -43,7 +56,33 @@ class AndroidReliabilityProbe(
             exactAlarmsAllowed =
                 sdkInt !in Build.VERSION_CODES.S..Build.VERSION_CODES.S_V2 ||
                     context.getSystemService(AlarmManager::class.java).canScheduleExactAlarms(),
+            dndAllowsAlarms = dndAllowsAlarms(),
+            batteryOptimizationIgnored =
+                context.getSystemService(PowerManager::class.java).isIgnoringBatteryOptimizations(context.packageName),
+            backgroundRestricted =
+                sdkInt >= Build.VERSION_CODES.P && context.getSystemService(ActivityManager::class.java).isBackgroundRestricted,
+            standbyBucketRestricted = sdkInt >= Build.VERSION_CODES.R && standbyBucket() == UsageStatsManager.STANDBY_BUCKET_RESTRICTED,
+            cameraGranted = context.checkSelfPermission(Manifest.permission.CAMERA) == PackageManager.PERMISSION_GRANTED,
         )
+
+    /** The app's own standby bucket (no permission needed for its own); read on API 30+ only. */
+    @SuppressLint("NewApi")
+    private fun standbyBucket(): Int = context.getSystemService(UsageStatsManager::class.java).appStandbyBucket
+
+    /**
+     * Alarms get through Do Not Disturb: not total silence, and "alarms only" always lets them through. Otherwise (off or
+     * priority only) on API 28+ the policy needs the alarms category: a scheduled rule uses it when it starts. Below 28 a
+     * priority mode always let alarms through.
+     */
+    @SuppressLint("NewApi") // PRIORITY_CATEGORY_ALARMS is read on API 28+ only.
+    private fun dndAllowsAlarms(): Boolean {
+        val notifications = context.getSystemService(NotificationManager::class.java)
+        return when (notifications.currentInterruptionFilter) {
+            NotificationManager.INTERRUPTION_FILTER_NONE -> false
+            NotificationManager.INTERRUPTION_FILTER_ALARMS -> true
+            else -> sdkInt < Build.VERSION_CODES.P || notifications.notificationPolicy.allowsAlarms()
+        }
+    }
 
     /**
      * The ringing notification's channel ("Alarms", created on the first ring) is not blocked: a blocked channel shows
@@ -53,6 +92,11 @@ class AndroidReliabilityProbe(
         context.getSystemService(NotificationManager::class.java).getNotificationChannel(WakeNotifier.CHANNEL_ID)?.importance !=
             NotificationManager.IMPORTANCE_NONE
 }
+
+/** The policy lets alarms through; no policy (some phones return none) counts as allowed. */
+@SuppressLint("InlinedApi") // Read on API 28+ only (AndroidReliabilityProbe.dndAllowsAlarms).
+private fun NotificationManager.Policy?.allowsAlarms(): Boolean =
+    this == null || (priorityCategories and NotificationManager.Policy.PRIORITY_CATEGORY_ALARMS) != 0
 
 /** `NotificationManager.canUseFullScreenIntent()`; [AndroidReliabilityProbe] calls it on API 34+ only. */
 @SuppressLint("NewApi") // The only caller checks the SDK level first (AndroidReliabilityProbe.check).
@@ -159,4 +203,16 @@ class AndroidNotificationPermission(
         const val PREFS = "reliability"
         const val KEY_ASKED = "notification_permission_asked"
     }
+}
+
+/**
+ * The Android [DeviceInfoSource] (Story 5.3): the API level, `Build.MANUFACTURER` and `Build.FINGERPRINT`. No maker is
+ * covered until Story 5.5 brings the maker guidance.
+ */
+class AndroidDeviceInfoSource(
+    private val sdkInt: Int = Build.VERSION.SDK_INT,
+    private val maker: String = Build.MANUFACTURER.orEmpty(),
+    private val fingerprint: String = Build.FINGERPRINT.orEmpty(),
+) : DeviceInfoSource {
+    override fun current(): DeviceInfo = DeviceInfo(sdkInt = sdkInt, maker = maker, fingerprint = fingerprint, makerCovered = false)
 }

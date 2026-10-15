@@ -13,6 +13,7 @@ import com.yawnandpawn.app.core.history.SessionHistoryRepository
 import com.yawnandpawn.app.core.id.IdGenerator
 import com.yawnandpawn.app.core.id.UuidV4IdGenerator
 import com.yawnandpawn.app.core.log.Logger
+import com.yawnandpawn.app.core.reliability.ReliabilityRecords
 import com.yawnandpawn.app.core.session.ActiveSessionStore
 import com.yawnandpawn.app.core.stats.CheckRegistrations
 import com.yawnandpawn.app.core.stats.FallbackHistory
@@ -30,6 +31,7 @@ import com.yawnandpawn.app.data.settings.DataStoreInstallIdProvider
 import com.yawnandpawn.app.data.settings.DataStoreMissedNoteDismissals
 import com.yawnandpawn.app.data.settings.DataStorePriceCacheStore
 import com.yawnandpawn.app.data.settings.DataStoreReRegisterDismissals
+import com.yawnandpawn.app.data.settings.DataStoreReliabilityRecords
 import com.yawnandpawn.app.data.settings.InstallIdDataStore
 import com.yawnandpawn.app.data.settings.PriceCacheDataStore
 import com.yawnandpawn.app.data.settings.SettingsDataStore
@@ -95,6 +97,7 @@ class DataModuleTest {
         val first = app.koin.get<MissedNoteDismissals>()
         assertIs<DataStoreMissedNoteDismissals>(first)
         assertIs<DataStoreReRegisterDismissals>(app.koin.get<ReRegisterDismissals>())
+        assertIs<DataStoreReliabilityRecords>(app.koin.get<ReliabilityRecords>())
         assertSame(app.koin.get<SettingsDataStore>(), app.koin.get<SettingsDataStore>())
         assertEquals(Outcome.Success(Unit), runBlocking { first.dismiss("s1") })
         app.close()

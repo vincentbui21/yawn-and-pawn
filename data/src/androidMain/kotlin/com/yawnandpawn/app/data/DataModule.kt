@@ -15,6 +15,7 @@ import com.yawnandpawn.app.core.config.PendingChangeRepository
 import com.yawnandpawn.app.core.config.SettingsSnapshotCache
 import com.yawnandpawn.app.core.history.MissedNoteDismissals
 import com.yawnandpawn.app.core.history.SessionHistoryRepository
+import com.yawnandpawn.app.core.reliability.ReliabilityRecords
 import com.yawnandpawn.app.core.session.ActiveSessionStore
 import com.yawnandpawn.app.core.session.TestAlarmStore
 import com.yawnandpawn.app.core.stats.CheckRegistrations
@@ -42,6 +43,7 @@ import com.yawnandpawn.app.data.settings.DataStoreInstallIdProvider
 import com.yawnandpawn.app.data.settings.DataStoreMissedNoteDismissals
 import com.yawnandpawn.app.data.settings.DataStorePriceCacheStore
 import com.yawnandpawn.app.data.settings.DataStoreReRegisterDismissals
+import com.yawnandpawn.app.data.settings.DataStoreReliabilityRecords
 import com.yawnandpawn.app.data.settings.DataStoreTestAlarmStore
 import com.yawnandpawn.app.data.settings.InstallIdDataStore
 import com.yawnandpawn.app.data.settings.PriceCacheDataStore
@@ -89,6 +91,9 @@ val dataModule =
         single<TestAlarmStore> { DataStoreTestAlarmStore(get<SettingsDataStore>().store, get()) }
         // When each re-register banner was dismissed (Story 3.13), in the same device-protected DataStore.
         single<ReRegisterDismissals> { DataStoreReRegisterDismissals(get<SettingsDataStore>().store, get()) }
+        // The reliability checklist's records (Story 5.3): the rows seen OK, the locked test pass and the maker
+        // confirmation, in the same device-protected DataStore.
+        single<ReliabilityRecords> { DataStoreReliabilityRecords(get<SettingsDataStore>().store) }
         // The commitment lock (Story 4.4): the global settings and their pending changes in the same DataStore (AD-6),
         // the alarms' pending changes and the commitment events in app.db.
         // The last-known settings for a fire that cannot read the DataStore in time (review fix 11); not backed up.

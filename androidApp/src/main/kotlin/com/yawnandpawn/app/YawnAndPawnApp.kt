@@ -60,6 +60,7 @@ import com.yawnandpawn.app.core.id.IdGenerator
 import com.yawnandpawn.app.core.id.UuidV4IdGenerator
 import com.yawnandpawn.app.core.log.Logger
 import com.yawnandpawn.app.core.net.Connectivity
+import com.yawnandpawn.app.core.reliability.ReliabilityRecords
 import com.yawnandpawn.app.core.session.ActiveSessionStore
 import com.yawnandpawn.app.core.session.CameraFallbackPolicy
 import com.yawnandpawn.app.core.session.CheckValidator
@@ -208,7 +209,22 @@ val appModule =
         single { ReRegisterSuggestions(get(), get(), get(), get()) }
         // Billing (Story 4.12, billingModule): Play Billing 9.1 is the one Billing, and AndroidDeviceUnlocker the one UnlockPort
         // (Spike S1: the PIN before Play opens), shared by the engine (it reads the keyguard for a Pay) and the coordinator.
-        single { SessionEngine(get(), get(), get(), get(), get(), get(), get(), get(), userLock = get(), unlock = get()) }
+        // Story 5.3: a test that rang locked and is completed is stored for the checklist's locked-screen test.
+        single {
+            SessionEngine(
+                get(),
+                get(),
+                get(),
+                get(),
+                get(),
+                get(),
+                get(),
+                get(),
+                userLock = get(),
+                unlock = get(),
+                lockedTest = get<ReliabilityRecords>(),
+            )
+        }
         // Story 4.11: the billing orchestration (launch, purchase updates, recovery, ITEM_ALREADY_OWNED, stranded reuse). It
         // runs on its own app-wide scope, never inside the engine's step.
         single {

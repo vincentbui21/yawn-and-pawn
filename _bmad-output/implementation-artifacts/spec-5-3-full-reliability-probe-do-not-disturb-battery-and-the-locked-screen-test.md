@@ -2,7 +2,7 @@
 title: 'Story 5.3: Full reliability probe: Do Not Disturb, battery and the locked-screen test'
 type: 'feature'
 created: '2026-10-15'
-status: 'ready-for-dev'
+status: 'done'
 baseline_revision: 'be7a2f04'
 review_loop_iteration: 0
 followup_review_recommended: false
@@ -80,6 +80,16 @@ deferred:
 
 ## Review Triage Log
 
+### 2026-10-15 — Review pass (fast mode: one combined self-review of the diff; the coordinator runs the independent review)
+- verdicts: 6 findings — high 0, medium 0, low 1, false 3, maybe-false 2
+- findings:
+  - `[maybe-false]` `reject` `AndroidReliabilityProbe.check()` now calls `getNotificationPolicy()` on every Home start; an OEM that throws there would crash Home — the platform method enforces no permission (API 28–36), and on API 35+ it returns the user's policy for an app with no implicit zen rule; settling it needs a device run (Story 5.13). If true it would be medium, but no evidence of a throwing OEM; not deferred.
+  - `[maybe-false]` `reject` The API 28 Robolectric sandbox must be downloaded by CI — existing tests already run `@Config(sdk = [28])` (2 uses before this story), so CI already fetches it.
+  - `[false]` `reject` A restored Completed session could record the locked test twice — `EngineKeyguard.afterStep` returns when `from` is Completed, and the restore step starts from the loaded Completed state.
+  - `[false]` `reject` `TestAlarmFired` arriving while an ended session is still being recorded skips the keyguard read — `dispatch` settles history (Recorded → Idle) before `step`, so `from` is Idle when the keyguard is read.
+  - `[false]` `reject` Adding an R02 example breaks the AD-2 doc/table parity test — the row count is unchanged; `Ad2TableDocTest` passes.
+  - `[low]` `reject` `EvaluateReliability` has no production caller yet — intended: Story 5.4 calls it (spec `deferred`); deleting it would push the last-OK bookkeeping into a UI story.
+
 ## Design Notes
 
 - **Rows** (all nine always returned, Hidden included): Notifications; FullScreenAlarm; ExactAlarms (Hidden unless `device.sdkInt` in 31..32); DoNotDisturb; Battery (`batteryOptimizationIgnored && !backgroundRestricted && !standbyBucketRestricted`); Manufacturer (Hidden unless `makerCovered`; OK when the stored confirmation equals the current maker and fingerprint); Camera (Hidden unless an enabled alarm has a check whose `type.usesCamera`); Microphone (always Hidden until Epic 7); LockedScreenTest (OK when `lockedTestPassedAt != null`).
@@ -97,3 +107,29 @@ deferred:
 - `./gradlew --no-daemon --max-workers=2 :data:testAndroidHostTest --tests "*DataStoreReliabilityRecords*" --tests "*DataModuleTest*"` -- expected: pass
 - `./gradlew --no-daemon --max-workers=2 :androidApp:testDebugUnitTest --tests "*ReliabilityProbeTest*"` and `:testing:allTests` -- expected: pass
 - `./gradlew --no-daemon --max-workers=2 spotlessCheck detekt` -- expected: pass
+
+## Auto Run Result
+
+Status: done (fast mode; not pushed — the coordinator pushes, runs the independent review and CI, and merges)
+
+**Summary:** the probe now reads Do Not Disturb, battery optimisation, background restriction, the restricted standby bucket and the camera grant. A test ring is frozen as `testStartedLocked` (keyguard showing, or before the first unlock) and stores `lockedTestPassedAt` in the settings DataStore when it reaches Completed. The pure `ReliabilityChecklist` (nine rows, the Revoked transition, `alarmBlocking`) and the `EvaluateReliability` use case are ready for Story 5.4. Home is unchanged.
+
+**Files:**
+- `core/.../reliability/Reliability.kt` — five new `ReliabilityStatus` values (with good defaults) and `batteryOk`.
+- `core/.../reliability/ReliabilityChecklist.kt` (new) — rows, statuses, device info, stored records, ports, rules and the use case.
+- `core/.../session/SessionConfig.kt`, `IdleRules.kt`, `SessionReducer.kt` — `testStartedLocked` is frozen when a test fires.
+- `core/.../session/SessionEngine.kt`, `EngineKeyguard.kt` (new), `SessionPorts.kt` — reads the keyguard when a test fires and records a locked test on Completed (moved out of the engine because of detekt's complexity limits).
+- `data/.../settings/DataStoreReliabilityRecords.kt` (new), `DataModule.kt` — the records, kept in the settings DataStore.
+- `androidApp/.../reliability/AndroidReliability.kt`, `ReliabilityModule.kt`, `YawnAndPawnApp.kt` — the probe values, `AndroidDeviceInfoSource` and the wiring.
+- `testing/.../ReliabilityFakes.kt` — `FakeReliabilityRecords`.
+- Tests: `ReliabilityProbeTest` (17), `ReliabilityChecklistTest` (12), `SessionEngineLockedTestTest` (6), `DataStoreReliabilityRecordsTest` (4), `SessionJsonTest`, `SessionTransitionTable` (an R02 example), `DataModuleTest`, `ReliabilityFakesTest`.
+
+**Review:** 6 findings: 0 patched, 0 deferred, 6 rejected (the reasons are in the triage log). Follow-up review recommended: false, because nothing was patched.
+
+**Verification** (all with `--no-daemon --max-workers=2` on JDK 17): `:core:jvmTest` for the `core.session.*` and `core.reliability.*` packages; `:testing:allTests`; `:data:testAndroidHostTest` (`DataStoreReliabilityRecords`, `DataModuleTest`, `Ad2TableDocTest`); `:androidApp:testDebugUnitTest` (`ReliabilityProbeTest`, `WakeServiceTest`, `TestAlarm*`); `spotlessCheck detekt`. All pass. Not run here because of the run's constraints: `qualityGate` and Kover (CI runs them).
+
+**Residual risks:**
+- Kover's core ≥ 90% is not checked locally.
+- The DataStore is backed up, so restoring it copies `lockedTestPassedAt` and the last-OK set onto a new phone.
+- If the app is killed between the Completed commit and the DataStore write, that pass is lost.
+- The DND and battery values have not been checked on a real phone yet (Story 5.13).

@@ -9,6 +9,7 @@ import com.yawnandpawn.app.core.checks.Difficulty
 import com.yawnandpawn.app.core.time.Deadline
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertFalse
 import kotlin.test.assertIs
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
@@ -182,6 +183,18 @@ class SessionJsonTest {
         val config = testConfig(checkPlan = CheckPlan(CheckMode.Random, listOf(CheckEntry(CheckType.Math, Difficulty.Easy, count = 10))))
         assertEquals(config, SessionJson.decodeConfig(SessionJson.encodeConfig(config)))
         assertNull(SessionJson.decodeConfig("""{"checkPlan":{"steps":[]}}"""))
+    }
+
+    @Test
+    fun `a config stored before Story 5_3 decodes as not started locked, and a locked test round trips`() {
+        assertEquals(false, SessionJson.decodeConfig(CONFIG_V1)?.testStartedLocked)
+        val stored = assertIs<StoredSession.Found>(SessionJson.decode(v1("Loud"))).state
+        assertFalse(assertIs<SessionState.Active>(stored).session.config.testStartedLocked)
+
+        val locked = testConfig(testMode = true).copy(testStartedLocked = true)
+        assertEquals(locked, SessionJson.decodeConfig(SessionJson.encodeConfig(locked)))
+        val state = SessionState.Completed(ringSession(locked))
+        assertEquals(StoredSession.Found(state), SessionJson.decode(SessionJson.encode(state)))
     }
 
     @Test

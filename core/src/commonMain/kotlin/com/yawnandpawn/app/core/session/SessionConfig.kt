@@ -25,6 +25,9 @@ import kotlin.time.Instant
  * @property rampStartPercent where "Gradually increase volume" starts, as a percentage of the set [volumePercent] (a fixed
  * 20: the ramp starts at a fifth of the set volume); any value 0..100 is valid at any volume. The player's gain follows
  * `rampGain(elapsed, rampStartPercent / 100.0, 30 s)` on top of the alarm stream set to [volumePercent].
+ * @property testStartedLocked a test ring that started with the keyguard showing (or before the first unlock), frozen at
+ * the fire (Story 5.3): once it is completed the reliability checklist's locked-screen test passes. Always false for a
+ * real ring; the default lets rows and pending test rings stored before Story 5.3 decode.
  */
 @Serializable
 data class SessionConfig(
@@ -43,6 +46,7 @@ data class SessionConfig(
     val soundRef: String,
     val vibration: Boolean,
     val checkPlan: CheckPlan,
+    val testStartedLocked: Boolean = false,
 )
 
 /**

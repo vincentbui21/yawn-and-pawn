@@ -44,7 +44,8 @@ class SessionReducer internal constructor(
      * user has not unlocked since boot" (Story 2.3), read by `SessionEngine` with the time: a ring that starts or is
      * restored while locked is marked before the first unlock (Direct Boot substitutions, history `direct_boot`).
      * [keyguardLocked] is the environment input "the keyguard is showing" (Spike S1, Story 4.8), read by `SessionEngine`
-     * for `PayConfirmed`: a locked Pay asks for the unlock before billing launches.
+     * for `PayConfirmed`: a locked Pay asks for the unlock before billing launches. It is also read for a `TestAlarmFired`
+     * from Idle: a test that starts locked is frozen as such (Story 5.3).
      */
     fun reduce(
         state: SessionState,
@@ -55,7 +56,7 @@ class SessionReducer internal constructor(
     ): Transition {
         val row =
             when (state) {
-                SessionState.Idle -> idleRow(event, now, userLocked, directBootPlan)
+                SessionState.Idle -> idleRow(event, now, userLocked, directBootPlan, keyguardLocked)
                 is SessionState.Ring -> ringRules.row(state, event, now, userLocked, keyguardLocked)
                 is SessionState.Snoozed -> snoozedRow(state, event, now, userLocked, directBootPlan)
                 is SessionState.Completed, is SessionState.Missed -> endedRow(state, event)

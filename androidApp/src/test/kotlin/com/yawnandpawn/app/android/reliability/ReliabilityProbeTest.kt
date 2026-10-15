@@ -1,9 +1,15 @@
 package com.yawnandpawn.app.android.reliability
 
+import android.Manifest
+import android.app.ActivityManager
 import android.app.AlarmManager
+import android.app.Application
 import android.app.NotificationChannel
 import android.app.NotificationManager
+import android.app.usage.UsageStatsManager
 import android.content.Context
+import android.os.Build
+import android.os.PowerManager
 import androidx.test.core.app.ApplicationProvider
 import com.yawnandpawn.app.StopAppRule
 import com.yawnandpawn.app.android.wake.WakeNotifier
@@ -13,6 +19,7 @@ import com.yawnandpawn.app.core.reliability.ReliabilityProbe
 import com.yawnandpawn.app.core.reliability.ReliabilitySettings
 import com.yawnandpawn.app.core.reliability.ReliabilityStatus
 import com.yawnandpawn.app.testing.FakeLogger
+import org.junit.Before
 import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -27,7 +34,10 @@ import kotlin.test.assertEquals
 import kotlin.test.assertIs
 import kotlin.test.assertSame
 
-/** Story 1.19: the reliability probe on API 26, 31, 32, 33, 34 and 36. */
+/**
+ * Story 1.19: the reliability probe on API 26, 31, 32, 33, 34 and 36. Story 5.3: Do Not Disturb, battery and camera on
+ * API 26, 28, 30, 31, 33, 34 and 36.
+ */
 @RunWith(RobolectricTestRunner::class)
 class ReliabilityProbeTest {
     @get:Rule
@@ -44,6 +54,57 @@ class ReliabilityProbeTest {
             fullScreenAsked++
             fullScreenGranted
         })
+
+    /** Every value starts in its good state (exact alarms too), so the Story 1.19 tests see only their three items. */
+    @Before
+    fun goodPhone() {
+        ShadowAlarmManager.setCanScheduleExactAlarms(true)
+        notifications.setNotificationPolicyAccessGranted(true)
+        dnd(NotificationManager.INTERRUPTION_FILTER_ALL, alarmsAllowed = true)
+        battery(ignoring = true, restricted = false, bucket = UsageStatsManager.STANDBY_BUCKET_ACTIVE)
+        shadowOf(context as Application).grantPermissions(Manifest.permission.CAMERA)
+    }
+
+    private fun dnd(
+        filter: Int,
+        alarmsAllowed: Boolean,
+    ) {
+        val manager = context.getSystemService(NotificationManager::class.java)
+        manager.setInterruptionFilter(filter)
+        val categories = NotificationManager.Policy.PRIORITY_CATEGORY_CALLS or (if (alarmsAllowed) ALARMS else 0)
+        manager.notificationPolicy = NotificationManager.Policy(categories, 0, 0)
+    }
+
+    private fun battery(
+        ignoring: Boolean,
+        restricted: Boolean,
+        bucket: Int,
+    ) {
+        shadowOf(context.getSystemService(PowerManager::class.java)).setIgnoringBatteryOptimizations(context.packageName, ignoring)
+        shadowOf(context.getSystemService(ActivityManager::class.java)).setBackgroundRestricted(restricted)
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
+            shadowOf(context.getSystemService(UsageStatsManager::class.java)).setCurrentAppStandbyBucket(bucket)
+        }
+    }
+
+    /** Every Story 5.3 setting is off: total silence, battery optimised and restricted, camera denied. */
+    private fun allNewOff() {
+        dnd(NotificationManager.INTERRUPTION_FILTER_NONE, alarmsAllowed = false)
+        battery(ignoring = false, restricted = true, bucket = UsageStatsManager.STANDBY_BUCKET_RESTRICTED)
+        shadowOf(context as Application).denyPermissions(Manifest.permission.CAMERA)
+    }
+
+    /** The Story 5.3 values of [status]: DND, battery exempt, background restricted, bucket restricted, camera. */
+    private fun newValues(status: ReliabilityStatus): List<Boolean> =
+        listOf(
+            status.dndAllowsAlarms,
+            status.batteryOptimizationIgnored,
+            status.backgroundRestricted,
+            status.standbyBucketRestricted,
+            status.cameraGranted,
+        )
+
+    private val good = newValues(ReliabilityStatus.ALL_OK)
 
     /** Every grant the probe could read is off. */
     private fun allOff() {
@@ -154,5 +215,89 @@ class ReliabilityProbeTest {
         allOff()
         fullScreenGranted = false
         assertEquals(status(notifications = false, fullScreen = false, exact = true), api36.check())
+    }
+
+    @Test
+    @Config(sdk = [26])
+    fun `API 26 reads DND total silence, battery optimisation and the camera, nothing newer`() {
+        assertEquals(good, newValues(probe.check()))
+
+        // Below 28 a priority mode always lets alarms through; background restriction and the bucket do not exist.
+        dnd(NotificationManager.INTERRUPTION_FILTER_PRIORITY, alarmsAllowed = false)
+        battery(ignoring = false, restricted = true, bucket = UsageStatsManager.STANDBY_BUCKET_RESTRICTED)
+        shadowOf(context as Application).denyPermissions(Manifest.permission.CAMERA)
+        assertEquals(listOf(true, false, false, false, false), newValues(probe.check()))
+
+        dnd(NotificationManager.INTERRUPTION_FILTER_NONE, alarmsAllowed = true)
+        assertEquals(false, probe.check().dndAllowsAlarms)
+    }
+
+    @Test
+    @Config(sdk = [28])
+    fun `API 28 reads the DND policy and background restriction, not the restricted bucket`() {
+        assertEquals(good, newValues(probe.check()))
+
+        // A policy without alarms blocks them even with DND off now: a scheduled rule turns it on later.
+        dnd(NotificationManager.INTERRUPTION_FILTER_ALL, alarmsAllowed = false)
+        assertEquals(false, probe.check().dndAllowsAlarms)
+        dnd(NotificationManager.INTERRUPTION_FILTER_PRIORITY, alarmsAllowed = false)
+        assertEquals(false, probe.check().dndAllowsAlarms)
+        dnd(NotificationManager.INTERRUPTION_FILTER_ALARMS, alarmsAllowed = false)
+        assertEquals(true, probe.check().dndAllowsAlarms, "alarms only lets alarms through")
+        dnd(NotificationManager.INTERRUPTION_FILTER_PRIORITY, alarmsAllowed = true)
+        assertEquals(true, probe.check().dndAllowsAlarms)
+
+        allNewOff()
+        assertEquals(listOf(false, false, true, false, false), newValues(probe.check()))
+    }
+
+    @Test
+    @Config(sdk = [28])
+    fun `no DND policy counts as allowed`() {
+        context.getSystemService(NotificationManager::class.java).notificationPolicy = null
+        assertEquals(true, probe.check().dndAllowsAlarms)
+    }
+
+    @Test
+    @Config(sdk = [30])
+    fun `API 30 reads every Story 5_3 value, the restricted bucket included`() {
+        assertReadsEverything(probe)
+        battery(ignoring = true, restricted = false, bucket = UsageStatsManager.STANDBY_BUCKET_RARE)
+        assertEquals(false, probe.check().standbyBucketRestricted, "only the restricted bucket counts")
+    }
+
+    @Test
+    @Config(sdk = [31])
+    fun `API 31 reads every Story 5_3 value`() = assertReadsEverything(probe)
+
+    @Test
+    @Config(sdk = [33])
+    fun `API 33 reads every Story 5_3 value`() = assertReadsEverything(probe)
+
+    @Test
+    @Config(sdk = [34])
+    fun `API 34 reads every Story 5_3 value`() = assertReadsEverything(probe)
+
+    /** API 36 through the probe's SDK level on the SDK 34 sandbox, as for the Story 1.19 values. */
+    @Test
+    @Config(sdk = [34])
+    fun `API 36 reads every Story 5_3 value`() =
+        assertReadsEverything(AndroidReliabilityProbe(context, sdkInt = 36, canUseFullScreenIntent = { true }))
+
+    /** All good reads good; all off reads every value off; and the Story 1.19 items and Home's banner do not change. */
+    private fun assertReadsEverything(probe: AndroidReliabilityProbe) {
+        assertEquals(ReliabilityStatus.ALL_OK, probe.check())
+
+        allNewOff()
+
+        val status = probe.check()
+        assertEquals(listOf(false, false, true, true, false), newValues(status))
+        assertEquals(false, status.batteryOk)
+        assertEquals(true, status.allOk, "Home's banner stays on the three Story 1.19 items (Story 5.4 moves it)")
+    }
+
+    private companion object {
+        /** `NotificationManager.Policy.PRIORITY_CATEGORY_ALARMS` (API 28; a constant, so usable on any sandbox). */
+        const val ALARMS = NotificationManager.Policy.PRIORITY_CATEGORY_ALARMS
     }
 }

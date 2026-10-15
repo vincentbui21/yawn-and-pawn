@@ -277,6 +277,36 @@ internal val ROW_CASES: Map<String, List<RowExample>> =
                         },
                     )
                 },
+                testConfig().let { editorValues ->
+                    // Story 5.3: a test that starts with the keyguard showing is frozen as a locked test.
+                    val config = editorValues.copy(testMode = true, testStartedLocked = true)
+                    RowExample(
+                        name = "a fire with the keyguard showing freezes a locked test",
+                        from = Idle,
+                        event = SessionEvent.TestAlarmFired(SESSION_ID, editorValues, beforeFirstUnlock = false),
+                        now = N,
+                        keyguardLocked = true,
+                        expected =
+                            Transition(
+                                Ringing(
+                                    SessionData(
+                                        sessionId = SESSION_ID,
+                                        config = config,
+                                        ringIndex = 1,
+                                        snoozesGranted = 0,
+                                        checkRun = CheckRun(config.checkPlan, ringSeeds(1, 1)),
+                                        firstRing = N,
+                                        interactionDeadline = Deadline.after(N, 30.minutes),
+                                    ),
+                                ),
+                                listOf(
+                                    SessionEffect.StartWakeRuntime(SESSION_ID),
+                                    heartbeatAt(N),
+                                    SessionEffect.RecordSessionStart(SESSION_ID, config),
+                                ),
+                            ),
+                    )
+                },
             ),
         "R03 Ringing|Grace|Loud+SlotFired" to
             ringStates().map { from ->

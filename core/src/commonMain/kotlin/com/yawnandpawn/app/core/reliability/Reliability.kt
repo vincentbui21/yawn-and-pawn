@@ -12,13 +12,37 @@ enum class ReliabilityItem {
     ExactAlarms,
 }
 
-/** What [ReliabilityProbe] found; [firstFailing] is the one "Fix" opens. */
+/**
+ * What [ReliabilityProbe] found; [firstFailing] is the one Home's "Fix" opens. Story 5.3 adds the values the reliability
+ * checklist reads ([ReliabilityChecklist]); each defaults to its good value, the one a phone below the API level that has
+ * the setting always reads.
+ *
+ * @property dndAllowsAlarms Do Not Disturb lets alarms through: not total silence, and on API 28+ the policy (a scheduled
+ * rule included) has the alarms category.
+ * @property batteryOptimizationIgnored the app is exempt from battery optimisation (Doze).
+ * @property backgroundRestricted the user restricted the app's background work (API 28+).
+ * @property standbyBucketRestricted the app sits in the restricted standby bucket (API 30+).
+ * @property cameraGranted the camera permission is granted (the Camera row shows only for an alarm with a camera check).
+ */
 data class ReliabilityStatus(
     val notificationsAllowed: Boolean,
     val fullScreenIntentAllowed: Boolean,
     val exactAlarmsAllowed: Boolean,
+    val dndAllowsAlarms: Boolean = true,
+    val batteryOptimizationIgnored: Boolean = true,
+    val backgroundRestricted: Boolean = false,
+    val standbyBucketRestricted: Boolean = false,
+    val cameraGranted: Boolean = true,
 ) {
-    /** The first item that fails, in the order notifications, full-screen intent, exact alarms; null when all are OK. */
+    /** The checklist's Battery row: exempt from optimisation, not background restricted, not in the restricted bucket. */
+    val batteryOk: Boolean
+        get() = batteryOptimizationIgnored && !backgroundRestricted && !standbyBucketRestricted
+
+    /**
+     * The first of the three Story 1.19 items that fails, in the order notifications, full-screen intent, exact alarms;
+     * null when all three are OK. The Story 5.3 values are not part of it: Home's banner stays on these three until Story
+     * 5.4 moves it to [ReliabilityChecklist.alarmBlocking].
+     */
     val firstFailing: ReliabilityItem?
         get() =
             when {
@@ -28,6 +52,7 @@ data class ReliabilityStatus(
                 else -> null
             }
 
+    /** The three Story 1.19 items are OK (Home's banner). */
     val allOk: Boolean
         get() = firstFailing == null
 

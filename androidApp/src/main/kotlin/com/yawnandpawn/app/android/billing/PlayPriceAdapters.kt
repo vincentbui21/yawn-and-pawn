@@ -52,8 +52,11 @@ class PlayLivePrices(
     }
 
     companion object {
-        /** How long the sheet's live price may take (default taken, owner can change). */
-        val LIVE_PRICE_TIMEOUT: Duration = 8.seconds
+        /**
+         * How long the sheet's live price may take: Play reconnecting (`BillingTimeouts.connect`, 10 s), then the query
+         * (`BillingTimeouts.query`, 10 s), as the sheet allows the price it asks at open (Story 4.18 device run; was 8 s).
+         */
+        val LIVE_PRICE_TIMEOUT: Duration = 20.seconds
         private const val STORE_LIVE_PRICE = "store live price"
     }
 }

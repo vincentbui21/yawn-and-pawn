@@ -128,6 +128,15 @@ class SnoozeSheetMappingTest {
     }
 
     @Test
+    fun `already paid for a product nobody prices shows no sheet and has no price to show (the host declines it)`() {
+        val reuse = SheetRequest.AlreadyPaid(session.sessionId, session.ringIndex, "snooze_usd_03")
+        val unpriced: PriceLookup = { id -> if (id == "snooze_usd_03") null else Money.of(1, "USD") }
+        assertNull(requestPrice(reuse, unpriced), "the confirm's cached offer price is no fallback for already paid")
+        assertNull(sheet(reuse, priceOf = unpriced), "no invented price: \"You already paid {price}\" needs one")
+        assertTrue(reuse.stillWanted(session, available), "still wanted: the host, not the mapping, ends it")
+    }
+
+    @Test
     fun `a grace window that ends keeps the sheet open (Grace and Loud share the ring)`() {
         val graceTest = aSession(config = aSessionConfig())
         assertEquals(sheet(on = graceTest), sheet(on = graceTest.copy(graceEnd = null)))

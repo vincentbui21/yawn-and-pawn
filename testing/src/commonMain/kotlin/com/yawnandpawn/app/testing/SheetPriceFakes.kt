@@ -12,19 +12,21 @@ fun usdPriceOf(productId: String): Money = Money.of(productId.takeLast(2).toInt(
 
 /**
  * Play's live prices (Story 4.13): each product at [usdPriceOf] unless [prices] says otherwise (a null entry: Play
- * knows no price). [asked] lists every product asked, in order. With [hold] set, each call waits for [release].
+ * knows no price). [asked] lists every product asked, in order, and [answered] every product answered. With [hold]
+ * set, each call waits for [release].
  */
 class FakeLivePriceSource(
     val prices: MutableMap<String, LivePrice?> = mutableMapOf(),
 ) : LivePriceSource {
     val asked: MutableList<String> = mutableListOf()
+    val answered: MutableList<String> = mutableListOf()
     var hold: Boolean = false
     private var gate = CompletableDeferred<Unit>()
 
     override suspend fun livePrice(productId: String): LivePrice? {
         asked += productId
         if (hold) gate.await()
-        return if (productId in prices) prices[productId] else usdLivePrice(productId)
+        return (if (productId in prices) prices[productId] else usdLivePrice(productId)).also { answered += productId }
     }
 
     /** Lets every held call go on. */

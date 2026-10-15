@@ -29,20 +29,28 @@ import androidx.compose.ui.test.performTouchInput
 import androidx.lifecycle.Lifecycle
 import com.github.takahirom.roborazzi.captureRoboImage
 import com.yawnandpawn.app.StopAppRule
+import com.yawnandpawn.app.core.alarm.Alarm
 import com.yawnandpawn.app.core.alarm.AlarmRepository
 import com.yawnandpawn.app.core.billing.Money
 import com.yawnandpawn.app.core.billing.PurchaseRecordRepository
 import com.yawnandpawn.app.core.billing.RecordStatus
 import com.yawnandpawn.app.core.error.Outcome
 import com.yawnandpawn.app.core.reliability.NotificationPermission
+import com.yawnandpawn.app.core.time.Clock
+import com.yawnandpawn.app.core.time.TimeZoneProvider
+import com.yawnandpawn.app.testing.FakeClock
+import com.yawnandpawn.app.testing.FakeTimeZoneProvider
 import com.yawnandpawn.app.testing.aPurchaseRecord
 import com.yawnandpawn.app.testing.anAlarm
 import kotlinx.coroutines.runBlocking
 import kotlinx.datetime.LocalTime
+import kotlinx.datetime.TimeZone
 import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
 import org.koin.core.context.GlobalContext
+import org.koin.core.module.Module
+import org.koin.dsl.module
 import org.robolectric.RobolectricTestRunner
 import org.robolectric.Shadows.shadowOf
 import org.robolectric.annotation.Config
@@ -52,12 +60,32 @@ import kotlin.test.assertFalse
 import kotlin.test.assertNotNull
 import kotlin.test.assertSame
 import kotlin.test.assertTrue
+import kotlin.time.Instant
 
-/** The real app: Koin, Room `app.db`, Navigation 3, the app shell and the Story 1.8 and 1.9 screens together. */
+/**
+ * The real app: Koin, Room `app.db`, Navigation 3, the app shell and the Story 1.8 and 1.9 screens together. The wall
+ * clock and the zone are pinned ([PinnedClockApp]): the 7:00 AM and 6:45 AM alarms these tests add must not fall inside
+ * the 8-hour commitment lock window (Story 4.6) at some hours of the real day only.
+ */
 @RunWith(RobolectricTestRunner::class)
 @GraphicsMode(GraphicsMode.Mode.NATIVE)
-@Config(qualifiers = "w411dp-h891dp-xxhdpi")
+@Config(qualifiers = "w411dp-h891dp-xxhdpi", application = MainActivityTest.PinnedClockApp::class)
 class MainActivityTest {
+    /**
+     * The test app with the wall clock stopped at [NOON] UTC, in UTC, so every alarm these tests add rings more than 8 h
+     * later (outside the commitment lock window) whatever the time of the run. A test moves it with [pinnedClock].
+     */
+    class PinnedClockApp : TestYawnAndPawnApp() {
+        override val overrideModules: List<Module> =
+            super.overrideModules +
+                module {
+                    single<Clock> { FakeClock(NOON) }
+                    single<TimeZoneProvider> { FakeTimeZoneProvider(TimeZone.UTC) }
+                }
+    }
+
+    private fun pinnedClock(): FakeClock = GlobalContext.get().get<Clock>() as FakeClock
+
     @get:Rule(order = 0)
     val appTeardown = StopAppRule()
 
@@ -375,6 +403,37 @@ class MainActivityTest {
     }
 
     @Test
+    fun `switching a card off inside its lock window asks first, and Turn off stores it off`() {
+        waitForText("No alarms yet.")
+        addDefaultAlarm()
+        // 23:30 UTC: the 7:00 AM alarm rings in 7 h 30 min, inside the 8-hour lock window (Story 4.6).
+        pinnedClock().set(Instant.parse("2027-03-03T23:30:00Z"))
+
+        composeRule.onNodeWithContentDescription("7:00 AM alarm").assertIsOn().performClick()
+        waitForText("Turn off your 7:00 AM alarm? It rings in 7 h. This is logged.")
+        composeRule.onNodeWithText("Keep it on").performClick()
+        waitForGone("Turn off your 7:00 AM alarm? It rings in 7 h. This is logged.")
+        composeRule.onNodeWithContentDescription("7:00 AM alarm").assertIsOn()
+
+        composeRule.onNodeWithContentDescription("7:00 AM alarm").performClick()
+        waitForText("Turn off your 7:00 AM alarm? It rings in 7 h. This is logged.")
+        composeRule.onNode(hasText("Turn off") and hasClickAction()).performClick()
+
+        composeRule.waitUntil(timeoutMillis = APP_WORK_TIMEOUT_MILLIS) {
+            composeRule.onAllNodes(hasText("Rings in", substring = true)).fetchSemanticsNodes().isEmpty()
+        }
+        composeRule.onNodeWithContentDescription("7:00 AM alarm").assertIsOff()
+        // Stored off, not only shown off: the switch shows the user's choice before the store has it.
+        composeRule.waitUntil(timeoutMillis = APP_WORK_TIMEOUT_MILLIS) { storedAlarms().singleOrNull()?.enabled == false }
+    }
+
+    private fun storedAlarms(): List<Alarm> =
+        when (val alarms = runBlocking { GlobalContext.get().get<AlarmRepository>().listAll() }) {
+            is Outcome.Success -> alarms.value
+            is Outcome.Failure -> error("alarms not readable: ${alarms.error}")
+        }
+
+    @Test
     fun `long-press Delete asks first, then the card goes`() {
         waitForText("No alarms yet.")
         addDefaultAlarm()
@@ -502,5 +561,10 @@ class MainActivityTest {
         composeRule.activityRule.scenario.moveToState(Lifecycle.State.CREATED)
         GlobalContext.get().get<NotificationPermission>().request()
         composeRule.activityRule.scenario.onActivity { assertSame(first, shadowOf(it).lastRequestedPermission, "not once stopped") }
+    }
+
+    private companion object {
+        /** Wednesday 2027-03-03 at noon UTC: 19 h before the next 7:00 AM ring, outside the 8-hour lock window. */
+        val NOON: Instant = Instant.parse("2027-03-03T12:00:00Z")
     }
 }

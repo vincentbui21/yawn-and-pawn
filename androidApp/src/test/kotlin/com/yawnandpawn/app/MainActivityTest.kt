@@ -1,6 +1,7 @@
 package com.yawnandpawn.app
 
 import android.Manifest
+import android.os.Looper
 import androidx.compose.ui.semantics.SemanticsActions
 import androidx.compose.ui.semantics.SemanticsProperties
 import androidx.compose.ui.semantics.getOrNull
@@ -34,6 +35,8 @@ import com.yawnandpawn.app.core.alarm.AlarmRepository
 import com.yawnandpawn.app.core.billing.Money
 import com.yawnandpawn.app.core.billing.PurchaseRecordRepository
 import com.yawnandpawn.app.core.billing.RecordStatus
+import com.yawnandpawn.app.core.config.CommitmentAction
+import com.yawnandpawn.app.core.config.CommitmentEventRepository
 import com.yawnandpawn.app.core.error.Outcome
 import com.yawnandpawn.app.core.reliability.NotificationPermission
 import com.yawnandpawn.app.core.time.Clock
@@ -403,7 +406,7 @@ class MainActivityTest {
     }
 
     @Test
-    fun `switching a card off inside its lock window asks first, and Turn off stores it off`() {
+    fun `switching a card off inside its lock window asks first, and Turn off stores it off and logs it`() {
         waitForText("No alarms yet.")
         addDefaultAlarm()
         // 23:30 UTC: the 7:00 AM alarm rings in 7 h 30 min, inside the 8-hour lock window (Story 4.6).
@@ -423,14 +426,26 @@ class MainActivityTest {
             composeRule.onAllNodes(hasText("Rings in", substring = true)).fetchSemanticsNodes().isEmpty()
         }
         composeRule.onNodeWithContentDescription("7:00 AM alarm").assertIsOff()
-        // Stored off, not only shown off: the switch shows the user's choice before the store has it.
-        composeRule.waitUntil(timeoutMillis = APP_WORK_TIMEOUT_MILLIS) { storedAlarms().singleOrNull()?.enabled == false }
+        // Stored off, not only shown off: the switch shows the user's choice before the store has it. The use case runs on
+        // viewModelScope (main) and Room resumes it through the main looper, which a condition that only reads the store
+        // never idles: idle it in the condition, or the write after the upsert (the commitment event) never comes.
+        composeRule.waitUntil(timeoutMillis = APP_WORK_TIMEOUT_MILLIS) {
+            shadowOf(Looper.getMainLooper()).idle()
+            storedAlarms().singleOrNull()?.enabled == false && commitmentActions().isNotEmpty()
+        }
+        assertEquals(listOf(CommitmentAction.Disabled), commitmentActions())
     }
 
     private fun storedAlarms(): List<Alarm> =
         when (val alarms = runBlocking { GlobalContext.get().get<AlarmRepository>().listAll() }) {
             is Outcome.Success -> alarms.value
             is Outcome.Failure -> error("alarms not readable: ${alarms.error}")
+        }
+
+    private fun commitmentActions(): List<CommitmentAction> =
+        when (val events = runBlocking { GlobalContext.get().get<CommitmentEventRepository>().all() }) {
+            is Outcome.Success -> events.value.map { it.action }
+            is Outcome.Failure -> error("commitment events not readable: ${events.error}")
         }
 
     @Test

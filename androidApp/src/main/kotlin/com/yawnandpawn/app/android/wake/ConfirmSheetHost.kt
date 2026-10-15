@@ -29,7 +29,9 @@ import com.yawnandpawn.app.ui.wake.snoozeSheet
 import com.yawnandpawn.app.ui.wake.stillWanted
 import com.yawnandpawn.app.ui.wake.unwantedBecause
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Deferred
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.async
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -63,20 +65,24 @@ data class RingMessage(
  * outside) always returns to the ring or check underneath, with no charge and no intent written.
  *
  * - **Opens** on the engine's `ShowSnoozeConfirm` ([onEffect], through [SheetEffectRunner]) and asks Play for the live
- *   price of the snooze and the next one ([livePrices]); until it arrives the cached display price ([display]) shows.
- * - **Pay** ([onUpper]) asks for the live price again, for at most [LIVE_PRICE_TIMEOUT]. A price other than the one on
- *   screen is shown instead (the sheet's 500 ms guard starts again) and nothing is sent: the user confirms the new
- *   price. The same price sends `PayConfirmed` with a new intent id ([ids], a UUID v4 per tap) and that live price. No
- *   live price (offline, not loaded, no answer in time) closes the sheet with "No connection. No charge.": billing could
- *   not launch, so nothing is charged. One request sends at most one Pay (review fix 12): a second tap, or one before
- *   the engine shows the first, does nothing; closing the sheet or "I'm up" first makes the request dead, so no Pay can follow them.
+ *   price of the snooze and the next one ([livePrices]), each for at most [OPEN_PRICE_TIMEOUT]; until it arrives the
+ *   cached display price ([display]) shows.
+ * - **Pay** ([onUpper]) compares the live price asked when the sheet opened with the one on screen ([payPrice]): still on
+ *   its way (Play reconnecting), Pay waits for it; it came without one, Pay asks again for at most [LIVE_PRICE_TIMEOUT].
+ *   A price other than the one on screen is shown instead (the sheet's 500 ms guard starts again) and nothing is sent:
+ *   the user confirms the new price. The same price sends `PayConfirmed` with a new intent id ([ids], a UUID v4 per tap)
+ *   and that live price. No live price (offline, not loaded, no answer in time) closes the sheet with "No connection. No
+ *   charge.": billing could not launch, so nothing is charged. One request sends at most one Pay (review fix 12): a
+ *   second tap, or one before the engine shows the first, does nothing; closing the sheet or "I'm up" first makes the
+ *   request dead, so no Pay can follow them, and neither ever waits for a price.
  * - **Unlocking:** while the session's `unlocking` is set, the sheet asks to unlock at the price that was sent (after a
  *   new process, the price stored with the intent, [intents]); "Cancel" sends `UnlockFailed` ("Phone still locked. No
  *   charge."). A lost unlock callback (back on screen with the unlock still pending) is not the sheet's: Story 4.11's
  *   `PurchaseCoordinator.onWakeScreenResumed` resolves it (settle, then recheck the keyguard) from `WakeActivity.onResume`
  *   (review fix 14, integration decision 2026-10-09).
  * - **Already paid** (`ShowReuseSheet`): "Use it" and "Not now" (or Back, a swipe) go to the coordinator's
- *   `acceptReuse()` / `declineReuse()` ([reuse]); the stranded token never reaches the UI (Story 4.11).
+ *   `acceptReuse()` / `declineReuse()` ([reuse]); the stranded token never reaches the UI (Story 4.11). One whose
+ *   product nobody prices cannot show its only text ("You already paid {price} earlier…"), so it is declined ([follow]).
  * - The sheet closes for good when its ring ends or snooze stops being Available for that snooze ([stillWanted], by
  *   product and snooze number, never by the cached price the offer carries): the snooze button then shows why. A
  *   confirm with no price known at all closes with "No connection. No charge." ([follow]). Every close is logged with
@@ -113,6 +119,16 @@ class ConfirmSheetHost(
     /** The Pay or "Use it" in progress (asking Play for the price or the token); one at a time. */
     @Volatile
     private var action: Job? = null
+
+    /** The live price of the open confirm's own snooze, asked when it opened; Pay uses it ([payPrice]). */
+    @Volatile
+    private var openedPrice: OpenedPrice? = null
+
+    /** The live price of [request]'s snooze, asked when [request] opened. */
+    private class OpenedPrice(
+        val request: SheetRequest.Confirm,
+        val price: Deferred<LivePrice?>,
+    )
 
     /** What opened the sheet; null when closed. */
     val request: StateFlow<SheetRequest?> = requested.asStateFlow()
@@ -163,8 +179,11 @@ class ConfirmSheetHost(
      * Follows [session] with [availability]: a sheet that no longer belongs on its screen ([stillWanted]: another ring, or
      * snooze no longer on sale for the same snooze) closes for good, and the snooze button underneath shows why. A confirm
      * for which no price is known at all ([requestPrice]) closes with "No connection. No charge.", so a Snooze tap never
-     * silently does nothing (Story 4.18 device check). A pending unlock whose price this process does not know (a new
-     * process) reads it from its stored intent. Every close is logged with its reason ([LogEvent.ConfirmSheetClosed]).
+     * silently does nothing (Story 4.18 device check). An already-paid sheet with no price known is declined through the
+     * coordinator ([ReuseChoices.declineReuse]): its only text names the price, and declining charges nothing (Google
+     * refunds the earlier payment, and the snooze button says so). A pending unlock whose price this process does not
+     * know (a new process) reads it from its stored intent. Every close is logged with its reason
+     * ([LogEvent.ConfirmSheetClosed]).
      */
     fun follow(
         session: SessionData,
@@ -180,8 +199,16 @@ class ConfirmSheetHost(
                 close(current, unwanted)
             }
 
-            current is SheetRequest.Confirm && requestPrice(current, priceOf(prices.value)) == null -> {
+            requestPrice(current, priceOf(prices.value)) != null -> {
+                Unit
+            }
+
+            current is SheetRequest.Confirm -> {
                 if (close(current, REASON_NO_PRICE)) showMessage(session, WakeMessage.PaymentOffline)
+            }
+
+            current is SheetRequest.AlreadyPaid -> {
+                if (close(current, REASON_NO_PRICE_REUSE_DECLINED)) scope.launch { reuse.declineReuse() }
             }
         }
     }
@@ -199,8 +226,10 @@ class ConfirmSheetHost(
                     logClosed(SHEET_CONFIRM, if (session == null) "not opened: not ringing" else "not opened: payment in flight")
                     return
                 }
-                requested.value = SheetRequest.Confirm(session.sessionId, session.ringIndex, effect.offer)
-                refreshPrices(listOfNotNull(effect.offer.productId, ladder.followingProduct(session, effect.offer)))
+                val request = SheetRequest.Confirm(session.sessionId, session.ringIndex, effect.offer)
+                requested.value = request
+                openedPrice = OpenedPrice(request, fetchPrice(effect.offer.productId))
+                ladder.followingProduct(session, effect.offer)?.let(::fetchPrice)
             }
 
             is SessionEffect.ShowReuseSheet -> {
@@ -209,7 +238,7 @@ class ConfirmSheetHost(
                     return
                 }
                 requested.value = SheetRequest.AlreadyPaid(session.sessionId, session.ringIndex, effect.productId)
-                refreshPrices(listOf(effect.productId))
+                fetchPrice(effect.productId)
             }
 
             SessionEffect.HideReuseSheet -> {
@@ -266,7 +295,7 @@ class ConfirmSheetHost(
         send: (List<SessionEvent>) -> Unit,
     ) {
         val productId = request.offer.productId
-        val price = livePrice(productId)
+        val price = payPrice(request)
         when {
             // No live price: billing could not launch, so the sheet closes with no charge and says so ("No connection. No
             // charge.", Story 4.18 device check: a Pay tap never silently does nothing).
@@ -424,17 +453,33 @@ class ConfirmSheetHost(
         reason: String,
     ) = logger.log(LogEvent.ConfirmSheetClosed(sheet, reason))
 
-    private suspend fun livePrice(productId: String): LivePrice? =
-        withTimeoutOrNull(LIVE_PRICE_TIMEOUT) { live.livePrice(productId) }?.takeIf { it.productId == productId }
-
-    private fun refreshPrices(productIds: List<String>) {
-        productIds.forEach { productId ->
-            scope.launch {
-                val price = livePrice(productId) ?: return@launch
-                prices.update { it + (productId to price) }
-            }
+    /**
+     * The live price Pay compares with the one on screen (Story 4.18 device run): the one asked when [request] opened.
+     * While that answer is still on its way (on a fresh morning Play's connection may have dropped: reconnecting takes up
+     * to 10 s, the query up to 10 s more), Pay waits for it instead of asking again with its own [LIVE_PRICE_TIMEOUT],
+     * which failed as "No connection" on a phone that was online. When it came without a price, Pay asks once more. Either
+     * way nothing is sent unless it is the price on screen ([pay]), and "I'm up" or a dismiss cancels the wait.
+     */
+    private suspend fun payPrice(request: SheetRequest.Confirm): LivePrice? {
+        val productId = request.offer.productId
+        val opened = openedPrice?.takeIf { it.request === request }?.price
+        return when {
+            opened == null -> livePrice(productId, LIVE_PRICE_TIMEOUT)
+            !opened.isCompleted -> opened.await()
+            else -> opened.await() ?: livePrice(productId, LIVE_PRICE_TIMEOUT)
         }
     }
+
+    private suspend fun livePrice(
+        productId: String,
+        limit: Duration,
+    ): LivePrice? = withTimeoutOrNull(limit) { live.livePrice(productId) }?.takeIf { it.productId == productId }
+
+    /** Asks Play for [productId]'s live price, for at most [OPEN_PRICE_TIMEOUT]; an answer joins [livePrices]. */
+    private fun fetchPrice(productId: String): Deferred<LivePrice?> =
+        scope.async {
+            livePrice(productId, OPEN_PRICE_TIMEOUT)?.also { price -> prices.update { it + (productId to price) } }
+        }
 
     private fun loadSentPrice(intentId: PurchaseIntentId) {
         scope.launch {
@@ -444,13 +489,23 @@ class ConfirmSheetHost(
     }
 
     companion object {
-        /** How long Pay waits for Play's live price before it closes the sheet with no charge (review fix 13). */
+        /**
+         * How long Pay asks Play again, when the price asked at open came without one, before it closes the sheet with no
+         * charge (review fix 13).
+         */
         val LIVE_PRICE_TIMEOUT: Duration = 3.seconds
+
+        /**
+         * How long the live price asked when the sheet opens may take, and so a Pay tapped before it came (Story 4.18
+         * device run): Play reconnecting (`BillingTimeouts.connect`, 10 s), then the query (`BillingTimeouts.query`, 10 s).
+         */
+        val OPEN_PRICE_TIMEOUT: Duration = 20.seconds
 
         private const val OPERATION_LIVE_PRICE = "snooze live price"
         private const val SHEET_CONFIRM = "confirm"
         private const val SHEET_ALREADY_PAID = "already paid"
         private const val REASON_NO_PRICE = "no price known"
+        private const val REASON_NO_PRICE_REUSE_DECLINED = "no price known: reuse declined"
     }
 }
 

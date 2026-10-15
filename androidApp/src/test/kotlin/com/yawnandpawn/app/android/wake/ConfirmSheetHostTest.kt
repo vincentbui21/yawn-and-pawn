@@ -1,6 +1,8 @@
 package com.yawnandpawn.app.android.wake
 
 import com.yawnandpawn.app.core.billing.FeeLadder
+import com.yawnandpawn.app.core.billing.LivePrice
+import com.yawnandpawn.app.core.billing.LivePriceSource
 import com.yawnandpawn.app.core.billing.Money
 import com.yawnandpawn.app.core.billing.PriceEntry
 import com.yawnandpawn.app.core.billing.UsdFeeLadder
@@ -31,6 +33,7 @@ import com.yawnandpawn.app.ui.wake.SnoozeSheet
 import com.yawnandpawn.app.ui.wake.WakeMessage
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.test.TestScope
 import kotlinx.coroutines.test.UnconfinedTestDispatcher
 import kotlinx.coroutines.test.advanceTimeBy
@@ -43,8 +46,10 @@ import kotlin.test.assertIs
 import kotlin.test.assertNull
 import kotlin.test.assertSame
 import kotlin.test.assertTrue
+import kotlin.time.Duration
 import kotlin.time.Duration.Companion.milliseconds
 import kotlin.time.Duration.Companion.minutes
+import kotlin.time.Duration.Companion.seconds
 
 /** Story 4.13: the confirm sheet's actions and effects, without a screen. */
 @OptIn(ExperimentalCoroutinesApi::class)
@@ -68,6 +73,19 @@ class ConfirmSheetHostTest {
 
     private val logger = FakeLogger()
     private val intents = FakePurchaseIntentStore()
+
+    /** Play after a night: the first question waits for the reconnect ([firstAnswerAfter]); later ones answer at once. */
+    private class SlowLivePrices(
+        private val firstAnswerAfter: Duration,
+    ) : LivePriceSource {
+        val asked = mutableListOf<String>()
+
+        override suspend fun livePrice(productId: String): LivePrice {
+            asked += productId
+            if (asked.size == 1) delay(firstAnswerAfter)
+            return usdLivePrice(productId)
+        }
+    }
 
     private fun hostOn(
         scope: CoroutineScope,
@@ -129,12 +147,47 @@ class ConfirmSheetHostTest {
         }
 
     @Test
+    fun `Pay uses the live price Play gave since the sheet opened, without asking again`() =
+        scope.runTest {
+            open()
+            assertEquals(listOf("snooze_usd_01", "snooze_usd_02"), live.asked)
+            host.onUpper(session, available, dollar, send)
+            assertEquals(usdLivePrice("snooze_usd_01"), sent.filterIsInstance<SessionEvent.PayConfirmed>().single().livePrice)
+            assertEquals(listOf("snooze_usd_01", "snooze_usd_02"), live.asked, "no second question to Play")
+        }
+
+    @Test
+    fun `4_18 device run - slow reconnect - the price asked at open takes 5 s and a Pay tapped meanwhile pays the price on screen`() =
+        scope.runTest {
+            val slow = SlowLivePrices(firstAnswerAfter = 5.seconds)
+            val slowHost = ConfirmSheetHost(slow, FakeDisplayPrices(), choices, UsdFeeLadder, FakeIdGenerator(), intents, scope, logger)
+            open(into = slowHost)
+            advanceTimeBy(1.seconds)
+            assertEquals(SnoozeSheet.Confirm(9, dollar, Money.of(2, "USD")), shown(from = slowHost), "the cached price shows")
+
+            slowHost.onUpper(session, available, dollar, send)
+            advanceTimeBy(4.seconds - 1.milliseconds)
+            assertIs<SheetRequest.Confirm>(slowHost.request.value, "no false No connection after the 3 s Pay limit")
+            assertTrue(sent.isEmpty(), "$sent")
+
+            advanceTimeBy(2.milliseconds)
+            val pay = sent.filterIsInstance<SessionEvent.PayConfirmed>().single()
+            assertEquals(usdLivePrice("snooze_usd_01"), pay.livePrice)
+            assertEquals(dollar, pay.livePrice.price, "the price on screen")
+            assertEquals(listOf("snooze_usd_01", "snooze_usd_02"), slow.asked, "Pay waited for the price asked at open")
+            assertNull(slowHost.messageFor(session, slowHost.message.value))
+            assertTrue(logger.events.none { it is LogEvent.ConfirmSheetClosed || it is LogEvent.OperationFailed }, "${logger.events}")
+        }
+
+    @Test
     fun `a live price other than the one on screen is shown instead of charged`() =
         scope.runTest {
+            live.hold = true
             open()
             val higher = usdLivePrice("snooze_usd_01").copy(price = Money(1_500_000, "USD"), formattedPrice = "$1.50")
             live.prices["snooze_usd_01"] = higher
             host.onUpper(session, available, dollar, send)
+            live.release()
             assertTrue(sent.none { it is SessionEvent.PayConfirmed })
             assertEquals(Money(1_500_000, "USD"), (shown() as SnoozeSheet.Confirm).price)
 
@@ -145,9 +198,10 @@ class ConfirmSheetHostTest {
     @Test
     fun `no live price at Pay closes the sheet with No connection, No charge (4_18 device check - never silent)`() =
         scope.runTest {
-            open()
             live.prices["snooze_usd_01"] = null
+            open()
             host.onUpper(session, available, dollar, send)
+            assertEquals(listOf("snooze_usd_01", "snooze_usd_02", "snooze_usd_01"), live.asked, "none at open: Pay asks again")
             assertNull(host.request.value)
             assertEquals(listOf<SessionEvent>(SessionEvent.UserInteracted), sent)
             assertTrue(logger.events.any { it.toString().contains("snooze live price") })
@@ -229,8 +283,8 @@ class ConfirmSheetHostTest {
     @Test
     fun `I'll get up or I'm up while Pay waits for its price drops the Pay`() =
         scope.runTest {
-            open()
             live.hold = true
+            open()
             host.onUpper(session, available, dollar, send)
             host.onDismiss(session, send)
             live.release()
@@ -398,9 +452,26 @@ class ConfirmSheetHostTest {
         }
 
     @Test
-    fun `a live price that never comes closes the sheet after the timeout with no charge`() =
+    fun `a live price that never comes closes the sheet after the open timeout with no charge`() =
         scope.runTest {
+            live.hold = true
             open()
+            host.onUpper(session, available, dollar, send)
+            advanceTimeBy(ConfirmSheetHost.OPEN_PRICE_TIMEOUT - 1.milliseconds)
+            assertIs<SheetRequest.Confirm>(host.request.value)
+            advanceTimeBy(2.milliseconds)
+            assertNull(host.request.value)
+            assertEquals(listOf<SessionEvent>(SessionEvent.UserInteracted), sent)
+            assertEquals(WakeMessage.PaymentOffline, host.messageFor(session, host.message.value))
+            live.release()
+        }
+
+    @Test
+    fun `when the price asked at open came without one, Pay asks again for at most the Pay timeout`() =
+        scope.runTest {
+            live.prices["snooze_usd_01"] = null
+            open()
+            live.prices.remove("snooze_usd_01")
             live.hold = true
             host.onUpper(session, available, dollar, send)
             advanceTimeBy(ConfirmSheetHost.LIVE_PRICE_TIMEOUT - 1.milliseconds)
@@ -439,6 +510,36 @@ class ConfirmSheetHostTest {
             host.onEffect(reuse, SessionState.Ringing(session))
             host.onEffect(SessionEffect.HideReuseSheet, SessionState.Ringing(session))
             assertNull(host.request.value)
+        }
+
+    @Test
+    fun `an already-paid sheet nobody can price is declined with a logged reason, never left showing nothing`() =
+        scope.runTest {
+            live.prices["snooze_usd_03"] = null
+            val unpriced =
+                ConfirmSheetHost(live, FakeDisplayPrices(all = false), choices, UsdFeeLadder, FakeIdGenerator(), intents, scope, logger)
+            unpriced.onEffect(SessionEffect.ShowReuseSheet("snooze_usd_03"), SessionState.Ringing(session))
+            assertNull(shown(from = unpriced), "\"You already paid {price}\" has no price to show")
+
+            unpriced.follow(session, available)
+            unpriced.follow(session, available)
+
+            assertNull(unpriced.request.value)
+            assertEquals(listOf("decline"), choices.calls, "declined once: no new charge, and Google refunds the earlier one")
+            assertTrue(sent.isEmpty(), "$sent")
+            assertEquals(
+                listOf(LogEvent.ConfirmSheetClosed("already paid", "no price known: reuse declined")),
+                logger.events.filterIsInstance<LogEvent.ConfirmSheetClosed>(),
+            )
+        }
+
+    @Test
+    fun `an already-paid sheet with a known price stays open on follow`() =
+        scope.runTest {
+            host.onEffect(SessionEffect.ShowReuseSheet("snooze_usd_01"), SessionState.Ringing(session))
+            host.follow(session, available)
+            assertIs<SheetRequest.AlreadyPaid>(host.request.value)
+            assertTrue(choices.calls.isEmpty())
         }
 
     @Test

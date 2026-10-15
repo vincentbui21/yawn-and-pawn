@@ -1,5 +1,6 @@
 package com.yawnandpawn.app.android.wake
 
+import com.android.billingclient.api.BillingClient.BillingResponseCode
 import com.yawnandpawn.app.android.billing.AndroidBilling
 import com.yawnandpawn.app.android.billing.AndroidProductDetailsSource
 import com.yawnandpawn.app.android.billing.BillingTimeouts
@@ -33,11 +34,15 @@ import com.yawnandpawn.app.ui.wake.SnoozeSheet
 import com.yawnandpawn.app.ui.wake.WakeMessage
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.test.advanceTimeBy
+import kotlinx.coroutines.test.runCurrent
+import kotlinx.coroutines.test.runTest
 import kotlinx.coroutines.withTimeout
 import org.junit.After
 import org.junit.Test
@@ -62,6 +67,7 @@ import kotlin.time.Duration.Companion.seconds
  * a fake Play client. [screen] does what `WakeActivity.sheetOverlay` does on each frame: the availability now, the
  * sheet, then [ConfirmSheetHost.follow].
  */
+@OptIn(ExperimentalCoroutinesApi::class)
 class ConfirmSheetPlayPricesTest {
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Unconfined)
     private val clock = FakeClock()
@@ -227,6 +233,68 @@ class ConfirmSheetPlayPricesTest {
                 "${logger.events}",
             )
         }
+
+    /**
+     * Story 4.18 device run: on a fresh morning Play's connection had dropped, and Pay, which asked again with its own
+     * 3 s limit, failed as "No connection. No charge." while the phone was online. Here Play takes 5 s to reconnect (the
+     * first query's answer comes then), with the production limits ([BillingTimeouts] and [PlayLivePrices] defaults), on
+     * virtual time.
+     */
+    @Test
+    fun `4_18 device run - Play reconnects for 5 s - a Pay tapped meanwhile pays the price on screen once Play answers`() {
+        play(first, "€1.09", 1_090_000)
+        play(next, "€2.19", 2_190_000)
+        runBlocking { awaitScreenSeesCache() }
+        val offer = assertIs<SnoozeAvailability.Available>(policy.availability(session)).offer
+        facade.setupCode = null // The connection dropped overnight: Play holds the reconnect.
+        runTest {
+            val reconnecting =
+                AndroidBilling(
+                    facade,
+                    FakeUserLockState(unlocked = true),
+                    { null },
+                    FakeMonotonicClock(),
+                    logger,
+                    backgroundScope,
+                    Dispatchers.Unconfined,
+                    BillingTimeouts(),
+                )
+            val morning =
+                ConfirmSheetHost(
+                    PlayLivePrices(reconnecting, cache, clock, logger),
+                    display,
+                    NoReuse,
+                    UsdFeeLadder,
+                    FakeIdGenerator(),
+                    FakePurchaseIntentStore(),
+                    backgroundScope,
+                    logger,
+                )
+            morning.onEffect(SessionEffect.ShowSnoozeConfirm(offer), SessionState.Ringing(session))
+            runCurrent()
+            advanceTimeBy(1.seconds)
+            val availability = policy.availability(session)
+            val shown =
+                assertIs<SnoozeSheet.Confirm>(
+                    morning.sheet(session, availability, morning.request.value, morning.livePrices.value, morning.sentPrices.value, false),
+                )
+            assertEquals(Money(1_090_000, "EUR"), shown.price, "the cached price shows while Play reconnects")
+
+            morning.onUpper(session, availability, shown.price) { sent += it }
+            advanceTimeBy(4.seconds - 1.milliseconds)
+            assertNotNull(morning.request.value, "no false No connection after the 3 s Pay limit")
+            assertTrue(sent.isEmpty(), "$sent")
+
+            facade.answerSetup(BillingResponseCode.OK) // 5 s in, Play is back and answers the query.
+            runCurrent()
+
+            val pay = sent.filterIsInstance<SessionEvent.PayConfirmed>().single()
+            assertEquals(LivePrice(first, Money(1_090_000, "EUR"), "€1.09"), pay.livePrice)
+            assertEquals(1, facade.startConnections, "one reconnect, joined by every question")
+            assertNull(morning.messageFor(session, morning.message.value))
+            assertTrue(logger.events.none { it is LogEvent.ConfirmSheetClosed }, "${logger.events}")
+        }
+    }
 
     private suspend fun awaitPay() =
         withTimeout(2.seconds) {

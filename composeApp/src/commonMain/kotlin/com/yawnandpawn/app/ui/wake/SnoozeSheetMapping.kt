@@ -104,7 +104,9 @@ fun requestPrice(
  *   ([FeeLadder.followingProduct]) when there is one and it is known, else only "This one costs {price}.", and the tax
  *   note when [showTaxNote].
  * - A [SheetRequest.AlreadyPaid]: *already paid* at the price of its product.
- * A price nobody knows shows no sheet rather than an invented one (the host then closes the request with a message).
+ * A price nobody knows shows no sheet rather than an invented one, and never silently: the host closes a confirm with
+ * "No connection. No charge." and declines an already-paid one, whose only text ("You already paid {price} earlier…")
+ * names the price (`ConfirmSheetHost.follow`).
  */
 @Suppress("LongParameterList") // Every input of the sheet; each is one plain value.
 fun snoozeSheet(

@@ -396,7 +396,10 @@ class SnoozeConfirmSheetTest {
         val app = app()
         ring(app)
         launch(app).use {
+            // Play gives no price at open (the cached $1.00 shows), then $1.50 when Pay asks again.
+            live.prices["snooze_usd_01"] = null
             openSheet(app)
+            await(app, "Play answered the price asked at open") { "snooze_usd_01" in live.answered.toList() }
             live.prices["snooze_usd_01"] = usdLivePrice("snooze_usd_01").copy(price = Money(1_500_000, "USD"), formattedPrice = "$1.50")
             passGuard()
             pay().performClick()
@@ -424,8 +427,8 @@ class SnoozeConfirmSheetTest {
         val app = app()
         ring(app)
         launch(app).use {
-            openSheet(app)
             live.prices["snooze_usd_01"] = null
+            openSheet(app)
             passGuard()
             pay().performClick()
             await(app, "the sheet closes") { host(app).request.value == null }

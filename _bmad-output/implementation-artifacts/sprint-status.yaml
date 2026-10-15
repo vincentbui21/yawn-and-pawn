@@ -93,7 +93,7 @@ development_status:
   epic-3-retrospective: optional
 
   epic-4: in-progress
-  4-1-create-the-50-snooze-products-with-tools-play-catalog: review  # PR 2026-10-08 (Epic 4 auto-run, fast mode); human-verify live run pending (owner Session B)
+  4-1-create-the-50-snooze-products-with-tools-play-catalog: done  # Epic 4 auto-run, fast mode; live run 1 on 2026-10-15 (docs/decisions/play-catalog-run.md)
   4-2-money-moneyformatter-and-the-feeladder-in-core: done  # Epic 4 auto-run, fast mode
   4-3-cache-play-prices-for-offline-display: done  # Epic 4 auto-run, fast mode
   4-4-commitment-lock-and-pending-changes-in-core: done  # 2026-10-08 (Epic 4 auto-run, fast mode)

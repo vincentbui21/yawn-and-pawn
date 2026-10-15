@@ -41,8 +41,9 @@ val testAppModule: Module =
  * The application every Robolectric test in :androidApp boots (`robolectric.properties`). It tears down any app a
  * previous test left running (its Koin graph, background work and databases) before starting the real one, so a test
  * class that forgets its teardown cannot break the next. Tests still tear down with [StopAppRule] or [stopApp].
+ * Open, so a test class can boot it with more bindings (`MainActivityTest` pins the wall clock and the zone).
  */
-class TestYawnAndPawnApp : YawnAndPawnApp() {
+open class TestYawnAndPawnApp : YawnAndPawnApp() {
     override val overrideModules: List<Module> = listOf(testAppModule)
 
     override fun onCreate() {

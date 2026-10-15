@@ -12,7 +12,7 @@ import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.assertIsNotFocused
 import androidx.compose.ui.test.click
 import androidx.compose.ui.test.hasText
-import androidx.compose.ui.test.junit4.createEmptyComposeRule
+import androidx.compose.ui.test.junit4.v2.createEmptyComposeRule
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.onRoot
 import androidx.compose.ui.test.performClick
@@ -80,6 +80,12 @@ class SnoozeConfirmSheetTest {
     @get:Rule(order = 0)
     val stopApp = StopAppRule()
 
+    /**
+     * The v2 rule: the composition's coroutines run on a StandardTestDispatcher, so only the test thread (main) runs
+     * them, as the main dispatcher does on a device. The engine writes the screen's StateFlows on `ApplicationScope`'s
+     * threads; with the v1 rule's UnconfinedTestDispatcher a `collectAsState` collector resumed there ran on that worker
+     * and could recompose and lay out the wake screen off the main thread (CalledFromWrongThreadException).
+     */
     @get:Rule(order = 1)
     val composeRule = createEmptyComposeRule()
 

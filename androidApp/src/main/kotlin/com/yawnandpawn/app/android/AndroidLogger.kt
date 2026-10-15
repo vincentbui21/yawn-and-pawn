@@ -68,6 +68,10 @@ class AndroidLogger : Logger {
             is LogEvent.WakeTiming -> {
                 Log.i(TAG, "WakeTiming stage=${event.stage} msSinceScheduled=${event.msSinceScheduled ?: "unknown"}")
             }
+
+            is LogEvent.ConfirmSheetClosed -> {
+                Log.i(TAG, "ConfirmSheetClosed sheet=${event.sheet} reason=${event.reason}")
+            }
         }
     }
 

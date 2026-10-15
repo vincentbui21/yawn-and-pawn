@@ -24,13 +24,16 @@ import com.yawnandpawn.app.ui.wake.SheetRequest
 import com.yawnandpawn.app.ui.wake.SnoozeSheet
 import com.yawnandpawn.app.ui.wake.WakeMessage
 import com.yawnandpawn.app.ui.wake.paymentOutcomeOf
+import com.yawnandpawn.app.ui.wake.requestPrice
 import com.yawnandpawn.app.ui.wake.snoozeSheet
 import com.yawnandpawn.app.ui.wake.stillWanted
+import com.yawnandpawn.app.ui.wake.unwantedBecause
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.getAndUpdate
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withTimeoutOrNull
@@ -64,9 +67,9 @@ data class RingMessage(
  * - **Pay** ([onUpper]) asks for the live price again, for at most [LIVE_PRICE_TIMEOUT]. A price other than the one on
  *   screen is shown instead (the sheet's 500 ms guard starts again) and nothing is sent: the user confirms the new
  *   price. The same price sends `PayConfirmed` with a new intent id ([ids], a UUID v4 per tap) and that live price. No
- *   live price (offline, not loaded, no answer in time) closes the sheet: billing could not launch, so nothing is
- *   charged. One request sends at most one Pay (review fix 12): a second tap, or one before the engine shows the first,
- *   does nothing; closing the sheet or "I'm up" first makes the request dead, so no Pay can follow them.
+ *   live price (offline, not loaded, no answer in time) closes the sheet with "No connection. No charge.": billing could
+ *   not launch, so nothing is charged. One request sends at most one Pay (review fix 12): a second tap, or one before
+ *   the engine shows the first, does nothing; closing the sheet or "I'm up" first makes the request dead, so no Pay can follow them.
  * - **Unlocking:** while the session's `unlocking` is set, the sheet asks to unlock at the price that was sent (after a
  *   new process, the price stored with the intent, [intents]); "Cancel" sends `UnlockFailed` ("Phone still locked. No
  *   charge."). A lost unlock callback (back on screen with the unlock still pending) is not the sheet's: Story 4.11's
@@ -74,8 +77,10 @@ data class RingMessage(
  *   (review fix 14, integration decision 2026-10-09).
  * - **Already paid** (`ShowReuseSheet`): "Use it" and "Not now" (or Back, a swipe) go to the coordinator's
  *   `acceptReuse()` / `declineReuse()` ([reuse]); the stranded token never reaches the UI (Story 4.11).
- * - The sheet closes for good when its ring ends or snooze stops being Available for that offer ([stillWanted]): the
- *   snooze button then shows why.
+ * - The sheet closes for good when its ring ends or snooze stops being Available for that snooze ([stillWanted], by
+ *   product and snooze number, never by the cached price the offer carries): the snooze button then shows why. A
+ *   confirm with no price known at all closes with "No connection. No charge." ([follow]). Every close is logged with
+ *   its reason (`ConfirmSheetClosed`).
  * - **Payment messages** (Story 4.14): every `ShowPurchaseOutcome` and `ShowPaymentPending` shows its row of the
  *   Payment outcomes table ([paymentOutcomeOf]) on the session's current ring ([message]); a paid snooze shows none. It
  *   stays at least 10 s ([onMinimumShown]), then until the next tap ([onTap]); a newer outcome replaces it, a new Pay or
@@ -155,8 +160,11 @@ class ConfirmSheetHost(
             ?.message
 
     /**
-     * Follows [session] with [availability]: a sheet that no longer belongs on its screen ([stillWanted]) closes for good,
-     * and a pending unlock whose price this process does not know (a new process) reads it from its stored intent.
+     * Follows [session] with [availability]: a sheet that no longer belongs on its screen ([stillWanted]: another ring, or
+     * snooze no longer on sale for the same snooze) closes for good, and the snooze button underneath shows why. A confirm
+     * for which no price is known at all ([requestPrice]) closes with "No connection. No charge.", so a Snooze tap never
+     * silently does nothing (Story 4.18 device check). A pending unlock whose price this process does not know (a new
+     * process) reads it from its stored intent. Every close is logged with its reason ([LogEvent.ConfirmSheetClosed]).
      */
     fun follow(
         session: SessionData,
@@ -165,7 +173,17 @@ class ConfirmSheetHost(
         val paying = session.paying
         if (paying != null && session.unlocking && paying !in sent.value) loadSentPrice(paying)
         val current = requested.value ?: return
-        if (paying == null && !current.stillWanted(session, availability)) close(current)
+        if (paying != null) return
+        val unwanted = current.unwantedBecause(session, availability)
+        when {
+            unwanted != null -> {
+                close(current, unwanted)
+            }
+
+            current is SheetRequest.Confirm && requestPrice(current, priceOf(prices.value)) == null -> {
+                if (close(current, REASON_NO_PRICE)) showMessage(session, WakeMessage.PaymentOffline)
+            }
+        }
     }
 
     /** The engine's UI effects (run after the transition is committed; never dispatches). */
@@ -177,24 +195,31 @@ class ConfirmSheetHost(
         when (effect) {
             is SessionEffect.ShowSnoozeConfirm -> {
                 // While a payment is in flight Play's sheet (or the PIN) is on top; its result comes first.
-                if (session == null || session.paying != null) return
+                if (session == null || session.paying != null) {
+                    logClosed(SHEET_CONFIRM, if (session == null) "not opened: not ringing" else "not opened: payment in flight")
+                    return
+                }
                 requested.value = SheetRequest.Confirm(session.sessionId, session.ringIndex, effect.offer)
                 refreshPrices(listOfNotNull(effect.offer.productId, ladder.followingProduct(session, effect.offer)))
             }
 
             is SessionEffect.ShowReuseSheet -> {
-                session ?: return
+                if (session == null) {
+                    logClosed(SHEET_ALREADY_PAID, "not opened: not ringing")
+                    return
+                }
                 requested.value = SheetRequest.AlreadyPaid(session.sessionId, session.ringIndex, effect.productId)
                 refreshPrices(listOf(effect.productId))
             }
 
             SessionEffect.HideReuseSheet -> {
-                requested.update { it.takeUnless { request -> request is SheetRequest.AlreadyPaid } }
+                val hidden = requested.getAndUpdate { it.takeUnless { request -> request is SheetRequest.AlreadyPaid } }
+                if (hidden is SheetRequest.AlreadyPaid) logClosed(hidden, "reuse sheet hidden")
             }
 
             // Story 4.14: the sheet closes and the outcome's message (its Payment outcomes row) shows on this ring.
             is SessionEffect.ShowPurchaseOutcome, SessionEffect.ShowPaymentPending -> {
-                requested.value = null
+                requested.getAndUpdate { null }?.let { logClosed(it, "payment outcome") }
                 show(session, effect)
             }
 
@@ -222,7 +247,7 @@ class ConfirmSheetHost(
             }
 
             !request.stillWanted(session, availability) -> {
-                close(request)
+                close(request, "Pay when ${request.unwantedBecause(session, availability)}")
             }
 
             else -> {
@@ -243,11 +268,14 @@ class ConfirmSheetHost(
         val productId = request.offer.productId
         val price = livePrice(productId)
         when {
-            // No live price: billing could not launch, so the sheet closes with no charge (the button keeps its reason).
+            // No live price: billing could not launch, so the sheet closes with no charge and says so ("No connection. No
+            // charge.", Story 4.18 device check: a Pay tap never silently does nothing).
             price == null -> {
                 if (sendWhileOpen(request, send) { listOf(SessionEvent.UserInteracted) }) {
                     logger.log(LogEvent.OperationFailed(OPERATION_LIVE_PRICE, "no live price"))
-                    close(request)
+                    if (close(request, "no live price at Pay")) {
+                        showMessage(request.sessionId, request.ringIndex, WakeMessage.PaymentOffline)
+                    }
                 }
             }
 
@@ -278,7 +306,10 @@ class ConfirmSheetHost(
             synchronized(lock) {
                 (requested.value === request).also { if (it) requested.value = null }
             }
-        if (open) reuse.acceptReuse()
+        if (open) {
+            logClosed(request, "use it")
+            reuse.acceptReuse()
+        }
     }
 
     /**
@@ -310,6 +341,7 @@ class ConfirmSheetHost(
                 action?.cancel()
                 requested.value.also { requested.value = null }
             }
+        request?.let { logClosed(it, "dismissed") }
         when {
             session.paying != null && session.unlocking -> send(listOf(SessionEvent.UserInteracted, SessionEvent.UnlockFailed))
             request is SheetRequest.AlreadyPaid -> scope.launch { reuse.declineReuse() }
@@ -319,10 +351,12 @@ class ConfirmSheetHost(
 
     /** "I'm up" (or any way past the sheet): a Pay still asking for its price is dropped and the sheet closes. */
     fun onImUp() {
-        synchronized(lock) {
-            action?.cancel()
-            requested.value = null
-        }
+        val request =
+            synchronized(lock) {
+                action?.cancel()
+                requested.value.also { requested.value = null }
+            }
+        request?.let { logClosed(it, "I'm up") }
     }
 
     /** The message of [effect]'s Payment outcomes row on [session]'s current ring, replacing any earlier one. */
@@ -332,7 +366,21 @@ class ConfirmSheetHost(
     ) {
         val message = paymentOutcomeOf(effect)?.message ?: return
         session ?: return
-        shownMessage.value = RingMessage(session.sessionId, session.ringIndex, message, messageSerial.incrementAndGet())
+        showMessage(session, message)
+    }
+
+    private fun showMessage(
+        session: SessionData,
+        message: WakeMessage,
+    ) = showMessage(session.sessionId, session.ringIndex, message)
+
+    /** [message] on ring [ringIndex] of session [sessionId], replacing any earlier one (the wake snackbar rules, Story 4.14). */
+    private fun showMessage(
+        sessionId: String,
+        ringIndex: Int,
+        message: WakeMessage,
+    ) {
+        shownMessage.value = RingMessage(sessionId, ringIndex, message, messageSerial.incrementAndGet())
     }
 
     /**
@@ -354,9 +402,27 @@ class ConfirmSheetHost(
         }
     }
 
-    private fun close(request: SheetRequest) {
-        requested.compareAndSet(request, null)
-    }
+    /** Closes [request] if it is still the open one, logging [reason]; true when it was. */
+    private fun close(
+        request: SheetRequest,
+        reason: String,
+    ): Boolean = requested.compareAndSet(request, null).also { if (it) logClosed(request, reason) }
+
+    private fun logClosed(
+        request: SheetRequest,
+        reason: String,
+    ) = logClosed(
+        when (request) {
+            is SheetRequest.Confirm -> SHEET_CONFIRM
+            is SheetRequest.AlreadyPaid -> SHEET_ALREADY_PAID
+        },
+        reason,
+    )
+
+    private fun logClosed(
+        sheet: String,
+        reason: String,
+    ) = logger.log(LogEvent.ConfirmSheetClosed(sheet, reason))
 
     private suspend fun livePrice(productId: String): LivePrice? =
         withTimeoutOrNull(LIVE_PRICE_TIMEOUT) { live.livePrice(productId) }?.takeIf { it.productId == productId }
@@ -382,6 +448,9 @@ class ConfirmSheetHost(
         val LIVE_PRICE_TIMEOUT: Duration = 3.seconds
 
         private const val OPERATION_LIVE_PRICE = "snooze live price"
+        private const val SHEET_CONFIRM = "confirm"
+        private const val SHEET_ALREADY_PAID = "already paid"
+        private const val REASON_NO_PRICE = "no price known"
     }
 }
 

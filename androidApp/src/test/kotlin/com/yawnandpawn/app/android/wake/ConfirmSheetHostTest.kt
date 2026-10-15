@@ -2,7 +2,9 @@ package com.yawnandpawn.app.android.wake
 
 import com.yawnandpawn.app.core.billing.FeeLadder
 import com.yawnandpawn.app.core.billing.Money
+import com.yawnandpawn.app.core.billing.PriceEntry
 import com.yawnandpawn.app.core.billing.UsdFeeLadder
+import com.yawnandpawn.app.core.log.LogEvent
 import com.yawnandpawn.app.core.session.EffectRunner
 import com.yawnandpawn.app.core.session.EntryEffect
 import com.yawnandpawn.app.core.session.PurchaseIntentId
@@ -15,6 +17,7 @@ import com.yawnandpawn.app.core.session.SessionState
 import com.yawnandpawn.app.core.session.SnoozeAvailability
 import com.yawnandpawn.app.core.session.SnoozeOffer
 import com.yawnandpawn.app.core.session.UnavailableReason
+import com.yawnandpawn.app.testing.DEFAULT_FAKE_INSTANT
 import com.yawnandpawn.app.testing.FakeDisplayPrices
 import com.yawnandpawn.app.testing.FakeIdGenerator
 import com.yawnandpawn.app.testing.FakeLivePriceSource
@@ -41,6 +44,7 @@ import kotlin.test.assertNull
 import kotlin.test.assertSame
 import kotlin.test.assertTrue
 import kotlin.time.Duration.Companion.milliseconds
+import kotlin.time.Duration.Companion.minutes
 
 /** Story 4.13: the confirm sheet's actions and effects, without a screen. */
 @OptIn(ExperimentalCoroutinesApi::class)
@@ -139,7 +143,7 @@ class ConfirmSheetHostTest {
         }
 
     @Test
-    fun `no live price at Pay closes the sheet with no charge`() =
+    fun `no live price at Pay closes the sheet with No connection, No charge (4_18 device check - never silent)`() =
         scope.runTest {
             open()
             live.prices["snooze_usd_01"] = null
@@ -147,6 +151,8 @@ class ConfirmSheetHostTest {
             assertNull(host.request.value)
             assertEquals(listOf<SessionEvent>(SessionEvent.UserInteracted), sent)
             assertTrue(logger.events.any { it.toString().contains("snooze live price") })
+            assertEquals(WakeMessage.PaymentOffline, host.messageFor(session, host.message.value))
+            assertTrue(LogEvent.ConfirmSheetClosed("confirm", "no live price at Pay") in logger.events, "${logger.events}")
         }
 
     @Test
@@ -156,6 +162,68 @@ class ConfirmSheetHostTest {
             host.onUpper(session, SnoozeAvailability.Unavailable(UnavailableReason.Offline), dollar, send)
             assertNull(host.request.value)
             assertTrue(sent.isEmpty())
+            assertTrue(LogEvent.ConfirmSheetClosed("confirm", "Pay when snooze unavailable: Offline") in logger.events, "${logger.events}")
+        }
+
+    @Test
+    fun `4_18 device check - the sheet stays open when the live price rewrites the cached price its offer carries`() =
+        scope.runTest {
+            val cached = PriceEntry("snooze_usd_01", "€1.09", Money(1_090_000, "EUR"), DEFAULT_FAKE_INSTANT)
+            val opened = offer.copy(price = cached)
+            host.onEffect(SessionEffect.ShowSnoozeConfirm(opened), SessionState.Ringing(session))
+            val rewritten = SnoozeAvailability.Available(offer.copy(price = cached.copy(fetchedAt = DEFAULT_FAKE_INSTANT + 1.minutes)))
+
+            host.follow(session, rewritten)
+
+            assertIs<SheetRequest.Confirm>(host.request.value)
+            assertIs<SnoozeSheet.Confirm>(shown(), "the sheet shows at the cached or live price")
+            val sheetNow = host.sheet(session, rewritten, host.request.value, host.livePrices.value, host.sentPrices.value, false)
+            assertIs<SnoozeSheet.Confirm>(sheetNow)
+            assertTrue(logger.events.none { it is LogEvent.ConfirmSheetClosed }, "${logger.events}")
+        }
+
+    @Test
+    fun `a confirm nobody can price closes with No connection, No charge instead of showing nothing`() =
+        scope.runTest {
+            live.prices["snooze_usd_01"] = null
+            val unpriced =
+                ConfirmSheetHost(live, FakeDisplayPrices(all = false), choices, UsdFeeLadder, FakeIdGenerator(), intents, scope, logger)
+            open(into = unpriced)
+            assertNull(shown(from = unpriced), "nothing to show: no price")
+
+            unpriced.follow(session, available)
+
+            assertNull(unpriced.request.value)
+            assertEquals(WakeMessage.PaymentOffline, unpriced.messageFor(session, unpriced.message.value))
+            assertTrue(LogEvent.ConfirmSheetClosed("confirm", "no price known") in logger.events, "${logger.events}")
+        }
+
+    @Test
+    fun `every close is logged with its reason, and a sheet that cannot open says why`() =
+        scope.runTest {
+            open()
+            host.follow(session, SnoozeAvailability.Unavailable(UnavailableReason.Offline))
+            open()
+            host.onImUp()
+            open()
+            host.onDismiss(session, send)
+            open()
+            host.follow(session.copy(ringIndex = 2), available)
+            host.onEffect(SessionEffect.ShowSnoozeConfirm(offer), SessionState.Idle)
+            open(session.copy(paying = PurchaseIntentId("intent-1")))
+
+            assertEquals(
+                listOf(
+                    LogEvent.ConfirmSheetClosed("confirm", "snooze unavailable: Offline"),
+                    LogEvent.ConfirmSheetClosed("confirm", "I'm up"),
+                    LogEvent.ConfirmSheetClosed("confirm", "dismissed"),
+                    LogEvent.ConfirmSheetClosed("confirm", "another ring"),
+                    LogEvent.ConfirmSheetClosed("confirm", "not opened: not ringing"),
+                    LogEvent.ConfirmSheetClosed("confirm", "not opened: payment in flight"),
+                ),
+                logger.events.filterIsInstance<LogEvent.ConfirmSheetClosed>(),
+            )
+            assertTrue(logger.events.none { "snooze_usd" in it.toString() }, "no product or price in the log")
         }
 
     @Test

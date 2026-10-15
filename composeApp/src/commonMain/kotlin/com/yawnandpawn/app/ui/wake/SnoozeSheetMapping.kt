@@ -35,29 +35,76 @@ sealed interface SheetRequest {
 
 /**
  * Whether [this] request still belongs on [session]'s screen: the same session and ring, and for a confirm, snooze is
- * still Available ([availability]) for the same offer. When not, the sheet closes for good (Story 4.13: "Pay" while it
- * just became unavailable): the snooze button underneath then shows the reason. Pure.
+ * still Available ([availability]) for the same snooze ([sameSnooze]: product and snooze number). When not, the sheet
+ * closes for good (Story 4.13: "Pay" while it just became unavailable): the snooze button underneath then shows the
+ * reason. Pure.
  */
 fun SheetRequest.stillWanted(
     session: SessionData,
     availability: SnoozeAvailability,
-): Boolean {
-    if (sessionId != session.sessionId || ringIndex != session.ringIndex) return false
-    return when (this) {
-        is SheetRequest.Confirm -> (availability as? SnoozeAvailability.Available)?.offer == offer
-        is SheetRequest.AlreadyPaid -> true
+): Boolean = unwantedBecause(session, availability) == null
+
+/**
+ * Why [this] request no longer belongs on [session]'s screen with [availability], for the log (no personal data), or
+ * null while it is still wanted ([stillWanted]). Pure.
+ */
+fun SheetRequest.unwantedBecause(
+    session: SessionData,
+    availability: SnoozeAvailability,
+): String? =
+    when {
+        sessionId != session.sessionId -> {
+            "another session"
+        }
+
+        ringIndex != session.ringIndex -> {
+            "another ring"
+        }
+
+        this is SheetRequest.Confirm && availability is SnoozeAvailability.Unavailable -> {
+            "snooze unavailable: ${availability.reason}"
+        }
+
+        this is SheetRequest.Confirm && availability is SnoozeAvailability.Available && !availability.offer.sameSnooze(offer) -> {
+            "another snooze on sale"
+        }
+
+        else -> {
+            null
+        }
     }
-}
+
+/**
+ * Whether [this] offer sells the same snooze as [other]: the same product and snooze number. The cached price an offer
+ * carries ([CoreSnoozeOffer.price]) is display data, not part of what is sold: it changes each time the price cache is
+ * written, and every live price Play gives is written with a new fetch time (Story 4.12). Comparing it closed the sheet a
+ * frame after it opened, as soon as the live price asked at open came back (Story 4.18 device check).
+ */
+fun CoreSnoozeOffer.sameSnooze(other: CoreSnoozeOffer): Boolean = productId == other.productId && snoozeNumber == other.snoozeNumber
+
+/**
+ * The price [request] shows, from [priceOf] (live first, then the cached display price); for a confirm, else the cached
+ * price its offer carried when the engine opened it (the price the snooze button showed). Null when nobody knows one.
+ */
+fun requestPrice(
+    request: SheetRequest,
+    priceOf: PriceLookup,
+): Money? =
+    when (request) {
+        is SheetRequest.Confirm -> priceOf(request.offer.productId) ?: request.offer.price?.price
+        is SheetRequest.AlreadyPaid -> priceOf(request.productId)
+    }
 
 /**
  * The sheet [session]'s wake screen shows (Story 4.13), or null for none. Pure.
  * - While the unlock before Play is pending (`paying` with `unlocking`): *unlocking* at [unlockingPrice] (the live price
  *   the Pay tap sent). While billing is in flight without it, none: Play's sheet is on top and its result closes ours.
- * - A [SheetRequest.Confirm] still wanted: *confirm* at [priceOf] the offer (live first, then the cached display price),
- *   "The next one costs {nextPrice}." with the price of the following snooze ([FeeLadder.followingProduct]) when there is
- *   one and it is known, else only "This one costs {price}.", and the tax note when [showTaxNote].
+ * - A [SheetRequest.Confirm] still wanted: *confirm* at [requestPrice] (live first, then the cached display price, then
+ *   the cached price the offer carried), "The next one costs {nextPrice}." with the price of the following snooze
+ *   ([FeeLadder.followingProduct]) when there is one and it is known, else only "This one costs {price}.", and the tax
+ *   note when [showTaxNote].
  * - A [SheetRequest.AlreadyPaid]: *already paid* at the price of its product.
- * A price nobody knows shows no sheet rather than an invented one.
+ * A price nobody knows shows no sheet rather than an invented one (the host then closes the request with a message).
  */
 @Suppress("LongParameterList") // Every input of the sheet; each is one plain value.
 fun snoozeSheet(
@@ -91,9 +138,9 @@ private fun shownRequest(
     ladder: FeeLadder,
     showTaxNote: Boolean,
 ): SnoozeSheet? =
-    when (request) {
-        is SheetRequest.Confirm -> {
-            priceOf(request.offer.productId)?.let { price ->
+    requestPrice(request, priceOf)?.let { price ->
+        when (request) {
+            is SheetRequest.Confirm -> {
                 SnoozeSheet.Confirm(
                     minutes = session.config.snoozeLengthMinutes,
                     price = price,
@@ -101,10 +148,10 @@ private fun shownRequest(
                     showTaxNote = showTaxNote,
                 )
             }
-        }
 
-        is SheetRequest.AlreadyPaid -> {
-            priceOf(request.productId)?.let(SnoozeSheet::AlreadyPaid)
+            is SheetRequest.AlreadyPaid -> {
+                SnoozeSheet.AlreadyPaid(price)
+            }
         }
     }
 

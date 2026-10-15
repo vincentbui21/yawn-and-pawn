@@ -1,11 +1,13 @@
 package com.yawnandpawn.app.ui.wake
 
 import com.yawnandpawn.app.core.billing.Money
+import com.yawnandpawn.app.core.billing.PriceEntry
 import com.yawnandpawn.app.core.billing.UsdFeeLadder
 import com.yawnandpawn.app.core.session.PurchaseIntentId
 import com.yawnandpawn.app.core.session.SessionData
 import com.yawnandpawn.app.core.session.SnoozeAvailability
 import com.yawnandpawn.app.core.session.UnavailableReason
+import com.yawnandpawn.app.testing.DEFAULT_FAKE_INSTANT
 import com.yawnandpawn.app.testing.aSession
 import com.yawnandpawn.app.testing.aSessionConfig
 import kotlin.test.Test
@@ -13,6 +15,7 @@ import kotlin.test.assertEquals
 import kotlin.test.assertFalse
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
+import kotlin.time.Duration.Companion.minutes
 import com.yawnandpawn.app.core.session.SnoozeOffer as CoreSnoozeOffer
 
 /** Story 4.13: which confirm sheet a session's wake screen shows, and the 500 ms guard. */
@@ -66,6 +69,42 @@ class SnoozeSheetMappingTest {
         assertNull(sheet(availability = SnoozeAvailability.Available(CoreSnoozeOffer("snooze_usd_02", 2))))
         assertFalse(confirm.stillWanted(session, SnoozeAvailability.Unavailable(UnavailableReason.PaymentPending)))
         assertTrue(confirm.stillWanted(session, available))
+    }
+
+    @Test
+    fun `4_18 device check - a confirm stays wanted when the cached price its offer carries is written again or changes`() {
+        val cached = PriceEntry("snooze_usd_01", "€1.09", Money(1_090_000, "EUR"), DEFAULT_FAKE_INSTANT)
+        val opened = confirm.copy(offer = first.copy(price = cached))
+        // Play's live price at open is stored with a new fetch time; a refresh may also change the amount.
+        val restored = SnoozeAvailability.Available(first.copy(price = cached.copy(fetchedAt = DEFAULT_FAKE_INSTANT + 1.minutes)))
+        val repriced =
+            SnoozeAvailability.Available(
+                first.copy(price = cached.copy(formattedPrice = "€1.19", price = Money(1_190_000, "EUR"))),
+            )
+
+        assertTrue(opened.stillWanted(session, restored))
+        assertTrue(opened.stillWanted(session, repriced))
+        assertTrue(opened.stillWanted(session, available), "an offer with no price attached sells the same snooze")
+        assertEquals(Money.of(1, "USD"), (sheet(request = opened, availability = restored) as SnoozeSheet.Confirm).price)
+        assertNull(opened.unwantedBecause(session, repriced))
+        assertEquals(
+            "another snooze on sale",
+            opened.unwantedBecause(session, SnoozeAvailability.Available(CoreSnoozeOffer("snooze_usd_02", 2))),
+        )
+        assertEquals(
+            "snooze unavailable: Offline",
+            opened.unwantedBecause(session, SnoozeAvailability.Unavailable(UnavailableReason.Offline)),
+        )
+        assertEquals("another ring", opened.unwantedBecause(session.copy(ringIndex = 2), restored))
+    }
+
+    @Test
+    fun `a confirm whose product nobody prices shows the cached price its offer carried`() {
+        val cached = PriceEntry("snooze_usd_01", "€1.09", Money(1_090_000, "EUR"), DEFAULT_FAKE_INSTANT)
+        val opened = confirm.copy(offer = first.copy(price = cached))
+        assertEquals(Money(1_090_000, "EUR"), (sheet(request = opened, priceOf = { null }) as SnoozeSheet.Confirm).price)
+        assertEquals(Money(1_090_000, "EUR"), requestPrice(opened) { null })
+        assertNull(requestPrice(confirm) { null })
     }
 
     @Test

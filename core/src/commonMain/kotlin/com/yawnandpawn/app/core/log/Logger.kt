@@ -139,6 +139,16 @@ sealed interface LogEvent {
         val stage: WakeStage,
         val msSinceScheduled: Long?,
     ) : LogEvent
+
+    /**
+     * The snooze confirm sheet's request of kind [sheet] ("confirm" or "already paid") was closed, or dropped before it
+     * showed, because of [reason] (for example "I'm up", "snooze unavailable: Offline", "no live price at Pay"). Only
+     * these labels are logged, never a price, product or token, so a device check can see why a sheet went away.
+     */
+    data class ConfirmSheetClosed(
+        val sheet: String,
+        val reason: String,
+    ) : LogEvent
 }
 
 /** The steps of a ring start that [LogEvent.WakeTiming] times, in the order they normally happen. */

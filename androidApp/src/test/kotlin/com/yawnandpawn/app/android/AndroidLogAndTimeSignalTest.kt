@@ -105,6 +105,19 @@ class AndroidLogAndTimeSignalTest {
     }
 
     @Test
+    fun `the logger writes why a confirm sheet closed at info level (4_18 device check)`() {
+        ShadowLog.clear()
+        val logger = AndroidLogger()
+
+        logger.log(LogEvent.ConfirmSheetClosed("confirm", "snooze unavailable: Offline"))
+
+        val expected = "ConfirmSheetClosed sheet=confirm reason=snooze unavailable: Offline"
+        val logs = ownLogs(expected)
+        assertEquals(listOf(expected), logs.map { it.msg })
+        assertEquals(listOf(Log.INFO), logs.map { it.type })
+    }
+
+    @Test
     fun `the time signal emits on a minute tick, a time set and a zone change, only while collected`() {
         val signal = AndroidTimeChangeSignal(app)
         val scope = CoroutineScope(Dispatchers.Unconfined)

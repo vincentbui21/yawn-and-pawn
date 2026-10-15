@@ -116,7 +116,7 @@ development_status:
   epic-5: backlog
   5-1-wake-and-snooze-defaults-and-theme-override-in-settings: backlog
   5-2-bright-wake-screen: backlog
-  5-3-full-reliability-probe-do-not-disturb-battery-and-the-locked: backlog
+  5-3-full-reliability-probe-do-not-disturb-battery-and-the-locked: review  # Epic 5 auto-run, fast mode (lane A)
   5-4-reliability-checklist-screen-and-revoked-setting-warnings: backlog
   5-5-manufacturer-background-guidance: backlog
   5-6-anonymous-usage-stats-off-until-the-user-says-yes: backlog

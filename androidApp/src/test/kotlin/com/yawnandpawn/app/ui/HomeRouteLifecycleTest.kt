@@ -1,7 +1,7 @@
 package com.yawnandpawn.app.ui
 
 import androidx.compose.runtime.CompositionLocalProvider
-import androidx.compose.ui.test.junit4.createEmptyComposeRule
+import androidx.compose.ui.test.junit4.v2.createEmptyComposeRule
 import androidx.compose.ui.test.onAllNodesWithText
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleOwner

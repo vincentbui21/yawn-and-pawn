@@ -9,7 +9,7 @@ import android.content.pm.ServiceInfo
 import android.provider.Settings
 import android.view.WindowManager
 import androidx.compose.ui.test.getBoundsInRoot
-import androidx.compose.ui.test.junit4.createEmptyComposeRule
+import androidx.compose.ui.test.junit4.v2.createEmptyComposeRule
 import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
@@ -280,7 +280,8 @@ class WakeActivityTest {
 
         buildActivity(WakeActivity::class.java).setup().get()
 
-        app.awaitUntil("the session ends") { app.engine.state.value == SessionState.Idle }
+        // The answer is sent from the screen's composition effect, which the compose rule runs: wait through it.
+        composeRule.awaitScreen(app, "the session ends") { app.engine.state.value == SessionState.Idle }
         composeRule.awaitSuccess(app, "Up on time.")
     }
 
@@ -329,7 +330,8 @@ class WakeActivityTest {
 
         buildActivity(WakeActivity::class.java).setup().get()
 
-        app.awaitUntil("the session ends") { app.engine.state.value == SessionState.Idle }
+        // The answer is sent from the screen's composition effect, which the compose rule runs: wait through it.
+        composeRule.awaitScreen(app, "the session ends") { app.engine.state.value == SessionState.Idle }
         composeRule.awaitSuccess(app, "Up on time.")
     }
 

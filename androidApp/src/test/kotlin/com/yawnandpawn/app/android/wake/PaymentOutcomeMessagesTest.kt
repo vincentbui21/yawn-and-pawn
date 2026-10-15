@@ -9,7 +9,7 @@ import androidx.compose.ui.test.getBoundsInRoot
 import androidx.compose.ui.test.hasClickAction
 import androidx.compose.ui.test.hasContentDescription
 import androidx.compose.ui.test.hasText
-import androidx.compose.ui.test.junit4.createEmptyComposeRule
+import androidx.compose.ui.test.junit4.v2.createEmptyComposeRule
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.test.core.app.ActivityScenario
@@ -153,6 +153,8 @@ class PaymentOutcomeMessagesTest {
     ) {
         val launches = billing.launched.size
         billing.launchResults.add(Outcome.Success(launch))
+        // After an earlier outcome the button comes back once the closed sheet's last frames ran (the rule runs them).
+        await(app, "snooze on sale") { composeRule.onAllNodes(snoozeOnSale).fetchSemanticsNodes().isNotEmpty() }
         composeRule.onNode(snoozeOnSale).performClick()
         await(app, "the sheet opens") {
             host(app).request.value != null && composeRule.onAllNodes(hasText("Snooze for 9 min?")).fetchSemanticsNodes().isNotEmpty()

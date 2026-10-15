@@ -14,7 +14,7 @@ import androidx.camera.view.PreviewView
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
-import androidx.compose.ui.test.junit4.createEmptyComposeRule
+import androidx.compose.ui.test.junit4.v2.createEmptyComposeRule
 import androidx.lifecycle.LifecycleOwner
 import androidx.lifecycle.MutableLiveData
 import androidx.test.core.app.ApplicationProvider
@@ -126,6 +126,8 @@ class CameraXCodeScannerTest {
             composeRule.waitForIdle()
             scenario.onActivity { block(it.window.decorView) }
         }
+        // The scan releases the camera when its effect is cancelled, which the compose rule runs: let it.
+        composeRule.waitForIdle()
     }
 
     private fun View.previewViews(): List<PreviewView> =

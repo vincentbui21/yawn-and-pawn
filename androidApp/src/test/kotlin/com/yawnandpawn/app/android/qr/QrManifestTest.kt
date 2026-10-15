@@ -3,7 +3,7 @@ package com.yawnandpawn.app.android.qr
 import android.Manifest
 import android.content.pm.FeatureInfo
 import android.content.pm.PackageManager
-import androidx.compose.ui.test.junit4.createEmptyComposeRule
+import androidx.compose.ui.test.junit4.v2.createEmptyComposeRule
 import androidx.test.core.app.ActivityScenario
 import androidx.test.core.app.ApplicationProvider
 import com.yawnandpawn.app.MainActivity

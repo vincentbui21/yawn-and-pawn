@@ -3,7 +3,7 @@ package com.yawnandpawn.app.android.wake
 import android.app.AlarmManager
 import android.content.Intent
 import android.os.Looper
-import androidx.compose.ui.test.junit4.createEmptyComposeRule
+import androidx.compose.ui.test.junit4.v2.createEmptyComposeRule
 import com.yawnandpawn.app.StopAppRule
 import com.yawnandpawn.app.buildActivity
 import com.yawnandpawn.app.core.alarm.AlarmFired

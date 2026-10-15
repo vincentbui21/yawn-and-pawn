@@ -1,7 +1,7 @@
 package com.yawnandpawn.app.android.work
 
 import android.content.Intent
-import androidx.compose.ui.test.junit4.createEmptyComposeRule
+import androidx.compose.ui.test.junit4.v2.createEmptyComposeRule
 import androidx.compose.ui.test.onNodeWithText
 import com.yawnandpawn.app.StopAppRule
 import com.yawnandpawn.app.android.wake.WakeActivity

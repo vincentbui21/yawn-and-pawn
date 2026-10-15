@@ -69,8 +69,11 @@ When neither is set, the tool stops with a message. It never prints the key.
 **The service account needs, in Play Console → Users and permissions → (the service account) → App permissions → Yawn & Pawn:**
 - **"Manage store presence"**: create and edit one-time products and their prices.
 - **"View app information"**.
+- **For a run: "Admin (all permissions)" on Yawn & Pawn only**, granted just before the run and removed right after.
+  - Found in run 1 (2026-10-15, `docs/decisions/play-catalog-run.md`): with only the two permissions above, plus "View financial data" at app and account level, `monetization.convertRegionPrices` answered HTTP 403 "The caller does not have permission" for 3 hours.
+  - It worked at once with Admin. Google's error names no permission, and its documentation doesn't list one for this call.
 
-The release permissions in `docs/ci-release.md` ("Release apps to testing tracks") are **not** enough. A 401/403 error from the tool names the missing permission. The **Google Play Android Developer API** must be enabled in the service account's Google Cloud project.
+The release permissions in `docs/ci-release.md` ("Release apps to testing tracks") are **not** enough. A 401/403 error from the tool points at these permissions. The **Google Play Android Developer API** must be enabled in the service account's Google Cloud project.
 
 ## Owner run (Story 4.1 human-verify, Session B)
 

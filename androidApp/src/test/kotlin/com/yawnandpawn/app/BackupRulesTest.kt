@@ -5,6 +5,7 @@ import androidx.test.core.app.ApplicationProvider
 import com.yawnandpawn.app.android.backup.SkippedRestoreNotice
 import com.yawnandpawn.app.data.db.AppDatabase
 import com.yawnandpawn.app.data.db.RuntimeDatabase
+import com.yawnandpawn.app.data.settings.ConsentDataStore
 import com.yawnandpawn.app.data.settings.InstallIdDataStore
 import com.yawnandpawn.app.data.settings.PriceCacheDataStore
 import com.yawnandpawn.app.data.settings.ReliabilityDataStore
@@ -63,6 +64,8 @@ class BackupRulesTest {
             Triple("exclude", "device_file", "datastore/${PriceCacheDataStore.FILE_NAME}"),
             // The reliability checklist's records (Story 5.3 review fix 14): true of this phone only, never restored.
             Triple("exclude", "device_file", reliability),
+            // The usage stats choice (Story 5.6 review fix 5): per install, so a restored phone starts with stats off.
+            Triple("exclude", "device_file", "datastore/${ConsentDataStore.FILE_NAME}"),
             Triple("exclude", "root", "."),
             Triple("exclude", "file", "."),
             Triple("exclude", "database", "."),

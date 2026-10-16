@@ -173,7 +173,11 @@ dependencies {
     implementation(platform(libs.firebase.bom))
     implementation(libs.firebase.crashlytics)
     // Story 5.6 (AD-15): Analytics behind the core Telemetry port, collecting only with the user's consent, after unlock.
-    implementation(libs.firebase.analytics)
+    // The advertising id library is left out (review fix 8): the app never reads the ad id (the manifest turns its
+    // collection off), so it has no business on the classpath (AnalyticsManifestTest checks it is absent).
+    implementation(libs.firebase.analytics) {
+        exclude(group = "com.google.android.gms", module = "play-services-ads-identifier")
+    }
     // Story 3.10: the QR/Barcode check. CameraX shows the viewfinder and feeds frames to the bundled ML Kit barcode
     // model (on device, no model download through Play services); no frame is ever stored.
     implementation(libs.camerax.core)

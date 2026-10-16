@@ -9,10 +9,14 @@ import com.yawnandpawn.app.testing.FakeLogger
 import com.yawnandpawn.app.testing.FakeUserLockState
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.test.TestScope
 import kotlinx.coroutines.test.UnconfinedTestDispatcher
+import kotlinx.coroutines.test.advanceTimeBy
+import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
 import org.junit.Rule
 import org.junit.Test
@@ -32,14 +36,20 @@ class AnalyticsConsentGateTest {
 
     private val consents = FakeConsentStore()
     private val userLock = FakeUserLockState(unlocked = true)
-    private val firebaseStarted = MutableStateFlow(true)
+    private val firebase = Firebase()
     private val sink = RecordingAnalyticsSink()
     private val logger = FakeLogger()
 
     /** A started gate on the test's background scope, unconfined, so every change is applied at once. */
     private fun TestScope.gate(store: ConsentStore = consents): AnalyticsConsentGate {
         val scope = CoroutineScope(backgroundScope.coroutineContext + UnconfinedTestDispatcher(testScheduler))
-        return AnalyticsConsentGate(store, userLock, firebaseStarted, sink, scope, logger).also { it.start() }
+        return AnalyticsConsentGate(store, userLock, firebase, sink, scope, logger).also { it.start() }
+    }
+
+    /** Firebase's start; by default it could not turn collection off itself, so the gate does. */
+    private class Firebase : FirebaseState {
+        override val ready = MutableStateFlow(true)
+        override var startedCollectionOff = false
     }
 
     private val on = listOf("collection true", "grant analytics storage only")
@@ -55,7 +65,19 @@ class AnalyticsConsentGateTest {
         }
 
     @Test
-    fun `without consent every start turns collection off and resets nothing`() =
+    fun `when the start turned collection off, the gate calls nothing without consent and only turns it on with consent`() =
+        runTest {
+            firebase.startedCollectionOff = true
+            gate()
+            assertEquals(emptyList(), sink.calls)
+
+            consents.setConsent(true)
+
+            assertEquals(on, sink.calls)
+        }
+
+    @Test
+    fun `without consent a start that could not turn collection off has the gate turn it off, and resets nothing`() =
         runTest {
             gate()
 
@@ -87,12 +109,12 @@ class AnalyticsConsentGateTest {
     @Test
     fun `nothing is called before Firebase has started, then the stored choice applies`() =
         runTest {
-            firebaseStarted.value = false
+            firebase.ready.value = false
             consents.setConsent(true)
             gate()
             assertEquals(emptyList(), sink.calls)
 
-            firebaseStarted.value = true
+            firebase.ready.value = true
 
             assertEquals(on, sink.calls)
         }
@@ -100,12 +122,12 @@ class AnalyticsConsentGateTest {
     @Test
     fun `consent turned on and off before Firebase starts still resets once it has started`() =
         runTest {
-            firebaseStarted.value = false
+            firebase.ready.value = false
             gate()
             consents.setConsent(true)
             consents.setConsent(false)
 
-            firebaseStarted.value = true
+            firebase.ready.value = true
 
             assertEquals(listOf("collection false", "reset"), sink.calls)
         }
@@ -126,13 +148,13 @@ class AnalyticsConsentGateTest {
     fun `consent before the first unlock turns collection on only once the unlock has started Firebase`() =
         runTest {
             userLock.unlocked = false
-            firebaseStarted.value = false
+            firebase.ready.value = false
             consents.setConsent(true)
             gate()
             assertEquals(emptyList(), sink.calls)
 
             userLock.unlock()
-            firebaseStarted.value = true
+            firebase.ready.value = true
 
             assertEquals(on, sink.calls)
         }
@@ -186,5 +208,76 @@ class AnalyticsConsentGateTest {
             consents.setConsent(true)
 
             assertEquals(listOf("collection false"), sink.calls)
+        }
+
+    @Test
+    fun `a failed collection off is tried again after the retry delay until it succeeds`() =
+        runTest {
+            sink.failure = IllegalStateException("not initialized")
+            gate()
+            advanceTimeBy(AnalyticsConsentGate.RETRY_DELAY)
+            runCurrent()
+            assertEquals(2, logger.events.count { it == LogEvent.OperationFailed("apply usage stats consent", "IllegalStateException") })
+            assertEquals(emptyList(), sink.calls)
+
+            sink.failure = null
+            advanceTimeBy(AnalyticsConsentGate.RETRY_DELAY)
+            runCurrent()
+
+            assertEquals(listOf("collection false"), sink.calls)
+        }
+
+    @Test
+    fun `a call that keeps failing is tried at most MAX_RETRIES more times, then at the next change`() =
+        runTest {
+            sink.failure = IllegalStateException("not initialized")
+            gate()
+
+            repeat(AnalyticsConsentGate.MAX_RETRIES * 2) {
+                advanceTimeBy(AnalyticsConsentGate.RETRY_DELAY)
+                runCurrent()
+            }
+
+            assertEquals(1 + AnalyticsConsentGate.MAX_RETRIES, logger.events.size, "${logger.events}")
+            sink.failure = null
+            consents.setConsent(true)
+            assertEquals(on, sink.calls)
+        }
+
+    /** Review fix 7: the no-consent default of an unreadable choice turns collection off but never deletes the data. */
+    @Test
+    fun `consent on, then the default of a read error, then on again turns collection off and on but never resets`() =
+        runTest {
+            val emitted = MutableSharedFlow<AnalyticsConsent>()
+            val flaky =
+                object : ConsentStore by consents {
+                    override fun observe() = emitted
+                }
+            gate(flaky)
+            emitted.subscriptionCount.first { it > 0 }
+
+            emitted.emit(AnalyticsConsent(consent = true, asked = true))
+            emitted.emit(AnalyticsConsent())
+            emitted.emit(AnalyticsConsent(consent = true, asked = true))
+
+            assertEquals(on + listOf("collection false") + on, sink.calls)
+        }
+
+    @Test
+    fun `only the user's own no after a yes resets the data`() =
+        runTest {
+            val emitted = MutableSharedFlow<AnalyticsConsent>()
+            val store =
+                object : ConsentStore by consents {
+                    override fun observe() = emitted
+                }
+            gate(store)
+            emitted.subscriptionCount.first { it > 0 }
+
+            emitted.emit(AnalyticsConsent(consent = true, asked = true))
+            emitted.emit(AnalyticsConsent())
+            emitted.emit(AnalyticsConsent(consent = false, asked = true))
+
+            assertEquals(on + listOf("collection false", "collection false", "reset"), sink.calls)
         }
 }

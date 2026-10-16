@@ -15,6 +15,7 @@ import org.koin.core.context.GlobalContext
 import org.robolectric.RobolectricTestRunner
 import java.io.File
 import kotlin.test.assertEquals
+import kotlin.test.assertFailsWith
 import kotlin.test.assertFalse
 import kotlin.test.assertIs
 import kotlin.test.assertSame
@@ -32,7 +33,7 @@ class AnalyticsManifestTest {
     private val context = ApplicationProvider.getApplicationContext<Context>()
 
     @Test
-    fun `the merged manifest turns Analytics collection, ad id, SSAID, ad consents and screen reporting off`() {
+    fun `the merged manifest turns Analytics collection, ad id, SSAID, storage and ad consents and screen reporting off`() {
         @Suppress("DEPRECATION")
         val info: ApplicationInfo = context.packageManager.getApplicationInfo(context.packageName, PackageManager.GET_META_DATA)
 
@@ -40,6 +41,7 @@ class AnalyticsManifestTest {
             "firebase_analytics_collection_enabled",
             "google_analytics_adid_collection_enabled",
             "google_analytics_ssaid_collection_enabled",
+            "google_analytics_default_allow_analytics_storage",
             "google_analytics_default_allow_ad_storage",
             "google_analytics_default_allow_ad_user_data",
             "google_analytics_default_allow_ad_personalization_signals",
@@ -66,6 +68,19 @@ class AnalyticsManifestTest {
             "android.permission.ACCESS_ADSERVICES_ATTRIBUTION",
             "com.google.android.finsky.permission.BIND_GET_INSTALL_REFERRER_SERVICE",
         ).forEach { permission -> assertFalse(permission in requested, "$permission in $requested") }
+    }
+
+    /** Review fix 8: the advertising id library is excluded from Analytics, so it is not on the app's classpath. */
+    @Test
+    fun `the advertising id library is not on the classpath`() {
+        assertFailsWith<ClassNotFoundException> { Class.forName("com.google.android.gms.ads.identifier.AdvertisingIdClient") }
+        val build = File("build.gradle.kts").readText()
+        assertTrue(build.contains("exclude(group = \"com.google.android.gms\", module = \"play-services-ads-identifier\")"))
+        assertFalse(
+            File(
+                "../config/dependency-allowlist.txt",
+            ).readLines().any { it.trim() == "com.google.android.gms:play-services-ads-identifier" },
+        )
     }
 
     @Test

@@ -40,6 +40,7 @@ import com.yawnandpawn.app.data.history.RoomSessionHistoryRepository
 import com.yawnandpawn.app.data.session.RoomActiveSessionStore
 import com.yawnandpawn.app.data.session.RoomGrantLedgerStore
 import com.yawnandpawn.app.data.session.RoomPurchaseIntentStore
+import com.yawnandpawn.app.data.settings.ConsentDataStore
 import com.yawnandpawn.app.data.settings.DataStoreConsentStore
 import com.yawnandpawn.app.data.settings.DataStoreInstallIdProvider
 import com.yawnandpawn.app.data.settings.DataStoreMissedNoteDismissals
@@ -98,8 +99,10 @@ val dataModule =
         // confirmation, in their own device-protected DataStore, never backed up (review fix 14); released like the others.
         single { ReliabilityDataStore(get<Context>()) } withOptions { onClose { it?.close() } }
         single<ReliabilityRecords> { DataStoreReliabilityRecords(get<ReliabilityDataStore>().store) }
-        // The usage stats choice (Story 5.6), in the same device-protected DataStore: off until the user says yes.
-        single<ConsentStore> { DataStoreConsentStore(get<SettingsDataStore>().store, get()) }
+        // The usage stats choice (Story 5.6): off until the user says yes, in its own device-protected DataStore, never backed
+        // up (consent is per install, review fix 5); released like the others.
+        single { ConsentDataStore(get<Context>()) } withOptions { onClose { it?.close() } }
+        single<ConsentStore> { DataStoreConsentStore(get<ConsentDataStore>().store, get()) }
         // The commitment lock (Story 4.4): the global settings and their pending changes in the same DataStore (AD-6),
         // the alarms' pending changes and the commitment events in app.db.
         // The last-known settings for a fire that cannot read the DataStore in time (review fix 11); not backed up.

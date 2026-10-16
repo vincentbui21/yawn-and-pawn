@@ -2,6 +2,7 @@ package com.yawnandpawn.app
 
 import com.yawnandpawn.app.android.billing.BillingClientFacade
 import com.yawnandpawn.app.android.billing.FakeBillingClientFacade
+import com.yawnandpawn.app.android.crash.FirebaseConfiguration
 import com.yawnandpawn.app.android.crash.FirebaseStartup
 import com.yawnandpawn.app.core.net.Connectivity
 import com.yawnandpawn.app.core.reliability.ReliabilityProbe
@@ -19,7 +20,8 @@ import org.koin.dsl.module
  *   has no shadow to change it, so the real probe would put the reliability banner on every Home screen.
  *   `ReliabilityProbeTest` tests the real probe directly.
  * - No real Firebase start. With a CI `google-services.json` the app is configured, but a test must never initialise
- *   Firebase (it would try to reach the network); the startup records that it started and does nothing else.
+ *   Firebase (it would try to reach the network); the startup records that it started and only turns Analytics
+ *   collection off through the bound `AnalyticsSink` (which does nothing while no FirebaseApp exists).
  * - Background jobs are only recorded ([FakeBackgroundWork]): app start enqueues the price refresh jobs (Story 4.3) and
  *   a failed consume its retry jobs (Story 4.10), which would start WorkManager's database and threads in every test.
  *   `BackgroundWorkWiringTest` tests the real WorkManager adapter with WorkManager's test driver.
@@ -29,7 +31,10 @@ import org.koin.dsl.module
 val testAppModule: Module =
     module {
         single<ReliabilityProbe> { FakeReliabilityProbe() }
-        single { FirebaseStartup(androidContext(), get(), initialize = {}) }
+        single {
+            val firebase = get<FirebaseConfiguration>()
+            FirebaseStartup(androidContext(), get(), analytics = get(), configured = { firebase.present }, initialize = {})
+        }
         single<BackgroundWork> { FakeBackgroundWork() }
         // An online phone (Story 4.7), so snooze reasons and the session-start refresh never depend on the host's
         // network. AndroidConnectivityTest tests the real adapter.

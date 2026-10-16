@@ -20,12 +20,12 @@ import okio.IOException
 import kotlin.coroutines.cancellation.CancellationException
 
 /**
- * [ConsentStore] in the settings DataStore (device-protected, Story 5.6): the usage stats choice under [CONSENT] and
- * whether the user was asked under [ASKED], both false until set. A file read error is logged and reads as no consent
- * (stats are never sent because a file could not be read); the flow then reads the file again after a growing pause,
- * like [DataStoreMissedNoteDismissals]. Other errors are not hidden. A write failure is a `StorageFailure`.
+ * [ConsentStore] in its own DataStore (`ConsentDataStore`, device-protected, Story 5.6): the usage stats choice under
+ * [CONSENT] and whether the user was asked under [ASKED], both false until set. A file read error is logged and reads as
+ * no consent (stats are never sent because a file could not be read); the flow then reads the file again after a growing
+ * pause, like [DataStoreMissedNoteDismissals]. Other errors are not hidden. A write failure is a `StorageFailure`.
  *
- * The settings DataStore is backed up, so a restore carries the choice to a new phone.
+ * That file is never backed up (review fix 5): consent is per install, so a restored phone starts with stats off.
  */
 class DataStoreConsentStore(
     private val store: DataStore<Preferences>,

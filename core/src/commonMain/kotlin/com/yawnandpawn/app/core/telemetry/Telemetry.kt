@@ -6,7 +6,8 @@ import com.yawnandpawn.app.core.history.SessionOutcome as HistoryOutcome
 
 /**
  * Port for anonymous usage stats (AD-15, FR-SET-6, Story 5.6). Production binds [ConsentGatedTelemetry] over the
- * Firebase Analytics adapter, so nothing is sent without the user's consent; [None] where there is no Analytics.
+ * Firebase Analytics adapter, so nothing is sent without the user's consent; [None] where there is no Analytics. The
+ * engine never calls it itself: it hands the events to a [TelemetryReporter], which runs [log] on the app's scope.
  *
  * [log] never throws for an expected failure: an event that cannot be sent now is dropped, never queued for later.
  */

@@ -86,6 +86,8 @@ import com.yawnandpawn.app.core.session.SnoozeAvailabilityPolicy
 import com.yawnandpawn.app.core.session.StoredSession
 import com.yawnandpawn.app.core.session.UserLockState
 import com.yawnandpawn.app.core.stats.ReRegisterSuggestions
+import com.yawnandpawn.app.core.telemetry.Telemetry
+import com.yawnandpawn.app.core.telemetry.TelemetryReporter
 import com.yawnandpawn.app.data.dataModule
 import com.yawnandpawn.app.ui.format.moneyFormatter
 import com.yawnandpawn.app.ui.links.AppLinks
@@ -239,6 +241,9 @@ val appModule =
         // (Spike S1: the PIN before Play opens), shared by the engine (it reads the keyguard for a Pay) and the coordinator.
         // Story 5.3: a test that rang locked and is completed is stored for the checklist's locked-screen test. The write
         // is launched on ApplicationScope, never inside the engine's lock (review fix 11).
+        // Story 5.6: a session's anonymous usage stats go to the consent-gated telemetry (telemetryModule) once it is recorded.
+        // The consent read and the Analytics calls are launched on ApplicationScope, never inside the engine's lock (review
+        // fix 1).
         single {
             SessionEngine(
                 get(),
@@ -252,9 +257,7 @@ val appModule =
                 userLock = get(),
                 unlock = get(),
                 lockedTest = LockedTestReporter.Launching(get<ReliabilityRecords>(), get<ApplicationScope>(), get()),
-                // Story 5.6: a session's anonymous usage stats go to the consent-gated telemetry (telemetryModule) once
-                // it is recorded.
-                telemetry = get(),
+                telemetry = TelemetryReporter.Launching(telemetry = get<Telemetry>(), scope = get<ApplicationScope>(), logger = get()),
             )
         }
         // Story 4.11: the billing orchestration (launch, purchase updates, recovery, ITEM_ALREADY_OWNED, stranded reuse). It

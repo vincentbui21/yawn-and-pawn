@@ -102,7 +102,8 @@
                 tools:node="remove" />
         </provider>
         <!-- Analytics (Story 5.6, AD-15): no collection until the user says yes; never the advertising id or SSAID, every
-             ad consent denied by default, no automatic screen views. -->
+             ad consent and analytics storage denied by default (the consent gate grants analytics storage only, with
+             consent), no automatic screen views. -->
         <meta-data
             android:name="firebase_analytics_collection_enabled"
             android:value="false" />
@@ -111,6 +112,9 @@
             android:value="false" />
         <meta-data
             android:name="google_analytics_ssaid_collection_enabled"
+            android:value="false" />
+        <meta-data
+            android:name="google_analytics_default_allow_analytics_storage"
             android:value="false" />
         <meta-data
             android:name="google_analytics_default_allow_ad_storage"

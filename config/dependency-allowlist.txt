@@ -282,10 +282,12 @@ org.jetbrains.kotlin:kotlin-stdlib-jdk8
 # stats" on: collection is disabled in the manifest and enabled at runtime only with consent, after the first unlock
 # (AnalyticsConsentGate); only three events (session_outcome, snooze_count, check_type), no user id or user property.
 # The measurement SDK and its API shims; play-services-stats; the support libraries it still declares (documentfile,
-# legacy-support-core-utils, localbroadcastmanager, print). play-services-ads-identifier and the Privacy Sandbox
-# ads-adservices libraries come with it: the app removes their merged permissions (AD_ID, ACCESS_ADSERVICES_AD_ID,
-# ACCESS_ADSERVICES_ATTRIBUTION, the install referrer service) with tools:node="remove" and turns ad id, SSAID and every
-# ad consent off in the manifest. To be declared in the Data safety form (Epic 8).
+# legacy-support-core-utils, localbroadcastmanager, print). play-services-ads-identifier is excluded in
+# androidApp/build.gradle.kts (Story 5.6 review fix 8): the measurement code reads the ad id only with ad storage
+# granted, which the app never grants (proguard-rules.pro tells R8 the class is absent on purpose). The Privacy Sandbox
+# ads-adservices libraries still come with it: the app removes their merged permissions (AD_ID,
+# ACCESS_ADSERVICES_AD_ID, ACCESS_ADSERVICES_ATTRIBUTION, the install referrer service) with tools:node="remove" and
+# turns ad id, SSAID and every ad consent off in the manifest. To be declared in the Data safety form (Epic 8).
 com.google.firebase:firebase-analytics
 com.google.android.gms:play-services-measurement
 com.google.android.gms:play-services-measurement-api
@@ -294,7 +296,6 @@ com.google.android.gms:play-services-measurement-impl
 com.google.android.gms:play-services-measurement-sdk
 com.google.android.gms:play-services-measurement-sdk-api
 com.google.android.gms:play-services-stats
-com.google.android.gms:play-services-ads-identifier
 androidx.privacysandbox.ads:ads-adservices
 androidx.privacysandbox.ads:ads-adservices-java
 androidx.documentfile:documentfile

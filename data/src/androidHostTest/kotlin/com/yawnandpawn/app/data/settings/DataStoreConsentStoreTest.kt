@@ -28,14 +28,16 @@ import java.util.concurrent.atomic.AtomicInteger
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
 import kotlin.test.assertIs
+import kotlin.test.assertNotEquals
+import kotlin.test.assertTrue
 import kotlin.time.Duration.Companion.seconds
 
-/** Story 5.6: the usage stats choice in the device-protected settings DataStore. */
+/** Story 5.6: the usage stats choice in its own device-protected DataStore, apart from the backed-up settings. */
 @RunWith(RobolectricTestRunner::class)
 class DataStoreConsentStoreTest {
     private val context = ApplicationProvider.getApplicationContext<Context>()
     private val logger = FakeLogger()
-    private var settings = SettingsDataStore(context)
+    private var settings = ConsentDataStore(context)
 
     @After
     fun tearDown() = settings.close()
@@ -80,8 +82,36 @@ class DataStoreConsentStoreTest {
 
             withContext(Dispatchers.Default) { withTimeout(WAIT) { seen.first { it?.consent == true } } }
             settings.close()
-            settings = SettingsDataStore(context)
+            settings = ConsentDataStore(context)
             assertEquals(AnalyticsConsent(consent = true, asked = true), DataStoreConsentStore(settings.store, logger).observe().first())
+        }
+
+    @Test
+    fun `the file is device-protected, apart from the backed-up settings (review fix 5)`() {
+        val file = ConsentDataStore.consentFile(context)
+
+        assertTrue(file.startsWith(context.createDeviceProtectedStorageContext().filesDir))
+        assertEquals(
+            "datastore/usage_stats_consent.preferences_pb",
+            file.relativeTo(context.createDeviceProtectedStorageContext().filesDir).invariantSeparatorsPath,
+        )
+        assertNotEquals(SettingsDataStore.settingsFile(context), file)
+    }
+
+    @Test
+    fun `a corrupt file reads as no consent, and the next choice is stored`() =
+        runTest {
+            settings.close()
+            ConsentDataStore.consentFile(context).apply {
+                parentFile?.mkdirs()
+                writeBytes(byteArrayOf(0x7f, 0x01, 0x02, 0x03))
+            }
+            settings = ConsentDataStore(context)
+            val consents = DataStoreConsentStore(settings.store, logger)
+
+            assertEquals(AnalyticsConsent(), consents.observe().first())
+            assertEquals(Outcome.Success(Unit), consents.setConsent(true))
+            assertEquals(AnalyticsConsent(consent = true, asked = true), consents.observe().first())
         }
 
     @Test

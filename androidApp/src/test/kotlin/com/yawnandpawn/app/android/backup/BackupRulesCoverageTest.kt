@@ -31,8 +31,11 @@ import com.yawnandpawn.app.core.session.SessionState
 import com.yawnandpawn.app.core.stats.CheckKey
 import com.yawnandpawn.app.core.stats.ReRegisterDismissals
 import com.yawnandpawn.app.core.stats.ReRegisterSuggestions
+import com.yawnandpawn.app.core.telemetry.AnalyticsConsent
+import com.yawnandpawn.app.core.telemetry.ConsentStore
 import com.yawnandpawn.app.data.db.appDatabaseFile
 import com.yawnandpawn.app.data.db.runtimeDatabaseFile
+import com.yawnandpawn.app.data.settings.ConsentDataStore
 import com.yawnandpawn.app.data.settings.InstallIdDataStore
 import com.yawnandpawn.app.data.settings.PriceCacheDataStore
 import com.yawnandpawn.app.data.settings.ReliabilityDataStore
@@ -118,6 +121,8 @@ class BackupRulesCoverageTest {
         assertIs<Outcome.Success<*>>(runBlocking { koin.get<PriceCacheStore>().update { aPriceSnapshot() } })
         // The reliability checklist's records (Story 5.3 review fix 14), in their own DataStore, never backed up.
         assertIs<Outcome.Success<*>>(runBlocking { koin.get<ReliabilityRecords>().lockedTestPassed(dismissedAt) })
+        // The usage stats choice (Story 5.6), in its own DataStore, never backed up.
+        assertIs<Outcome.Success<*>>(runBlocking { koin.get<ConsentStore>().setConsent(true) })
         // Close the databases and the DataStore, as when the process ends, so their files are final.
         stopApp()
 
@@ -131,11 +136,40 @@ class BackupRulesCoverageTest {
             InstallIdDataStore.installIdFile(app.app),
             PriceCacheDataStore.priceCacheFile(app.app),
             ReliabilityDataStore.reliabilityFile(app.app),
+            ConsentDataStore.consentFile(app.app),
         ).forEach { expected ->
             assertTrue(files.any { it.first == expected.canonicalFile }, "the morning created $expected; found $names")
         }
 
         assertEquals(emptyList(), storage.uncovered(), "files no backup rule names (found $names)")
+    }
+
+    /**
+     * Story 5.6 review fix 5 (DEFAULT TAKEN, owner can change: consent is per install): a phone restored from a backup
+     * gets only the files the cloud backup includes, so a user who said yes on the old phone starts with stats off.
+     */
+    @Test
+    fun `usage stats consent is off and not asked after a restore, while the backed-up settings come back`() {
+        val app = WakeApp()
+        runBlocking { app.engine.restore() }
+        assertIs<Outcome.Success<*>>(runBlocking { app.koin.get<ConsentStore>().setConsent(true) })
+        assertIs<Outcome.Success<*>>(runBlocking { app.koin.get<SetBaseFee>()(3) })
+        stopApp()
+
+        AppStorage(app.app).keepOnlyBackedUp("cloud-backup")
+        val restored = WakeApp()
+
+        assertEquals(
+            AnalyticsConsent(consent = false, asked = false),
+            runBlocking {
+                restored.koin
+                    .get<ConsentStore>()
+                    .observe()
+                    .first()
+            },
+        )
+        assertTrue(SettingsDataStore.settingsFile(app.app).isFile, "the backed-up settings were restored")
+        assertFalse(ConsentDataStore.consentFile(app.app).exists())
     }
 
     @Test
@@ -210,6 +244,19 @@ class BackupRulesCoverageTest {
                 }.distinct()
                 .filter { file -> neverBackedUp.none { file.startsWith(it) } }
                 .map { file -> file to locate(file).let { (domain, path) -> "$domain/$path" } }
+
+        /**
+         * A restore onto a new phone: deletes every file [section] does not include (or explicitly excludes), so only
+         * what that backup carries is left.
+         */
+        fun keepOnlyBackedUp(section: String) {
+            val sectionRules = rules.filter { it.section == section }
+            files()
+                .filterNot { (_, name) ->
+                    sectionRules.any { it.kind == "include" && it.matches(name) } &&
+                        sectionRules.none { it.kind == "exclude" && it.matches(name) }
+                }.forEach { (file, _) -> file.delete() }
+        }
 
         /** "section: domain/path" for every file a section neither includes nor excludes. */
         fun uncovered(): List<String> =

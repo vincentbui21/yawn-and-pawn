@@ -9,6 +9,8 @@ import android.os.Looper
 import androidx.test.core.app.ApplicationProvider
 import com.google.firebase.FirebaseApp
 import com.yawnandpawn.app.StopAppRule
+import com.yawnandpawn.app.android.telemetry.AnalyticsSink
+import com.yawnandpawn.app.android.telemetry.RecordingAnalyticsSink
 import com.yawnandpawn.app.android.wake.NoOpCrashReporter
 import com.yawnandpawn.app.core.crash.CrashReporter
 import com.yawnandpawn.app.core.log.LogEvent
@@ -204,6 +206,45 @@ class CrashReportingTest {
         shadowOf(Looper.getMainLooper()).idle()
 
         assertTrue(locked.ready.value)
+    }
+
+    @Test
+    fun `the start turns Analytics collection off right after initializing, before ready turns true (Story 5-6 fix 4)`() {
+        val order = mutableListOf<String>()
+        lateinit var startup: FirebaseStartup
+        val sink =
+            object : AnalyticsSink by RecordingAnalyticsSink() {
+                override fun setCollectionEnabled(enabled: Boolean) {
+                    order += "collection $enabled, ready ${startup.ready.value}"
+                }
+            }
+        startup =
+            FirebaseStartup(context, logger, analytics = sink, configured = { true }, unlocked = { true }, initialize = { order += "init" })
+
+        startup.start()
+
+        assertEquals(listOf("init", "collection false, ready false"), order)
+        assertTrue(startup.ready.value)
+        assertTrue(startup.startedCollectionOff)
+        assertTrue(logger.events.isEmpty(), "${logger.events}")
+    }
+
+    @Test
+    fun `a failing collection off is logged, Firebase still starts, and the consent gate is told to turn it off itself`() {
+        val failing = RecordingAnalyticsSink().apply { failure = IllegalStateException("not initialized") }
+        val startup = FirebaseStartup(context, logger, analytics = failing, configured = { true }, unlocked = { true }, initialize = {})
+
+        startup.start()
+
+        assertTrue(startup.ready.value)
+        assertFalse(startup.startedCollectionOff)
+        assertEquals(listOf<LogEvent>(LogEvent.OperationFailed("turn usage stats collection off", "IllegalStateException")), logger.events)
+
+        val notReady = RecordingAnalyticsSink(isReady = false)
+        val unready = FirebaseStartup(context, logger, analytics = notReady, configured = { true }, unlocked = { true }, initialize = {})
+        unready.start()
+        assertEquals(emptyList(), notReady.calls)
+        assertFalse(unready.startedCollectionOff)
     }
 
     @Test

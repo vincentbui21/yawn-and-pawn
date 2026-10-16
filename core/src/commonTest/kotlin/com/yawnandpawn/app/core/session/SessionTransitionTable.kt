@@ -307,6 +307,47 @@ internal val ROW_CASES: Map<String, List<RowExample>> =
                             ),
                     )
                 },
+                testConfig().let { editorValues ->
+                    // Story 5.3 review: before the first unlock counts as locked even with no keyguard showing, and the
+                    // ring runs the Direct Boot plan (here a marker plan, so its use shows).
+                    val config = editorValues.copy(testMode = true, testStartedLocked = true)
+                    RowExample(
+                        name = "a fire before the first unlock freezes a locked test and runs the Direct Boot plan",
+                        from = Idle,
+                        event = SessionEvent.TestAlarmFired(SESSION_ID, editorValues, beforeFirstUnlock = true),
+                        now = N,
+                        keyguardLocked = false,
+                        reducer =
+                            SessionReducer(
+                                StubAvailability(SnoozeAvailability.Available(OFFER)),
+                                StubCheck(StepResult.ValidLast),
+                                StubFallback(FallbackDecision.Allowed(FALLBACK_PLAN)),
+                                directBootPlan = { TWO_STEPS },
+                            ),
+                        expected =
+                            Transition(
+                                Ringing(
+                                    SessionData(
+                                        sessionId = SESSION_ID,
+                                        config = config,
+                                        ringIndex = 1,
+                                        snoozesGranted = 0,
+                                        checkRun = CheckRun(TWO_STEPS, ringSeeds(1, 2)),
+                                        firstRing = N,
+                                        startedBeforeUnlock = true,
+                                        beforeFirstUnlock = true,
+                                        directBootRing = true,
+                                        interactionDeadline = Deadline.after(N, 30.minutes),
+                                    ),
+                                ),
+                                listOf(
+                                    SessionEffect.StartWakeRuntime(SESSION_ID),
+                                    heartbeatAt(N),
+                                    SessionEffect.RecordSessionStart(SESSION_ID, config),
+                                ),
+                            ),
+                    )
+                },
             ),
         "R03 Ringing|Grace|Loud+SlotFired" to
             ringStates().map { from ->

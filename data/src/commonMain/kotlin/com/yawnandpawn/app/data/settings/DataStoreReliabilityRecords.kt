@@ -18,7 +18,8 @@ import kotlin.coroutines.cancellation.CancellationException
 import kotlin.time.Instant
 
 /**
- * [ReliabilityRecords] in the settings DataStore (device-protected, AD-6, Story 5.3): the rows seen OK under
+ * [ReliabilityRecords] in their own device-protected DataStore (AD-6, Story 5.3; `ReliabilityDataStore`, never backed
+ * up, review fix 14): the rows seen OK under
  * [LAST_OK] (row names; a name this version does not know is skipped), when a locked test passed under
  * [LOCKED_TEST_PASSED_AT] (epoch millis) and the maker confirmation under [MAKER] and [FINGERPRINT] (both or none).
  * Every storage error, a read included, is a `StorageFailure`; `EvaluateReliability` then writes nothing.

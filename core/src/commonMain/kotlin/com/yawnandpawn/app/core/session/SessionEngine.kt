@@ -4,7 +4,7 @@ import com.yawnandpawn.app.core.error.DomainError
 import com.yawnandpawn.app.core.error.Outcome
 import com.yawnandpawn.app.core.log.LogEvent
 import com.yawnandpawn.app.core.log.Logger
-import com.yawnandpawn.app.core.reliability.LockedTestRecorder
+import com.yawnandpawn.app.core.reliability.LockedTestReporter
 import com.yawnandpawn.app.core.time.BootCounter
 import com.yawnandpawn.app.core.time.Clock
 import com.yawnandpawn.app.core.time.MonotonicClock
@@ -43,9 +43,10 @@ import kotlin.coroutines.cancellation.CancellationException
  * session goes Idle and its `runtime.db` row is cleared by that commit. When it fails, the failure is logged, the
  * state stays Completed or Missed, and the next [dispatch], [tick] or [restore] writes it again.
  *
- * A test ring that started locked ([SessionConfig.testStartedLocked]) and reaches Completed is reported once to
- * [LockedTestRecorder] (Story 5.3, the checklist's locked-screen test), after that step's commit and effects; a failure
- * there is logged and never touches the session.
+ * A test ring that started locked ([SessionConfig.testStartedLocked]) and that the user completed is reported once to
+ * the [LockedTestReporter] (Story 5.3, the checklist's locked-screen test), after that step's commit and effects. The
+ * report never suspends, so the engine's lock never waits for its storage write (review fix 11); a test the wake service
+ * ends for a real alarm ([testPreempted]) is not reported (review fix 10).
  *
  * Nothing is reduced before the stored session is loaded: [dispatch] and [tick] first run the [restore] step if it has
  * not succeeded yet, and return its failure if the store cannot be read (the next call tries again). Expected failures
@@ -63,7 +64,7 @@ class SessionEngine internal constructor(
     private val due: (SessionState, TimeSnapshot) -> List<SessionEvent>,
     private val userLock: UserLockState = UserLockState.Unlocked,
     private val unlock: UnlockPort = UnlockPort.Unlocked,
-    private val lockedTest: LockedTestRecorder = LockedTestRecorder.None,
+    private val lockedTest: LockedTestReporter = LockedTestReporter.None,
 ) {
     constructor(
         reducer: SessionReducer,
@@ -76,7 +77,7 @@ class SessionEngine internal constructor(
         logger: Logger,
         userLock: UserLockState = UserLockState.Unlocked,
         unlock: UnlockPort = UnlockPort.Unlocked,
-        lockedTest: LockedTestRecorder = LockedTestRecorder.None,
+        lockedTest: LockedTestReporter = LockedTestReporter.None,
     ) : this(reducer, store, effects, recorder, clock, monotonicClock, bootCounter, logger, ::dueEvents, userLock, unlock, lockedTest)
 
     private val mutex = Mutex()
@@ -112,6 +113,13 @@ class SessionEngine internal constructor(
      * memory only, never stored; null until a session ends.
      */
     val ended: StateFlow<SessionState.Active?> = endedFlag.asStateFlow()
+
+    /**
+     * The wake service is about to end the ringing test [sessionId] for a real alarm (Story 1.18): it answers the check
+     * for the user, so that Completed never passes the checklist's locked-screen test (Story 5.3 review fix 10). Called
+     * with the session id; a property (not a function) only because detekt caps the engine's function count.
+     */
+    val testPreempted: (sessionId: String) -> Unit = keyguard::preempt
 
     /** Runs [event] through the reducer, commits, runs its effects, then any follow-up events now due. Returns the state. */
     suspend fun dispatch(event: SessionEvent): Outcome<SessionState, DomainError> =
@@ -261,7 +269,8 @@ class SessionEngine internal constructor(
                 oneShot.filterIsInstance<SessionEffect.RecordSessionStart>().forEach { start ->
                     guarded(start) { history.recordStart(start, transition.state) }
                 }
-                // Story 5.3: after the commit, so a kill before the write loses the pass (the user rings another test).
+                // Story 5.3: after the commit, so a kill before the write loses the pass (the user rings another test). The
+                // write runs outside the lock (review fix 11).
                 keyguard.afterStep(from, next, now)
                 Outcome.Success(now)
             }

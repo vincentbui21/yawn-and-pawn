@@ -269,9 +269,67 @@ class ReliabilityChecklistTest {
         }
 
     @Test
-    fun `the no-op recorder records nothing and succeeds`() =
+    fun `unreadable alarms hide the Camera row and keep it among the rows seen OK, with nothing written (review item 9)`() =
         runTest {
-            assertEquals(Outcome.Success(Unit), LockedTestRecorder.None.lockedTestPassed(at))
+            val seenOk = setOf(ChecklistRow.Notifications, ChecklistRow.FullScreenAlarm, ChecklistRow.DoNotDisturb, ChecklistRow.Battery)
+            val records = Records(StoredReliability(lastOk = seenOk + ChecklistRow.Camera))
+            val brokenAlarms = Checks(failure = IllegalStateException("db"))
+
+            val rows = EvaluateReliability({ ok }, { api34 }, brokenAlarms, records, Logs())()
+
+            assertEquals(RowStatus.Hidden, rows.statusOf(ChecklistRow.Camera))
+            assertEquals(seenOk + ChecklistRow.Camera, records.stored.lastOk)
+            assertEquals(0, records.saves)
+        }
+
+    /**
+     * Review item 15 pins today's Revoked rules (DEFAULT TAKEN, owner can change; listed in the spec): a Hidden row keeps
+     * its old membership, so it comes back Revoked when it shows again failing; Revoked stays until the row is OK; and a
+     * records read that fails shows the locked test as NeedsFix ("Fix") although a pass may be stored.
+     */
+    @Test
+    fun `the Revoked rules, row by row`() =
+        runTest {
+            /** [row] on [device] with [status], [wasOk] or not before: the [expected] status, and whether it stays [kept]. */
+            data class Case(
+                val name: String,
+                val status: ReliabilityStatus,
+                val device: DeviceInfo,
+                val row: ChecklistRow,
+                val wasOk: Boolean,
+                val expected: RowStatus,
+                val kept: Boolean,
+            )
+            val api31 = api34.copy(sdkInt = 31)
+            val exact = ChecklistRow.ExactAlarms
+            val dnd = ChecklistRow.DoNotDisturb
+            val exactOff = ok.copy(exactAlarmsAllowed = false)
+            val dndOff = ok.copy(dndAllowsAlarms = false)
+            listOf(
+                Case("Hidden keeps its OK membership", exactOff, api34, exact, true, RowStatus.Hidden, true),
+                Case("Hidden never seen OK stays out", ok, api34, exact, false, RowStatus.Hidden, false),
+                Case("shown again and failing is Revoked", exactOff, api31, exact, true, RowStatus.Revoked, true),
+                Case("Revoked stays Revoked", dndOff, api34, dnd, true, RowStatus.Revoked, true),
+                Case("fixed is OK again", ok, api34, dnd, true, RowStatus.Ok, true),
+                Case("never seen OK is NeedsFix", dndOff, api34, dnd, false, RowStatus.NeedsFix, false),
+            ).forEach { case ->
+                val lastOk = if (case.wasOk) setOf(case.row) else emptySet()
+                val rows = ReliabilityChecklist.evaluate(case.status, emptyList(), case.device, none.copy(lastOk = lastOk))
+                assertEquals(case.expected, rows.statusOf(case.row), case.name)
+                assertEquals(case.kept, case.row in ReliabilityChecklist.lastOkAfter(rows, lastOk), case.name)
+            }
+
+            val passed = Records(StoredReliability(lockedTestPassedAt = at))
+            val unreadable = Records(passed.stored, readFailure = DomainError.StorageFailure("disk"))
+            val lockedTest = { records: Records ->
+                EvaluateReliability({ ok }, { api34 }, Checks(), records, Logs())
+            }
+            assertEquals(RowStatus.Ok, lockedTest(passed)().statusOf(ChecklistRow.LockedScreenTest))
+            assertEquals(
+                RowStatus.NeedsFix,
+                lockedTest(unreadable)().statusOf(ChecklistRow.LockedScreenTest),
+                "a records read error shows the locked test as Fix",
+            )
         }
 
     private class Records(

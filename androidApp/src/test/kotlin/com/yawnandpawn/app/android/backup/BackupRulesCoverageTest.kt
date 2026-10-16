@@ -24,6 +24,7 @@ import com.yawnandpawn.app.core.config.SettingValue
 import com.yawnandpawn.app.core.error.Outcome
 import com.yawnandpawn.app.core.history.MissedNoteDismissals
 import com.yawnandpawn.app.core.history.SessionHistoryRepository
+import com.yawnandpawn.app.core.reliability.ReliabilityRecords
 import com.yawnandpawn.app.core.session.ScheduleTestAlarm
 import com.yawnandpawn.app.core.session.SessionEvent
 import com.yawnandpawn.app.core.session.SessionState
@@ -34,6 +35,7 @@ import com.yawnandpawn.app.data.db.appDatabaseFile
 import com.yawnandpawn.app.data.db.runtimeDatabaseFile
 import com.yawnandpawn.app.data.settings.InstallIdDataStore
 import com.yawnandpawn.app.data.settings.PriceCacheDataStore
+import com.yawnandpawn.app.data.settings.ReliabilityDataStore
 import com.yawnandpawn.app.data.settings.SettingsDataStore
 import com.yawnandpawn.app.stopApp
 import com.yawnandpawn.app.testing.aPriceSnapshot
@@ -114,6 +116,8 @@ class BackupRulesCoverageTest {
         assertIs<Outcome.Success<*>>(runBlocking { koin.get<InstallIdProvider>().installId() })
         // The cached Play prices (Story 4.3), as a refresh stores them, in their own DataStore.
         assertIs<Outcome.Success<*>>(runBlocking { koin.get<PriceCacheStore>().update { aPriceSnapshot() } })
+        // The reliability checklist's records (Story 5.3 review fix 14), in their own DataStore, never backed up.
+        assertIs<Outcome.Success<*>>(runBlocking { koin.get<ReliabilityRecords>().lockedTestPassed(dismissedAt) })
         // Close the databases and the DataStore, as when the process ends, so their files are final.
         stopApp()
 
@@ -126,6 +130,7 @@ class BackupRulesCoverageTest {
             SettingsDataStore.settingsFile(app.app),
             InstallIdDataStore.installIdFile(app.app),
             PriceCacheDataStore.priceCacheFile(app.app),
+            ReliabilityDataStore.reliabilityFile(app.app),
         ).forEach { expected ->
             assertTrue(files.any { it.first == expected.canonicalFile }, "the morning created $expected; found $names")
         }

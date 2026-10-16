@@ -91,16 +91,11 @@ data class StoredReliability(
 )
 
 /**
- * Port: records that a test alarm rung with the phone locked was completed. `SessionEngine` calls it once, on the
- * transition into Completed of such a test (Story 5.3).
+ * Port: records that a test alarm rung with the phone locked was completed (Story 5.3). `SessionEngine` never calls it
+ * itself: it reports the pass to a [LockedTestReporter], which runs this write outside the engine's lock.
  */
 interface LockedTestRecorder {
     suspend fun lockedTestPassed(at: Instant): Outcome<Unit, DomainError>
-
-    /** Records nothing (tests and engines without the checklist). */
-    object None : LockedTestRecorder {
-        override suspend fun lockedTestPassed(at: Instant): Outcome<Unit, DomainError> = Outcome.Success(Unit)
-    }
 }
 
 /** Port: the [StoredReliability] in the device-protected settings DataStore. Storage errors are `StorageFailure`, never thrown. */

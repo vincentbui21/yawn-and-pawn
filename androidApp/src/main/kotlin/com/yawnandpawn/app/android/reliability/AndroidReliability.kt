@@ -35,18 +35,28 @@ import com.yawnandpawn.app.core.reliability.ReliabilityStatus
  *   below need no grant.
  *
  * Story 5.3 adds, each read only on the API level that has it (below it the value is the good one):
- * - Do Not Disturb: `NotificationManager.getCurrentInterruptionFilter()`; total silence blocks alarms, "alarms only"
- *   lets them through, and otherwise on API 28+ the policy (`getNotificationPolicy()`, no permission needed; a scheduled
- *   rule's too) must have the alarms category. No policy counts as allowed;
+ * - Do Not Disturb: `NotificationManager.getCurrentInterruptionFilter()` decides alone when it is total silence
+ *   (blocks alarms) or "alarms only" (lets them through), whatever the policy says. Otherwise (DND off, or priority
+ *   only) on API 28+ the policy must have the alarms category; no policy counts as allowed. Known limit (review fix
+ *   13): `getNotificationPolicy()` needs no permission but returns only the default policy, the one manual DND and a
+ *   schedule rule without its own policy use (on API 35+ this app's own, which it never sets). A schedule rule with its
+ *   own `ZenPolicy` (API 29+) or a mode with its own policy (API 35+) is invisible without `ACCESS_NOTIFICATION_POLICY`,
+ *   which the app never asks for: such a rule that blocks alarms reads as allowed, and one that allows them while the
+ *   default policy does not reads as blocked;
  * - battery: `PowerManager.isIgnoringBatteryOptimizations`, `ActivityManager.isBackgroundRestricted()` (API 28+) and
  *   the standby bucket `STANDBY_BUCKET_RESTRICTED` (API 30+, `UsageStatsManager.getAppStandbyBucket()`, the app's own);
  * - camera: `checkSelfPermission(CAMERA)`.
+ *
+ * The probe runs when Home starts and resumes, so a Story 5.3 read that throws (a missing service, an OEM's
+ * SecurityException) never crashes Home: it is logged and counts as the good value (review fix 12), because a "Fix"
+ * the user cannot clear is worse than a value the probe cannot read. The Story 1.19 reads are unchanged.
  */
 class AndroidReliabilityProbe(
     private val context: Context,
     private val sdkInt: Int = Build.VERSION.SDK_INT,
     /** The API 34+ full-screen intent grant; a seam because Robolectric has no shadow for it. */
     private val canUseFullScreenIntent: () -> Boolean = { platformCanUseFullScreenIntent(context) },
+    private val logger: Logger = Logger {},
 ) : ReliabilityProbe {
     @SuppressLint("NewApi", "InlinedApi") // Each call is behind its own SDK check (sdkInt is injectable for tests).
     override fun check(): ReliabilityStatus =
@@ -56,22 +66,47 @@ class AndroidReliabilityProbe(
             exactAlarmsAllowed =
                 sdkInt !in Build.VERSION_CODES.S..Build.VERSION_CODES.S_V2 ||
                     context.getSystemService(AlarmManager::class.java).canScheduleExactAlarms(),
-            dndAllowsAlarms = dndAllowsAlarms(),
+            dndAllowsAlarms = guarded("Do Not Disturb", good = true) { dndAllowsAlarms() },
             batteryOptimizationIgnored =
-                context.getSystemService(PowerManager::class.java).isIgnoringBatteryOptimizations(context.packageName),
+                guarded("battery optimisation", good = true) {
+                    context.getSystemService(PowerManager::class.java).isIgnoringBatteryOptimizations(context.packageName)
+                },
             backgroundRestricted =
-                sdkInt >= Build.VERSION_CODES.P && context.getSystemService(ActivityManager::class.java).isBackgroundRestricted,
-            standbyBucketRestricted = sdkInt >= Build.VERSION_CODES.R && standbyBucket() == UsageStatsManager.STANDBY_BUCKET_RESTRICTED,
-            cameraGranted = context.checkSelfPermission(Manifest.permission.CAMERA) == PackageManager.PERMISSION_GRANTED,
+                sdkInt >= Build.VERSION_CODES.P &&
+                    guarded("background restriction", good = false) {
+                        context.getSystemService(ActivityManager::class.java).isBackgroundRestricted
+                    },
+            standbyBucketRestricted =
+                sdkInt >= Build.VERSION_CODES.R &&
+                    guarded("standby bucket", good = false) { standbyBucket() == UsageStatsManager.STANDBY_BUCKET_RESTRICTED },
+            cameraGranted =
+                guarded("camera permission", good = true) {
+                    context.checkSelfPermission(Manifest.permission.CAMERA) == PackageManager.PERMISSION_GRANTED
+                },
         )
+
+    /** [read], or [good] (logged) when the platform throws: a phone's broken service never crashes Home. */
+    @Suppress("TooGenericExceptionCaught") // Any platform failure: a SecurityException, a null service, a dead system.
+    private inline fun guarded(
+        what: String,
+        good: Boolean,
+        read: () -> Boolean,
+    ): Boolean =
+        try {
+            read()
+        } catch (e: RuntimeException) {
+            logger.log(LogEvent.OperationFailed("read $what", e::class.simpleName.orEmpty()))
+            good
+        }
 
     /** The app's own standby bucket (no permission needed for its own); read on API 30+ only. */
     @SuppressLint("NewApi")
     private fun standbyBucket(): Int = context.getSystemService(UsageStatsManager::class.java).appStandbyBucket
 
     /**
-     * Alarms get through Do Not Disturb: not total silence, and "alarms only" always lets them through. Otherwise (off or
-     * priority only) on API 28+ the policy needs the alarms category: a scheduled rule uses it when it starts. Below 28 a
+     * Alarms get through Do Not Disturb. The interruption filter decides alone when DND is total silence (false) or
+     * "alarms only" (true). Otherwise (off or priority only) on API 28+ the default policy needs the alarms category: a
+     * manual DND and a schedule rule without its own policy use it (the class KDoc lists what it cannot see). Below 28 a
      * priority mode always let alarms through.
      */
     @SuppressLint("NewApi") // PRIORITY_CATEGORY_ALARMS is read on API 28+ only.

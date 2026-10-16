@@ -1,21 +1,20 @@
 package com.yawnandpawn.app.core.session
 
-import com.yawnandpawn.app.core.error.Outcome
 import com.yawnandpawn.app.core.log.LogEvent
 import com.yawnandpawn.app.core.log.Logger
-import com.yawnandpawn.app.core.reliability.LockedTestRecorder
+import com.yawnandpawn.app.core.reliability.LockedTestReporter
 import com.yawnandpawn.app.core.time.TimeSnapshot
-import kotlin.coroutines.cancellation.CancellationException
+import kotlinx.coroutines.flow.MutableStateFlow
 import kotlin.time.Instant
 
 /**
  * [SessionEngine]'s keyguard: it reads [UnlockPort.isKeyguardLocked] for the steps that need it and reports a completed
- * locked test to the [LockedTestRecorder] (Story 5.3). Only the engine uses it, inside its Mutex. Failures are logged and
- * never thrown.
+ * locked test to the [LockedTestReporter] (Story 5.3). Only the engine uses it, inside its Mutex (except [preempt]).
+ * Failures are logged and never thrown.
  */
 internal class EngineKeyguard(
     private val unlock: UnlockPort,
-    private val lockedTest: LockedTestRecorder,
+    private val reporter: LockedTestReporter,
     private val logger: Logger,
 ) {
     /**
@@ -42,29 +41,33 @@ internal class EngineKeyguard(
             }
         }
 
+    /** The test the wake service is ending for a real alarm ([preempt]); its Completed is not the user's. */
+    private val preempted = MutableStateFlow<String?>(null)
+
+    /**
+     * The wake service ends the test [sessionId] for a real alarm (Story 1.18) by answering its check for the user, so
+     * its Completed never passes the locked-screen test (Story 5.3 review fix 10).
+     */
+    fun preempt(sessionId: String) {
+        preempted.value = sessionId
+    }
+
     /**
      * A committed step from [from] to [next] at [now]: on the step into Completed of a test that started locked
-     * ([SessionConfig.testStartedLocked]) the pass is recorded, once. A failed or throwing record is logged only.
+     * ([SessionConfig.testStartedLocked]) and that the user completed (not [preempt]ed), the pass is reported, once.
+     * The report never suspends ([LockedTestReporter]): the engine's lock is never held for the write (review fix 11).
+     * A reporter that throws is logged only.
      */
-    @Suppress("TooGenericExceptionCaught")
-    suspend fun afterStep(
+    fun afterStep(
         from: SessionState,
         next: SessionState,
         now: TimeSnapshot,
     ) {
-        val completedLockedTest = (next as? SessionState.Completed)?.session?.config?.let { it.testMode && it.testStartedLocked } == true
-        if (from is SessionState.Completed || !completedLockedTest) return
-        try {
-            val recorded = lockedTest.lockedTestPassed(Instant.fromEpochMilliseconds(now.wallMillis))
-            if (recorded is Outcome.Failure) logger.log(LogEvent.OperationFailed.of(RECORD, recorded.error))
-        } catch (e: CancellationException) {
-            throw e
-        } catch (e: Throwable) {
-            logger.log(LogEvent.OperationFailed(RECORD, e::class.simpleName ?: "Throwable"))
+        val session = (next as? SessionState.Completed)?.session ?: return
+        val lockedTest = session.config.testMode && session.config.testStartedLocked
+        if (from is SessionState.Completed || !lockedTest || session.sessionId == preempted.value) return
+        runCatching { reporter.lockedTestPassed(Instant.fromEpochMilliseconds(now.wallMillis)) }.onFailure { e ->
+            logger.log(LogEvent.OperationFailed(LockedTestReporter.RECORD, e::class.simpleName ?: "Throwable"))
         }
-    }
-
-    private companion object {
-        const val RECORD = "record locked test"
     }
 }

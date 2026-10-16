@@ -22,40 +22,40 @@ import kotlin.test.assertEquals
 import kotlin.test.assertIs
 import kotlin.time.Instant
 
-/** Story 5.3: the reliability checklist's records in the device-protected settings DataStore. */
+/** Story 5.3: the reliability checklist's records in their own device-protected DataStore (review fix 14). */
 @RunWith(RobolectricTestRunner::class)
 class DataStoreReliabilityRecordsTest {
     private val context = ApplicationProvider.getApplicationContext<Context>()
-    private var settings = SettingsDataStore(context)
+    private var dataStore = ReliabilityDataStore(context)
     private val passedAt = Instant.parse("2027-03-03T06:00:00Z")
     private val maker = MakerConfirmation("Maker", "build-1")
 
     @After
-    fun tearDown() = settings.close()
+    fun tearDown() = dataStore.close()
 
     @Test
     fun `nothing at first, then every record is kept and survives a new DataStore`() =
         runTest {
-            val records = DataStoreReliabilityRecords(settings.store)
+            val records = DataStoreReliabilityRecords(dataStore.store)
             assertEquals(Outcome.Success(StoredReliability()), records.read())
 
             assertEquals(Outcome.Success(Unit), records.saveLastOk(setOf(ChecklistRow.Battery, ChecklistRow.DoNotDisturb)))
             assertEquals(Outcome.Success(Unit), records.lockedTestPassed(passedAt))
             assertEquals(Outcome.Success(Unit), records.confirmMaker(maker))
-            settings.close()
+            dataStore.close()
 
-            settings = SettingsDataStore(context)
+            dataStore = ReliabilityDataStore(context)
 
             assertEquals(
                 Outcome.Success(StoredReliability(setOf(ChecklistRow.Battery, ChecklistRow.DoNotDisturb), passedAt, maker)),
-                DataStoreReliabilityRecords(settings.store).read(),
+                DataStoreReliabilityRecords(dataStore.store).read(),
             )
         }
 
     @Test
     fun `saving the rows replaces them, and a later pass and confirmation replace the earlier ones`() =
         runTest {
-            val records = DataStoreReliabilityRecords(settings.store)
+            val records = DataStoreReliabilityRecords(dataStore.store)
             records.saveLastOk(setOf(ChecklistRow.Battery))
             records.saveLastOk(emptySet())
             records.lockedTestPassed(passedAt)
@@ -72,11 +72,11 @@ class DataStoreReliabilityRecordsTest {
     @Test
     fun `stored keys are the documented ones, an unknown row is skipped and half a confirmation is none`() =
         runTest {
-            settings.store.edit {
+            dataStore.store.edit {
                 it[DataStoreReliabilityRecords.LAST_OK] = setOf("Battery", "Teleporter")
                 it[DataStoreReliabilityRecords.MAKER] = "Maker"
             }
-            val records = DataStoreReliabilityRecords(settings.store)
+            val records = DataStoreReliabilityRecords(dataStore.store)
 
             assertEquals(Outcome.Success(StoredReliability(lastOk = setOf(ChecklistRow.Battery))), records.read())
             assertEquals("reliability_last_ok", DataStoreReliabilityRecords.LAST_OK.name)

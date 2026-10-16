@@ -1,5 +1,6 @@
 package com.yawnandpawn.app.android.wake
 
+import android.app.KeyguardManager
 import android.app.NotificationManager
 import android.os.Looper
 import android.view.accessibility.AccessibilityManager
@@ -26,6 +27,8 @@ import com.yawnandpawn.app.core.checks.Difficulty
 import com.yawnandpawn.app.core.error.DomainError
 import com.yawnandpawn.app.core.error.Outcome
 import com.yawnandpawn.app.core.history.SessionOutcome
+import com.yawnandpawn.app.core.reliability.ReliabilityRecords
+import com.yawnandpawn.app.core.reliability.StoredReliability
 import com.yawnandpawn.app.core.session.ScheduleTestAlarm
 import com.yawnandpawn.app.core.session.SessionEvent
 import com.yawnandpawn.app.core.session.SessionState
@@ -36,6 +39,7 @@ import com.yawnandpawn.app.testing.FakeTestAlarmStore
 import com.yawnandpawn.app.testing.aRegisteredCode
 import com.yawnandpawn.app.testing.aSessionConfig
 import com.yawnandpawn.app.testing.anAlarm
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.runBlocking
 import kotlinx.datetime.LocalTime
 import org.junit.Rule
@@ -45,6 +49,7 @@ import org.robolectric.RobolectricTestRunner
 import org.robolectric.Shadows.shadowOf
 import org.robolectric.annotation.Config
 import org.robolectric.annotation.GraphicsMode
+import org.robolectric.shadows.ShadowKeyguardManager
 import kotlin.test.assertEquals
 import kotlin.test.assertIs
 import kotlin.test.assertNotNull
@@ -270,6 +275,41 @@ class TestAlarmFlowTest {
         assertTrue(app.player.sound != null, "the real alarm rings")
         // Story 2.9 keeps this Story 1.18 rule over the AC's "merged like any other": a real morning is never logged as Test.
         assertEquals(emptyList(), history.merges, "no merge row: the real alarm got its own session")
+    }
+
+    /**
+     * Story 5.3 review fix 10: the service answers a test for the user when a real alarm preempts it, so a test that rang
+     * locked and ends that way never passes the checklist's locked-screen test.
+     */
+    @Test
+    fun `a locked test ended by a real alarm never passes the locked-screen test`() {
+        val app = app()
+        val keyguard = shadowOf(app.app.getSystemService(KeyguardManager::class.java))
+        try {
+            keyguard.setKeyguardLocked(true)
+            val alarm = anAlarm(id = "alarm-a", requestCode = 1000)
+            assertEquals(Outcome.Success(Unit), runBlocking { app.koin.get<AlarmRepository>().upsert(alarm) })
+            testAlarms.pending = aSessionConfig(label = "test", testMode = true)
+            val controller = app.startService(WakeService.intent(app.app, WakeService.ACTION_TEST))
+            app.awaitRinging()
+            val test = app.engine.state.value as SessionState.Ringing
+            assertTrue(test.session.config.testStartedLocked, "the test rang with the keyguard showing")
+
+            val fired = AlarmFired(alarm.id, Instant.parse("2027-03-08T06:00:00Z"))
+            controller.withIntent(WakeService.alarmIntent(app.app, fired)).startCommand(0, 2)
+            app.awaitUntil("the real session rings") {
+                (app.engine.state.value as? SessionState.Ringing)?.session?.config?.testMode == false
+            }
+            assertEquals(SessionOutcome.Test, history.rows.single { it.sessionId == test.session.sessionId }.outcome)
+            val appWork = assertNotNull(app.koin.get<ApplicationScope>().coroutineContext[Job])
+            app.awaitUntil("the app's background work is done") { appWork.children.none { it.isActive } }
+
+            val stored = runBlocking { app.koin.get<ReliabilityRecords>().read() }
+            assertNull(assertIs<Outcome.Success<StoredReliability>>(stored).value.lockedTestPassedAt)
+            controller.destroy()
+        } finally {
+            ShadowKeyguardManager.reset()
+        }
     }
 
     @Test

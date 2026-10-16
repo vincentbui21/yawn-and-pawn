@@ -17,7 +17,7 @@ import org.koin.dsl.module
  */
 fun reliabilityModule(): Module =
     module {
-        single<ReliabilityProbe> { AndroidReliabilityProbe(androidContext()) }
+        single<ReliabilityProbe> { AndroidReliabilityProbe(androidContext(), logger = get()) }
         single<ReliabilitySettings> { AndroidReliabilitySettings(androidContext(), get()) }
         single { AndroidNotificationPermission(androidContext(), get()) }
         single<NotificationPermission> { get<AndroidNotificationPermission>() }

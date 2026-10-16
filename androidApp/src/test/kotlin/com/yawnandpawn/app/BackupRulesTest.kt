@@ -7,6 +7,7 @@ import com.yawnandpawn.app.data.db.AppDatabase
 import com.yawnandpawn.app.data.db.RuntimeDatabase
 import com.yawnandpawn.app.data.settings.InstallIdDataStore
 import com.yawnandpawn.app.data.settings.PriceCacheDataStore
+import com.yawnandpawn.app.data.settings.ReliabilityDataStore
 import com.yawnandpawn.app.data.settings.SettingsDataStore
 import org.junit.After
 import org.junit.Test
@@ -36,6 +37,7 @@ class BackupRulesTest {
     private val runtimeDb = RuntimeDatabase.FILE_NAME
     private val settings = "datastore/${SettingsDataStore.FILE_NAME}"
     private val installId = "datastore/${InstallIdDataStore.FILE_NAME}"
+    private val reliability = "datastore/${ReliabilityDataStore.FILE_NAME}"
 
     /** The entries every section must hold, in this order: kind, domain, path. */
     private val sectionEntries =
@@ -59,6 +61,8 @@ class BackupRulesTest {
             Triple("exclude", "device_file", installId),
             // The cached Play prices (Story 4.3): in the phone's Play currency, never restored onto another phone.
             Triple("exclude", "device_file", "datastore/${PriceCacheDataStore.FILE_NAME}"),
+            // The reliability checklist's records (Story 5.3 review fix 14): true of this phone only, never restored.
+            Triple("exclude", "device_file", reliability),
             Triple("exclude", "root", "."),
             Triple("exclude", "file", "."),
             Triple("exclude", "database", "."),
@@ -115,6 +119,17 @@ class BackupRulesTest {
             all.filter { it.kind == "exclude" && it.domain == "device_file" && it.path == installId }.map { it.section }.toSet(),
         )
         assertFalse(all.any { it.kind == "include" && it.path.contains("install_id") })
+    }
+
+    @Test
+    fun `the reliability records are excluded from cloud backup, device transfer and full backup, and never included`() {
+        val all = backupRules(context, R.xml.data_extraction_rules) + backupRules(context, R.xml.backup_rules)
+
+        assertEquals(
+            setOf("cloud-backup", "device-transfer", "full-backup-content"),
+            all.filter { it.kind == "exclude" && it.domain == "device_file" && it.path == reliability }.map { it.section }.toSet(),
+        )
+        assertFalse(all.any { it.kind == "include" && it.path.contains("reliability") })
     }
 
     @Test

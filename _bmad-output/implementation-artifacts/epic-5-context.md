@@ -87,3 +87,8 @@ A new user is guided through setup in 8 onboarding steps: mission, alarm behavio
   - 5.9 ends in onboarding (5.10+), or the empty Home before that exists.
   - 5.12 sets `lockedTestPassedAt` using 5.3.
 - **Closed test (5.14)** needs Stories 4.18 and 5.13 passed or explicitly waived.
+
+## Notes from implemented stories
+
+- **Story 5.13 checklist line (from the 5.3 review, fix 13):** on the Oppo A96, check the DND row against a ColorOS schedule rule (Bedtime/Sleep mode) that has its own "alarms" setting. Turn alarms off in that rule only, leave manual DND allowing alarms, and record whether the checklist still shows DND as OK while the rule would block the alarm. The app reads only the default DND policy; a rule's own policy is invisible without `ACCESS_NOTIFICATION_POLICY`, which stays off the allowlist.
+- **Story 5.12 open question (from the 5.3 review, item 16):** a phone with no screen lock never shows the keyguard, so its test can never tick the locked-screen row. A test rung with the screen on and unlocked counts as unlocked too. The owner decides in 5.12 whether such a phone passes with any completed test or is told to set a screen lock.

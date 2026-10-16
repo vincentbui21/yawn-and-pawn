@@ -17,8 +17,8 @@ enum class ReliabilityItem {
  * checklist reads ([ReliabilityChecklist]); each defaults to its good value, the one a phone below the API level that has
  * the setting always reads.
  *
- * @property dndAllowsAlarms Do Not Disturb lets alarms through: not total silence, and on API 28+ the policy (a scheduled
- * rule included) has the alarms category.
+ * @property dndAllowsAlarms Do Not Disturb lets alarms through: not total silence, and unless it is "alarms only", on API
+ * 28+ the default policy has the alarms category (a schedule rule or mode with its own policy is not seen, Story 5.3).
  * @property batteryOptimizationIgnored the app is exempt from battery optimisation (Doze).
  * @property backgroundRestricted the user restricted the app's background work (API 28+).
  * @property standbyBucketRestricted the app sits in the restricted standby bucket (API 30+).

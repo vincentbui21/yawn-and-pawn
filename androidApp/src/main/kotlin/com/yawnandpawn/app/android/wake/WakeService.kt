@@ -354,10 +354,12 @@ class WakeService :
      * user only here: a test never charges and the real alarm needs the wake screen. Returns the state after: Idle, or
      * the test still ringing when a step could not be saved (the real alarm then merges into it, so it still rings).
      * It answers only in Grace or Loud, and stops as soon as an answer does not move the check on: a failed "I'm up"
-     * (still Ringing) or a failed answer sends nothing more (Story 3.2 review).
+     * (still Ringing) or a failed answer sends nothing more (Story 3.2 review). The engine is told first, so a test that
+     * rang locked and ends this way never passes the checklist's locked-screen test (Story 5.3 review fix 10).
      */
     private suspend fun endTestSession(test: SessionState.Ring): SessionState {
         logger.log(LogEvent.OperationFailed("finish test session", "a real alarm rang; the test ends as Test"))
+        engine.testPreempted(test.session.sessionId)
         if (test is SessionState.Ringing) engine.dispatch(SessionEvent.ImUpTapped)
         var answers = 0
         var run = engine.state.value.checkingRun()

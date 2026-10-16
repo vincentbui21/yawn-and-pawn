@@ -58,7 +58,8 @@ class SitePagesTest {
             "terms.md" to
                 page(
                     "/terms/",
-                    "# Terms\n\n${SitePagesRules.Q17_START}\n<!-- TODO(Q17): write it -->\nPlaceholder.\n${SitePagesRules.Q17_END}\n",
+                    "# Terms\n\n${SitePagesRules.Q17_START}\n{% comment %} TODO(Q17): write it {% endcomment %}\nPlaceholder.\n" +
+                        "${SitePagesRules.Q17_END}\n",
                 ),
             "support.md" to page("/support/", "# Support\n\nEmail <$email>.\n"),
             "payments.md" to
@@ -99,6 +100,15 @@ class SitePagesTest {
         val text = page("/privacy/", privacyBody.replace("## Backup\n", "## Backups\n"))
 
         assertEquals(listOf("privacy.md: missing heading '## Backup'"), violations(with("privacy.md", text)))
+    }
+
+    @Test
+    fun `heading missing - privacy without the security or retention section fails naming it`() {
+        listOf("Keeping your data safe", "How long data is kept").forEach { heading ->
+            val text = page("/privacy/", privacyBody.replace("## $heading\n", "## Other\n"))
+
+            assertEquals(listOf("privacy.md: missing heading '## $heading'"), violations(with("privacy.md", text)))
+        }
     }
 
     @Test
@@ -145,6 +155,31 @@ class SitePagesTest {
         )
         val fine = "$support\nThe elevator and the backup copy are fine. Prices are in USD, $1.\n"
         assertEquals(emptyList(), violations(with("support.md", fine)))
+    }
+
+    @Test
+    fun `copy rule - every md file of the site is checked, not only the required pages`() {
+        val site = folder.newFolder("site")
+        validFiles.forEach { (name, text) -> File(site, name).writeText(text) }
+        File(site, "faq.md").writeText(page("/faq/", "# FAQ\n\nOne $emDash two.\n"))
+        File(site, "notes").mkdirs()
+        File(site, "notes/old.md").writeText("Seamless TODO.\n")
+        File(site, "notes/readme.txt").writeText("Seamless, not a page.\n")
+
+        val files = SiteFiles.read(site)
+
+        assertEquals(validFiles.keys + setOf("faq.md", "notes/old.md"), files.keys)
+        assertEquals(
+            listOf(
+                "faq.md: em dash (use a period, comma or '·')",
+                "notes/old.md: TODO outside the marked Q17 placeholder",
+                "notes/old.md: banned word 'Seamless'",
+            ),
+            violations(files).sorted(),
+        )
+        val missing = SiteFiles.read(File(folder.root, "nothing-here"))
+        assertEquals(SitePagesRules.REQUIRED_FILES.toSet(), missing.keys)
+        assertTrue(missing.values.all { it == null })
     }
 
     @Test
@@ -202,6 +237,28 @@ class SitePagesTest {
         assertEquals(
             mapOf("url" to "https://a.b", "baseurl" to ""),
             SiteText.yaml(listOf("url: 'https://a.b'", "baseurl: \"\"", "  nested: no")),
+        )
+    }
+
+    @Test
+    fun `yaml parsing - a quoted value with a trailing comment keeps only the text inside the quotes`() {
+        assertEquals(
+            mapOf(
+                "url" to "https://a.b",
+                "baseurl" to "/x",
+                "title" to "A # B",
+                "plain" to "value",
+                "empty" to "",
+            ),
+            SiteText.yaml(
+                listOf(
+                    "url: \"https://a.b\" # the site",
+                    "baseurl: '/x'   # the repo",
+                    "title: \"A # B\"",
+                    "plain: value # note",
+                    "empty: # nothing",
+                ),
+            ),
         )
     }
 

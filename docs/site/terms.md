@@ -3,13 +3,13 @@ title: Terms of use
 permalink: /terms/
 ---
 
-<!-- Draft for the owner to review; not legal advice. The Q17 placeholder below still needs its final wording. -->
+{% comment %} Draft for the owner to review; not legal advice. The Q17 placeholder below still needs its final wording. {% endcomment %}
 
 # Terms of use
 
 **Effective date:** 15 October 2026
 
-These terms apply when you use Yawn & Pawn ("the app"), an alarm clock for Android made by an independent developer ("we", "us"). By using the app, you agree to them. If you don't agree, please don't use the app.
+These terms apply when you use Yawn & Pawn ("the app"), an alarm clock for Android published on Google Play by the developer Yawn & Pawn ("we", "us"). By using the app, you agree to them. If you don't agree, please don't use the app.
 
 ## What the app does
 
@@ -61,10 +61,10 @@ The app is for adults (18 and over). We recommend turning on purchase authentica
 
 ## EU and UK right of withdrawal
 
-<!-- Q17-PLACEHOLDER-START -->
-<!-- TODO(Q17): the owner or a legal reviewer writes the EU/UK right-of-withdrawal wording for snoozes, which are delivered at once, then removes these markers. -->
+{% comment %} Q17-PLACEHOLDER-START {% endcomment %}
+{% comment %} TODO(Q17): the owner or a legal reviewer writes the EU/UK right-of-withdrawal wording for snoozes, which are delivered at once, then removes these markers. {% endcomment %}
 **Placeholder:** the wording about the EU and UK right of withdrawal is still being reviewed. On EU accounts, Google Play shows its own "Review and agree" screen before each purchase.
-<!-- Q17-PLACEHOLDER-END -->
+{% comment %} Q17-PLACEHOLDER-END {% endcomment %}
 
 ## Changes to these terms
 

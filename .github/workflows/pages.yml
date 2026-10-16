@@ -2,8 +2,12 @@
 # the official Pages actions. checkSitePages runs first and must pass before anything deploys. ci.yml skips docs-only
 # changes, so pull requests that touch the site run that check here (and only the check).
 #
-# Owner action, once: Settings > Pages > Build and deployment > Source: "GitHub Actions". Until then configure-pages
-# fails on main. The site is https://vincentbui21.github.io/yawn-and-pawn/.
+# Nothing is built or deployed until the repository variable PAGES_LIVE is "true" (Settings > Secrets and variables >
+# Actions > Variables). The pages describe features of Stories 5.6, 5.8 and 5.9 that aren't built yet, so the owner
+# sets PAGES_LIVE only after those are merged and the pages are re-read. Until then only the check runs.
+#
+# Owner action, once: Settings > Pages > Build and deployment > Source: "GitHub Actions", then PAGES_LIVE=true.
+# The site is https://vincentbui21.github.io/yawn-and-pawn/.
 name: Pages
 
 on:
@@ -51,9 +55,12 @@ jobs:
   build:
     name: Build the site
     needs: check
-    if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
+    if: vars.PAGES_LIVE == 'true' && github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     timeout-minutes: 15
+    permissions:
+      contents: read
+      pages: read
     steps:
       - name: Check out
         uses: actions/checkout@v7
@@ -75,7 +82,7 @@ jobs:
   deploy:
     name: Deploy to GitHub Pages
     needs: build
-    if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
+    if: vars.PAGES_LIVE == 'true' && github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     timeout-minutes: 15
     permissions:

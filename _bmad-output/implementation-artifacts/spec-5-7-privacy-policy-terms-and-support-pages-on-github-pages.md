@@ -21,7 +21,7 @@ deferred: []
 
 **Approach:**
 - **Pages:** `docs/site/` holds `index.md`, `privacy.md`, `terms.md`, `support.md` and `payments.md` in plain Markdown with a minimal Jekyll `_config.yml`. Each page sets a `permalink` (`/privacy/`, `/terms/`, `/support/`, `/payments/`), so the URLs never depend on Jekyll's `.html` default.
-- **Publishing:** `.github/workflows/pages.yml` uses the official Pages actions (`configure-pages`, `jekyll-build-pages` with `source: ./docs/site`, `upload-pages-artifact`, `deploy-pages`). It deploys on pushes to `main` that touch `docs/site/**`, `config/app-links.properties` or the workflow, and on `workflow_dispatch`. Its first job runs `./gradlew checkSitePages`, and on pull requests that touch the same paths it runs only that check. This covers the CI gap, because `ci.yml` ignores `docs/**` and `**/*.md`.
+- **Publishing:** `.github/workflows/pages.yml` uses the official Pages actions (`configure-pages`, `jekyll-build-pages` with `source: ./docs/site`, `upload-pages-artifact`, `deploy-pages`). It deploys on pushes to `main` that touch `docs/site/**`, `config/app-links.properties` or the workflow, and on `workflow_dispatch`. Its first job runs `./gradlew checkSitePages`, and on pull requests that touch the same paths it runs only that check. The build and deploy jobs also need the repository variable `PAGES_LIVE` set to `true` (owner action 1). This covers the CI gap, because `ci.yml` ignores `docs/**` and `**/*.md`.
 - **Check:** `checkSitePages`, a new build-logic plugin `yawnandpawn.site-pages` on the root project, is added to `qualityGate`. Its rules are pure (`SitePagesRules`) and unit-tested.
 - **Links:** `config/app-links.properties` gains `privacy.url`, `terms.url` and `support.url`, next to the existing `support.email`. The build turns them into `BuildConfig` fields, and the app gets them in `AppLinks`.
 
@@ -47,13 +47,13 @@ deferred: []
 3. **The analytics events:** with consent on, Story 5.6 leaves Firebase's automatic events (`first_open`, `session_start`, `app_remove`) on. So `privacy.md` names the three app events plus these automatic open, session and uninstall events. It does not say "only three events".
 4. **Google's diagnostics:** Play Billing, Crashlytics and ML Kit can send diagnostic logs to Google. Each section where this applies says so.
 5. **Effective date:** 15 October 2026. The owner updates it when the pages go live.
-6. **Who runs the app:** the pages say "an independent developer". They give no name and no postal address (the EU DSA trader details are an Epic 8 launch blocker).
-7. **Q17:** the visible placeholder in `terms.md` says the EU/UK right-of-withdrawal wording is still being reviewed. The `TODO` sits inside `<!-- Q17-PLACEHOLDER-START -->` and `<!-- Q17-PLACEHOLDER-END -->`, the only place `checkSitePages` allows it.
+6. **Who runs the app (DEFAULT TAKEN in review, owner can change):** the pages name the developer "Yawn & Pawn", the developer name on the Play Console account (`docs/project-status.md`), because Play expects the policy to name the entity on the listing. They give no personal name and no postal address (the EU DSA trader details are an Epic 8 launch blocker).
+7. **Q17:** the visible placeholder in `terms.md` says the EU/UK right-of-withdrawal wording is still being reviewed. The `TODO` sits inside `{% comment %} Q17-PLACEHOLDER-START {% endcomment %}` and `{% comment %} Q17-PLACEHOLDER-END {% endcomment %}`, the only place `checkSitePages` allows it. The notes on the pages are Liquid comments, so Jekyll leaves them out of the published HTML.
 8. **Theme:** the default GitHub Pages theme (Primer), with no custom layout. These are text pages, not app screens, so no design review comes first.
 9. **The Google backup copy:** one sentence tells the user how to remove the copy kept in their Google account.
 10. **Mirroring:** `checkSitePages` also fails if `payments.md` is missing an in-app sentence. It checks each mirrored key from `strings.xml` (everything on the Payments screen except `payments_cap_body`), word for word after normalising whitespace. This makes "mirrors the in-app text" testable.
 11. **The link check:** `checkSitePages` fails unless each `*.url` equals the `_config.yml` `url` + `baseurl` + the page's `permalink`, and unless `support.md` and `privacy.md` contain `support.email`.
-12. **Deferred items:** `deferred-work.md` assigns none to 5.7. One is added (item 2, for 5.8).
+12. **Deferred items:** `deferred-work.md` assigns none to 5.7. One is added (item 2, for 5.8). The review adds a second, not assigned to a story: cleaning the messages of fatal crash reports.
 
 ## I/O & Edge-Case Matrix
 
@@ -101,21 +101,28 @@ deferred: []
 - `_bmad-output/implementation-artifacts/deferred-work.md` -- add the cap-wording item, assigned to Story 5.8.
 
 **Acceptance Criteria:**
-- Given `docs/site/`, when the pages are read, then `privacy.md` has the headings Data on your phone, Backup, Crash reports, Usage stats, Payments, Camera and microphone, Deleting your data and Contact, and covers every point in the epic AC list. `terms.md` covers B × N, the $50 cap, max snoozes, the commitment lock, Google handling payments and refunds, pending and unused payments, no ringing guarantee and the marked Q17 placeholder. `support.md` has the email plus refunds, pending, unused and reliability answers. `payments.md` mirrors the in-app text.
+- Given `docs/site/`, when the pages are read, then `privacy.md` has the headings Data on your phone, Backup, Crash reports, Usage stats, Payments, Camera and microphone, Keeping your data safe, How long data is kept, Deleting your data and Contact, and covers every point in the epic AC list. `terms.md` covers B × N, the $50 cap, max snoozes, the commitment lock, Google handling payments and refunds, pending and unused payments, no ringing guarantee and the marked Q17 placeholder. `support.md` has the email plus refunds, pending, unused and reliability answers. `payments.md` mirrors the in-app text.
 - Given `./gradlew checkSitePages`, when any row of the matrix is broken, then it fails with the reason. With the committed files, it passes.
 - Given the app build, when `AndroidExternalLinksTest` runs, then `BuildConfig.PRIVACY_URL`, `TERMS_URL`, `SUPPORT_URL` and `SUPPORT_EMAIL` equal the properties file.
-- Given a push to `main` that touches `docs/site/**`, when `pages.yml` runs and Pages is enabled, then the check passes before the site deploys.
+- Given a push to `main` that touches `docs/site/**`, when `pages.yml` runs, Pages is enabled and the repository variable `PAGES_LIVE` is `true`, then the check passes before the site deploys. Without `PAGES_LIVE`, only the check runs.
 
 ## Owner actions
 
-1. **Enable GitHub Pages:** open https://github.com/vincentbui21/yawn-and-pawn, then go to **Settings** › **Pages** (left sidebar, under "Code and automation"). Under **Build and deployment** › **Source**, choose **GitHub Actions**. There is nothing to save beyond that choice. Then go to **Actions** › **Pages** › **Run workflow** on `main`, or wait for the next push to `docs/site/`. Until Pages is enabled, the `configure-pages` step fails on `main`. The site appears at https://vincentbui21.github.io/yawn-and-pawn/.
+1. **Enable GitHub Pages, then set `PAGES_LIVE=true` only after 5.6, 5.8 and 5.9 are merged and the pages are re-read:**
+   - Open https://github.com/vincentbui21/yawn-and-pawn, then go to **Settings** › **Pages** (left sidebar, under "Code and automation"). Under **Build and deployment** › **Source**, choose **GitHub Actions**. There is nothing to save beyond that choice.
+   - Wait until Stories 5.6 (usage stats), 5.8 (the You tab) and 5.9 ("Delete all data") are merged, and re-read the pages against the app (action 2). The pages describe those features, so publishing earlier would make claims the app doesn't meet yet.
+   - Then go to **Settings** › **Secrets and variables** › **Actions** › **Variables** › **New repository variable**, name `PAGES_LIVE`, value `true`. Then go to **Actions** › **Pages** › **Run workflow** on `main`, or wait for the next push to `docs/site/`.
+   - Until `PAGES_LIVE` is `true`, `pages.yml` runs only `checkSitePages` and skips the build and deploy jobs, so `main` stays green before Pages is enabled. The site appears at https://vincentbui21.github.io/yawn-and-pawn/.
 2. **Review the text:** read all five pages against the app (draft for the owner to review; not legal advice). Check the statements about features that aren't built yet: 5.6 analytics, 5.9 "Delete all data" and Epic 7 photos and recordings. Check the effective date, the support address (a personal Gmail address, published) and Q17. Record the live URLs and the date under "Owner verification" below.
    The statements written to the specified behaviour of stories not built yet (re-check each against the app):
    - **5.6 usage stats** (`privacy.md` "Usage stats"): off until yes, asked once in setup and changeable in Settings; the three app events plus Firebase's first-open, session-start and app-removed events; device facts and an approximate country from the network; no advertising ID, ad storage off; test alarms and pre-consent events never sent; turning it off deletes the on-phone analytics data and id. Also "Delete all data" turning stats off (`privacy.md` "Deleting your data").
    - **5.9 Delete all data** (`privacy.md` "Deleting your data"): You › "Delete all data" deletes alarms, history, purchase records, settings, photos and recordings, deletes unsent crash reports, makes a new install id, keeps only what an unfinished Play payment needs, and is unavailable while an alarm rings or is snoozed.
    - **Epic 7 photos and recordings** (`privacy.md` "Data on your phone", "Backup", "Camera and microphone"): House Hunt reference photos and motivation recordings stay on the phone, are not backed up, are never uploaded; the stop-the-alarm photo is compared on the phone; the microphone is used only while recording; custom sounds are a reference only and not backed up.
    - **5.1 and 5.4** (`privacy.md` settings list mentions the theme; `support.md` "My alarm didn't ring" names the reliability checklist in Settings and its items).
+   - **5.6 usage-stats wording added in review** (`privacy.md` "Usage stats", "How long data is kept"): stats are linked only to Firebase's random analytics id; the approximate location is country, region and city, worked out from the network address and not kept; Google Analytics keeps id-linked stats for 2 months. The 2 months is the Google Analytics default setting, because the code sets no retention (5.6 isn't built). Confirm it in Firebase › Analytics › Data retention once 5.6 is live, and change the page if the setting differs.
    - Other facts to confirm: Crashlytics keeps reports 90 days (Google's documented retention); unused payments are refunded "after about three days"; Google Play's "Request a refund" label in order history; the Google Drive path "Storage, then Backups" for removing the backup copy.
+   - **The developer name** "Yawn & Pawn" on `privacy.md` and `terms.md` (DEFAULT TAKEN, decision 6): keep it equal to the developer name on the Play listing.
+   - **Crash reports** (`privacy.md` "Crash reports"): the page says a crash that closes the app is reported as it happened, with its error messages. The follow-up that would clean those too is in `deferred-work.md`; update the page if it ships.
 3. **Approve the cap wording fix** for Story 5.8 (deferred item).
 
 ## Spec Change Log
@@ -131,6 +138,27 @@ Verdicts: high 0, medium 2, low 1, false 0, maybe-false 0.
 | 1 | medium | patch | `privacy.md` short version said "Nothing you do in the app is sent to us", but crash reports and opted-in usage stats reach the developer's Firebase project. | Now "Your alarms, history and payments are never sent to us." |
 | 2 | medium | patch | `privacy.md` said "we never sell or share your data", but the data goes to Google as a processor (Crashlytics, Analytics, Billing), which a reader can count as sharing. | Now "we never sell your data or use it for advertising." |
 | 3 | low | patch | "Test alarms send nothing": with consent on, Firebase's automatic events can still fire while a test alarm runs; only the app events are skipped (5.6 default). | Now "Test alarms send no app events". |
+
+## Review (fast mode)
+
+2026-10-16. One combined reviewer on PR #66 (head a86c5efa, main e203f4aa). Verdicts: high 2, medium 4, low 4. All 10 were patched. Each changed sentence was checked against the code on `origin/main`.
+
+| # | Verdict | Finding | Fix |
+|---|---------|---------|-----|
+| 1 | high | `privacy.md` "Crash reports" said every error message is removed, but only `FirebaseCrashReporter.report()` cleans an exception. Crashlytics' own handler uploads a crash that closes the app (and ANRs) with its messages and device state. | The page says the app cleans the errors it reports itself, and that a crash that closes the app is reported as it happened, with device state such as free memory and storage. `deferred-work.md` gets the follow-up: a default `UncaughtExceptionHandler` that passes on the cleaned exception. |
+| 2 | high | The pages describe features not built yet (5.6 usage stats, 5.8 the You tab, 5.9 "Delete all data", 5.1 theme, 5.4 checklist), and the next push to `main` would publish them. | `pages.yml` builds and deploys only when `vars.PAGES_LIVE == 'true'`, on `main`, and not on a pull request. Owner action 1 now says to set it only after 5.6, 5.8 and 5.9 are merged and the pages are re-read. This also keeps `main` green before Pages is enabled. |
+| 3 | medium | "The only things that leave it" left out Google's SDK diagnostics. | Adds that Google's libraries (the barcode scanner, Play Billing and crash reporting) can send Google their own diagnostic logs. |
+| 4 | medium | Overpromises: "anonymous stats", "an approximate country", "never collects ... location". | Stats are "linked only to a random analytics id that Firebase makes (not to you)"; the location is "country, region and city" worked out from the network address and not kept; the app "never asks for" name, email or contacts and has no location permission, "so it never knows your precise location". |
+| 5 | medium | "An independent developer" doesn't name the entity on the Play listing. | DEFAULT TAKEN (owner can change): `privacy.md` and `terms.md` name the developer "Yawn & Pawn", the Play Console developer name. `support.md` says "We are a small developer". No personal name or address (decision 6). |
+| 6 | medium | No security or retention section. | Adds "## Keeping your data safe" (encrypted connections through Google's libraries and Android's default block on unencrypted traffic at targetSdk 36; app-private storage, nothing in shared storage; `app.db` holds only the SHA-256 of a purchase token, `PurchaseRecords.kt`) and "## How long data is kept" (phone data until deleted or uninstalled, except the morning in progress, payment attempts after 7 days (`PurchaseIntent.RETENTION`) and a settled token after 30 days (`PurchaseLedger.SETTLED_RETENTION`); Crashlytics 90 days; Google Analytics' default 2 months, for the owner to confirm). Both headings are in `PRIVACY_HEADINGS`, with a test. |
+| 7 | low | HTML comments are published in the page source. | The notes and the Q17 markers are Liquid `{% comment %}` blocks; `Q17_START` and `Q17_END` changed to match. |
+| 8 | low | The build job inherited only `contents: read`. | It sets `contents: read` and `pages: read` (for `configure-pages`). |
+| 9 | low | The copy and TODO rules read only `REQUIRED_FILES`. | `SiteFiles.read` adds every `*.md` under `docs/site/`, by relative path, with a test. |
+| 10 | low | `SiteText.unquote` kept the quotes of `"x" # comment`. | A quoted value keeps only the text inside its quotes, and a bare `# comment` value is empty, with a test. |
+
+Found while checking item 6 (patched): `privacy.md` said the app keeps "the text of the code you registered" for a QR/Barcode check. The app keeps only a SHA-256 fingerprint of it (`RegisteredCode`, `CheckConfigEntity.codeValue`). Both sentences now say "fingerprint".
+
+Verification on 2026-10-16, all with `--no-daemon --max-workers=2`, all passed: `checkSitePages`, `:build-logic:test --tests '*SitePages*'` (14 tests), `spotlessCheck` and `detekt`.
 
 Checked and kept: the terms match PRD §6.2 (8-hour lock, weakening changes) and the stranded reuse offer ("Use it", FR-RNG-10). The backup lists match `data_extraction_rules.xml`. All four official Pages action tags exist (`configure-pages@v6`, `jekyll-build-pages@v1`, `upload-pages-artifact@v5`, `deploy-pages@v5`). The only `AppLinks(` constructors are the Koin binding and `ProblemWithChargeViewModelTest`.
 

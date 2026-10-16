@@ -16,6 +16,7 @@ import org.gradle.api.tasks.PathSensitivity
 import org.gradle.api.tasks.TaskAction
 import org.w3c.dom.Element
 import org.xml.sax.InputSource
+import java.io.File
 import java.io.StringReader
 import java.util.Properties
 import javax.xml.parsers.DocumentBuilderFactory
@@ -25,7 +26,8 @@ const val CHECK_SITE_PAGES = "checkSitePages"
 /**
  * What [SitePagesRules] checks: the texts of the published site and the app's links and strings.
  *
- * @property files every file of [SitePagesRules.REQUIRED_FILES] by name; null when the file is missing.
+ * @property files every file of [SitePagesRules.REQUIRED_FILES] by name (null when the file is missing), plus every other
+ *   `*.md` file of the site by its path relative to the site folder ([SiteFiles.read]).
  * @property appLinks the keys of `config/app-links.properties`.
  * @property appStrings the app's Compose strings by key (`strings.xml`).
  * @property mirroredKeys the keys whose text `payments.md` must contain word for word.
@@ -42,7 +44,7 @@ data class SiteInput(
  * app. Pure rules; the task only reads the files.
  *
  * It fails when a page or `_config.yml` is missing, `privacy.md` lacks a required heading, "TODO" appears outside the
- * marked Q17 placeholder in `terms.md` (or a marker is unpaired or elsewhere), a page breaks a copy rule (em dash, banned
+ * marked Q17 placeholder in `terms.md` (or a marker is unpaired or elsewhere), any `*.md` page breaks a copy rule (em dash, banned
  * hype words, "backup check"), a `*.url` link is not the config's `url` + `baseurl` + the page's permalink, a page has no
  * permalink, the support address is missing from `support.md` or `privacy.md`, or `payments.md` lacks an in-app
  * sentence it mirrors. The currency rule of the app's CopyRules is not applied: the terms state USD tiers.
@@ -59,6 +61,8 @@ object SitePagesRules {
             "Usage stats",
             "Payments",
             "Camera and microphone",
+            "Keeping your data safe",
+            "How long data is kept",
             "Deleting your data",
             "Contact",
         )
@@ -69,8 +73,10 @@ object SitePagesRules {
     /** The pages that must show the support address. */
     val EMAIL_PAGES: List<String> = listOf("support.md", "privacy.md")
     const val SUPPORT_EMAIL = "support.email"
-    const val Q17_START = "<!-- Q17-PLACEHOLDER-START -->"
-    const val Q17_END = "<!-- Q17-PLACEHOLDER-END -->"
+
+    /** Liquid comments, so the published page never shows them (an HTML comment would stay in the page source). */
+    const val Q17_START = "{% comment %} Q17-PLACEHOLDER-START {% endcomment %}"
+    const val Q17_END = "{% comment %} Q17-PLACEHOLDER-END {% endcomment %}"
     private const val Q17_PAGE = "terms.md"
     private const val URL_SUFFIX = ".url"
     private const val EM_DASH_CODE = 0x2014
@@ -260,11 +266,19 @@ object SiteText {
             .associate { it.getAttribute("name") to unescape(it.textContent) }
     }
 
-    private fun unquote(value: String): String =
-        when {
-            value.length >= 2 && value.first() == value.last() && value.first() in "\"'" -> value.substring(1, value.length - 1)
+    /**
+     * A quoted value without its quotes (what follows the closing quote, such as ` # comment`, is dropped), else the
+     * value before a ` #` comment.
+     */
+    private fun unquote(value: String): String {
+        val quote = value.firstOrNull()
+        val close = if (quote == '"' || quote == '\'') value.indexOf(quote, startIndex = 1) else -1
+        return when {
+            close > 0 -> value.substring(1, close)
+            value.startsWith("#") -> ""
             else -> value.substringBefore(" #").trim()
         }
+    }
 
     private fun unescape(text: String): String =
         text
@@ -275,6 +289,24 @@ object SiteText {
 
     /** The text without a byte order mark and with LF line endings. */
     fun normalized(text: String): String = text.removePrefix(BYTE_ORDER_MARK).replace("\r\n", "\n")
+}
+
+/** Reading the site folder for [SitePagesRules]. */
+object SiteFiles {
+    /**
+     * Every [SitePagesRules.REQUIRED_FILES] entry by name (null when it is missing) and every other `*.md` file under [dir]
+     * by its `/`-separated path relative to [dir], so the copy and TODO rules cover every page Jekyll can publish.
+     */
+    fun read(dir: File): Map<String, String?> {
+        val required =
+            SitePagesRules.REQUIRED_FILES.associateWith { name -> dir.resolve(name).takeIf { it.isFile }?.readText(Charsets.UTF_8) }
+        val pages =
+            dir
+                .walkTopDown()
+                .filter { it.isFile && it.extension == "md" }
+                .associate { it.relativeTo(dir).invariantSeparatorsPath to it.readText(Charsets.UTF_8) }
+        return required + pages
+    }
 }
 
 /** Checks the site pages against the rules and the app, and fails with every problem it finds. */
@@ -301,7 +333,7 @@ abstract class CheckSitePagesTask : DefaultTask() {
     @TaskAction
     fun check() {
         val dir = siteDir.get().asFile
-        val files = SitePagesRules.REQUIRED_FILES.associateWith { name -> dir.resolve(name).takeIf { it.isFile }?.readText(Charsets.UTF_8) }
+        val files = SiteFiles.read(dir)
         val links =
             Properties()
                 .apply {

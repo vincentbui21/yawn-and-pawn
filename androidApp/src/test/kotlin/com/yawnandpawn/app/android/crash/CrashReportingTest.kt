@@ -187,6 +187,26 @@ class CrashReportingTest {
     }
 
     @Test
+    fun `ready turns true only once Firebase has started, after the unlock (Story 5-6)`() {
+        val unconfigured = FirebaseStartup(context, logger, configured = { false }, unlocked = { true }, initialize = {})
+        unconfigured.start()
+        assertFalse(unconfigured.ready.value)
+
+        val failing = FirebaseStartup(context, logger, configured = { true }, unlocked = { true }, initialize = { error("no Firebase") })
+        assertFailsWith<IllegalStateException> { failing.start() }
+        assertFalse(failing.ready.value, "not ready when initializing failed")
+
+        val locked = FirebaseStartup(context, logger, configured = { true }, unlocked = { false }, initialize = {})
+        locked.start()
+        assertFalse(locked.ready.value, "not before the first unlock")
+
+        context.sendBroadcast(Intent(Intent.ACTION_USER_UNLOCKED))
+        shadowOf(Looper.getMainLooper()).idle()
+
+        assertTrue(locked.ready.value)
+    }
+
+    @Test
     fun `the merged manifest has no FirebaseInitProvider and turns Analytics collection off`() {
         val packages = context.packageManager
 

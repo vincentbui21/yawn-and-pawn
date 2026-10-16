@@ -9,8 +9,11 @@ import androidx.navigationevent.compose.NavigationBackHandler
 import androidx.navigationevent.compose.rememberNavigationEventState
 import org.koin.compose.viewmodel.koinViewModel
 
-/** The Settings rows built so far (Story 4.5): the Snooze card's base fee and max snoozes. Epic 5 adds the others. */
-val BuiltSettingsRows: Set<SettingsRow> = setOf(SettingsRow.BaseFee, SettingsRow.MaxSnoozes)
+/**
+ * The Settings rows built so far: the Snooze card's base fee and max snoozes (Story 4.5) and the usage stats switch
+ * (Story 5.6). Epic 5 adds the others.
+ */
+val BuiltSettingsRows: Set<SettingsRow> = setOf(SettingsRow.BaseFee, SettingsRow.MaxSnoozes, SettingsRow.UsageStats)
 
 /**
  * The Settings tab route: [SettingsViewModel] (scoped to the nav entry) feeding [SettingsScreen] with [rows]. Until the

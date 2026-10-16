@@ -3,7 +3,7 @@
 # Every `group:artifact` on the resolved :androidApp debug and release runtime classpaths must be
 # listed here, one per line, without a version. `#` starts a comment.
 # Adding a line is a review decision: no analytics, ads or network SDKs beyond what the
-# architecture allows (Play Billing, Firebase Crashlytics). Test-only dependencies never appear here.
+# architecture allows (Play Billing, Firebase Crashlytics, consent-gated Firebase Analytics). Test-only dependencies never appear here.
 # Owner-run tools (tools/play-catalog, Story 4.1) keep their own list with licences in config/tool-dependency-allowlist.txt.
 #
 # Generated from the resolution on 2026-09-26 (Story 1.2) and reviewed: all entries are Kotlin,
@@ -277,6 +277,30 @@ org.jetbrains.kotlin:kotlin-android-extensions-runtime
 org.jetbrains.kotlin:kotlin-parcelize-runtime
 org.jetbrains.kotlin:kotlin-stdlib-jdk7
 org.jetbrains.kotlin:kotlin-stdlib-jdk8
+
+# Firebase Analytics (Story 5.6, AD-15, BoM 34.19.0). Reviewed 2026-10-16. Off until the user turns "Share anonymous usage
+# stats" on: collection is disabled in the manifest and enabled at runtime only with consent, after the first unlock
+# (AnalyticsConsentGate); only three events (session_outcome, snooze_count, check_type), no user id or user property.
+# The measurement SDK and its API shims; play-services-stats; the support libraries it still declares (documentfile,
+# legacy-support-core-utils, localbroadcastmanager, print). play-services-ads-identifier and the Privacy Sandbox
+# ads-adservices libraries come with it: the app removes their merged permissions (AD_ID, ACCESS_ADSERVICES_AD_ID,
+# ACCESS_ADSERVICES_ATTRIBUTION, the install referrer service) with tools:node="remove" and turns ad id, SSAID and every
+# ad consent off in the manifest. To be declared in the Data safety form (Epic 8).
+com.google.firebase:firebase-analytics
+com.google.android.gms:play-services-measurement
+com.google.android.gms:play-services-measurement-api
+com.google.android.gms:play-services-measurement-base
+com.google.android.gms:play-services-measurement-impl
+com.google.android.gms:play-services-measurement-sdk
+com.google.android.gms:play-services-measurement-sdk-api
+com.google.android.gms:play-services-stats
+com.google.android.gms:play-services-ads-identifier
+androidx.privacysandbox.ads:ads-adservices
+androidx.privacysandbox.ads:ads-adservices-java
+androidx.documentfile:documentfile
+androidx.legacy:legacy-support-core-utils
+androidx.localbroadcastmanager:localbroadcastmanager
+androidx.print:print
 
 # CameraX 1.6.2 and bundled ML Kit barcode-scanning 17.3.0 (Story 3.10, the QR/Barcode check; Architecture Stack table).
 # Reviewed 2026-10-06. CameraX (Apache-2.0) shows the viewfinder and hands frames to the analyser; camera-view brings

@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!--
+        The window theme of the app screens (Story 5.1 review): light here, dark in values-night, so the window behind
+        the first Compose frame follows the phone. MainActivity then paints the window background in the stored theme
+        (Settings › Appearance) before its first frame. Wake screens keep the light Theme.Material (Sunrise).
+    -->
+    <style name="Theme.YawnAndPawn" parent="@android:style/Theme.Material.Light.NoActionBar" />
+</resources>

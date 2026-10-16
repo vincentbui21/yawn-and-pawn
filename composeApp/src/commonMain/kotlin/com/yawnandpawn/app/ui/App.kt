@@ -20,7 +20,7 @@ import org.koin.compose.koinInject
  * Root composable of the app screens: the Navigation 3 host in [PpsTheme] with the theme stored in Settings ›
  * Appearance (Story 5.1). The first frame uses the last-known settings, so a restart opens in the chosen theme at once;
  * then every change of the stored theme re-themes the app. System follows the device light/dark setting. Wake screens
- * (`WakeSurface`) always use Sunrise, whatever is chosen. An unreadable store already reads as the defaults (System).
+ * (`WakeSurface`) always use Sunrise, whatever is chosen. An unreadable store reads as the last-known settings.
  */
 @Composable
 fun App(
@@ -36,7 +36,7 @@ fun App(
 }
 
 /**
- * The stored theme on every change. An unreadable store reads as the defaults in `observe()` (System), as every other
- * setting does; anything else that throws ends the flow, and the app keeps the theme it has.
+ * The stored theme on every change. An unreadable store reads as the last-known settings in `observe()`, so a read error
+ * keeps the chosen theme; anything else that throws ends the flow, and the app keeps the theme it has.
  */
 private fun GlobalSettingsRepository.themeModes(): Flow<ThemeMode> = observe().map { it.themeMode }.distinctUntilChanged().catch { }

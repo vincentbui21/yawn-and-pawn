@@ -220,6 +220,50 @@ the approved rows, give a new alarm the stored defaults, and theme the app from 
 - `:androidApp:testDebugUnitTest` for the new and updated UI tests, with Roborazzi record, then verify.
 - `spotlessCheck detekt`.
 
+## Review (fast mode)
+
+The coordinator's independent review of PR #67 had one combined reviewer and no HIGH findings. All 7 items are fixed
+in `fix(5.1): review fixes`, each with its test.
+
+1. **(medium) Queued default saves were dropped on a tab switch.** A tab switch clears the Settings ViewModel, which
+   cancelled the save under way and dropped the queue.
+   - Fix:
+     - The running default or theme save finishes under `NonCancellable`.
+     - A queued default superseded by a newer value of its field is skipped, so a slider drag saves its first and
+       last steps only.
+     - The latest queued value of each field is saved after it in the app scope (`outlivingScope`, Koin
+       `SettingsViewModel.SAVE_SCOPE` → `ApplicationScope`).
+     - Base fee and max snoozes saves keep the Story 4.5 behaviour: dropped and logged.
+   - Test: `SettingsDefaultsViewModelTest`. With the gate closed, 21 to 30 is sent, the ViewModelStore is cleared and
+     the gate opened: 30 is stored, the writes are [21, 30], and nothing is logged as dropped. Without an outliving
+     scope, a left value is logged as dropped and the running save still finishes. The slider and toggle tests now
+     expect the coalesced writes. The deferred-work entry is marked resolved.
+2. **(low) The window theme was always Light,** so Dark on a light phone flashed a light window.
+   - Fix:
+     - A `Theme.YawnAndPawn` window theme, light in `values` and dark in `values-night`. `WakeActivity` keeps the light
+       `Theme.Material`.
+     - `MainActivity` paints the window background with the stored theme's `bg` (the last-known snapshot) before the
+       first frame.
+     - `UiModeManager.setApplicationNightMode` is not used: it recreates the app on every change. So the system splash
+       follows the phone (documented in `MainActivity`).
+   - Test: `ThemeOverrideTest`. With Dark stored on a light phone, the window is the Dark `bg` at once, with no wait,
+     and again after a restart.
+3. **(low) A read error in `observe()` read as the defaults,** so the theme flipped to System.
+   - Fix: `DataStoreGlobalSettings.observe()` now falls back to the last-known settings (else the defaults) on a read
+     error.
+   - Test: `ConfigRepositoriesTest`. With a broken file and Dark last known, the flow reads Dark.
+4. **(low) Test gap.**
+   - Test: `ConfigResolverTest`. A stored alarm (20 s, 9 min, vibration on) keeps its own values under changed defaults
+     (30 / 15 / off).
+5. **(low) The out-of-range test could not fail.**
+   - Fix: it now also asserts that no save failed and that the screen never showed 14, 31 or 7.
+6. **(low) The first-frame tests only proved "eventually Dark".**
+   - Fix: both theme tests check the window colour at once, with no wait. The first-frame test uses a store that never
+     emits, so its Dark can only come from the snapshot.
+7. **(low) The TalkBack path of the slider was not exercised.**
+   - Test: `SnoozeSettingsRouteTest`. `SetProgress(26)` on the real slider stores 26, "26 seconds" is its state
+     description, and the card shows it.
+
 ## Auto Run Result
 
 Status: done (fast mode, one combined review pass; the coordinator runs the independent review and CI).

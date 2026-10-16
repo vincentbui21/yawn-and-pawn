@@ -1,7 +1,9 @@
 package com.yawnandpawn.app.ui
 
 import android.app.Activity
+import android.graphics.drawable.ColorDrawable
 import androidx.compose.runtime.Composable
+import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.test.hasClickAction
 import androidx.compose.ui.test.hasContentDescription
 import androidx.compose.ui.test.hasText
@@ -31,6 +33,7 @@ import com.yawnandpawn.app.testing.FakeTimeZoneProvider
 import com.yawnandpawn.app.ui.theme.PpsColorSet
 import com.yawnandpawn.app.ui.theme.PpsTheme
 import com.yawnandpawn.app.ui.theme.PpsThemeMode
+import com.yawnandpawn.app.ui.theme.colors
 import com.yawnandpawn.app.ui.wake.WakeSurface
 import kotlinx.coroutines.awaitCancellation
 import kotlinx.coroutines.flow.Flow
@@ -96,6 +99,19 @@ class ThemeOverrideTest {
         return light
     }
 
+    /** The window's own background, painted in `onCreate` before the first Compose frame (review fix). */
+    private fun ActivityScenario<MainActivity>.windowColor(): Int? {
+        var color: Int? = null
+        onActivity { activity: Activity -> color = (activity.window.decorView.background as? ColorDrawable)?.color }
+        return color
+    }
+
+    private val darkBg =
+        PpsColorSet.Dark
+            .colors()
+            .bg
+            .toArgb()
+
     private fun ActivityScenario<MainActivity>.awaitDraws(light: Boolean) {
         runCatching { composeRule.waitUntil(timeoutMillis = APP_WORK_TIMEOUT_MILLIS) { drawsLight() == light } }
         assertEquals(light, drawsLight(), if (light) "the Light set" else "the Dark set")
@@ -135,11 +151,14 @@ class ThemeOverrideTest {
         storeTheme(ThemeMode.Dark)
         assertEquals(ThemeMode.Dark, settings().lastKnown()?.settings?.themeMode, "the first frame reads the last-known snapshot")
         ActivityScenario.launch(MainActivity::class.java).use { scenario ->
+            // No wait: the window is Dark before any frame or store read, on this light phone (review fix).
+            assertEquals(darkBg, scenario.windowColor(), "the window behind the first frame")
             waitForText("No alarms yet.")
             scenario.awaitDraws(light = false)
 
             scenario.recreate()
 
+            assertEquals(darkBg, scenario.windowColor(), "the window after the restart, before any frame")
             waitForText("No alarms yet.")
             assertEquals(false, scenario.drawsLight(), "still Dark after the restart")
         }
@@ -156,6 +175,8 @@ class ThemeOverrideTest {
             }
         restartKoin(RuntimeEnvironment.getApplication(), module { single<GlobalSettingsRepository> { silent } })
         ActivityScenario.launch(MainActivity::class.java).use { scenario ->
+            assertEquals(darkBg, scenario.windowColor(), "the window, at once")
+            // The store never emits, so Dark here can only be the first composition's theme from the snapshot.
             scenario.awaitDraws(light = false)
         }
     }

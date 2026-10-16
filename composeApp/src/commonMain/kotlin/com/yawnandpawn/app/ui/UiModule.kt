@@ -10,6 +10,7 @@ import com.yawnandpawn.app.ui.purchases.PurchaseHistoryViewModel
 import com.yawnandpawn.app.ui.settings.DefaultSettingSetters
 import com.yawnandpawn.app.ui.settings.SettingsViewModel
 import org.koin.core.module.dsl.viewModel
+import org.koin.core.qualifier.named
 import org.koin.dsl.module
 
 /**
@@ -35,6 +36,7 @@ val uiModule =
                 moneyFormatter = get(),
                 logger = get(),
                 defaults = DefaultSettingSetters(get(), get(), get(), get()),
+                outlivingScope = get(named(SettingsViewModel.SAVE_SCOPE)),
             )
         }
         viewModel { ProblemWithChargeViewModel(get(), get(), get(), get(), get()) }

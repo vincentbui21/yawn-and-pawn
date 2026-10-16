@@ -45,8 +45,9 @@ import okio.IOException
  * - Every successful [snapshot] and every write keeps the resulting snapshot in [cache] ([lastKnown], review fix 11), so a
  *   fire that cannot read the store in time rings with the last settings, not the weakest defaults.
  *
- * Read errors in the flows behave as in [DataStoreMissedNoteDismissals]: logged, read as the defaults, then read again
- * after a growing pause. A failed one-shot read or write is a `StorageFailure`.
+ * Read errors in the flows behave as in [DataStoreMissedNoteDismissals]: logged, read as the defaults (the settings as
+ * the last-known ones, when there are any), then read again after a growing pause. A failed one-shot read or write is a
+ * `StorageFailure`.
  *
  * One adapter for the keys of one store (the settings, their pending changes, the snapshot of both), hence the many
  * small functions.
@@ -57,7 +58,12 @@ class DataStoreGlobalSettings(
     private val logger: Logger,
     private val cache: SettingsSnapshotCache,
 ) : GlobalSettingsRepository {
-    override fun observe(): Flow<GlobalSettings> = preferences("read global settings").map(::settingsOf)
+    /**
+     * The live settings. A read error is logged and reads as the last-known settings ([lastKnown], else the defaults),
+     * then the store is read again: an unreadable file never flips the chosen theme to System (Story 5.1 review).
+     */
+    override fun observe(): Flow<GlobalSettings> =
+        store.data.map(::settingsOf).retryReads("read global settings") { cache.load()?.settings ?: GlobalSettings() }
 
     override suspend fun get(): Outcome<GlobalSettings, DomainError> = storage { settingsOf(store.data.first()) }
 
@@ -99,11 +105,17 @@ class DataStoreGlobalSettings(
     private suspend fun edit(change: (MutablePreferences) -> Unit): Outcome<Unit, DomainError> =
         storage { cache.save(snapshotOf(store.edit { change(it) })) }
 
-    private fun preferences(operation: String): Flow<Preferences> =
-        store.data.retryWhen { cause, attempt ->
+    private fun preferences(operation: String): Flow<Preferences> = store.data.retryReads(operation) { emptyPreferences() }
+
+    /** On a read error: logged, [fallback] emitted, then read again after a growing pause. */
+    private fun <T> Flow<T>.retryReads(
+        operation: String,
+        fallback: () -> T,
+    ): Flow<T> =
+        retryWhen { cause, attempt ->
             if (cause !is IOException) return@retryWhen false
             logger.log(LogEvent.OperationFailed(operation, cause::class.simpleName.orEmpty()))
-            emit(emptyPreferences())
+            emit(fallback())
             delay(DataStoreMissedNoteDismissals.readRetryDelay(attempt))
             true
         }

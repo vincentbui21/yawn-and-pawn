@@ -321,7 +321,7 @@
 - source_spec: `_bmad-output/implementation-artifacts/spec-5-1-wake-and-snooze-defaults-and-theme-override-in-settings.md`
   summary: Settings saves still queued when the user leaves the Settings tab are dropped and logged. Since Story 5.1 this covers the defaults and the theme too, so a quick tab switch right after a slider drag can lose its last steps.
   evidence: The Settings ViewModel is scoped to the tab's nav entry, which `selectTab` and `openEditor` remove (the Story 1.9 tab-state item above). `onCleared` then drops the queue (the Story 4.5 design). A fix needs saves that outlive the screen, through an app-scoped save path.
-  status: open (medium). Natural home: with the Story 1.9 "keep each tab's saved state" item.
+  status: resolved in the Story 5.1 review fixes for the defaults and the theme. The running save finishes (`NonCancellable`), a value superseded in the queue is skipped, and the latest queued value of each field is saved in the app scope after it (`SettingsViewModel.outlivingScope`). Tested in `SettingsDefaultsViewModelTest`. Base fee and max snoozes saves left on close are still dropped and logged (Story 4.5).
 - source_spec: `_bmad-output/implementation-artifacts/spec-5-1-wake-and-snooze-defaults-and-theme-override-in-settings.md`
   summary: On API 26 to 28 with 3-button navigation, a theme that overrides the system (Dark on a light phone, or Light on a dark one) may draw the navigation icons in the same colour as the scrim behind them.
   evidence: Unverified. `enableEdgeToEdge()` picks the API < 29 navigation scrim from the system night mode, while `SystemBarIcons` sets the icon colour from the app theme. Settle it on an API 28 emulator with 3-button navigation. The owner's Oppo A96 runs API 30 or later.

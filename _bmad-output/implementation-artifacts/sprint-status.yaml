@@ -119,7 +119,7 @@ development_status:
   5-3-full-reliability-probe-do-not-disturb-battery-and-the-locked: backlog
   5-4-reliability-checklist-screen-and-revoked-setting-warnings: backlog
   5-5-manufacturer-background-guidance: backlog
-  5-6-anonymous-usage-stats-off-until-the-user-says-yes: backlog
+  5-6-anonymous-usage-stats-off-until-the-user-says-yes: review  # Epic 5 auto-run, fast mode (lane A)
   5-7-privacy-policy-terms-and-support-pages-on-github-pages: backlog
   5-8-how-payments-refunds-work-privacy-terms-and-support-in-setti: backlog
   5-9-delete-all-data: backlog

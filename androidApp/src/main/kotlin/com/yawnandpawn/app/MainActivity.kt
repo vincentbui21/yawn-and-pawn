@@ -1,11 +1,14 @@
 package com.yawnandpawn.app
 
 import android.Manifest
+import android.content.res.Configuration
+import android.graphics.drawable.ColorDrawable
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.ui.graphics.toArgb
 import androidx.lifecycle.DefaultLifecycleObserver
 import androidx.lifecycle.LifecycleOwner
 import com.yawnandpawn.app.android.ApplicationScope
@@ -15,8 +18,13 @@ import com.yawnandpawn.app.android.screen.forwardToWakeScreenWhileResumed
 import com.yawnandpawn.app.android.wake.WakeRuntime
 import com.yawnandpawn.app.core.billing.PurchaseCoordinator
 import com.yawnandpawn.app.core.billing.ReplayGrantLedger
+import com.yawnandpawn.app.core.config.GlobalSettingsRepository
 import com.yawnandpawn.app.core.session.SessionEngine
+import com.yawnandpawn.app.core.session.ThemeMode
 import com.yawnandpawn.app.ui.App
+import com.yawnandpawn.app.ui.theme.colors
+import com.yawnandpawn.app.ui.theme.resolveColorSet
+import com.yawnandpawn.app.ui.theme.toPps
 import kotlinx.coroutines.launch
 import org.koin.android.ext.android.inject
 
@@ -45,6 +53,8 @@ class MainActivity : ComponentActivity() {
 
     private val cameraPermission: AndroidCameraPermission by inject()
 
+    private val settings: GlobalSettingsRepository by inject()
+
     private val requestNotifications = registerForActivityResult(ActivityResultContracts.RequestPermission()) { }
 
     // Story 3.10: the camera dialog (picking QR/Barcode, QR registration); "Don't ask again" answers false at once.
@@ -53,6 +63,7 @@ class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         enableEdgeToEdge()
         super.onCreate(savedInstanceState)
+        paintWindowInStoredTheme()
         // A restore entry point (Story 2.1): a session the last process left in runtime.db is taken over here, in the
         // foreground, where its wake service may start. Off the main thread, outside composition.
         appScope.launch { engine.restore() }
@@ -81,5 +92,18 @@ class MainActivity : ComponentActivity() {
         setContent {
             App()
         }
+    }
+
+    /**
+     * Story 5.1 review: the window behind the first Compose frame gets the stored theme's `bg` (the last-known settings,
+     * as `App` uses), so Dark on a light phone never flashes a light window, nor Light a dark one. The system splash
+     * before it follows the phone (values-night); overriding it would need `UiModeManager.setApplicationNightMode`
+     * (API 31+), which recreates the app on every change, so it is not used.
+     */
+    private fun paintWindowInStoredTheme() {
+        val mode = settings.lastKnown()?.settings?.themeMode ?: ThemeMode.System
+        val systemDark = (resources.configuration.uiMode and Configuration.UI_MODE_NIGHT_MASK) == Configuration.UI_MODE_NIGHT_YES
+        val colors = resolveColorSet(mode.toPps(), wake = false, systemInDarkTheme = systemDark).colors()
+        window.setBackgroundDrawable(ColorDrawable(colors.bg.toArgb()))
     }
 }

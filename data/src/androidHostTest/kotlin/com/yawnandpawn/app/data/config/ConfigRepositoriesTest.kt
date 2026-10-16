@@ -23,6 +23,7 @@ import com.yawnandpawn.app.core.error.DomainError
 import com.yawnandpawn.app.core.error.Outcome
 import com.yawnandpawn.app.core.log.LogEvent
 import com.yawnandpawn.app.core.session.GlobalSettings
+import com.yawnandpawn.app.core.session.ThemeMode
 import com.yawnandpawn.app.data.alarm.RoomAlarmRepository
 import com.yawnandpawn.app.data.alarm.RoomCheckConfigRepository
 import com.yawnandpawn.app.data.db.AppDatabase
@@ -164,6 +165,36 @@ class ConfigRepositoriesTest {
         }
 
     @Test
+    fun `the new-alarm defaults and the theme persist, keep the last-known snapshot, and read garbage as the defaults`() =
+        runTest(timeout = TIMEOUT) {
+            val chosen =
+                GlobalSettings(
+                    defaultGraceSeconds = 25,
+                    defaultSnoozeLengthMinutes = 15,
+                    defaultVibrateInGrace = false,
+                    themeMode = ThemeMode.Dark,
+                )
+            global.setDefaultGraceSeconds(25)
+            global.setDefaultSnoozeLength(15)
+            global.setDefaultVibrateInGrace(false)
+            global.setThemeMode(ThemeMode.Dark)
+            assertEquals(chosen, global.observe().first())
+            assertEquals(SettingsSnapshot(chosen, emptyList()), global.lastKnown(), "the first frame's theme")
+
+            settingsStore.close()
+            settingsStore = SettingsDataStore(context)
+            val reopened = DataStoreGlobalSettings(settingsStore.store, logger, cache)
+            assertEquals(Outcome.Success(chosen), reopened.get())
+
+            settingsStore.store.edit {
+                it[DataStoreGlobalSettings.DEFAULT_GRACE_SECONDS] = 99
+                it[DataStoreGlobalSettings.DEFAULT_SNOOZE_LENGTH] = 7
+                it[DataStoreGlobalSettings.THEME_MODE] = "Purple"
+            }
+            assertEquals(Outcome.Success(GlobalSettings(defaultVibrateInGrace = false)), reopened.get())
+        }
+
+    @Test
     fun `a broken settings file reads as the defaults in the flows and fails the one-shot calls`() =
         runTest(timeout = TIMEOUT) {
             val broken = DataStoreGlobalSettings(BrokenStore(), logger, cache)
@@ -174,8 +205,20 @@ class ConfigRepositoriesTest {
             assertIs<Outcome.Failure<DomainError>>(broken.get())
             assertIs<Outcome.Failure<DomainError>>(broken.snapshot())
             assertIs<Outcome.Failure<DomainError>>(broken.setBaseFeeTier(2))
+            assertIs<Outcome.Failure<DomainError>>(broken.setThemeMode(ThemeMode.Dark))
             assertIs<Outcome.Failure<DomainError>>(broken.putPending(PendingChange(null, SettingValue.MaxSnoozes(5), sevenThirty)))
             assertIs<Outcome.Failure<DomainError>>(CompositePendingChangeRepository(roomPending, broken).all())
+        }
+
+    @Test
+    fun `a broken settings file reads as the last-known settings in the flow, so a chosen Dark theme never flips to System`() =
+        runTest(timeout = TIMEOUT) {
+            val chosen = GlobalSettings(baseFeeTier = 3, themeMode = ThemeMode.Dark)
+            cache.snapshot = SettingsSnapshot(chosen, emptyList())
+            val broken = DataStoreGlobalSettings(BrokenStore(), logger, cache)
+
+            assertEquals(chosen, broken.observe().first())
+            assertTrue(logger.events.contains(LogEvent.OperationFailed("read global settings", "IOException")))
         }
 
     @Test

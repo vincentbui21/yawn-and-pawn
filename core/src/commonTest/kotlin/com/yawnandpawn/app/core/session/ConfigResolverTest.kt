@@ -36,16 +36,23 @@ class ConfigResolverTest {
         )
 
     @Test
-    fun `global settings default to base fee tier 1, 5 snoozes, 20 s grace, 9 min snooze and no vibration in grace`() {
+    fun `global settings default to base fee tier 1, 5 snoozes, 20 s grace, 9 min snooze, vibration in grace and the system theme`() {
         assertEquals(
-            GlobalSettings(baseFeeTier = 1, maxSnoozes = 5, graceSeconds = 20, snoozeLengthMinutes = 9, vibrateInGrace = false),
+            GlobalSettings(
+                baseFeeTier = 1,
+                maxSnoozes = 5,
+                defaultGraceSeconds = 20,
+                defaultSnoozeLengthMinutes = 9,
+                defaultVibrateInGrace = true,
+                themeMode = ThemeMode.System,
+            ),
             GlobalSettings(),
         )
     }
 
     @Test
     fun `the config takes the alarm's own settings, its quiet-time vibration included, and the global fee settings`() {
-        val settings = GlobalSettings(baseFeeTier = 3, maxSnoozes = 2, vibrateInGrace = true)
+        val settings = GlobalSettings(baseFeeTier = 3, maxSnoozes = 2, defaultVibrateInGrace = true)
         assertEquals(
             SessionConfig(
                 alarmId = "alarm-7",
@@ -132,6 +139,18 @@ class ConfigResolverTest {
     }
 
     @Test
+    fun `changed Settings defaults never reach a stored alarm's session - it keeps its own 20 s, 9 min and vibration (Story 5_1)`() {
+        val stored = alarm.copy(graceSeconds = 20, snoozeLengthMinutes = 9, vibration = true, vibrateInGrace = true)
+        val defaults = GlobalSettings(defaultGraceSeconds = 30, defaultSnoozeLengthMinutes = 15, defaultVibrateInGrace = false)
+
+        val config = ConfigResolver.resolve(stored, emptyList(), defaults, testMode = false, scheduledAt = SCHEDULED_AT)
+
+        assertEquals(20, config.graceSeconds)
+        assertEquals(9, config.snoozeLengthMinutes)
+        assertEquals(true, config.vibrateInGrace)
+    }
+
+    @Test
     fun `test mode is carried into the config`() {
         val config = ConfigResolver.resolve(alarm, emptyList(), GlobalSettings(), testMode = true, scheduledAt = SCHEDULED_AT)
         assertEquals(true, config.testMode)
@@ -142,8 +161,8 @@ class ConfigResolverTest {
 
     @Test
     fun `quiet-time vibration is the alarm's own setting, on by default, whatever the global setting says (Story 3_4)`() {
-        val off = GlobalSettings(vibrateInGrace = false)
-        val on = GlobalSettings(vibrateInGrace = true)
+        val off = GlobalSettings(defaultVibrateInGrace = false)
+        val on = GlobalSettings(defaultVibrateInGrace = true)
 
         assertEquals(
             true,

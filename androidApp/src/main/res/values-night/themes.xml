@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- The night variant of the app screens' window theme (see values/themes.xml). -->
+    <style name="Theme.YawnAndPawn" parent="@android:style/Theme.Material.NoActionBar" />
+</resources>

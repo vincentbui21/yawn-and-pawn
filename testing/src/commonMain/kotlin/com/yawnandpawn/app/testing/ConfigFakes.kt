@@ -11,6 +11,7 @@ import com.yawnandpawn.app.core.config.SettingsSnapshotCache
 import com.yawnandpawn.app.core.error.DomainError
 import com.yawnandpawn.app.core.error.Outcome
 import com.yawnandpawn.app.core.session.GlobalSettings
+import com.yawnandpawn.app.core.session.ThemeMode
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -66,6 +67,7 @@ class FakePendingChangeRepository(
  * the app both live in the settings DataStore). Set [failure] to make every call fail with it, or [snapshotDelay] to
  * make [snapshot] slow. Each successful snapshot or write becomes [lastKnown], which a test may also set.
  */
+@Suppress("TooManyFunctions") // One per port function, as the port it fakes.
 class FakeGlobalSettingsRepository(
     initial: GlobalSettings = GlobalSettings(),
     private val pending: PendingChangeRepository? = null,
@@ -89,6 +91,15 @@ class FakeGlobalSettingsRepository(
     override suspend fun setBaseFeeTier(tier: Int): Outcome<Unit, DomainError> = write { it.copy(baseFeeTier = tier) }
 
     override suspend fun setMaxSnoozes(count: Int): Outcome<Unit, DomainError> = write { it.copy(maxSnoozes = count) }
+
+    override suspend fun setDefaultGraceSeconds(seconds: Int): Outcome<Unit, DomainError> = write { it.copy(defaultGraceSeconds = seconds) }
+
+    override suspend fun setDefaultVibrateInGrace(on: Boolean): Outcome<Unit, DomainError> = write { it.copy(defaultVibrateInGrace = on) }
+
+    override suspend fun setDefaultSnoozeLength(minutes: Int): Outcome<Unit, DomainError> =
+        write { it.copy(defaultSnoozeLengthMinutes = minutes) }
+
+    override suspend fun setThemeMode(mode: ThemeMode): Outcome<Unit, DomainError> = write { it.copy(themeMode = mode) }
 
     override suspend fun snapshot(): Outcome<SettingsSnapshot, DomainError> {
         delay(snapshotDelay)

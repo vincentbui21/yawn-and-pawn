@@ -51,9 +51,14 @@ import com.yawnandpawn.app.core.config.CommitmentLog
 import com.yawnandpawn.app.core.config.PromotePendingChanges
 import com.yawnandpawn.app.core.config.ReadFireSettings
 import com.yawnandpawn.app.core.config.RecordCommitmentEvent
+import com.yawnandpawn.app.core.config.SaveDefaultSetting
 import com.yawnandpawn.app.core.config.SaveGlobalSetting
 import com.yawnandpawn.app.core.config.SetBaseFee
+import com.yawnandpawn.app.core.config.SetDefaultGrace
+import com.yawnandpawn.app.core.config.SetDefaultSnoozeLength
+import com.yawnandpawn.app.core.config.SetDefaultVibrateInGrace
 import com.yawnandpawn.app.core.config.SetMaxSnoozes
+import com.yawnandpawn.app.core.config.SetThemeMode
 import com.yawnandpawn.app.core.error.valueOrNull
 import com.yawnandpawn.app.core.history.MissedNotes
 import com.yawnandpawn.app.core.id.IdGenerator
@@ -84,7 +89,9 @@ import com.yawnandpawn.app.ui.format.moneyFormatter
 import com.yawnandpawn.app.ui.links.AppLinks
 import com.yawnandpawn.app.ui.links.ExternalLinks
 import com.yawnandpawn.app.ui.nav.WakeScreenOpener
+import com.yawnandpawn.app.ui.settings.SettingsViewModel
 import com.yawnandpawn.app.ui.uiModule
+import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.flow.emitAll
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.flow
@@ -92,6 +99,7 @@ import kotlinx.coroutines.launch
 import org.koin.android.ext.koin.androidContext
 import org.koin.core.context.startKoin
 import org.koin.core.module.Module
+import org.koin.core.qualifier.named
 import org.koin.dsl.module
 
 /** Koin bindings of :androidApp (platform adapters, core wiring). Later stories add their bindings here. */
@@ -101,6 +109,8 @@ val appModule =
         single<IdGenerator> { UuidV4IdGenerator() }
         single<Logger> { AndroidLogger() }
         single { ApplicationScope(get()) }
+        // Story 5.1 review: a default or theme change left when Settings closes is still saved.
+        single<CoroutineScope>(named(SettingsViewModel.SAVE_SCOPE)) { get<ApplicationScope>() }
         // Alarm use cases (Story 1.7); the repository and the request-code sequence come from dataModule, Clock and
         // TimeZoneProvider from androidTimeModule.
         // One lock shared by every alarm use case and by AlarmScheduling: it serializes their read-modify-write.
@@ -130,6 +140,12 @@ val appModule =
         factory { SaveGlobalSetting(get(), get(), get(), get(), get(), get(), get()) }
         factory { SetBaseFee(get()) }
         factory { SetMaxSnoozes(get()) }
+        // Story 5.1: the new-alarm defaults and the theme, no commitment lock.
+        factory { SaveDefaultSetting(get(), get()) }
+        factory { SetDefaultGrace(get()) }
+        factory { SetDefaultVibrateInGrace(get()) }
+        factory { SetDefaultSnoozeLength(get()) }
+        factory { SetThemeMode(get()) }
         factory { RecordCommitmentEvent(get(), get(), get(), get(), get()) }
         // Story 4.6: turning an alarm off or deleting it inside its lock window is logged by the alarm use cases.
         factory { CommitmentLog(get(), get(), get()) }

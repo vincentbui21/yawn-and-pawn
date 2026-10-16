@@ -10,7 +10,10 @@ sealed interface DomainError {
         val field: AlarmField,
     ) : DomainError
 
-    /** A global setting is outside its allowed range (base fee tier 1–10, max snoozes 1–5, Story 4.4); nothing was stored. */
+    /**
+     * A global setting is outside its allowed range (base fee tier 1–10, max snoozes 1–5, Story 4.4; default quiet time
+     * 15–30 s, default snooze length 5 / 9 / 10 / 15 min, Story 5.1); nothing was stored.
+     */
     data class InvalidSetting(
         val field: SettingField,
     ) : DomainError

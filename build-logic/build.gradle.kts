@@ -44,5 +44,9 @@ gradlePlugin {
             id = "yawnandpawn.sound-loudness"
             implementationClass = "com.yawnandpawn.app.buildlogic.SoundLoudnessPlugin"
         }
+        register("sitePages") {
+            id = "yawnandpawn.site-pages"
+            implementationClass = "com.yawnandpawn.app.buildlogic.SitePagesPlugin"
+        }
     }
 }

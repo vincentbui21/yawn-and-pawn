@@ -2,7 +2,8 @@
 title: 'Story 5.7: Privacy policy, terms and support pages on GitHub Pages'
 type: 'feature'
 created: '2026-10-15'
-status: 'ready-for-dev'
+status: 'review'
+baseline_revision: '1c5573f48ea7c50c9f74cbc08c7103230d7772a9'
 review_loop_iteration: 0
 followup_review_recommended: false
 context:
@@ -109,11 +110,29 @@ deferred: []
 
 1. **Enable GitHub Pages:** open https://github.com/vincentbui21/yawn-and-pawn, then go to **Settings** › **Pages** (left sidebar, under "Code and automation"). Under **Build and deployment** › **Source**, choose **GitHub Actions**. There is nothing to save beyond that choice. Then go to **Actions** › **Pages** › **Run workflow** on `main`, or wait for the next push to `docs/site/`. Until Pages is enabled, the `configure-pages` step fails on `main`. The site appears at https://vincentbui21.github.io/yawn-and-pawn/.
 2. **Review the text:** read all five pages against the app (draft for the owner to review; not legal advice). Check the statements about features that aren't built yet: 5.6 analytics, 5.9 "Delete all data" and Epic 7 photos and recordings. Check the effective date, the support address (a personal Gmail address, published) and Q17. Record the live URLs and the date under "Owner verification" below.
+   The statements written to the specified behaviour of stories not built yet (re-check each against the app):
+   - **5.6 usage stats** (`privacy.md` "Usage stats"): off until yes, asked once in setup and changeable in Settings; the three app events plus Firebase's first-open, session-start and app-removed events; device facts and an approximate country from the network; no advertising ID, ad storage off; test alarms and pre-consent events never sent; turning it off deletes the on-phone analytics data and id. Also "Delete all data" turning stats off (`privacy.md` "Deleting your data").
+   - **5.9 Delete all data** (`privacy.md` "Deleting your data"): You › "Delete all data" deletes alarms, history, purchase records, settings, photos and recordings, deletes unsent crash reports, makes a new install id, keeps only what an unfinished Play payment needs, and is unavailable while an alarm rings or is snoozed.
+   - **Epic 7 photos and recordings** (`privacy.md` "Data on your phone", "Backup", "Camera and microphone"): House Hunt reference photos and motivation recordings stay on the phone, are not backed up, are never uploaded; the stop-the-alarm photo is compared on the phone; the microphone is used only while recording; custom sounds are a reference only and not backed up.
+   - **5.1 and 5.4** (`privacy.md` settings list mentions the theme; `support.md` "My alarm didn't ring" names the reliability checklist in Settings and its items).
+   - Other facts to confirm: Crashlytics keeps reports 90 days (Google's documented retention); unused payments are refunded "after about three days"; Google Play's "Request a refund" label in order history; the Google Drive path "Storage, then Backups" for removing the backup copy.
 3. **Approve the cap wording fix** for Story 5.8 (deferred item).
 
 ## Spec Change Log
 
 ## Review Triage Log
+
+### Pass 1 (2026-10-16, one combined self-review, fast mode; the coordinator runs the independent review)
+
+Verdicts: high 0, medium 2, low 1, false 0, maybe-false 0.
+
+| # | Verdict | Route | Finding and evidence | Action |
+|---|---------|-------|----------------------|--------|
+| 1 | medium | patch | `privacy.md` short version said "Nothing you do in the app is sent to us", but crash reports and opted-in usage stats reach the developer's Firebase project. | Now "Your alarms, history and payments are never sent to us." |
+| 2 | medium | patch | `privacy.md` said "we never sell or share your data", but the data goes to Google as a processor (Crashlytics, Analytics, Billing), which a reader can count as sharing. | Now "we never sell your data or use it for advertising." |
+| 3 | low | patch | "Test alarms send nothing": with consent on, Firebase's automatic events can still fire while a test alarm runs; only the app events are skipped (5.6 default). | Now "Test alarms send no app events". |
+
+Checked and kept: the terms match PRD §6.2 (8-hour lock, weakening changes) and the stranded reuse offer ("Use it", FR-RNG-10). The backup lists match `data_extraction_rules.xml`. All four official Pages action tags exist (`configure-pages@v6`, `jekyll-build-pages@v1`, `upload-pages-artifact@v5`, `deploy-pages@v5`). The only `AppLinks(` constructors are the Koin binding and `ProblemWithChargeViewModelTest`.
 
 ## Verification
 
@@ -122,6 +141,26 @@ deferred: []
 - `./gradlew --no-daemon --max-workers=2 -p build-logic test --tests '*SitePages*'` -- expected: passes.
 - `./gradlew --no-daemon --max-workers=2 :androidApp:testDebugUnitTest --tests '*AndroidExternalLinksTest*' :composeApp:testAndroidHostTest --tests '*ProblemWithChargeViewModelTest*'` -- expected: passes.
 - `./gradlew --no-daemon --max-workers=2 spotlessCheck detekt` -- expected: passes.
+
+## Auto Run Result
+
+Status: review. The coordinator pushes, reviews, runs CI and merges. Automation never marks this story done (human-verify).
+
+- **Built:**
+  - `docs/site/` holds the five pages and `_config.yml`.
+  - `checkSitePages` is a build-logic plugin with 11 tests, added to `qualityGate`.
+  - `.github/workflows/pages.yml` runs check, then build, then deploy. Pull requests run the check only.
+  - `privacy.url`, `terms.url` and `support.url` are in `config/app-links.properties`, reach the app as `BuildConfig` fields and are in `AppLinks`.
+  - One deferred item (the cap wording) is assigned to Story 5.8.
+- **Verification on 2026-10-16:** all passed.
+  - `checkSitePages`.
+  - `:build-logic:test --tests '*SitePages*'` (11 tests).
+  - `:androidApp:testDebugUnitTest --tests '*AndroidExternalLinksTest*'` (7 tests).
+  - `:composeApp:testAndroidHostTest --tests '*ProblemWithChargeViewModelTest*'` (16 tests).
+  - `spotlessCheck` and `detekt`, all modules.
+  - Everything ran with `--no-daemon --max-workers=2`. The full `qualityGate` is left to CI.
+- **Matrix audit:** every I/O row has a `SitePagesTest` case, and the TestKit test runs the task on a fixture project.
+- **Follow-up review recommended:** false. 2 medium and 1 low were patched, all of them copy accuracy. No code risk is unverified beyond CI.
 
 ## Owner verification
 

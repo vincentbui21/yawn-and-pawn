@@ -125,5 +125,22 @@ class AndroidExternalLinksTest {
         assertEquals("https://play.google.com/store/account/orderhistory", BuildConfig.PLAY_ORDER_HISTORY_URL)
     }
 
+    @Test
+    fun `the build takes the privacy, terms and support pages and the support address from config app-links properties`() {
+        val file =
+            generateSequence(File("").absoluteFile) { it.parentFile }
+                .map { File(it, "config/app-links.properties") }
+                .first { it.exists() }
+        val config = Properties().apply { file.reader().use { load(it) } }
+
+        assertEquals(config.getProperty("privacy.url"), BuildConfig.PRIVACY_URL)
+        assertEquals(config.getProperty("terms.url"), BuildConfig.TERMS_URL)
+        assertEquals(config.getProperty("support.url"), BuildConfig.SUPPORT_URL)
+        assertEquals(config.getProperty("support.email"), BuildConfig.SUPPORT_EMAIL)
+        listOf(BuildConfig.PRIVACY_URL, BuildConfig.TERMS_URL, BuildConfig.SUPPORT_URL).forEach { url ->
+            assertTrue(url.startsWith("https://vincentbui21.github.io/yawn-and-pawn/"), url)
+        }
+    }
+
     private fun assertNotNullUri(uri: Uri?): Uri = checkNotNull(uri) { "no data" }
 }

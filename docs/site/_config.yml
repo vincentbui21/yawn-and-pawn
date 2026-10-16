@@ -1,0 +1,8 @@
+# The Yawn & Pawn site on GitHub Pages (Story 5.7). Only this folder is published, by .github/workflows/pages.yml.
+# url + baseurl + each page's permalink must equal the links in config/app-links.properties (checkSitePages).
+title: Yawn & Pawn
+description: An alarm clock where every snooze costs real money. Waking up is always free.
+url: "https://vincentbui21.github.io"
+baseurl: "/yawn-and-pawn"
+theme: jekyll-theme-primer
+markdown: kramdown

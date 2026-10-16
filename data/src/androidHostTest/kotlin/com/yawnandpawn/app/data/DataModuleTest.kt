@@ -18,6 +18,8 @@ import com.yawnandpawn.app.core.stats.CheckRegistrations
 import com.yawnandpawn.app.core.stats.FallbackHistory
 import com.yawnandpawn.app.core.stats.ReRegisterDismissals
 import com.yawnandpawn.app.core.stats.StoredCheckRegistrations
+import com.yawnandpawn.app.core.telemetry.AnalyticsConsent
+import com.yawnandpawn.app.core.telemetry.ConsentStore
 import com.yawnandpawn.app.core.time.Clock
 import com.yawnandpawn.app.data.alarm.RoomAlarmRepository
 import com.yawnandpawn.app.data.alarm.RoomRequestCodeSequence
@@ -26,6 +28,7 @@ import com.yawnandpawn.app.data.db.RuntimeDatabase
 import com.yawnandpawn.app.data.history.RoomSessionHistoryRepository
 import com.yawnandpawn.app.data.session.RoomActiveSessionStore
 import com.yawnandpawn.app.data.session.RoomPurchaseIntentStore
+import com.yawnandpawn.app.data.settings.DataStoreConsentStore
 import com.yawnandpawn.app.data.settings.DataStoreInstallIdProvider
 import com.yawnandpawn.app.data.settings.DataStoreMissedNoteDismissals
 import com.yawnandpawn.app.data.settings.DataStorePriceCacheStore
@@ -107,6 +110,33 @@ class DataModuleTest {
             assertEquals(setOf("s1", "s2"), runBlocking { second.dismissed().first() })
         } finally {
             again.close()
+        }
+    }
+
+    @Test
+    fun `the data module binds the usage stats consent to the settings DataStore (Story 5-6)`() {
+        val ports =
+            module {
+                single<Context> { context }
+                single<Logger> { FakeLogger() }
+            }
+        val app = koinApplication { modules(ports, dataModule) }
+        try {
+            val consents = app.koin.get<ConsentStore>()
+            assertIs<DataStoreConsentStore>(consents)
+            assertEquals(AnalyticsConsent(), runBlocking { consents.observe().first() })
+            assertEquals(Outcome.Success(Unit), runBlocking { consents.setConsent(true) })
+            assertEquals(
+                AnalyticsConsent(consent = true, asked = true),
+                runBlocking {
+                    app.koin
+                        .get<ConsentStore>()
+                        .observe()
+                        .first()
+                },
+            )
+        } finally {
+            app.close()
         }
     }
 

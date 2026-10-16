@@ -4,6 +4,7 @@ import com.yawnandpawn.app.core.error.DomainError
 import com.yawnandpawn.app.core.error.Outcome
 import com.yawnandpawn.app.core.log.LogEvent
 import com.yawnandpawn.app.core.log.Logger
+import com.yawnandpawn.app.core.telemetry.Telemetry
 import com.yawnandpawn.app.core.time.BootCounter
 import com.yawnandpawn.app.core.time.Clock
 import com.yawnandpawn.app.core.time.MonotonicClock
@@ -42,6 +43,10 @@ import kotlin.coroutines.cancellation.CancellationException
  * session goes Idle and its `runtime.db` row is cleared by that commit. When it fails, the failure is logged, the
  * state stays Completed or Missed, and the next [dispatch], [tick] or [restore] writes it again.
  *
+ * Usage stats (Story 5.6, AD-15): once `Recorded` has committed the end of a real session, its anonymous stats go to
+ * [Telemetry] (which checks consent); a test session sends none, and a failing telemetry is logged and never stops the
+ * session going Idle. A crash before that commit sends them once more when the session is restored.
+ *
  * Nothing is reduced before the stored session is loaded: [dispatch] and [tick] first run the [restore] step if it has
  * not succeeded yet, and return its failure if the store cannot be read (the next call tries again). Expected failures
  * come back as [Outcome] values; nothing here throws for them.
@@ -58,6 +63,7 @@ class SessionEngine internal constructor(
     private val due: (SessionState, TimeSnapshot) -> List<SessionEvent>,
     private val userLock: UserLockState = UserLockState.Unlocked,
     private val unlock: UnlockPort = UnlockPort.Unlocked,
+    telemetry: Telemetry = Telemetry.None,
 ) {
     constructor(
         reducer: SessionReducer,
@@ -70,7 +76,8 @@ class SessionEngine internal constructor(
         logger: Logger,
         userLock: UserLockState = UserLockState.Unlocked,
         unlock: UnlockPort = UnlockPort.Unlocked,
-    ) : this(reducer, store, effects, recorder, clock, monotonicClock, bootCounter, logger, ::dueEvents, userLock, unlock)
+        telemetry: Telemetry = Telemetry.None,
+    ) : this(reducer, store, effects, recorder, clock, monotonicClock, bootCounter, logger, ::dueEvents, userLock, unlock, telemetry)
 
     private val mutex = Mutex()
     private val current = MutableStateFlow<SessionState>(SessionState.Idle)
@@ -84,6 +91,9 @@ class SessionEngine internal constructor(
 
     /** The history effects go here, never to the runner. */
     private val history = EngineHistory(recorder, logger)
+
+    /** The usage stats of a session that ended (Story 5.6), sent once its `Recorded` has committed. */
+    private val stats = EngineTelemetry(telemetry, logger)
 
     /** The last committed state. The main app shows "Alarm in progress" from it (AD-11). */
     val state: StateFlow<SessionState> = current.asStateFlow()
@@ -254,6 +264,7 @@ class SessionEngine internal constructor(
                 oneShot.filterIsInstance<SessionEffect.RecordSessionStart>().forEach { start ->
                     guarded(start) { history.recordStart(start, transition.state) }
                 }
+                stats.committed(event, from, next)
                 Outcome.Success(now)
             }
         }

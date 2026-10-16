@@ -19,6 +19,8 @@ import com.yawnandpawn.app.android.reliability.reliabilityModule
 import com.yawnandpawn.app.android.screen.AndroidExternalLinks
 import com.yawnandpawn.app.android.screen.AndroidWakeScreenOpener
 import com.yawnandpawn.app.android.sound.soundModule
+import com.yawnandpawn.app.android.telemetry.AnalyticsConsentGate
+import com.yawnandpawn.app.android.telemetry.telemetryModule
 import com.yawnandpawn.app.android.wake.SheetEffectRunner
 import com.yawnandpawn.app.android.wake.WakeAlarmFiredHandler
 import com.yawnandpawn.app.android.wake.WakeRuntime
@@ -95,7 +97,16 @@ import org.koin.dsl.module
 /** Koin bindings of :androidApp (platform adapters, core wiring). Later stories add their bindings here. */
 val appModule =
     module {
-        includes(androidTimeModule, wakeModule(), soundModule(), reliabilityModule(), qrModule(), workModule(), billingModule())
+        includes(
+            androidTimeModule,
+            wakeModule(),
+            soundModule(),
+            reliabilityModule(),
+            qrModule(),
+            workModule(),
+            billingModule(),
+            telemetryModule(),
+        )
         single<IdGenerator> { UuidV4IdGenerator() }
         single<Logger> { AndroidLogger() }
         single { ApplicationScope(get()) }
@@ -208,7 +219,10 @@ val appModule =
         single { ReRegisterSuggestions(get(), get(), get(), get()) }
         // Billing (Story 4.12, billingModule): Play Billing 9.1 is the one Billing, and AndroidDeviceUnlocker the one UnlockPort
         // (Spike S1: the PIN before Play opens), shared by the engine (it reads the keyguard for a Pay) and the coordinator.
-        single { SessionEngine(get(), get(), get(), get(), get(), get(), get(), get(), userLock = get(), unlock = get()) }
+        // Story 5.6: a session's anonymous usage stats go to the consent-gated telemetry (telemetryModule) once it is recorded.
+        single {
+            SessionEngine(get(), get(), get(), get(), get(), get(), get(), get(), userLock = get(), unlock = get(), telemetry = get())
+        }
         // Story 4.11: the billing orchestration (launch, purchase updates, recovery, ITEM_ALREADY_OWNED, stranded reuse). It
         // runs on its own app-wide scope, never inside the engine's step.
         single {
@@ -280,6 +294,8 @@ open class YawnAndPawnApp :
             }.koin
         // Crashlytics (Story 1.19): only with a Firebase configuration, and only once the user has unlocked (AD-15).
         koin.get<FirebaseStartup>().start()
+        // Story 5.6: Analytics collection follows the usage stats consent once Firebase has started (never before unlock).
+        koin.get<AnalyticsConsentGate>().start()
         // Story 4.12: Play's sheet and the PIN prompt open only from the resumed wake screen, followed here (once per process,
         // so a Koin graph a test restarts still sees it).
         registerActivityLifecycleCallbacks(resumedWakeScreen)

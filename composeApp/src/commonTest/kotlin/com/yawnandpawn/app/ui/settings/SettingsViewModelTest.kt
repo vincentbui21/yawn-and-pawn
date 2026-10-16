@@ -15,8 +15,12 @@ import com.yawnandpawn.app.core.log.LogEvent
 import com.yawnandpawn.app.core.session.GlobalSettings
 import com.yawnandpawn.app.core.session.SessionLockGuard
 import com.yawnandpawn.app.core.session.SessionState
+import com.yawnandpawn.app.core.telemetry.AnalyticsConsent
+import com.yawnandpawn.app.core.telemetry.ConsentStore
+import com.yawnandpawn.app.core.telemetry.SetAnalyticsConsent
 import com.yawnandpawn.app.testing.FakeAlarmRepository
 import com.yawnandpawn.app.testing.FakeClock
+import com.yawnandpawn.app.testing.FakeConsentStore
 import com.yawnandpawn.app.testing.FakeGlobalSettingsRepository
 import com.yawnandpawn.app.testing.FakeLogger
 import com.yawnandpawn.app.testing.FakeMoneyFormatter
@@ -71,6 +75,7 @@ class SettingsViewModelTest {
     private val settings = FakeGlobalSettingsRepository(GlobalSettings(baseFeeTier = 3, maxSnoozes = 2), pending)
     private val prices = FakePriceCatalog(aPriceSnapshot(currency = "EUR"))
     private val formatter = FakeMoneyFormatter()
+    private val consents = FakeConsentStore()
     private val sessionLock =
         SessionLockGuard(MutableStateFlow<SessionState>(SessionState.Idle), MutableStateFlow(true), MutableStateFlow(false))
 
@@ -98,6 +103,8 @@ class SettingsViewModelTest {
                 timeChanges = signal,
                 moneyFormatter = formatter,
                 logger = logger,
+                consents = consents,
+                setAnalyticsConsent = SetAnalyticsConsent(consents),
             )
         backgroundScope.launch(dispatcher) { viewModel.state.collect {} }
         return viewModel
@@ -319,10 +326,95 @@ class SettingsViewModelTest {
                 }
             val save = SaveGlobalSetting(settings, pending, alarms, clock, zone, AlarmWriteLock(), sessionLock)
             val viewModel =
-                SettingsViewModel(settings, failing, prices, SetBaseFee(save), SetMaxSnoozes(save), clock, zone, signal, formatter, logger)
+                SettingsViewModel(
+                    settings,
+                    failing,
+                    prices,
+                    SetBaseFee(save),
+                    SetMaxSnoozes(save),
+                    clock,
+                    zone,
+                    signal,
+                    formatter,
+                    logger,
+                    consents,
+                    SetAnalyticsConsent(consents),
+                )
             backgroundScope.launch(dispatcher) { viewModel.state.collect {} }
 
             assertEquals(3, viewModel.shown.baseFeeTier)
             assertTrue(logger.events.any { it is LogEvent.OperationFailed && it.operation == SettingsViewModel.LOAD_PENDING })
+        }
+
+    @Test
+    fun `usage stats show off by default, and a tap stores the choice at once, as asked`() =
+        runTest {
+            val viewModel = viewModel()
+            assertFalse(viewModel.shown.usageStats)
+
+            viewModel.onIntent(SettingsIntent.UsageStatsToggled(true))
+
+            assertEquals(AnalyticsConsent(consent = true, asked = true), consents.current)
+            assertTrue(viewModel.shown.usageStats)
+
+            viewModel.onIntent(SettingsIntent.UsageStatsToggled(false))
+
+            assertEquals(AnalyticsConsent(consent = false, asked = true), consents.current)
+            assertFalse(viewModel.shown.usageStats)
+        }
+
+    @Test
+    fun `the switch shows a choice stored elsewhere (onboarding)`() =
+        runTest {
+            val viewModel = viewModel()
+
+            consents.setConsent(true)
+
+            assertTrue(viewModel.shown.usageStats)
+        }
+
+    @Test
+    fun `a failed usage stats write is logged and the switch stays at the stored value`() =
+        runTest {
+            val viewModel = viewModel()
+            consents.setFailure = DomainError.StorageFailure("disk full")
+
+            viewModel.onIntent(SettingsIntent.UsageStatsToggled(true))
+
+            assertFalse(viewModel.shown.usageStats)
+            assertEquals(listOf(true), consents.requests)
+            assertEquals(
+                listOf<LogEvent>(LogEvent.OperationFailed(SettingsViewModel.SAVE_CONSENT, "storage failure: disk full")),
+                logger.events,
+            )
+        }
+
+    @Test
+    fun `an unreadable usage stats choice is logged and shows off`() =
+        runTest {
+            val failing =
+                object : ConsentStore by consents {
+                    override fun observe(): Flow<AnalyticsConsent> = flow { error("disk unreadable") }
+                }
+            val save = SaveGlobalSetting(settings, pending, alarms, clock, zone, AlarmWriteLock(), sessionLock)
+            val viewModel =
+                SettingsViewModel(
+                    settings,
+                    pending,
+                    prices,
+                    SetBaseFee(save),
+                    SetMaxSnoozes(save),
+                    clock,
+                    zone,
+                    signal,
+                    formatter,
+                    logger,
+                    failing,
+                    SetAnalyticsConsent(failing),
+                )
+            backgroundScope.launch(dispatcher) { viewModel.state.collect {} }
+
+            assertFalse(viewModel.shown.usageStats)
+            assertTrue(logger.events.any { it is LogEvent.OperationFailed && it.operation == SettingsViewModel.LOAD_CONSENT })
         }
 }

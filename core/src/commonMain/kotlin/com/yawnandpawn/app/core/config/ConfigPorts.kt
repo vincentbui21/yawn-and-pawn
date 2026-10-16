@@ -3,6 +3,7 @@ package com.yawnandpawn.app.core.config
 import com.yawnandpawn.app.core.error.DomainError
 import com.yawnandpawn.app.core.error.Outcome
 import com.yawnandpawn.app.core.session.GlobalSettings
+import com.yawnandpawn.app.core.session.ThemeMode
 import kotlinx.coroutines.flow.Flow
 import kotlin.time.Instant
 
@@ -33,9 +34,9 @@ interface PendingChangeRepository {
 }
 
 /**
- * Port for the persisted global settings (FR-SET-1) in the settings DataStore (device-protected, backed up). Only the
- * base fee tier and max snoozes are stored so far; the other [GlobalSettings] fields keep their defaults (Epic 5). A
- * stored value outside its range reads as the default.
+ * Port for the persisted global settings (FR-SET-1) in the settings DataStore (device-protected, backed up): the base
+ * fee tier and max snoozes (Story 4.4), and the new-alarm defaults and the theme (Story 5.1). A missing value, or one
+ * stored outside its range (an unknown theme name too), reads as the default.
  */
 interface GlobalSettingsRepository {
     /** The live settings; emits again after each change. */
@@ -46,6 +47,18 @@ interface GlobalSettingsRepository {
     suspend fun setBaseFeeTier(tier: Int): Outcome<Unit, DomainError>
 
     suspend fun setMaxSnoozes(count: Int): Outcome<Unit, DomainError>
+
+    /** "Default quiet time" for new alarms ([SaveDefaultSetting] checks the range). */
+    suspend fun setDefaultGraceSeconds(seconds: Int): Outcome<Unit, DomainError>
+
+    /** "Vibrate during quiet time" for new alarms. */
+    suspend fun setDefaultVibrateInGrace(on: Boolean): Outcome<Unit, DomainError>
+
+    /** "Default snooze length" for new alarms ([SaveDefaultSetting] checks the value). */
+    suspend fun setDefaultSnoozeLength(minutes: Int): Outcome<Unit, DomainError>
+
+    /** The app screens' theme (Appearance). */
+    suspend fun setThemeMode(mode: ThemeMode): Outcome<Unit, DomainError>
 
     /** The live settings and the global pending changes from one read of the store, so the two always agree (the fire). */
     suspend fun snapshot(): Outcome<SettingsSnapshot, DomainError>

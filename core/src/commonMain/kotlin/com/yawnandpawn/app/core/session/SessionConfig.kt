@@ -50,16 +50,21 @@ data class SessionConfig(
 )
 
 /**
- * The global settings a session reads (FR-SET-1), kept in DataStore by `:data`. [graceSeconds] and
- * [snoozeLengthMinutes] are the defaults for new alarms; a session uses the values stored on its alarm.
+ * The global settings (FR-SET-1), kept in DataStore by `:data`. A session reads the base fee and max snoozes. The
+ * `default*` fields are the Settings defaults a new alarm opens with (Story 5.1); a session uses the values stored on
+ * its alarm, and changing a default never changes a stored alarm (AD-16). [themeMode] is the app screens' theme.
  */
 data class GlobalSettings(
     val baseFeeTier: Int = DEFAULT_BASE_FEE_TIER,
     val maxSnoozes: Int = DEFAULT_MAX_SNOOZES,
-    val graceSeconds: Int = Alarm.DEFAULT_GRACE_SECONDS,
-    val snoozeLengthMinutes: Int = Alarm.DEFAULT_SNOOZE_LENGTH_MINUTES,
-    /** The Settings default for new alarms (Epic 5); a session uses its alarm's own `vibrateInGrace` (Story 3.4). */
-    val vibrateInGrace: Boolean = false,
+    /** "Default quiet time", 15 to 30 s. */
+    val defaultGraceSeconds: Int = Alarm.DEFAULT_GRACE_SECONDS,
+    /** "Default snooze length", 5 / 9 / 10 / 15 min. */
+    val defaultSnoozeLengthMinutes: Int = Alarm.DEFAULT_SNOOZE_LENGTH_MINUTES,
+    /** "Vibrate during quiet time" for new alarms; a session uses its alarm's own `vibrateInGrace` (Story 3.4). */
+    val defaultVibrateInGrace: Boolean = Alarm.DEFAULT_VIBRATE_IN_GRACE,
+    /** Appearance: System / Light / Dark. Wake screens always use Sunrise, whatever it says. */
+    val themeMode: ThemeMode = ThemeMode.System,
 ) {
     companion object {
         const val DEFAULT_BASE_FEE_TIER = 1

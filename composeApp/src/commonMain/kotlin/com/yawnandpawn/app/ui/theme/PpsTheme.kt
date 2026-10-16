@@ -8,10 +8,27 @@ import androidx.compose.runtime.ReadOnlyComposable
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.platform.LocalDensity
+import com.yawnandpawn.app.core.session.ThemeMode
 import com.yawnandpawn.app.ui.components.SystemBarIcons
 
 /** App-screen theme choice (Settings: System / Light / Dark). */
 enum class PpsThemeMode { System, Light, Dark }
+
+/** The stored theme (Story 5.1) as the theme takes it. */
+fun ThemeMode.toPps(): PpsThemeMode =
+    when (this) {
+        ThemeMode.System -> PpsThemeMode.System
+        ThemeMode.Light -> PpsThemeMode.Light
+        ThemeMode.Dark -> PpsThemeMode.Dark
+    }
+
+/** The Settings choice as it is stored (Story 5.1). */
+fun PpsThemeMode.toCore(): ThemeMode =
+    when (this) {
+        PpsThemeMode.System -> ThemeMode.System
+        PpsThemeMode.Light -> ThemeMode.Light
+        PpsThemeMode.Dark -> ThemeMode.Dark
+    }
 
 /** The three DESIGN.md token sets. */
 enum class PpsColorSet { Light, Dark, Sunrise }

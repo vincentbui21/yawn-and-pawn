@@ -7,6 +7,7 @@ import com.yawnandpawn.app.ui.home.AlarmActions
 import com.yawnandpawn.app.ui.home.HomeViewModel
 import com.yawnandpawn.app.ui.payments.ProblemWithChargeViewModel
 import com.yawnandpawn.app.ui.purchases.PurchaseHistoryViewModel
+import com.yawnandpawn.app.ui.settings.DefaultSettingSetters
 import com.yawnandpawn.app.ui.settings.SettingsViewModel
 import org.koin.core.module.dsl.viewModel
 import org.koin.dsl.module
@@ -33,6 +34,7 @@ val uiModule =
                 timeChanges = get(),
                 moneyFormatter = get(),
                 logger = get(),
+                defaults = DefaultSettingSetters(get(), get(), get(), get()),
             )
         }
         viewModel { ProblemWithChargeViewModel(get(), get(), get(), get(), get()) }
@@ -56,6 +58,7 @@ val uiModule =
                 reRegisterCode = get(),
                 pendingChanges = get(),
                 fees = EditorFeeSources(globalSettings = get(), priceCatalog = get(), moneyFormatter = get()),
+                newAlarmDefaults = get(),
             )
         }
     }

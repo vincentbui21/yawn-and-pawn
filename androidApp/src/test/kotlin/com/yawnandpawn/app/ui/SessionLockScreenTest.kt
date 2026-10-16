@@ -170,7 +170,10 @@ class SessionLockScreenTest {
         start()
         ActivityScenario.launch(MainActivity::class.java).use {
             composeRule.onNodeWithContentDescription("Add alarm").performClick()
-            composeRule.onNodeWithText("Save").assertExists()
+            // A new alarm opens once the Settings defaults are read (Story 5.1).
+            composeRule.waitUntil(timeoutMillis = APP_WORK_TIMEOUT_MILLIS) {
+                composeRule.onAllNodes(hasText("Save")).fetchSemanticsNodes().isNotEmpty()
+            }
             preview.play(SoundRef.BuiltIn("bell"), volumePercent = 50)
 
             dispatch(SessionEvent.AlarmFired("session-1", aSessionConfig(), beforeFirstUnlock = false))

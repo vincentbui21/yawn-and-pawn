@@ -47,6 +47,7 @@ class SessionLockGuardScanTest {
                 "DuplicateAlarm",
                 "ReRegisterCode",
                 "SaveGlobalSetting",
+                "SaveDefaultSetting",
                 "RecordCommitmentEvent",
             ),
             writers - ALLOWED.keys,

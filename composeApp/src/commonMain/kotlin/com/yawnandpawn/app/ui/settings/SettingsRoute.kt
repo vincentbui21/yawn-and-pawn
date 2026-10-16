@@ -9,8 +9,20 @@ import androidx.navigationevent.compose.NavigationBackHandler
 import androidx.navigationevent.compose.rememberNavigationEventState
 import org.koin.compose.viewmodel.koinViewModel
 
-/** The Settings rows built so far (Story 4.5): the Snooze card's base fee and max snoozes. Epic 5 adds the others. */
-val BuiltSettingsRows: Set<SettingsRow> = setOf(SettingsRow.BaseFee, SettingsRow.MaxSnoozes)
+/**
+ * The Settings rows built so far: the Snooze card's base fee and max snoozes (Story 4.5); its default snooze length, the
+ * Wake card's default quiet time and "Vibrate during quiet time", and Appearance (Story 5.1). Bright wake screen (Story
+ * 5.2), weekly summary, usage stats and the reliability checklist come with their own stories.
+ */
+val BuiltSettingsRows: Set<SettingsRow> =
+    setOf(
+        SettingsRow.BaseFee,
+        SettingsRow.MaxSnoozes,
+        SettingsRow.DefaultSnoozeLength,
+        SettingsRow.DefaultQuietTime,
+        SettingsRow.VibrateDuringQuietTime,
+        SettingsRow.Appearance,
+    )
 
 /**
  * The Settings tab route: [SettingsViewModel] (scoped to the nav entry) feeding [SettingsScreen] with [rows]. Until the

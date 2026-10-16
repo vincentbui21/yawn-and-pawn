@@ -4,6 +4,7 @@ import com.yawnandpawn.app.core.error.DomainError
 import com.yawnandpawn.app.core.error.Outcome
 import com.yawnandpawn.app.core.log.LogEvent
 import com.yawnandpawn.app.core.log.Logger
+import com.yawnandpawn.app.core.reliability.LockedTestReporter
 import com.yawnandpawn.app.core.time.BootCounter
 import com.yawnandpawn.app.core.time.Clock
 import com.yawnandpawn.app.core.time.MonotonicClock
@@ -42,6 +43,11 @@ import kotlin.coroutines.cancellation.CancellationException
  * session goes Idle and its `runtime.db` row is cleared by that commit. When it fails, the failure is logged, the
  * state stays Completed or Missed, and the next [dispatch], [tick] or [restore] writes it again.
  *
+ * A test ring that started locked ([SessionConfig.testStartedLocked]) and that the user completed is reported once to
+ * the [LockedTestReporter] (Story 5.3, the checklist's locked-screen test), after that step's commit and effects. The
+ * report never suspends, so the engine's lock never waits for its storage write (review fix 11); a test the wake service
+ * ends for a real alarm ([testPreempted]) is not reported (review fix 10).
+ *
  * Nothing is reduced before the stored session is loaded: [dispatch] and [tick] first run the [restore] step if it has
  * not succeeded yet, and return its failure if the store cannot be read (the next call tries again). Expected failures
  * come back as [Outcome] values; nothing here throws for them.
@@ -58,6 +64,7 @@ class SessionEngine internal constructor(
     private val due: (SessionState, TimeSnapshot) -> List<SessionEvent>,
     private val userLock: UserLockState = UserLockState.Unlocked,
     private val unlock: UnlockPort = UnlockPort.Unlocked,
+    private val lockedTest: LockedTestReporter = LockedTestReporter.None,
 ) {
     constructor(
         reducer: SessionReducer,
@@ -70,7 +77,8 @@ class SessionEngine internal constructor(
         logger: Logger,
         userLock: UserLockState = UserLockState.Unlocked,
         unlock: UnlockPort = UnlockPort.Unlocked,
-    ) : this(reducer, store, effects, recorder, clock, monotonicClock, bootCounter, logger, ::dueEvents, userLock, unlock)
+        lockedTest: LockedTestReporter = LockedTestReporter.None,
+    ) : this(reducer, store, effects, recorder, clock, monotonicClock, bootCounter, logger, ::dueEvents, userLock, unlock, lockedTest)
 
     private val mutex = Mutex()
     private val current = MutableStateFlow<SessionState>(SessionState.Idle)
@@ -84,6 +92,9 @@ class SessionEngine internal constructor(
 
     /** The history effects go here, never to the runner. */
     private val history = EngineHistory(recorder, logger)
+
+    /** The keyguard reads and the locked test record (Story 5.3). */
+    private val keyguard = EngineKeyguard(unlock, lockedTest, logger)
 
     /** The last committed state. The main app shows "Alarm in progress" from it (AD-11). */
     val state: StateFlow<SessionState> = current.asStateFlow()
@@ -102,6 +113,13 @@ class SessionEngine internal constructor(
      * memory only, never stored; null until a session ends.
      */
     val ended: StateFlow<SessionState.Active?> = endedFlag.asStateFlow()
+
+    /**
+     * The wake service is about to end the ringing test [sessionId] for a real alarm (Story 1.18): it answers the check
+     * for the user, so that Completed never passes the checklist's locked-screen test (Story 5.3 review fix 10). Called
+     * with the session id; a property (not a function) only because detekt caps the engine's function count.
+     */
+    val testPreempted: (sessionId: String) -> Unit = keyguard::preempt
 
     /** Runs [event] through the reducer, commits, runs its effects, then any follow-up events now due. Returns the state. */
     suspend fun dispatch(event: SessionEvent): Outcome<SessionState, DomainError> =
@@ -217,10 +235,7 @@ class SessionEngine internal constructor(
     ): Outcome<TimeSnapshot, DomainError> {
         val now = now()
         // Read with the time ports: a ring that starts or is restored while locked is before the first unlock (Story 2.3).
-        // The keyguard only matters to a Pay (Spike S1), so no other step makes that platform call. A port that cannot tell
-        // counts as locked: the unlock request then succeeds at once on an unlocked phone (S1 run L-s1), whereas a launch
-        // behind a keyguard shows nothing.
-        val keyguardLocked = event is SessionEvent.PayConfirmed && runCatching { unlock.isKeyguardLocked() }.getOrDefault(true)
+        val keyguardLocked = keyguard.lockedFor(event, from)
         val transition = reducer.reduce(from, event, now, userLocked = !userLock.isUserUnlocked(), keyguardLocked = keyguardLocked)
         val oneShot = if (runOneShot) transition.effects else emptyList()
         // Rows written with the state (AD-2 rule 2, AD-7): the purchase intent of a Pay and the grant ledger row of a paid
@@ -254,6 +269,9 @@ class SessionEngine internal constructor(
                 oneShot.filterIsInstance<SessionEffect.RecordSessionStart>().forEach { start ->
                     guarded(start) { history.recordStart(start, transition.state) }
                 }
+                // Story 5.3: after the commit, so a kill before the write loses the pass (the user rings another test). The
+                // write runs outside the lock (review fix 11).
+                keyguard.afterStep(from, next, now)
                 Outcome.Success(now)
             }
         }

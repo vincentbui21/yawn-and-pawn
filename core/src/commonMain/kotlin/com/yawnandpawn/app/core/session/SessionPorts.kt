@@ -177,7 +177,10 @@ enum class UnlockResult {
  * the runner starts it outside and dispatches [UnlockResult.event]. A wrong PIN gives no result, so it may never return.
  */
 interface UnlockPort {
-    /** Whether the keyguard is showing now; `SessionEngine` reads it for `PayConfirmed` only. */
+    /**
+     * Whether the keyguard is showing now; `SessionEngine` reads it for `PayConfirmed` and for a `TestAlarmFired` from
+     * Idle (Story 5.3: a test that starts locked counts for the checklist's locked-screen test).
+     */
     fun isKeyguardLocked(): Boolean
 
     /** Asks the user to unlock (PIN, pattern or swipe) and returns how it ended. */

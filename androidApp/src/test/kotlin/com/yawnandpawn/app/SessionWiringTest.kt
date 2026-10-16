@@ -1,5 +1,6 @@
 package com.yawnandpawn.app
 
+import android.app.KeyguardManager
 import android.content.Context
 import androidx.test.core.app.ApplicationProvider
 import com.yawnandpawn.app.android.AndroidConnectivity
@@ -13,6 +14,7 @@ import com.yawnandpawn.app.android.crash.isFirebaseConfigured
 import com.yawnandpawn.app.android.wake.CatalogDisplayPrices
 import com.yawnandpawn.app.android.wake.NoOpCrashReporter
 import com.yawnandpawn.app.android.wake.SheetEffectRunner
+import com.yawnandpawn.app.android.wake.WakeApp
 import com.yawnandpawn.app.android.wake.WakeRuntime
 import com.yawnandpawn.app.core.billing.BillingCountry
 import com.yawnandpawn.app.core.billing.DisplayPrices
@@ -24,8 +26,11 @@ import com.yawnandpawn.app.core.billing.SessionStartPriceRefresh
 import com.yawnandpawn.app.core.billing.SnoozeConditions
 import com.yawnandpawn.app.core.billing.UsdFeeLadder
 import com.yawnandpawn.app.core.crash.CrashReporter
+import com.yawnandpawn.app.core.error.Outcome
 import com.yawnandpawn.app.core.history.SessionHistoryRepository
 import com.yawnandpawn.app.core.net.Connectivity
+import com.yawnandpawn.app.core.reliability.ReliabilityRecords
+import com.yawnandpawn.app.core.reliability.StoredReliability
 import com.yawnandpawn.app.core.session.ActiveSessionStore
 import com.yawnandpawn.app.core.session.Billing
 import com.yawnandpawn.app.core.session.CameraFallbackPolicy
@@ -34,6 +39,7 @@ import com.yawnandpawn.app.core.session.EffectRunner
 import com.yawnandpawn.app.core.session.FallbackPolicy
 import com.yawnandpawn.app.core.session.PluginCheckValidator
 import com.yawnandpawn.app.core.session.SessionEngine
+import com.yawnandpawn.app.core.session.SessionEvent
 import com.yawnandpawn.app.core.session.SessionRecorder
 import com.yawnandpawn.app.core.session.SessionReducer
 import com.yawnandpawn.app.core.session.SessionState
@@ -42,8 +48,11 @@ import com.yawnandpawn.app.core.session.UserLockState
 import com.yawnandpawn.app.data.dataModule
 import com.yawnandpawn.app.data.history.RoomSessionHistoryRepository
 import com.yawnandpawn.app.data.session.RoomActiveSessionStore
+import com.yawnandpawn.app.testing.aSessionConfig
 import com.yawnandpawn.app.ui.format.AndroidMoneyFormatter
 import com.yawnandpawn.app.ui.uiModule
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.runBlocking
 import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -51,6 +60,8 @@ import org.koin.android.ext.koin.androidContext
 import org.koin.core.context.GlobalContext
 import org.koin.core.context.startKoin
 import org.robolectric.RobolectricTestRunner
+import org.robolectric.Shadows.shadowOf
+import org.robolectric.shadows.ShadowKeyguardManager
 import kotlin.test.assertEquals
 import kotlin.test.assertIs
 import kotlin.test.assertNotNull
@@ -134,6 +145,43 @@ class SessionWiringTest {
 
         assertNotSame(before, GlobalContext.get())
         GlobalContext.get().get<ApplicationScope>().awaitChildren()
+    }
+
+    /**
+     * Story 5.3 review item 1: the production engine reads the real keyguard adapter when a test fires and stores a
+     * completed locked test in the real records; a test rung unlocked stores nothing.
+     */
+    @Test
+    fun `the app's engine stores a test completed after a locked fire as the locked-screen test's pass`() {
+        assertEquals(true, lockedTestPassed(keyguardLocked = true))
+    }
+
+    @Test
+    fun `the app's engine stores nothing for a test fired unlocked`() {
+        assertEquals(false, lockedTestPassed(keyguardLocked = false))
+    }
+
+    /** Rings a test with the keyguard [keyguardLocked], completes it, and returns whether a locked-test pass is stored. */
+    private fun lockedTestPassed(keyguardLocked: Boolean): Boolean {
+        val app = WakeApp()
+        val keyguard = shadowOf(app.app.getSystemService(KeyguardManager::class.java))
+        try {
+            keyguard.setKeyguardLocked(keyguardLocked)
+            app.dispatch(SessionEvent.TestAlarmFired("test-session", aSessionConfig(testMode = true), beforeFirstUnlock = false))
+            val test = assertIs<SessionState.Ringing>(app.engine.state.value)
+            assertEquals(keyguardLocked, test.session.config.testStartedLocked)
+            app.dispatch(SessionEvent.ImUpTapped)
+            app.solveCheck()
+            app.awaitUntil("the test is completed and recorded") { app.engine.state.value == SessionState.Idle }
+            assertIs<SessionState.Completed>(app.engine.ended.value)
+            val appWork = assertNotNull(app.koin.get<ApplicationScope>().coroutineContext[Job])
+            app.awaitUntil("the app's background work is done") { appWork.children.none { it.isActive } }
+
+            val stored = assertIs<Outcome.Success<StoredReliability>>(runBlocking { app.koin.get<ReliabilityRecords>().read() })
+            return stored.value.lockedTestPassedAt != null
+        } finally {
+            ShadowKeyguardManager.reset()
+        }
     }
 
     @Test

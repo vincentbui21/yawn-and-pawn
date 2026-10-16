@@ -8,13 +8,16 @@ import com.yawnandpawn.app.core.time.TimeSnapshot
 
 /**
  * Idle + AlarmFired (alarm enabled) and Idle + TestAlarmFired: the first ring. It is before the first unlock when the
- * event says so or the user is locked now ([userLocked], Story 2.3).
+ * event says so or the user is locked now ([userLocked], Story 2.3). A test ring freezes whether it started locked
+ * ([SessionConfig.testStartedLocked], Story 5.3): the keyguard was showing ([keyguardLocked]) or it is before the first
+ * unlock.
  */
 internal fun idleRow(
     event: SessionEvent,
     now: TimeSnapshot,
     userLocked: Boolean = false,
     directBootPlan: (CheckPlan) -> CheckPlan = DirectBootSubstitution::lockedPlan,
+    keyguardLocked: Boolean = false,
 ): Transition? =
     when (event) {
         is SessionEvent.AlarmFired -> {
@@ -22,8 +25,9 @@ internal fun idleRow(
         }
 
         is SessionEvent.TestAlarmFired -> {
-            val config = event.config.copy(testMode = true)
-            startSession(event.sessionId, config, event.beforeFirstUnlock || userLocked, now, directBootPlan)
+            val beforeFirstUnlock = event.beforeFirstUnlock || userLocked
+            val config = event.config.copy(testMode = true, testStartedLocked = keyguardLocked || beforeFirstUnlock)
+            startSession(event.sessionId, config, beforeFirstUnlock, now, directBootPlan)
         }
 
         else -> {

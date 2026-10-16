@@ -21,6 +21,7 @@ plugins {
     id("yawnandpawn.allowlists")
     id("yawnandpawn.sound-loudness")
     id("yawnandpawn.word-list")
+    id("yawnandpawn.site-pages")
     id("yawnandpawn.design-tokens")
 }
 
@@ -55,6 +56,33 @@ soundLoudness {
 wordList {
     wordList.set(layout.projectDirectory.file("androidApp/src/main/assets/words_en.txt"))
     blocklist.set(layout.projectDirectory.file("config/word-blocklist.txt"))
+}
+
+// ---------------------------------------------------------------------------------------------
+// Site pages (Story 5.7, plugin yawnandpawn.site-pages from build-logic): `checkSitePages` (qualityGate, and
+// .github/workflows/pages.yml before every deploy) fails on a missing page or privacy heading, a TODO outside the Q17
+// placeholder, a copy-rule break, a link in config/app-links.properties that is not where the page is published, a
+// missing support address, or a "How payments & refunds work" sentence that payments.md does not mirror.
+// ---------------------------------------------------------------------------------------------
+sitePages {
+    siteDir.set(layout.projectDirectory.dir("docs/site"))
+    appLinks.set(layout.projectDirectory.file("config/app-links.properties"))
+    appStrings.set(layout.projectDirectory.file("composeApp/src/commonMain/composeResources/values/strings.xml"))
+    // Everything on the Payments screen except payments_cap_body, whose "one morning" wording is wrong (the $50 cap is
+    // per snooze); payments.md states the cap correctly until Story 5.8 fixes the app string.
+    mirroredKeys.set(
+        listOf(
+            "payments_fee_body",
+            "payments_lock_body",
+            "payments_pending_body",
+            "payments_unused_body",
+            "payments_self_refund_body",
+            "disclosure_ringing_body",
+            "disclosure_usable_body",
+            "disclosure_escape_body",
+            "purchase_auth_tip",
+        ),
+    )
 }
 
 // ---------------------------------------------------------------------------------------------
@@ -229,6 +257,8 @@ tasks.register("qualityGate") {
         "checkSoundLoudness",
         // Story 3.7: the Word Unscramble list is clean (a-z, unique, 4-10 letters, not blocklisted, 300 per group).
         "checkWordList",
+        // Story 5.7: the GitHub Pages site in docs/site agrees with the app and follows the copy rules.
+        "checkSitePages",
         // Story 1.18: no debug-only code (fire hook, design preview, theme showcase) in the release build.
         ":androidApp:checkReleaseContent",
     )

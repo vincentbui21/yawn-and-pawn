@@ -1,14 +1,21 @@
 package com.yawnandpawn.app.ui.links
 
 /**
- * The addresses the app opens outside itself (Story 4.17), from `config/app-links.properties` through the build.
+ * The addresses the app opens outside itself (Stories 4.17 and 5.7), from `config/app-links.properties` through the
+ * build.
  *
  * @property supportEmail where "Email support" writes to (a placeholder until a dedicated support address exists).
  * @property orderHistoryUrl Google Play's order history, where the user can request a refund.
+ * @property privacyUrl the privacy policy on the project's GitHub Pages site (`docs/site/privacy.md`).
+ * @property termsUrl the terms on the site (`docs/site/terms.md`).
+ * @property supportUrl the support page on the site (`docs/site/support.md`).
  */
 data class AppLinks(
     val supportEmail: String,
     val orderHistoryUrl: String,
+    val privacyUrl: String,
+    val termsUrl: String,
+    val supportUrl: String,
 )
 
 /**

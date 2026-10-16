@@ -1,0 +1,101 @@
+# Pages (Story 5.7): publishes only docs/site/ (privacy policy, terms, support and payments pages) to GitHub Pages with
+# the official Pages actions. checkSitePages runs first and must pass before anything deploys. ci.yml skips docs-only
+# changes, so pull requests that touch the site run that check here (and only the check).
+#
+# Nothing is built or deployed until the repository variable PAGES_LIVE is "true" (Settings > Secrets and variables >
+# Actions > Variables). The pages describe features of Stories 5.6, 5.8 and 5.9 that aren't built yet, so the owner
+# sets PAGES_LIVE only after those are merged and the pages are re-read. Until then only the check runs.
+#
+# Owner action, once: Settings > Pages > Build and deployment > Source: "GitHub Actions", then PAGES_LIVE=true.
+# The site is https://vincentbui21.github.io/yawn-and-pawn/.
+name: Pages
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - "docs/site/**"
+      - "config/app-links.properties"
+      - ".github/workflows/pages.yml"
+  pull_request:
+    paths:
+      - "docs/site/**"
+      - "config/app-links.properties"
+      - ".github/workflows/pages.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  check:
+    name: Check the site pages
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    concurrency:
+      group: pages-check-${{ github.ref }}
+      cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+    steps:
+      - name: Check out
+        uses: actions/checkout@v7
+
+      - name: Set up Temurin JDK 17
+        uses: actions/setup-java@v6
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - name: Set up Gradle (with caching)
+        uses: gradle/actions/setup-gradle@v6
+
+      - name: checkSitePages
+        run: ./gradlew checkSitePages
+
+  build:
+    name: Build the site
+    needs: check
+    if: vars.PAGES_LIVE == 'true' && github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: read
+      pages: read
+    steps:
+      - name: Check out
+        uses: actions/checkout@v7
+
+      - name: Configure Pages
+        uses: actions/configure-pages@v6
+
+      - name: Build with Jekyll (docs/site only)
+        uses: actions/jekyll-build-pages@v1
+        with:
+          source: ./docs/site
+          destination: ./_site
+
+      - name: Upload the site
+        uses: actions/upload-pages-artifact@v5
+        with:
+          path: ./_site
+
+  deploy:
+    name: Deploy to GitHub Pages
+    needs: build
+    if: vars.PAGES_LIVE == 'true' && github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    # A deploy in progress is never cancelled: a newer one waits for it (and replaces an older one still waiting).
+    concurrency:
+      group: pages-deploy
+      cancel-in-progress: false
+    steps:
+      - name: Deploy
+        id: deployment
+        uses: actions/deploy-pages@v5

@@ -46,7 +46,13 @@ class ProblemWithChargeViewModelTest {
     private val links = RecordingLinks()
     private val logger = FakeLogger()
     private val appLinks =
-        AppLinks(supportEmail = "help@example.com", orderHistoryUrl = "https://play.google.com/store/account/orderhistory")
+        AppLinks(
+            supportEmail = "help@example.com",
+            orderHistoryUrl = "https://play.google.com/store/account/orderhistory",
+            privacyUrl = "https://example.com/privacy/",
+            termsUrl = "https://example.com/terms/",
+            supportUrl = "https://example.com/support/",
+        )
 
     /** Writes the charge it was given into the body, so the test sees which charge the email is about. */
     private val writer = SupportEmailWriter { charge -> SupportEmail("Charge question", charge?.key.orEmpty()) }

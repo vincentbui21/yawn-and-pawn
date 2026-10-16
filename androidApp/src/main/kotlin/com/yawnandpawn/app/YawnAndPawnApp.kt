@@ -261,9 +261,17 @@ val appModule =
                 get<WakeRuntime>().emergencyRinging,
             )
         }
-        // "Problem with a charge?" (Story 4.17): the order history link and the support email, from
-        // config/app-links.properties through BuildConfig.
-        single { AppLinks(supportEmail = BuildConfig.SUPPORT_EMAIL, orderHistoryUrl = BuildConfig.PLAY_ORDER_HISTORY_URL) }
+        // "Problem with a charge?" (Story 4.17): the order history link and the support email; the privacy policy, terms
+        // and support pages (Story 5.7). All from config/app-links.properties through BuildConfig.
+        single {
+            AppLinks(
+                supportEmail = BuildConfig.SUPPORT_EMAIL,
+                orderHistoryUrl = BuildConfig.PLAY_ORDER_HISTORY_URL,
+                privacyUrl = BuildConfig.PRIVACY_URL,
+                termsUrl = BuildConfig.TERMS_URL,
+                supportUrl = BuildConfig.SUPPORT_URL,
+            )
+        }
         single<ExternalLinks> { AndroidExternalLinks(androidContext(), get()) }
     }
 

@@ -83,6 +83,10 @@ android {
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         buildConfigField("String", "SUPPORT_EMAIL", "\"${appLink("support.email")}\"")
         buildConfigField("String", "PLAY_ORDER_HISTORY_URL", "\"${appLink("play.orderHistory")}\"")
+        // Story 5.7: the privacy policy, terms and support pages on GitHub Pages (docs/site/).
+        buildConfigField("String", "PRIVACY_URL", "\"${appLink("privacy.url")}\"")
+        buildConfigField("String", "TERMS_URL", "\"${appLink("terms.url")}\"")
+        buildConfigField("String", "SUPPORT_URL", "\"${appLink("support.url")}\"")
     }
 
     signingConfigs {

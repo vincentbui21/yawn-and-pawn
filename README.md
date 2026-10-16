@@ -14,6 +14,7 @@ Package id: `com.yawnandpawn.app` · Android first, iOS later · Kotlin Multipla
 | Epics and stories (114 stories, 8 epics) | `_bmad-output/planning-artifacts/epics.md` |
 | Sprint tracking (source of truth for progress) | `_bmad-output/implementation-artifacts/sprint-status.yaml` |
 | Readable copies of the main docs | `docs/` |
+| Privacy policy, terms, support and payments pages (published to GitHub Pages by `.github/workflows/pages.yml`) | `docs/site/` |
 | UI rules Claude loads for every screen | `.claude/skills/pps-design/SKILL.md` |
 | BMAD skills and config | `.claude/skills/`, `_bmad/` |
 

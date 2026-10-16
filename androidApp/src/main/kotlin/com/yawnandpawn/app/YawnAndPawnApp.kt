@@ -89,7 +89,9 @@ import com.yawnandpawn.app.ui.format.moneyFormatter
 import com.yawnandpawn.app.ui.links.AppLinks
 import com.yawnandpawn.app.ui.links.ExternalLinks
 import com.yawnandpawn.app.ui.nav.WakeScreenOpener
+import com.yawnandpawn.app.ui.settings.SettingsViewModel
 import com.yawnandpawn.app.ui.uiModule
+import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.flow.emitAll
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.flow
@@ -97,6 +99,7 @@ import kotlinx.coroutines.launch
 import org.koin.android.ext.koin.androidContext
 import org.koin.core.context.startKoin
 import org.koin.core.module.Module
+import org.koin.core.qualifier.named
 import org.koin.dsl.module
 
 /** Koin bindings of :androidApp (platform adapters, core wiring). Later stories add their bindings here. */
@@ -106,6 +109,8 @@ val appModule =
         single<IdGenerator> { UuidV4IdGenerator() }
         single<Logger> { AndroidLogger() }
         single { ApplicationScope(get()) }
+        // Story 5.1 review: a default or theme change left when Settings closes is still saved.
+        single<CoroutineScope>(named(SettingsViewModel.SAVE_SCOPE)) { get<ApplicationScope>() }
         // Alarm use cases (Story 1.7); the repository and the request-code sequence come from dataModule, Clock and
         // TimeZoneProvider from androidTimeModule.
         // One lock shared by every alarm use case and by AlarmScheduling: it serializes their read-modify-write.

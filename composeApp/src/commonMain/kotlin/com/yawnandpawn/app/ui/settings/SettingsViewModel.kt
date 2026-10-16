@@ -30,6 +30,9 @@ import com.yawnandpawn.app.core.time.TimeChangeSignal
 import com.yawnandpawn.app.core.time.TimeZoneProvider
 import com.yawnandpawn.app.ui.theme.toCore
 import com.yawnandpawn.app.ui.theme.toPps
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -41,6 +44,7 @@ import kotlinx.coroutines.flow.onStart
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 
 /**
  * The Story 5.1 setters of Settings: the new-alarm defaults and the theme, each through its own core use case (no
@@ -84,10 +88,12 @@ class DefaultSettingSetters(
  *   moves at once to the requested value (the requests overlay the stored values). A saved request is let go only by the
  *   same render that sees the store hold it (review fix 1), so the control never shows the old value in between and the
  *   next step starts from the new one. A failed save is logged and the stored value comes back, unless a newer request
- *   replaced it. A value outside its range, or one already shown, is not saved.
+ *   replaced it. A value outside its range, or one already shown, is not saved, and a default superseded in the queue
+ *   by a newer value of its field is skipped (a slider drag saves its first and last steps, not every one).
  *
- * [state] is null until the stored settings are read, so no default value flashes. Saves still queued when the
- * ViewModel is cleared are logged as dropped.
+ * [state] is null until the stored settings are read, so no default value flashes. When the ViewModel is cleared, the
+ * base fee and max snoozes saves still queued are logged as dropped, and the defaults and the theme are finished in
+ * [outlivingScope] ([onCleared]).
  */
 class SettingsViewModel(
     globalSettings: GlobalSettingsRepository,
@@ -101,6 +107,11 @@ class SettingsViewModel(
     private val moneyFormatter: MoneyFormatter,
     private val logger: Logger,
     private val defaults: DefaultSettingSetters,
+    /**
+     * Where the latest default or theme still waiting when the screen closes is saved (the app's scope, review fix):
+     * leaving the tab right after a change never loses it. Null (tests that never close mid-save) drops it, logged.
+     */
+    private val outlivingScope: CoroutineScope? = null,
 ) : ViewModel() {
     private val local = MutableStateFlow(Local())
     private val saves = Channel<Save>(Channel.UNLIMITED)
@@ -132,7 +143,8 @@ class SettingsViewModel(
             render(saved, prices, ui)
         }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(STOP_TIMEOUT_MILLIS), null)
 
-    init {
+    /** The save queue, run in order. */
+    private val loop: Job =
         viewModelScope.launch {
             for (save in saves) {
                 saving = save
@@ -140,7 +152,6 @@ class SettingsViewModel(
                 saving = null
             }
         }
-    }
 
     fun onIntent(intent: SettingsIntent) {
         when (intent) {
@@ -167,13 +178,27 @@ class SettingsViewModel(
         }
     }
 
+    /**
+     * The screen closes (a tab switch clears it). A base fee or max snoozes save still queued or running is dropped and
+     * logged (Story 4.5). A default or theme save is not lost (review fix): the running one finishes ([NonCancellable]),
+     * and the latest queued value of each field is saved in [outlivingScope] after it, in order.
+     */
     override fun onCleared() {
-        val dropped = listOfNotNull(saving) + generateSequence { saves.tryReceive().getOrNull() }.toList()
-        // Each kind under its own operation, so a lost default or theme is never blamed on the snooze settings.
-        dropped.groupBy { if (it is Save.Locked) SAVE_SETTING else SAVE_DEFAULT }.forEach { (operation, lost) ->
-            logger.log(LogEvent.OperationFailed(operation, "dropped ${lost.size} on close"))
-        }
+        val queued = generateSequence { saves.tryReceive().getOrNull() }.toList()
         saves.close()
+        val lostLocked = (listOfNotNull(saving) + queued).filterIsInstance<Save.Locked>()
+        if (lostLocked.isNotEmpty()) logger.log(LogEvent.OperationFailed(SAVE_SETTING, "dropped ${lostLocked.size} on close"))
+        val latest = queued.filterIsInstance<Save.Default>().filter { local.value.holds(it.request) }.map { it.request.value }
+        if (latest.isEmpty()) return
+        val scope = outlivingScope
+        if (scope == null) {
+            logger.log(LogEvent.OperationFailed(SAVE_DEFAULT, "dropped ${latest.size} on close"))
+        } else {
+            scope.launch {
+                loop.join()
+                latest.forEach { value -> logger.logDefaultFailure(defaults.save(value)) }
+            }
+        }
     }
 
     /**
@@ -231,8 +256,11 @@ class SettingsViewModel(
             }
 
             is Save.Default -> {
-                val result = defaults.save(save.request.value)
-                if (result is Outcome.Failure) logger.log(LogEvent.OperationFailed.of(SAVE_DEFAULT, result.error))
+                // A newer value of the same field is queued behind it: only that one is saved.
+                if (!local.value.holds(save.request)) return
+                // Finishes even when the screen closes meanwhile, so a value the user saw applied is stored.
+                val result = withContext(NonCancellable) { defaults.save(save.request.value) }
+                logger.logDefaultFailure(result)
                 local.update { it.settled(save.request, saved = result is Outcome.Success) }
             }
         }
@@ -344,6 +372,9 @@ class SettingsViewModel(
         /** At most one per field, the latest. */
         val defaults: List<DefaultRequest> = emptyList(),
     ) {
+        /** [request] is still the latest of its field: one superseded by a newer value is never saved (a drag coalesces). */
+        fun holds(request: DefaultRequest): Boolean = defaults.any { it.id == request.id }
+
         /**
          * [value]'s save is over. A newer request of the same field stays as it is. Otherwise a saved request waits for
          * the store ([forgetEchoed]) and a failed one goes, so the stored value comes back.
@@ -391,6 +422,9 @@ class SettingsViewModel(
 
         /** The operation logged when a default or the theme could not be saved (Story 5.1). */
         const val SAVE_DEFAULT = "save default setting"
+
+        /** The Koin name of the app scope that finishes the default saves left when Settings closes. */
+        const val SAVE_SCOPE = "settings save scope"
         const val LOAD_SETTINGS = "load global settings"
         const val LOAD_PENDING = "load pending changes"
 
@@ -414,3 +448,8 @@ private fun DefaultSetting.isValid(): Boolean =
         is DefaultSetting.SnoozeLength -> minutes in SaveDefaultSetting.SNOOZE_LENGTHS
         is DefaultSetting.VibrateInGrace, is DefaultSetting.Theme -> true
     }
+
+/** Logs a default or theme save that failed (Story 5.1). */
+private fun Logger.logDefaultFailure(result: Outcome<Unit, DomainError>) {
+    if (result is Outcome.Failure) log(LogEvent.OperationFailed.of(SettingsViewModel.SAVE_DEFAULT, result.error))
+}

@@ -211,6 +211,17 @@ class ConfigRepositoriesTest {
         }
 
     @Test
+    fun `a broken settings file reads as the last-known settings in the flow, so a chosen Dark theme never flips to System`() =
+        runTest(timeout = TIMEOUT) {
+            val chosen = GlobalSettings(baseFeeTier = 3, themeMode = ThemeMode.Dark)
+            cache.snapshot = SettingsSnapshot(chosen, emptyList())
+            val broken = DataStoreGlobalSettings(BrokenStore(), logger, cache)
+
+            assertEquals(chosen, broken.observe().first())
+            assertTrue(logger.events.contains(LogEvent.OperationFailed("read global settings", "IOException")))
+        }
+
+    @Test
     fun `one snapshot holds the settings and the global changes, and every read or write becomes the last-known one`() =
         runTest(timeout = TIMEOUT) {
             alarms.upsert(anAlarm(id = "a"))

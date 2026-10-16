@@ -1,5 +1,9 @@
 package com.yawnandpawn.app.ui.settings
 
+import androidx.lifecycle.ViewModelProvider
+import androidx.lifecycle.ViewModelStore
+import androidx.lifecycle.viewmodel.initializer
+import androidx.lifecycle.viewmodel.viewModelFactory
 import com.yawnandpawn.app.core.alarm.AlarmWriteLock
 import com.yawnandpawn.app.core.config.GlobalSettingsRepository
 import com.yawnandpawn.app.core.config.SaveDefaultSetting
@@ -24,6 +28,7 @@ import com.yawnandpawn.app.testing.FakeTimeChangeSignal
 import com.yawnandpawn.app.testing.FakeTimeZoneProvider
 import com.yawnandpawn.app.testing.aPriceSnapshot
 import com.yawnandpawn.app.ui.theme.PpsThemeMode
+import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -31,6 +36,7 @@ import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.test.TestScope
 import kotlinx.coroutines.test.UnconfinedTestDispatcher
+import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.resetMain
 import kotlinx.coroutines.test.runTest
 import kotlinx.coroutines.test.setMain
@@ -103,23 +109,28 @@ class SettingsDefaultsViewModelTest {
     }
 
     private fun TestScope.viewModel(): SettingsViewModel {
-        val save = SaveGlobalSetting(settings, pending, FakeAlarmRepository(), clock, zone, AlarmWriteLock(), sessionLock)
-        val viewModel =
-            SettingsViewModel(
-                globalSettings = settings,
-                pendingChanges = pending,
-                priceCatalog = FakePriceCatalog(aPriceSnapshot(currency = "EUR")),
-                setBaseFee = SetBaseFee(save),
-                setMaxSnoozes = SetMaxSnoozes(save),
-                clock = clock,
-                timeZoneProvider = zone,
-                timeChanges = FakeTimeChangeSignal(),
-                moneyFormatter = FakeMoneyFormatter(),
-                logger = logger,
-                defaults = DefaultSettingSetters(SaveDefaultSetting(settings, sessionLock)),
-            )
+        val viewModel = newViewModel()
         backgroundScope.launch(dispatcher) { viewModel.state.collect { state -> state?.let { shown += it } } }
         return viewModel
+    }
+
+    /** The ViewModel as the app builds it; [outliving] finishes the default saves left when it is cleared. */
+    private fun newViewModel(outliving: CoroutineScope? = null): SettingsViewModel {
+        val save = SaveGlobalSetting(settings, pending, FakeAlarmRepository(), clock, zone, AlarmWriteLock(), sessionLock)
+        return SettingsViewModel(
+            globalSettings = settings,
+            pendingChanges = pending,
+            priceCatalog = FakePriceCatalog(aPriceSnapshot(currency = "EUR")),
+            setBaseFee = SetBaseFee(save),
+            setMaxSnoozes = SetMaxSnoozes(save),
+            clock = clock,
+            timeZoneProvider = zone,
+            timeChanges = FakeTimeChangeSignal(),
+            moneyFormatter = FakeMoneyFormatter(),
+            logger = logger,
+            defaults = DefaultSettingSetters(SaveDefaultSetting(settings, sessionLock)),
+            outlivingScope = outliving,
+        )
     }
 
     private val SettingsViewModel.now: SettingsUiState
@@ -196,10 +207,13 @@ class SettingsDefaultsViewModelTest {
             assertTrue(settings.writes.isEmpty(), "${settings.writes}")
             assertEquals(20, viewModel.now.defaultQuietSeconds)
             assertEquals(GlobalSettings(), inner.current)
+            // Ignored, not refused by the use case: nothing failed, and the screen never showed 14, 31 or 7 (review fix).
+            assertTrue(!saveFailed(), "${logger.events}")
+            assertTrue(shown.none { it.defaultQuietSeconds !in 15..30 || it.defaultSnoozeMinutes == 7 }, "$shown")
         }
 
     @Test
-    fun `slider steps show at once and are saved once each, in order, while a drag repeats them`() =
+    fun `slider steps show at once, and a drag saves the running step and then only the latest one`() =
         runTest {
             val viewModel = viewModel()
             settings.open.value = false
@@ -210,7 +224,8 @@ class SettingsDefaultsViewModelTest {
 
             settings.open.value = true
 
-            assertEquals(listOf("grace=21", "grace=22", "grace=23"), settings.writes)
+            // 21 was running; 22 was superseded by 23 in the queue, so it is never written (review fix: coalesced).
+            assertEquals(listOf("grace=21", "grace=23"), settings.writes)
             assertEquals(23, inner.current.defaultGraceSeconds)
             assertEquals(23, viewModel.now.defaultQuietSeconds)
         }
@@ -227,7 +242,8 @@ class SettingsDefaultsViewModelTest {
             val before = shown.size
             settings.open.value = true
 
-            assertEquals(listOf("vibrate=false", "vibrate=true", "vibrate=false"), settings.writes)
+            // The running false, then the latest false; the true between them was superseded in the queue.
+            assertEquals(listOf("vibrate=false", "vibrate=false"), settings.writes)
             assertEquals(false, inner.current.defaultVibrateInGrace)
             assertTrue(shown.drop(before).none { it.vibrateDuringQuietTime }, "never back on while the saves ran")
             assertEquals(false, viewModel.now.vibrateDuringQuietTime)
@@ -274,5 +290,50 @@ class SettingsDefaultsViewModelTest {
             assertEquals(3, inner.current.baseFeeTier)
             assertEquals(3, viewModel.now.baseFeeTier)
             assertEquals(5, viewModel.now.defaultSnoozeMinutes)
+        }
+
+    @Test
+    fun `a tab switch during a slider drag still saves the last value, once, after the running one`() =
+        runTest {
+            val store = ViewModelStore()
+            val viewModel =
+                ViewModelProvider.create(
+                    store,
+                    viewModelFactory {
+                        initializer { newViewModel(outliving = this@runTest) }
+                    },
+                )[SettingsViewModel::class]
+            backgroundScope.launch(dispatcher) { viewModel.state.collect {} }
+            settings.open.value = false
+
+            (21..30).forEach { viewModel.onIntent(SettingsIntent.QuietTimeChanged(it)) }
+            store.clear() // the user taps another tab: the Settings entry and its ViewModel go
+            settings.open.value = true
+            advanceUntilIdle() // the app scope's drain (a child of the test, so it runs here)
+
+            assertEquals(30, inner.current.defaultGraceSeconds)
+            assertEquals(listOf("grace=21", "grace=30"), settings.writes)
+            assertTrue(logger.events.none { it is LogEvent.OperationFailed }, "nothing dropped: ${logger.events}")
+        }
+
+    @Test
+    fun `without an outliving scope a default left when the screen closes is logged as dropped`() =
+        runTest {
+            val store = ViewModelStore()
+            val viewModel = ViewModelProvider.create(store, viewModelFactory { initializer { newViewModel() } })[SettingsViewModel::class]
+            backgroundScope.launch(dispatcher) { viewModel.state.collect {} }
+            settings.open.value = false
+
+            viewModel.onIntent(SettingsIntent.ThemeSelected(PpsThemeMode.Dark))
+            viewModel.onIntent(SettingsIntent.QuietTimeChanged(25))
+            store.clear()
+            settings.open.value = true
+
+            assertEquals(ThemeMode.Dark, inner.current.themeMode, "the running save finishes")
+            val dropped =
+                logger.events.filterIsInstance<LogEvent.OperationFailed>().single {
+                    it.operation == SettingsViewModel.SAVE_DEFAULT
+                }
+            assertEquals("dropped 1 on close", dropped.cause)
         }
 }

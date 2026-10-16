@@ -2,9 +2,14 @@ package com.yawnandpawn.app.ui
 
 import android.app.Application
 import android.os.Looper
+import androidx.compose.ui.semantics.SemanticsActions
+import androidx.compose.ui.semantics.SemanticsProperties
+import androidx.compose.ui.test.SemanticsMatcher
+import androidx.compose.ui.test.assert
 import androidx.compose.ui.test.assertIsOff
 import androidx.compose.ui.test.assertIsSelected
 import androidx.compose.ui.test.hasClickAction
+import androidx.compose.ui.test.hasContentDescription
 import androidx.compose.ui.test.hasText
 import androidx.compose.ui.test.isSelectable
 import androidx.compose.ui.test.isToggleable
@@ -12,6 +17,7 @@ import androidx.compose.ui.test.junit4.v2.createEmptyComposeRule
 import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
+import androidx.compose.ui.test.performSemanticsAction
 import androidx.test.core.app.ActivityScenario
 import androidx.test.core.app.ApplicationProvider
 import com.yawnandpawn.app.APP_WORK_TIMEOUT_MILLIS
@@ -159,6 +165,18 @@ class SnoozeSettingsRouteTest {
             composeRule.onNode(hasText("Vibrate during quiet time") and isToggleable()).assertIsOff()
 
             assertEquals(GlobalSettings(defaultSnoozeLengthMinutes = 15, defaultVibrateInGrace = false), stored())
+
+            // The slider as TalkBack drives it (SetProgress): stored and announced (review fix).
+            composeRule.onNode(hasText("Default quiet time", substring = true) and hasClickAction()).performClick()
+            val slider =
+                composeRule.onNode(
+                    hasContentDescription("Default quiet time") and SemanticsMatcher.keyIsDefined(SemanticsProperties.ProgressBarRangeInfo),
+                )
+            slider.performSemanticsAction(SemanticsActions.SetProgress) { it(26f) }
+            awaitStored { it.defaultGraceSeconds == 26 }
+            slider.assert(SemanticsMatcher.expectValue(SemanticsProperties.StateDescription, "26 seconds"))
+            composeRule.onNodeWithContentDescription("Back").performClick()
+            waitForText("26 seconds")
 
             // The real "+" (the Koin-wired editor) opens a new alarm with the stored defaults (review fix).
             runBlocking { GlobalContext.get().get<SetDefaultGrace>()(25) }

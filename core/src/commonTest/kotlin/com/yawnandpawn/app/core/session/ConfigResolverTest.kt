@@ -139,6 +139,18 @@ class ConfigResolverTest {
     }
 
     @Test
+    fun `changed Settings defaults never reach a stored alarm's session - it keeps its own 20 s, 9 min and vibration (Story 5_1)`() {
+        val stored = alarm.copy(graceSeconds = 20, snoozeLengthMinutes = 9, vibration = true, vibrateInGrace = true)
+        val defaults = GlobalSettings(defaultGraceSeconds = 30, defaultSnoozeLengthMinutes = 15, defaultVibrateInGrace = false)
+
+        val config = ConfigResolver.resolve(stored, emptyList(), defaults, testMode = false, scheduledAt = SCHEDULED_AT)
+
+        assertEquals(20, config.graceSeconds)
+        assertEquals(9, config.snoozeLengthMinutes)
+        assertEquals(true, config.vibrateInGrace)
+    }
+
+    @Test
     fun `test mode is carried into the config`() {
         val config = ConfigResolver.resolve(alarm, emptyList(), GlobalSettings(), testMode = true, scheduledAt = SCHEDULED_AT)
         assertEquals(true, config.testMode)

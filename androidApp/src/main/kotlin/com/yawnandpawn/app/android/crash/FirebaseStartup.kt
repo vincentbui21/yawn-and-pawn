@@ -11,6 +11,9 @@ import com.google.firebase.FirebaseOptions
 import com.google.firebase.crashlytics.FirebaseCrashlytics
 import com.yawnandpawn.app.core.log.LogEvent
 import com.yawnandpawn.app.core.log.Logger
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
 import java.util.concurrent.atomic.AtomicBoolean
 
 /** The app has a Firebase configuration: the google-services plugin ran with a `google-services.json`. */
@@ -24,6 +27,9 @@ fun isFirebaseConfigured(context: Context): Boolean = FirebaseOptions.fromResour
  * [start] runs from `Application.onCreate`: unlocked, it starts at once; locked, a receiver registered at runtime
  * waits for `ACTION_USER_UNLOCKED`. The unlock signals (Story 2.4) call it again, so it is idempotent: it starts
  * nothing twice, registers no second receiver while one waits and logs a missing configuration only once.
+ *
+ * [ready] turns true once Firebase has started (Story 5.6): the Analytics consent gate waits for it, so Analytics is
+ * never touched before the first unlock or without a configuration.
  */
 class FirebaseStartup(
     private val context: Context,
@@ -38,6 +44,11 @@ class FirebaseStartup(
     @Volatile
     var started = false
         private set
+
+    private val readyFlow = MutableStateFlow(false)
+
+    /** True once [initialize] has succeeded; it never goes back to false. */
+    val ready: StateFlow<Boolean> = readyFlow.asStateFlow()
 
     private val reportedUnconfigured = AtomicBoolean(false)
 
@@ -91,5 +102,6 @@ class FirebaseStartup(
         if (started) return
         initialize()
         started = true
+        readyFlow.value = true
     }
 }

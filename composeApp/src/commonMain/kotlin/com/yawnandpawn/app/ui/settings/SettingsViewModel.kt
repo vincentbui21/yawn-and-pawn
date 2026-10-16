@@ -25,6 +25,9 @@ import com.yawnandpawn.app.core.error.Outcome
 import com.yawnandpawn.app.core.log.LogEvent
 import com.yawnandpawn.app.core.log.Logger
 import com.yawnandpawn.app.core.session.GlobalSettings
+import com.yawnandpawn.app.core.telemetry.AnalyticsConsent
+import com.yawnandpawn.app.core.telemetry.ConsentStore
+import com.yawnandpawn.app.core.telemetry.SetAnalyticsConsent
 import com.yawnandpawn.app.core.time.Clock
 import com.yawnandpawn.app.core.time.TimeChangeSignal
 import com.yawnandpawn.app.core.time.TimeZoneProvider
@@ -40,6 +43,7 @@ import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.catch
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.onStart
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
@@ -91,6 +95,10 @@ class DefaultSettingSetters(
  *   replaced it. A value outside its range, or one already shown, is not saved, and a default superseded in the queue
  *   by a newer value of its field is skipped (a slider drag saves its first and last steps, not every one).
  *
+ * Usage stats (Story 5.6): the switch shows the stored choice from [consents]; a tap stores it at once through
+ * [setAnalyticsConsent] (no Save). A failed write is logged and the switch stays at the stored value; an unreadable
+ * choice is logged and shows off.
+ *
  * [state] is null until the stored settings are read, so no default value flashes. When the ViewModel is cleared, the
  * base fee and max snoozes saves still queued are logged as dropped, and the defaults and the theme are finished in
  * [outlivingScope] ([onCleared]).
@@ -107,6 +115,8 @@ class SettingsViewModel(
     private val moneyFormatter: MoneyFormatter,
     private val logger: Logger,
     private val defaults: DefaultSettingSetters,
+    consents: ConsentStore,
+    private val setAnalyticsConsent: SetAnalyticsConsent,
     /**
      * Where the latest default or theme still waiting when the screen closes is saved (the app's scope, review fix):
      * leaving the tab right after a change never loses it. Null (tests that never close mid-save) drops it, logged.
@@ -137,10 +147,19 @@ class SettingsViewModel(
 
     private val ticks: Flow<Unit> = timeChanges.changes().onStart { emit(Unit) }
 
+    /** The stored usage stats choice; an unreadable store is logged and reads as off. */
+    private val consent: Flow<Boolean> =
+        consents
+            .observe()
+            .catch { cause ->
+                logFailure(LOAD_CONSENT, cause)
+                emit(AnalyticsConsent())
+            }.map { it.consent }
+
     val state: StateFlow<SettingsUiState?> =
-        combine(stored, priceCatalog.observe(), ticks, local) { saved, prices, _, ui ->
+        combine(stored, priceCatalog.observe(), ticks, local, consent) { saved, prices, _, ui, usageStats ->
             forgetEchoed(saved, ui)
-            render(saved, prices, ui)
+            render(saved, prices, ui).copy(usageStats = usageStats)
         }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(STOP_TIMEOUT_MILLIS), null)
 
     /** The save queue, run in order. */
@@ -173,6 +192,8 @@ class SettingsViewModel(
 
             is SettingsIntent.ThemeSelected -> request(DefaultSetting.Theme(intent.mode.toCore()))
 
+            is SettingsIntent.UsageStatsToggled -> setUsageStats(intent.on)
+
             // The other rows belong to later Epic 5 stories; production does not show them.
             else -> Unit
         }
@@ -198,6 +219,14 @@ class SettingsViewModel(
                 loop.join()
                 latest.forEach { value -> logger.logDefaultFailure(defaults.save(value)) }
             }
+        }
+    }
+
+    /** Stores the usage stats choice at once; the switch follows the store, so a failed write leaves it as stored. */
+    private fun setUsageStats(on: Boolean) {
+        viewModelScope.launch {
+            val result = setAnalyticsConsent(on)
+            if (result is Outcome.Failure) logger.log(LogEvent.OperationFailed.of(SAVE_CONSENT, result.error))
         }
     }
 
@@ -427,6 +456,10 @@ class SettingsViewModel(
         const val SAVE_SCOPE = "settings save scope"
         const val LOAD_SETTINGS = "load global settings"
         const val LOAD_PENDING = "load pending changes"
+
+        /** The operations logged when the usage stats choice could not be read or saved (Story 5.6). */
+        const val LOAD_CONSENT = "load usage stats consent"
+        const val SAVE_CONSENT = "save usage stats consent"
 
         private const val STOP_TIMEOUT_MILLIS = 5_000L
     }

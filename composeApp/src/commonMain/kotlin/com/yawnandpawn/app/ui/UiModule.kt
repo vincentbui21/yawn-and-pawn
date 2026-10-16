@@ -17,8 +17,8 @@ import org.koin.dsl.module
 /**
  * Koin bindings of :composeApp (AD-13): one ViewModel per screen. The core ports and use cases they take
  * (`AlarmRepository`, the alarm use cases, `Clock`, `TimeZoneProvider`, `TimeChangeSignal`, `Logger`, `SoundLibrary`,
- * `SoundPreview`, `ExternalLinks`, `AppLinks`, `DeviceInfoSource`, `ManufacturerSettings`, `ConfirmMakerGuidance`) are
- * bound by :androidApp and :data.
+ * `SoundPreview`, `ExternalLinks`, `AppLinks`, `DeviceInfoSource`, `ManufacturerSettings`, `ConfirmMakerGuidance`,
+ * `ConsentStore`, `SetAnalyticsConsent`) are bound by :androidApp and :data.
  */
 val uiModule =
     module {
@@ -39,6 +39,8 @@ val uiModule =
                 logger = get(),
                 defaults = DefaultSettingSetters(get(), get(), get(), get()),
                 outlivingScope = get(named(SettingsViewModel.SAVE_SCOPE)),
+                consents = get(),
+                setAnalyticsConsent = get(),
             )
         }
         viewModel { ProblemWithChargeViewModel(get(), get(), get(), get(), get()) }

@@ -169,9 +169,11 @@ dependencies {
     implementation(libs.compose.foundation)
     implementation(libs.compose.material3)
     implementation(libs.compose.components.resources)
-    // Story 1.19: Crashlytics behind the core CrashReporter port; started only after the user unlocks. No Analytics.
+    // Story 1.19: Crashlytics behind the core CrashReporter port; started only after the user unlocks.
     implementation(platform(libs.firebase.bom))
     implementation(libs.firebase.crashlytics)
+    // Story 5.6 (AD-15): Analytics behind the core Telemetry port, collecting only with the user's consent, after unlock.
+    implementation(libs.firebase.analytics)
     // Story 3.10: the QR/Barcode check. CameraX shows the viewfinder and feeds frames to the bundled ML Kit barcode
     // model (on device, no model download through Play services); no frame is ever stored.
     implementation(libs.camerax.core)

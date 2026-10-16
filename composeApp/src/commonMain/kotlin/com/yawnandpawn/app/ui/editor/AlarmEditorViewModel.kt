@@ -17,6 +17,7 @@ import com.yawnandpawn.app.core.billing.PriceCatalogSnapshot
 import com.yawnandpawn.app.core.checks.AccessibilityState
 import com.yawnandpawn.app.core.checks.CheckEntry
 import com.yawnandpawn.app.core.checks.qr.RegisteredCode
+import com.yawnandpawn.app.core.config.GlobalSettingsRepository
 import com.yawnandpawn.app.core.config.PendingChange
 import com.yawnandpawn.app.core.config.PendingChangeRepository
 import com.yawnandpawn.app.core.error.DomainError
@@ -83,7 +84,8 @@ data class AlarmEditorArgs(
 )
 
 /**
- * The Alarm editor (Story 1.8): loads the alarm with [alarmId] (or starts from the defaults, or, for Duplicate, from the
+ * The Alarm editor (Story 1.8): loads the alarm with [alarmId] (or starts from the defaults, the Settings ones from
+ * [newAlarmDefaults] since Story 5.1, or, for Duplicate, from the
  * settings of the stored alarm [copyOf] as a new alarm that is stored only on Save), keeps the form, and saves it
  * through [SaveAlarm] as an enabled alarm (a new alarm identical to a stored one switches that one on instead). Back
  * (or Duplicate) with unsaved changes asks "Discard changes?" first; on a sub-screen (Sound, Snooze) Back returns to the
@@ -98,7 +100,7 @@ data class AlarmEditorArgs(
  * check, its setup (difficulty and count within the type's range), Random / All and the order; with none, Save shows
  * "Pick at least one check." and stores nothing.
  */
-@Suppress("TooManyFunctions") // One small handler per editor action (save, back, repeat, menu, test, checks).
+@Suppress("TooManyFunctions", "LargeClass") // One small handler per editor action; at the size limit before Story 5.1.
 class AlarmEditorViewModel(
     private val alarmId: String?,
     private val repository: AlarmRepository,
@@ -131,6 +133,11 @@ class AlarmEditorViewModel(
     private val pendingChanges: PendingChangeRepository? = null,
     /** The fee ladder's settings and prices (Story 4.6); null shows no ladder (tests that do not price snoozes). */
     private val fees: EditorFeeSources? = null,
+    /**
+     * The Settings defaults a new alarm opens with (Story 5.1): snooze length, quiet time and its vibration. Not an edit,
+     * not a Duplicate (which keeps the copied alarm's values). Null opens with the built-in defaults (tests).
+     */
+    private val newAlarmDefaults: GlobalSettingsRepository? = null,
 ) : ViewModel() {
     /**
      * The editor opened on QR registration for "Re-register" (only when the alarm has a QR/Barcode check): "Use this
@@ -148,7 +155,7 @@ class AlarmEditorViewModel(
         MutableStateFlow(
             EditorUiState(
                 isNew = alarmId == null,
-                isLoading = alarmId != null || copyOf != null,
+                isLoading = alarmId != null || copyOf != null || newAlarmDefaults != null,
                 full = wakeCheckOnly(pickable, talkBackOn = accessibility.isScreenReaderOn()),
             ).withChecks(),
         )
@@ -194,11 +201,35 @@ class AlarmEditorViewModel(
                 viewModelScope.launch { load(copyOf, asCopy = true) }
             }
 
+            // Story 5.1: a new alarm opens with the Settings defaults once they are read (only the background until then,
+            // as when an alarm opens), so it has no unsaved changes; an unreadable store is logged and the built-in ones
+            // are used.
+            newAlarmDefaults != null -> {
+                viewModelScope.launch { open(newAlarmDefaults.newAlarmForm { actions.logFailure(LOAD_DEFAULTS, it) }) }
+            }
+
             else -> {
                 _state.update { it.withRings(it.form, clock.now(), timeZoneProvider.current()) }
                 sounds.opened()
             }
         }
+    }
+
+    /** Shows the opened [form] (a stored alarm, a duplicate, or a new alarm with the defaults) as the form it starts from. */
+    private fun open(
+        form: EditorForm,
+        shown: EditorUiState.() -> EditorUiState = { this },
+    ) {
+        initialForm = form
+        _state.update {
+            it
+                .copy(isLoading = false, form = form)
+                .shown()
+                .withRings(form, clock.now(), timeZoneProvider.current())
+                .withChecks()
+                .withLock()
+        }
+        sounds.opened()
     }
 
     fun onIntent(intent: EditorIntent) {
@@ -545,21 +576,15 @@ class AlarmEditorViewModel(
                 stored = alarm
                 pendingFields = PendingFields.of(pending, checks.orderedEntries(), ::chipsOf)
                 val form = alarm.toForm(checks).withPending(pendingFields)
-                initialForm = form
                 changedOnOpen = hasUnshownChecks(checks)
                 val custom = form.repeatDays.isNotEmpty() && form.repeatDays != Weekdays
                 // Re-register (Story 3.13): straight to QR registration when the alarm has a QR/Barcode check.
                 val scan = scanCode && form.checks.any { it.type == CheckType.QrBarcode }
                 reRegistering = scan
-                _state.update {
-                    it
-                        .copy(isLoading = false, form = form, customRepeat = custom, hasOverflowMenu = !asCopy)
+                open(form) {
+                    copy(customRepeat = custom, hasOverflowMenu = !asCopy)
                         .let { opened -> if (scan) opened.copy(pane = EditorPane.ScanCode, setupType = CheckType.QrBarcode) else opened }
-                        .withRings(form, clock.now(), timeZoneProvider.current())
-                        .withChecks()
-                        .withLock()
                 }
-                sounds.opened()
             }
 
             // Deleted meanwhile, or storage unreadable (its pending changes too, which a save must not cancel unseen):

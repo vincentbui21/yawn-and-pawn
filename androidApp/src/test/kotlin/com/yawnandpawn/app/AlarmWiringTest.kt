@@ -20,7 +20,11 @@ import com.yawnandpawn.app.core.config.PromotePendingChanges
 import com.yawnandpawn.app.core.config.ReadFireSettings
 import com.yawnandpawn.app.core.config.RecordCommitmentEvent
 import com.yawnandpawn.app.core.config.SetBaseFee
+import com.yawnandpawn.app.core.config.SetDefaultGrace
+import com.yawnandpawn.app.core.config.SetDefaultSnoozeLength
+import com.yawnandpawn.app.core.config.SetDefaultVibrateInGrace
 import com.yawnandpawn.app.core.config.SetMaxSnoozes
+import com.yawnandpawn.app.core.config.SetThemeMode
 import com.yawnandpawn.app.core.id.IdGenerator
 import com.yawnandpawn.app.core.id.UuidV4IdGenerator
 import com.yawnandpawn.app.data.alarm.RoomAlarmRepository
@@ -66,6 +70,11 @@ class AlarmWiringTest {
         assertIs<RoomCommitmentEventRepository>(koin.get<CommitmentEventRepository>())
         assertNotNull(koin.get<SetBaseFee>())
         assertNotNull(koin.get<SetMaxSnoozes>())
+        // Story 5.1: the new-alarm defaults and the theme.
+        assertNotNull(koin.get<SetDefaultGrace>())
+        assertNotNull(koin.get<SetDefaultVibrateInGrace>())
+        assertNotNull(koin.get<SetDefaultSnoozeLength>())
+        assertNotNull(koin.get<SetThemeMode>())
         assertNotNull(koin.get<RecordCommitmentEvent>())
         assertSame(koin.get<PromotePendingChanges>(), koin.get<PromotePendingChanges>())
         assertNotNull(koin.get<ReadFireSettings>())

@@ -8,6 +8,7 @@ import com.yawnandpawn.app.core.alarm.AlarmWriteLock
 import com.yawnandpawn.app.core.config.GlobalSettingsRepository
 import com.yawnandpawn.app.core.config.Occurrence
 import com.yawnandpawn.app.core.config.PendingChange
+import com.yawnandpawn.app.core.config.SaveDefaultSetting
 import com.yawnandpawn.app.core.config.SaveGlobalSetting
 import com.yawnandpawn.app.core.config.SetBaseFee
 import com.yawnandpawn.app.core.config.SetMaxSnoozes
@@ -119,6 +120,7 @@ class SettingsViewModelSequenceTest {
             timeChanges = FakeTimeChangeSignal(),
             moneyFormatter = FakeMoneyFormatter(),
             logger = logger,
+            defaults = DefaultSettingSetters(SaveDefaultSetting(settings, sessionLock)),
         )
     }
 

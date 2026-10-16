@@ -3,6 +3,7 @@ package com.yawnandpawn.app.data.config
 import androidx.datastore.core.DataStore
 import androidx.datastore.preferences.core.MutablePreferences
 import androidx.datastore.preferences.core.Preferences
+import androidx.datastore.preferences.core.booleanPreferencesKey
 import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.emptyPreferences
 import androidx.datastore.preferences.core.intPreferencesKey
@@ -12,6 +13,7 @@ import com.yawnandpawn.app.core.config.LockedField
 import com.yawnandpawn.app.core.config.PendingChange
 import com.yawnandpawn.app.core.config.PendingChangeJson
 import com.yawnandpawn.app.core.config.PendingChangeRepository
+import com.yawnandpawn.app.core.config.SaveDefaultSetting
 import com.yawnandpawn.app.core.config.SaveGlobalSetting
 import com.yawnandpawn.app.core.config.SettingsSnapshot
 import com.yawnandpawn.app.core.config.SettingsSnapshotCache
@@ -22,6 +24,7 @@ import com.yawnandpawn.app.core.error.map
 import com.yawnandpawn.app.core.log.LogEvent
 import com.yawnandpawn.app.core.log.Logger
 import com.yawnandpawn.app.core.session.GlobalSettings
+import com.yawnandpawn.app.core.session.ThemeMode
 import com.yawnandpawn.app.data.settings.DataStoreMissedNoteDismissals
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.Flow
@@ -34,7 +37,9 @@ import okio.IOException
 /**
  * The global settings (FR-SET-1) and the global pending changes (Story 4.4) in the settings DataStore (device-protected,
  * so a ring before the first unlock reads them; backed up). AD-6: no copy in `app.db`.
- * - [BASE_FEE_TIER] and [MAX_SNOOZES]: a missing or out-of-range value reads as the `GlobalSettings` default.
+ * - [BASE_FEE_TIER] and [MAX_SNOOZES], and the Story 5.1 defaults and theme ([DEFAULT_GRACE_SECONDS],
+ *   [DEFAULT_VIBRATE_IN_GRACE], [DEFAULT_SNOOZE_LENGTH], [THEME_MODE]): a missing or out-of-range value (an unknown theme
+ *   name too) reads as the `GlobalSettings` default.
  * - [PENDING_GLOBAL]: the global pending changes as one `PendingChangeJson` list; a list that does not decode reads as
  *   none (the live settings, the stronger ones, apply).
  * - Every successful [snapshot] and every write keeps the resulting snapshot in [cache] ([lastKnown], review fix 11), so a
@@ -59,6 +64,14 @@ class DataStoreGlobalSettings(
     override suspend fun setBaseFeeTier(tier: Int): Outcome<Unit, DomainError> = edit { it[BASE_FEE_TIER] = tier }
 
     override suspend fun setMaxSnoozes(count: Int): Outcome<Unit, DomainError> = edit { it[MAX_SNOOZES] = count }
+
+    override suspend fun setDefaultGraceSeconds(seconds: Int): Outcome<Unit, DomainError> = edit { it[DEFAULT_GRACE_SECONDS] = seconds }
+
+    override suspend fun setDefaultVibrateInGrace(on: Boolean): Outcome<Unit, DomainError> = edit { it[DEFAULT_VIBRATE_IN_GRACE] = on }
+
+    override suspend fun setDefaultSnoozeLength(minutes: Int): Outcome<Unit, DomainError> = edit { it[DEFAULT_SNOOZE_LENGTH] = minutes }
+
+    override suspend fun setThemeMode(mode: ThemeMode): Outcome<Unit, DomainError> = edit { it[THEME_MODE] = mode.name }
 
     override suspend fun snapshot(): Outcome<SettingsSnapshot, DomainError> = storage { snapshotOf(store.data.first()).also(cache::save) }
 
@@ -102,6 +115,18 @@ class DataStoreGlobalSettings(
         /** Max snoozes per session, 1–5. */
         val MAX_SNOOZES: Preferences.Key<Int> = intPreferencesKey("max_snoozes")
 
+        /** "Default quiet time" for new alarms, 15–30 s (Story 5.1). */
+        val DEFAULT_GRACE_SECONDS: Preferences.Key<Int> = intPreferencesKey("default_grace_seconds")
+
+        /** "Vibrate during quiet time" for new alarms (Story 5.1). */
+        val DEFAULT_VIBRATE_IN_GRACE: Preferences.Key<Boolean> = booleanPreferencesKey("default_vibrate_in_grace")
+
+        /** "Default snooze length" for new alarms, 5 / 9 / 10 / 15 min (Story 5.1). */
+        val DEFAULT_SNOOZE_LENGTH: Preferences.Key<Int> = intPreferencesKey("default_snooze_length_minutes")
+
+        /** The app theme as a `ThemeMode` name (Story 5.1); an unknown name reads as System. */
+        val THEME_MODE: Preferences.Key<String> = stringPreferencesKey("theme_mode")
+
         /** The global pending changes (`PendingChangeJson.encodeGlobal`). */
         val PENDING_GLOBAL: Preferences.Key<String> = stringPreferencesKey("pending_global_changes")
 
@@ -110,6 +135,13 @@ class DataStoreGlobalSettings(
             return defaults.copy(
                 baseFeeTier = preferences[BASE_FEE_TIER]?.takeIf { it in SaveGlobalSetting.BASE_FEE_TIERS } ?: defaults.baseFeeTier,
                 maxSnoozes = preferences[MAX_SNOOZES]?.takeIf { it in SaveGlobalSetting.MAX_SNOOZES } ?: defaults.maxSnoozes,
+                defaultGraceSeconds =
+                    preferences[DEFAULT_GRACE_SECONDS]?.takeIf { it in SaveDefaultSetting.GRACE_SECONDS } ?: defaults.defaultGraceSeconds,
+                defaultSnoozeLengthMinutes =
+                    preferences[DEFAULT_SNOOZE_LENGTH]?.takeIf { it in SaveDefaultSetting.SNOOZE_LENGTHS }
+                        ?: defaults.defaultSnoozeLengthMinutes,
+                defaultVibrateInGrace = preferences[DEFAULT_VIBRATE_IN_GRACE] ?: defaults.defaultVibrateInGrace,
+                themeMode = ThemeMode.parse(preferences[THEME_MODE]) ?: defaults.themeMode,
             )
         }
 

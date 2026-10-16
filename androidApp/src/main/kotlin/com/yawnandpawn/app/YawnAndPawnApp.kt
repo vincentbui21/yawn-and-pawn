@@ -51,9 +51,14 @@ import com.yawnandpawn.app.core.config.CommitmentLog
 import com.yawnandpawn.app.core.config.PromotePendingChanges
 import com.yawnandpawn.app.core.config.ReadFireSettings
 import com.yawnandpawn.app.core.config.RecordCommitmentEvent
+import com.yawnandpawn.app.core.config.SaveDefaultSetting
 import com.yawnandpawn.app.core.config.SaveGlobalSetting
 import com.yawnandpawn.app.core.config.SetBaseFee
+import com.yawnandpawn.app.core.config.SetDefaultGrace
+import com.yawnandpawn.app.core.config.SetDefaultSnoozeLength
+import com.yawnandpawn.app.core.config.SetDefaultVibrateInGrace
 import com.yawnandpawn.app.core.config.SetMaxSnoozes
+import com.yawnandpawn.app.core.config.SetThemeMode
 import com.yawnandpawn.app.core.error.valueOrNull
 import com.yawnandpawn.app.core.history.MissedNotes
 import com.yawnandpawn.app.core.id.IdGenerator
@@ -130,6 +135,12 @@ val appModule =
         factory { SaveGlobalSetting(get(), get(), get(), get(), get(), get(), get()) }
         factory { SetBaseFee(get()) }
         factory { SetMaxSnoozes(get()) }
+        // Story 5.1: the new-alarm defaults and the theme, no commitment lock.
+        factory { SaveDefaultSetting(get(), get()) }
+        factory { SetDefaultGrace(get()) }
+        factory { SetDefaultVibrateInGrace(get()) }
+        factory { SetDefaultSnoozeLength(get()) }
+        factory { SetThemeMode(get()) }
         factory { RecordCommitmentEvent(get(), get(), get(), get(), get()) }
         // Story 4.6: turning an alarm off or deleting it inside its lock window is logged by the alarm use cases.
         factory { CommitmentLog(get(), get(), get()) }

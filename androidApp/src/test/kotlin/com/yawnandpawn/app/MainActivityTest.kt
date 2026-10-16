@@ -306,10 +306,12 @@ class MainActivityTest {
         waitForText("Your first morning shows up here.")
         composeRule.onNodeWithText("Purchase history").assertDoesNotExist()
 
-        // Story 4.5 built the Snooze card's base fee and max snoozes; the Epic 5 rows stay hidden.
+        // Story 4.5 built the Snooze card's base fee and max snoozes, Story 5.1 the defaults and Appearance; the later
+        // Epic 5 rows stay hidden.
         tab("Settings").performClick()
         waitForText("Max snoozes per session")
-        composeRule.onNodeWithText("Default snooze length").assertDoesNotExist()
+        composeRule.onNode(hasText("Default snooze length", substring = true) and hasClickAction()).assertExists()
+        composeRule.onNodeWithText("Bright wake screen").assertDoesNotExist()
         composeRule.onNodeWithText("Reliability checklist").assertDoesNotExist()
 
         tab("You").performClick()

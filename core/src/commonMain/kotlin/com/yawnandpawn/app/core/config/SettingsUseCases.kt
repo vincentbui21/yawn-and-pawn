@@ -16,6 +16,12 @@ import com.yawnandpawn.app.core.time.TimeZoneProvider
 enum class SettingField {
     BaseFee,
     MaxSnoozes,
+
+    /** "Default quiet time" outside 15 to 30 s (Story 5.1). */
+    DefaultGrace,
+
+    /** "Default snooze length" other than 5 / 9 / 10 / 15 min (Story 5.1). */
+    DefaultSnoozeLength,
 }
 
 /**

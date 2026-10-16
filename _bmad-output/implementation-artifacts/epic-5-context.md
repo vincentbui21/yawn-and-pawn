@@ -47,6 +47,7 @@ A new user is guided through setup in 8 onboarding steps: mission, alarm behavio
 - **System alarms:** all scheduling and cancelling goes through `AlarmScheduler`, with one request code per occurrence plus one session slot. Granting exact alarms triggers `rescheduleAll()`. Deferred work goes through `BackgroundWork`; Delete all data cancels it all except consume-retry. Granted `grant_ledger` rows survive Delete all data until consumed.
 - **Delete all data must survive a crash:** it writes a `deleteInProgress` marker first. The next app start finishes the deletion before showing any screen.
 - **Story 5.9 must decide** whether "Delete all data" logs each alarm deletion. If it does, the logging belongs inside `DeleteAlarm`, so no path can skip it.
+- **Story 5.9 must also clear the `settings_fallback` shared preferences** (`SharedPreferencesSettingsCache`, device-protected, not backed up). Since Story 5.1 this last-known settings snapshot holds the new-alarm defaults and the theme as well as the fees, and it gives the first frame (and the window background) its theme.
 - **Published URLs** live in `config/app-links.properties` and are exposed as `AppLinks`. Only `docs/site/` is published, by `.github/workflows/pages.yml`. `checkSitePages` is a `qualityGate` dependency.
 
 ## UX & Interaction Patterns

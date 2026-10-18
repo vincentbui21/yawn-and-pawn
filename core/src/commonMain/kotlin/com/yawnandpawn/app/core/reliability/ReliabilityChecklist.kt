@@ -57,14 +57,17 @@ data class ChecklistEntry(
  * @property sdkInt the API level.
  * @property maker the manufacturer (`Build.MANUFACTURER`).
  * @property fingerprint the build fingerprint: a confirmation of the maker guidance holds for this build only.
- * @property makerCovered the maker guidance covers [maker] (the mapping comes with Story 5.5; false until then).
+ * @property deviceMaker the maker the guidance knows this phone as ([DeviceMaker.of], Story 5.5).
  */
 data class DeviceInfo(
     val sdkInt: Int,
     val maker: String,
     val fingerprint: String,
-    val makerCovered: Boolean = false,
-)
+    val deviceMaker: DeviceMaker = DeviceMaker.Other,
+) {
+    /** The maker guidance covers this phone ([DeviceMaker.covered]): the Manufacturer row shows. */
+    val makerCovered: Boolean get() = deviceMaker.covered
+}
 
 /** Port: the phone the app runs on. */
 fun interface DeviceInfoSource {

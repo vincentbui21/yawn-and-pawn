@@ -38,6 +38,7 @@ import com.yawnandpawn.app.ui.progress.CalendarMonth
 import com.yawnandpawn.app.ui.progress.ProgressScreen
 import com.yawnandpawn.app.ui.progress.ProgressUiState
 import com.yawnandpawn.app.ui.purchases.PurchaseHistoryRoute
+import com.yawnandpawn.app.ui.reliability.ManufacturerGuidanceRoute
 import com.yawnandpawn.app.ui.settings.SettingsRoute
 import com.yawnandpawn.app.ui.settings.WeakeningNote
 import com.yawnandpawn.app.ui.shell.AppShell
@@ -124,6 +125,9 @@ fun AppNavHost(modifier: Modifier = Modifier) {
                     }
                     entry<Route.PurchaseHistory> { PurchaseHistoryEntry(backStack) }
                     entry<Route.ProblemWithCharge> { ProblemWithChargeRoute(onBack = { backStack.close(Route.ProblemWithCharge) }) }
+                    entry<Route.ManufacturerGuidance> {
+                        ManufacturerGuidanceRoute(onClose = { backStack.close(Route.ManufacturerGuidance) })
+                    }
                 },
         )
     }

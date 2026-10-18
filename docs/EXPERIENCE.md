@@ -281,7 +281,7 @@ Body copy, one bullet per paragraph (each ≤ 25 words).
   - "Google lets you request a refund yourself within 48 hours of a charge."
 - **Reliability checklist, manufacturer guidance** (2 to 4 numbered steps per maker, sourced from `docs/oem-guidance.md`)
   - Xiaomi: "Turn on Autostart for Yawn & Pawn." · "Set Battery saver to “No restrictions”." · "Lock the app in Recents so it stays open."
-  - Samsung, Huawei, Oppo/Realme, Vivo, OnePlus: to be added from `docs/oem-guidance.md` when it is written.
+  - Samsung, Huawei, Oppo/Realme, Vivo, OnePlus: owner drafts in `docs/oem-guidance.md` (Story 5.5), each ending with Xiaomi step 3; they move here once the owner approves them.
 
 ## Component Patterns
 

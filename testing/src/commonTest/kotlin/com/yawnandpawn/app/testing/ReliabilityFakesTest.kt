@@ -3,6 +3,7 @@ package com.yawnandpawn.app.testing
 import com.yawnandpawn.app.core.error.DomainError
 import com.yawnandpawn.app.core.error.Outcome
 import com.yawnandpawn.app.core.reliability.ChecklistRow
+import com.yawnandpawn.app.core.reliability.DeviceMaker
 import com.yawnandpawn.app.core.reliability.MakerConfirmation
 import com.yawnandpawn.app.core.reliability.ReliabilityItem
 import com.yawnandpawn.app.core.reliability.ReliabilityStatus
@@ -30,6 +31,10 @@ class ReliabilityFakesTest {
         val settings = FakeReliabilitySettings()
         settings.open(ReliabilityItem.ExactAlarms)
         assertEquals(listOf(ReliabilityItem.ExactAlarms), settings.opened)
+
+        val maker = FakeManufacturerSettings()
+        maker.open(DeviceMaker.Vivo)
+        assertEquals(listOf(DeviceMaker.Vivo), maker.opened)
 
         val permission = FakeNotificationPermission(needed = true)
         assertTrue(permission.shouldRequest())

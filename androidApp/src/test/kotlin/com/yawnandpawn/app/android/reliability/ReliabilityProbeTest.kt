@@ -23,6 +23,7 @@ import com.yawnandpawn.app.core.log.Logger
 import com.yawnandpawn.app.core.reliability.ChecklistRow
 import com.yawnandpawn.app.core.reliability.DeviceInfo
 import com.yawnandpawn.app.core.reliability.DeviceInfoSource
+import com.yawnandpawn.app.core.reliability.DeviceMaker
 import com.yawnandpawn.app.core.reliability.EvaluateReliability
 import com.yawnandpawn.app.core.reliability.NotificationPermission
 import com.yawnandpawn.app.core.reliability.ReliabilityProbe
@@ -410,17 +411,23 @@ class ReliabilityProbeTest {
         private fun fromDndRead(): Boolean = Throwable().stackTrace.any { it.methodName == "dndAllowsAlarms" }
     }
 
-    /** Review item 2: the phone's details, read from `Build`; no maker is covered until Story 5.5. */
+    /** Review item 2: the phone's details, read from `Build`; Story 5.5 maps the maker, then the brand. */
     @Test
-    fun `the device info source reads the API level, maker and build, and covers no maker yet`() {
-        assertEquals(DeviceInfo(31, "X", "f", makerCovered = false), AndroidDeviceInfoSource(31, "X", "f").current())
+    fun `the device info source reads the API level, maker and build, and maps the maker or else the brand`() {
+        assertEquals(DeviceInfo(31, "X", "f", DeviceMaker.Other), AndroidDeviceInfoSource(31, "X", "f", "X").current())
+        assertEquals(DeviceMaker.Xiaomi, AndroidDeviceInfoSource(34, "Xiaomi", "f", "Redmi").current().deviceMaker)
+        assertEquals(DeviceMaker.OppoRealme, AndroidDeviceInfoSource(34, "Unknown", "f", "realme").current().deviceMaker)
+        assertEquals(DeviceMaker.Huawei, AndroidDeviceInfoSource(34, "HONOR", "f", "HONOR").current().deviceMaker)
+        val oppo = AndroidDeviceInfoSource(34, " OPPO ", "f", "OPPO").current()
+        assertEquals(" OPPO ", oppo.maker, "the confirmation keeps the raw manufacturer")
+        assertEquals(true, oppo.makerCovered)
 
         val device = GlobalContext.get().get<DeviceInfoSource>().current()
         assertIs<AndroidDeviceInfoSource>(GlobalContext.get().get<DeviceInfoSource>())
         assertEquals(Build.VERSION.SDK_INT, device.sdkInt)
         assertEquals(Build.MANUFACTURER.orEmpty(), device.maker)
         assertEquals(Build.FINGERPRINT.orEmpty(), device.fingerprint)
-        assertEquals(false, device.makerCovered)
+        assertEquals(DeviceMaker.of(Build.MANUFACTURER.orEmpty(), Build.BRAND.orEmpty()), device.deviceMaker)
     }
 
     /** Review item 2: the app's graph builds the checklist evaluation over its real records and alarms. */

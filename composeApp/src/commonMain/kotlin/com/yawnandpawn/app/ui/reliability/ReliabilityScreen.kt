@@ -1,7 +1,6 @@
 package com.yawnandpawn.app.ui.reliability
 
 import androidx.compose.animation.AnimatedContent
-import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -13,12 +12,11 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.semantics.semantics
-import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
+import com.yawnandpawn.app.core.reliability.DeviceMaker
 import com.yawnandpawn.app.ui.components.GroupCard
 import com.yawnandpawn.app.ui.components.GroupDivider
 import com.yawnandpawn.app.ui.components.PpsOutlinedButton
-import com.yawnandpawn.app.ui.components.PpsTextButton
 import com.yawnandpawn.app.ui.components.RowIcon
 import com.yawnandpawn.app.ui.components.SubScreen
 import com.yawnandpawn.app.ui.components.subScreenTransition
@@ -31,7 +29,6 @@ import com.yawnandpawn.app.ui.resources.reliability_camera
 import com.yawnandpawn.app.ui.resources.reliability_camera_reason
 import com.yawnandpawn.app.ui.resources.reliability_dnd
 import com.yawnandpawn.app.ui.resources.reliability_dnd_reason
-import com.yawnandpawn.app.ui.resources.reliability_done_this
 import com.yawnandpawn.app.ui.resources.reliability_exact
 import com.yawnandpawn.app.ui.resources.reliability_exact_reason
 import com.yawnandpawn.app.ui.resources.reliability_full_screen
@@ -43,7 +40,6 @@ import com.yawnandpawn.app.ui.resources.reliability_microphone_reason
 import com.yawnandpawn.app.ui.resources.reliability_notifications
 import com.yawnandpawn.app.ui.resources.reliability_notifications_reason
 import com.yawnandpawn.app.ui.resources.reliability_ok
-import com.yawnandpawn.app.ui.resources.reliability_open_settings
 import com.yawnandpawn.app.ui.resources.reliability_revoked_battery
 import com.yawnandpawn.app.ui.resources.reliability_revoked_dnd
 import com.yawnandpawn.app.ui.resources.reliability_revoked_exact
@@ -53,9 +49,6 @@ import com.yawnandpawn.app.ui.resources.reliability_revoked_notifications
 import com.yawnandpawn.app.ui.resources.reliability_ring_test
 import com.yawnandpawn.app.ui.resources.reliability_test
 import com.yawnandpawn.app.ui.resources.reliability_test_reason
-import com.yawnandpawn.app.ui.resources.reliability_xiaomi_step_1
-import com.yawnandpawn.app.ui.resources.reliability_xiaomi_step_2
-import com.yawnandpawn.app.ui.resources.reliability_xiaomi_step_3
 import com.yawnandpawn.app.ui.resources.settings_reliability
 import com.yawnandpawn.app.ui.resources.symbol_check_circle_fill1
 import com.yawnandpawn.app.ui.resources.symbol_error
@@ -101,20 +94,14 @@ data class ChecklistRow(
 
 /**
  * What the Reliability checklist renders: [rows] (camera and microphone only when a check or recording needs them) and,
- * with [showManufacturerSteps], the manufacturer guidance sub-screen for [manufacturerSteps] (2 to 4 numbered steps).
+ * with [showManufacturerSteps], the maker guidance ([ManufacturerGuidanceScreen]) for [manufacturer].
  */
 data class ReliabilityUiState(
     val rows: List<ChecklistRow>,
     val showManufacturerSteps: Boolean = false,
-    val manufacturerSteps: List<StringResource> = XIAOMI_STEPS,
+    val manufacturer: DeviceMaker = DeviceMaker.Xiaomi,
 ) {
     val allOk: Boolean get() = rows.all { it.status == ItemStatus.Ok }
-
-    companion object {
-        /** EXPERIENCE.md long-form copy, Xiaomi (other makers follow docs/oem-guidance.md). */
-        val XIAOMI_STEPS: List<StringResource> =
-            listOf(Res.string.reliability_xiaomi_step_1, Res.string.reliability_xiaomi_step_2, Res.string.reliability_xiaomi_step_3)
-    }
 }
 
 /** Everything the user can do on the Reliability checklist. */
@@ -152,7 +139,12 @@ fun ReliabilityScreen(
         label = "reliability pane",
     ) { steps ->
         if (steps) {
-            ManufacturerSteps(steps = state.manufacturerSteps, onIntent = onIntent)
+            ManufacturerGuidanceScreen(
+                maker = state.manufacturer,
+                onBack = { onIntent(ReliabilityIntent.Back) },
+                onOpenSettings = { onIntent(ReliabilityIntent.OpenManufacturerSettings) },
+                onDone = { onIntent(ReliabilityIntent.ManufacturerDone) },
+            )
         } else {
             Checklist(state = state, onIntent = onIntent)
         }
@@ -241,56 +233,6 @@ private fun ChecklistRowView(
         if (row.status != ItemStatus.Ok && !isTest) {
             PpsOutlinedButton(text = stringResource(Res.string.home_fix), onClick = onFix, modifier = Modifier.widthIn(min = FIX_WIDTH))
         }
-    }
-}
-
-/** The manufacturer guidance: numbered steps, then "Open settings" and "I've done this". */
-@Composable
-private fun ManufacturerSteps(
-    steps: List<StringResource>,
-    onIntent: (ReliabilityIntent) -> Unit,
-) {
-    val colors = PpsTheme.colors
-    val spacing = PpsTheme.spacing
-    SubScreen(
-        title = stringResource(Res.string.reliability_manufacturer),
-        backContentDescription = stringResource(Res.string.editor_back),
-        onBack = { onIntent(ReliabilityIntent.Back) },
-    ) {
-        GroupCard {
-            steps.forEachIndexed { index, step ->
-                if (index > 0) GroupDivider()
-                Row(
-                    modifier =
-                        Modifier
-                            .fillMaxWidth()
-                            .heightIn(min = spacing.targetMin)
-                            .semantics(mergeDescendants = true) { }
-                            .padding(horizontal = spacing.cardPadding, vertical = spacing.space3),
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(spacing.space3),
-                ) {
-                    Text(
-                        text = (index + 1).toString(),
-                        modifier = Modifier.widthIn(min = spacing.space5),
-                        style = PpsTheme.typography.title,
-                        color = colors.textSecondary,
-                        textAlign = TextAlign.Center,
-                    )
-                    Text(text = stringResource(step), style = PpsTheme.typography.body, color = colors.text)
-                }
-            }
-        }
-        PpsOutlinedButton(
-            text = stringResource(Res.string.reliability_open_settings),
-            onClick = { onIntent(ReliabilityIntent.OpenManufacturerSettings) },
-            modifier = Modifier.fillMaxWidth(),
-        )
-        PpsTextButton(
-            text = stringResource(Res.string.reliability_done_this),
-            onClick = { onIntent(ReliabilityIntent.ManufacturerDone) },
-            modifier = Modifier.fillMaxWidth(),
-        )
     }
 }
 

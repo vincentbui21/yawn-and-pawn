@@ -58,6 +58,14 @@ sealed interface Route : NavKey {
     data object ProblemWithCharge : Route
 
     /**
+     * The maker guidance (Story 5.5): the phone maker's steps, "Open settings" and "I've done this", which closes it.
+     * Pushed over a tab until the checklist screen (Story 5.4) pushes it from its Manufacturer row; Back returns there.
+     * Not a tab, so the nav capsule hides.
+     */
+    @Serializable
+    data object ManufacturerGuidance : Route
+
+    /**
      * The session lock (Story 2.6, FR-SES-3): while a wake session is active it is the whole back stack, showing only
      * "Alarm in progress" with "Back to alarm" ([applySessionLock]). It is not a tab, so the nav capsule hides.
      */

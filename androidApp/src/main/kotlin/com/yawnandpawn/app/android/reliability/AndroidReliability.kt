@@ -20,6 +20,7 @@ import com.yawnandpawn.app.core.log.LogEvent
 import com.yawnandpawn.app.core.log.Logger
 import com.yawnandpawn.app.core.reliability.DeviceInfo
 import com.yawnandpawn.app.core.reliability.DeviceInfoSource
+import com.yawnandpawn.app.core.reliability.DeviceMaker
 import com.yawnandpawn.app.core.reliability.NotificationPermission
 import com.yawnandpawn.app.core.reliability.ReliabilityItem
 import com.yawnandpawn.app.core.reliability.ReliabilityProbe
@@ -241,13 +242,15 @@ class AndroidNotificationPermission(
 }
 
 /**
- * The Android [DeviceInfoSource] (Story 5.3): the API level, `Build.MANUFACTURER` and `Build.FINGERPRINT`. No maker is
- * covered until Story 5.5 brings the maker guidance.
+ * The Android [DeviceInfoSource] (Story 5.3): the API level, `Build.MANUFACTURER` and `Build.FINGERPRINT`, and the
+ * maker the guidance knows the phone as, from the manufacturer, then `Build.BRAND` ([DeviceMaker.of], Story 5.5).
  */
 class AndroidDeviceInfoSource(
     private val sdkInt: Int = Build.VERSION.SDK_INT,
     private val maker: String = Build.MANUFACTURER.orEmpty(),
     private val fingerprint: String = Build.FINGERPRINT.orEmpty(),
+    private val brand: String = Build.BRAND.orEmpty(),
 ) : DeviceInfoSource {
-    override fun current(): DeviceInfo = DeviceInfo(sdkInt = sdkInt, maker = maker, fingerprint = fingerprint, makerCovered = false)
+    override fun current(): DeviceInfo =
+        DeviceInfo(sdkInt = sdkInt, maker = maker, fingerprint = fingerprint, deviceMaker = DeviceMaker.of(maker, brand))
 }

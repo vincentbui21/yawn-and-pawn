@@ -386,9 +386,20 @@
     <string name="reliability_ring_test">Ring a test alarm</string>
     <string name="reliability_open_settings">Open settings</string>
     <string name="reliability_done_this">I've done this</string>
+    <!-- Manufacturer guidance steps (Story 5.5). Xiaomi and the Recents step are EXPERIENCE.md long-form copy; every
+         other step is an owner draft, sourced in docs/oem-guidance.md. -->
+    <string name="reliability_step_recents">Lock the app in Recents so it stays open.</string>
+    <string name="reliability_step_battery_usage">In the app's Battery usage, turn on “Allow background activity”.</string>
     <string name="reliability_xiaomi_step_1">Turn on Autostart for Yawn &amp; Pawn.</string>
     <string name="reliability_xiaomi_step_2">Set Battery saver to “No restrictions”.</string>
-    <string name="reliability_xiaomi_step_3">Lock the app in Recents so it stays open.</string>
+    <string name="reliability_samsung_step_1">In Battery, open Background usage limits and add Yawn &amp; Pawn to “Never sleeping apps”.</string>
+    <string name="reliability_samsung_step_2">Turn off “Put unused apps to sleep”.</string>
+    <string name="reliability_huawei_step_1">In App launch, set Yawn &amp; Pawn to “Manage manually”.</string>
+    <string name="reliability_huawei_step_2">Turn on Auto-launch, Secondary launch and Run in background.</string>
+    <string name="reliability_oppo_step_2">Turn on “Allow auto launch” on the same screen.</string>
+    <string name="reliability_vivo_step_1">In Battery, allow “High background power consumption” for Yawn &amp; Pawn.</string>
+    <string name="reliability_vivo_step_2">Turn on Autostart for Yawn &amp; Pawn.</string>
+    <string name="reliability_oneplus_step_2">In Battery optimization, turn off “Advanced optimization” if your phone has it.</string>
 
     <!-- How payments & refunds work (long-form copy, one string per paragraph) -->
     <string name="payments_fee_body">Each snooze costs your base fee times the snooze number. Google Play shows the price in your local currency.</string>

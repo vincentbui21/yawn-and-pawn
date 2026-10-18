@@ -137,6 +137,35 @@ class TabNavigationTest {
     }
 
     @Test
+    fun `the maker guidance is pushed over the tab on top once, never over a pushed screen or the lock, and closes to the tab`() {
+        val backStack = stack(Route.Alarms, Route.Settings)
+        assertNull(Route.ManufacturerGuidance.tab)
+
+        backStack.openManufacturerGuidance()
+        backStack.openManufacturerGuidance()
+        backStack.selectTab(AppTab.You)
+        backStack.openEditor(alarmId = null)
+        assertEquals(listOf<NavKey>(Route.Alarms, Route.Settings, Route.ManufacturerGuidance), backStack)
+
+        backStack.close(Route.ManufacturerGuidance)
+        backStack.close(Route.ManufacturerGuidance)
+        assertEquals(listOf<NavKey>(Route.Alarms, Route.Settings), backStack)
+
+        backStack.openManufacturerGuidance()
+        backStack.pop()
+        assertEquals(listOf<NavKey>(Route.Alarms, Route.Settings), backStack)
+
+        val overHistory = stack(Route.Alarms, Route.You, Route.PurchaseHistory)
+        overHistory.openManufacturerGuidance()
+        assertEquals(listOf<NavKey>(Route.Alarms, Route.You, Route.PurchaseHistory), overHistory)
+
+        backStack.openManufacturerGuidance()
+        assertEquals(true, backStack.applySessionLock(active = true))
+        backStack.openManufacturerGuidance()
+        assertEquals(listOf<NavKey>(Route.SessionInProgress), backStack)
+    }
+
+    @Test
     fun `a session replaces Purchase history with the lock, and its end lands on Home`() {
         val backStack = stack(Route.Alarms, Route.You, Route.PurchaseHistory)
 

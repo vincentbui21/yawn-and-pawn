@@ -41,6 +41,19 @@ class CopyRulesTest {
     }
 
     @Test
+    fun `every manufacturer guidance step has at most 25 words, and the shared Recents step is EXPERIENCE's Xiaomi step 3`() {
+        val strings = CopyRules.stringFiles(composeResources).flatMap { CopyRules.read(it) }
+        val steps = strings.filter { it.key.startsWith("reliability_") && "_step" in it.key }
+
+        assertTrue(steps.size >= 12, "manufacturer steps: ${steps.map { it.key }}")
+        steps.forEach { step ->
+            val words = step.text.split(Regex("\\s+")).count { it.isNotBlank() }
+            assertTrue(words <= 25, "'${step.key}' has $words words (max 25)")
+        }
+        assertEquals("Lock the app in Recents so it stays open.", steps.single { it.key == "reliability_step_recents" }.text)
+    }
+
+    @Test
     fun `plain supportive copy passes`() {
         assertEquals(emptyList(), violations("mission_body", "This app makes money only when you snooze. We hope you never pay us."))
         assertEquals(emptyList(), violations("snooze_label", "Snooze · %1\$s"))

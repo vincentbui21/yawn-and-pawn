@@ -11,6 +11,11 @@ import com.yawnandpawn.app.core.config.PendingChangeRepository
 import com.yawnandpawn.app.core.history.MissedNotes
 import com.yawnandpawn.app.core.history.SessionHistoryRepository
 import com.yawnandpawn.app.core.log.Logger
+import com.yawnandpawn.app.core.reliability.ConfirmMakerGuidance
+import com.yawnandpawn.app.core.reliability.DeviceInfo
+import com.yawnandpawn.app.core.reliability.DeviceInfoSource
+import com.yawnandpawn.app.core.reliability.DeviceMaker
+import com.yawnandpawn.app.core.reliability.ManufacturerSettings
 import com.yawnandpawn.app.core.reliability.NotificationPermission
 import com.yawnandpawn.app.core.reliability.ReliabilityProbe
 import com.yawnandpawn.app.core.reliability.ReliabilitySettings
@@ -29,6 +34,7 @@ import com.yawnandpawn.app.testing.FakeAlarmScheduler
 import com.yawnandpawn.app.testing.FakeClock
 import com.yawnandpawn.app.testing.FakeGlobalSettingsRepository
 import com.yawnandpawn.app.testing.FakeLogger
+import com.yawnandpawn.app.testing.FakeManufacturerSettings
 import com.yawnandpawn.app.testing.FakeMissedNoteDismissals
 import com.yawnandpawn.app.testing.FakeMoneyFormatter
 import com.yawnandpawn.app.testing.FakeNotificationPermission
@@ -37,6 +43,7 @@ import com.yawnandpawn.app.testing.FakePriceCatalog
 import com.yawnandpawn.app.testing.FakePurchaseRecordRepository
 import com.yawnandpawn.app.testing.FakeReRegisterDismissals
 import com.yawnandpawn.app.testing.FakeReliabilityProbe
+import com.yawnandpawn.app.testing.FakeReliabilityRecords
 import com.yawnandpawn.app.testing.FakeReliabilitySettings
 import com.yawnandpawn.app.testing.FakeSessionHistoryRepository
 import com.yawnandpawn.app.testing.FakeSoundLibrary
@@ -52,6 +59,7 @@ import com.yawnandpawn.app.ui.home.HomeViewModel
 import com.yawnandpawn.app.ui.purchases.PurchaseHistoryViewModel
 import com.yawnandpawn.app.ui.qr.CameraPermission
 import com.yawnandpawn.app.ui.qr.TestCameraPermission
+import com.yawnandpawn.app.ui.reliability.ManufacturerGuidanceViewModel
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.test.UnconfinedTestDispatcher
@@ -139,6 +147,26 @@ class UiModuleTest {
         } finally {
             Dispatchers.resetMain()
         }
+    }
+
+    @Test
+    fun `the ui module builds the maker guidance ViewModel from the core ports (Story 5_5)`() {
+        val ports =
+            module {
+                single<Logger> { FakeLogger() }
+                single<DeviceInfoSource> { DeviceInfoSource { DeviceInfo(34, "Xiaomi", "build-1", DeviceMaker.Xiaomi) } }
+                single<ManufacturerSettings> { FakeManufacturerSettings() }
+                factory { ConfirmMakerGuidance(get(), FakeReliabilityRecords(), get()) }
+            }
+        val app = koinApplication { modules(ports, uiModule) }
+
+        assertEquals(
+            DeviceMaker.Xiaomi,
+            app.koin
+                .get<ManufacturerGuidanceViewModel>()
+                .state.value.maker,
+        )
+        app.close()
     }
 
     @Test

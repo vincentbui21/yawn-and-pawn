@@ -126,7 +126,7 @@ class ReliabilityChecklistTest {
         }
 
         // Camera, Manufacturer and the locked test fail here, and none of them blocks.
-        val covered = api34.copy(makerCovered = true)
+        val covered = api34.copy(deviceMaker = DeviceMaker.Xiaomi)
         val rows = ReliabilityChecklist.evaluate(ok.copy(cameraGranted = false), listOf(alarm(true, CheckType.QrBarcode)), covered, none)
         assertEquals(RowStatus.NeedsFix, rows.statusOf(ChecklistRow.Camera))
         assertEquals(RowStatus.NeedsFix, rows.statusOf(ChecklistRow.Manufacturer))
@@ -150,7 +150,7 @@ class ReliabilityChecklistTest {
 
     @Test
     fun `the manufacturer row shows for a covered maker and is OK for the confirmed maker and build only`() {
-        val covered = api34.copy(makerCovered = true)
+        val covered = api34.copy(deviceMaker = DeviceMaker.Xiaomi)
         val confirmed = none.copy(makerConfirmation = MakerConfirmation("Maker", "build-1"))
 
         assertEquals(RowStatus.Hidden, ReliabilityChecklist.evaluate(ok, emptyList(), api34, confirmed).statusOf(ChecklistRow.Manufacturer))
@@ -161,6 +161,18 @@ class ReliabilityChecklistTest {
                 ReliabilityChecklist.evaluate(ok, emptyList(), device, confirmed).statusOf(ChecklistRow.Manufacturer),
             )
         }
+    }
+
+    @Test
+    fun `a confirmed maker guidance reads Revoked after a system update changed the build fingerprint`() {
+        val covered = api34.copy(deviceMaker = DeviceMaker.OppoRealme)
+        val confirmed = none.copy(makerConfirmation = MakerConfirmation("Maker", "build-1"), lastOk = setOf(ChecklistRow.Manufacturer))
+
+        assertEquals(RowStatus.Ok, ReliabilityChecklist.evaluate(ok, emptyList(), covered, confirmed).statusOf(ChecklistRow.Manufacturer))
+        val updated = ReliabilityChecklist.evaluate(ok, emptyList(), covered.copy(fingerprint = "build-2"), confirmed)
+        assertEquals(RowStatus.Revoked, updated.statusOf(ChecklistRow.Manufacturer))
+        assertFalse(ReliabilityChecklist.alarmBlocking(updated), "the Manufacturer row never blocks")
+        assertTrue(ChecklistRow.Manufacturer in ReliabilityChecklist.lastOkAfter(updated, confirmed.lastOk), "stays Revoked")
     }
 
     @Test

@@ -4,9 +4,9 @@ import androidx.navigation3.runtime.NavKey
 import com.yawnandpawn.app.ui.shell.AppTab
 
 // Back stack rules of the shell (Story 1.9). The stack is always [Alarms] or [Alarms, other tab], with at most the
-// editor or Purchase history (Story 4.16; "Problem with a charge?" over it, 4.17) on top; every change below keeps
-// it that way, and a late or repeated call (a double tap) changes nothing. During a session it is only
-// [SessionInProgress] (Story 2.6): no tab is on top then, so the tab and editor calls below change nothing.
+// editor, Purchase history (Story 4.16; "Problem with a charge?" over it, 4.17) or the maker guidance (5.5) on top;
+// every change below keeps it that way, and a late or repeated call (a double tap) changes nothing. During a session
+// it is only [SessionInProgress] (Story 2.6): no tab is on top then, so the tab and editor calls below change nothing.
 
 /** The nav-bar tab this route is, or `null` for a pushed screen (the editor, Purchase history). */
 val Route.tab: AppTab?
@@ -19,6 +19,7 @@ val Route.tab: AppTab?
             is Route.AlarmEditor -> null
             Route.PurchaseHistory -> null
             Route.ProblemWithCharge -> null
+            Route.ManufacturerGuidance -> null
             Route.SessionInProgress -> null
         }
 

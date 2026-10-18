@@ -3,7 +3,9 @@ package com.yawnandpawn.app.testing
 import com.yawnandpawn.app.core.error.DomainError
 import com.yawnandpawn.app.core.error.Outcome
 import com.yawnandpawn.app.core.reliability.ChecklistRow
+import com.yawnandpawn.app.core.reliability.DeviceMaker
 import com.yawnandpawn.app.core.reliability.MakerConfirmation
+import com.yawnandpawn.app.core.reliability.ManufacturerSettings
 import com.yawnandpawn.app.core.reliability.NotificationPermission
 import com.yawnandpawn.app.core.reliability.ReliabilityItem
 import com.yawnandpawn.app.core.reliability.ReliabilityProbe
@@ -32,6 +34,15 @@ class FakeReliabilitySettings : ReliabilitySettings {
 
     override fun open(item: ReliabilityItem) {
         opened += item
+    }
+}
+
+/** [ManufacturerSettings] that records every maker whose settings it was asked to open (Story 5.5). */
+class FakeManufacturerSettings : ManufacturerSettings {
+    val opened = mutableListOf<DeviceMaker>()
+
+    override fun open(maker: DeviceMaker) {
+        opened += maker
     }
 }
 

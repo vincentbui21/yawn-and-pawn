@@ -92,7 +92,7 @@ development_status:
   3-14-epic-3-device-verification-checklist: in-progress  # device session 2026-10-08; bugs fixed in fix/epic-3-device-check-bugs; owner closes it
   epic-3-retrospective: optional
 
-  epic-4: in-progress
+  epic-4: done
   4-1-create-the-50-snooze-products-with-tools-play-catalog: done  # Epic 4 auto-run, fast mode; live run 1 on 2026-10-15 (docs/decisions/play-catalog-run.md)
   4-2-money-moneyformatter-and-the-feeladder-in-core: done  # Epic 4 auto-run, fast mode
   4-3-cache-play-prices-for-offline-display: done  # Epic 4 auto-run, fast mode
@@ -110,7 +110,7 @@ development_status:
   4-15-snoozed-screen-session-line-and-snoozing-from-a-check: done  # Epic 4 auto-run, fast mode
   4-16-purchase-history: done  # Epic 4 auto-run, fast mode
   4-17-problem-with-a-charge: done  # Epic 4 auto-run, fast mode
-  4-18-epic-4-payment-verification-with-license-testers: review  # device runs 2026-10-15 and 2026-10-18/19; v2 deferrals await owner
+  4-18-epic-4-payment-verification-with-license-testers: done  # owner 2026-10-19: remaining items deferred to v2
   epic-4-retrospective: optional
 
   epic-5: backlog

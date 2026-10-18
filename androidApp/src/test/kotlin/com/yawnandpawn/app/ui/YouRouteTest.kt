@@ -5,7 +5,9 @@ import android.content.ClipboardManager
 import android.content.Intent
 import android.os.Looper
 import androidx.compose.ui.test.assertCountEquals
+import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.assertIsSelected
+import androidx.compose.ui.test.getBoundsInRoot
 import androidx.compose.ui.test.hasClickAction
 import androidx.compose.ui.test.hasContentDescription
 import androidx.compose.ui.test.hasText
@@ -41,6 +43,7 @@ import kotlin.test.assertContentEquals
 import kotlin.test.assertEquals
 import kotlin.test.assertNotNull
 import kotlin.test.assertNull
+import kotlin.test.assertTrue
 
 /**
  * Story 5.8 in the real app (Koin, Navigation 3, the app shell): each You link starts its intent on the user's tap, a
@@ -60,7 +63,9 @@ class YouRouteTest {
 
     private val app: Application = ApplicationProvider.getApplicationContext()
 
-    private val capSentence = "You can snooze up to your max snoozes per session. A single snooze never costs more than $50.00."
+    /** The cap in the tier wording: a fresh install has no cached Play price yet (review fix 2). */
+    private val capSentence =
+        "You can snooze up to your max snoozes per session. A single snooze never costs more than the $50.00 price tier."
 
     private fun waitForText(text: String) =
         composeRule.waitUntil(timeoutMillis = APP_WORK_TIMEOUT_MILLIS) {
@@ -115,6 +120,8 @@ class YouRouteTest {
                 val started = nextStarted()
                 assertEquals(Intent.ACTION_VIEW, started.action, label)
                 assertEquals(url, started.dataString, label)
+                assertTrue(started.hasCategory(Intent.CATEGORY_BROWSABLE), label)
+                assertTrue(started.flags and Intent.FLAG_ACTIVITY_NEW_TASK != 0, label)
             }
             composeRule.onAllNodes(hasText("No browser found.")).assertCountEquals(0)
         }
@@ -128,6 +135,7 @@ class YouRouteTest {
             val email = nextStarted()
             assertEquals(Intent.ACTION_SENDTO, email.action)
             assertEquals("mailto", email.data?.scheme)
+            assertTrue(email.dataString.orEmpty().startsWith("mailto:${BuildConfig.SUPPORT_EMAIL}"), email.dataString)
             assertContentEquals(arrayOf(BuildConfig.SUPPORT_EMAIL), email.getStringArrayExtra(Intent.EXTRA_EMAIL))
             assertEquals("", email.getStringExtra(Intent.EXTRA_SUBJECT))
             assertEquals("", email.getStringExtra(Intent.EXTRA_TEXT))
@@ -135,19 +143,14 @@ class YouRouteTest {
         }
 
     @Test
-    fun `with no browser a link says No browser found for 4 s, and a second tap starts the 4 s again`() =
+    fun `with no browser a link says No browser found, gone some 5 s later`() =
         onYou {
             shadowOf(app).checkActivities(true)
 
             tap("Privacy policy")
             waitForText("No browser found.")
-            shadowOf(Looper.getMainLooper()).idleFor(Duration.ofMillis(3_000))
-            tap("Terms")
-            shadowOf(Looper.getMainLooper()).idleFor(Duration.ofMillis(3_000))
-            composeRule.waitForIdle()
-            // 6 s after the first tap, 3 s after the second: still showing.
-            composeRule.onAllNodes(hasText("No browser found.")).assertCountEquals(1)
-            shadowOf(Looper.getMainLooper()).idleFor(Duration.ofMillis(1_500))
+            // The exact 4 s and the restart on a second tap are YouViewModelTest's, on a virtual clock.
+            shadowOf(Looper.getMainLooper()).idleFor(Duration.ofMillis(5_000))
             waitForGone("No browser found.")
             assertNull(shadowOf(app).nextStartedActivity)
         }
@@ -172,6 +175,36 @@ class YouRouteTest {
             )
             // The note stays until the user moves on.
             composeRule.onAllNodes(hasText("No email app found. Write to:")).assertCountEquals(1)
+        }
+
+    @Test
+    fun `the no-email-app note is gone after a visit to another tab`() =
+        onYou {
+            shadowOf(app).checkActivities(true)
+            tap("Email support")
+            waitForText("No email app found. Write to:")
+
+            tab("Settings").performClick()
+            waitForGone("Privacy and your data")
+            tab("You").performClick()
+            waitForText("Privacy and your data")
+
+            composeRule.onAllNodes(hasText("No email app found. Write to:")).assertCountEquals(0)
+        }
+
+    @Test
+    @Config(qualifiers = "w360dp-h640dp-xxhdpi", fontScale = 2.0f)
+    fun `on a small phone at 200 percent the no-email-app note scrolls into view above the nav bar`() =
+        onYou {
+            shadowOf(app).checkActivities(true)
+            tap("Email support")
+            waitForText("Copy address")
+            composeRule.waitForIdle()
+
+            // No scroll by the test: the screen brought the note into view itself.
+            val copy = composeRule.onNode(hasText("Copy address") and hasClickAction()).assertIsDisplayed().getBoundsInRoot()
+            val navBarTop = listOf("Alarms", "Progress", "Settings", "You").minOf { tab(it).getBoundsInRoot().top }
+            assertTrue(copy.bottom <= navBarTop, "Copy address ends at ${copy.bottom}, under the nav bar at $navBarTop")
         }
 
     @Test

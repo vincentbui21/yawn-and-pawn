@@ -1,5 +1,6 @@
 package com.yawnandpawn.app.ui.you
 
+import com.yawnandpawn.app.core.time.MonotonicClock
 import com.yawnandpawn.app.ui.links.AppLinks
 import com.yawnandpawn.app.ui.links.ExternalLinks
 import kotlinx.coroutines.Dispatchers
@@ -45,7 +46,8 @@ class YouViewModelTest {
         Dispatchers.resetMain()
     }
 
-    private fun screen(): YouViewModel = YouViewModel(links, appLinks)
+    /** The ViewModel on the test's virtual clock, so a double tap and "1 s later" are exact. */
+    private fun screen(): YouViewModel = YouViewModel(links, appLinks, MonotonicClock { dispatcher.scheduler.currentTime })
 
     @Test
     fun `production shows the built rows, never Delete all data or About`() {
@@ -114,6 +116,8 @@ class YouViewModelTest {
             links.canSendEmail = true
             viewModel.onIntent(YouIntent.EmailSupportClicked)
             assertNull(viewModel.state.value.noEmailAppAddress)
+            // Past the double-tap window of the email that just opened.
+            advanceTimeBy(YouViewModel.REPEAT_MILLIS)
 
             links.canSendEmail = false
             viewModel.onIntent(YouIntent.EmailSupportClicked)
@@ -143,6 +147,56 @@ class YouViewModelTest {
             viewModel.onIntent(YouIntent.CopyAddressClicked)
             assertEquals(listOf("help@example.com", "help@example.com"), links.copied)
             assertFalse(viewModel.state.value.addressCopied)
+        }
+
+    @Test
+    fun `a copy that failed, with no clipboard, shows no Address copied`() =
+        runTest(dispatcher) {
+            links.canSendEmail = false
+            links.copyWorks = false
+            val viewModel = screen()
+            viewModel.onIntent(YouIntent.EmailSupportClicked)
+
+            viewModel.onIntent(YouIntent.CopyAddressClicked)
+
+            assertFalse(viewModel.state.value.addressCopied)
+            assertEquals("help@example.com", viewModel.state.value.noEmailAppAddress)
+        }
+
+    @Test
+    fun `a double tap on a link or on Email support opens it once, the same link again after 1 s, another one at once`() =
+        runTest(dispatcher) {
+            val viewModel = screen()
+
+            viewModel.onIntent(YouIntent.PrivacyClicked)
+            viewModel.onIntent(YouIntent.PrivacyClicked)
+            advanceTimeBy(YouViewModel.REPEAT_MILLIS - 1)
+            viewModel.onIntent(YouIntent.PrivacyClicked)
+            assertEquals(listOf("https://example.com/privacy/"), links.urls)
+            advanceTimeBy(1)
+            viewModel.onIntent(YouIntent.PrivacyClicked)
+            viewModel.onIntent(YouIntent.TermsClicked)
+            assertEquals(
+                listOf("https://example.com/privacy/", "https://example.com/privacy/", "https://example.com/terms/"),
+                links.urls,
+            )
+
+            viewModel.onIntent(YouIntent.EmailSupportClicked)
+            viewModel.onIntent(YouIntent.EmailSupportClicked)
+            assertEquals(listOf(SentEmail("help@example.com", "", "")), links.emails)
+        }
+
+    @Test
+    fun `a link that did not open is not a double tap, so the next tap tries again`() =
+        runTest(dispatcher) {
+            links.canOpenUrls = false
+            val viewModel = screen()
+            viewModel.onIntent(YouIntent.SupportClicked)
+
+            links.canOpenUrls = true
+            viewModel.onIntent(YouIntent.SupportClicked)
+
+            assertEquals(listOf("https://example.com/support/"), links.urls)
         }
 
     @Test
@@ -186,6 +240,9 @@ class YouViewModelTest {
         var canOpenUrls = true
         var canSendEmail = true
         var phoneConfirmsCopy = false
+
+        /** False as on a phone with no clipboard service: nothing copied, so the adapter reports false. */
+        var copyWorks = true
         val urls = mutableListOf<String>()
         val emails = mutableListOf<SentEmail>()
         val copied = mutableListOf<String>()
@@ -199,6 +256,7 @@ class YouViewModelTest {
         ): Boolean = canSendEmail.also { if (it) emails += SentEmail(to, subject, body) }
 
         override fun copyText(text: String): Boolean {
+            if (!copyWorks) return false
             copied += text
             return !phoneConfirmsCopy
         }

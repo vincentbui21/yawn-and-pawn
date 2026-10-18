@@ -148,7 +148,7 @@ object PreviewRound2 {
             reliability("reliability_all_ok", "All OK", s.reliabilityAllOk),
             reliability("reliability_manufacturer", "Manufacturer steps (Xiaomi)", s.reliabilityManufacturer),
             item("payments", "Payments & refunds", "How payments & refunds work", primary = true) {
-                PaymentsScreen(priceCap = s.priceCap, onIntent = {})
+                PaymentsScreen(cap = s.priceCap, onIntent = {})
             },
             item("payments_problem", "Payments & refunds", "Problem with a charge?") { ProblemWithChargeScreen(onIntent = {}) },
             item("payments_problem_no_browser", "Payments & refunds", "Problem with a charge?, no browser") {

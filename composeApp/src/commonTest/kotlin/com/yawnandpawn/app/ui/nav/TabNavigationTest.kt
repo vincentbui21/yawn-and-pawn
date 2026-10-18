@@ -101,8 +101,8 @@ class TabNavigationTest {
         val backStack = stack(Route.Alarms)
         backStack.selectTab(AppTab.You)
 
-        backStack.openPurchaseHistory()
-        backStack.openPurchaseHistory()
+        backStack.openPurchaseHistory(from = Route.You)
+        backStack.openPurchaseHistory(from = Route.You)
         backStack.selectTab(AppTab.Settings)
         backStack.openEditor(alarmId = null)
         assertEquals(listOf<NavKey>(Route.Alarms, Route.You, Route.PurchaseHistory), backStack)
@@ -110,7 +110,7 @@ class TabNavigationTest {
         backStack.close(Route.PurchaseHistory)
         assertEquals(listOf<NavKey>(Route.Alarms, Route.You), backStack)
 
-        backStack.openPurchaseHistory()
+        backStack.openPurchaseHistory(from = Route.You)
         backStack.pop()
         assertEquals(listOf<NavKey>(Route.Alarms, Route.You), backStack)
     }
@@ -118,22 +118,23 @@ class TabNavigationTest {
     @Test
     fun `Problem with a charge is pushed over Purchase history once, only from there, and Back returns to it`() {
         val backStack = stack(Route.Alarms, Route.You)
-        backStack.openProblemWithCharge()
+        backStack.openProblemWithCharge(from = Route.You)
         assertEquals(listOf<NavKey>(Route.Alarms, Route.You), backStack)
         assertNull(Route.ProblemWithCharge.tab)
 
-        backStack.openPurchaseHistory()
-        backStack.openProblemWithCharge()
-        backStack.openProblemWithCharge()
-        backStack.openPurchaseHistory()
+        backStack.openPurchaseHistory(from = Route.You)
+        backStack.openProblemWithCharge(from = Route.PurchaseHistory)
+        backStack.openProblemWithCharge(from = Route.PurchaseHistory)
+        backStack.openPurchaseHistory(from = Route.You)
         assertEquals(listOf<NavKey>(Route.Alarms, Route.You, Route.PurchaseHistory, Route.ProblemWithCharge), backStack)
 
         backStack.close(Route.ProblemWithCharge)
         assertEquals(listOf<NavKey>(Route.Alarms, Route.You, Route.PurchaseHistory), backStack)
 
-        backStack.openProblemWithCharge()
+        backStack.openProblemWithCharge(from = Route.PurchaseHistory)
         assertEquals(true, backStack.applySessionLock(active = true))
-        backStack.openProblemWithCharge()
+        backStack.openProblemWithCharge(from = Route.PurchaseHistory)
+        backStack.openProblemWithCharge(from = Route.SessionInProgress)
         assertEquals(listOf<NavKey>(Route.SessionInProgress), backStack)
     }
 
@@ -171,8 +172,8 @@ class TabNavigationTest {
         val backStack = stack(Route.Alarms)
         backStack.selectTab(AppTab.You)
 
-        backStack.openPayments()
-        backStack.openPayments()
+        backStack.openPayments(from = Route.You)
+        backStack.openPayments(from = Route.You)
         backStack.selectTab(AppTab.Settings)
         backStack.openEditor(alarmId = null)
         assertEquals(listOf<NavKey>(Route.Alarms, Route.You, Route.Payments), backStack)
@@ -181,7 +182,7 @@ class TabNavigationTest {
         backStack.close(Route.Payments)
         assertEquals(listOf<NavKey>(Route.Alarms, Route.You), backStack)
 
-        backStack.openPayments()
+        backStack.openPayments(from = Route.You)
         backStack.pop()
         assertEquals(listOf<NavKey>(Route.Alarms, Route.You), backStack)
     }
@@ -190,13 +191,13 @@ class TabNavigationTest {
     fun `Payments pushes Purchase history or Problem with a charge once each, and Back walks back to Payments`() {
         val backStack = stack(Route.Alarms, Route.You, Route.Payments)
 
-        backStack.openPurchaseHistory()
-        backStack.openPurchaseHistory()
-        backStack.openPayments()
+        backStack.openPurchaseHistory(from = Route.Payments)
+        backStack.openPurchaseHistory(from = Route.Payments)
+        backStack.openPayments(from = Route.You)
         assertEquals(listOf<NavKey>(Route.Alarms, Route.You, Route.Payments, Route.PurchaseHistory), backStack)
         // Purchase history pushed from Payments still pushes "Problem with a charge?".
-        backStack.openProblemWithCharge()
-        backStack.openProblemWithCharge()
+        backStack.openProblemWithCharge(from = Route.PurchaseHistory)
+        backStack.openProblemWithCharge(from = Route.PurchaseHistory)
         assertEquals(
             listOf<NavKey>(Route.Alarms, Route.You, Route.Payments, Route.PurchaseHistory, Route.ProblemWithCharge),
             backStack,
@@ -205,12 +206,33 @@ class TabNavigationTest {
         backStack.close(Route.PurchaseHistory)
         assertEquals(listOf<NavKey>(Route.Alarms, Route.You, Route.Payments), backStack)
 
-        backStack.openProblemWithCharge()
-        backStack.openProblemWithCharge()
-        backStack.openPurchaseHistory()
+        backStack.openProblemWithCharge(from = Route.Payments)
+        backStack.openProblemWithCharge(from = Route.Payments)
+        backStack.openPurchaseHistory(from = Route.Payments)
         assertEquals(listOf<NavKey>(Route.Alarms, Route.You, Route.Payments, Route.ProblemWithCharge), backStack)
         backStack.pop()
         assertEquals(listOf<NavKey>(Route.Alarms, Route.You, Route.Payments), backStack)
+    }
+
+    @Test
+    fun `a second, different row tapped on the screen below during the slide pushes nothing`() {
+        // You: "How payments & refunds work", then "Purchase history" before Payments covers You.
+        val fromYou = stack(Route.Alarms, Route.You)
+        fromYou.openPayments(from = Route.You)
+        fromYou.openPurchaseHistory(from = Route.You)
+        assertEquals(listOf<NavKey>(Route.Alarms, Route.You, Route.Payments), fromYou)
+
+        // You: "Purchase history", then "How payments & refunds work".
+        val historyFirst = stack(Route.Alarms, Route.You)
+        historyFirst.openPurchaseHistory(from = Route.You)
+        historyFirst.openPayments(from = Route.You)
+        assertEquals(listOf<NavKey>(Route.Alarms, Route.You, Route.PurchaseHistory), historyFirst)
+
+        // Payments: "Purchase history", then "Problem with a charge?" (Purchase history's own link still works).
+        val fromPayments = stack(Route.Alarms, Route.You, Route.Payments)
+        fromPayments.openPurchaseHistory(from = Route.Payments)
+        fromPayments.openProblemWithCharge(from = Route.Payments)
+        assertEquals(listOf<NavKey>(Route.Alarms, Route.You, Route.Payments, Route.PurchaseHistory), fromPayments)
     }
 
     @Test
@@ -218,9 +240,11 @@ class TabNavigationTest {
         val backStack = stack(Route.Alarms, Route.You, Route.Payments, Route.PurchaseHistory)
 
         assertEquals(true, backStack.applySessionLock(active = true))
-        backStack.openPayments()
-        backStack.openPurchaseHistory()
-        backStack.openProblemWithCharge()
+        backStack.openPayments(from = Route.You)
+        backStack.openPurchaseHistory(from = Route.Payments)
+        backStack.openProblemWithCharge(from = Route.PurchaseHistory)
+        backStack.openPayments(from = Route.SessionInProgress)
+        backStack.openPurchaseHistory(from = Route.SessionInProgress)
         assertEquals(listOf<NavKey>(Route.SessionInProgress), backStack)
 
         backStack.applySessionLock(active = false)
@@ -233,7 +257,7 @@ class TabNavigationTest {
 
         assertEquals(true, backStack.applySessionLock(active = true))
         assertEquals(listOf<NavKey>(Route.SessionInProgress), backStack)
-        backStack.openPurchaseHistory()
+        backStack.openPurchaseHistory(from = Route.You)
         assertEquals(listOf<NavKey>(Route.SessionInProgress), backStack)
 
         backStack.applySessionLock(active = false)

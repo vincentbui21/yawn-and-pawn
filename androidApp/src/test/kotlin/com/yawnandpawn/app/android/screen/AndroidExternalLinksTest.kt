@@ -2,6 +2,8 @@ package com.yawnandpawn.app.android.screen
 
 import android.app.Application
 import android.content.ClipboardManager
+import android.content.Context
+import android.content.ContextWrapper
 import android.content.Intent
 import android.net.Uri
 import androidx.test.core.app.ApplicationProvider
@@ -93,6 +95,19 @@ class AndroidExternalLinksTest {
     @Config(sdk = [32])
     fun `before Android 13 the app confirms the copy itself`() {
         assertTrue(links.copyText("help@example.com"))
+    }
+
+    @Test
+    @Config(sdk = [32])
+    fun `with no clipboard nothing is confirmed, even before Android 13, and the log names no text`() {
+        val noClipboard =
+            object : ContextWrapper(app) {
+                override fun getSystemService(name: String): Any? =
+                    if (name == Context.CLIPBOARD_SERVICE) null else super.getSystemService(name)
+            }
+
+        assertFalse(AndroidExternalLinks(noClipboard, logger).copyText("help@example.com"))
+        assertEquals(listOf<LogEvent>(LogEvent.OperationFailed("copy address", "no clipboard")), logger.events)
     }
 
     @Test

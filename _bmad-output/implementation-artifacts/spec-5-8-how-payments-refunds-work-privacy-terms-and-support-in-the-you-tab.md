@@ -221,6 +221,99 @@ snooze (deferred from Story 5.7).
   `TapThroughTest`, `PreviewMenuTest` (8) and the preview screenshot and semantics cases for `you_*` and `payments*`.
 - The full `qualityGate` was not run (left to CI).
 
+## Review (fast mode)
+
+### 2026-10-19: independent review, 8 findings, all fixed
+
+1. **[medium] Push rules checked only the top type, not the caller.** A tap on two different rows during the 250 ms
+   slide gave `[You, Payments, PurchaseHistory]`.
+   - Fix: `openPurchaseHistory`, `openPayments` and `openProblemWithCharge` (`ui/nav/YouNavigation.kt`) take
+     `from: NavKey` and push only when `lastOrNull() == from` (and `from` is an allowed source). The You, Payments and
+     Purchase history entries (`YouEntries.kt`) pass their own route. The double-tap and session-lock guarantees stay.
+   - Test: `TabNavigationTest` updated to the new calls, plus "a second, different row tapped on the screen below
+     during the slide pushes nothing" (You: Payments then Purchase history, and the reverse; Payments: Purchase history
+     then "Problem with a charge?"), and pushes `from` the lock are ignored.
+2. **[medium] "A single snooze never costs more than $50.00." is not true locally** (an EU price includes VAT, e.g.
+   €59.99).
+   - Fix: a new `PaymentsViewModel` (`ui/payments`) reads the `PriceCatalog` port (`observe()` +
+     `displayablePriceFor(snooze_usd_50, clock.now())`) and exposes Play's own formatted price as `cap`, or null when
+     not cached or expired. A read failure is logged (`load cap price`) and counts as unknown. Bound in `UiModule`, used
+     by `PaymentsRoute` (`koinViewModel`). `PaymentsScreen` takes `cap: String?`: with a price, `payments_cap_body`
+     with it; without, `payments_cap_tier_body` with `formatMoney(PRICE_CAP)` ("$50.00") followed by
+     `payments_local_price_body`. EXPERIENCE.md's long-form list gives both variants; `docs/site/payments.md` states the
+     tier wording and its Liquid comment explains it; root `build.gradle.kts` mirrors the tier strings, not
+     `payments_cap_body`.
+   - Tests: `PaymentsViewModelTest` (4: a cached "€59.99" is the cap, stale too; none / other tiers only / expired is
+     null; a later price replaces null; an unreadable cache is logged and null). `YouSemanticsTest`: "€59.99" reads
+     "…never costs more than €59.99."; no price reads the tier sentence then "Google Play sets the local price,
+     including any tax.". `YouRouteTest` (fresh install, no cached price) shows the tier sentence. `UiModuleTest`
+     builds the ViewModel.
+3. **[low] `%1$s` matched any text, so the page's cap number was unchecked.**
+   - Fix: `mirroredKeys` (build-logic `SitePages`) is now a `MapProperty<String, List<String>>`: key → the values its
+     placeholders show on the page, in `%N$` order, configured in root `build.gradle.kts`
+     (`payments_cap_tier_body` → `["$50.00"]`, the rest `[]`). The mirror check fills the placeholders and looks for the
+     exact sentence. A placeholder with no value, or a value with no placeholder, is a violation naming the key.
+   - Test: `SitePagesTest` (16, all pass): "$5." and another currency fail naming `payments_cap_body`; a new case for a
+     missing value, an extra value and a value on a string without placeholders; `%2$d` and regex characters still
+     work; the TestKit fixture uses the map.
+4. **[low] The no-email-app note was never scrolled into view.**
+   - Fix: `YouScreen` puts a `BringIntoViewRequester` on the note and calls it in `LaunchedEffect(address)` once the
+     note is measured, with a rect that extends below it by the nav capsule clearance (`LocalNavBarClearance` +
+     `space6`, the column's own bottom padding), so "Copy address" is never left under the capsule.
+   - Test: `YouRouteTest` at `w360dp-h640dp`, 200 % font: after "Email support" with no email app, "Copy address" is
+     displayed (no scroll by the test) and ends above the nav bar's tabs. Baseline `you_no_email_app_light_font200`
+     re-recorded (the screen now scrolls to the note).
+5. **[low] A double tap on a link opened two browser tasks; `copyText` claimed success without a clipboard.**
+   - Fix: `YouViewModel` takes the `MonotonicClock` port and ignores a repeat of the link (or the support email) that
+     opened less than `REPEAT_MILLIS` (1 s) ago; a link that failed to open never counts. `AndroidExternalLinks.copyText`
+     returns false (and logs "copy address" / "no clipboard") when the clipboard service is null, so neither You nor
+     "Problem with a charge?" shows "Address copied." (both show it only on true). `ExternalLinks.copyText` doc says so.
+   - Tests: `YouViewModelTest` on the virtual clock (double tap on a link and on Email support opens once, the same link
+     again at 1 s, another link at once; a failed open is not a double tap; a failed copy shows no confirmation).
+     `AndroidExternalLinksTest`: no clipboard (SDK 32) returns false and logs no text. The existing
+     `ProblemWithChargeViewModelTest` covers false → no confirmation.
+6. **[low] Weak intent asserts.** `YouRouteTest` now asserts the email `dataString` starts with
+   `mailto:${BuildConfig.SUPPORT_EMAIL}`, and `CATEGORY_BROWSABLE` and `FLAG_ACTIVITY_NEW_TASK` on each VIEW intent
+   (the adapter already set both).
+7. **[low] Note lifetime across tabs.** New `YouRouteTest` case: show the note, go to Settings, back to You, the note
+   is gone.
+8. **[low] Flaky timing margins.** `YouRouteTest` keeps only "No browser found. appears, then is gone 5 s later"; the
+   exact 4 s and the restart stay in `YouViewModelTest` (virtual clock).
+
+**Defaults taken (owner can change):**
+- Item 2 copy, per the coordinator's default: with a cached Play price, "…A single snooze never costs more than
+  {Play price}."; without, "…never costs more than the $50.00 price tier." then "Google Play sets the local price,
+  including any tax.". The tier text was given as one 30-word string; it is split into `payments_cap_tier_body` (21
+  words) and `payments_local_price_body` (9 words) because `CopyRulesTest` and EXPERIENCE.md limit a body to 25 words.
+  The words are unchanged. The site states the tier wording.
+- Item 2: the preview catalogue shows the "price known" variant with "$50.00" (a US Play price), so its Payments
+  baselines are unchanged; `YouScreenshotTest` shows the tier variant (baselines re-recorded).
+- Item 5: the repeat window is 1 s and covers the three links and Email support; only the link that opened last counts.
+
+**For the owner:** in the US and Canada (`config/tax-exclusive-countries.txt`) Play prices exclude tax, so "never
+costs more than $50.00" with Play's US price leaves sales tax out. `docs/site/terms.md` still says "A single snooze
+never costs more than $50." (USD tiers); neither was in this review's scope.
+
+**Verification (2026-10-19, all `--no-daemon --max-workers=2`, all passed):**
+- `spotlessApply`, `spotlessCheck`, `detekt`, `checkSitePages` (11 mirrored strings), `:build-logic:test --tests
+  'com.yawnandpawn.app.buildlogic.SitePagesTest'` (16).
+- `:composeApp:testAndroidHostTest`: `ui.you.*` (`YouViewModelTest` 11), `ui.payments.*` (`PaymentsViewModelTest` 4,
+  `ProblemWithChargeViewModelTest` 16), `ui.nav.*` (`TabNavigationTest` 15, `SessionLockTest` 5), `UiModuleTest` (4),
+  `CopyRulesTest` (14).
+- `:androidApp:recordRoborazziDebug -Proborazzi.test.verify=false` for `YouScreenshotTest.Payments*` and "You with no
+  email app at 200 percent": re-recorded `payments_top_light`, `payments_top_dark`, `payments_top_light_font200`,
+  `payments_links_light`, `payments_links_dark` (the tier paragraphs) and `you_no_email_app_light_font200` (scrolled to
+  the note); `payments_links_light_font200` came out unchanged.
+- `:androidApp:testDebugUnitTest` verify: `YouScreenshotTest` (12), `YouSemanticsTest` (7), `YouRouteTest` (10),
+  `AndroidExternalLinksTest` (8), `MainActivityTest` (20), `ProblemWithChargeScreenshotTest` (15),
+  `ProblemWithChargeSemanticsTest` (5), `PurchaseHistoryScreenshotTest` (15), `PurchaseHistorySemanticsTest` (7),
+  `MoneyLayoutFontScaleTest` (3), `NavBarScreenshotTest` (4), `Round2TapThroughTest` (6), `TapThroughTest` (5),
+  `PreviewMenuTest` (8).
+- Not run locally: `PreviewScreenshotTest` / `PreviewSemanticsTest` (Gradle's `--tests` cannot pick single cases of the
+  parameterized runner, and the whole class does not fit the 10-minute foreground limit). Their You and Payments cases
+  should not change: the preview Payments text is the same ("$50.00" through `payments_cap_body`), and the preview
+  no-email-app note is fully on screen at 411 x 891 dp, so the scroll is a no-op. Left to CI.
+
 ## Auto Run Result
 
 Status: done (fast mode). The coordinator runs the independent review and CI.

@@ -18,7 +18,6 @@ import androidx.compose.ui.test.performScrollTo
 import androidx.compose.ui.unit.dp
 import com.yawnandpawn.app.StopAppRule
 import com.yawnandpawn.app.ui.TalkBackRules.spokenOrder
-import com.yawnandpawn.app.ui.payments.PRICE_CAP
 import com.yawnandpawn.app.ui.payments.PaymentsIntent
 import com.yawnandpawn.app.ui.payments.PaymentsScreen
 import com.yawnandpawn.app.ui.theme.PpsThemeMode
@@ -64,7 +63,10 @@ class YouSemanticsTest {
         block: () -> Unit,
     ) = show({ YouScreen(state = state, onIntent = { youIntents += it }, rows = BuiltYouRows) }, block)
 
-    private fun payments(block: () -> Unit) = show({ PaymentsScreen(priceCap = PRICE_CAP, onIntent = { paymentsIntents += it }) }, block)
+    private fun payments(
+        cap: String? = "€59.99",
+        block: () -> Unit,
+    ) = show({ PaymentsScreen(cap = cap, onIntent = { paymentsIntents += it }) }, block)
 
     private fun button(label: String) =
         hasText(label) and hasClickAction() and SemanticsMatcher.expectValue(SemanticsProperties.Role, Role.Button)
@@ -163,7 +165,8 @@ class YouSemanticsTest {
                     "Back",
                     "How payments & refunds work",
                     "Each snooze costs your base fee times the snooze number. Google Play shows the price in your local currency.",
-                    "You can snooze up to your max snoozes per session. A single snooze never costs more than $50.00.",
+                    // Google Play's cached local price of the top tier, as is (review fix 2).
+                    "You can snooze up to your max snoozes per session. A single snooze never costs more than €59.99.",
                     "Your fee is locked for the morning. You can raise it anytime. Lowering it waits until after your next alarm.",
                     "A pending payment only starts your snooze if it goes through before you finish. " +
                         "Otherwise, finish the check to stop the alarm.",
@@ -190,5 +193,17 @@ class YouSemanticsTest {
                 listOf(PaymentsIntent.ProblemWithChargeClicked, PaymentsIntent.PurchaseHistoryClicked, PaymentsIntent.Back),
                 paymentsIntents,
             )
+        }
+
+    @Test
+    fun `with no known Play price Payments names the 50 dollar price tier and says Play sets the local price`() =
+        payments(cap = null) {
+            val spoken = composeRule.spokenOrder()
+            val tier =
+                "You can snooze up to your max snoozes per session. A single snooze never costs more than the $50.00 price tier."
+            val fee = spoken.indexOfFirst { it.startsWith("Each snooze costs your base fee times the snooze number.") }
+
+            assertEquals(listOf(tier, "Google Play sets the local price, including any tax."), spoken.subList(fee + 1, fee + 3))
+            assertTrue(spoken.none { it.endsWith("never costs more than $50.00.") }, spoken.toString())
         }
 }

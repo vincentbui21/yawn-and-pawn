@@ -6,7 +6,6 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import com.yawnandpawn.app.core.billing.Money
 import com.yawnandpawn.app.ui.components.AppSnackbar
 import com.yawnandpawn.app.ui.components.GroupCard
 import com.yawnandpawn.app.ui.components.GroupDivider
@@ -21,7 +20,9 @@ import com.yawnandpawn.app.ui.resources.disclosure_ringing_body
 import com.yawnandpawn.app.ui.resources.disclosure_usable_body
 import com.yawnandpawn.app.ui.resources.editor_back
 import com.yawnandpawn.app.ui.resources.payments_cap_body
+import com.yawnandpawn.app.ui.resources.payments_cap_tier_body
 import com.yawnandpawn.app.ui.resources.payments_fee_body
+import com.yawnandpawn.app.ui.resources.payments_local_price_body
 import com.yawnandpawn.app.ui.resources.payments_lock_body
 import com.yawnandpawn.app.ui.resources.payments_pending_body
 import com.yawnandpawn.app.ui.resources.payments_self_refund_body
@@ -38,16 +39,28 @@ import com.yawnandpawn.app.ui.theme.PpsTheme
 import org.jetbrains.compose.resources.stringResource
 
 /**
- * "How payments & refunds work" (FR-SET-3), stateless: the fee rules with the per-snooze [priceCap], pending and unused
+ * "How payments & refunds work" (FR-SET-3), stateless: the fee rules with the per-snooze cap, pending and unused
  * payments and Google's self-refund, then the alarm behaviour disclosure verbatim and the purchase authentication tip,
  * then links to "Problem with a charge?" and Purchase history. Long-form copy, one paragraph per string.
+ *
+ * [cap] is Google Play's own price of the top tier ("€59.99"); null when it is not known, and the cap is then named as
+ * the [PRICE_CAP] price tier, with "Google Play sets the local price, including any tax." (review fix 2).
  */
 @Composable
 fun PaymentsScreen(
-    priceCap: Money,
+    cap: String?,
     onIntent: (PaymentsIntent) -> Unit,
     modifier: Modifier = Modifier,
 ) {
+    val capParagraphs =
+        if (cap != null) {
+            listOf(stringResource(Res.string.payments_cap_body, cap))
+        } else {
+            listOf(
+                stringResource(Res.string.payments_cap_tier_body, formatMoney(PRICE_CAP)),
+                stringResource(Res.string.payments_local_price_body),
+            )
+        }
     SubScreen(
         title = stringResource(Res.string.settings_payments),
         backContentDescription = stringResource(Res.string.editor_back),
@@ -56,11 +69,7 @@ fun PaymentsScreen(
     ) {
         TextCard(
             paragraphs =
-                listOf(
-                    stringResource(Res.string.payments_fee_body),
-                    stringResource(Res.string.payments_cap_body, formatMoney(priceCap)),
-                    stringResource(Res.string.payments_lock_body),
-                ),
+                listOf(stringResource(Res.string.payments_fee_body)) + capParagraphs + stringResource(Res.string.payments_lock_body),
         )
         TextCard(
             paragraphs =

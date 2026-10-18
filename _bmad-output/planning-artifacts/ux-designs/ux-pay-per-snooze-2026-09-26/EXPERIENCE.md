@@ -278,7 +278,9 @@ Body copy, one bullet per paragraph (each ≤ 25 words).
 - **Problem with a charge?, support email body** (one line each): "Order ID: {orderId}" · "Date: {purchaseTime}" (ISO 8601 with offset) · "Price: {price}" · "Status: {status}"
 - **How payments & refunds work** (followed by the alarm behaviour disclosure verbatim, the purchase authentication tip, and links to "Problem with a charge?" and "Purchase history")
   - "Each snooze costs your base fee times the snooze number. Google Play shows the price in your local currency."
-  - "You can snooze up to your max snoozes per session. A single snooze never costs more than {cap}." ({cap}: the $50 per-snooze cap in USD, Story 5.8, default taken)
+  - The per-snooze cap, one of two variants (Story 5.8 review fix 2, default taken, owner can change):
+    - With Google Play's cached price of the $50 tier: "You can snooze up to your max snoozes per session. A single snooze never costs more than {cap}." ({cap}: Play's own local price of `snooze_usd_50`, e.g. "€59.99")
+    - Without it: "You can snooze up to your max snoozes per session. A single snooze never costs more than the {tier} price tier." then "Google Play sets the local price, including any tax." ({tier}: the $50 tier in USD, "$50.00"; two paragraphs, so each stays within 25 words)
   - "Your fee is locked for the morning. You can raise it anytime. Lowering it waits until after your next alarm."
   - "A pending payment only starts your snooze if it goes through before you finish. Otherwise, finish the check to stop the alarm."
   - "Payments that weren't used are refunded automatically by Google."

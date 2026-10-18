@@ -30,9 +30,14 @@ class AndroidExternalLinks(
 
     override fun copyText(text: String): Boolean {
         val clipboard = context.getSystemService(ClipboardManager::class.java)
-        clipboard?.setPrimaryClip(ClipData.newPlainText(text, text))
+        if (clipboard == null) {
+            // Nothing was copied, so nothing may say it was (review fix 5); logged without the text.
+            logger.log(LogEvent.OperationFailed("copy address", "no clipboard"))
+            return false
+        }
+        clipboard.setPrimaryClip(ClipData.newPlainText(text, text))
         // Android 13+ shows its own "Copied" confirmation; before that the app confirms.
-        return clipboard == null || Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU
+        return Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU
     }
 
     private fun start(

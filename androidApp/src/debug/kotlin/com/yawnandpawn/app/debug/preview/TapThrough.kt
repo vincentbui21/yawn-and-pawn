@@ -383,7 +383,7 @@ private fun Screen(
         }
 
         Pushed.Payments -> {
-            PaymentsScreen(priceCap = PreviewProgressSamples.priceCap, onIntent = state::onPayments)
+            PaymentsScreen(cap = PreviewProgressSamples.priceCap, onIntent = state::onPayments)
         }
 
         Pushed.ProblemWithCharge -> {

@@ -14,8 +14,8 @@ import com.yawnandpawn.app.ui.you.YouRoute
 @Composable
 internal fun YouEntry(backStack: MutableList<NavKey>) =
     YouRoute(
-        onOpenPurchaseHistory = { backStack.openPurchaseHistory() },
-        onOpenPayments = { backStack.openPayments() },
+        onOpenPurchaseHistory = { backStack.openPurchaseHistory(from = Route.You) },
+        onOpenPayments = { backStack.openPayments(from = Route.You) },
     )
 
 /** Purchase history on [backStack]: Back closes it, "Problem with a charge?" opens its screen (Story 4.17). */
@@ -23,7 +23,7 @@ internal fun YouEntry(backStack: MutableList<NavKey>) =
 internal fun PurchaseHistoryEntry(backStack: MutableList<NavKey>) =
     PurchaseHistoryRoute(
         onBack = { backStack.close(Route.PurchaseHistory) },
-        onProblemWithCharge = { backStack.openProblemWithCharge() },
+        onProblemWithCharge = { backStack.openProblemWithCharge(from = Route.PurchaseHistory) },
     )
 
 /**
@@ -34,8 +34,8 @@ internal fun PurchaseHistoryEntry(backStack: MutableList<NavKey>) =
 internal fun PaymentsEntry(backStack: MutableList<NavKey>) =
     PaymentsRoute(
         onBack = { backStack.close(Route.Payments) },
-        onProblemWithCharge = { backStack.openProblemWithCharge() },
-        onPurchaseHistory = { backStack.openPurchaseHistory() },
+        onProblemWithCharge = { backStack.openProblemWithCharge(from = Route.Payments) },
+        onPurchaseHistory = { backStack.openPurchaseHistory(from = Route.Payments) },
     )
 
 /** "Problem with a charge?" on [backStack] (Story 4.17): Back closes it. */

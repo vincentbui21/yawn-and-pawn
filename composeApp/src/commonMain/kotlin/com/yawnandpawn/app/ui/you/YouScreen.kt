@@ -2,11 +2,24 @@ package com.yawnandpawn.app.ui.you
 
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.relocation.BringIntoViewRequester
+import androidx.compose.foundation.relocation.bringIntoViewRequester
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
+import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.geometry.Rect
+import androidx.compose.ui.layout.onSizeChanged
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.unit.IntSize
 import com.yawnandpawn.app.ui.components.AppSnackbar
 import com.yawnandpawn.app.ui.components.ConfirmDialog
 import com.yawnandpawn.app.ui.components.GroupCardOf
+import com.yawnandpawn.app.ui.components.LocalNavBarClearance
 import com.yawnandpawn.app.ui.components.NavRow
 import com.yawnandpawn.app.ui.components.TabScreen
 import com.yawnandpawn.app.ui.components.rowIf
@@ -32,6 +45,7 @@ import com.yawnandpawn.app.ui.resources.you_money
 import com.yawnandpawn.app.ui.resources.you_privacy_data
 import com.yawnandpawn.app.ui.resources.you_version
 import com.yawnandpawn.app.ui.theme.PpsTheme
+import kotlinx.coroutines.flow.first
 import org.jetbrains.compose.resources.stringResource
 
 /** What the You tab renders. */
@@ -107,7 +121,11 @@ fun YouScreen(
             PrivacyCard(onIntent = onIntent, rows = rows)
             HelpCard(appVersion = state.appVersion, onIntent = onIntent, rows = rows)
             state.noEmailAppAddress?.let { address ->
-                NoEmailAppNote(address = address, onCopy = { onIntent(YouIntent.CopyAddressClicked) })
+                NoEmailAppNote(
+                    address = address,
+                    onCopy = { onIntent(YouIntent.CopyAddressClicked) },
+                    modifier = Modifier.revealAboveNavBar(key = address),
+                )
             }
         }
     }
@@ -122,6 +140,22 @@ fun YouScreen(
             destructive = true,
         )
     }
+}
+
+/**
+ * Scrolls this (the no-email-app note under the cards, often below the fold) into view once it appears for [key], with
+ * the column's bottom clearance under it, so "Copy address" never ends up under the floating nav capsule (review fix 4).
+ */
+@Composable
+private fun Modifier.revealAboveNavBar(key: Any): Modifier {
+    val requester = remember { BringIntoViewRequester() }
+    var size by remember { mutableStateOf(IntSize.Zero) }
+    val below = with(LocalDensity.current) { (LocalNavBarClearance.current + PpsTheme.spacing.space6).toPx() }
+    LaunchedEffect(key) {
+        val measured = snapshotFlow { size }.first { it != IntSize.Zero }
+        requester.bringIntoView(Rect(0f, 0f, measured.width.toFloat(), measured.height + below))
+    }
+    return bringIntoViewRequester(requester).onSizeChanged { size = it }
 }
 
 /** The snackbar of [state], if any: "No browser found." or "Address copied.". */

@@ -333,8 +333,11 @@ object PreviewProgressSamples {
 
     val reliabilityManufacturer = reliabilityMissing.copy(showManufacturerSteps = true)
 
-    /** The most a single snooze can cost (Story 5.8): the app's $50 cap, as the Payments route shows it. */
-    val priceCap: Money = PRICE_CAP
+    /**
+     * The most a single snooze can cost (Story 5.8), as Google Play would price the $50 tier for a US user ("$50.00"):
+     * the Payments route shows Play's cached price of that tier (review fix 2).
+     */
+    val priceCap: String = formatMoney(PRICE_CAP)
 
     private const val YEAR = 2026
 

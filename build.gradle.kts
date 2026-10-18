@@ -68,20 +68,24 @@ sitePages {
     siteDir.set(layout.projectDirectory.dir("docs/site"))
     appLinks.set(layout.projectDirectory.file("config/app-links.properties"))
     appStrings.set(layout.projectDirectory.file("composeApp/src/commonMain/composeResources/values/strings.xml"))
-    // Every paragraph of the Payments screen. A placeholder in the app's text (payments_cap_body's %1$s, the formatted
-    // cap) matches any text without spaces on the page (Story 5.8).
+    // Every paragraph of the Payments screen, each with the values its placeholders (%1$s, %2$s, ...) must show on the
+    // page, in order (Story 5.8 review fix 3). The page states the cap in the app's tier wording (payments_cap_tier_body,
+    // not payments_cap_body: a local price is only known on the phone). Its value is the tier of FeeRules.PRICE_CAP_TIER
+    // (50) formatted as en-US USD.
+    val priceCapTier = "\$50.00"
     mirroredKeys.set(
-        listOf(
-            "payments_fee_body",
-            "payments_cap_body",
-            "payments_lock_body",
-            "payments_pending_body",
-            "payments_unused_body",
-            "payments_self_refund_body",
-            "disclosure_ringing_body",
-            "disclosure_usable_body",
-            "disclosure_escape_body",
-            "purchase_auth_tip",
+        mapOf<String, List<String>>(
+            "payments_fee_body" to emptyList(),
+            "payments_cap_tier_body" to listOf(priceCapTier),
+            "payments_local_price_body" to emptyList(),
+            "payments_lock_body" to emptyList(),
+            "payments_pending_body" to emptyList(),
+            "payments_unused_body" to emptyList(),
+            "payments_self_refund_body" to emptyList(),
+            "disclosure_ringing_body" to emptyList(),
+            "disclosure_usable_body" to emptyList(),
+            "disclosure_escape_body" to emptyList(),
+            "purchase_auth_tip" to emptyList(),
         ),
     )
 }

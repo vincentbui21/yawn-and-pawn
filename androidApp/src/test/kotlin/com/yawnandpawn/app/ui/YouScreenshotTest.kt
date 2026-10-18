@@ -9,7 +9,6 @@ import androidx.compose.ui.test.performScrollTo
 import com.github.takahirom.roborazzi.captureRoboImage
 import com.yawnandpawn.app.StopAppRule
 import com.yawnandpawn.app.screenshotOptions
-import com.yawnandpawn.app.ui.payments.PRICE_CAP
 import com.yawnandpawn.app.ui.payments.PaymentsScreen
 import com.yawnandpawn.app.ui.shell.AppShell
 import com.yawnandpawn.app.ui.shell.AppTab
@@ -65,7 +64,7 @@ class YouScreenshotTest {
         name: String,
         mode: PpsThemeMode = PpsThemeMode.Light,
         scrollToLinks: Boolean = false,
-    ) = capture(name, mode, scrollToLinks) { PaymentsScreen(priceCap = PRICE_CAP, onIntent = {}) }
+    ) = capture(name, mode, scrollToLinks) { PaymentsScreen(cap = null, onIntent = {}) }
 
     @Test
     fun `You light`() = youTab("you_light")

@@ -2,6 +2,7 @@ package com.yawnandpawn.app.ui.you
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.yawnandpawn.app.core.time.MonotonicClock
 import com.yawnandpawn.app.ui.links.AppLinks
 import com.yawnandpawn.app.ui.links.ExternalLinks
 import kotlinx.coroutines.Job
@@ -19,19 +20,25 @@ import kotlinx.coroutines.launch
  * [AppLinks.supportEmail] with no subject or body (no approved copy exists for them); with no email app the note with
  * the address and "Copy address" shows until an email opens or the user moves on to Purchase history or Payments.
  * "Copy address" puts the address on the clipboard and says "Address copied." for 4 s where the phone does not confirm
- * it itself (before Android 13).
+ * it itself (before Android 13), never when the copy failed ([ExternalLinks.copyText] false).
  *
- * Links open only on the user's tap. Navigation itself is the route's: this only clears the note when the user moves
- * on. "Delete all data" (Story 5.9) and "About" are not shown in production, so their intents do nothing here.
+ * Links open only on the user's tap. A repeat of the link (or the email) that just opened, within [REPEAT_MILLIS] on
+ * [clock], is a double tap and is ignored, so one tap never opens two browser tasks or two emails. Navigation itself is
+ * the route's: this only clears the note when the user moves on. "Delete all data" (Story 5.9) and "About" are not
+ * shown in production, so their intents do nothing here.
  */
 class YouViewModel(
     private val links: ExternalLinks,
     private val appLinks: AppLinks,
+    private val clock: MonotonicClock,
 ) : ViewModel() {
     private val mutableState = MutableStateFlow(YouUiState(appVersion = ""))
     val state: StateFlow<YouUiState> = mutableState.asStateFlow()
 
     private var snackbarJob: Job? = null
+
+    /** The link (or `mailto:` address) that opened last, and when ([clock]), to ignore a double tap on it. */
+    private var lastOpened: Pair<String, Long>? = null
 
     fun onIntent(intent: YouIntent) {
         when (intent) {
@@ -46,13 +53,27 @@ class YouViewModel(
     }
 
     private fun open(url: String) {
-        if (!links.openUrl(url)) show(YouSnackbar.NoBrowser)
+        if (isRepeat(url)) return
+        if (links.openUrl(url)) opened(url) else show(YouSnackbar.NoBrowser)
     }
 
     /** The support email; with no email app the note with the address stays (not a 4 s snackbar), so it can be copied. */
     private fun emailSupport() {
-        val opened = links.sendEmail(appLinks.supportEmail, subject = "", body = "")
-        mutableState.update { it.copy(noEmailAppAddress = if (opened) null else appLinks.supportEmail) }
+        val target = MAILTO + appLinks.supportEmail
+        if (isRepeat(target)) return
+        val sent = links.sendEmail(appLinks.supportEmail, subject = "", body = "")
+        if (sent) opened(target)
+        mutableState.update { it.copy(noEmailAppAddress = if (sent) null else appLinks.supportEmail) }
+    }
+
+    /** True when [target] opened less than [REPEAT_MILLIS] ago: a double tap. A link that failed to open never counts. */
+    private fun isRepeat(target: String): Boolean {
+        val (last, at) = lastOpened ?: return false
+        return last == target && clock.elapsedMillis() - at in 0 until REPEAT_MILLIS
+    }
+
+    private fun opened(target: String) {
+        lastOpened = target to clock.elapsedMillis()
     }
 
     /** Shows [snackbar] for [SNACKBAR_MILLIS]; a newer one (or the same one again) replaces it and starts over. */
@@ -75,5 +96,10 @@ class YouViewModel(
     internal companion object {
         /** How long an app-screen snackbar stays (EXPERIENCE.md `snackbar`: 4 s). */
         const val SNACKBAR_MILLIS = 4_000L
+
+        /** A second tap on the link that just opened, within this time, is a double tap (review fix 5). */
+        const val REPEAT_MILLIS = 1_000L
+
+        private const val MAILTO = "mailto:"
     }
 }

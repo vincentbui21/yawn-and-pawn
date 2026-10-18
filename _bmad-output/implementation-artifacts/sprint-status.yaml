@@ -29,7 +29,7 @@
 # - Dev moves story to 'review', then runs code-review (fresh context, different LLM recommended)
 # - Retrospective appends its action items to action_items; the status view surfaces open ones
 generated: 09-26-2026 12:36
-last_updated: 10-01-2026 10:09
+last_updated: 10-19-2026 00:30
 project: Yawn & Pawn
 project_key: NOKEY
 tracking_system: file-system
@@ -111,7 +111,7 @@ development_status:
   4-16-purchase-history: done  # Epic 4 auto-run, fast mode
   4-17-problem-with-a-charge: done  # Epic 4 auto-run, fast mode
   4-18-epic-4-payment-verification-with-license-testers: done  # owner 2026-10-19: remaining items deferred to v2
-  epic-4-retrospective: optional
+  epic-4-retrospective: done
 
   epic-5: backlog
   5-1-wake-and-snooze-defaults-and-theme-override-in-settings: review
@@ -172,3 +172,62 @@ development_status:
   8-11-post-launch-monitoring-runbook: backlog
   8-12-staged-production-rollout: backlog
   epic-8-retrospective: optional
+action_items:
+  - id: "epic-4-retro-item-1-fix-story-epic-4-device-follow-ups-re-ri"
+    epic: 4
+    action: "Fix story Epic 4 device follow-ups: re-ring clock shows the current time;
+      refresh owned purchases so Play already-own dialog never precedes the reuse
+      sheet. Merge before Story 5.13."
+    owner: "dev loop"
+    status: open
+    ref: "_bmad-output/implementation-artifacts/epic-4-retro-2026-10-19.md"
+  - id: "epic-4-retro-item-2-document-the-device-test-build-path-paym"
+    epic: 4
+    action: "Document the device-test build path: payment tests need a release build
+      installed from Internal testing (ColorOS sideload installer is pc); play-catalog
+      needs temporary Admin."
+    owner: "coordinator"
+    status: open
+    ref: "_bmad-output/implementation-artifacts/epic-4-retro-2026-10-19.md"
+  - id: "epic-4-retro-item-3-test-conventions-pin-the-clock-for-time"
+    epic: 4
+    action: "Test conventions: pin the clock for time-window rules; junit4.v2 compose
+      rules only, with a quality-gate check against the v1 imports."
+    owner: "dev loop"
+    status: open
+    ref: "_bmad-output/implementation-artifacts/epic-4-retro-2026-10-19.md"
+  - id: "epic-4-retro-item-4-at-most-two-lanes-run-gradle-at-once-on"
+    epic: 4
+    action: "At most two lanes run Gradle at once on the PC; keep the PC on mains
+      power with sleep off; keep RUN-STATUS current for restarts."
+    owner: "coordinator"
+    status: open
+    ref: "_bmad-output/implementation-artifacts/epic-4-retro-2026-10-19.md"
+  - id: "epic-4-retro-item-5-shared-files-coordinator-updates-sprint"
+    epic: 4
+    action: "Shared files: coordinator updates sprint-status after merges; deferred-work
+      entries appended at the end; epic context edits in their own docs commit; stories
+      that re-record the same baselines stack."
+    owner: "coordinator"
+    status: open
+    ref: "_bmad-output/implementation-artifacts/epic-4-retro-2026-10-19.md"
+  - id: "epic-4-retro-item-6-ask-any-default-taken-question-that-chan"
+    epic: 4
+    action: "Ask any default-taken question that changes the ring screen at the next
+      owner contact; list open defaults at the top of each device checklist."
+    owner: "coordinator"
+    status: open
+    ref: "_bmad-output/implementation-artifacts/epic-4-retro-2026-10-19.md"
+  - id: "epic-4-retro-item-7-add-the-spike-s1-pixel-and-samsung-re-ch"
+    epic: 4
+    action: "Add the Spike S1 Pixel and Samsung re-check to the Story 8.8 device matrix."
+    owner: "owner"
+    status: open
+    ref: "_bmad-output/implementation-artifacts/epic-4-retro-2026-10-19.md"
+  - id: "epic-4-retro-item-8-decide-whether-to-mark-epic-2-and-epic-3"
+    epic: 4
+    action: "Decide whether to mark epic-2 and epic-3 retrospectives done and close
+      epic-3 and 3-14 in sprint-status."
+    owner: "owner"
+    status: open
+    ref: "_bmad-output/implementation-artifacts/epic-4-retro-2026-10-19.md"

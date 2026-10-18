@@ -2,7 +2,7 @@
 title: 'Story 5.5: Manufacturer background guidance'
 type: 'feature'
 created: '2026-10-16'
-status: 'in-review'
+status: 'done'
 baseline_revision: 'e35b0e2c71d601ed29504ea3844168c90b934eef'
 review_loop_iteration: 0
 followup_review_recommended: false
@@ -130,7 +130,7 @@ deferred:
 - [x] Copy matches `EXPERIENCE.md > Voice and Tone` (no em dashes, no filler, strings in resources). Verbatim keys reused; new steps are owner drafts in resources, checked by `CopyRulesTest` (≤ 25 words each).
 - [x] Every state row in `EXPERIENCE.md > State Patterns` for this surface is handled. Covered maker (steps), Other (no steps, buttons still work), confirm failure (screen stays).
 - [x] "I'm up" is the most prominent wake action; snooze is visible, plain and priced. Does not apply: not a wake screen.
-- [x] Compose `@Preview`s for each state (light/dark/Sunrise, empty/error) exist; screenshot tests updated (Paparazzi or Roborazzi). `ManufacturerGuidanceScreenshotTest` (6 makers × Light, Dark, 200%), recorded. The round-2 `preview/reliability_manufacturer_*` goldens are not captured by any current test (`PreviewScreenshotTest` lists no such case), so they were left as they are.
+- [x] Compose `@Preview`s for each state (light/dark/Sunrise, empty/error) exist; screenshot tests updated (Paparazzi or Roborazzi). `ManufacturerGuidanceScreenshotTest` (6 makers × Light, Dark, 200%), recorded. The design-preview `preview/reliability_manufacturer_{light,dark}` goldens (`PreviewEditorScreenshotTest`) are re-recorded: the pane now shows the real guidance screen.
 
 ## Verification
 
@@ -144,7 +144,7 @@ deferred:
 
 ## Auto Run Result
 
-Status: in-review (fast mode; not pushed). The code, tests and goldens are complete. The last verification round could not finish: the PC ran out of memory while other lanes were building (the JVM `hs_err` crash logs were deleted). See the verification notes below.
+Status: done (fast mode; not pushed; the follow-up below finished the verification). The first local verification round could not finish because the PC ran out of memory while other lanes were building (the JVM `hs_err` crash logs were deleted).
 
 **Summary:**
 - `DeviceMaker` maps `Build.MANUFACTURER`, then `Build.BRAND`, to six covered makers; any other maker hides the row. It turns the Manufacturer row on for covered makers.
@@ -196,6 +196,15 @@ Status: in-review (fast mode; not pushed). The code, tests and goldens are compl
   - the tests touched by the patches: the moved `openManufacturerGuidance()` and the split `UiModuleTest`;
   - `:androidApp:testDebugUnitTest` in verify mode for the screenshots and `ReliabilityProbeTest`.
   - CI or the coordinator runs these.
+
+**Follow-up (2026-10-18), after CI on PR #69:**
+- CI ran 2177 tests. 2 failed: `PreviewEditorScreenshotTest[reliability_manufacturer_light]` and `[..._dark]`. This was expected, because the design-preview pane now uses the real guidance screen.
+- Re-recorded those two baselines and checked them: they show the Xiaomi guidance screen.
+- Then, with `--no-daemon --max-workers=2`, all of these pass:
+  - `:androidApp:testDebugUnitTest --tests '*PreviewEditorScreenshotTest*'` in verify mode: 152/152.
+  - `spotlessCheck` and `detekt`: 0 issues in core, composeApp and androidApp.
+  - `:composeApp:testAndroidHostTest`: `TabNavigationTest` 12/12 and `UiModuleTest` 4/4.
+- The other checks that crashed locally (`ReliabilityProbeTest`, `ManufacturerGuidanceScreenshotTest`) passed on CI.
 
 **Residual risks:**
 - The non-Xiaomi steps are owner drafts.

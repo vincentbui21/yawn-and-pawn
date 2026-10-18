@@ -25,7 +25,7 @@ fun telemetryModule(): Module =
         single<Telemetry> {
             if (get<FirebaseConfiguration>().present) ConsentGatedTelemetry(FirebaseTelemetry(get(), get()), get()) else Telemetry.None
         }
-        factory { SetAnalyticsConsent(get()) }
+        factory { SetAnalyticsConsent(get(), get()) }
         // Its own app-wide scope (as the purchase coordinator's): it follows the consent for the life of the process, so it
         // is not among the app start's finite jobs; it stops when the Koin graph closes.
         single {

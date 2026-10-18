@@ -10,6 +10,7 @@ import com.yawnandpawn.app.core.alarm.AlarmDraft
 import com.yawnandpawn.app.core.alarm.AlarmFired
 import com.yawnandpawn.app.core.alarm.SaveAlarm
 import com.yawnandpawn.app.core.error.Outcome
+import com.yawnandpawn.app.core.session.SessionEngine
 import com.yawnandpawn.app.core.session.SessionEvent
 import com.yawnandpawn.app.core.session.SessionState
 import com.yawnandpawn.app.core.telemetry.ConsentGatedTelemetry
@@ -75,6 +76,8 @@ class TelemetryWiringTest {
         assertEquals(listOf("collection false"), sink.calls.toList(), "off first, as Firebase became ready")
         assertIs<ConsentGatedTelemetry>(koin.get<Telemetry>())
 
+        // The choice is stored only once the session lock knows no session runs (the stored session is loaded).
+        runBlocking { koin.get<SessionEngine>().restore() }
         assertIs<Outcome.Success<*>>(runBlocking { koin.get<SetAnalyticsConsent>()(true) })
 
         awaitUntil { sink.calls.size >= 3 }

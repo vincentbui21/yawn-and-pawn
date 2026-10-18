@@ -106,7 +106,7 @@ class SettingsViewModelTest {
                 logger = logger,
                 defaults = DefaultSettingSetters(SaveDefaultSetting(settings, sessionLock)),
                 consents = consents,
-                setAnalyticsConsent = SetAnalyticsConsent(consents),
+                setAnalyticsConsent = SetAnalyticsConsent(consents, sessionLock),
             )
         backgroundScope.launch(dispatcher) { viewModel.state.collect {} }
         return viewModel
@@ -341,7 +341,7 @@ class SettingsViewModelTest {
                     logger,
                     DefaultSettingSetters(SaveDefaultSetting(settings, sessionLock)),
                     consents,
-                    SetAnalyticsConsent(consents),
+                    SetAnalyticsConsent(consents, sessionLock),
                 )
             backgroundScope.launch(dispatcher) { viewModel.state.collect {} }
 
@@ -414,7 +414,7 @@ class SettingsViewModelTest {
                     logger,
                     DefaultSettingSetters(SaveDefaultSetting(settings, sessionLock)),
                     failing,
-                    SetAnalyticsConsent(failing),
+                    SetAnalyticsConsent(failing, sessionLock),
                 )
             backgroundScope.launch(dispatcher) { viewModel.state.collect {} }
 

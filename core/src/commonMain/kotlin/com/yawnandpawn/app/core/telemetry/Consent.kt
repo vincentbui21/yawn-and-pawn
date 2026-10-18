@@ -2,6 +2,7 @@ package com.yawnandpawn.app.core.telemetry
 
 import com.yawnandpawn.app.core.error.DomainError
 import com.yawnandpawn.app.core.error.Outcome
+import com.yawnandpawn.app.core.session.SessionLockGuard
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.first
 import kotlin.coroutines.cancellation.CancellationException
@@ -27,11 +28,16 @@ interface ConsentStore {
     suspend fun setConsent(on: Boolean): Outcome<Unit, DomainError>
 }
 
-/** Turns usage stats on or off (Settings switch now, the onboarding step in Story 5.11). Applies at once, no Save. */
+/**
+ * Turns usage stats on or off (Settings switch now, the onboarding step in Story 5.11). Applies at once, no Save. Like
+ * every user-facing write it runs inside [SessionLockGuard.whenIdle] (Story 2.6): during a session it changes nothing
+ * and returns [DomainError.SessionActive] (Settings and onboarding are behind the session lock then anyway).
+ */
 class SetAnalyticsConsent(
     private val store: ConsentStore,
+    private val sessionLock: SessionLockGuard,
 ) {
-    suspend operator fun invoke(on: Boolean): Outcome<Unit, DomainError> = store.setConsent(on)
+    suspend operator fun invoke(on: Boolean): Outcome<Unit, DomainError> = sessionLock.whenIdle { store.setConsent(on) }
 }
 
 /**

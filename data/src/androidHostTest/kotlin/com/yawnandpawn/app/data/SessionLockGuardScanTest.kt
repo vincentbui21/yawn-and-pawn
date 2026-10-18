@@ -49,6 +49,8 @@ class SessionLockGuardScanTest {
                 "SaveGlobalSetting",
                 "SaveDefaultSetting",
                 "RecordCommitmentEvent",
+                // The usage stats choice (Story 5.6).
+                "SetAnalyticsConsent",
             ),
             writers - ALLOWED.keys,
         )

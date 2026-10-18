@@ -2,6 +2,8 @@ package com.yawnandpawn.app.core.telemetry
 
 import com.yawnandpawn.app.core.error.DomainError
 import com.yawnandpawn.app.core.error.Outcome
+import com.yawnandpawn.app.core.session.SessionLockGuard
+import com.yawnandpawn.app.core.session.SessionState
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.flow
@@ -28,6 +30,17 @@ class ConsentGatedTelemetryTest {
     private val delivered = mutableListOf<TelemetryEvent>()
     private val delegate = Telemetry { delivered += it }
     private val store = MemoryConsentStore()
+    private val sessionState = MutableStateFlow<SessionState>(SessionState.Idle)
+    private val idle = SessionLockGuard(sessionState, restored = MutableStateFlow(true), emergency = MutableStateFlow(false))
+
+    @Test
+    fun `during a session the choice is not stored and the session lock is reported`() =
+        runTest {
+            val notRestored = SessionLockGuard(sessionState, restored = MutableStateFlow(false), emergency = MutableStateFlow(false))
+
+            assertEquals(Outcome.Failure(DomainError.SessionActive), SetAnalyticsConsent(store, notRestored)(true))
+            assertEquals(AnalyticsConsent(), store.stored.value)
+        }
 
     @Test
     fun `three events before consent and one after deliver only the one after`() =
@@ -35,7 +48,7 @@ class ConsentGatedTelemetryTest {
             val telemetry = ConsentGatedTelemetry(delegate, store)
             repeat(3) { telemetry.log(TelemetryEvent.SnoozeCount(it)) }
 
-            SetAnalyticsConsent(store)(true)
+            SetAnalyticsConsent(store, idle)(true)
             telemetry.log(TelemetryEvent.SnoozeCount(9))
 
             assertEquals(listOf<TelemetryEvent>(TelemetryEvent.SnoozeCount(9)), delivered)
@@ -45,10 +58,10 @@ class ConsentGatedTelemetryTest {
     fun `turning consent off stops delivery at once`() =
         runTest {
             val telemetry = ConsentGatedTelemetry(delegate, store)
-            SetAnalyticsConsent(store)(true)
+            SetAnalyticsConsent(store, idle)(true)
             telemetry.log(TelemetryEvent.SnoozeCount(1))
 
-            SetAnalyticsConsent(store)(false)
+            SetAnalyticsConsent(store, idle)(false)
             telemetry.log(TelemetryEvent.SnoozeCount(2))
 
             assertEquals(listOf<TelemetryEvent>(TelemetryEvent.SnoozeCount(1)), delivered)
@@ -72,11 +85,11 @@ class ConsentGatedTelemetryTest {
     @Test
     fun `any choice marks the user as asked, and a failed write is returned and stores nothing`() =
         runTest {
-            assertEquals(Outcome.Success(Unit), SetAnalyticsConsent(store)(false))
+            assertEquals(Outcome.Success(Unit), SetAnalyticsConsent(store, idle)(false))
             assertEquals(AnalyticsConsent(consent = false, asked = true), store.stored.value)
 
             store.failure = DomainError.StorageFailure("disk full")
-            assertEquals(Outcome.Failure(DomainError.StorageFailure("disk full")), SetAnalyticsConsent(store)(true))
+            assertEquals(Outcome.Failure(DomainError.StorageFailure("disk full")), SetAnalyticsConsent(store, idle)(true))
             assertEquals(AnalyticsConsent(consent = false, asked = true), store.stored.value)
         }
 

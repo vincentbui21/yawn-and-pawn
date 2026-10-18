@@ -188,8 +188,12 @@ Independent review (1 reviewer, two lenses) of head `aea4b9f3`: 10 findings. Fix
 9. **LOW, fixed: the timeout test proved little.** The 2 s timeout and its test are gone with item 1, replaced by item 1's test.
 10. **LOW, fixed:** the 5.13 DebugView checklist line (only the 3 custom events plus the approved automatic events; with consent on, Crashlytics also logs `app_exception`, to note for Data safety) is in `epic-5-context.md` under "Notes from implemented stories".
 
+11. **CI failure on `aea4b9f3`, fixed: `SessionLockGuardScanTest`.** `SetAnalyticsConsent` wrote the consent outside the session lock guard. It now takes the `SessionLockGuard` and stores the choice inside `whenIdle` like every user-facing write (Story 2.6). During a session it stores nothing and returns `SessionActive`; Settings and onboarding are behind the session lock then anyway. The scan's expected guarded writers list `SetAnalyticsConsent`. Tests: `SessionLockGuardScanTest` (4), a new `ConsentGatedTelemetryTest` case (no write and `SessionActive` while the lock holds), and `TelemetryWiringTest` loads the stored session before the yes, as the app start does.
+
 **Verification** (all with `--no-daemon --max-workers=2`, JDK 17), all passing:
-- `:core:jvmTest` (`*Telemetry*`, `*SessionEngine*`): 85 tests, including `SessionEngineTelemetryTest` 10.
+- `:data:testAndroidHostTest` (`*SessionLockGuardScanTest*`, `*ConsentStore*`): `SessionLockGuardScanTest` 4, `DataStoreConsentStoreTest` 9 (item 11).
+- `:composeApp:testAndroidHostTest` (`com.yawnandpawn.app.ui.settings.*`) and `:androidApp:testDebugUnitTest` (`TelemetryWiringTest`, `UsageStatsSettingsTest` 7) after item 11.
+- `:core:jvmTest` (`*Telemetry*`, `*SessionEngine*`): 85 tests, including `SessionEngineTelemetryTest` 10; `ConsentGatedTelemetryTest` 6 after item 11.
 - `:testing:allTests`: 73 tests.
 - `:data:testAndroidHostTest` (`*ConsentStore*`, `*DataModuleTest*`): 16 tests (`DataStoreConsentStoreTest` 9, `DataModuleTest` 7).
 - `:androidApp:testDebugUnitTest` (`*Telemetry*`, `*Analytics*`, `*CrashReporting*`, `*BackupRules*`, `*UsageStatsSettingsTest*`, `*SessionWiringTest*`): 65 tests, among them `AnalyticsConsentGateTest` 17, `CrashReportingTest` 15, `TelemetryWiringTest` 2, `BackupRulesCoverageTest` 4 and `BackupRulesTest` 6.

@@ -125,7 +125,7 @@ class SettingsViewModelSequenceTest {
             logger = logger,
             defaults = DefaultSettingSetters(SaveDefaultSetting(settings, sessionLock)),
             consents = consents,
-            setAnalyticsConsent = SetAnalyticsConsent(consents),
+            setAnalyticsConsent = SetAnalyticsConsent(consents, sessionLock),
         )
     }
 

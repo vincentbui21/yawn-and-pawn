@@ -7,6 +7,7 @@ import com.yawnandpawn.app.ui.daydetail.DayDetailUiState
 import com.yawnandpawn.app.ui.daydetail.MorningEvent
 import com.yawnandpawn.app.ui.daydetail.SessionDetail
 import com.yawnandpawn.app.ui.format.formatMoney
+import com.yawnandpawn.app.ui.payments.PRICE_CAP
 import com.yawnandpawn.app.ui.progress.CalendarDay
 import com.yawnandpawn.app.ui.progress.CalendarMonth
 import com.yawnandpawn.app.ui.progress.DaySelection
@@ -283,6 +284,12 @@ object PreviewProgressSamples {
 
     val youNoBrowser = you.copy(noBrowser = true)
 
+    /** The address the no-email-app note shows in previews (a reserved example domain, not the real support address). */
+    const val PREVIEW_SUPPORT_EMAIL = "support@example.com"
+
+    /** "Email support" with no email app (Story 5.8): the note with the address and "Copy address" under the cards. */
+    val youNoEmailApp = you.copy(noEmailAppAddress = PREVIEW_SUPPORT_EMAIL)
+
     val settingsSession: SettingsUiState get() = settings.copy(sessionInProgress = true)
 
     val settingsBaseFee: SettingsUiState get() = settings.copy(pane = SettingsPane.BaseFee)
@@ -326,10 +333,8 @@ object PreviewProgressSamples {
 
     val reliabilityManufacturer = reliabilityMissing.copy(showManufacturerSteps = true)
 
-    /** The most one morning can cost with the default 5 snoozes: B x (1 + 2 + 3 + 4 + 5). */
-    val priceCap: Money = price(CAP_MULTIPLE)
-
-    private const val CAP_MULTIPLE = 15
+    /** The most a single snooze can cost (Story 5.8): the app's $50 cap, as the Payments route shows it. */
+    val priceCap: Money = PRICE_CAP
 
     private const val YEAR = 2026
 

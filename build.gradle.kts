@@ -68,11 +68,12 @@ sitePages {
     siteDir.set(layout.projectDirectory.dir("docs/site"))
     appLinks.set(layout.projectDirectory.file("config/app-links.properties"))
     appStrings.set(layout.projectDirectory.file("composeApp/src/commonMain/composeResources/values/strings.xml"))
-    // Everything on the Payments screen except payments_cap_body, whose "one morning" wording is wrong (the $50 cap is
-    // per snooze); payments.md states the cap correctly until Story 5.8 fixes the app string.
+    // Every paragraph of the Payments screen. A placeholder in the app's text (payments_cap_body's %1$s, the formatted
+    // cap) matches any text without spaces on the page (Story 5.8).
     mirroredKeys.set(
         listOf(
             "payments_fee_body",
+            "payments_cap_body",
             "payments_lock_body",
             "payments_pending_body",
             "payments_unused_body",

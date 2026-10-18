@@ -5,9 +5,8 @@ permalink: /payments/
 
 {% comment %}
   Mirrors the app's "How payments & refunds work" screen, in its order. checkSitePages fails unless every mirrored
-  in-app sentence (the mirroredKeys in the root build.gradle.kts) appears here word for word. The cap sentence is the
-  exception: the app's "one morning never costs more than" is wrong (the cap is per snooze), so it is stated correctly
-  here until Story 5.8 fixes the app string.
+  in-app sentence (the mirroredKeys in the root build.gradle.kts) appears here word for word. A placeholder in the
+  app's text (the cap, %1$s) matches any text without spaces, so "$50." here mirrors the app's formatted cap.
 {% endcomment %}
 
 # How payments & refunds work

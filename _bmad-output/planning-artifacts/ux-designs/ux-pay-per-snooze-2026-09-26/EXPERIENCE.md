@@ -57,7 +57,7 @@ Bottom navigation (owner decision 2026-10-01, feedback item 26): a floating glas
 | Settings | Nav | Grouped cards, rows open sub-screens (owner decision 2026-09-27; design preview round 2 layout 2026-09-30). Title "Settings" pinned top-left. Card "Snooze": "Base fee" ›, "Max snoozes per session" ›, "Default snooze length" ›; card "Wake": "Default quiet time" ›, "Vibrate during quiet time" (switch), "Bright wake screen" (switch with its caption); card "Appearance": System / Light / Dark `segmented-control`; a card with "Weekly summary" and "Share anonymous usage stats" (switches); a card with "Reliability checklist" ›. App behaviour only: payments, privacy, "Delete all data", support, terms and about moved to You (owner decision 2026-10-01). Sub-screens: **Base fee** (`stepper`, fee ladder preview, lock note, approximate-price note), **Max snoozes per session** (`stepper` 1 to 5), **Default snooze length** (5 / 9 / 10 / 15 min), **Default quiet time** (15 to 30 s slider). |
 | You | Nav | A personal page with no sign-in (owner decision 2026-10-01; no account or backend, NFR-4), grouped cards: "Money" (Purchase history ›, "How payments & refunds work" ›), "Privacy and your data" ("Privacy policy" ›, "Delete all data" in `error`, opens its dialog), "Help" ("Support" ›, "Terms" ›, "About" with "Version {version}"). The label can later become "Account" with a one-word change. |
 | Reliability checklist | Settings, onboarding step 5, `banner-warning` | Permission and device-setting status with fixes (FR-ONB-2/3). All rows in one `card-group`; "Fix" on "Manufacturer settings" opens its numbered steps as a sub-screen ("Open settings", "I've done this"). |
-| Payments & refunds | Settings | Plain explanation of fees, pending payments and Google refunds (FR-SET-3). |
+| Payments & refunds | You | Plain explanation of fees, pending payments and Google refunds (FR-SET-3). Its links push "Problem with a charge?" and Purchase history over it (Story 5.8). |
 | Ringing | Alarm fires (full-screen intent), `notification-ringing` tap | Time, "I'm up", "Snooze · {price}". |
 | Snooze confirm | `button-snooze` tap | Price, next price, nudge, confirm. Includes the unlock step and "already paid" state. |
 | Google Play purchase sheet | Snooze confirm (system UI) | Payment. |
@@ -278,7 +278,7 @@ Body copy, one bullet per paragraph (each ≤ 25 words).
 - **Problem with a charge?, support email body** (one line each): "Order ID: {orderId}" · "Date: {purchaseTime}" (ISO 8601 with offset) · "Price: {price}" · "Status: {status}"
 - **How payments & refunds work** (followed by the alarm behaviour disclosure verbatim, the purchase authentication tip, and links to "Problem with a charge?" and "Purchase history")
   - "Each snooze costs your base fee times the snooze number. Google Play shows the price in your local currency."
-  - "You can snooze up to your max snoozes per session, and one morning never costs more than {cap}."
+  - "You can snooze up to your max snoozes per session. A single snooze never costs more than {cap}." ({cap}: the $50 per-snooze cap in USD, Story 5.8, default taken)
   - "Your fee is locked for the morning. You can raise it anytime. Lowering it waits until after your next alarm."
   - "A pending payment only starts your snooze if it goes through before you finish. Otherwise, finish the check to stop the alarm."
   - "Payments that weren't used are refunded automatically by Google."

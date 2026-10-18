@@ -94,6 +94,9 @@ object SitePagesRules {
     private val todo = Regex("""\bTODO\b""")
     private val whitespace = Regex("""\s+""")
 
+    /** An Android format placeholder for a string or a number in the app's text: `%1$s`, `%2$d`. */
+    private val placeholder = Regex("""%\d+\$[sd]""")
+
     /** Every problem of [input]; empty when the site passes. */
     fun violations(input: SiteInput): List<String> {
         val texts = input.files.mapValues { (_, text) -> text?.let(SiteText::normalized) }
@@ -210,7 +213,11 @@ object SitePagesRules {
         return EMAIL_PAGES.filter { it in files && email !in files.getValue(it) }.map { "$it: does not show $SUPPORT_EMAIL '$email'" }
     }
 
-    /** Each mirrored in-app string in `payments.md`, word for word after normalising whitespace. */
+    /**
+     * Each mirrored in-app string in `payments.md`, word for word after normalising whitespace. A `%N$s` or `%N$d`
+     * placeholder in the app's text (a value the app fills in, such as the formatted cap) matches any text without
+     * spaces on the page (Story 5.8).
+     */
     fun mirrorViolations(
         payments: String?,
         appStrings: Map<String, String>,
@@ -222,11 +229,14 @@ object SitePagesRules {
             val text = appStrings[key]
             when {
                 text == null -> "strings.xml: no string '$key' to mirror"
-                text.collapsed() !in page -> "payments.md: does not mirror '$key' (\"${text.collapsed()}\")"
+                !mirrorPattern(text.collapsed()).containsMatchIn(page) -> "payments.md: does not mirror '$key' (\"${text.collapsed()}\")"
                 else -> null
             }
         }
     }
+
+    /** [text] as a pattern: its words literally, each placeholder as one run of non-space characters. */
+    private fun mirrorPattern(text: String): Regex = Regex(text.split(placeholder).joinToString("""\S+""") { Regex.escape(it) })
 
     private fun String.collapsed(): String = trim().replace(whitespace, " ")
 

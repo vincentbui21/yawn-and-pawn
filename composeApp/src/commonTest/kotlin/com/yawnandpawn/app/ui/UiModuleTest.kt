@@ -56,10 +56,14 @@ import com.yawnandpawn.app.testing.anAppVersion
 import com.yawnandpawn.app.ui.editor.AlarmEditorArgs
 import com.yawnandpawn.app.ui.editor.AlarmEditorViewModel
 import com.yawnandpawn.app.ui.home.HomeViewModel
+import com.yawnandpawn.app.ui.links.AppLinks
+import com.yawnandpawn.app.ui.links.ExternalLinks
 import com.yawnandpawn.app.ui.purchases.PurchaseHistoryViewModel
 import com.yawnandpawn.app.ui.qr.CameraPermission
 import com.yawnandpawn.app.ui.qr.TestCameraPermission
 import com.yawnandpawn.app.ui.reliability.ManufacturerGuidanceViewModel
+import com.yawnandpawn.app.ui.you.YouUiState
+import com.yawnandpawn.app.ui.you.YouViewModel
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.test.UnconfinedTestDispatcher
@@ -166,6 +170,41 @@ class UiModuleTest {
                 .get<ManufacturerGuidanceViewModel>()
                 .state.value.maker,
         )
+        app.close()
+    }
+
+    @Test
+    fun `the ui module builds the You ViewModel from the links ports`() {
+        val ports =
+            module {
+                single<ExternalLinks> {
+                    object : ExternalLinks {
+                        override fun openUrl(url: String): Boolean = true
+
+                        override fun sendEmail(
+                            to: String,
+                            subject: String,
+                            body: String,
+                        ): Boolean = true
+
+                        override fun copyText(text: String): Boolean = false
+                    }
+                }
+                single {
+                    AppLinks(
+                        supportEmail = "help@example.com",
+                        orderHistoryUrl = "https://example.com/orders",
+                        privacyUrl = "https://example.com/privacy/",
+                        termsUrl = "https://example.com/terms/",
+                        supportUrl = "https://example.com/support/",
+                    )
+                }
+            }
+        val app = koinApplication { modules(ports, uiModule) }
+
+        val you = app.koin.get<YouViewModel>()
+
+        assertEquals(YouUiState(appVersion = ""), you.state.value)
         app.close()
     }
 

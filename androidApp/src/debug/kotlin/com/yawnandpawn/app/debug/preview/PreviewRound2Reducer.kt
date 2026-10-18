@@ -82,7 +82,10 @@ internal fun ReliabilityUiState.fixed(item: ChecklistItem): ReliabilityUiState =
         copy(rows = rows.map { if (it.item == item) it.copy(status = ItemStatus.Ok) else it }, showManufacturerSteps = false)
     }
 
-/** The You tab in the tap-through: links show what a phone without a browser sees, "Delete all data" asks first. */
+/**
+ * The You tab in the tap-through: links show what a phone without a browser sees, "Email support" what a phone without
+ * an email app sees (Story 5.8), "Delete all data" asks first. "Copy address" does nothing here.
+ */
 internal fun reduceYou(
     state: YouUiState,
     intent: YouIntent,
@@ -92,6 +95,10 @@ internal fun reduceYou(
             state.copy(
                 noBrowser = !state.noBrowser,
             )
+        }
+
+        YouIntent.EmailSupportClicked -> {
+            state.copy(noEmailAppAddress = PreviewProgressSamples.PREVIEW_SUPPORT_EMAIL.takeIf { state.noEmailAppAddress == null })
         }
 
         YouIntent.DeleteAllClicked -> {

@@ -126,6 +126,7 @@ object PreviewRound2 {
             you("you_main", "Money, privacy and your data, help", s.you, primary = true),
             you("you_delete_dialog", "Delete all data", s.youDeleteDialog, hasDialog = true),
             you("you_no_browser", "Link without a browser", s.youNoBrowser),
+            you("you_no_email_app", "Email support without an email app", s.youNoEmailApp),
             settings("settings_session", "During a session (session lock)", { s.settingsSession }),
             settings("settings_base_fee", "Base fee", { s.settingsBaseFee }, group = "Settings sub-screens", primary = true),
             settings(

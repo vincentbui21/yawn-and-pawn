@@ -10,6 +10,7 @@ import com.yawnandpawn.app.ui.purchases.PurchaseHistoryViewModel
 import com.yawnandpawn.app.ui.reliability.ManufacturerGuidanceViewModel
 import com.yawnandpawn.app.ui.settings.DefaultSettingSetters
 import com.yawnandpawn.app.ui.settings.SettingsViewModel
+import com.yawnandpawn.app.ui.you.YouViewModel
 import org.koin.core.module.dsl.viewModel
 import org.koin.core.qualifier.named
 import org.koin.dsl.module
@@ -45,6 +46,7 @@ val uiModule =
         }
         viewModel { ProblemWithChargeViewModel(get(), get(), get(), get(), get()) }
         viewModel { ManufacturerGuidanceViewModel(get(), get(), get()) }
+        viewModel { YouViewModel(links = get(), appLinks = get()) }
         viewModel { params ->
             AlarmEditorViewModel(
                 alarmId = params.get<AlarmEditorArgs>().alarmId,

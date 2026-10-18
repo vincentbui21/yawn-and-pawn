@@ -38,7 +38,7 @@ import com.yawnandpawn.app.ui.theme.PpsTheme
 import org.jetbrains.compose.resources.stringResource
 
 /**
- * "How payments & refunds work" (FR-SET-3), stateless: the fee rules with the morning's [priceCap], pending and unused
+ * "How payments & refunds work" (FR-SET-3), stateless: the fee rules with the per-snooze [priceCap], pending and unused
  * payments and Google's self-refund, then the alarm behaviour disclosure verbatim and the purchase authentication tip,
  * then links to "Problem with a charge?" and Purchase history. Long-form copy, one paragraph per string.
  */

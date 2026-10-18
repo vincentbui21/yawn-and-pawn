@@ -93,6 +93,7 @@ class TabNavigationTest {
         AppTab.entries.forEach { tab -> assertEquals(tab, tab.route().tab) }
         assertNull(Route.AlarmEditor(null).tab)
         assertNull(Route.PurchaseHistory.tab)
+        assertNull(Route.Payments.tab)
     }
 
     @Test
@@ -163,6 +164,67 @@ class TabNavigationTest {
         assertEquals(true, backStack.applySessionLock(active = true))
         backStack.openManufacturerGuidance()
         assertEquals(listOf<NavKey>(Route.SessionInProgress), backStack)
+    }
+
+    @Test
+    fun `Payments is pushed over You once, and Back returns to You`() {
+        val backStack = stack(Route.Alarms)
+        backStack.selectTab(AppTab.You)
+
+        backStack.openPayments()
+        backStack.openPayments()
+        backStack.selectTab(AppTab.Settings)
+        backStack.openEditor(alarmId = null)
+        assertEquals(listOf<NavKey>(Route.Alarms, Route.You, Route.Payments), backStack)
+        assertNull(Route.Payments.tab)
+
+        backStack.close(Route.Payments)
+        assertEquals(listOf<NavKey>(Route.Alarms, Route.You), backStack)
+
+        backStack.openPayments()
+        backStack.pop()
+        assertEquals(listOf<NavKey>(Route.Alarms, Route.You), backStack)
+    }
+
+    @Test
+    fun `Payments pushes Purchase history or Problem with a charge once each, and Back walks back to Payments`() {
+        val backStack = stack(Route.Alarms, Route.You, Route.Payments)
+
+        backStack.openPurchaseHistory()
+        backStack.openPurchaseHistory()
+        backStack.openPayments()
+        assertEquals(listOf<NavKey>(Route.Alarms, Route.You, Route.Payments, Route.PurchaseHistory), backStack)
+        // Purchase history pushed from Payments still pushes "Problem with a charge?".
+        backStack.openProblemWithCharge()
+        backStack.openProblemWithCharge()
+        assertEquals(
+            listOf<NavKey>(Route.Alarms, Route.You, Route.Payments, Route.PurchaseHistory, Route.ProblemWithCharge),
+            backStack,
+        )
+        backStack.close(Route.ProblemWithCharge)
+        backStack.close(Route.PurchaseHistory)
+        assertEquals(listOf<NavKey>(Route.Alarms, Route.You, Route.Payments), backStack)
+
+        backStack.openProblemWithCharge()
+        backStack.openProblemWithCharge()
+        backStack.openPurchaseHistory()
+        assertEquals(listOf<NavKey>(Route.Alarms, Route.You, Route.Payments, Route.ProblemWithCharge), backStack)
+        backStack.pop()
+        assertEquals(listOf<NavKey>(Route.Alarms, Route.You, Route.Payments), backStack)
+    }
+
+    @Test
+    fun `a session replaces Payments and anything over it with the lock, and nothing pushes over the lock`() {
+        val backStack = stack(Route.Alarms, Route.You, Route.Payments, Route.PurchaseHistory)
+
+        assertEquals(true, backStack.applySessionLock(active = true))
+        backStack.openPayments()
+        backStack.openPurchaseHistory()
+        backStack.openProblemWithCharge()
+        assertEquals(listOf<NavKey>(Route.SessionInProgress), backStack)
+
+        backStack.applySessionLock(active = false)
+        assertEquals(listOf<NavKey>(Route.Alarms), backStack)
     }
 
     @Test

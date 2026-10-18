@@ -2,7 +2,7 @@
 title: 'Story 5.8: "How payments & refunds work", privacy, terms and support in the You tab'
 type: 'feature'
 created: '2026-10-16'
-status: 'ready-for-dev'
+status: 'done'
 baseline_revision: 'c03bdee0c739baeee81294fa3888cff6b6bed1cb'
 review_loop_iteration: 0
 followup_review_recommended: false
@@ -122,11 +122,11 @@ snooze (deferred from Story 5.7).
 ## Tasks & Acceptance
 
 **Execution:**
-- [ ] Cap copy: the string, EXPERIENCE.md, `payments.md` comment, the mirror check with placeholders (and its test),
+- [x] Cap copy: the string, EXPERIENCE.md, `payments.md` comment, the mirror check with placeholders (and its test),
   `mirroredKeys`, and deferred-work.
-- [ ] You: rows, state, intents, ViewModel, route, wiring.
-- [ ] Payments route and nav rules, with their tests.
-- [ ] Screenshots, semantics and real-app link tests. Keep the preview catalogue compiling.
+- [x] You: rows, state, intents, ViewModel, route, wiring.
+- [x] Payments route and nav rules, with their tests.
+- [x] Screenshots, semantics and real-app link tests. Keep the preview catalogue compiling.
 
 **Acceptance Criteria:**
 - Given the You tab, when it renders, then Money, Privacy and your data, and Help show the rows in the matrix. Each
@@ -139,20 +139,65 @@ snooze (deferred from Story 5.7).
 
 ## pps-design Done checklist
 
-- [ ] Only tokens from `DESIGN.md` used.
-- [ ] Light, Dark (and Sunrise where relevant) checked with previews / screenshots.
-- [ ] Every colour pair used is in the `DESIGN.md` contrast table.
-- [ ] Touch targets ≥ 48 dp; wake actions ≥ 64 dp.
-- [ ] Works at 200% font scale and with TalkBack; outcome glyphs present.
-- [ ] Reduced-motion path works.
-- [ ] Copy matches `EXPERIENCE.md > Voice and Tone` (no em dashes, no filler, strings in resources).
-- [ ] Every state row in `EXPERIENCE.md > State Patterns` for this surface is handled.
-- [ ] "I'm up" is the most prominent wake action; snooze is visible, plain and priced.
-- [ ] Compose `@Preview`s for each state (light/dark/Sunrise, empty/error) exist; screenshot tests updated.
+- [x] Only tokens from `DESIGN.md` used. No new UI code paints anything: You and Payments reuse `NavRow`,
+  `GroupCardOf`, `TextCard`, `NoteInline`, `NoEmailAppNote` and `AppSnackbar`; detekt (NoRawColor and the rest) passes.
+- [x] Light, Dark (and Sunrise where relevant) checked with previews / screenshots. `YouScreenshotTest` (You, You with
+  the no-email-app note, Payments top and scrolled to its links, each Light, Dark and Light 200 %), plus the preview
+  catalogue's You and Payments items. No wake screen, so no Sunrise.
+- [x] Every colour pair used is in the `DESIGN.md` contrast table. Only existing pairs (text and text-secondary on
+  glass, accent-text on the text button, inverse-text on inverse-surface).
+- [x] Touch targets ≥ 48 dp; wake actions ≥ 64 dp. `YouSemanticsTest` checks every You row, "Copy address", both
+  Payments links and the Back arrow; the preview semantics floor passes for the You and Payments items. No wake actions.
+- [x] Works at 200% font scale and with TalkBack; outcome glyphs present. 200 % screenshots wrap with no clipping;
+  screen and card titles are headings, rows are buttons, the note and both snackbars are polite live regions. No
+  outcomes on these screens.
+- [x] Reduced-motion path works. Only the existing 250 ms sub-screen slide of Navigation 3 (instant with reduced
+  motion, unchanged); nothing new animates.
+- [x] Copy matches `EXPERIENCE.md > Voice and Tone` (no em dashes, no filler, strings in resources). Only existing
+  strings plus the changed `payments_cap_body` (EXPERIENCE.md long-form line changed with it); `CopyRulesTest` passes.
+- [x] Every state row in `EXPERIENCE.md > State Patterns` for this surface is handled. No browser (4 s snackbar), no
+  email app (the note with "Copy address"), session active (the lock replaces You and Payments, `YouRouteTest`).
+- [x] "I'm up" is the most prominent wake action; snooze is visible, plain and priced. Not applicable: no wake screen.
+- [x] Compose `@Preview`s for each state (light/dark/Sunrise, empty/error) exist; screenshot tests updated. New preview
+  item `you_no_email_app`; the You, Payments and nav bar preview baselines were re-recorded for the Email support row
+  and the cap sentence.
 
 ## Spec Change Log
 
+### Implementation notes (2026-10-18)
+
+- **Cap:** `payments_cap_body` is "You can snooze up to your max snoozes per session. A single snooze never costs more
+  than %1$s." and `PRICE_CAP` (`ui/payments/PaymentsRoute.kt`) is `Money(FeeRules.PRICE_CAP_TIER * Money.MICROS_PER_UNIT,
+  "USD")`, shown as "$50.00" in en-US. The preview catalogue's `priceCap` (was the old B × 15 "morning" figure) now uses
+  `PRICE_CAP` too. `SitePagesRules.mirrorViolations` turns each `%N$s`/`%N$d` into `\S+` and quotes the rest; a new
+  `SitePagesTest` case covers another amount, a missing sentence, other words around the value, regex characters and
+  `%2$d`. `payments_cap_body` is in `mirroredKeys`.
+- **You:** `YouRow.EmailSupport` (label `problem_email_support`) sits under Support. `YouUiState` gains
+  `noEmailAppAddress` and `addressCopied` (the "Address copied." snackbar, only where the phone gives no confirmation,
+  as in Story 4.17). The note is cleared when an email opens and when the user taps Purchase history or Payments; it
+  also goes when the You entry leaves the back stack (another tab). `YouViewModel` runs one 4 s snackbar at a time;
+  a second tap restarts it.
+- **Navigation:** `Route.Payments`. `openPayments` pushes it over a tab; `openPurchaseHistory` now also works over
+  Payments, and `openProblemWithCharge` over Payments or Purchase history. To keep detekt's size limits without a
+  suppression, the three push rules moved to `ui/nav/YouNavigation.kt` (`topTab` became internal) and the You,
+  Purchase history, Payments and "Problem with a charge?" entries to `ui/nav/YouEntries.kt`.
+- **NoEmailAppNote** stays where Story 4.17 put it (`SupportChargePicker.kt`, next to `ProblemWithChargeFlow`), internal
+  to the module; `YouScreen` uses it as is.
+- **Preview catalogue:** the reducer toggles the no-email-app note on "Email support" and ignores "Copy address"; a new
+  `you_no_email_app` item uses the reserved `support@example.com`. `docs/design-preview/states.md` lists it
+  (`PreviewMenuTest`).
+- **EXPERIENCE.md:** only the cap long-form line and the Payments & refunds surface row ("You") changed. The You IA row
+  still lists "Help" as Support, Terms, About; it does not name the new Email support row (owner review, DEFAULT 2).
+
 ## Review Triage Log
+
+### 2026-10-18 — Review pass (fast mode: one combined self-review; the coordinator runs the independent review)
+- verdicts: 4 findings — high 0, medium 0, low 3, false 1, maybe-false 0
+- findings:
+  - `[low]` `[reject]` The EXPERIENCE.md You IA row still lists Help as Support, Terms and About, not the new "Email support" row. The spec limits this story to two EXPERIENCE.md edits, and the row is an owner-review default (DEFAULT 2). Raised for owner sign-off instead.
+  - `[low]` `[reject]` The 4 s snackbar check in `YouRouteTest` advances Robolectric's clock by hand, so it may be timing-sensitive on CI. `YouViewModelTest` covers the same timing with a virtual clock. To watch on CI.
+  - `[low]` `[reject]` `NoEmailAppNote` stays in `SupportChargePicker.kt` instead of moving next to `ProblemWithChargeMain`, as the Code Map said. It is internal to the module either way, and moving it would only churn Story 4.17's file.
+  - `[false]` A double tap on Payments' links could stack screens. Disproved: `openPurchaseHistory` needs a tab or Payments on top, and `openProblemWithCharge` needs Purchase history or Payments on top, so the second tap is ignored. `TabNavigationTest` covers it.
 
 ## Verification
 
@@ -163,3 +208,39 @@ snooze (deferred from Story 5.7).
 - `:androidApp:testDebugUnitTest` for the new You tests (Roborazzi record, then verify), plus `MainActivityTest`,
   `PurchaseHistory*`, `ProblemWithCharge*` and any test that renders the You tab or the preview catalogue's You and
   Payments items.
+
+**Results (2026-10-18), all with `--no-daemon --max-workers=2`, all passed:**
+- `spotlessCheck`, `detekt` (all modules) and `checkSitePages`.
+- `:build-logic:test --tests '*SitePagesTest'` (15 tests).
+- `:composeApp:testAndroidHostTest`: `YouViewModelTest` (8), `TabNavigationTest` (14), `SessionLockTest` (5),
+  `UiModuleTest` (4), `CopyRulesTest` (14).
+- `:androidApp:recordRoborazziDebug` for `YouScreenshotTest`, `NavBarScreenshotTest` and the preview cases `you_*`,
+  `payments_light`, `payments_dark` and `payments_light_font200`; then `:androidApp:testDebugUnitTest` verifying
+  `YouScreenshotTest` (12), `YouSemanticsTest` (6), `YouRouteTest` (8), `MainActivityTest` (20), `PurchaseHistory*`,
+  `ProblemWithCharge*`, `AndroidExternalLinksTest`, `NavBarScreenshotTest` (4), `Round2TapThroughTest`,
+  `TapThroughTest`, `PreviewMenuTest` (8) and the preview screenshot and semantics cases for `you_*` and `payments*`.
+- The full `qualityGate` was not run (left to CI).
+
+## Auto Run Result
+
+Status: done (fast mode). The coordinator runs the independent review and CI.
+
+- **Built:**
+  - The You tab runs on `YouViewModel` with the rows Purchase history, How payments & refunds work, Privacy policy,
+    Support, Email support and Terms.
+    - The links open `AppLinks` URLs, with "No browser found." for 4 s when nothing handles them.
+    - Email support writes to the support address, with the no-email-app note and "Copy address" when no app takes it.
+  - `Route.Payments` shows the approved `PaymentsScreen`, and its links push Problem with a charge? and Purchase
+    history.
+  - The cap sentence is fixed: "A single snooze never costs more than {cap}". It is in sync with EXPERIENCE.md and
+    `payments.md`, and `checkSitePages` now mirrors it, with placeholders matched.
+- **Files:**
+  - `ui/you/` (screen, ViewModel, route), `ui/payments/PaymentsRoute.kt`.
+  - `ui/nav/` (`Route`, `TabNavigation`, `YouNavigation`, `YouEntries`, `AppNavHost`), `UiModule`, `strings.xml`.
+  - `SitePages.kt` and its test, `build.gradle.kts`, `docs/site/payments.md`, EXPERIENCE.md, `deferred-work.md`.
+  - The preview catalogue, `docs/design-preview/states.md`, tests and baselines.
+- **Review:** 4 findings, 0 patches, 3 rejected (reasons in the triage log), 1 false.
+- **Follow-up review:** false. Nothing medium or high was patched.
+- **Verification:** see `## Verification`. All targeted runs passed. The full `qualityGate` was not run.
+- **Residual risks:** the timing of the `YouRouteTest` snackbar check on CI, and the owner's sign-off on the cap copy
+  and the "Email support" row.

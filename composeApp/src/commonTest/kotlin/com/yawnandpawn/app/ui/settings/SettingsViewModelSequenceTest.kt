@@ -19,8 +19,10 @@ import com.yawnandpawn.app.core.log.LogEvent
 import com.yawnandpawn.app.core.session.GlobalSettings
 import com.yawnandpawn.app.core.session.SessionLockGuard
 import com.yawnandpawn.app.core.session.SessionState
+import com.yawnandpawn.app.core.telemetry.SetAnalyticsConsent
 import com.yawnandpawn.app.testing.FakeAlarmRepository
 import com.yawnandpawn.app.testing.FakeClock
+import com.yawnandpawn.app.testing.FakeConsentStore
 import com.yawnandpawn.app.testing.FakeGlobalSettingsRepository
 import com.yawnandpawn.app.testing.FakeLogger
 import com.yawnandpawn.app.testing.FakeMoneyFormatter
@@ -94,6 +96,7 @@ class SettingsViewModelSequenceTest {
     private val pending = FakePendingChangeRepository()
     private val inner = FakeGlobalSettingsRepository(GlobalSettings(baseFeeTier = 3, maxSnoozes = 2), pending)
     private val settings = GatedSettings(inner)
+    private val consents = FakeConsentStore()
     private val sessionLock =
         SessionLockGuard(MutableStateFlow<SessionState>(SessionState.Idle), MutableStateFlow(true), MutableStateFlow(false))
 
@@ -121,6 +124,8 @@ class SettingsViewModelSequenceTest {
             moneyFormatter = FakeMoneyFormatter(),
             logger = logger,
             defaults = DefaultSettingSetters(SaveDefaultSetting(settings, sessionLock)),
+            consents = consents,
+            setAnalyticsConsent = SetAnalyticsConsent(consents, sessionLock),
         )
     }
 

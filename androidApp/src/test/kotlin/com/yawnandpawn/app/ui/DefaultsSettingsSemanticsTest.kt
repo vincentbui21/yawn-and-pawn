@@ -37,7 +37,7 @@ import kotlin.test.assertEquals
  * Story 5.1 with TalkBack in mind, at 200 % font on a small phone: the Default snooze length and Default quiet time rows
  * are 56 dp buttons with their values, the "Vibrate during quiet time" switch row, the theme segments, the radio rows
  * and Back are at least 48 dp, the segments and radio rows are selectable with their labels, and the slider exposes its
- * range and its value text. Bright wake screen and the later cards stay hidden.
+ * range and its value text. Bright wake screen and the later cards stay hidden; the usage stats switch (Story 5.6) shows.
  */
 @RunWith(RobolectricTestRunner::class)
 @GraphicsMode(GraphicsMode.Mode.NATIVE)
@@ -110,11 +110,12 @@ class DefaultsSettingsSemanticsTest {
     }
 
     @Test
-    fun `Bright wake screen, weekly summary, usage stats and the checklist stay hidden`() =
+    fun `Bright wake screen, weekly summary and the checklist stay hidden, and usage stats shows (Story 5_6)`() =
         show(DefaultsSettingsSamples.main) {
-            listOf("Bright wake screen", "Weekly summary", "Share anonymous usage stats", "Reliability checklist").forEach {
+            listOf("Bright wake screen", "Weekly summary", "Reliability checklist").forEach {
                 composeRule.onNode(hasText(it, substring = true)).assertDoesNotExist()
             }
+            composeRule.onNode(hasText("Share anonymous usage stats")).assertExists()
         }
 
     @Test

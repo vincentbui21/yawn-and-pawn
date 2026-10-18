@@ -24,6 +24,20 @@
     <uses-permission android:name="android.permission.CAMERA" />
     <!-- Snooze is unavailable offline (Story 4.7, AndroidConnectivity reads the default network). -->
     <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
+    <!-- Firebase Analytics (Story 5.6, AD-15) merges ad and attribution permissions the app never uses: no advertising
+         id, no ad attribution, no install referrer. Removed, so the permission allowlist stays unchanged. -->
+    <uses-permission
+        android:name="com.google.android.gms.permission.AD_ID"
+        tools:node="remove" />
+    <uses-permission
+        android:name="android.permission.ACCESS_ADSERVICES_AD_ID"
+        tools:node="remove" />
+    <uses-permission
+        android:name="android.permission.ACCESS_ADSERVICES_ATTRIBUTION"
+        tools:node="remove" />
+    <uses-permission
+        android:name="com.google.android.finsky.permission.BIND_GET_INSTALL_REFERRER_SERVICE"
+        tools:node="remove" />
     <uses-feature
         android:name="android.hardware.camera"
         android:required="false" />
@@ -61,8 +75,9 @@
             android:name="android.app.backup.PROPERTY_USE_RESTRICTED_BACKUP_MODE"
             android:value="true" />
 
-        <!-- Firebase (Story 1.19, AD-15): no auto-start before the first unlock (FirebaseStartup starts it after), and
-             no Analytics collection (consent arrives in Epic 5). Crashlytics stays on. -->
+        <!-- Firebase (Story 1.19, AD-15): no auto-start before the first unlock (FirebaseStartup starts it after).
+             Crashlytics stays on. Analytics collection is off here and turned on at runtime only with consent (Story 5.6,
+             AnalyticsConsentGate). -->
         <provider
             android:name="com.google.firebase.provider.FirebaseInitProvider"
             android:authorities="${applicationId}.firebaseinitprovider"
@@ -86,11 +101,32 @@
                 android:value="androidx.startup"
                 tools:node="remove" />
         </provider>
+        <!-- Analytics (Story 5.6, AD-15): no collection until the user says yes; never the advertising id or SSAID, every
+             ad consent and analytics storage denied by default (the consent gate grants analytics storage only, with
+             consent), no automatic screen views. -->
         <meta-data
             android:name="firebase_analytics_collection_enabled"
             android:value="false" />
         <meta-data
             android:name="google_analytics_adid_collection_enabled"
+            android:value="false" />
+        <meta-data
+            android:name="google_analytics_ssaid_collection_enabled"
+            android:value="false" />
+        <meta-data
+            android:name="google_analytics_default_allow_analytics_storage"
+            android:value="false" />
+        <meta-data
+            android:name="google_analytics_default_allow_ad_storage"
+            android:value="false" />
+        <meta-data
+            android:name="google_analytics_default_allow_ad_user_data"
+            android:value="false" />
+        <meta-data
+            android:name="google_analytics_default_allow_ad_personalization_signals"
+            android:value="false" />
+        <meta-data
+            android:name="google_analytics_automatic_screen_reporting_enabled"
             android:value="false" />
         <activity
             android:name=".MainActivity"

@@ -10,6 +10,8 @@ import com.yawnandpawn.app.android.AndroidLogger
 import com.yawnandpawn.app.android.ApplicationScope
 import com.yawnandpawn.app.android.billing.BillingClientFacade
 import com.yawnandpawn.app.android.call.CallState
+import com.yawnandpawn.app.android.crash.FirebaseConfiguration
+import com.yawnandpawn.app.android.telemetry.AnalyticsSink
 import com.yawnandpawn.app.buildService
 import com.yawnandpawn.app.core.alarm.AlarmFired
 import com.yawnandpawn.app.core.alarm.AlarmRepository
@@ -61,7 +63,8 @@ import kotlin.time.Duration
  * [repository], service [starter], session [history] repository, wall [clock], [monotonic] clock, pending [testAlarms],
  * [billing], the alarms' [checkConfigs], the fallback policy, the camera scanner or the screen reader
  * ([accessibility], Story 3.12), the global settings ([globalSettings], Story 4.4), Play's product details
- * ([productDetails], Story 4.3) or the connection ([connectivity], Story 4.7; online by default). The alarm receiver
+ * ([productDetails], Story 4.3), the connection ([connectivity], Story 4.7; online by default) or the Analytics facade
+ * and the Firebase configuration ([analytics], [firebase], Story 5.6). The alarm receiver
  * waits [serviceStartWait] for the wake service (none by default: the tests start it themselves, as the system would).
  * The real `MediaPlayer` adapter plays over Robolectric's media shadow (every source opens). The service's coroutines
  * run on the main looper: [awaitUntil] idles it (and the Room threads) until a condition holds. Tear down with
@@ -95,6 +98,9 @@ internal class WakeApp(
     billingCountry: BillingCountry? = null,
     connectivity: Connectivity? = null,
     billingFacade: BillingClientFacade? = null,
+    // Story 5.6: the Analytics facade and whether the build counts as Firebase-configured.
+    analytics: AnalyticsSink? = null,
+    firebase: FirebaseConfiguration? = null,
 ) {
     val app: YawnAndPawnApp = ApplicationProvider.getApplicationContext()
     val crashReporter = FakeCrashReporter()
@@ -136,6 +142,8 @@ internal class WakeApp(
                 billingCountry?.let { replaced -> single<BillingCountry> { replaced } }
                 connectivity?.let { replaced -> single<Connectivity> { replaced } }
                 billingFacade?.let { replaced -> single<BillingClientFacade> { replaced } }
+                analytics?.let { replaced -> single<AnalyticsSink> { replaced } }
+                firebase?.let { replaced -> single { replaced } }
                 single { WakeServiceStarts(serviceStartWait) }
             },
         )

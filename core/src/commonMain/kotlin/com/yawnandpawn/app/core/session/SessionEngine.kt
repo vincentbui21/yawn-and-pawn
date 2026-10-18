@@ -5,6 +5,7 @@ import com.yawnandpawn.app.core.error.Outcome
 import com.yawnandpawn.app.core.log.LogEvent
 import com.yawnandpawn.app.core.log.Logger
 import com.yawnandpawn.app.core.reliability.LockedTestReporter
+import com.yawnandpawn.app.core.telemetry.TelemetryReporter
 import com.yawnandpawn.app.core.time.BootCounter
 import com.yawnandpawn.app.core.time.Clock
 import com.yawnandpawn.app.core.time.MonotonicClock
@@ -48,6 +49,11 @@ import kotlin.coroutines.cancellation.CancellationException
  * report never suspends, so the engine's lock never waits for its storage write (review fix 11); a test the wake service
  * ends for a real alarm ([testPreempted]) is not reported (review fix 10).
  *
+ * Usage stats (Story 5.6, AD-15): once `Recorded` has committed the end of a real session, its anonymous stats are
+ * handed to the [TelemetryReporter], which never suspends: the consent read and the Analytics calls run on the app's
+ * scope, never inside this lock (review fix 1). A test session sends none, and a failing reporter is logged and never
+ * stops the session going Idle. A crash before that commit sends them once more when the session is restored.
+ *
  * Nothing is reduced before the stored session is loaded: [dispatch] and [tick] first run the [restore] step if it has
  * not succeeded yet, and return its failure if the store cannot be read (the next call tries again). Expected failures
  * come back as [Outcome] values; nothing here throws for them.
@@ -65,6 +71,7 @@ class SessionEngine internal constructor(
     private val userLock: UserLockState = UserLockState.Unlocked,
     private val unlock: UnlockPort = UnlockPort.Unlocked,
     private val lockedTest: LockedTestReporter = LockedTestReporter.None,
+    telemetry: TelemetryReporter = TelemetryReporter.None,
 ) {
     constructor(
         reducer: SessionReducer,
@@ -78,7 +85,22 @@ class SessionEngine internal constructor(
         userLock: UserLockState = UserLockState.Unlocked,
         unlock: UnlockPort = UnlockPort.Unlocked,
         lockedTest: LockedTestReporter = LockedTestReporter.None,
-    ) : this(reducer, store, effects, recorder, clock, monotonicClock, bootCounter, logger, ::dueEvents, userLock, unlock, lockedTest)
+        telemetry: TelemetryReporter = TelemetryReporter.None,
+    ) : this(
+        reducer,
+        store,
+        effects,
+        recorder,
+        clock,
+        monotonicClock,
+        bootCounter,
+        logger,
+        ::dueEvents,
+        userLock,
+        unlock,
+        lockedTest,
+        telemetry,
+    )
 
     private val mutex = Mutex()
     private val current = MutableStateFlow<SessionState>(SessionState.Idle)
@@ -95,6 +117,9 @@ class SessionEngine internal constructor(
 
     /** The keyguard reads and the locked test record (Story 5.3). */
     private val keyguard = EngineKeyguard(unlock, lockedTest, logger)
+
+    /** The usage stats of a session that ended (Story 5.6), reported once its `Recorded` has committed. */
+    private val stats = EngineTelemetry(telemetry, logger)
 
     /** The last committed state. The main app shows "Alarm in progress" from it (AD-11). */
     val state: StateFlow<SessionState> = current.asStateFlow()
@@ -272,6 +297,7 @@ class SessionEngine internal constructor(
                 // Story 5.3: after the commit, so a kill before the write loses the pass (the user rings another test). The
                 // write runs outside the lock (review fix 11).
                 keyguard.afterStep(from, next, now)
+                stats.committed(event, from, next)
                 Outcome.Success(now)
             }
         }

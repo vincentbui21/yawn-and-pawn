@@ -17,8 +17,10 @@ import com.yawnandpawn.app.core.session.GlobalSettings
 import com.yawnandpawn.app.core.session.SessionLockGuard
 import com.yawnandpawn.app.core.session.SessionState
 import com.yawnandpawn.app.core.session.ThemeMode
+import com.yawnandpawn.app.core.telemetry.SetAnalyticsConsent
 import com.yawnandpawn.app.testing.FakeAlarmRepository
 import com.yawnandpawn.app.testing.FakeClock
+import com.yawnandpawn.app.testing.FakeConsentStore
 import com.yawnandpawn.app.testing.FakeGlobalSettingsRepository
 import com.yawnandpawn.app.testing.FakeLogger
 import com.yawnandpawn.app.testing.FakeMoneyFormatter
@@ -94,6 +96,7 @@ class SettingsDefaultsViewModelTest {
     private val settings = GatedDefaults(inner)
     private val restored = MutableStateFlow(true)
     private val sessionLock = SessionLockGuard(MutableStateFlow<SessionState>(SessionState.Idle), restored, MutableStateFlow(false))
+    private val consents = FakeConsentStore()
 
     /** Every state the screen showed, in order. */
     private val shown = mutableListOf<SettingsUiState>()
@@ -129,6 +132,8 @@ class SettingsDefaultsViewModelTest {
             moneyFormatter = FakeMoneyFormatter(),
             logger = logger,
             defaults = DefaultSettingSetters(SaveDefaultSetting(settings, sessionLock)),
+            consents = consents,
+            setAnalyticsConsent = SetAnalyticsConsent(consents, sessionLock),
             outlivingScope = outliving,
         )
     }

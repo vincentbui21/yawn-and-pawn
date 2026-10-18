@@ -21,6 +21,8 @@
         currency, so a phone restored in another country never shows the old currency; refreshed from Play;
       - datastore/reliability.preferences_pb: the reliability checklist's records (Story 5.3), true of this phone only,
         so a new phone never shows a locked test it did not ring or settings "turned off" it never had;
+      - datastore/usage_stats_consent.preferences_pb: the usage stats choice and whether the user was asked (Story 5.6),
+        per install, so a restored or transferred phone starts with usage stats off and asks again;
       - the whole credential-protected storage (root, file, database, sharedpref), where media will live (Epic 7).
     Because there are includes, anything not included is not backed up either. Lint calls an exclude outside every
     include redundant (FullBackupContent); it is ignored on those elements on purpose.
@@ -43,6 +45,7 @@
         <exclude domain="device_file" path="datastore/install_id.preferences_pb" tools:ignore="FullBackupContent" />
         <exclude domain="device_file" path="datastore/price_cache.preferences_pb" tools:ignore="FullBackupContent" />
         <exclude domain="device_file" path="datastore/reliability.preferences_pb" tools:ignore="FullBackupContent" />
+        <exclude domain="device_file" path="datastore/usage_stats_consent.preferences_pb" tools:ignore="FullBackupContent" />
         <exclude domain="root" path="." tools:ignore="FullBackupContent" />
         <exclude domain="file" path="." tools:ignore="FullBackupContent" />
         <exclude domain="database" path="." tools:ignore="FullBackupContent" />
@@ -65,6 +68,7 @@
         <exclude domain="device_file" path="datastore/install_id.preferences_pb" tools:ignore="FullBackupContent" />
         <exclude domain="device_file" path="datastore/price_cache.preferences_pb" tools:ignore="FullBackupContent" />
         <exclude domain="device_file" path="datastore/reliability.preferences_pb" tools:ignore="FullBackupContent" />
+        <exclude domain="device_file" path="datastore/usage_stats_consent.preferences_pb" tools:ignore="FullBackupContent" />
         <exclude domain="root" path="." tools:ignore="FullBackupContent" />
         <exclude domain="file" path="." tools:ignore="FullBackupContent" />
         <exclude domain="database" path="." tools:ignore="FullBackupContent" />

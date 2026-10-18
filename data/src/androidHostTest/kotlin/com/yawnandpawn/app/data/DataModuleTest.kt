@@ -19,6 +19,8 @@ import com.yawnandpawn.app.core.stats.CheckRegistrations
 import com.yawnandpawn.app.core.stats.FallbackHistory
 import com.yawnandpawn.app.core.stats.ReRegisterDismissals
 import com.yawnandpawn.app.core.stats.StoredCheckRegistrations
+import com.yawnandpawn.app.core.telemetry.AnalyticsConsent
+import com.yawnandpawn.app.core.telemetry.ConsentStore
 import com.yawnandpawn.app.core.time.Clock
 import com.yawnandpawn.app.data.alarm.RoomAlarmRepository
 import com.yawnandpawn.app.data.alarm.RoomRequestCodeSequence
@@ -27,6 +29,8 @@ import com.yawnandpawn.app.data.db.RuntimeDatabase
 import com.yawnandpawn.app.data.history.RoomSessionHistoryRepository
 import com.yawnandpawn.app.data.session.RoomActiveSessionStore
 import com.yawnandpawn.app.data.session.RoomPurchaseIntentStore
+import com.yawnandpawn.app.data.settings.ConsentDataStore
+import com.yawnandpawn.app.data.settings.DataStoreConsentStore
 import com.yawnandpawn.app.data.settings.DataStoreInstallIdProvider
 import com.yawnandpawn.app.data.settings.DataStoreMissedNoteDismissals
 import com.yawnandpawn.app.data.settings.DataStorePriceCacheStore
@@ -49,6 +53,7 @@ import org.koin.dsl.module
 import org.robolectric.RobolectricTestRunner
 import kotlin.test.assertEquals
 import kotlin.test.assertIs
+import kotlin.test.assertNull
 import kotlin.test.assertSame
 
 @RunWith(RobolectricTestRunner::class)
@@ -114,6 +119,52 @@ class DataModuleTest {
             assertEquals(setOf("s1", "s2"), runBlocking { second.dismissed().first() })
         } finally {
             again.close()
+        }
+    }
+
+    @Test
+    fun `the data module binds the usage stats consent to its own DataStore, never the settings (Story 5-6 fix 5)`() {
+        val ports =
+            module {
+                single<Context> { context }
+                single<Logger> { FakeLogger() }
+            }
+        val app = koinApplication { modules(ports, dataModule) }
+        try {
+            val consents = app.koin.get<ConsentStore>()
+            assertIs<DataStoreConsentStore>(consents)
+            assertSame(app.koin.get<ConsentDataStore>(), app.koin.get<ConsentDataStore>())
+            assertEquals(AnalyticsConsent(), runBlocking { consents.observe().first() })
+            assertEquals(Outcome.Success(Unit), runBlocking { consents.setConsent(true) })
+            assertEquals(
+                AnalyticsConsent(consent = true, asked = true),
+                runBlocking {
+                    app.koin
+                        .get<ConsentStore>()
+                        .observe()
+                        .first()
+                },
+            )
+            assertEquals(
+                true,
+                runBlocking {
+                    app.koin
+                        .get<ConsentDataStore>()
+                        .store.data
+                        .first()[DataStoreConsentStore.CONSENT]
+                },
+            )
+            val settings =
+                runBlocking {
+                    app.koin
+                        .get<SettingsDataStore>()
+                        .store.data
+                        .first()
+                }
+            assertNull(settings[DataStoreConsentStore.CONSENT], "the backed-up settings hold no consent")
+            assertNull(settings[DataStoreConsentStore.ASKED])
+        } finally {
+            app.close()
         }
     }
 

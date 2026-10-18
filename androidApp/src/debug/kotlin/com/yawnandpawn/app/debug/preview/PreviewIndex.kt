@@ -68,7 +68,7 @@ internal fun statesMarkdown(): String =
         appendLine()
         appendLine("```sh")
         appendLine(
-            "adb -s 4d804fdd shell am start -S -n com.yawnandpawn.app/.debug.preview.PreviewActivity " +
+            "adb shell am start -S -n com.yawnandpawn.app/.debug.preview.PreviewActivity " +
                 "--es state progress-empty --es theme dark --ez font200 true",
         )
         appendLine("```")

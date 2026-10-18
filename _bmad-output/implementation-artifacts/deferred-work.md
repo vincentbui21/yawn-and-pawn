@@ -196,11 +196,11 @@
 - source_spec: `docs/spikes/S1.md`
   summary: Play shows the EU "Review and agree" (right of withdrawal) screen before every purchase on a Finnish account, so each paid snooze needs one extra tap; the first purchase also asks about purchase authentication.
   evidence: Spike S1, every run on 2026-10-05.
-  status: assigned to Story 4.13 (confirm sheet copy and timing) and 4.18 (licence-tester verification).
+  status: assigned to Story 4.13 (confirm sheet copy and timing) and 4.18 (licence-tester verification). Checked in Story 4.18 (item 5, 2026-10-18): with the release build from Internal testing, Play showed "Review and agree" once, before the first purchase only, not before every purchase.
 - source_spec: `docs/spikes/S1.md`
   summary: Re-check the Spike S1 lock-screen findings on a Pixel and a Samsung device, and the slow-card anomaly (a completed slow-card purchase was missing from queryPurchasesAsync about 5 minutes later).
   evidence: Spike S1 ran on the Oppo A96 only; V1s purchase gone by 20:11:36.
-  status: assigned to Story 4.18.
+  status: assigned to Story 4.18. Partly checked there (Oppo only): the locked Pay (item 3) and the slow card (item 7) passed; a slow-card approval within about 1 min started the snooze. Pixel and Samsung were not available. Open, proposed for the Story 8.8 device matrix (Epic 4 retrospective).
 - source_spec: `_bmad-output/implementation-artifacts/spec-2-5-leave-the-alarm-and-come-back-through-the-notification.md`
   summary: Check on the phone that tapping the ringing notification from the shade after Home brings the wake screen back within 1,000 ms, and that three taps leave one wake screen.
   evidence: The GMD test for it failed in CI because the managed device is an ATD image with no notification shade (PR #24, 2026-10-06); it was removed. Robolectric LeaveAndReturnTest covers the logic.
@@ -255,7 +255,7 @@
 - source_spec: `_bmad-output/implementation-artifacts/spec-3-9-fallback-check-picker.md`
   summary: The Fallback check picker has no snooze control in its footer, although the Story 3.9 acceptance criteria ask for one.
   evidence: Decided 2026-10-06 (coordinator): keep the approved `fallback-picker` screen (preview baseline) as it is, without a footer. Snooze is unavailable until billing (Epic 4), so the picker loses nothing today; while it is open, Grace keeps counting and Loud keeps ringing.
-  status: assigned to Epic 4 (the first snooze story that makes snooze available on wake screens): decide whether the picker gets the same `button-snooze` footer as the Check screen, and update the preview baseline if so.
+  status: assigned to Epic 4 (the first snooze story that makes snooze available on wake screens): decide whether the picker gets the same `button-snooze` footer as the Check screen, and update the preview baseline if so. Decided: no Snooze footer on the fallback picker (owner decision Q2, 2026-10-08; `spec-4-7-snoozeavailability-with-every-reason.md` item 7). Closed (Epic 4 retrospective).
 - source_spec: `_bmad-output/implementation-artifacts/spec-1-11-the-complete-wake-session-state-machine-in-core.md`
   summary: (follow-up of the check-run consistency item) The fallback now has its own seeds, reset failed attempts and a `StartCheckStep` (Story 3.9). The policy input is `FallbackRequest(type, reason)`, open for the image matcher's error.
   evidence: Story 3.9 settles the fallback part; the matcher-error input stays for Story 7.7.
@@ -278,7 +278,7 @@
 - source_spec: `_bmad-output/implementation-artifacts/spec-4-2-money-moneyformatter-and-the-feeladder-in-core.md`
   summary: (device row for the Story 4.18 checklist) Money formatting on the phone matches the host tests and Google Play's own price strings.
   evidence: `AndroidMoneyFormatter` formats with ICU (`android.icu`), and a whole amount uses the currency's cash digits (Story 4.2 review). Robolectric runs ICU from the android-all jar, but the phone's ICU and CLDR versions can differ. Check on the Oppo, with the phone language set to each in turn: English (US) "$1.00", Deutsch "1,00 €", Bahasa Indonesia "Rp 15.000" (or "Rp15.000", as Play shows it), Magyar "15 000 Ft". In each, compare Purchase history and Home "paid" with the price on Play's sheet.
-  status: assigned to Story 4.18 (human-verify).
+  status: assigned to Story 4.18 (human-verify). Checked for euros only (item 15, 2026-10-18): prices, the session line and history use Play's euro formatting. The other languages were not run; deferred to v2 (owner decision 2026-10-19).
 - source_spec: `_bmad-output/implementation-artifacts/spec-4-3-cache-play-prices-for-offline-display.md`
   summary: The cached Play prices are for display only. The price charged and recorded must be Play's live one.
   evidence: A cached entry can be up to 30 days old (`PriceCachePolicy.EXPIRES_AFTER`, Story 4.3 review). Play's own sheet always charges its live price, but the intent and history would record the cached `Money` if they read the cache.
@@ -290,22 +290,22 @@
 - source_spec: `_bmad-output/implementation-artifacts/spec-4-3-cache-play-prices-for-offline-display.md`
   summary: (device row for the Story 4.18 checklist) WorkManager starts only after the first unlock, and the price refresh runs after a reboot.
   evidence: The on-demand start and the locked-start path are tested in Robolectric only (`PriceRefreshSchedulingTest`, `BackgroundWorkWiringTest`).
-  status: assigned to Story 4.18 (human-verify). On the Oppo, reboot and let an alarm ring before unlocking (no crash, it rings). Then unlock, open the app online, and check that prices show.
+  status: assigned to Story 4.18 (human-verify). On the Oppo, reboot and let an alarm ring before unlocking (no crash, it rings). Then unlock, open the app online, and check that prices show. Not run in Story 4.18; deferred to v2 with the other unchecked parts (owner decision 2026-10-19). The Epic 5 device check (5.13) can pick it up with its reboot items.
 - source_spec: `_bmad-output/implementation-artifacts/spec-4-13-snooze-confirm-sheet.md`
   summary: Story 4.13 wires the confirm sheet over ports whose real adapters come later, and two of its behaviours need the phone.
   evidence: |
     - Ports with `None` defaults in `WakeModule`: `LivePriceSource` (4.12: ProductDetails) and `BillingCountry` (4.12: cached `getBillingConfigAsync` country for the tax note). `DisplayPrices` reads the 4.3 price cache (`CatalogDisplayPrices`); "Use it" / "Not now" go through the 4.11 coordinator (`ReuseChoices`); the only `UnlockPort` binding is 4.11's.
     - Lost unlock callbacks are resolved by the 4.11 coordinator (`onWakeScreenResumed` from `WakeActivity.onResume`); the sheet sends no unlock result of its own.
     - Only `PurchaseOutcome.UnlockFailed` shows a message (until the next tap or 10 s); 4.14 maps every outcome with the full snackbar rules. Resolved in Story 4.14: every `ShowPurchaseOutcome` and `ShowPaymentPending` shows its Payment outcomes row (`paymentOutcome`), at least 10 s, then until the next tap.
-  status: adapters resolved in Story 4.12 (`PlayLivePrices` and `PlayBillingCountry` bound in `confirmSheetModule`); device checks (Pay on a locked Oppo with PIN, fingerprint and cancel; the EU "Review and agree" extra tap; a price change between open and Pay) assigned to Story 4.18.
+  status: adapters resolved in Story 4.12 (`PlayLivePrices` and `PlayBillingCountry` bound in `confirmSheetModule`); device checks (Pay on a locked Oppo with PIN, fingerprint and cancel; the EU "Review and agree" extra tap; a price change between open and Pay) assigned to Story 4.18. Story 4.18: PIN and cancel passed (item 3), "Review and agree" shows once (item 5). The live price refresh closed the sheet (fixed in #63) and Pay could report a false "No connection" while Play reconnected (fixed in #64). Fingerprint, the 500 ms guard and swipe/Back on the phone are deferred to v2 (owner decision 2026-10-19).
 - source_spec: `_bmad-output/implementation-artifacts/spec-4-12-play-billing-9-1-adapter-replacing-the-fake.md`
   summary: (device row for the Story 4.18 checklist) The Play adapter's timings are host-tested only: Play's sheet opens from `WakeActivity` after the PIN (the adapter waits up to 5 s for the wake screen to resume after `onDismissSucceeded`), Play's posted copy of a failed launch's code arrives within the 5 s echo window, and an unanswered PIN prompt is given up after 2 minutes.
   evidence: `AndroidBillingTest` and `AndroidDeviceUnlockerTest` run on a fake facade and Robolectric's keyguard shadow; nothing has run against Play on the phone since Spike S1.
-  status: assigned to Story 4.18 (human-verify). On the Oppo with a licence tester: a locked Pay (PIN, then the sheet), a Pay while Play still owns the product (`ITEM_ALREADY_OWNED` is handled once: one outcome, never two), and a wrong PIN left alone for 2 minutes ("Phone still locked. No charge.").
+  status: assigned to Story 4.18 (human-verify). On the Oppo with a licence tester: a locked Pay (PIN, then the sheet), a Pay while Play still owns the product (`ITEM_ALREADY_OWNED` is handled once: one outcome, never two), and a wrong PIN left alone for 2 minutes ("Phone still locked. No charge."). Story 4.18: the locked Pay passed (item 3). `ITEM_ALREADY_OWNED` gave one outcome and the reuse sheet, but Play's own "You already own this item." showed first (item 8; follow-up below). The 2-minute wrong-PIN wait was not run; deferred to v2 (owner decision 2026-10-19).
 - source_spec: `_bmad-output/implementation-artifacts/spec-4-14-payment-outcome-messages.md`
   summary: (device row for the Story 4.18 checklist) payment messages with TalkBack and the 10 s minimum on the phone.
   evidence: The messages, their polite live region and the 10 s minimum are tested in Robolectric only (`PaymentOutcomeMessagesTest`). The "offline until connectivity returns" label is Story 4.7's Connectivity policy (not merged when 4.14 was built).
-  status: assigned to Story 4.18 (human-verify). On the Oppo with TalkBack on: cancel Play's sheet, then airplane mode and Pay; each message is read once after the current speech, says "No charge.", stays at least 10 s and goes at the next tap; "I'm up" works at once.
+  status: assigned to Story 4.18 (human-verify). On the Oppo with TalkBack on: cancel Play's sheet, then airplane mode and Pay; each message is read once after the current speech, says "No charge.", stays at least 10 s and goes at the next tap; "I'm up" works at once. Story 4.18: the copy and "No charge." were seen without TalkBack (item 17). The TalkBack and 200 % run (item 16) is deferred to v2 (owner decision 2026-10-19).
 - source_spec: `_bmad-output/implementation-artifacts/spec-5-7-privacy-policy-terms-and-support-pages-on-github-pages.md`
   summary: The in-app cap sentence is wrong. `payments_cap_body` says "one morning never costs more than {cap}", but the $50 cap is per snooze, and a morning can cost up to $150 ($10 + $20 + $30 + $40 + $50).
   evidence: `composeApp/.../composeResources/values/strings.xml` `payments_cap_body` and the EXPERIENCE.md key string (Long-form copy, "How payments & refunds work"). `docs/site/payments.md` says "A single snooze never costs more than $50." instead, and `checkSitePages` leaves `payments_cap_body` out of its mirrored keys until this is fixed.
@@ -330,3 +330,11 @@
   summary: Owner review. At 200 % font, the selected segment of the shared `PpsSegmentedControl` wraps mid-word beside its check mark ("Syste / m" in Appearance).
   evidence: `androidApp/src/test/screenshots/settings_defaults_appearance_light_font200.png`. This is the approved shared component, also used for difficulty and check mode, and nothing is clipped. A fix (drop the check mark at large font sizes, or let the segment grow) would change other screens' baselines.
   status: open (owner decision).
+- source_spec: `_bmad-output/implementation-artifacts/story-4-18-epic-4-payment-verification-with-license-testers.md`
+  summary: After a snooze, the ringing screen's big clock shows the session's first ring time, not the current time (23:01 shown at 23:11 on the re-ring).
+  evidence: Story 4.18 item 5 and follow-up 1 (the owner noticed it on the Oppo, 2026-10-18). The Ringing screen takes its time from the session's `config.scheduledAt` (Story 1.15). EXPERIENCE.md calls it a "clock", and the Samsung and Oppo clock apps show the current time. The same behaviour was a "default taken" owner question from Story 4.15 (the re-ring shows 7:30, not 7:39) that was never answered before the device run.
+  status: assigned to a small fix story (Epic 4 device follow-ups, branch `fix/epic-4-device-followups`) by the Epic 4 retrospective. Fix it before the Epic 5 device check (Story 5.13). Proposed fix: every Ringing screen shows the current time, updated each minute; the notification and history keep the alarm's own time. Check the Ringing and grace screenshot baselines.
+- source_spec: `_bmad-output/implementation-artifacts/story-4-18-epic-4-payment-verification-with-license-testers.md`
+  summary: Right after a slow test-card approval, the next Pay at the same price shows Play's own "You already own this item." dialog before the app's "You already paid ... Use it?" reuse sheet.
+  evidence: Story 4.18 item 8 and follow-up 2 (2026-10-18). The pre-launch owned-purchases query had not yet seen the purchase Play had just approved, so the launch got `ITEM_ALREADY_OWNED` (`PurchaseCoordinator.alreadyOwned`, Story 4.11), and the reuse sheet came only after "Got it". The app recovered correctly: one outcome, and "Use it" snoozed with no new charge (history shows 3 charges, not 4). No money is at risk, but Play's error is confusing while the alarm rings.
+  status: assigned to the same small fix story (Epic 4 device follow-ups) by the Epic 4 retrospective. Fix it before Story 5.13. Proposed fix: refresh the owned purchases before launching when a purchase of that product was pending or approved in this session, or when the last query may be stale, so the reuse sheet shows instead of Play's dialog. Add a coordinator test for "approved after the last query".

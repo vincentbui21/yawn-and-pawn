@@ -31,7 +31,7 @@ context:
 - **Device fixes:** `MainActivity` (and the future wake activity) draw edge-to-edge with theme system-bar colours; the editor's Save stays visible above the keyboard with the label focused, verified on the Oppo A96 via uiautomator bounds.
 - **Copy:** EXPERIENCE.md strings verbatim. Strings EXPERIENCE.md doesn't define are drafted in voice (short, supportive, no em dash, no hype words) and listed in `docs/design-preview/copy-to-approve.md` (key, draft, screen) for the owner; they live in resources like any other string.
 - **Preview mode:** debug-only (`androidApp/src/debug`), its own launcher entry "Yawn & Pawn Preview"; a menu grouped by round and screen listing each state; Light/Dark and 200% font-scale toggles; tapping through works like the finished app (bottom nav, pushed screens, wake flow sequence Ringing → Check → Success). Fake prices go through the normal price formatting, never a hard-coded currency symbol. Release builds contain none of it.
-- Each round: Roborazzi screenshots of every new screen/state (Light and Dark, Sunrise for wake screens) plus 200% for primary states; semantics tests for touch targets and TalkBack labels; `qualityGate` green; then install on the Oppo A96 (`adb -s 4d804fdd`), walk every preview item and capture device screenshots into `docs/design-preview/round-N/` for the owner.
+- Each round: Roborazzi screenshots of every new screen/state (Light and Dark, Sunrise for wake screens) plus 200% for primary states; semantics tests for touch targets and TalkBack labels; `qualityGate` green; then install on the Oppo A96 (`adb`), walk every preview item and capture device screenshots into `docs/design-preview/round-N/` for the owner.
 - EXPERIENCE.md `time-picker` row updated to the wheel "(owner decision 2026-09-27)"; later owner feedback from the preview is recorded in EXPERIENCE.md/DESIGN.md the same way; `docs/` copies updated.
 
 **Never:**
@@ -146,13 +146,13 @@ Round 3 (2026-10-01, setup flows, owner design direction in docs/design-preview/
 
 - Delivery: the orchestrator dispatches one implementation run per round and stops after each for the owner's on-device feedback; feedback that changes intent is written back here and into EXPERIENCE.md/DESIGN.md before the next round.
 - Wheel picker: a `LazyColumn` per wheel with `rememberSnapFlingBehavior`, 3–5 visible items, centre highlighted, large repeated range for an endless feel; semantics with state description and custom increase/decrease actions.
-- Environment (company PC): JDK 17 at `C:/Users/BuiTua/AppData/Local/Programs/jdk17/jdk-17.0.20.1+1`. Phone via `adb -s 4d804fdd`; in Git Bash set `MSYS_NO_PATHCONV=1` before adb paths like `/sdcard/...`.
+- Environment (company PC): JDK 17 at `C:/Users/BuiTua/AppData/Local/Programs/jdk17/jdk-17.0.20.1+1`. Phone via `adb`; in Git Bash set `MSYS_NO_PATHCONV=1` before adb paths like `/sdcard/...`.
 
 ## Verification
 
 **Commands:**
 - `./gradlew qualityGate` -- expected: BUILD SUCCESSFUL (each round).
-- `ANDROID_SERIAL=4d804fdd ./gradlew :androidApp:installDebug` -- expected: "Yawn & Pawn Preview" icon on the phone.
+- `./gradlew :androidApp:installDebug` -- expected: "Yawn & Pawn Preview" icon on the phone.
 
 **Manual checks (if no CLI):**
 - On the Oppo A96 each round: walk every preview item; focus the editor label and confirm Save is above the keyboard.

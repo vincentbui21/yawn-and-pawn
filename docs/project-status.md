@@ -17,7 +17,7 @@ _Last updated: 2026-10-01_
 3. **Run the rest of Epic 1 automatically** with `bmad-build-auto`, one story after another: PR → CI green → merge. Stop only on real blockers. The owner reviews and tests the whole epic at the end, not per story. `human-verify` stories (1.4, 1.5, 1.20, 1.21) are done with the owner.
 4. **Play Console is approved** (2026-10-01). The Story 1.4 remainder (app record, upload key, first manual internal-track upload, Play App Signing, license testers, payments profile) unblocks spike 1.5, which decides whether 1.11 needs unlock states.
 
-**Test phone:** the owner's **Oppo A96** (Android 13, 360 dp, ColorOS), adb serial `4d804fdd`, USB debugging on.
+**Test phone:** the owner's **Oppo A96** (Android 13, 360 dp, ColorOS), USB debugging on.
 - **Use it only when the owner says the phone is free.** Never run capture loops while they hold it.
 - `am start -S` loops make the app look like it keeps restarting.
 - Avoid `settings put` and `svc power`: on ColorOS they fail with a WRITE_SETTINGS error.

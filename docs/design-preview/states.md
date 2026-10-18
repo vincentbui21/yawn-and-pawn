@@ -7,7 +7,7 @@ tap-throughs; `PreviewMenuTest` fails when it is out of date. Rewrite it with
 Open one directly on the phone (debug build installed; Back returns to the menu):
 
 ```sh
-adb -s 4d804fdd shell am start -S -n com.yawnandpawn.app/.debug.preview.PreviewActivity --es state progress-empty --es theme dark --ez font200 true
+adb shell am start -S -n com.yawnandpawn.app/.debug.preview.PreviewActivity --es state progress-empty --es theme dark --ez font200 true
 ```
 
 `--es theme light|dark` (default light) and `--ez font200 true` (default off) are optional. In Git Bash set

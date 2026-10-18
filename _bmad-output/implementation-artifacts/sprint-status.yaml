@@ -110,7 +110,7 @@ development_status:
   4-15-snoozed-screen-session-line-and-snoozing-from-a-check: done  # Epic 4 auto-run, fast mode
   4-16-purchase-history: done  # Epic 4 auto-run, fast mode
   4-17-problem-with-a-charge: done  # Epic 4 auto-run, fast mode
-  4-18-epic-4-payment-verification-with-license-testers: backlog
+  4-18-epic-4-payment-verification-with-license-testers: review  # device runs 2026-10-15 and 2026-10-18/19; v2 deferrals await owner
   epic-4-retrospective: optional
 
   epic-5: backlog

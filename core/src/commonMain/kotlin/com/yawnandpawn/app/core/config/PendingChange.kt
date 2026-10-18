@@ -3,6 +3,7 @@ package com.yawnandpawn.app.core.config
 import com.yawnandpawn.app.core.checks.CheckPlan
 import com.yawnandpawn.app.core.session.GlobalSettings
 import com.yawnandpawn.app.core.session.SessionReducer
+import com.yawnandpawn.app.core.session.ThemeMode
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.builtins.ListSerializer
@@ -137,27 +138,56 @@ object PendingChangeJson {
 
     private fun PendingChange.toStored() = StoredGlobal(value, effectiveAfter.alarmId, effectiveAfter.scheduledAt.toEpochMilliseconds())
 
-    /** A [SettingsSnapshot] as the fire's fallback cache keeps it. */
+    /**
+     * A [SettingsSnapshot] as the fallback cache keeps it. The Story 5.1 fields are optional, so a snapshot saved by an
+     * older build still decodes (as the defaults); the theme is its name, so an unknown one reads as System instead of
+     * losing the fire's fallback.
+     */
     @Serializable
     private data class StoredSnapshot(
         val baseFeeTier: Int,
         val maxSnoozes: Int,
         val pending: List<StoredGlobal>,
+        val defaultGraceSeconds: Int? = null,
+        val defaultSnoozeLengthMinutes: Int? = null,
+        val defaultVibrateInGrace: Boolean? = null,
+        val themeMode: String? = null,
     )
 
-    /** [snapshot] as JSON (the last-known settings, review fix 11). */
-    fun encodeSnapshot(snapshot: SettingsSnapshot): String =
-        json.encodeToString(
+    /** [snapshot] as JSON (the last-known settings, review fix 11; the theme too, so the first frame uses it). */
+    fun encodeSnapshot(snapshot: SettingsSnapshot): String {
+        val settings = snapshot.settings
+        return json.encodeToString(
             StoredSnapshot.serializer(),
-            StoredSnapshot(snapshot.settings.baseFeeTier, snapshot.settings.maxSnoozes, snapshot.pending.map { it.toStored() }),
+            StoredSnapshot(
+                baseFeeTier = settings.baseFeeTier,
+                maxSnoozes = settings.maxSnoozes,
+                pending = snapshot.pending.map { it.toStored() },
+                defaultGraceSeconds = settings.defaultGraceSeconds,
+                defaultSnoozeLengthMinutes = settings.defaultSnoozeLengthMinutes,
+                defaultVibrateInGrace = settings.defaultVibrateInGrace,
+                themeMode = settings.themeMode.name,
+            ),
         )
+    }
 
-    /** The snapshot stored as [text], or null when it cannot be decoded. */
+    /** The snapshot stored as [text], or null when it cannot be decoded; a missing or out-of-range default reads as its default. */
     fun decodeSnapshot(text: String): SettingsSnapshot? =
         runCatching {
             val stored = json.decodeFromString(StoredSnapshot.serializer(), text)
+            val defaults = GlobalSettings()
             SettingsSnapshot(
-                GlobalSettings(baseFeeTier = stored.baseFeeTier, maxSnoozes = stored.maxSnoozes),
+                GlobalSettings(
+                    baseFeeTier = stored.baseFeeTier,
+                    maxSnoozes = stored.maxSnoozes,
+                    defaultGraceSeconds =
+                        stored.defaultGraceSeconds?.takeIf { it in SaveDefaultSetting.GRACE_SECONDS } ?: defaults.defaultGraceSeconds,
+                    defaultSnoozeLengthMinutes =
+                        stored.defaultSnoozeLengthMinutes?.takeIf { it in SaveDefaultSetting.SNOOZE_LENGTHS }
+                            ?: defaults.defaultSnoozeLengthMinutes,
+                    defaultVibrateInGrace = stored.defaultVibrateInGrace ?: defaults.defaultVibrateInGrace,
+                    themeMode = ThemeMode.parse(stored.themeMode) ?: defaults.themeMode,
+                ),
                 stored.pending.map { it.toChange() },
             )
         }.getOrNull()

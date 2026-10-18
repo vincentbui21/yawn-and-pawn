@@ -314,3 +314,19 @@
   summary: A crash that closes the app reaches Crashlytics with its error messages. Only `FirebaseCrashReporter.report()` removes them; Crashlytics' own uncaught-exception handler uploads fatal crashes (and ANRs) as they happened.
   evidence: `androidApp/.../android/crash/FirebaseCrashReporter.kt` (`sanitized`) runs only for the errors the app reports itself (`WakeRuntime` and `WakeService`). Nothing installs a default `Thread.UncaughtExceptionHandler`. `docs/site/privacy.md` "Crash reports" now describes this behaviour (Story 5.7 review, item 1).
   status: open, not assigned to a story (medium). Follow-up: a default `UncaughtExceptionHandler`, installed after Crashlytics starts, that passes `FirebaseCrashReporter.sanitized(e)` on to the previous (Crashlytics) handler, with a test; then update `privacy.md` "Crash reports". ANR reports can't be cleaned this way.
+- source_spec: `_bmad-output/implementation-artifacts/spec-5-1-wake-and-snooze-defaults-and-theme-override-in-settings.md`
+  summary: Story 5.9 "Delete all data" must also clear the device-protected `settings_fallback` shared preferences (`SharedPreferencesSettingsCache`). Since Story 5.1 it also holds the defaults and the theme.
+  evidence: The cache is a second copy of the last-known settings. It is the fire's fallback, and now also gives the first frame its theme. The 5.9 plan lists the DataStores and the price cache but not this file, so the chosen theme and the old fees could survive "Delete all data" in the fallback.
+  status: assigned to Story 5.9.
+- source_spec: `_bmad-output/implementation-artifacts/spec-5-1-wake-and-snooze-defaults-and-theme-override-in-settings.md`
+  summary: Settings saves still queued when the user leaves the Settings tab are dropped and logged. Since Story 5.1 this covers the defaults and the theme too, so a quick tab switch right after a slider drag can lose its last steps.
+  evidence: The Settings ViewModel is scoped to the tab's nav entry, which `selectTab` and `openEditor` remove (the Story 1.9 tab-state item above). `onCleared` then drops the queue (the Story 4.5 design). A fix needs saves that outlive the screen, through an app-scoped save path.
+  status: resolved in the Story 5.1 review fixes for the defaults and the theme. The running save finishes (`NonCancellable`), a value superseded in the queue is skipped, and the latest queued value of each field is saved in the app scope after it (`SettingsViewModel.outlivingScope`). Tested in `SettingsDefaultsViewModelTest`. Base fee and max snoozes saves left on close are still dropped and logged (Story 4.5).
+- source_spec: `_bmad-output/implementation-artifacts/spec-5-1-wake-and-snooze-defaults-and-theme-override-in-settings.md`
+  summary: On API 26 to 28 with 3-button navigation, a theme that overrides the system (Dark on a light phone, or Light on a dark one) may draw the navigation icons in the same colour as the scrim behind them.
+  evidence: Unverified. `enableEdgeToEdge()` picks the API < 29 navigation scrim from the system night mode, while `SystemBarIcons` sets the icon colour from the app theme. Settle it on an API 28 emulator with 3-button navigation. The owner's Oppo A96 runs API 30 or later.
+  status: open (medium if true).
+- source_spec: `_bmad-output/implementation-artifacts/spec-5-1-wake-and-snooze-defaults-and-theme-override-in-settings.md`
+  summary: Owner review. At 200 % font, the selected segment of the shared `PpsSegmentedControl` wraps mid-word beside its check mark ("Syste / m" in Appearance).
+  evidence: `androidApp/src/test/screenshots/settings_defaults_appearance_light_font200.png`. This is the approved shared component, also used for difficulty and check mode, and nothing is clipped. A fix (drop the check mark at large font sizes, or let the segment grow) would change other screens' baselines.
+  status: open (owner decision).

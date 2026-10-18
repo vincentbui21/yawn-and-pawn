@@ -8,8 +8,10 @@ import com.yawnandpawn.app.ui.home.HomeViewModel
 import com.yawnandpawn.app.ui.payments.ProblemWithChargeViewModel
 import com.yawnandpawn.app.ui.purchases.PurchaseHistoryViewModel
 import com.yawnandpawn.app.ui.reliability.ManufacturerGuidanceViewModel
+import com.yawnandpawn.app.ui.settings.DefaultSettingSetters
 import com.yawnandpawn.app.ui.settings.SettingsViewModel
 import org.koin.core.module.dsl.viewModel
+import org.koin.core.qualifier.named
 import org.koin.dsl.module
 
 /**
@@ -35,6 +37,8 @@ val uiModule =
                 timeChanges = get(),
                 moneyFormatter = get(),
                 logger = get(),
+                defaults = DefaultSettingSetters(get(), get(), get(), get()),
+                outlivingScope = get(named(SettingsViewModel.SAVE_SCOPE)),
             )
         }
         viewModel { ProblemWithChargeViewModel(get(), get(), get(), get(), get()) }
@@ -59,6 +63,7 @@ val uiModule =
                 reRegisterCode = get(),
                 pendingChanges = get(),
                 fees = EditorFeeSources(globalSettings = get(), priceCatalog = get(), moneyFormatter = get()),
+                newAlarmDefaults = get(),
             )
         }
     }

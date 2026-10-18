@@ -6,6 +6,7 @@ import com.yawnandpawn.app.core.billing.SnoozeProducts
 import com.yawnandpawn.app.core.config.Occurrence
 import com.yawnandpawn.app.core.config.PendingChange
 import com.yawnandpawn.app.core.config.PendingChangeRepository
+import com.yawnandpawn.app.core.config.SaveDefaultSetting
 import com.yawnandpawn.app.core.config.SaveGlobalSetting
 import com.yawnandpawn.app.core.config.SetBaseFee
 import com.yawnandpawn.app.core.config.SetMaxSnoozes
@@ -98,6 +99,7 @@ class SettingsViewModelTest {
                 timeChanges = signal,
                 moneyFormatter = formatter,
                 logger = logger,
+                defaults = DefaultSettingSetters(SaveDefaultSetting(settings, sessionLock)),
             )
         backgroundScope.launch(dispatcher) { viewModel.state.collect {} }
         return viewModel
@@ -319,7 +321,19 @@ class SettingsViewModelTest {
                 }
             val save = SaveGlobalSetting(settings, pending, alarms, clock, zone, AlarmWriteLock(), sessionLock)
             val viewModel =
-                SettingsViewModel(settings, failing, prices, SetBaseFee(save), SetMaxSnoozes(save), clock, zone, signal, formatter, logger)
+                SettingsViewModel(
+                    settings,
+                    failing,
+                    prices,
+                    SetBaseFee(save),
+                    SetMaxSnoozes(save),
+                    clock,
+                    zone,
+                    signal,
+                    formatter,
+                    logger,
+                    DefaultSettingSetters(SaveDefaultSetting(settings, sessionLock)),
+                )
             backgroundScope.launch(dispatcher) { viewModel.state.collect {} }
 
             assertEquals(3, viewModel.shown.baseFeeTier)

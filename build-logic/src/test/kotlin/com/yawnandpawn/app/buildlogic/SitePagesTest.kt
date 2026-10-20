@@ -38,9 +38,14 @@ class SitePagesTest {
         mapOf(
             "payments_fee_body" to "Each snooze costs your base fee times the snooze number.",
             "payments_unused_body" to "Payments that weren't used are refunded automatically by Google.",
-            "payments_cap_body" to "one morning never costs more than %1\$s.",
+            "payments_cap_body" to "You can snooze up to your max snoozes per session. A single snooze never costs more than %1\$s.",
         )
-    private val mirroredKeys = listOf("payments_fee_body", "payments_unused_body")
+    private val mirroredKeys =
+        mapOf<String, List<String>>(
+            "payments_fee_body" to emptyList(),
+            "payments_cap_body" to listOf("$50"),
+            "payments_unused_body" to emptyList(),
+        )
 
     private fun page(
         permalink: String?,
@@ -66,6 +71,7 @@ class SitePagesTest {
                 page(
                     "/payments/",
                     "# Payments\n\nEach snooze costs your base fee\ntimes the snooze number.\n\n" +
+                        "You can snooze up to your max snoozes per session. A single snooze never costs more than $50.\n\n" +
                         "Payments that weren't used are refunded automatically by Google.\n",
                 ),
         )
@@ -74,7 +80,8 @@ class SitePagesTest {
         files: Map<String, String?> = validFiles,
         links: Map<String, String> = appLinks,
         strings: Map<String, String> = appStrings,
-    ): List<String> = SitePagesRules.violations(SiteInput(files, links, strings, mirroredKeys))
+        keys: Map<String, List<String>> = mirroredKeys,
+    ): List<String> = SitePagesRules.violations(SiteInput(files, links, strings, keys))
 
     private fun with(
         name: String,
@@ -228,6 +235,46 @@ class SitePagesTest {
     }
 
     @Test
+    fun `mirror placeholders - each placeholder must show its configured value, the words around it still must match`() {
+        val payments = validFiles.getValue("payments.md")
+        val capSentence = "A single snooze never costs more than $50."
+        // Another currency than the configured "$50" fails.
+        assertEquals(1, violations(with("payments.md", payments.replace("$50.", "50,00 €."))).size)
+        // Another amount ("$5."), a page without the sentence, or other words around the value, fails naming the key.
+        listOf(
+            payments.replace("$50.", "$5."),
+            payments.replace(capSentence, ""),
+            payments.replace(capSentence, "One morning never costs more than $50."),
+            payments.replace("$50.", "fifty dollars."),
+        ).forEach { broken ->
+            val found = violations(with("payments.md", broken))
+            assertEquals(1, found.size, found.toString())
+            assertTrue(found.single().startsWith("payments.md: does not mirror 'payments_cap_body'"), found.toString())
+        }
+        // Regex characters in the app's text are literal, and %2$d takes the second value.
+        val counted = appStrings + ("payments_cap_body" to "Snooze (up to %2\$d) costs %1\$s.")
+        val countedKeys = mirroredKeys + ("payments_cap_body" to listOf("$3", "5"))
+        val page = with("payments.md", payments.replace(capSentence, "Snooze (up to 5) costs $3."))
+        assertEquals(emptyList(), violations(page, strings = counted, keys = countedKeys))
+        val loose = with("payments.md", payments.replace(capSentence, "Snooze up to 5 costs $3."))
+        assertEquals(1, violations(loose, strings = counted, keys = countedKeys).size)
+    }
+
+    @Test
+    fun `mirror placeholders - a placeholder with no configured value, or a value with no placeholder, fails naming the key`() {
+        listOf(
+            mirroredKeys + ("payments_cap_body" to emptyList()),
+            mirroredKeys + ("payments_cap_body" to listOf("$50", "5")),
+            mirroredKeys + ("payments_fee_body" to listOf("$1")),
+        ).forEach { keys ->
+            val found = violations(keys = keys)
+            assertEquals(1, found.size, found.toString())
+            assertTrue(found.single().startsWith("mirroredKeys: '"), found.toString())
+            assertTrue(keys.any { (key, values) -> values != mirroredKeys[key] && "'$key'" in found.single() }, found.toString())
+        }
+    }
+
+    @Test
     fun `front matter and yaml parsing - quotes and comments, and none without the dashes`() {
         assertEquals(
             mapOf("title" to "A & B", "permalink" to "/x/"),
@@ -287,7 +334,13 @@ class SitePagesTest {
                 siteDir.set(layout.projectDirectory.dir("site"))
                 appLinks.set(layout.projectDirectory.file("app-links.properties"))
                 appStrings.set(layout.projectDirectory.file("strings.xml"))
-                mirroredKeys.set(listOf("payments_fee_body", "payments_unused_body"))
+                mirroredKeys.set(
+                    mapOf(
+                        "payments_fee_body" to listOf<String>(),
+                        "payments_cap_body" to listOf("${'$'}50"),
+                        "payments_unused_body" to listOf<String>(),
+                    ),
+                )
             }
             """.trimIndent(),
         )

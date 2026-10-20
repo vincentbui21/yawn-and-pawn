@@ -126,6 +126,7 @@ object PreviewRound2 {
             you("you_main", "Money, privacy and your data, help", s.you, primary = true),
             you("you_delete_dialog", "Delete all data", s.youDeleteDialog, hasDialog = true),
             you("you_no_browser", "Link without a browser", s.youNoBrowser),
+            you("you_no_email_app", "Email support without an email app", s.youNoEmailApp),
             settings("settings_session", "During a session (session lock)", { s.settingsSession }),
             settings("settings_base_fee", "Base fee", { s.settingsBaseFee }, group = "Settings sub-screens", primary = true),
             settings(
@@ -147,7 +148,7 @@ object PreviewRound2 {
             reliability("reliability_all_ok", "All OK", s.reliabilityAllOk),
             reliability("reliability_manufacturer", "Manufacturer steps (Xiaomi)", s.reliabilityManufacturer),
             item("payments", "Payments & refunds", "How payments & refunds work", primary = true) {
-                PaymentsScreen(priceCap = s.priceCap, onIntent = {})
+                PaymentsScreen(cap = s.priceCap, onIntent = {})
             },
             item("payments_problem", "Payments & refunds", "Problem with a charge?") { ProblemWithChargeScreen(onIntent = {}) },
             item("payments_problem_no_browser", "Payments & refunds", "Problem with a charge?, no browser") {

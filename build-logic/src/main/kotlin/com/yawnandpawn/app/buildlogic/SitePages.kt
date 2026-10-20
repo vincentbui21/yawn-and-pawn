@@ -6,7 +6,7 @@ import org.gradle.api.Plugin
 import org.gradle.api.Project
 import org.gradle.api.file.DirectoryProperty
 import org.gradle.api.file.RegularFileProperty
-import org.gradle.api.provider.ListProperty
+import org.gradle.api.provider.MapProperty
 import org.gradle.api.tasks.Input
 import org.gradle.api.tasks.InputFile
 import org.gradle.api.tasks.InputFiles
@@ -30,13 +30,14 @@ const val CHECK_SITE_PAGES = "checkSitePages"
  *   `*.md` file of the site by its path relative to the site folder ([SiteFiles.read]).
  * @property appLinks the keys of `config/app-links.properties`.
  * @property appStrings the app's Compose strings by key (`strings.xml`).
- * @property mirroredKeys the keys whose text `payments.md` must contain word for word.
+ * @property mirroredKeys the keys whose text `payments.md` must contain word for word, each with the values its
+ *   placeholders show on the page (`%1$s` the first, `%2$d` the second; empty for a string with none).
  */
 data class SiteInput(
     val files: Map<String, String?>,
     val appLinks: Map<String, String>,
     val appStrings: Map<String, String>,
-    val mirroredKeys: List<String>,
+    val mirroredKeys: Map<String, List<String>>,
 )
 
 /**
@@ -93,6 +94,9 @@ object SitePagesRules {
     private val backupCheck = Regex("""\bback[\s-]?up[\s-]+checks?\b|\bchecks?[\s-]+back[\s-]?up\b""", RegexOption.IGNORE_CASE)
     private val todo = Regex("""\bTODO\b""")
     private val whitespace = Regex("""\s+""")
+
+    /** An Android format placeholder for a string or a number in the app's text: `%1$s`, `%2$d`. */
+    private val placeholder = Regex("""%(\d+)\$[sd]""")
 
     /** Every problem of [input]; empty when the site passes. */
     fun violations(input: SiteInput): List<String> {
@@ -210,22 +214,39 @@ object SitePagesRules {
         return EMAIL_PAGES.filter { it in files && email !in files.getValue(it) }.map { "$it: does not show $SUPPORT_EMAIL '$email'" }
     }
 
-    /** Each mirrored in-app string in `payments.md`, word for word after normalising whitespace. */
+    /**
+     * Each mirrored in-app string in `payments.md`, word for word after normalising whitespace. Each `%N$s` or `%N$d`
+     * placeholder in the app's text (a value the app fills in, such as the cap) must show the N-th value [mirroredKeys]
+     * gives that key, so the page's numbers are checked too (Story 5.8 review fix 3). A placeholder with no value, or a
+     * value with no placeholder, fails naming the key.
+     */
     fun mirrorViolations(
         payments: String?,
         appStrings: Map<String, String>,
-        mirroredKeys: List<String>,
+        mirroredKeys: Map<String, List<String>>,
     ): List<String> {
         if (payments == null) return emptyList()
         val page = payments.collapsed()
-        return mirroredKeys.mapNotNull { key ->
-            val text = appStrings[key]
+        return mirroredKeys.mapNotNull { (key, values) ->
+            val text = appStrings[key]?.collapsed()
+            val expected = text?.let { filled(it, values) }
             when {
                 text == null -> "strings.xml: no string '$key' to mirror"
-                text.collapsed() !in page -> "payments.md: does not mirror '$key' (\"${text.collapsed()}\")"
+                expected == null -> "mirroredKeys: '$key' needs exactly one value per placeholder of \"$text\", has $values"
+                expected !in page -> "payments.md: does not mirror '$key' (\"$expected\")"
                 else -> null
             }
         }
+    }
+
+    /** [text] with each `%N$s`/`%N$d` replaced by the N-th of [values]; null unless every value fills a placeholder. */
+    private fun filled(
+        text: String,
+        values: List<String>,
+    ): String? {
+        val numbers = placeholder.findAll(text).map { it.groupValues[1].toInt() }.toSet()
+        if (numbers != (1..values.size).toSet()) return null
+        return placeholder.replace(text) { values[it.groupValues[1].toInt() - 1] }
     }
 
     private fun String.collapsed(): String = trim().replace(whitespace, " ")
@@ -325,7 +346,7 @@ abstract class CheckSitePagesTask : DefaultTask() {
     abstract val appStrings: RegularFileProperty
 
     @get:Input
-    abstract val mirroredKeys: ListProperty<String>
+    abstract val mirroredKeys: MapProperty<String, List<String>>
 
     @get:OutputFile
     abstract val marker: RegularFileProperty
@@ -376,8 +397,8 @@ abstract class SitePagesExtension {
     /** The app's Compose `strings.xml`, the source of the text `payments.md` mirrors. */
     abstract val appStrings: RegularFileProperty
 
-    /** The in-app strings `payments.md` must contain word for word. */
-    abstract val mirroredKeys: ListProperty<String>
+    /** The in-app strings `payments.md` must contain word for word, each with the values of its placeholders there. */
+    abstract val mirroredKeys: MapProperty<String, List<String>>
 }
 
 /** Registers [CHECK_SITE_PAGES] (a `qualityGate` dependency) on the root project. */

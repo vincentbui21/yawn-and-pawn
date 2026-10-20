@@ -44,15 +44,22 @@ sealed interface Route : NavKey {
     ) : Route
 
     /**
-     * Purchase history (Story 4.16), pushed over the You tab from its Money card; Back returns to You. Not a tab, so
-     * the nav capsule hides.
+     * Purchase history (Story 4.16), pushed over the You tab from its Money card, or over [Payments] (Story 5.8); Back
+     * returns to the screen under it. Not a tab, so the nav capsule hides.
      */
     @Serializable
     data object PurchaseHistory : Route
 
     /**
-     * "Problem with a charge?" (Story 4.17), pushed over Purchase history; Back returns to it. Its "Email support" picker
-     * is a pane of the same entry. Not a tab, so the nav capsule hides.
+     * "How payments & refunds work" (Story 5.8), pushed over the You tab from its Money card; Back returns to You. Its
+     * links push Purchase history and "Problem with a charge?" over it. Not a tab, so the nav capsule hides.
+     */
+    @Serializable
+    data object Payments : Route
+
+    /**
+     * "Problem with a charge?" (Story 4.17), pushed over Purchase history or [Payments]; Back returns to it. Its "Email
+     * support" picker is a pane of the same entry. Not a tab, so the nav capsule hides.
      */
     @Serializable
     data object ProblemWithCharge : Route

@@ -5,9 +5,9 @@ permalink: /payments/
 
 {% comment %}
   Mirrors the app's "How payments & refunds work" screen, in its order. checkSitePages fails unless every mirrored
-  in-app sentence (the mirroredKeys in the root build.gradle.kts) appears here word for word. The cap sentence is the
-  exception: the app's "one morning never costs more than" is wrong (the cap is per snooze), so it is stated correctly
-  here until Story 5.8 fixes the app string.
+  in-app sentence (the mirroredKeys in the root build.gradle.kts) appears here word for word. A placeholder in the
+  app's text is filled with the value mirroredKeys gives it: the cap sentence is the app's tier wording
+  (payments_cap_tier_body) with "$50.00", because a local price, with any tax, is only known on the phone.
 {% endcomment %}
 
 # How payments & refunds work
@@ -16,7 +16,9 @@ permalink: /payments/
 
 Each snooze costs your base fee times the snooze number. Google Play shows the price in your local currency.
 
-You can snooze up to your max snoozes per session. A single snooze never costs more than $50.
+You can snooze up to your max snoozes per session. A single snooze never costs more than the $50.00 price tier.
+
+Google Play sets the local price, including any tax.
 
 Your fee is locked for the morning. You can raise it anytime. Lowering it waits until after your next alarm.
 

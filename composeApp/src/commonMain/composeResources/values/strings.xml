@@ -403,7 +403,14 @@
 
     <!-- How payments & refunds work (long-form copy, one string per paragraph) -->
     <string name="payments_fee_body">Each snooze costs your base fee times the snooze number. Google Play shows the price in your local currency.</string>
-    <string name="payments_cap_body">You can snooze up to your max snoozes per session, and one morning never costs more than %1$s.</string>
+    <!-- Story 5.8 (default taken, owner can change): the $50 cap is per snooze, not per morning. %1$s is Google Play's
+         own cached price of the top tier (snooze_usd_50); while it is not known, the tier wording below shows instead
+         (review fix 2, EXPERIENCE.md Key strings). -->
+    <string name="payments_cap_body">You can snooze up to your max snoozes per session. A single snooze never costs more than %1$s.</string>
+    <!-- (EXPERIENCE.md Key strings) %1$s: the $50 tier formatted as USD. Two strings, so each body stays within 25 words. -->
+    <string name="payments_cap_tier_body">You can snooze up to your max snoozes per session. A single snooze never costs more than the %1$s price tier.</string>
+    <!-- (EXPERIENCE.md Key strings) Follows payments_cap_tier_body. -->
+    <string name="payments_local_price_body">Google Play sets the local price, including any tax.</string>
     <string name="payments_lock_body">Your fee is locked for the morning. You can raise it anytime. Lowering it waits until after your next alarm.</string>
     <string name="payments_pending_body">A pending payment only starts your snooze if it goes through before you finish. Otherwise, finish the check to stop the alarm.</string>
     <string name="payments_unused_body">Payments that weren't used are refunded automatically by Google.</string>

@@ -105,6 +105,7 @@ adb shell am start -S -n com.yawnandpawn.app/.debug.preview.PreviewActivity --es
 | `you-main` | You | Money, privacy and your data, help |
 | `you-delete-dialog` | You | Delete all data |
 | `you-no-browser` | You | Link without a browser |
+| `you-no-email-app` | You | Email support without an email app |
 | `settings-session` | Settings | During a session (session lock) |
 | `settings-base-fee` | Settings sub-screens | Base fee |
 | `settings-base-fee-weakening` | Settings sub-screens | Base fee lowered under lock |

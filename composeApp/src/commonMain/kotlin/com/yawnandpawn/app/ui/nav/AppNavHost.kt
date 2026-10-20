@@ -33,21 +33,15 @@ import com.yawnandpawn.app.ui.home.HomeIntent
 import com.yawnandpawn.app.ui.home.HomeRoute
 import com.yawnandpawn.app.ui.home.HomeScreen
 import com.yawnandpawn.app.ui.home.HomeUiState
-import com.yawnandpawn.app.ui.payments.ProblemWithChargeRoute
 import com.yawnandpawn.app.ui.progress.CalendarMonth
 import com.yawnandpawn.app.ui.progress.ProgressScreen
 import com.yawnandpawn.app.ui.progress.ProgressUiState
-import com.yawnandpawn.app.ui.purchases.PurchaseHistoryRoute
 import com.yawnandpawn.app.ui.reliability.ManufacturerGuidanceRoute
 import com.yawnandpawn.app.ui.settings.SettingsRoute
 import com.yawnandpawn.app.ui.settings.WeakeningNote
 import com.yawnandpawn.app.ui.shell.AppShell
 import com.yawnandpawn.app.ui.shell.AppTab
 import com.yawnandpawn.app.ui.theme.PpsTheme
-import com.yawnandpawn.app.ui.you.YouIntent
-import com.yawnandpawn.app.ui.you.YouRow
-import com.yawnandpawn.app.ui.you.YouScreen
-import com.yawnandpawn.app.ui.you.YouUiState
 import kotlinx.datetime.LocalDate
 import kotlinx.datetime.LocalTime
 import kotlinx.datetime.toLocalDateTime
@@ -118,13 +112,14 @@ fun AppNavHost(modifier: Modifier = Modifier) {
                     }
                     entry<Route.Progress>(metadata = TabMetadata) { ProgressTab() }
                     entry<Route.Settings>(metadata = TabMetadata) { SettingsTab() }
-                    entry<Route.You>(metadata = TabMetadata) { YouTab(onOpenPurchaseHistory = { backStack.openPurchaseHistory() }) }
+                    entry<Route.You>(metadata = TabMetadata) { YouEntry(backStack) }
                     entry<Route.SessionInProgress>(metadata = LockMetadata) { SessionInProgressScreen() }
                     entry<Route.AlarmEditor> { route ->
                         EditorEntry(route, backStack, onOpenFailed = { openFailed = true }, onSavedUnderLock = { savedUnderLock = it })
                     }
                     entry<Route.PurchaseHistory> { PurchaseHistoryEntry(backStack) }
-                    entry<Route.ProblemWithCharge> { ProblemWithChargeRoute(onBack = { backStack.close(Route.ProblemWithCharge) }) }
+                    entry<Route.Payments> { PaymentsEntry(backStack) }
+                    entry<Route.ProblemWithCharge> { ProblemWithChargeEntry(backStack) }
                     entry<Route.ManufacturerGuidance> {
                         ManufacturerGuidanceRoute(onClose = { backStack.close(Route.ManufacturerGuidance) })
                     }
@@ -132,14 +127,6 @@ fun AppNavHost(modifier: Modifier = Modifier) {
         )
     }
 }
-
-/** Purchase history on [backStack]: Back closes it, "Problem with a charge?" opens its screen (Story 4.17). */
-@Composable
-private fun PurchaseHistoryEntry(backStack: MutableList<NavKey>) =
-    PurchaseHistoryRoute(
-        onBack = { backStack.close(Route.PurchaseHistory) },
-        onProblemWithCharge = { backStack.openProblemWithCharge() },
-    )
 
 /** Marks the tab entries, so moving between two tabs is instant (the shared capsule stays put). */
 private const val TAB_ENTRY = "yawnandpawn.tab"
@@ -211,23 +198,6 @@ internal fun emptyProgress(today: LocalDate): ProgressUiState =
 private fun SettingsTab() {
     SettingsRoute(is24Hour = is24HourClock())
 }
-
-/**
- * The You tab until its other stories are built: the Money card with "Purchase history" only (Story 4.16), which
- * [onOpenPurchaseHistory] pushes; every other row, About too, opens something not built yet.
- */
-@Composable
-private fun YouTab(onOpenPurchaseHistory: () -> Unit) {
-    val state = remember { YouUiState(appVersion = "") }
-    YouScreen(
-        state = state,
-        onIntent = { intent -> if (intent == YouIntent.PurchaseHistoryClicked) onOpenPurchaseHistory() },
-        rows = YouTabRows,
-    )
-}
-
-/** The You rows whose screens are built. */
-private val YouTabRows: Set<YouRow> = setOf(YouRow.PurchaseHistory)
 
 /**
  * The editor of [route] on [backStack]; [onOpenFailed] after it closed because its alarm could not be read, and

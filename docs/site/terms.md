@@ -19,7 +19,7 @@ The app is an alarm clock. To stop an alarm for free, you finish a check you cho
 
 - You choose a base fee, from $1 to $10 in $1 steps.
 - The first snooze of a morning costs the base fee, and each one after costs more: the Nth snooze costs base fee × N. With a $2 base fee, the snoozes cost $2, $4, $6, and so on.
-- A single snooze never costs more than $50. A snooze that would cost more is not offered.
+- A single snooze never costs more than the $50.00 price tier. Google Play sets the local price, including any tax. A snooze that would cost more is not offered.
 - You choose your max snoozes per morning, from 1 to 5 (5 by default). After that, snooze is not offered and only the check is left.
 - Fees are set in US dollar price tiers. Google Play shows and charges the price in your local currency, so local prices may not be exact multiples of each other. Where prices exclude tax, Google Play adds it and shows the final total.
 - Your base fee, max snoozes and snooze length are fixed when an alarm first rings. Changes apply from the next morning.

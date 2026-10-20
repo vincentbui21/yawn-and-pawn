@@ -25,6 +25,7 @@ import com.yawnandpawn.app.core.sound.SoundPreview
 import com.yawnandpawn.app.core.stats.CheckRegistrations
 import com.yawnandpawn.app.core.stats.ReRegisterSuggestions
 import com.yawnandpawn.app.core.time.Clock
+import com.yawnandpawn.app.core.time.MonotonicClock
 import com.yawnandpawn.app.core.time.TimeChangeSignal
 import com.yawnandpawn.app.core.time.TimeZoneProvider
 import com.yawnandpawn.app.testing.AlarmUseCasesFixture
@@ -37,6 +38,7 @@ import com.yawnandpawn.app.testing.FakeLogger
 import com.yawnandpawn.app.testing.FakeManufacturerSettings
 import com.yawnandpawn.app.testing.FakeMissedNoteDismissals
 import com.yawnandpawn.app.testing.FakeMoneyFormatter
+import com.yawnandpawn.app.testing.FakeMonotonicClock
 import com.yawnandpawn.app.testing.FakeNotificationPermission
 import com.yawnandpawn.app.testing.FakePendingChangeRepository
 import com.yawnandpawn.app.testing.FakePriceCatalog
@@ -56,10 +58,15 @@ import com.yawnandpawn.app.testing.anAppVersion
 import com.yawnandpawn.app.ui.editor.AlarmEditorArgs
 import com.yawnandpawn.app.ui.editor.AlarmEditorViewModel
 import com.yawnandpawn.app.ui.home.HomeViewModel
+import com.yawnandpawn.app.ui.links.AppLinks
+import com.yawnandpawn.app.ui.links.ExternalLinks
+import com.yawnandpawn.app.ui.payments.PaymentsViewModel
 import com.yawnandpawn.app.ui.purchases.PurchaseHistoryViewModel
 import com.yawnandpawn.app.ui.qr.CameraPermission
 import com.yawnandpawn.app.ui.qr.TestCameraPermission
 import com.yawnandpawn.app.ui.reliability.ManufacturerGuidanceViewModel
+import com.yawnandpawn.app.ui.you.YouUiState
+import com.yawnandpawn.app.ui.you.YouViewModel
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.test.UnconfinedTestDispatcher
@@ -73,6 +80,7 @@ import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
 import kotlin.test.assertNotNull
+import kotlin.test.assertNull
 import kotlin.test.assertTrue
 
 class UiModuleTest {
@@ -167,6 +175,55 @@ class UiModuleTest {
                 .state.value.maker,
         )
         app.close()
+    }
+
+    @OptIn(ExperimentalCoroutinesApi::class)
+    @Test
+    fun `the ui module builds the You and Payments ViewModels from the links, clock and price ports`() {
+        val ports =
+            module {
+                single<MonotonicClock> { FakeMonotonicClock() }
+                single<Clock> { FakeClock() }
+                single<PriceCatalog> { FakePriceCatalog() }
+                single<Logger> { FakeLogger() }
+                single<ExternalLinks> {
+                    object : ExternalLinks {
+                        override fun openUrl(url: String): Boolean = true
+
+                        override fun sendEmail(
+                            to: String,
+                            subject: String,
+                            body: String,
+                        ): Boolean = true
+
+                        override fun copyText(text: String): Boolean = false
+                    }
+                }
+                single {
+                    AppLinks(
+                        supportEmail = "help@example.com",
+                        orderHistoryUrl = "https://example.com/orders",
+                        privacyUrl = "https://example.com/privacy/",
+                        termsUrl = "https://example.com/terms/",
+                        supportUrl = "https://example.com/support/",
+                    )
+                }
+            }
+        val app = koinApplication { modules(ports, uiModule) }
+        Dispatchers.setMain(UnconfinedTestDispatcher())
+        try {
+            val you = app.koin.get<YouViewModel>()
+
+            assertEquals(YouUiState(appVersion = ""), you.state.value)
+            assertNull(
+                app.koin
+                    .get<PaymentsViewModel>()
+                    .cap.value,
+            )
+        } finally {
+            Dispatchers.resetMain()
+            app.close()
+        }
     }
 
     @Test

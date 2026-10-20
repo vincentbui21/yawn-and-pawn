@@ -35,7 +35,8 @@ interface ExternalLinks {
 
     /**
      * Puts [text] on the clipboard. True when the app should confirm it itself: from Android 13 the phone shows its
-     * own confirmation, so a second one from the app would repeat it.
+     * own confirmation, so a second one from the app would repeat it. False too when nothing was copied (no clipboard),
+     * so the caller never claims a copy that did not happen.
      */
     fun copyText(text: String): Boolean
 }

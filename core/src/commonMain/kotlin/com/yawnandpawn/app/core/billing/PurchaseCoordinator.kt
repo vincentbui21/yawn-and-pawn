@@ -310,7 +310,7 @@ class PurchaseCoordinator(
 
     /** The tokens of [productId] Play lists as pending for this install. */
     private fun Reconciled.pendingTokens(productId: String): Set<PurchaseToken> =
-        pending.filter { it.productId == productId }.mapTo(mutableSetOf()) { it.token }
+        pending.filter { it.first == productId }.mapTo(mutableSetOf()) { it.second }
 
     /** Opens Play's sheet for [launch] while the session still pays it and no other sheet is open for it. */
     private suspend fun openSheet(launch: InFlight) {
@@ -540,17 +540,36 @@ class PurchaseCoordinator(
         var offered = false
         val strandedProducts = mutableSetOf<String>()
         val pendingSessions = mutableSetOf<String>()
+
+        /**
+         * What the reconciler made of each listed purchase (the purchase rules stay in `PurchaseReconciler`, Story 4.9): the
+         * tokens it found pending for this install, by product, and the products it found paid (any decision but pending or
+         * another install's).
+         */
+        val pendingTokens = mutableSetOf<Pair<String, PurchaseToken>>()
+        val paidProducts = mutableSetOf<String>()
+
+        fun note(
+            snapshot: PurchaseSnapshot,
+            decision: PurchaseDecision,
+        ) {
+            when ((decision as? PurchaseDecision.Ignore)?.reason) {
+                IgnoreReason.Pending -> pendingTokens += snapshot.productId to snapshot.token
+                IgnoreReason.OtherInstall -> Unit
+                else -> paidProducts += snapshot.productId
+            }
+        }
     }
 
     /**
-     * The outcome of a full query: [queried] false when Play could not be asked. [pending] are the purchases Play lists as
-     * pending for this install, [purchasedProducts] the products it lists as purchased.
+     * The outcome of a full query: [queried] false when Play could not be asked. [pending] are the tokens the reconciler
+     * found pending for this install, by product, [purchasedProducts] the products it found paid.
      */
     private class Reconciled(
         val queried: Boolean,
         val stopsLaunch: Boolean,
         val consumedForRetry: Boolean,
-        val pending: List<PurchaseSnapshot> = emptyList(),
+        val pending: Set<Pair<String, PurchaseToken>> = emptySet(),
         val purchasedProducts: Set<String> = emptySet(),
     )
 
@@ -572,9 +591,8 @@ class PurchaseCoordinator(
             queried = true,
             stopsLaunch = pass.stopsLaunch,
             consumedForRetry = pass.consumedForRetry,
-            pending = owned.filter { it.purchaseState == PlayPurchaseState.Pending && (it.accountId == null || it.accountId == installId) },
-            purchasedProducts =
-                owned.filter { it.purchaseState == PlayPurchaseState.Purchased }.mapTo(mutableSetOf()) { it.productId },
+            pending = pass.pendingTokens.toSet(),
+            purchasedProducts = pass.paidProducts.toSet(),
         )
     }
 
@@ -604,6 +622,7 @@ class PurchaseCoordinator(
         state: SessionState,
         pass: Pass,
     ) {
+        pass.note(snapshot, decision)
         when (decision) {
             is PurchaseDecision.Grant -> {
                 val price = intentPrice(snapshot.profileId, snapshot.productId)

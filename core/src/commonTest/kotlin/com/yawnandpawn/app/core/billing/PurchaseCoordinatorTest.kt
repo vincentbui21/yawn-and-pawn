@@ -547,7 +547,11 @@ class PurchaseCoordinatorTest {
             assertEquals(3, w.play.queries, "the pre-launch query, the recovery and the second pre-launch query")
             assertEquals(emptyList(), w.play.launches)
             assertEquals(listOf<SessionEffect>(SessionEffect.ShowReuseSheet(PRODUCT_1)), w.outcomes)
-            assertEquals(PRODUCT_1, w.coordinator.reuseOffer.value?.productId)
+            assertEquals(
+                PRODUCT_1,
+                w.coordinator.reuseOffer.value
+                    ?.productId,
+            )
         }
 
     @Test

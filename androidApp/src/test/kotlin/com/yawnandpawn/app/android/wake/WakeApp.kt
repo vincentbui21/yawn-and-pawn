@@ -40,6 +40,7 @@ import com.yawnandpawn.app.core.session.UnlockPort
 import com.yawnandpawn.app.core.session.UserLockState
 import com.yawnandpawn.app.core.time.Clock
 import com.yawnandpawn.app.core.time.MonotonicClock
+import com.yawnandpawn.app.core.time.TimeChangeSignal
 import com.yawnandpawn.app.core.time.TimeSnapshot
 import com.yawnandpawn.app.restartKoin
 import com.yawnandpawn.app.testing.FakeCrashReporter
@@ -101,6 +102,8 @@ internal class WakeApp(
     // Story 5.6: the Analytics facade and whether the build counts as Firebase-configured.
     analytics: AnalyticsSink? = null,
     firebase: FirebaseConfiguration? = null,
+    // Epic 4 device follow-ups: the time-change signal the wake screen's clock follows.
+    timeChanges: TimeChangeSignal? = null,
 ) {
     val app: YawnAndPawnApp = ApplicationProvider.getApplicationContext()
     val crashReporter = FakeCrashReporter()
@@ -144,6 +147,7 @@ internal class WakeApp(
                 billingFacade?.let { replaced -> single<BillingClientFacade> { replaced } }
                 analytics?.let { replaced -> single<AnalyticsSink> { replaced } }
                 firebase?.let { replaced -> single { replaced } }
+                timeChanges?.let { replaced -> single<TimeChangeSignal> { replaced } }
                 single { WakeServiceStarts(serviceStartWait) }
             },
         )

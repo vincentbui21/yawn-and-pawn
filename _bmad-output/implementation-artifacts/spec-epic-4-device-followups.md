@@ -56,6 +56,28 @@ deferred:
 
 ## Review Triage Log
 
+## Review (fast mode)
+
+Independent review of PR #73: no HIGH findings, and money safety confirmed. All seven items are fixed:
+
+1. **Clock follows the time-change signal.** `wallTimes(clock, zones, changes)` (`WakeClockTicks.kt`) starts with the time now and emits again at every `TimeChangeSignal` (the system's minute tick, a clock set, a zone change, as Home does). Each emission reads `clock.now()` and `zones.current()`. A minute-boundary delay stays as a backstop.
+   - `WakeActivity` reads it through `rememberWallTime`, with the `WallTime` class replacing the private `WakeTime`.
+   - Tests: `WakeClockTicksTest` (signal with a new time and zone; the boundary backstop) and `WakeActivityTest` ("moves on at a time-change signal").
+2. **The ring may end during the 1 s wait.** `prepareAndLaunch` returns at once when the session no longer pays the intent after the wait.
+   - Test: "a ring that ends during the wait asks nothing more and opens nothing" (1 query, no launch, no reuse sheet).
+3. **An update during the wait keeps its flag.** The update flag is read and cleared together with the first query, inside the same lock (`getAndUpdate`), so an update that lands during the wait still counts for the next Pay.
+   - Test: "an update that strands the product during the wait keeps its flag for the next Pay".
+4. **A pending payment that never resolves no longer delays every Pay.** The refresh runs once per pending token (`refreshedForPending`).
+   - Test: two Pays with the same pending payment make 3 queries.
+5. **New coordinator cases:**
+   - the second query fails: exactly one launch;
+   - once per update;
+   - the ring ends during the wait;
+   - a recovery runs during the wait: one reuse sheet, no launch;
+   - an approval is delivered during the wait: reuse, no launch, nothing consumed.
+6. **The screen clock ticks.** `WakeActivityTest` "turns over at the minute without a signal": the fake clock starts at 06:09:40 and is moved to 06:10:00, then the system clock and the compose clock both advance 20 s, and the screen shows 6:10.
+7. **Device-check note.** `epic-5-context.md` "Notes from implemented stories" now asks the Story 5.13 run to log the time from approval to the next Pay and which dialog showed first, then tune `PRE_LAUNCH_REFRESH`.
+
 ## Verification
 
 **Commands** (`--no-daemon --max-workers=2`, JDK 17):

@@ -45,6 +45,7 @@ import com.yawnandpawn.app.core.session.SnoozeAvailabilityPolicy
 import com.yawnandpawn.app.core.session.UserLockState
 import com.yawnandpawn.app.core.time.Clock
 import com.yawnandpawn.app.core.time.MonotonicClock
+import com.yawnandpawn.app.core.time.TimeChangeSignal
 import com.yawnandpawn.app.core.time.TimeZoneProvider
 import com.yawnandpawn.app.ui.components.LocalViewfinderFeed
 import com.yawnandpawn.app.ui.format.is24HourClock
@@ -67,7 +68,8 @@ import com.yawnandpawn.app.ui.wake.WakeMessage
 import com.yawnandpawn.app.ui.wake.WakeSurface
 import com.yawnandpawn.app.ui.wake.alarmOnlyRingingUiState
 import com.yawnandpawn.app.ui.wake.checkPosition
-import com.yawnandpawn.app.ui.wake.minuteTicks
+import com.yawnandpawn.app.ui.wake.WallTime
+import com.yawnandpawn.app.ui.wake.rememberWallTime
 import com.yawnandpawn.app.ui.wake.placeholderStepDue
 import com.yawnandpawn.app.ui.wake.ringingUiState
 import com.yawnandpawn.app.ui.wake.snoozedUiState
@@ -152,6 +154,7 @@ class WakeActivity : ComponentActivity() {
 
     /** The wall clock the Ringing screen's clock shows (Epic 4 device follow-up 1): the app's, so tests control it. */
     private val clock: Clock by inject()
+    private val timeChanges: TimeChangeSignal by inject()
 
     /** The snooze confirm sheet (Story 4.13); process-wide, so a recreated screen shows the same sheet. */
     private val sheet: ConfirmSheetHost by inject()
@@ -291,7 +294,7 @@ class WakeActivity : ComponentActivity() {
                 // Restored with a Success whose session this process no longer knows (it was killed): nothing to show.
                 if (end.successSessionId != null) LaunchedEffect(Unit) { finish() }
                 // The clock shows the time now, turning over at each minute (Epic 4 device follow-up 1).
-                val time = WakeTime(timeZones.current(), remember { minuteTicks(clock) }.collectAsState(initial = clock.now()).value)
+                val time = rememberWallTime(clock, timeZones, timeChanges)
                 val session = (state as? SessionState.Active)?.session?.takeIf { state.isRinging() }
                 val availability = session?.let { key(env) { snoozePolicy.availability(it) } }
                 // Story 4.13: the confirm sheet and its message over the session's Ringing or Check screen.
@@ -577,7 +580,7 @@ private fun sessionScreen(
     state: SessionState,
     session: SessionData?,
     availability: SnoozeAvailability?,
-    time: WakeTime,
+    time: WallTime,
     check: WakeCheck,
     overlay: SheetOverlay,
 ): WakeScreen? {
@@ -598,12 +601,6 @@ private fun sessionScreen(
         }
     }
 }
-
-/** Where and when the wake screen is: the zone its times show in and the time now its clock shows. */
-private class WakeTime(
-    val zone: TimeZone,
-    val now: Instant,
-)
 
 /** The confirm sheet and payment message over a wake screen, and the prices its snooze shows (Story 4.13). */
 private class SheetOverlay(

@@ -10,6 +10,7 @@ import android.provider.Settings
 import android.view.WindowManager
 import androidx.compose.ui.test.getBoundsInRoot
 import androidx.compose.ui.test.junit4.v2.createEmptyComposeRule
+import androidx.compose.ui.test.onAllNodesWithContentDescription
 import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
@@ -37,6 +38,7 @@ import com.yawnandpawn.app.launchActivity
 import com.yawnandpawn.app.testing.FakeActiveSessionStore
 import com.yawnandpawn.app.testing.FakeAlarmRepository
 import com.yawnandpawn.app.testing.FakeClock
+import com.yawnandpawn.app.testing.FakeTimeChangeSignal
 import com.yawnandpawn.app.testing.FakeSessionHistoryRepository
 import com.yawnandpawn.app.testing.aSession
 import com.yawnandpawn.app.testing.aSessionConfig
@@ -380,6 +382,46 @@ class WakeActivityTest {
 
         composeRule.onNodeWithContentDescription(alarmTime(app, at = scheduled + 9.minutes)).assertExists()
         composeRule.onNodeWithContentDescription(alarmTime(app, at = scheduled)).assertDoesNotExist()
+    }
+
+    /** Review fix 1: the clock follows the app's time-change signal (the system's minute tick, a clock set, a zone change). */
+    @Test
+    fun `the Ringing clock moves on at a time-change signal`() {
+        val scheduled = aSessionConfig().scheduledAt
+        val clock = FakeClock(scheduled)
+        val changes = FakeTimeChangeSignal()
+        val app = WakeApp(clock = clock, timeChanges = changes)
+        ringing(app)
+        buildActivity(WakeActivity::class.java).setup()
+        composeRule.onNodeWithContentDescription(alarmTime(app, at = scheduled)).assertExists()
+
+        clock.set(scheduled + 3.minutes)
+        changes.emit()
+
+        composeRule.waitUntil(timeoutMillis = APP_WORK_TIMEOUT_MILLIS) {
+            composeRule.onAllNodesWithContentDescription(alarmTime(app, at = scheduled + 3.minutes)).fetchSemanticsNodes().isNotEmpty()
+        }
+        composeRule.onNodeWithContentDescription(alarmTime(app, at = scheduled)).assertDoesNotExist()
+    }
+
+    /** Review fix 6: with no signal at all, the clock still turns over at the minute boundary. */
+    @Test
+    fun `the Ringing clock turns over at the minute without a signal`() {
+        val clock = FakeClock(Instant.parse("2027-03-03T06:09:40Z"))
+        val app = WakeApp(clock = clock, timeChanges = FakeTimeChangeSignal())
+        ringing(app)
+        buildActivity(WakeActivity::class.java).setup()
+        composeRule.onNodeWithContentDescription(alarmTime(app, at = Instant.parse("2027-03-03T06:09:40Z"))).assertExists()
+
+        clock.set(Instant.parse("2027-03-03T06:10:00Z"))
+        ShadowSystemClock.advanceBy(java.time.Duration.ofSeconds(20))
+        composeRule.mainClock.advanceTimeBy(20_000)
+        composeRule.waitForIdle()
+
+        composeRule.waitUntil(timeoutMillis = APP_WORK_TIMEOUT_MILLIS) {
+            val shown = alarmTime(app, at = Instant.parse("2027-03-03T06:10:00Z"))
+            composeRule.onAllNodesWithContentDescription(shown).fetchSemanticsNodes().isNotEmpty()
+        }
     }
 
     @Test

@@ -2,7 +2,7 @@
 title: 'Epic 4 device follow-ups: the re-ring clock and the reuse sheet after a slow approval'
 type: 'bugfix'
 created: '2026-10-19'
-status: 'in-review'
+status: 'done'
 baseline_revision: '620fb48d'
 context:
   - '{project-root}/_bmad-output/implementation-artifacts/spec-1-15-ringing-screen-over-the-lock-screen-with-i-m-up.md'
@@ -63,3 +63,19 @@ deferred:
 - `:composeApp:testAndroidHostTest --tests "com.yawnandpawn.app.ui.wake.*"` -- expected: pass
 - `:androidApp:recordRoborazziDebug` for `SnoozedScreenshotTest`, then `:androidApp:testDebugUnitTest` for the wake screenshot classes and `WakeActivityTest`, `TalkBackF5FlowTest`, `DirectBootNoteTest`, `TestAlarmFlowTest` -- expected: pass
 - `spotlessCheck detekt` -- expected: pass
+
+## Auto Run Result
+
+Status: done (fast mode; not pushed). Rebased onto main `a7246758`.
+
+**Verification** (`--no-daemon --max-workers=2`, JDK 17), all passing:
+- Coordinator: `PurchaseCoordinatorTest` 28, `PurchaseCoordinatorSequenceTest` 13, `PurchaseCoordinatorReviewTest` 19.
+- Wake mapping: `com.yawnandpawn.app.ui.wake.*`, including `RingingMappingTest` 13 and `WakeClockTicksTest` 2.
+- Wake screen: `WakeActivityTest` 20, `PaymentOutcomeMessagesTest` 8, `TestAlarmFlowTest` 14, `DirectBootNoteTest` 3, `TalkBackF5FlowTest` 1, `SnoozedScreenTest` 11.
+- Screenshots: `RingingScreenshotTest` 20, `SnoozedScreenshotTest` 12, `DirectBootNoteScreenshotTest` 4, `SnoozeVariantsTest` 36, `RingingSemanticsTest` 15. Four re-ring baselines were re-recorded on purpose: the 6:15 alarm now shows 6:24.
+- Before the rebase, the whole `com.yawnandpawn.app.android.wake.*` package passed.
+- `spotlessCheck detekt`.
+
+**Residual risks:**
+- The 1 s refresh and Play's list timing are tested on the host only; the Story 5.13 device check covers them.
+- `PaymentOutcomeMessagesTest` failed once under load before the rebase, then passed on both re-runs. It looks like a timing flake unrelated to this change.

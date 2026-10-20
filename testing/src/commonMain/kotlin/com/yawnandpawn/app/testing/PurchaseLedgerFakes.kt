@@ -112,6 +112,13 @@ class FakePurchaseRecordRepository(
 
     override suspend fun all(): Outcome<List<PurchaseRecord>, DomainError> =
         failure?.let { Outcome.Failure(it) } ?: Outcome.Success(records)
+
+    /** Keeps only the records still owed a consume, and those of [keep] (Story 5.9); returns how many stay. */
+    override suspend fun deleteNotOwed(keep: Set<String>): Outcome<Int, DomainError> {
+        failure?.let { return Outcome.Failure(it) }
+        rows.update { byHash -> byHash.filterValues { it.reconcilerStatus == RecordStatus.Granted || it.tokenHash in keep } }
+        return Outcome.Success(rows.value.size)
+    }
 }
 
 /**

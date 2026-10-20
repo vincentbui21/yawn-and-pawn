@@ -20,6 +20,8 @@ import com.yawnandpawn.app.core.reliability.NotificationPermission
 import com.yawnandpawn.app.core.reliability.ReliabilityProbe
 import com.yawnandpawn.app.core.reliability.ReliabilitySettings
 import com.yawnandpawn.app.core.session.ScheduleTestAlarm
+import com.yawnandpawn.app.core.session.SessionLockGuard
+import com.yawnandpawn.app.core.session.SessionState
 import com.yawnandpawn.app.core.sound.SoundLibrary
 import com.yawnandpawn.app.core.sound.SoundPreview
 import com.yawnandpawn.app.core.stats.CheckRegistrations
@@ -29,6 +31,7 @@ import com.yawnandpawn.app.core.time.MonotonicClock
 import com.yawnandpawn.app.core.time.TimeChangeSignal
 import com.yawnandpawn.app.core.time.TimeZoneProvider
 import com.yawnandpawn.app.testing.AlarmUseCasesFixture
+import com.yawnandpawn.app.testing.aDeleteAllData
 import com.yawnandpawn.app.testing.FakeAccessibilityState
 import com.yawnandpawn.app.testing.FakeAlarmRepository
 import com.yawnandpawn.app.testing.FakeAlarmScheduler
@@ -69,6 +72,7 @@ import com.yawnandpawn.app.ui.you.YouUiState
 import com.yawnandpawn.app.ui.you.YouViewModel
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.test.UnconfinedTestDispatcher
 import kotlinx.coroutines.test.resetMain
 import kotlinx.coroutines.test.setMain
@@ -185,6 +189,9 @@ class UiModuleTest {
                 single<MonotonicClock> { FakeMonotonicClock() }
                 single<Clock> { FakeClock() }
                 single<PriceCatalog> { FakePriceCatalog() }
+                // "Delete all data" (Story 5.9): the You tab's use case and the session guard it follows.
+                single { SessionLockGuard(MutableStateFlow<SessionState>(SessionState.Idle), MutableStateFlow(true), MutableStateFlow(false)) }
+                single { aDeleteAllData(get()) }
                 single<Logger> { FakeLogger() }
                 single<ExternalLinks> {
                     object : ExternalLinks {

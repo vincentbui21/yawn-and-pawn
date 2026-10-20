@@ -126,8 +126,8 @@ interface GrantLedgerStore {
 }
 
 /**
- * The purchase records in `app.db`. `PurchaseLedger` is the only writer ([putRecord]; a scan test in `:data` enforces
- * it); Purchase history (Story 4.16) and "Problem with a charge?" (Story 4.17) read them.
+ * The purchase records in `app.db`. `PurchaseLedger` is the only writer ([putRecord] and [deleteNotOwed]; a scan test in
+ * `:data` enforces it); Purchase history (Story 4.16) and "Problem with a charge?" (Story 4.17) read them.
  */
 interface PurchaseRecordRepository {
     /** The record of [tokenHash], or null when there is none. */
@@ -138,6 +138,15 @@ interface PurchaseRecordRepository {
 
     /** Every record, newest purchase first. */
     suspend fun all(): Outcome<List<PurchaseRecord>, DomainError>
+
+    /**
+     * "Delete all data" (Story 5.9): deletes every record that is not owed a consume (consumed, stranded, and reused once
+     * consumed), and keeps the ones still owed one ([PurchaseRecord.reconcilerStatus] granted) and any stored row that
+     * is not a readable record (its status is unknown, so it may be owed). The records of [keep] (the token hashes a
+     * pending grant ledger row still settles, Story 5.9 review) stay whatever their status. Returns how many rows stay.
+     * Safe to repeat.
+     */
+    suspend fun deleteNotOwed(keep: Set<String>): Outcome<Int, DomainError>
 
     /**
      * Every readable record, newest purchase first, with the count of stored rows that could not be read, again after

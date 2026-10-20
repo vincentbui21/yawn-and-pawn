@@ -265,6 +265,25 @@ class TabNavigationTest {
     }
 
     @Test
+    fun `after Delete all data only the empty Home is left, and a locked stack stays locked (Story 5_9)`() {
+        val fromYou = stack(Route.Alarms, Route.You)
+        assertEquals(true, fromYou.resetToHome())
+        assertEquals(listOf<NavKey>(Route.Alarms), fromYou)
+
+        val deeper = stack(Route.Alarms, Route.You, Route.PurchaseHistory, Route.ProblemWithCharge)
+        assertEquals(true, deeper.resetToHome())
+        assertEquals(listOf<NavKey>(Route.Alarms), deeper)
+
+        val home = stack(Route.Alarms)
+        assertEquals(false, home.resetToHome())
+        assertEquals(listOf<NavKey>(Route.Alarms), home)
+
+        val locked = stack(Route.SessionInProgress)
+        assertEquals(false, locked.resetToHome())
+        assertEquals(listOf<NavKey>(Route.SessionInProgress), locked)
+    }
+
+    @Test
     fun `production Progress is this month's empty calendar with no other months`() {
         val state = emptyProgress(LocalDate(2027, 3, 17))
 

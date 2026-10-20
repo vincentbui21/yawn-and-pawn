@@ -118,6 +118,19 @@ class AndroidLogAndTimeSignalTest {
     }
 
     @Test
+    fun `the logger writes one line at info level when all data was deleted (Story 5_9)`() {
+        ShadowLog.clear()
+        val logger = AndroidLogger()
+
+        logger.log(LogEvent.AllDataDeleted(alarms = 2, keptRecords = 1, at = Instant.parse("2027-03-03T06:00:00Z")))
+
+        val expected = "AllDataDeleted alarms=2 keptRecords=1 at=2027-03-03T06:00:00Z"
+        val logs = ownLogs(expected)
+        assertEquals(listOf(expected), logs.map { it.msg })
+        assertEquals(listOf(Log.INFO), logs.map { it.type })
+    }
+
+    @Test
     fun `the time signal emits on a minute tick, a time set and a zone change, only while collected`() {
         val signal = AndroidTimeChangeSignal(app)
         val scope = CoroutineScope(Dispatchers.Unconfined)

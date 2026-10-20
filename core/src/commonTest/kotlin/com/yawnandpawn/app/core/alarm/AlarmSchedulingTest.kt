@@ -216,6 +216,21 @@ class AlarmSchedulingTest {
         }
 
     @Test
+    fun `while a Delete all data is pending rescheduleAll arms nothing, and once it is not it arms again (Story 5_9 review)`() =
+        runTest {
+            val early = stored(alarm("early", 1000, LocalTime(6, 30)))
+            val pending = MutableStateFlow(true)
+            val guarded = AlarmScheduling(repository, scheduler, clock, zone, lock, logger, deletionPending = pending)
+
+            assertEquals(Outcome.Success(Unit), guarded.rescheduleAll())
+            assertEquals(emptyList<Call>(), scheduler.calls, "a background start never re-arms half-deleted alarms")
+
+            pending.value = false
+            assertEquals(Outcome.Success(Unit), guarded.rescheduleAll())
+            assertEquals(listOf<Call>(schedule(early, berlin("2027-03-03T06:30"))), scheduler.calls)
+        }
+
+    @Test
     fun `rescheduleAll twice makes the same calls, arming every enabled alarm and cancelling every disabled code`() =
         runTest {
             val early = stored(alarm("early", 1000, LocalTime(6, 30)))

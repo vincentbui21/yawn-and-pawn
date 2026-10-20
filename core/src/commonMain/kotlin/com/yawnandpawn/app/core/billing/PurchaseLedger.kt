@@ -41,6 +41,19 @@ data class PurchaseLookup(
 )
 
 /**
+ * What "Delete all data" kept of the payments (Story 5.9): [records] purchase records still owed a consume (or not
+ * readable, or settled by a pending ledger row), and [pendingGrants] grant ledger rows not settled yet, for the sessions
+ * [pendingSessions] (whose purchase intents stay too). [owed] is true when either is left.
+ */
+data class KeptPayments(
+    val records: Int,
+    val pendingGrants: Int,
+    val pendingSessions: Set<String> = emptySet(),
+) {
+    val owed: Boolean get() = records > 0 || pendingGrants > 0
+}
+
+/**
  * The only writer of purchase records and the only caller of `Billing.consume` (AD-7, Story 4.10; scan tests in
  * `:data`). It settles every paid snooze in this order, each step safe to repeat after a crash:
  * 1. the Snoozed state and the grant ledger row are already committed together (`SessionEngine`);
@@ -109,6 +122,37 @@ class PurchaseLedger(
     suspend fun purgeSettled(): Outcome<Int, DomainError> =
         mutex.withLock {
             ledger.purgeSettledBefore(clock.now() - SETTLED_RETENTION).also { if (it is Outcome.Failure) log(WRITE_LEDGER, it.error) }
+        }
+
+    /**
+     * "Delete all data" (Story 5.9): deletes every purchase record not owed a consume, and keeps the grant ledger
+     * whole (pending rows settle through the consume retry; settled markers keep a token from granting twice and are
+     * purged after [SETTLED_RETENTION]). The record of a pending row stays whatever its status (a stranded record whose
+     * reuse is not settled yet, a consumed one whose settle failed), so its later settle never rebuilds it from the USD
+     * tier (review item 4). Returns what stays owed. Safe to repeat; a failure is logged.
+     */
+    suspend fun deleteSettledRecords(): Outcome<KeptPayments, DomainError> =
+        mutex.withLock {
+            val pending =
+                when (val rows = ledger.all()) {
+                    is Outcome.Failure -> return@withLock rows.also { log(LOAD_LEDGER, it.error) }
+                    is Outcome.Success -> rows.value
+                }
+            when (val deleted = records.deleteNotOwed(keep = pending.map { it.token.hash() }.toSet())) {
+                is Outcome.Failure -> {
+                    deleted.also { log(DELETE_RECORDS, it.error) }
+                }
+
+                is Outcome.Success -> {
+                    Outcome.Success(
+                        KeptPayments(
+                            records = deleted.value,
+                            pendingGrants = pending.size,
+                            pendingSessions = pending.map { it.sessionId }.toSet(),
+                        ),
+                    )
+                }
+            }
         }
 
     /**
@@ -509,6 +553,7 @@ class PurchaseLedger(
         const val WRITE_LEDGER = "write grant ledger"
         const val LOAD_RECORD = "read purchase record"
         const val WRITE_RECORD = "write purchase record"
+        const val DELETE_RECORDS = "delete settled purchase records"
         const val PRICE_RECORD = "price purchase record"
         const val ENQUEUE_RETRY = "enqueue consume retry"
         const val UNSETTLED = "settle granted payment"

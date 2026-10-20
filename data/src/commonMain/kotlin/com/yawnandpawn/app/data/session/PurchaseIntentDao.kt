@@ -4,8 +4,9 @@ import androidx.room3.Dao
 import androidx.room3.Query
 
 /**
- * Reads and purges `purchase_intent` (Story 4.8). Only `RoomPurchaseIntentStore` uses it. Rows are inserted only by
- * [ActiveSessionDao.commit], in the transaction of the session state.
+ * Reads and purges `purchase_intent` (Story 4.8). Only `RoomPurchaseIntentStore` uses it, and "Delete all data" deletes
+ * every row a pending grant ledger row does not need ([deleteAllExcept], Story 5.9, only `AndroidLocalDataEraser`). Rows
+ * are inserted only by [ActiveSessionDao.commit], in the transaction of the session state.
  */
 @Dao
 interface PurchaseIntentDao {
@@ -27,4 +28,11 @@ interface PurchaseIntentDao {
 
     @Query("SELECT COUNT(*) FROM purchase_intent")
     suspend fun count(): Int
+
+    /**
+     * "Delete all data" (Story 5.9): every intent except those of [keepSessions], the sessions a pending grant ledger row
+     * still settles (their intents price its record). An empty set deletes every intent.
+     */
+    @Query("DELETE FROM purchase_intent WHERE session_id NOT IN (:keepSessions)")
+    suspend fun deleteAllExcept(keepSessions: List<String>): Int
 }

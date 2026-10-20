@@ -8,9 +8,9 @@ import kotlin.test.assertTrue
 /**
  * AD-18: session history has one writer. Scans the shipped sources (main source sets, plus the debug build's) of
  * `:core`, `:data`, `:androidApp` and `:composeApp`: only `RoomSessionHistoryRepository` may use the session history
- * DAO's write methods, and only `SessionRecorder` may call `SessionHistoryRepository.upsert` or `recordMerge` (the merge
- * log, Story 2.9). Files are exempt by their
- * path from the repository root, never by bare file name. A text scan: an upsert counts when its receiver is a name
+ * DAO's write methods (also the deletes of "Delete all data", Story 5.9), and only `SessionRecorder` may call
+ * `SessionHistoryRepository.upsert` or `recordMerge` (the merge log, Story 2.9). Files are exempt by their path from the
+ * repository root, never by bare file name. A text scan: an upsert counts when its receiver is a name
  * declared as (or fetched as) a `SessionHistoryRepository` in that file, or it is a `SessionHistoryRepository::upsert`
  * reference.
  */
@@ -37,7 +37,8 @@ class SessionHistoryWriterScanTest {
     @Test
     fun `the scan sees every module and the real writers, so it cannot pass by finding nothing`() {
         MODULES.forEach { module -> assertTrue(sources.any { it.path.startsWith("$module/src/") }, "no sources scanned in $module") }
-        assertEquals(setOf("upsertRow", "insertMerge"), daoWrites)
+        // "Delete all data" (Story 5.9) adds the two deletes, used only by the Room repository (in one transaction).
+        assertEquals(setOf("upsertRow", "insertMerge", "deleteAllRows", "deleteAllMerges"), daoWrites)
         // Without their exemptions, the two real writers are exactly what the scan reports.
         assertEquals(
             listOf(

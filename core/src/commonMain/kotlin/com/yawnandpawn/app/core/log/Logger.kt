@@ -27,6 +27,17 @@ sealed interface LogEvent {
     ) : LogEvent
 
     /**
+     * "Delete all data" finished at [at] (Story 5.9): [alarms] stored alarms were deleted with everything else, and
+     * [keptRecords] purchase records stayed because a consume is still owed for them (or they could not be read). One
+     * event for the whole deletion: no `AlarmDeleted` per alarm and no commitment event.
+     */
+    data class AllDataDeleted(
+        val alarms: Int,
+        val keptRecords: Int,
+        val at: Instant,
+    ) : LogEvent
+
+    /**
      * An expected failure the user can only retry: [operation] says what failed ("load alarms"), [cause] is diagnostic
      * text for the log only and is never shown to users.
      */

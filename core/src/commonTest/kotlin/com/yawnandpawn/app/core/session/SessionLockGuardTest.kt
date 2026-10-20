@@ -63,6 +63,24 @@ class SessionLockGuardTest {
         }
 
     @Test
+    fun `while a Delete all data is pending only the deletion writes, and it is still refused during a ring (Story 5_9)`() =
+        runTest {
+            val pending = MutableStateFlow(true)
+            val guard = SessionLockGuard(state, restored, emergency, deletionPending = pending)
+
+            assertEquals(Outcome.Failure(DomainError.SessionActive), guard.whenIdle { Outcome.Success(1) })
+            assertEquals(Outcome.Success(2), guard.whenIdleForDeletion { Outcome.Success(2) })
+            assertFalse(guard.isLocked, "a pending deletion does not lock the app for a session")
+
+            state.value = SessionState.Ringing(ringSession())
+            assertEquals(Outcome.Failure(DomainError.SessionActive), guard.whenIdleForDeletion { Outcome.Success(3) })
+
+            state.value = SessionState.Idle
+            pending.value = false
+            assertEquals(Outcome.Success(4), guard.whenIdle { Outcome.Success(4) })
+        }
+
+    @Test
     fun `while the emergency ring plays the guard refuses`() =
         runTest {
             emergency.value = true

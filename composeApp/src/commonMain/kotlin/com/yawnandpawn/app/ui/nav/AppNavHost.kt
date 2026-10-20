@@ -60,6 +60,11 @@ import org.koin.compose.koinInject
  * ViewModel, draft and preview with it), and Home returns once unlocked. Until the stored session is restored (and no
  * emergency ring plays) the app shows a neutral empty screen instead, so a cold start never flashes "Alarm in
  * progress"; the guard still refuses writes then.
+ *
+ * A "Delete all data" left unfinished (Story 5.9 and its review, `PendingDeletion.pending`: a crash, or a failed run)
+ * shows the same neutral screen while `ResumePendingDeletion` finishes it, so nothing is created on top of it; then the
+ * empty Home. When the resume gives up the app goes on to Home (the next start tries again). A ring or snooze is never
+ * held up: the session lock shows first.
  */
 @Composable
 fun AppNavHost(modifier: Modifier = Modifier) {
@@ -67,6 +72,7 @@ fun AppNavHost(modifier: Modifier = Modifier) {
     val lock = sessionLock()
     if (lock == SessionLock.Restoring) return RestoringScreen(modifier)
     val locked = lock == SessionLock.Locked
+    if (!locked && pendingDeletion(backStack)) return RestoringScreen(modifier)
     SideEffect { backStack.applySessionLock(locked) }
     // What is shown follows the lock in the same composition, so a locked app never composes the route it held (Home
     // or the editor would start their loads and previews); the SideEffect then makes the real stack match.

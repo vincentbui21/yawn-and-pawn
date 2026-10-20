@@ -12,3 +12,11 @@ package com.yawnandpawn.app.core.crash
 fun interface CrashReporter {
     fun report(throwable: Throwable)
 }
+
+/**
+ * Port for dropping the crash reports not sent yet ("Delete all data", Story 5.9): Crashlytics' `deleteUnsentReports()`
+ * once it has started, nothing otherwise. Never throws; a failure is only logged. `FakeUnsentCrashReports` in tests.
+ */
+fun interface UnsentCrashReports {
+    fun deleteUnsent()
+}

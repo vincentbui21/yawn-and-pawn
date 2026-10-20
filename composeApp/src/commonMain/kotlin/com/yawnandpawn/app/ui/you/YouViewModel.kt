@@ -2,6 +2,9 @@ package com.yawnandpawn.app.ui.you
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.yawnandpawn.app.core.reset.DeleteAllData
+import com.yawnandpawn.app.core.session.SessionLockGuard
+import com.yawnandpawn.app.core.session.SessionState
 import com.yawnandpawn.app.core.time.MonotonicClock
 import com.yawnandpawn.app.ui.links.AppLinks
 import com.yawnandpawn.app.ui.links.ExternalLinks
@@ -10,6 +13,7 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 
@@ -24,16 +28,38 @@ import kotlinx.coroutines.launch
  *
  * Links open only on the user's tap. A repeat of the link (or the email) that just opened, within [REPEAT_MILLIS] on
  * [clock], is a double tap and is ignored, so one tap never opens two browser tasks or two emails. Navigation itself is
- * the route's: this only clears the note when the user moves on. "Delete all data" (Story 5.9) and "About" are not
- * shown in production, so their intents do nothing here.
+ * the route's: this only clears the note when the user moves on. "About" is not shown in production, so its intent does
+ * nothing here.
+ *
+ * "Delete all data" (Story 5.9) opens `dialog-confirm`; "Keep it" (or a dismiss) closes it and deletes nothing; "Delete"
+ * closes it and runs [DeleteAllData] once. The row is enabled only while the deletion could run
+ * ([YouUiState.deleteEnabled]): the session lock open, the session Idle (not Completed or Missed waiting for its history
+ * row) and no deletion running; otherwise the row does nothing and an open dialog closes. The app follows the result,
+ * not this view model: a completed deletion sends it back to the empty Home (`PendingDeletion.completed`), and a failed
+ * one holds it on the restoring screen while it is resumed, so leaving the tab never loses either.
  */
 class YouViewModel(
     private val links: ExternalLinks,
     private val appLinks: AppLinks,
     private val clock: MonotonicClock,
+    private val deleteAllData: DeleteAllData,
+    sessionLock: SessionLockGuard,
 ) : ViewModel() {
     private val mutableState = MutableStateFlow(YouUiState(appVersion = ""))
     val state: StateFlow<YouUiState> = mutableState.asStateFlow()
+
+    private val deleting = MutableStateFlow(false)
+    private var deletion: Job? = null
+
+    init {
+        viewModelScope.launch {
+            combine(sessionLock.locked, sessionLock.state, deleting) { locked, session, running ->
+                !locked && session == SessionState.Idle && !running
+            }.collect { enabled ->
+                mutableState.update { it.copy(deleteEnabled = enabled, showDeleteDialog = it.showDeleteDialog && enabled) }
+            }
+        }
+    }
 
     private var snackbarJob: Job? = null
 
@@ -48,8 +74,26 @@ class YouViewModel(
             YouIntent.EmailSupportClicked -> emailSupport()
             YouIntent.CopyAddressClicked -> if (links.copyText(appLinks.supportEmail)) show(YouSnackbar.AddressCopied)
             YouIntent.PurchaseHistoryClicked, YouIntent.PaymentsClicked -> mutableState.update { it.copy(noEmailAppAddress = null) }
-            YouIntent.DeleteAllClicked, YouIntent.DeleteConfirmed, YouIntent.DeleteCancelled, YouIntent.AboutClicked -> Unit
+            YouIntent.DeleteAllClicked -> mutableState.update { it.copy(showDeleteDialog = it.deleteEnabled) }
+            YouIntent.DeleteCancelled -> mutableState.update { it.copy(showDeleteDialog = false) }
+            YouIntent.DeleteConfirmed -> confirmDelete()
+            YouIntent.AboutClicked -> Unit
         }
+    }
+
+    private fun confirmDelete() {
+        val confirmed = state.value.showDeleteDialog && state.value.deleteEnabled
+        mutableState.update { it.copy(showDeleteDialog = false) }
+        if (!confirmed || deletion?.isActive == true) return
+        deleting.value = true
+        deletion =
+            viewModelScope.launch {
+                try {
+                    deleteAllData()
+                } finally {
+                    deleting.value = false
+                }
+            }
     }
 
     private fun open(url: String) {

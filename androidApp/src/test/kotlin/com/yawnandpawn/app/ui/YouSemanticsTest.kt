@@ -82,7 +82,7 @@ class YouSemanticsTest {
     }
 
     @Test
-    fun `the title and card titles are headings, the rows read in card order, never Delete all data or About`() =
+    fun `the title and card titles are headings, the rows read in card order, Delete all data included, never About`() =
         you {
             listOf("You", "Money", "Privacy and your data", "Help").forEach { title ->
                 composeRule.onNode(hasText(title) and isHeading()).assertExists()
@@ -95,6 +95,7 @@ class YouSemanticsTest {
                     "How payments & refunds work",
                     "Privacy and your data",
                     "Privacy policy",
+                    "Delete all data",
                     "Help",
                     "Support",
                     "Email support",
@@ -112,6 +113,7 @@ class YouSemanticsTest {
                     "Purchase history" to YouIntent.PurchaseHistoryClicked,
                     "How payments & refunds work" to YouIntent.PaymentsClicked,
                     "Privacy policy" to YouIntent.PrivacyClicked,
+                    "Delete all data" to YouIntent.DeleteAllClicked,
                     "Support" to YouIntent.SupportClicked,
                     "Email support" to YouIntent.EmailSupportClicked,
                     "Terms" to YouIntent.TermsClicked,

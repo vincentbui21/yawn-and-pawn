@@ -316,8 +316,10 @@ class RestoreEntryPointsTest {
         (koin().get<BackgroundWork>() as FakeBackgroundWork).enqueued.filter { it.task == BackgroundTaskKind.ConsumeRetry }
 
     @Test
-    fun `restore is called only from WakeService, MainActivity and WakeActivity - never from the app or a receiver`() {
-        val allowed = setOf("WakeService.kt", "MainActivity.kt", "WakeActivity.kt")
+    fun `restore is called only from WakeService, MainActivity, WakeActivity and an empty-session resume - never a receiver`() {
+        // YawnAndPawnApp.kt restores only for an unfinished "Delete all data" with no session stored (Story 5.9 review):
+        // restoring nothing runs no entry effect and starts no service, so Story 2.1 still holds.
+        val allowed = setOf("WakeService.kt", "MainActivity.kt", "WakeActivity.kt", "YawnAndPawnApp.kt")
         val sources =
             listOf(File("src/main/kotlin"), File("src/debug/kotlin")).flatMap { root ->
                 root.walk().filter { it.extension == "kt" }.toList()
@@ -330,11 +332,15 @@ class RestoreEntryPointsTest {
         val receivers = sources.filter { "BroadcastReceiver()" in it.readText() }
         assertTrue(receivers.size >= 3, "the scan sees the receivers: ${receivers.map { it.name }}")
         assertTrue(receivers.none { RESTORE_CALL.containsMatchIn(it.readText()) })
-        assertTrue(sources.single { it.name == "YawnAndPawnApp.kt" }.readText().let { !RESTORE_CALL.containsMatchIn(it) })
+        val app = sources.single { it.name == "YawnAndPawnApp.kt" }.readText()
+        assertEquals(1, RESTORE_CALL.findAll(app).count(), "the app restores in one place only")
+        assertTrue(ONLY_WITH_NOTHING_STORED.containsMatchIn(app), "the app restores only when no session is stored")
     }
 
     private companion object {
         val RESTORE_CALL = Regex("""\.restore\(\)""")
+        val ONLY_WITH_NOTHING_STORED =
+            Regex("""if \(store\.load\(\)\.valueOrNull\(\)\?\.holdsNoSession\(\) == true\) engine\.restore\(\)""")
 
         // A boot count no Robolectric run reports (a real one is small, a missing one is negative).
         const val OTHER_BOOT = 999_999

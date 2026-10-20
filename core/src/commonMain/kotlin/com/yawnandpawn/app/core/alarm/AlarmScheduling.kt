@@ -8,6 +8,7 @@ import com.yawnandpawn.app.core.log.LogEvent
 import com.yawnandpawn.app.core.log.Logger
 import com.yawnandpawn.app.core.time.Clock
 import com.yawnandpawn.app.core.time.TimeZoneProvider
+import kotlinx.coroutines.flow.StateFlow
 import kotlinx.datetime.TimeZone
 import kotlin.coroutines.cancellation.CancellationException
 import kotlin.time.Instant
@@ -33,6 +34,11 @@ class AlarmScheduling(
     private val logger: Logger,
     /** Promotes the due pending changes first in [rescheduleAll] (Story 4.4); none in tests and the backup fallback. */
     private val promotion: PendingChangePromotion? = null,
+    /**
+     * An unfinished "Delete all data" (`PendingDeletion`, Story 5.9 review): while true, [rescheduleAll] arms nothing, so
+     * a background start (boot, a time change) never re-arms the alarms being deleted. None in tests and the fallback.
+     */
+    private val deletionPending: StateFlow<Boolean>? = null,
 ) {
     /** Arms [alarm] at its next occurrence after now when it is enabled, cancels its code when it is not. */
     fun sync(alarm: Alarm) {
@@ -55,8 +61,12 @@ class AlarmScheduling(
      * `updatedAt`) is already past (the phone was off, or the clock jumped over it) is not moved to the next day:
      * it is stored disabled, its code is cancelled and [LogEvent.OneTimeAlarmPassed] is logged. Powering off is an
      * accepted escape (FR-ONB-5).
+     *
+     * While a "Delete all data" is pending ([deletionPending]) it does nothing and succeeds: the deletion cancels every
+     * code and removes the rows when it resumes.
      */
     suspend fun rescheduleAll(): Outcome<Unit, DomainError> {
+        if (deletionPending?.value == true) return Outcome.Success(Unit)
         promotePending()
         return lock.withLock {
             val alarms = repository.listAll()

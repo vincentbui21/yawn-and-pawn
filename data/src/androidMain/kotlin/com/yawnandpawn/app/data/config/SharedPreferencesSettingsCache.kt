@@ -32,6 +32,16 @@ class SharedPreferencesSettingsCache(
         }
     }
 
+    /**
+     * "Delete all data" (Story 5.9): forgets the last-known settings, written to disk before it returns. False when the
+     * preferences could not be written.
+     */
+    fun clear(): Boolean =
+        preferences
+            .edit()
+            .clear()
+            .commit()
+
     companion object {
         /** `shared_prefs/settings_fallback.xml` in device-protected storage; named in the backup rules (excluded). */
         const val PREFS = "settings_fallback"

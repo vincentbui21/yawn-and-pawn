@@ -4,6 +4,7 @@ import android.content.Context
 import com.google.firebase.FirebaseApp
 import com.google.firebase.crashlytics.FirebaseCrashlytics
 import com.yawnandpawn.app.core.crash.CrashReporter
+import com.yawnandpawn.app.core.crash.UnsentCrashReports
 import com.yawnandpawn.app.core.log.LogEvent
 import com.yawnandpawn.app.core.log.Logger
 
@@ -13,6 +14,12 @@ interface CrashSink {
     val isReady: Boolean
 
     fun recordException(throwable: Throwable)
+
+    /** Drops the reports not sent yet ("Delete all data", Story 5.9). */
+    fun deleteUnsentReports()
+
+    /** Turns Crashlytics' collection off or on (around [deleteUnsentReports]); nothing by default. */
+    fun setCollectionEnabled(enabled: Boolean) = Unit
 }
 
 /** [CrashSink] on the default Firebase app's Crashlytics. */
@@ -23,6 +30,10 @@ class CrashlyticsSink(
         get() = FirebaseApp.getApps(context).isNotEmpty()
 
     override fun recordException(throwable: Throwable) = FirebaseCrashlytics.getInstance().recordException(throwable)
+
+    override fun deleteUnsentReports() = FirebaseCrashlytics.getInstance().deleteUnsentReports()
+
+    override fun setCollectionEnabled(enabled: Boolean) = FirebaseCrashlytics.getInstance().setCrashlyticsCollectionEnabled(enabled)
 }
 
 /**
@@ -70,6 +81,45 @@ class FirebaseCrashReporter(
                 stackTrace = throwable.stackTrace
             }
         }
+    }
+}
+
+/**
+ * The Crashlytics [UnsentCrashReports] ("Delete all data", Story 5.9): once Crashlytics has started, the reports it has
+ * not sent yet are dropped; before that there is nothing to drop. Never throws: a failure is logged with its type only,
+ * and the deletion it follows has already finished.
+ */
+class CrashlyticsUnsentReports(
+    private val sink: CrashSink,
+    private val logger: Logger,
+) : UnsentCrashReports {
+    @Suppress("TooGenericExceptionCaught")
+    override fun deleteUnsent() {
+        try {
+            if (sink.isReady) deleteWithCollectionOff()
+        } catch (e: Exception) {
+            logger.log(LogEvent.OperationFailed(DELETE_UNSENT, e::class.simpleName.orEmpty()))
+        } catch (e: LinkageError) {
+            logger.log(LogEvent.OperationFailed(DELETE_UNSENT, e::class.simpleName.orEmpty()))
+        }
+    }
+
+    /**
+     * `deleteUnsentReports` is documented for opt-in reporting (collection off); with automatic collection on it may do
+     * nothing (Story 5.9 review, item 6, not verified on a device). So collection is turned off around the delete and
+     * back on after it, whatever happens: FirebaseStartup turns it on at every start anyway.
+     */
+    private fun deleteWithCollectionOff() {
+        sink.setCollectionEnabled(false)
+        try {
+            sink.deleteUnsentReports()
+        } finally {
+            sink.setCollectionEnabled(true)
+        }
+    }
+
+    private companion object {
+        const val DELETE_UNSENT = "delete unsent crash reports"
     }
 }
 

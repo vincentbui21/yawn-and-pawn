@@ -51,6 +51,8 @@ class SessionLockGuardScanTest {
                 "RecordCommitmentEvent",
                 // The usage stats choice (Story 5.6).
                 "SetAnalyticsConsent",
+                // "Delete all data" (Story 5.9), in core.reset: found as a use case outside the fully scanned packages.
+                "DeleteAllData",
             ),
             writers - ALLOWED.keys,
         )
@@ -141,6 +143,17 @@ class SessionLockGuardScanTest {
                         suspend operator fun invoke() = requestCodes.next()
                     }
 
+                    class WipeSome(private val eraser: LocalDataEraser, private val activeSession: ActiveSessionStore) {
+                        suspend operator fun invoke() {
+                            eraser.deleteAlarmData()
+                            activeSession.clear()
+                        }
+                    }
+
+                    class WipeGuarded(private val eraser: LocalDataEraser, private val sessionLock: SessionLockGuard) {
+                        suspend operator fun invoke() = sessionLock.whenIdleForDeletion { eraser.clearSettings() }
+                    }
+
                     class Engine(private val store: ActiveSessionStore) {
                         suspend fun step(state: SessionState) = store.commit(state)
                     }
@@ -162,6 +175,8 @@ class SessionLockGuardScanTest {
                 // Engine is not a use case outside the fully scanned packages, so it is not checked.
                 "core/settings/Settings.kt: SetBaseFee writes outside SessionLockGuard.whenIdle",
                 "core/settings/Settings.kt: TakeCode writes outside SessionLockGuard.whenIdle",
+                // Story 5.9 review: the deletion ports and the stored session's clear are writes; whenIdleForDeletion guards.
+                "core/settings/Settings.kt: WipeSome writes outside SessionLockGuard.whenIdle",
             )
     }
 
@@ -441,9 +456,17 @@ class SessionLockGuardScanTest {
                 """\b\w*(?:[Rr]epository|[Ss]tore|[Dd]ao|[Dd]ismissals|[Rr]ecorder)\s*\??\.\s*(?:$VERBS)\w*\s*[({]""" +
                     """|\b\w*[Dd]ataStore\s*\??\.\s*(?:edit|updateData)\b""" +
                     """|\b(?:requestCodes|\w*[Ss]equence)\s*\??\.\s*next\s*\(""" +
-                    """|\b\w*[Ss]chedul(?:ing|er)\s*(?:\??\.|::)\s*(?:sync|cancel|schedule|reschedule)\w*""",
+                    """|\b\w*[Ss]chedul(?:ing|er)\s*(?:\??\.|::)\s*(?:sync|cancel|schedule|reschedule)\w*""" +
+                    // "Delete all data" (Story 5.9 review, item 8): its ports, whatever the receiver, and the stored session's clear.
+                    """|\b\w+\s*\??\.\s*(?:$DELETION_PORTS)\s*\(""" +
+                    """|\b\w*[Ss]ession\s*\??\.\s*clear\s*\(""",
             )
 
-        val GUARD = Regex("""\.whenIdle\s*(?:<[^>]*>)?\s*(?:\(\s*\))?\s*\{""")
+        /** The ports "Delete all data" writes through (Story 5.9). */
+        private const val DELETION_PORTS =
+            "deleteAlarmData|deleteAllHistory|deleteSettledRecords|deletePurchaseIntents|clearSettings|resetInstallId"
+
+        /** `whenIdle`, and the deletion's own `whenIdleForDeletion` (Story 5.9 review), which runs while one is pending. */
+        val GUARD = Regex("""\.whenIdle(?:ForDeletion)?\s*(?:<[^>]*>)?\s*(?:\(\s*\))?\s*\{""")
     }
 }

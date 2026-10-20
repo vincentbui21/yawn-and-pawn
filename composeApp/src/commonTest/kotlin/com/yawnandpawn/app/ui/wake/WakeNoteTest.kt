@@ -49,7 +49,7 @@ class WakeNoteTest {
     fun `a swapped ring shows the Direct Boot note on the Ringing and the Math Check screen, also after the unlock`() {
         val session = swapped()
         assertEquals(WakeNote.DirectBoot, wakeNote(session))
-        assertEquals(WakeNote.DirectBoot, ringingUiState(session, locked, TimeZone.UTC).note)
+        assertEquals(WakeNote.DirectBoot, ringingUiState(session, locked, TimeZone.UTC, session.config.scheduledAt).note)
         assertEquals(WakeNote.DirectBoot, mathCheckUiState(SessionState.Loud(session), locked, now, CheckInput())?.note)
 
         val unlockedInRing = session.copy(beforeFirstUnlock = false)
@@ -61,7 +61,10 @@ class WakeNoteTest {
     fun `a call during a swapped ring shows the phone-call note, and the Direct Boot note comes back after it`() {
         val session = swapped()
         assertEquals(WakeNote.PhoneCall, wakeNote(session.copy(pausedAt = now)))
-        assertEquals(WakeNote.PhoneCall, ringingUiState(session.copy(pausedAt = now), locked, TimeZone.UTC).note)
+        assertEquals(
+            WakeNote.PhoneCall,
+            ringingUiState(session.copy(pausedAt = now), locked, TimeZone.UTC, session.config.scheduledAt).note,
+        )
         assertEquals(WakeNote.DirectBoot, wakeNote(session.copy(pausedAt = null)))
     }
 

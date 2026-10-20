@@ -17,18 +17,20 @@ typealias PriceLookup = (productId: String) -> Money?
 val NoPrices: PriceLookup = { null }
 
 /**
- * The Ringing screen for [session] (Story 1.15): the alarm's time and date in [zone] (`config.scheduledAt`, as in the
- * notification), its label (none when blank), its note ([wakeNote]: a paused call, or the Direct Boot check), and the snooze that
- * [availability] (the `SnoozeAvailabilityPolicy` result) allows, and after a paid snooze the session line
- * ([sessionLine], Story 4.15). Pure.
+ * The Ringing screen for [session] (Story 1.15): the clock, the time and date of [now] in [zone] (the current time, so
+ * a re-ring after a snooze shows the time it rings, not the first ring's; Epic 4 device follow-up 1, owner-approved;
+ * the notification and history keep the alarm's own time), its label (none when blank), its note ([wakeNote]: a paused
+ * call, or the Direct Boot check), and the snooze that [availability] (the `SnoozeAvailabilityPolicy` result) allows,
+ * and after a paid snooze the session line ([sessionLine], Story 4.15). Pure.
  */
 fun ringingUiState(
     session: SessionData,
     availability: SnoozeAvailability,
     zone: TimeZone,
+    now: Instant,
     priceOf: PriceLookup = NoPrices,
 ): RingingUiState {
-    val at = session.config.scheduledAt.toLocalDateTime(zone)
+    val at = now.toLocalDateTime(zone)
     return RingingUiState(
         time = at.time,
         date = at.date,
@@ -65,13 +67,14 @@ fun snoozedUiState(
 
 /**
  * The Ringing screen of an emergency ring (no session could start, NFR-2) or of a wake screen opened just before the
- * session, for the alarm at [alarmAt]: no label, and snooze waits for prices like any Epic 1 ring. Pure.
+ * session: the clock at [now] in [zone] (the current time, as every Ringing screen), no label, and snooze waits for
+ * prices like any Epic 1 ring. Pure.
  */
 fun alarmOnlyRingingUiState(
-    alarmAt: Instant,
+    now: Instant,
     zone: TimeZone,
 ): RingingUiState {
-    val at = alarmAt.toLocalDateTime(zone)
+    val at = now.toLocalDateTime(zone)
     return RingingUiState(time = at.time, date = at.date, snooze = SnoozeOffer.Unavailable(SnoozeUnavailableReason.PricesNotLoaded))
 }
 

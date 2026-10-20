@@ -22,6 +22,7 @@ import kotlinx.datetime.TimeZone
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertNull
+import kotlin.time.Duration.Companion.minutes
 import kotlin.time.Instant
 import com.yawnandpawn.app.core.session.SnoozeOffer as CoreSnoozeOffer
 
@@ -37,7 +38,13 @@ class RingingMappingTest {
     fun `a first ring shows the alarm time and date in the zone, its label and prices not loaded yet`() {
         val session = aSession()
 
-        val state = ringingUiState(session, NoBillingSnoozeAvailability().availability(session), TimeZone.of("Europe/Berlin"))
+        val state =
+            ringingUiState(
+                session,
+                NoBillingSnoozeAvailability().availability(session),
+                TimeZone.of("Europe/Berlin"),
+                session.config.scheduledAt,
+            )
 
         // 2027-03-03T06:00Z is 07:00 in Berlin (CET).
         assertEquals(LocalTime(7, 0), state.time)
@@ -50,11 +57,30 @@ class RingingMappingTest {
         assertNull(state.message)
     }
 
+    /** Epic 4 device follow-up 1 (owner-approved): the clock is the time now, not the session's first ring. */
+    @Test
+    fun `a re-ring after a snooze shows the time it rings, not the alarm's scheduled time`() {
+        val session = aSession().copy(snoozesGranted = 1, ringIndex = 2)
+        val reRing = session.config.scheduledAt + 9.minutes
+
+        val state = ringingUiState(session, unavailable(UnavailableReason.CatalogueNotLoaded), utc, reRing)
+
+        // The fixture's alarm is 06:00 UTC; the re-ring 9 minutes later reads 06:09.
+        assertEquals(LocalTime(6, 9), state.time)
+        assertEquals(LocalDate(2027, 3, 3), state.date)
+    }
+
     @Test
     fun `the date follows the zone across midnight`() {
         val session = aSession(config = aSessionConfig(scheduledAt = Instant.parse("2027-03-03T23:30:00Z")))
 
-        val state = ringingUiState(session, unavailable(UnavailableReason.CatalogueNotLoaded), TimeZone.of("Asia/Tokyo"))
+        val state =
+            ringingUiState(
+                session,
+                unavailable(UnavailableReason.CatalogueNotLoaded),
+                TimeZone.of("Asia/Tokyo"),
+                session.config.scheduledAt,
+            )
 
         assertEquals(LocalTime(8, 30), state.time)
         assertEquals(LocalDate(2027, 3, 4), state.date)
@@ -65,7 +91,10 @@ class RingingMappingTest {
         listOf(null, "", "   ").forEach { label ->
             val session = aSession(config = aSessionConfig(label = label))
 
-            assertNull(ringingUiState(session, unavailable(UnavailableReason.CatalogueNotLoaded), utc).label, "label '$label'")
+            assertNull(
+                ringingUiState(session, unavailable(UnavailableReason.CatalogueNotLoaded), utc, session.config.scheduledAt).label,
+                "label '$label'",
+            )
         }
     }
 
@@ -73,7 +102,10 @@ class RingingMappingTest {
     fun `a test session reads Test no charge`() {
         val session = aSession(config = aSessionConfig(testMode = true))
 
-        assertEquals(SnoozeOffer.TestMode, ringingUiState(session, NoBillingSnoozeAvailability().availability(session), utc).snooze)
+        assertEquals(
+            SnoozeOffer.TestMode,
+            ringingUiState(session, NoBillingSnoozeAvailability().availability(session), utc, session.config.scheduledAt).snooze,
+        )
     }
 
     @Test
@@ -133,7 +165,10 @@ class RingingMappingTest {
     fun `a call pausing the ring shows the phone call note`() {
         val paused = aSession().copy(pausedAt = TimeSnapshot(0, 0, 1))
 
-        assertEquals(WakeNote.PhoneCall, ringingUiState(paused, unavailable(UnavailableReason.CatalogueNotLoaded), utc).note)
+        assertEquals(
+            WakeNote.PhoneCall,
+            ringingUiState(paused, unavailable(UnavailableReason.CatalogueNotLoaded), utc, paused.config.scheduledAt).note,
+        )
     }
 
     @Test

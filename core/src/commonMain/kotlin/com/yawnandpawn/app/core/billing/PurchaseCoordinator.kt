@@ -111,6 +111,12 @@ class PurchaseCoordinator(
 
     private val pendingListed = MutableStateFlow<Set<String>>(emptySet())
 
+    /**
+     * Products an update recorded stranded since the last Pay of them (Epic 4 device follow-up 2): Play's list may not
+     * show them yet, so the next Pay of one asks Play again before it launches.
+     */
+    private val strandedByUpdate = MutableStateFlow<Set<String>>(emptySet())
+
     /** The stranded payment offered for this snooze, if any (Story 4.13's "already paid" sheet). */
     val reuseOffer: StateFlow<ReuseOffer?> = offered.asStateFlow()
 
@@ -224,7 +230,9 @@ class PurchaseCoordinator(
      * 2. nothing happens when the session no longer pays this intent;
      * 3. the grant ledger is settled, so a granted token Play still owns is consumed first;
      * 4. the owned purchases are reconciled with `PreLaunch`: a grant, a reuse offer or a pending payment of this product
-     *    for this session ends it without opening Play;
+     *    for this session ends it without opening Play; when the list may lag a payment of this product (one it still
+     *    lists that did not stop the launch, or one stranded before the query that it no longer lists as purchased), it is
+     *    asked once more after [PRE_LAUNCH_REFRESH] (Epic 4 device follow-up 2);
      * 5. otherwise Play opens with the install id and the session id.
      * Anything that throws on the way ends the payment with "No charge." (the sheet never opened).
      */
@@ -270,9 +278,30 @@ class PurchaseCoordinator(
     ) {
         // A granted payment Play still owns blocks buying the same product again: consume it first (Story 4.10's path).
         ledger.settleAll()
-        val found = mutex.withLock { reconcileOwned(ReconcileContext.PreLaunch(intent.productId), intent, installId) }
+        val strandedBefore = stranded.value + strandedByUpdate.value
+        var found = mutex.withLock { reconcileOwned(ReconcileContext.PreLaunch(intent.productId), intent, installId) }
+        // Epic 4 device follow-up 2: right after a slow payment is approved, Play's list may still show it pending, or not
+        // yet at all while its update already said it is stranded. Launching then gets Play's own "You already own this
+        // item." before the reuse sheet, so the owned purchases are asked once more first. Still unresolved, Play opens and
+        // ITEM_ALREADY_OWNED recovers as before.
+        if (!found.stopsLaunch && found.mayBeStale(intent.productId, strandedBefore)) {
+            delay(PRE_LAUNCH_REFRESH)
+            found = mutex.withLock { reconcileOwned(ReconcileContext.PreLaunch(intent.productId), intent, installId) }
+        }
+        // Asked again at most once per update that stranded it: a refunded token never delays every later Pay.
+        strandedByUpdate.update { it - intent.productId }
         if (!found.stopsLaunch) openSheet(InFlight(intent, installId, retried = false))
     }
+
+    /**
+     * Play's list may lag a payment of [productId] that blocks a new purchase of it: it still lists this install's payment
+     * of it as pending (another session's, for example), or the product was stranded before this query and the list does
+     * not show it as purchased.
+     */
+    private fun Reconciled.mayBeStale(
+        productId: String,
+        strandedBefore: Set<String>,
+    ): Boolean = queried && (productId in pendingProducts || (productId in strandedBefore && productId !in purchasedProducts))
 
     /** Opens Play's sheet for [launch] while the session still pays it and no other sheet is open for it. */
     private suspend fun openSheet(launch: InFlight) {
@@ -382,6 +411,7 @@ class PurchaseCoordinator(
             val installId = installId() ?: return
             val pass = Pass(launching = null)
             purchases.forEach { reconcileOne(it, ReconcileContext.Update, pass, installId) }
+            strandedByUpdate.update { it + pass.strandedProducts }
         }
     }
 
@@ -503,11 +533,16 @@ class PurchaseCoordinator(
         val pendingSessions = mutableSetOf<String>()
     }
 
-    /** The outcome of a full query: [queried] false when Play could not be asked. */
+    /**
+     * The outcome of a full query: [queried] false when Play could not be asked. [pendingProducts] are the products Play
+     * lists as pending for this install, [purchasedProducts] those it lists as purchased.
+     */
     private class Reconciled(
         val queried: Boolean,
         val stopsLaunch: Boolean,
         val consumedForRetry: Boolean,
+        val pendingProducts: Set<String> = emptySet(),
+        val purchasedProducts: Set<String> = emptySet(),
     )
 
     /**
@@ -524,7 +559,17 @@ class PurchaseCoordinator(
         owned.forEach { reconcileOne(it, context, pass, installId) }
         stranded.value = pass.strandedProducts.toSet()
         pendingListed.value = pass.pendingSessions.toSet()
-        return Reconciled(queried = true, stopsLaunch = pass.stopsLaunch, consumedForRetry = pass.consumedForRetry)
+        return Reconciled(
+            queried = true,
+            stopsLaunch = pass.stopsLaunch,
+            consumedForRetry = pass.consumedForRetry,
+            pendingProducts =
+                owned
+                    .filter { it.purchaseState == PlayPurchaseState.Pending && (it.accountId == null || it.accountId == installId) }
+                    .mapTo(mutableSetOf()) { it.productId },
+            purchasedProducts =
+                owned.filter { it.purchaseState == PlayPurchaseState.Purchased }.mapTo(mutableSetOf()) { it.productId },
+        )
     }
 
     /** Decides [snapshot] against the ledger, the record and the session now, and carries the decision out. */
@@ -730,5 +775,12 @@ class PurchaseCoordinator(
 
         /** Review 15 (default taken): a sheet open this long whose result never came is cancelled on the next resume. */
         val STALE_SHEET: Duration = 2.minutes
+
+        /**
+         * Epic 4 device follow-up 2 (default taken): the pause before Play's owned purchases are asked again when the
+         * pre-launch list may lag a just-approved payment, so the reuse sheet shows instead of Play's "You already own this
+         * item.".
+         */
+        val PRE_LAUNCH_REFRESH: Duration = 1.seconds
     }
 }

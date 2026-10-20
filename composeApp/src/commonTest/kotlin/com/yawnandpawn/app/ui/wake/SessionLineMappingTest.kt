@@ -27,14 +27,14 @@ class SessionLineMappingTest {
     @Test
     fun `the first ring shows no session line`() {
         assertNull(sessionLine(aSession()))
-        assertNull(ringingUiState(aSession(), available(1), TimeZone.UTC).sessionLine)
+        assertNull(ringingUiState(aSession(), available(1), TimeZone.UTC, aSession().config.scheduledAt).sessionLine)
     }
 
     @Test
     fun `a re-ring shows snooze n of the frozen max with every amount paid`() {
         val session = aSession().copy(snoozesGranted = 2, ringIndex = 3, paid = listOf(usd1, usd2))
 
-        val state = ringingUiState(session, available(3), TimeZone.UTC)
+        val state = ringingUiState(session, available(3), TimeZone.UTC, session.config.scheduledAt)
 
         assertEquals(SessionLine(snoozeNumber = 2, maxSnoozes = 5, paid = listOf(usd1, usd2)), state.sessionLine)
     }
@@ -50,7 +50,13 @@ class SessionLineMappingTest {
     fun `with max snoozes reached the line stays and the button says why`() {
         val session = aSession().copy(snoozesGranted = 5, paid = List(5) { usd1 })
 
-        val state = ringingUiState(session, SnoozeAvailability.Unavailable(UnavailableReason.MaxSnoozesReached), TimeZone.UTC)
+        val state =
+            ringingUiState(
+                session,
+                SnoozeAvailability.Unavailable(UnavailableReason.MaxSnoozesReached),
+                TimeZone.UTC,
+                session.config.scheduledAt,
+            )
 
         assertEquals(SessionLine(5, 5, List(5) { usd1 }), state.sessionLine)
         assertEquals(SnoozeOffer.Unavailable(SnoozeUnavailableReason.MaxSnoozesReached), state.snooze)
@@ -61,7 +67,7 @@ class SessionLineMappingTest {
         val session = aSession().copy(snoozesGranted = 2, ringIndex = 3, paid = listOf(Money.of(2, "EUR")))
 
         assertNull(sessionLine(session))
-        assertNull(ringingUiState(session, available(3), TimeZone.UTC).sessionLine)
+        assertNull(ringingUiState(session, available(3), TimeZone.UTC, session.config.scheduledAt).sessionLine)
     }
 
     @Test

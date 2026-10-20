@@ -241,8 +241,12 @@ internal class FakePlay : Billing {
         return launchResults.removeFirstOrNull() ?: Outcome.Success(LaunchResult.Launched)
     }
 
+    /** Runs at each query with its number (1 for the first), before the list is read: Play's list changing in between. */
+    var onQuery: (Int) -> Unit = {}
+
     override suspend fun queryPurchases(): Outcome<List<PurchaseSnapshot>, DomainError> {
         queries++
+        onQuery(queries)
         queryHold?.await()
         queryFailure?.let { return Outcome.Failure(it) }
         return Outcome.Success(listed.values.toList())

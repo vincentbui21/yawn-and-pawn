@@ -47,6 +47,7 @@ import org.robolectric.annotation.Config
 import org.robolectric.annotation.GraphicsMode
 import kotlin.test.assertTrue
 import kotlin.time.Duration.Companion.hours
+import kotlin.time.Duration.Companion.minutes
 import kotlin.time.Instant
 
 /**
@@ -231,7 +232,11 @@ private object PaidSamples {
     private fun ring(
         session: SessionData,
         env: SnoozeEnv,
-    ): RingingUiState = ringingUiState(session, snoozeAvailability(session, env, UsdFeeLadder, FakeLogger()), utc)
+    ): RingingUiState = ringingUiState(session, snoozeAvailability(session, env, UsdFeeLadder, FakeLogger()), utc, reRingAt(session))
+
+    /** When the re-ring after [session]'s paid snoozes rings: what its clock shows (Epic 4 device follow-up 1). */
+    private fun reRingAt(session: SessionData): Instant =
+        session.config.scheduledAt + (session.snoozesGranted * session.config.snoozeLengthMinutes).minutes
 
     val usdRing: RingingUiState = ring(usdSession, usd)
     val eurRing: RingingUiState = ring(eurSession, eur)

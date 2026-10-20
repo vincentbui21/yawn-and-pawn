@@ -39,7 +39,7 @@ object RingingSamples {
     ): SessionData = aSession(config = aSessionConfig(label = label, scheduledAt = at, testMode = testMode))
 
     private fun epic1(session: SessionData): RingingUiState =
-        ringingUiState(session, NoBillingSnoozeAvailability().availability(session), utc)
+        ringingUiState(session, NoBillingSnoozeAvailability().availability(session), utc, at)
 
     /** A normal Epic 1 first ring: "Prices not loaded yet" (TalkBack "Snooze unavailable, prices not loaded yet"). */
     val firstRing: RingingUiState = epic1(session())
@@ -48,7 +48,7 @@ object RingingSamples {
 
     /** Another unavailable reason (offline), as Epic 4's policy reports it. */
     val snoozeUnavailable: RingingUiState =
-        session().let { ringingUiState(it, SnoozeAvailability.Unavailable(UnavailableReason.Offline), utc) }
+        session().let { ringingUiState(it, SnoozeAvailability.Unavailable(UnavailableReason.Offline), utc, at) }
 
     /** A test alarm: "Test · no charge". */
     val testAlarm: RingingUiState = epic1(session(label = null, testMode = true))
@@ -57,7 +57,7 @@ object RingingSamples {
     private val locked = NoBillingSnoozeAvailability(FakeUserLockState(unlocked = false))
 
     /** Before the first unlock: lock icon, "Unlock your phone to snooze" (TalkBack "Snooze unavailable, Unlock ..."). */
-    val lockedBeforeUnlock: RingingUiState = session().let { ringingUiState(it, locked.availability(it), utc) }
+    val lockedBeforeUnlock: RingingUiState = session().let { ringingUiState(it, locked.availability(it), utc, at) }
 
     /**
      * Story 3.11: a ring before the first unlock whose QR/Barcode check the reducer swapped for Math: the note "Your phone
@@ -75,7 +75,7 @@ object RingingSamples {
         }
 
     /** The Ringing screen of [directBootSession]. */
-    val directBoot: RingingUiState = ringingUiState(directBootSession, locked.availability(directBootSession), utc)
+    val directBoot: RingingUiState = ringingUiState(directBootSession, locked.availability(directBootSession), utc, at)
 
     /** The snooze of [directBootSession] (locked: "Unlock your phone to snooze"). */
     val directBootAvailability: SnoozeAvailability = locked.availability(directBootSession)
@@ -88,17 +88,21 @@ object RingingSamples {
             val lock = FakeUserLockState(unlocked = false)
             val policy = NoBillingSnoozeAvailability(lock)
             lock.unlock()
-            ringingUiState(session.copy(beforeFirstUnlock = true), policy.availability(session), utc)
+            ringingUiState(session.copy(beforeFirstUnlock = true), policy.availability(session), utc, at)
         }
 
     /** Story 2.4: after the unlock with a policy that offers a snooze (fake, Epic 4's catalogue): "Snooze · {price}". */
     val afterUnlockSnooze: RingingUiState =
         session().copy(beforeFirstUnlock = true).let { session ->
-            ringingUiState(session, UsdFeeLadder.nextAvailability(session, FakeLogger()), utc) { Money.of(1, "USD") }
+            ringingUiState(session, UsdFeeLadder.nextAvailability(session, FakeLogger()), utc, at) { Money.of(1, "USD") }
         }
 
     /** A test alarm before the first unlock still says "Test · no charge". */
-    val testAlarmLocked: RingingUiState = session(label = null, testMode = true).let { ringingUiState(it, locked.availability(it), utc) }
+    val testAlarmLocked: RingingUiState =
+        session(
+            label = null,
+            testMode = true,
+        ).let { ringingUiState(it, locked.availability(it), utc, at) }
 
     /** Story 2.7: the ring paused for a phone call, with the note "Paused for your call. Rings again when it ends.". */
     val phoneCall: RingingUiState =
@@ -107,6 +111,6 @@ object RingingSamples {
     /** The enabled "Snooze · {price}" variant, preview only until billing (Epic 4). */
     val enabledSnooze: RingingUiState =
         session().let { session ->
-            ringingUiState(session, UsdFeeLadder.nextAvailability(session, FakeLogger()), utc) { Money.of(1, "USD") }
+            ringingUiState(session, UsdFeeLadder.nextAvailability(session, FakeLogger()), utc, at) { Money.of(1, "USD") }
         }
 }

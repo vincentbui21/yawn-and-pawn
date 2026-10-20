@@ -354,6 +354,85 @@ class PurchaseCoordinatorTest {
             assertEquals(1, w.play.launches.size, "never launched again")
         }
 
+    /**
+     * Epic 4 device follow-up 2 (Story 4.18 item 8): a slow payment of yesterday is approved just before the next Pay, but
+     * Play's list still shows it pending. Launching would get Play's own "You already own this item." first; the list is
+     * asked again after [PurchaseCoordinator.PRE_LAUNCH_REFRESH] and the reuse sheet shows, with Play never opened.
+     */
+    @Test
+    fun `a payment approved after the pre-launch query shows the reuse sheet, never Play's already-owned dialog`() =
+        runTest {
+            val w = CoordinatorWorld(this)
+            w.ring()
+            w.play.own(purchase(profileId = "yesterday", pending = true))
+            w.play.onQuery = { n -> if (n == 2) w.play.own(purchase(profileId = "yesterday")) }
+
+            w.pay()
+            assertEquals(emptyList(), w.play.launches, "Play does not open on a list that may lag")
+            assertEquals(1, w.play.queries)
+
+            w.advance(PurchaseCoordinator.PRE_LAUNCH_REFRESH)
+
+            assertEquals(listOf<SessionEffect>(SessionEffect.ShowReuseSheet(PRODUCT_1)), w.outcomes)
+            assertEquals(emptyList(), w.play.launches, "never launched while a reuse is possible")
+            assertEquals(2, w.play.queries)
+            assertEquals(
+                PRODUCT_1,
+                w.coordinator.reuseOffer.value
+                    ?.productId,
+            )
+            assertEquals(emptyList(), w.play.calls, "nothing consumed before the user says yes")
+        }
+
+    @Test
+    fun `a payment stranded by an update but missing from Play's list is asked again, then offered for reuse`() =
+        runTest {
+            val w = CoordinatorWorld(this)
+            w.ring()
+            // Its approval arrived as an update and was recorded stranded; Play's list has not caught up yet.
+            w.buy(purchase(profileId = "yesterday"))
+            assertEquals(RecordStatus.Stranded, w.world.recordRows[tok.hash()]?.status)
+            w.play.listed.remove(tok)
+            w.play.onQuery = { n -> if (n == 2) w.play.own(purchase(profileId = "yesterday")) }
+
+            w.pay()
+            w.advance(PurchaseCoordinator.PRE_LAUNCH_REFRESH)
+
+            assertEquals(listOf<SessionEffect>(SessionEffect.ShowReuseSheet(PRODUCT_1)), w.outcomes)
+            assertEquals(emptyList(), w.play.launches)
+        }
+
+    @Test
+    fun `a list still lagging after the second query opens Play, and ITEM_ALREADY_OWNED still recovers the reuse`() =
+        runTest {
+            val w = CoordinatorWorld(this)
+            w.ring()
+            w.play.own(purchase(profileId = "yesterday", pending = true))
+            w.play.launchResults += Outcome.Success(LaunchResult.ItemAlreadyOwned)
+            w.play.onQuery = { n -> if (n == 3) w.play.own(purchase(profileId = "yesterday")) }
+
+            w.pay()
+            w.advance(PurchaseCoordinator.PRE_LAUNCH_REFRESH)
+
+            assertEquals(1, w.play.launches.size, "the fallback: Play opens once")
+            assertEquals(3, w.play.queries, "two before the launch, one for ITEM_ALREADY_OWNED")
+            assertEquals(listOf<SessionEffect>(SessionEffect.ShowReuseSheet(PRODUCT_1)), w.outcomes)
+            assertEquals(emptyList(), w.play.calls)
+        }
+
+    @Test
+    fun `a list with nothing of the launched product opens Play at once, with one query`() =
+        runTest {
+            val w = CoordinatorWorld(this)
+            w.ring()
+            w.play.own(purchase(productId = PRODUCT_3, profileId = "yesterday", pending = true))
+
+            w.pay()
+
+            assertEquals(1, w.play.launches.size)
+            assertEquals(1, w.play.queries)
+        }
+
     @Test
     fun `a pending payment of the product being launched stops the launch`() =
         runTest {

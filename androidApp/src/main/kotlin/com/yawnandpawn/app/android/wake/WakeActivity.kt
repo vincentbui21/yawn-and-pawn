@@ -260,7 +260,6 @@ class WakeActivity : ComponentActivity() {
             // The availability below is never remembered (the policy reads the env's latest value); keyed on this
             // observed env, every change recomposes it. Collecting it is also what keeps the reducer's view current.
             val env by remember { snoozeConditions.observe() }.collectAsState(initial = snoozeConditions.current())
-            val now by remember { minuteTicks(clock) }.collectAsState(initial = clock.now())
             // The full-screen intent can open the screen just before the session starts (the service posts the ringing
             // notification first): it waits for a session or an emergency ring, and closes only once that is over.
             val active = state.isRinging() || emergency != null
@@ -291,7 +290,8 @@ class WakeActivity : ComponentActivity() {
             } else {
                 // Restored with a Success whose session this process no longer knows (it was killed): nothing to show.
                 if (end.successSessionId != null) LaunchedEffect(Unit) { finish() }
-                val zone = timeZones.current()
+                // The clock shows the time now, turning over at each minute (Epic 4 device follow-up 1).
+                val time = WakeTime(timeZones.current(), remember { minuteTicks(clock) }.collectAsState(initial = clock.now()).value)
                 val session = (state as? SessionState.Active)?.session?.takeIf { state.isRinging() }
                 val availability = session?.let { key(env) { snoozePolicy.availability(it) } }
                 // Story 4.13: the confirm sheet and its message over the session's Ringing or Check screen.
@@ -300,12 +300,12 @@ class WakeActivity : ComponentActivity() {
                 // was shown, an ended session (Missed, or Completed before Success shows, with the notification still
                 // posted) keeps its last screen, so a check never flips back to the Ringing screen (Story 3.2 review).
                 val current =
-                    emergency?.let { WakeScreen.Ringing(alarmOnlyRingingUiState(now, zone)) }
-                        ?: sessionScreen(state, session, availability, WakeTime(zone, now), check, overlay)
+                    emergency?.let { WakeScreen.Ringing(alarmOnlyRingingUiState(time.now, time.zone)) }
+                        ?: sessionScreen(state, session, availability, time, check, overlay)
                         ?: runtime
                             .shownAlarmAt()
                             ?.takeIf { !last.sessionShown }
-                            ?.let { WakeScreen.Ringing(alarmOnlyRingingUiState(now, zone)) }
+                            ?.let { WakeScreen.Ringing(alarmOnlyRingingUiState(time.now, time.zone)) }
                 if (session != null) last.sessionShown = true
                 if (current != null) last.state = current
                 val shown = current ?: last.state

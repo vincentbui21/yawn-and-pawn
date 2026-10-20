@@ -335,9 +335,10 @@ object PreviewProgressSamples {
 
     /**
      * The most a single snooze can cost (Story 5.8), as Google Play would price the $50 tier for a US user ("$50.00"):
-     * the Payments route shows Play's cached price of that tier (review fix 2).
+     * the Payments route shows Play's cached price of that tier (review fix 2). A getter, like the Settings samples: the
+     * phone's `MoneyFormatter` (ICU) only works in the running app, not when the catalogue object is first loaded.
      */
-    val priceCap: String = formatMoney(PRICE_CAP)
+    val priceCap: String get() = formatMoney(PRICE_CAP)
 
     private const val YEAR = 2026
 

@@ -31,7 +31,6 @@ import com.yawnandpawn.app.core.time.MonotonicClock
 import com.yawnandpawn.app.core.time.TimeChangeSignal
 import com.yawnandpawn.app.core.time.TimeZoneProvider
 import com.yawnandpawn.app.testing.AlarmUseCasesFixture
-import com.yawnandpawn.app.testing.aDeleteAllData
 import com.yawnandpawn.app.testing.FakeAccessibilityState
 import com.yawnandpawn.app.testing.FakeAlarmRepository
 import com.yawnandpawn.app.testing.FakeAlarmScheduler
@@ -56,6 +55,7 @@ import com.yawnandpawn.app.testing.FakeSoundPreview
 import com.yawnandpawn.app.testing.FakeTestAlarmStore
 import com.yawnandpawn.app.testing.FakeTimeChangeSignal
 import com.yawnandpawn.app.testing.FakeTimeZoneProvider
+import com.yawnandpawn.app.testing.aDeleteAllData
 import com.yawnandpawn.app.testing.anAlarm
 import com.yawnandpawn.app.testing.anAppVersion
 import com.yawnandpawn.app.ui.editor.AlarmEditorArgs
@@ -190,7 +190,13 @@ class UiModuleTest {
                 single<Clock> { FakeClock() }
                 single<PriceCatalog> { FakePriceCatalog() }
                 // "Delete all data" (Story 5.9): the You tab's use case and the session guard it follows.
-                single { SessionLockGuard(MutableStateFlow<SessionState>(SessionState.Idle), MutableStateFlow(true), MutableStateFlow(false)) }
+                single {
+                    SessionLockGuard(
+                        MutableStateFlow<SessionState>(SessionState.Idle),
+                        MutableStateFlow(true),
+                        MutableStateFlow(false),
+                    )
+                }
                 single { aDeleteAllData(get()) }
                 single<Logger> { FakeLogger() }
                 single<ExternalLinks> {

@@ -70,9 +70,8 @@ import org.koin.compose.koinInject
 fun AppNavHost(modifier: Modifier = Modifier) {
     val backStack = rememberNavBackStack(RouteSavedStateConfiguration, Route.Alarms)
     val lock = sessionLock()
-    if (lock == SessionLock.Restoring) return RestoringScreen(modifier)
     val locked = lock == SessionLock.Locked
-    if (!locked && pendingDeletion(backStack)) return RestoringScreen(modifier)
+    if (lock == SessionLock.Restoring || (!locked && pendingDeletion(backStack))) return RestoringScreen(modifier)
     SideEffect { backStack.applySessionLock(locked) }
     // What is shown follows the lock in the same composition, so a locked app never composes the route it held (Home
     // or the editor would start their loads and previews); the SideEffect then makes the real stack match.

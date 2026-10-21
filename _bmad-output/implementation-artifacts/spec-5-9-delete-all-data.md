@@ -259,3 +259,28 @@ The coordinator's review of PR #72 (one reviewer, two lenses) found 1 HIGH, 3 ME
   - `spotlessCheck` and core detekt.
 - The full `qualityGate` is left to CI.
 
+**CI on PR #72 (head 6456f0d4): 1 of 2255 tests failed, and it is not caused by 5.9.**
+- **The failing test:** `WakeServiceTest` "a refused alarm start through the receiver arms the session slot one heartbeat ahead carrying the alarm", at its last assertion (`WakeServiceTest.kt:766`, "no service started"). The message, from the CI reports artifact, is "Expected value to be null, but was: Intent { act=…WAKE_RESTORE … }".
+- **What passed:** the slot assertions before it passed (armed, carrying alarm A, one heartbeat ahead). `asked == [ACTION_ALARM]` also passed, which proves this test's own Koin graph asked for nothing else.
+- **Where the start came from:** a `WAKE_RESTORE` start is only made by `WakeRuntime.ensureService()` through a real `WakeServiceStarter`. This test replaced its starter with a throwing one, so the start came from another graph. That fits the test run just before it ("the emergency ring … after a kill …"), which builds two graphs and ends with a session ringing. It is the cross-test leftover that `stopApp`'s KDoc already names: "WakeServiceTest's 'no service started' failed".
+- **Why 5.9 is not involved:** none of 5.9's code runs on this path.
+  - `restartKoin` (WakeApp) never calls `onCreate`, so `onAppStart` does not run for these graphs.
+  - With no marker, `onAppStart` launches nothing anyway, and `deletionPending` stays false.
+  - `startingSession` never reads `deletionPending`.
+- **Local result:** `WakeServiceTest` passed 38/38 in three local runs (below). No code change was needed.
+
+**Rebased onto 2d35e706 (Story 5.8), 2026-10-21.** The earlier commits were squashed into one feature commit plus the sprint-status chore before the rebase, so the You conflicts were resolved once.
+- **YouViewModel:** 5.8's view model (links, email support, snackbars) gained 5.9's `deleteAllData` and `sessionLock`, with the delete logic and `deleteEnabled`.
+- **Rows and screen:** `BuiltYouRows` now includes `DeleteAll`. `YouScreen`'s `PrivacyCard` passes `deleteEnabled`.
+- **Files:** 5.9's `ui/nav/YouTab.kt` was dropped in favour of 5.8's `YouEntries.kt` and `YouRoute`.
+- **Wiring:** `UiModule` binds both. A new testing helper, `aDeleteAllData`, builds the use case on fakes for `YouViewModelTest`, the new `YouDeleteAllDataTest` and `UiModuleTest`.
+- **Tests:** `YouSemanticsTest`, `YouRouteTest` and `MainActivityTest` now expect the "Delete all data" row, and the "Privacy policy" row is shown.
+- **Baselines:** the six `YouScreenshotTest` baselines (`you_{light,dark,light_font200}` and `you_no_email_app_*`) were re-recorded, because 5.8 made them and 5.9 adds the row.
+- **detekt:** `AppNavHost` went over LongMethod (61 lines), so its two restoring-screen returns were merged into one.
+- **Re-run on the merged tree, all passed:**
+  - core `DeleteAllDataTest` 21, `SessionLockGuardTest` 9, `AlarmSchedulingTest` 30;
+  - the `:data` reset, scan and module tests;
+  - composeApp `YouViewModelTest` 11, `YouDeleteAllDataTest` 4, `TabNavigationTest` 17, `UiModuleTest` 5, `CopyRulesTest` 15;
+  - androidApp `WakeServiceTest` 38 (×3), `MainActivityTest` 21, `PendingDeletionStartTest` 3, `DeleteAllDataAlarmsTest`, `YouScreenshotTest` 12, `YouSemanticsTest` 7, `YouRouteTest` 10, `YouDeleteDialogScreenshotTest` 3, `RestoreEntryPointsTest` 14, `AppStartRescheduleTest`, `CrashReportingTest` 16, `BackupRules*`, `SinkAnalyticsDataResetTest`, `TelemetryWiringTest`;
+  - `checkSitePages`, `spotlessCheck`, and detekt on every module.
+

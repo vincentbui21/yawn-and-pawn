@@ -18,10 +18,10 @@ import com.yawnandpawn.app.testing.FakeClock
 import com.yawnandpawn.app.testing.FakeLogger
 import com.yawnandpawn.app.testing.FakeMissedNoteDismissals
 import com.yawnandpawn.app.testing.FakeReliabilityProbe
-import com.yawnandpawn.app.testing.FakeReliabilitySettings
 import com.yawnandpawn.app.testing.FakeSessionHistoryRepository
 import com.yawnandpawn.app.testing.FakeTimeChangeSignal
 import com.yawnandpawn.app.testing.FakeTimeZoneProvider
+import com.yawnandpawn.app.testing.anEvaluateReliability
 import com.yawnandpawn.app.testing.noReRegisterSuggestions
 import com.yawnandpawn.app.ui.home.AlarmActions
 import com.yawnandpawn.app.ui.home.HomeRoute
@@ -31,11 +31,13 @@ import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
-import kotlin.test.assertTrue
+import kotlin.coroutines.EmptyCoroutineContext
+import kotlin.test.assertEquals
 
 /**
  * Story 1.19: the Home route checks the reliability settings again when it starts (back from "Fix") and when it
- * resumes (a permission dialog answered over Home only pauses it), and the banner follows.
+ * resumes (a permission dialog answered over Home only pauses it), and the banner follows. Story 5.4 review: once per
+ * cycle (on the resume that ends every start), not twice.
  */
 @RunWith(RobolectricTestRunner::class)
 class HomeRouteLifecycleTest {
@@ -68,9 +70,10 @@ class HomeRouteLifecycleTest {
                 FakeTimeZoneProvider(),
                 FakeTimeChangeSignal(),
                 MissedNotes(FakeSessionHistoryRepository(), FakeMissedNoteDismissals()),
-                probe,
-                FakeReliabilitySettings(),
+                anEvaluateReliability(probe = probe, checks = FakeCheckConfigRepository(repository)),
                 noReRegisterSuggestions(),
+                // On the main looper, so each evaluation is done when the composition is idle and the count is exact.
+                evaluationContext = EmptyCoroutineContext,
             )
         val owner = TestOwner()
         withScreen(
@@ -83,22 +86,21 @@ class HomeRouteLifecycleTest {
         ) {
             composeRule.waitUntil(timeoutMillis = APP_WORK_TIMEOUT_MILLIS) { bannerShown() }
 
-            // Back from "Fix": stopped, the setting turned on, started again.
+            // Back from the checklist: stopped, the setting turned on, started again.
             composeRule.runOnIdle { owner.registry.currentState = Lifecycle.State.CREATED }
             val beforeStart = probe.checks
             probe.status = ReliabilityStatus.ALL_OK
-            composeRule.runOnIdle { owner.registry.currentState = Lifecycle.State.STARTED }
+            composeRule.runOnIdle { owner.registry.currentState = Lifecycle.State.RESUMED }
             composeRule.waitUntil(timeoutMillis = APP_WORK_TIMEOUT_MILLIS) { !bannerShown() }
-            assertTrue(probe.checks > beforeStart, "ON_START checked again")
+            composeRule.runOnIdle { assertEquals(beforeStart + 1, probe.checks, "one check per start and resume") }
 
             // A permission dialog over Home: paused, the setting turned off, resumed.
-            composeRule.runOnIdle { owner.registry.currentState = Lifecycle.State.RESUMED }
             composeRule.runOnIdle { owner.registry.currentState = Lifecycle.State.STARTED }
             val beforeResume = probe.checks
             probe.status = ReliabilityStatus.ALL_OK.copy(notificationsAllowed = false)
             composeRule.runOnIdle { owner.registry.currentState = Lifecycle.State.RESUMED }
             composeRule.waitUntil(timeoutMillis = APP_WORK_TIMEOUT_MILLIS) { bannerShown() }
-            assertTrue(probe.checks > beforeResume, "ON_RESUME checked again")
+            composeRule.runOnIdle { assertEquals(beforeResume + 1, probe.checks, "ON_RESUME checked again, once") }
         }
     }
 }

@@ -19,7 +19,9 @@ import org.koin.dsl.module
  * notification permission (one instance, which `MainActivity` attaches its launcher to) and the Firebase start (with
  * whether this build has a Firebase configuration, Story 5.6). Story 5.3 adds the phone's details and the checklist
  * evaluation (over the alarms and the records from `dataModule`); 5.5 the maker's settings screens and "I've done this"
- * on the maker guidance.
+ * on the maker guidance. Since Story 5.4 the settings deep links open
+ * each checklist row's screen (resolver-checked, with fallbacks), and the evaluation also feeds the Home and Settings
+ * banner and the checklist screen (a factory: each screen gets its own).
  */
 fun reliabilityModule(): Module =
     module {

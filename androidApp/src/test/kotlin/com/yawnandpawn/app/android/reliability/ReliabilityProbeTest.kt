@@ -302,7 +302,7 @@ class ReliabilityProbeTest {
         assertReadsEverything(AndroidReliabilityProbe(context, sdkInt = 36, canUseFullScreenIntent = { true }))
 
     /**
-     * All good reads good; all off reads every value off; and the Story 1.19 items and Home's banner do not change. The
+     * All good reads good; all off reads every value off; and the Story 1.19 items do not change. The
      * DND policy rule holds on this level too (review item 3): with DND off a policy without alarms blocks them, "alarms
      * only" lets them through whatever the policy says, and no policy counts as allowed.
      */
@@ -314,7 +314,8 @@ class ReliabilityProbeTest {
         val status = probe.check()
         assertEquals(listOf(false, false, true, true, false), newValues(status))
         assertEquals(false, status.batteryOk)
-        assertEquals(true, status.allOk, "Home's banner stays on the three Story 1.19 items (Story 5.4 moves it)")
+        val storyOneNineteen = listOf(status.notificationsAllowed, status.fullScreenIntentAllowed, status.exactAlarmsAllowed)
+        assertEquals(listOf(true, true, true), storyOneNineteen, "the Story 1.19 items do not change")
 
         goodPhone()
         dnd(NotificationManager.INTERRUPTION_FILTER_ALL, alarmsAllowed = false)

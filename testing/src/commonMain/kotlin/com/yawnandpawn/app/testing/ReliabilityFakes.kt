@@ -1,13 +1,16 @@
 package com.yawnandpawn.app.testing
 
+import com.yawnandpawn.app.core.alarm.CheckConfigRepository
 import com.yawnandpawn.app.core.error.DomainError
 import com.yawnandpawn.app.core.error.Outcome
+import com.yawnandpawn.app.core.log.Logger
 import com.yawnandpawn.app.core.reliability.ChecklistRow
+import com.yawnandpawn.app.core.reliability.DeviceInfo
 import com.yawnandpawn.app.core.reliability.DeviceMaker
+import com.yawnandpawn.app.core.reliability.EvaluateReliability
 import com.yawnandpawn.app.core.reliability.MakerConfirmation
 import com.yawnandpawn.app.core.reliability.ManufacturerSettings
 import com.yawnandpawn.app.core.reliability.NotificationPermission
-import com.yawnandpawn.app.core.reliability.ReliabilityItem
 import com.yawnandpawn.app.core.reliability.ReliabilityProbe
 import com.yawnandpawn.app.core.reliability.ReliabilityRecords
 import com.yawnandpawn.app.core.reliability.ReliabilitySettings
@@ -28,12 +31,18 @@ class FakeReliabilityProbe(
     }
 }
 
-/** [ReliabilitySettings] that records every item it was asked to open. */
-class FakeReliabilitySettings : ReliabilitySettings {
-    val opened = mutableListOf<ReliabilityItem>()
+/**
+ * [ReliabilitySettings] that records every row it was asked to open (Story 5.4); [opens] is what each open answers
+ * (false: nothing could be opened).
+ */
+class FakeReliabilitySettings(
+    var opens: Boolean = true,
+) : ReliabilitySettings {
+    val opened = mutableListOf<ChecklistRow>()
 
-    override fun open(item: ReliabilityItem) {
-        opened += item
+    override fun open(row: ChecklistRow): Boolean {
+        opened += row
+        return opens
     }
 }
 
@@ -95,3 +104,18 @@ class FakeReliabilityRecords(
         return Outcome.Success(Unit)
     }
 }
+
+/** An API 34 phone of a maker the guidance does not cover, so its Manufacturer row is Hidden. */
+val aPlainPhone: DeviceInfo = DeviceInfo(sdkInt = 34, maker = "Google", fingerprint = "google/build-1")
+
+/**
+ * The real [EvaluateReliability] over fakes (Story 5.4): [probe] for the settings, [checks] for the alarms (none by
+ * default), [records] for what is remembered and [device] for the phone. With the defaults no blocking row fails.
+ */
+fun anEvaluateReliability(
+    probe: ReliabilityProbe = FakeReliabilityProbe(),
+    checks: CheckConfigRepository = FakeCheckConfigRepository(),
+    records: ReliabilityRecords = FakeReliabilityRecords(),
+    device: DeviceInfo = aPlainPhone,
+    logger: Logger = FakeLogger(),
+): EvaluateReliability = EvaluateReliability(probe, { device }, checks, records, logger)

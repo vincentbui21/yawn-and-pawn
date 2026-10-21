@@ -52,7 +52,7 @@ data class SettingsUiState(
     val theme: PpsThemeMode = PpsThemeMode.System,
     val weeklySummary: Boolean = true,
     val usageStats: Boolean = false,
-    /** A reliability checklist item fails: the non-dismissible `banner-warning`. */
+    /** A blocking reliability checklist row is not OK (Story 5.4): the non-dismissible `banner-warning`. */
     val reliabilityProblem: Boolean = false,
     /** A session is active: Settings is not reachable, only `panel-session-in-progress` shows (session lock). */
     val sessionInProgress: Boolean = false,
@@ -122,9 +122,20 @@ sealed interface SettingsIntent {
         val on: Boolean,
     ) : SettingsIntent
 
+    /** "Fix" on the reliability banner: opens the reliability checklist (Story 5.4). */
     data object FixSettings : SettingsIntent
 
+    /** The "Reliability checklist" row: opens the checklist (Story 5.4). */
     data object ReliabilityClicked : SettingsIntent
 
     data object BackToAlarm : SettingsIntent
+
+    /** Settings started (`ON_START`, also back from the checklist): evaluate the reliability checklist again (Story 5.4). */
+    data object Started : SettingsIntent
+}
+
+/** One-shot events for the Settings route. */
+sealed interface SettingsEffect {
+    /** Open the reliability checklist (Story 5.4). */
+    data object OpenReliability : SettingsEffect
 }

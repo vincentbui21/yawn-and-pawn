@@ -9,7 +9,9 @@ import com.yawnandpawn.app.ui.onboarding.OnboardingViewModel
 import com.yawnandpawn.app.ui.payments.PaymentsViewModel
 import com.yawnandpawn.app.ui.payments.ProblemWithChargeViewModel
 import com.yawnandpawn.app.ui.purchases.PurchaseHistoryViewModel
+import com.yawnandpawn.app.ui.reliability.ChecklistTestAlarm
 import com.yawnandpawn.app.ui.reliability.ManufacturerGuidanceViewModel
+import com.yawnandpawn.app.ui.reliability.ReliabilityViewModel
 import com.yawnandpawn.app.ui.settings.DefaultSettingSetters
 import com.yawnandpawn.app.ui.settings.SettingsViewModel
 import com.yawnandpawn.app.ui.you.YouViewModel
@@ -21,13 +23,14 @@ import org.koin.dsl.module
  * Koin bindings of :composeApp (AD-13): one ViewModel per screen. The core ports and use cases they take
  * (`AlarmRepository`, the alarm use cases, `Clock`, `MonotonicClock`, `TimeZoneProvider`, `TimeChangeSignal`, `Logger`,
  * `SoundLibrary`, `SoundPreview`, `ExternalLinks`, `AppLinks`, `DeviceInfoSource`, `ManufacturerSettings`,
- * `ConfirmMakerGuidance`, `ConsentStore`, `SetAnalyticsConsent`, `OnboardingRepository` and the onboarding use cases) are
- * bound by :androidApp and :data.
+ * `ConfirmMakerGuidance`, `ConsentStore`, `SetAnalyticsConsent`, `EvaluateReliability`, `ReliabilitySettings`,
+ * `CameraPermission`, `ScheduleTestAlarm`, `OnboardingRepository` and the onboarding use cases) are bound by :androidApp
+ * and :data.
  */
 val uiModule =
     module {
         factory { AlarmActions(get(), get(), get()) }
-        viewModel { HomeViewModel(get(), get(), get(), get(), get(), get(), get(), get(), get()) }
+        viewModel { HomeViewModel(get(), get(), get(), get(), get(), get(), get(), get()) }
         viewModel { PurchaseHistoryViewModel(get(), get(), get(), get(), get()) }
         viewModel {
             SettingsViewModel(
@@ -45,9 +48,12 @@ val uiModule =
                 outlivingScope = get(named(SettingsViewModel.SAVE_SCOPE)),
                 consents = get(),
                 setAnalyticsConsent = get(),
+                reliability = get(),
             )
         }
         viewModel { ProblemWithChargeViewModel(get(), get(), get(), get(), get()) }
+        factory { ChecklistTestAlarm(get(), get(), get(), get(), get(), get()) }
+        viewModel { ReliabilityViewModel(get(), get(), get(), get(), get()) }
         viewModel { ManufacturerGuidanceViewModel(get(), get(), get()) }
         // The You tab (Stories 5.8 and 5.9): its links, and "Delete all data" through core's DeleteAllData (bound by :androidApp).
         viewModel { YouViewModel(links = get(), appLinks = get(), clock = get(), deleteAllData = get(), sessionLock = get()) }

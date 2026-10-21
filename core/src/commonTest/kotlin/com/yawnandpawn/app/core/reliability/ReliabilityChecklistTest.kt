@@ -103,7 +103,6 @@ class ReliabilityChecklistTest {
             ok.copy(standbyBucketRestricted = true),
         ).forEach { status ->
             assertFalse(status.batteryOk, "$status")
-            assertTrue(status.allOk, "Home's banner keeps the three Story 1.19 items")
             val rows = ReliabilityChecklist.evaluate(status, emptyList(), api34, none)
             assertEquals(RowStatus.NeedsFix, rows.statusOf(ChecklistRow.Battery))
             assertTrue(ReliabilityChecklist.alarmBlocking(rows))
@@ -254,6 +253,20 @@ class ReliabilityChecklistTest {
             evaluate()
             assertEquals(1, records.saves, "nothing changed, nothing written")
             assertEquals(emptyList(), logger.events)
+        }
+
+    @Test
+    fun `an evaluation hands out the rows with the one probe status they came from (Story 5_4)`() =
+        runTest {
+            var probes = 0
+            val restricted = ok.copy(backgroundRestricted = true)
+            val evaluate = EvaluateReliability({ restricted.also { probes++ } }, { api34 }, Checks(), Records(), Logs())
+
+            val evaluation = evaluate.evaluation()
+
+            assertEquals(restricted, evaluation.status)
+            assertEquals(RowStatus.NeedsFix, evaluation.rows.statusOf(ChecklistRow.Battery))
+            assertEquals(1, probes)
         }
 
     @Test

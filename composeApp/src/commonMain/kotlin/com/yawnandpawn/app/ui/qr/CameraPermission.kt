@@ -14,8 +14,26 @@ interface CameraPermission {
      */
     suspend fun request(): Boolean
 
+    /**
+     * [request], telling a denial the user can still change in the dialog ([CameraAnswer.Denied]) apart from one the
+     * system answered without it ([CameraAnswer.Blocked]: "Don't ask again", or denied twice). The reliability checklist
+     * opens the app details at once on Blocked (Story 5.4); without that knowledge every "no" is Denied.
+     */
+    suspend fun requestAnswer(): CameraAnswer = if (request()) CameraAnswer.Granted else CameraAnswer.Denied
+
     /** "Fix": opens the app's page in the system settings, from a user tap only. */
     fun openSettings()
+}
+
+/** The answer of a camera permission request ([CameraPermission.requestAnswer]). */
+enum class CameraAnswer {
+    Granted,
+
+    /** Refused; the dialog can still be shown next time. */
+    Denied,
+
+    /** Refused and the dialog will not show again: only the app details page can grant it. */
+    Blocked,
 }
 
 /**

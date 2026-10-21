@@ -21,13 +21,12 @@ import com.yawnandpawn.app.testing.FakeIdGenerator
 import com.yawnandpawn.app.testing.FakeLogger
 import com.yawnandpawn.app.testing.FakeMissedNoteDismissals
 import com.yawnandpawn.app.testing.FakeReRegisterDismissals
-import com.yawnandpawn.app.testing.FakeReliabilityProbe
-import com.yawnandpawn.app.testing.FakeReliabilitySettings
 import com.yawnandpawn.app.testing.FakeSessionHistoryRepository
 import com.yawnandpawn.app.testing.FakeTimeChangeSignal
 import com.yawnandpawn.app.testing.FakeTimeZoneProvider
 import com.yawnandpawn.app.testing.aSessionHistoryRow
 import com.yawnandpawn.app.testing.anAlarm
+import com.yawnandpawn.app.testing.anEvaluateReliability
 import com.yawnandpawn.app.testing.checkConfigsOf
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
@@ -97,7 +96,6 @@ class HomeReRegisterBannerTest {
     ): HomeViewModel {
         val alarms = AlarmUseCasesFixture(repository, clock, zone)
         val actions = AlarmActions(alarms.setEnabled, alarms.delete, logger)
-        val probe = FakeReliabilityProbe()
         val viewModel =
             HomeViewModel(
                 FakeCheckConfigRepository(repository),
@@ -106,10 +104,10 @@ class HomeReRegisterBannerTest {
                 zone,
                 signal,
                 missedNotes,
-                probe,
-                FakeReliabilitySettings(),
+                anEvaluateReliability(checks = FakeCheckConfigRepository(repository)),
                 suggestions,
                 uiTypeOf,
+                evaluationContext = dispatcher,
             )
         backgroundScope.launch { viewModel.state.collect { } }
         return viewModel

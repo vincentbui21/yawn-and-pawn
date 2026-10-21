@@ -19,14 +19,13 @@ import com.yawnandpawn.app.testing.FakeCommitmentEventRepository
 import com.yawnandpawn.app.testing.FakeIdGenerator
 import com.yawnandpawn.app.testing.FakeLogger
 import com.yawnandpawn.app.testing.FakeMissedNoteDismissals
-import com.yawnandpawn.app.testing.FakeReliabilityProbe
-import com.yawnandpawn.app.testing.FakeReliabilitySettings
 import com.yawnandpawn.app.testing.FakeRequestCodeSequence
 import com.yawnandpawn.app.testing.FakeSessionHistoryRepository
 import com.yawnandpawn.app.testing.FakeTimeChangeSignal
 import com.yawnandpawn.app.testing.FakeTimeZoneProvider
 import com.yawnandpawn.app.testing.SchedulerCall
 import com.yawnandpawn.app.testing.anAlarm
+import com.yawnandpawn.app.testing.anEvaluateReliability
 import com.yawnandpawn.app.testing.noReRegisterSuggestions
 import com.yawnandpawn.app.ui.format.Countdown
 import com.yawnandpawn.app.ui.settings.WeakeningNote
@@ -111,9 +110,9 @@ class HomeTurnOffUnderLockTest {
                 zone,
                 FakeTimeChangeSignal(),
                 MissedNotes(FakeSessionHistoryRepository(), FakeMissedNoteDismissals()),
-                FakeReliabilityProbe(),
-                FakeReliabilitySettings(),
+                anEvaluateReliability(checks = FakeCheckConfigRepository(store)),
                 noReRegisterSuggestions(clock),
+                evaluationContext = dispatcher,
             )
         if (collect) backgroundScope.launch { viewModel.state.collect { } }
         return viewModel

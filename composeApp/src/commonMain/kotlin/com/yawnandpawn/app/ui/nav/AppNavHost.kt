@@ -36,7 +36,6 @@ import com.yawnandpawn.app.ui.onboarding.OnboardingRoute
 import com.yawnandpawn.app.ui.progress.CalendarMonth
 import com.yawnandpawn.app.ui.progress.ProgressScreen
 import com.yawnandpawn.app.ui.progress.ProgressUiState
-import com.yawnandpawn.app.ui.reliability.ManufacturerGuidanceRoute
 import com.yawnandpawn.app.ui.settings.SettingsRoute
 import com.yawnandpawn.app.ui.settings.WeakeningNote
 import com.yawnandpawn.app.ui.shell.AppShell
@@ -118,22 +117,18 @@ fun AppNavHost(modifier: Modifier = Modifier) {
                             savedUnderLock = savedUnderLock,
                             onSavedUnderLockShown = { savedUnderLock = null },
                             onOpenQrRegistration = { id -> backStack.openEditor(id, scanCode = true) },
+                            onOpenReliability = { backStack.openReliability(from = Route.Alarms) },
                         )
                     }
                     entry<Route.Progress>(metadata = TabMetadata) { ProgressTab() }
-                    entry<Route.Settings>(metadata = TabMetadata) { SettingsTab() }
+                    entry<Route.Settings>(metadata = TabMetadata) { SettingsTab(backStack) }
                     entry<Route.You>(metadata = TabMetadata) { YouEntry(backStack) }
                     entry<Route.SessionInProgress>(metadata = LockMetadata) { SessionInProgressScreen() }
                     entry<Route.Onboarding>(metadata = LockMetadata) { OnboardingRoute(is24Hour = is24HourClock()) }
                     entry<Route.AlarmEditor> { route ->
                         EditorEntry(route, backStack, onOpenFailed = { openFailed = true }, onSavedUnderLock = { savedUnderLock = it })
                     }
-                    entry<Route.PurchaseHistory> { PurchaseHistoryEntry(backStack) }
-                    entry<Route.Payments> { PaymentsEntry(backStack) }
-                    entry<Route.ProblemWithCharge> { ProblemWithChargeEntry(backStack) }
-                    entry<Route.ManufacturerGuidance> {
-                        ManufacturerGuidanceRoute(onClose = { backStack.close(Route.ManufacturerGuidance) })
-                    }
+                    pushedEntries(backStack)
                 },
         )
     }
@@ -204,10 +199,13 @@ internal fun emptyProgress(today: LocalDate): ProgressUiState =
             ),
     )
 
-/** Settings: the Snooze card's base fee and max snoozes (Story 4.5); Epic 5 adds the other rows. */
+/**
+ * Settings: the Snooze card's base fee and max snoozes (Story 4.5), the defaults and the theme (5.1), and the reliability
+ * checklist row and banner, which push the checklist over Settings on [backStack] (5.4); Epic 5 adds the other rows.
+ */
 @Composable
-private fun SettingsTab() {
-    SettingsRoute(is24Hour = is24HourClock())
+private fun SettingsTab(backStack: MutableList<NavKey>) {
+    SettingsRoute(is24Hour = is24HourClock(), onOpenReliability = { backStack.openReliability(from = Route.Settings) })
 }
 
 /**

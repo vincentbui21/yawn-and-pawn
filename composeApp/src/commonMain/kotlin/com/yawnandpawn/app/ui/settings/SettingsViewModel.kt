@@ -24,6 +24,7 @@ import com.yawnandpawn.app.core.error.DomainError
 import com.yawnandpawn.app.core.error.Outcome
 import com.yawnandpawn.app.core.log.LogEvent
 import com.yawnandpawn.app.core.log.Logger
+import com.yawnandpawn.app.core.reliability.EvaluateReliability
 import com.yawnandpawn.app.core.session.GlobalSettings
 import com.yawnandpawn.app.core.telemetry.AnalyticsConsent
 import com.yawnandpawn.app.core.telemetry.ConsentStore
@@ -31,9 +32,11 @@ import com.yawnandpawn.app.core.telemetry.SetAnalyticsConsent
 import com.yawnandpawn.app.core.time.Clock
 import com.yawnandpawn.app.core.time.TimeChangeSignal
 import com.yawnandpawn.app.core.time.TimeZoneProvider
+import com.yawnandpawn.app.ui.reliability.AlarmBlockingCheck
 import com.yawnandpawn.app.ui.theme.toCore
 import com.yawnandpawn.app.ui.theme.toPps
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.channels.Channel
@@ -45,10 +48,12 @@ import kotlinx.coroutines.flow.catch
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.onStart
+import kotlinx.coroutines.flow.receiveAsFlow
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import kotlin.coroutines.CoroutineContext
 
 /**
  * The Story 5.1 setters of Settings: the new-alarm defaults and the theme, each through its own core use case (no
@@ -99,6 +104,9 @@ class DefaultSettingSetters(
  * [setAnalyticsConsent] (no Save). A failed write is logged and the switch stays at the stored value; an unreadable
  * choice is logged and shows off.
  *
+ * The reliability banner (Story 5.4) follows the checklist's `alarmBlocking`, evaluated on every start; "Fix" and the
+ * "Reliability checklist" row open the checklist through [effects].
+ *
  * [state] is null until the stored settings are read, so no default value flashes. When the ViewModel is cleared, the
  * base fee and max snoozes saves still queued are logged as dropped, and the defaults and the theme are finished in
  * [outlivingScope] ([onCleared]).
@@ -122,9 +130,28 @@ class SettingsViewModel(
      * leaving the tab right after a change never loses it. Null (tests that never close mid-save) drops it, logged.
      */
     private val outlivingScope: CoroutineScope? = null,
+    /**
+     * The reliability checklist behind the banner (Story 5.4), evaluated on every [SettingsIntent.Started]; null (tests
+     * of the other rows) shows no banner.
+     */
+    reliability: EvaluateReliability? = null,
+    /** Where the banner's evaluation runs (system service calls): off the main thread in the app, the test's in tests. */
+    evaluationContext: CoroutineContext = Dispatchers.Default,
 ) : ViewModel() {
     private val local = MutableStateFlow(Local())
     private val saves = Channel<Save>(Channel.UNLIMITED)
+
+    private val banner: AlarmBlockingCheck? =
+        reliability?.let { evaluate ->
+            AlarmBlockingCheck(evaluate, viewModelScope, evaluationContext) { blocking ->
+                local.update { it.copy(reliabilityProblem = blocking) }
+            }
+        }
+
+    private val mutableEffects = Channel<SettingsEffect>(Channel.BUFFERED)
+
+    /** Navigation out of Settings: the reliability checklist (Story 5.4). */
+    val effects: Flow<SettingsEffect> = mutableEffects.receiveAsFlow()
 
     /** The save running now, if any (logged as dropped when the ViewModel is cleared under it). */
     private var saving: Save? = null
@@ -136,11 +163,11 @@ class SettingsViewModel(
     private val stored: Flow<Stored> =
         combine(
             globalSettings.observe().catch { cause ->
-                logFailure(LOAD_SETTINGS, cause)
+                logger.logFailure(LOAD_SETTINGS, cause)
                 emit(GlobalSettings())
             },
             pendingChanges.observe().catch { cause ->
-                logFailure(LOAD_PENDING, cause)
+                logger.logFailure(LOAD_PENDING, cause)
                 emit(emptyList())
             },
         ) { settings, pending -> Stored(settings, pending.filter { it.alarmId == null }) }
@@ -152,7 +179,7 @@ class SettingsViewModel(
         consents
             .observe()
             .catch { cause ->
-                logFailure(LOAD_CONSENT, cause)
+                logger.logFailure(LOAD_CONSENT, cause)
                 emit(AnalyticsConsent())
             }.map { it.consent }
 
@@ -174,28 +201,62 @@ class SettingsViewModel(
 
     fun onIntent(intent: SettingsIntent) {
         when (intent) {
-            is SettingsIntent.OpenPane -> local.update { it.copy(pane = intent.pane) }
+            is SettingsIntent.OpenPane -> {
+                local.update { it.copy(pane = intent.pane) }
+            }
 
-            SettingsIntent.Back -> local.update { it.copy(pane = SettingsPane.Main) }
+            SettingsIntent.Back -> {
+                local.update { it.copy(pane = SettingsPane.Main) }
+            }
 
-            SettingsIntent.LowerBaseFee -> currentTier()?.let { request(SettingValue.BaseFeeTier(it - 1)) }
+            SettingsIntent.LowerBaseFee -> {
+                currentTier()?.let { request(SettingValue.BaseFeeTier(it - 1)) }
+            }
 
-            SettingsIntent.RaiseBaseFee -> currentTier()?.let { request(SettingValue.BaseFeeTier(it + 1)) }
+            SettingsIntent.RaiseBaseFee -> {
+                currentTier()?.let { request(SettingValue.BaseFeeTier(it + 1)) }
+            }
 
-            is SettingsIntent.MaxSnoozesChanged -> request(SettingValue.MaxSnoozes(intent.value))
+            is SettingsIntent.MaxSnoozesChanged -> {
+                request(SettingValue.MaxSnoozes(intent.value))
+            }
 
-            is SettingsIntent.SnoozeLengthSelected -> request(DefaultSetting.SnoozeLength(intent.minutes))
+            is SettingsIntent.SnoozeLengthSelected -> {
+                request(DefaultSetting.SnoozeLength(intent.minutes))
+            }
 
-            is SettingsIntent.QuietTimeChanged -> request(DefaultSetting.GraceSeconds(intent.seconds))
+            is SettingsIntent.QuietTimeChanged -> {
+                request(DefaultSetting.GraceSeconds(intent.seconds))
+            }
 
-            is SettingsIntent.VibrateDuringQuietTimeToggled -> request(DefaultSetting.VibrateInGrace(intent.on))
+            is SettingsIntent.VibrateDuringQuietTimeToggled -> {
+                request(DefaultSetting.VibrateInGrace(intent.on))
+            }
 
-            is SettingsIntent.ThemeSelected -> request(DefaultSetting.Theme(intent.mode.toCore()))
+            is SettingsIntent.ThemeSelected -> {
+                request(DefaultSetting.Theme(intent.mode.toCore()))
+            }
 
-            is SettingsIntent.UsageStatsToggled -> setUsageStats(intent.on)
+            is SettingsIntent.UsageStatsToggled, SettingsIntent.Started, SettingsIntent.FixSettings, SettingsIntent.ReliabilityClicked -> {
+                onGeneralIntent(intent)
+            }
 
             // The other rows belong to later Epic 5 stories; production does not show them.
-            else -> Unit
+            else -> {
+                Unit
+            }
+        }
+    }
+
+    /**
+     * The usage stats switch (Story 5.6) and the reliability checklist (Story 5.4): a start evaluates the checklist again
+     * (back from it, too); "Fix" and its row open it.
+     */
+    private fun onGeneralIntent(intent: SettingsIntent) {
+        when (intent) {
+            is SettingsIntent.UsageStatsToggled -> setUsageStats(intent.on)
+            SettingsIntent.Started -> banner?.refresh()
+            else -> mutableEffects.trySend(SettingsEffect.OpenReliability)
         }
     }
 
@@ -339,17 +400,13 @@ class SettingsViewModel(
             defaultQuietSeconds = chosen.defaultGraceSeconds,
             vibrateDuringQuietTime = chosen.defaultVibrateInGrace,
             theme = chosen.themeMode.toPps(),
+            reliabilityProblem = ui.reliabilityProblem,
             pane = ui.pane,
             // While a new value is still being saved, the stored note may be the old one: wait for the store.
             baseFeeNote = weakeningNoteOf(saved.pending(LockedField.BaseFee), now, zone).takeIf { tier == saved.tier },
             maxSnoozesNote = weakeningNoteOf(saved.pending(LockedField.MaxSnoozes), now, zone).takeIf { max == saved.maxSnoozes },
         )
     }
-
-    private fun logFailure(
-        operation: String,
-        cause: Throwable,
-    ) = logger.log(LogEvent.OperationFailed(operation, cause.message ?: cause::class.simpleName.orEmpty()))
 
     /** One save in the queue: a commitment-locked setting (Story 4.5) or a default (Story 5.1). */
     private sealed interface Save {
@@ -393,13 +450,17 @@ class SettingsViewModel(
         fun sameField(other: DefaultSetting): Boolean = value::class == other::class
     }
 
-    /** What only this screen holds: the pane and the values requested but not shown by the store yet. */
+    /**
+     * What only this screen holds: the pane, the values requested but not shown by the store yet, and whether the last
+     * checklist evaluation found a blocking row (Story 5.4).
+     */
     private data class Local(
         val pane: SettingsPane = SettingsPane.Main,
         val fee: Request? = null,
         val max: Request? = null,
         /** At most one per field, the latest. */
         val defaults: List<DefaultRequest> = emptyList(),
+        val reliabilityProblem: Boolean = false,
     ) {
         /** [request] is still the latest of its field: one superseded by a newer value is never saved (a drag coalesces). */
         fun holds(request: DefaultRequest): Boolean = defaults.any { it.id == request.id }
@@ -486,3 +547,9 @@ private fun DefaultSetting.isValid(): Boolean =
 private fun Logger.logDefaultFailure(result: Outcome<Unit, DomainError>) {
     if (result is Outcome.Failure) log(LogEvent.OperationFailed.of(SettingsViewModel.SAVE_DEFAULT, result.error))
 }
+
+/** Logs a store read that failed with [cause] as [operation]. */
+private fun Logger.logFailure(
+    operation: String,
+    cause: Throwable,
+) = log(LogEvent.OperationFailed(operation, cause.message ?: cause::class.simpleName.orEmpty()))

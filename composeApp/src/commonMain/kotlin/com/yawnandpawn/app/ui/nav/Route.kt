@@ -65,9 +65,16 @@ sealed interface Route : NavKey {
     data object ProblemWithCharge : Route
 
     /**
+     * The reliability checklist (Story 5.4), pushed over Settings (its "Reliability checklist" row or banner) or Home
+     * (the banner's "Fix"); Back returns there. Not a tab, so the nav capsule hides.
+     */
+    @Serializable
+    data object Reliability : Route
+
+    /**
      * The maker guidance (Story 5.5): the phone maker's steps, "Open settings" and "I've done this", which closes it.
-     * Pushed over a tab until the checklist screen (Story 5.4) pushes it from its Manufacturer row; Back returns there.
-     * Not a tab, so the nav capsule hides.
+     * Pushed over the reliability checklist from its Manufacturer row (Story 5.4); Back returns there. Not a tab, so the
+     * nav capsule hides.
      */
     @Serializable
     data object ManufacturerGuidance : Route

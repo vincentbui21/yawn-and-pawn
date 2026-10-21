@@ -350,4 +350,4 @@
 - source_spec: `_bmad-output/implementation-artifacts/spec-5-9-delete-all-data.md`
   summary: Onboarding opens after "Delete all data" (Story 5.10).
   evidence: Story 5.9 returns to the empty Home, because onboarding does not exist yet. The settings clear removes `onboardingCompleted` once 5.10 adds it, so onboarding follows on its own if 5.10 reads that key at the gate; the navigation reset (`resetToHome`) and the pending-deletion gate in `AppNavHost` must then lead to onboarding instead of Home.
-  status: deferred to Story 5.10.
+  status: resolved in Story 5.10. The onboarding progress lives in the settings DataStore, which `DeleteAllData` clears through the shared `SettingsDataStore.clear()` (also used by `AndroidLocalDataEraser`), so the onboarding gate flips back by itself. `AppNavHost` keeps the pending-deletion check before the gate, and `resetToHome(onboardingRequired)` leads to `Route.Onboarding` after a completed deletion. Tested with the real `DeleteAllData` in `OnboardingFlowTest` (step 1 shows, `SaveAlarm` returns `DisclosureRequired` again) and in `OnboardingNavigationTest`.

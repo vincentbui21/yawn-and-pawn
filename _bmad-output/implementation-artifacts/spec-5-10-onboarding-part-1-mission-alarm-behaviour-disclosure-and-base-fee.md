@@ -271,7 +271,14 @@ PR #75 review (one combined reviewer): 1 HIGH, 3 MEDIUM, 3 LOW. All applied in `
    - Tests in `OnboardingViewModelTest`.
 6. **LOW, the upgrade path was untested.**
    - New test `OnboardingUpgradeTest`: the real empty onboarding store and an alarm stored before the update. BOOT_COMPLETED and MY_PACKAGE_REPLACED still arm it; MainActivity then opens onboarding.
-7. **LOW, Delete all data is only simulated.**
+7. **LOW, Delete all data is only simulated: done after 5.9 merged (eaa7b1c3).**
+   - Rebased onto it, keeping both sides: in `AppNavHost`, 5.9's restoring and pending-deletion check stays before the onboarding gate (`shownStack`).
+   - `OnboardingFlowTest` now runs 5.9's real `DeleteAllData`: step 1 shows, the stored progress is fresh, and `SaveAlarm` returns `DisclosureRequired` again.
+   - `AndroidLocalDataEraser` uses the shared `SettingsDataStore.clear()`.
+   - After a completed deletion, `resetToHome(onboardingRequired)` leads to `Route.Onboarding` when the progress says so (tested in `OnboardingNavigationTest`).
+   - 5.9's deferred-work entry "Onboarding opens after Delete all data (Story 5.10)" is marked resolved, so deferred item 1 in the frontmatter is done.
+
+   Original note, before the 5.9 merge:
    - 5.9 (PR #72) is still not on main, so the `clear()` simulation stays.
    - Note for the 5.9 merge: use 5.9's real `DeleteAllData` in `OnboardingFlowTest`, and keep one shared clear (`SettingsDataStore.clear()`, which 5.9's `AndroidLocalDataEraser` can call).
 

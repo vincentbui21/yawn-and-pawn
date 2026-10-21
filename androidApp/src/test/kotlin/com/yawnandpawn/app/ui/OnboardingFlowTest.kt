@@ -24,6 +24,7 @@ import com.yawnandpawn.app.core.error.Outcome
 import com.yawnandpawn.app.core.error.valueOrNull
 import com.yawnandpawn.app.core.onboarding.OnboardingProgress
 import com.yawnandpawn.app.core.onboarding.OnboardingRepository
+import com.yawnandpawn.app.core.reset.DeleteAllData
 import com.yawnandpawn.app.core.session.SessionEngine
 import com.yawnandpawn.app.data.settings.SettingsDataStore
 import com.yawnandpawn.app.restartKoin
@@ -52,8 +53,8 @@ import kotlin.time.Instant
 /**
  * Story 5.10 in the real app, with the real onboarding store (the settings DataStore) instead of the completed fake every
  * other app test uses: a first launch opens onboarding with no nav capsule, no alarm is saved before "I understand",
- * Back steps back, "Continue" on step 3 opens Home, a stored step 3 reopens there, and clearing the settings store
- * ("Delete all data") brings onboarding back.
+ * Back steps back, "Continue" on step 3 opens Home, a stored step 3 reopens there, and Story 5.9's real "Delete all data"
+ * brings onboarding back with no consent.
  */
 @RunWith(RobolectricTestRunner::class)
 @GraphicsMode(GraphicsMode.Mode.NATIVE)
@@ -236,18 +237,23 @@ class OnboardingFlowTest {
         }
 
     @Test
-    fun `a completed onboarding opens Home, and clearing the settings store brings onboarding back`() =
+    fun `a completed onboarding opens Home, and Delete all data brings onboarding back with no consent`() =
         launch(before = { onboarding ->
             onboarding.setDisclosureAccepted(Instant.parse("2027-03-08T21:00:00Z"))
             onboarding.setCompleted()
         }) {
             waitFor(navCapsule)
             composeRule.onNode(mission).assertDoesNotExist()
+            assertIs<Outcome.Success<*>>(saveAlarm(), "the consent lets alarms be saved")
 
-            runBlocking { koinGet().get<SettingsDataStore>().clear() }
+            // Story 5.9's real deletion: it clears the settings DataStore, the onboarding progress with it.
+            assertEquals(Outcome.Success(Unit), runBlocking { koinGet().get<DeleteAllData>()() })
 
             waitFor(mission)
+            composeRule.onNode(hasContentDescription("Step 1 of 8")).assertExists()
             composeRule.onNode(navCapsule).assertDoesNotExist()
+            assertEquals(OnboardingProgress(), stored())
+            assertEquals(Outcome.Failure(DomainError.DisclosureRequired), saveAlarm(), "no alarm before I understand again")
         }
 
     private companion object {

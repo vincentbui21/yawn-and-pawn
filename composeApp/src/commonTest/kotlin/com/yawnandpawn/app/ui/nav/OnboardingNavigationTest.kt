@@ -78,6 +78,26 @@ class OnboardingNavigationTest {
     }
 
     @Test
+    fun `after Delete all data the reset leads to onboarding when it is required, and leaves a session lock alone`() {
+        stacks.forEach { start ->
+            val stack = start.toMutableList()
+
+            assertTrue(stack.resetToHome(onboardingRequired = true), "$start")
+
+            assertEquals(onboarding, stack, "from $start")
+        }
+        assertFalse(onboarding.toMutableList().resetToHome(onboardingRequired = true), "already onboarding")
+
+        val locked = mutableListOf<NavKey>(Route.SessionInProgress)
+        assertFalse(locked.resetToHome(onboardingRequired = true))
+        assertEquals(listOf<NavKey>(Route.SessionInProgress), locked)
+
+        val notRequired = onboarding.toMutableList()
+        assertTrue(notRequired.resetToHome(onboardingRequired = false))
+        assertEquals(listOf<NavKey>(Route.Alarms), notRequired)
+    }
+
+    @Test
     fun `onboarding is not a tab, so the nav capsule hides`() {
         assertNull(Route.Onboarding.tab)
         AppTab.entries.forEach { assertTrue(it.route() != Route.Onboarding) }

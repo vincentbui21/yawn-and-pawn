@@ -77,6 +77,18 @@ Independent review of PR #73: no HIGH findings, and money safety confirmed. All 
    - an approval is delivered during the wait: reuse, no launch, nothing consumed.
 6. **The screen clock ticks.** `WakeActivityTest` "turns over at the minute without a signal": the fake clock starts at 06:09:40 and is moved to 06:10:00, then the system clock and the compose clock both advance 20 s, and the screen shows 6:10.
 8. **CI on `cc0b5bcc`: `PurchaseStateReaderScanTest` (Story 4.9, AD-7).** The coordinator read the purchase state itself. It now takes the pending tokens and the paid products from the reconciler's decisions: `Ignore(Pending)` means pending for this install, `Ignore(OtherInstall)` is skipped, and any other decision means paid. The purchase rules stay only in `PurchaseReconciler`. The scan's allowlist is unchanged.
+9. **Detekt:** the file is renamed to `WallTime.kt` (MatchingDeclarationName), and the refresh tests moved from `PurchaseCoordinatorTest` (LargeClass) to `PurchaseCoordinatorRefreshTest`.
+
+**Verification after the review**, on main `2d35e706`, with `--no-daemon --max-workers=2`. All pass:
+- Coordinator: `PurchaseCoordinatorRefreshTest` 11, `PurchaseCoordinatorTest` 24, `PurchaseCoordinatorSequenceTest` 13, `PurchaseCoordinatorReviewTest` 19.
+- Scan: `PurchaseStateReaderScanTest` 4.
+- Wake mapping: `com.yawnandpawn.app.ui.wake.*`, including `WallTimeTest` 3.
+- Wake screen: `WakeActivityTest` 22, `PaymentOutcomeMessagesTest` 8, `SnoozedScreenTest` 11, `SnoozeConfirmSheetTest` 20, `TestAlarmFlowTest` 14, `DirectBootNoteTest` 3.
+- Screenshots: `RingingScreenshotTest` 20, `SnoozedScreenshotTest` 12.
+- `spotlessCheck` and `detekt`.
+
+An earlier run timed out once in `SnoozedScreenTest` while waiting for Play to launch, under load. It passed on the re-run, which looks like the same timing flake as the earlier `PaymentOutcomeMessagesTest` one.
+
 7. **Device-check note.** `epic-5-context.md` "Notes from implemented stories" now asks the Story 5.13 run to log the time from approval to the next Pay and which dialog showed first, then tune `PRE_LAUNCH_REFRESH`.
 
 ## Verification

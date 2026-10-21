@@ -79,6 +79,7 @@ val uiModule =
                     FirstAlarmSources(
                         editors = { alarmId, onSaved -> alarmEditor(AlarmEditorArgs(alarmId), onSaved) },
                         remember = get(),
+                        alarms = get(),
                     ),
                 // Step 6 is Story 5.4's own checklist, built exactly like the checklist screen's.
                 checklist = ChecklistScreens { ReliabilityViewModel(get(), get(), get(), get(), get()) },

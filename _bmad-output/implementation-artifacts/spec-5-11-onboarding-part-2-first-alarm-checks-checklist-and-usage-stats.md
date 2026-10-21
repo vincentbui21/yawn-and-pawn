@@ -249,3 +249,17 @@ Status: done (fast mode, one combined self-review). The branch was rebased three
 **Follow-up review recommended:** false (one medium entry patched, no high). The swap to 5.4's `ReliabilityViewModel` came after the review pass; the updated ViewModel tests and the real-app flow test cover it.
 
 **Residual risks:** the intent contract's matrix row "Fix on DND/Battery re-checks only" is outdated (5.4 now opens their screens; the contract is read-only); the deferred second-alarm windows (failed id write, transient read failure); `qualityGate` runs in CI only; 5.12 must skip step 7 on Back for a user already asked.
+
+## Review (fast mode)
+
+PR #77 review (combined reviewer, fast mode; no HIGH), applied in `fix(5.11): review fixes`:
+
+1. **MEDIUM, duplicate alarm after a transient read failure** -- fixed. While onboarding is required every stored alarm is onboarding's: on restore without an id (step 4 or later) the newest stored alarm is adopted and remembered; when the child editor cannot open its alarm (or a save finds it deleted) the stored alarms decide: still stored → it opens again (once at once, then on the next "Continue" or step 4 / 5), else the newest is adopted, and only with none does a new alarm open. A read failure never stores a null id; "Continue" then shows "Couldn't save. Try again." and reads the alarm again. Tests: adopted on restore (Back + Continue keep one alarm); a one-time read failure keeps the id and the next "Continue" edits it.
+2. **LOW, "close means gone" was fragile** -- fixed: only `OpenFailed`, or a close while saving without `onSaved` (a save that found the alarm deleted), means gone; a plain close re-opens the child on the same alarm. Test on `OnboardingFirstAlarm` with a `StandardTestDispatcher` (fails without the fix).
+3. **LOW, commitment lock on onboarding Back-edits** -- **DEFAULT TAKEN (owner can change):** the lock keeps applying to Back-edits of the first alarm (consistent with the editor, protects money); the "Saved. Takes effect after ..." note shows on steps 4 and 5. No code change.
+4. **LOW, slide guard on the bottom buttons only** -- fixed: a step's cards get the same guard as its actions, and the overlays (Check setup, "Try it", QR registration, maker guidance) ignore taps until their slide is over. Test: a double tap on a check's row opens Check setup without changing it.
+5. **LOW (a11y), overlays without a pane title** -- fixed: Check setup (the check's name), "Try it", QR registration ("QR/Barcode") and the maker guidance ("Manufacturer settings") are panes named by their existing titles. Tests in `OnboardingFlowTest`.
+6. **LOW, one maker guidance ViewModel for all of onboarding** -- fixed: each opening gets its own `ViewModelStore`, cleared when it closes. Route test: two openings, the second stays open.
+7. **LOW, verification gaps** -- the whole-flow test asserts the first alarm is armed; `OnboardingFlowTest` re-checks step 6 on `ON_RESUME` (probe changed, STARTED then RESUMED → no "Fix" left) and asserts "Share" / "No thanks" are not focused on the live route.
+
+**Public shape changes (for 5.12):** `FirstAlarmSources` takes a third parameter, `alarms: AlarmRepository` (UiModule passes `get()`). `OnboardingFirstAlarm.Events.openFailed()` became `gone(id: String?)` (internal). New `OnboardingViewModel.LOAD_ALARMS` and `MAX_OPEN_RETRIES`. Nothing else public changed (`OnboardingUiState`, `OnboardingIntent`, `LAST_BUILT`, `afterUsageStats()` as before).

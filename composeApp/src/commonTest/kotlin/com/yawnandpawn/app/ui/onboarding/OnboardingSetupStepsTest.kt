@@ -1,8 +1,12 @@
 package com.yawnandpawn.app.ui.onboarding
 
+import com.yawnandpawn.app.core.alarm.Alarm
+import com.yawnandpawn.app.core.alarm.AlarmDraft
 import com.yawnandpawn.app.core.error.DomainError
+import com.yawnandpawn.app.core.error.Outcome
 import com.yawnandpawn.app.core.reliability.ReliabilityStatus
 import com.yawnandpawn.app.core.telemetry.AnalyticsConsent
+import com.yawnandpawn.app.testing.FakeAlarmScheduler
 import com.yawnandpawn.app.ui.checkpicker.CheckPickerIntent
 import com.yawnandpawn.app.ui.checks.CheckType
 import com.yawnandpawn.app.ui.checksetup.CheckSetupIntent
@@ -15,12 +19,17 @@ import com.yawnandpawn.app.ui.qr.TestCameraPermission
 import com.yawnandpawn.app.ui.reliability.ChecklistItem
 import com.yawnandpawn.app.ui.reliability.ChecklistRow
 import com.yawnandpawn.app.ui.reliability.ItemStatus
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.test.StandardTestDispatcher
+import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.runTest
+import kotlinx.coroutines.test.setMain
 import kotlinx.datetime.LocalTime
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
+import kotlin.test.assertIs
 import kotlin.test.assertNotNull
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
@@ -120,6 +129,90 @@ class OnboardingSetupStepsTest : OnboardingViewModelFixture() {
             assertFalse(stored.vibrateInGrace)
             assertEquals(listOf(CoreCheckType.Math), checkRows.current.getValue(stored.id).map { it.entry.type })
             assertEquals(1, notifications.requests, "asked once")
+        }
+
+    @Test
+    fun `an alarm saved before its id was stored is adopted on restore, so Back and Continue keep one alarm`() =
+        runTest {
+            onStep(OnboardingStep.Reliability)
+            val saved = assertIs<Outcome.Success<Alarm>>(fixture.save(AlarmDraft(time = LocalTime(6, 45)))).value
+
+            val viewModel = viewModel()
+
+            assertEquals(OnboardingStep.Reliability, viewModel.shown.step, "the saved alarm counts as the first alarm")
+            assertEquals(saved.id, onboarding.current.alarmId, "and its id is remembered")
+            viewModel.onIntent(OnboardingIntent.Back)
+            assertEquals(LocalTime(6, 45), viewModel.shown.alarmTime)
+            viewModel.next()
+
+            assertEquals(OnboardingStep.Reliability, viewModel.shown.step)
+            assertEquals(saved.id, alarms.current.single().id)
+        }
+
+    @Test
+    fun `a first alarm that could not be read once keeps its id, and the next Continue edits it`() =
+        runTest {
+            onStep(OnboardingStep.Checks)
+            val viewModel = viewModel()
+            viewModel.next()
+            val id = alarms.current.single().id
+
+            // Back to step 5 while the store cannot be read: nothing is forgotten, nothing new opens.
+            alarms.failure = DomainError.StorageFailure("busy")
+            viewModel.onIntent(OnboardingIntent.Back)
+            assertEquals(OnboardingStep.Checks, viewModel.shown.step)
+            assertEquals(id, onboarding.current.alarmId)
+            alarms.failure = null
+
+            viewModel.next()
+            assertTrue(viewModel.shown.saveFailed, "Couldn't save. Try again., and the alarm is read again")
+            viewModel.next()
+
+            assertEquals(OnboardingStep.Reliability, viewModel.shown.step)
+            assertEquals(id, alarms.current.single().id)
+            assertEquals(id, onboarding.current.alarmId)
+        }
+
+    @Test
+    fun `a plain close of the first alarm's editor opens it again and never reports it gone`() =
+        runTest(StandardTestDispatcher()) {
+            Dispatchers.setMain(StandardTestDispatcher(testScheduler))
+            onStep(OnboardingStep.FirstAlarm)
+            val stored = assertIs<Outcome.Success<Alarm>>(fixture.save(AlarmDraft(time = LocalTime(6, 45)))).value
+            val gone = mutableListOf<String?>()
+            val firstAlarm =
+                OnboardingFirstAlarm(
+                    editors = ::editor,
+                    // The test's own scope (not backgroundScope), so advanceUntilIdle runs what the close starts.
+                    scope = this,
+                    events =
+                        object : OnboardingFirstAlarm.Events {
+                            override fun saved(id: String) = Unit
+
+                            override fun gone(id: String?) {
+                                gone += id
+                            }
+
+                            override fun saveFailed() = Unit
+                        },
+                )
+            firstAlarm.open(stored.id)
+            advanceUntilIdle()
+            val opened = editorsOpened
+
+            // Back on the editor's main screen with nothing changed: the editor closes, the alarm is untouched.
+            firstAlarm.send(EditorIntent.BackRequested)
+            advanceUntilIdle()
+
+            assertEquals(emptyList<String?>(), gone, "a plain close is not a deleted alarm")
+            assertEquals(opened + 1, editorsOpened, "the same alarm opens again")
+            assertEquals(
+                LocalTime(6, 45),
+                firstAlarm.state.value
+                    ?.form
+                    ?.time,
+            )
+            firstAlarm.close()
         }
 
     @Test
@@ -225,6 +318,7 @@ class OnboardingSetupStepsTest : OnboardingViewModelFixture() {
             onStep(OnboardingStep.Checks)
             viewModel().next()
             val id = alarms.current.single().id
+            assertTrue((fixture.scheduler as FakeAlarmScheduler).armed.isNotEmpty(), "the first alarm is armed")
             assertEquals("Reliability", onboarding.current.step)
             assertEquals(id, onboarding.current.alarmId)
 
@@ -246,7 +340,7 @@ class OnboardingSetupStepsTest : OnboardingViewModelFixture() {
         }
 
     @Test
-    fun `a stored first alarm that cannot be read opens a new alarm and forgets the id`() =
+    fun `a first alarm deleted meanwhile, with no alarm stored, opens a new alarm and forgets the id`() =
         runTest {
             onStep(OnboardingStep.Checks, alarmId = "gone")
 

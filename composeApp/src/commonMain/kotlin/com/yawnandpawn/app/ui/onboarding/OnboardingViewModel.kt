@@ -64,8 +64,10 @@ import kotlin.time.Instant
  *   the Settings defaults, or the first alarm already stored (its id is remembered through [FirstAlarmSources.remember]),
  *   so going back never adds a second alarm. "Continue" on step 5 saves it like the editor's Save (`SaveAlarm`, enabled,
  *   the notification ask once); once stored the checklist opens and the id, then the step, are stored. A failed save
- *   stays with "Couldn't save. Try again." ([OnboardingUiState.saveFailed]); a stored alarm that cannot be read opens a
- *   new one and the id is forgotten. Check setup, "Try it" and QR registration show over step 5 ([OnboardingUiState.checkSetup]).
+ *   stays with "Couldn't save. Try again." ([OnboardingUiState.saveFailed]). While onboarding is required every stored
+ *   alarm is onboarding's, so an id never stored (a process death right after the save) or an alarm that could not be
+ *   read is found again in [FirstAlarmSources.alarms] ([alarmGone]); a new alarm opens only when none is stored. Check
+ *   setup, "Try it" and QR registration show over step 5 ([OnboardingUiState.checkSetup]).
  * - **Checklist (step 6):** Story 5.4's own checklist ([OnboardingChecklist], built by [ChecklistScreens]) without its
  *   test alarm row, read again each time the step opens, the screen resumes and the maker guidance closes. "Fix" is the
  *   checklist screen's own (each row's system screen, the camera ask); on the maker row it opens the maker guidance over
@@ -108,6 +110,9 @@ class OnboardingViewModel(
     /** Numbers the fee requests, so a save settles only its own request. */
     private var nextRequest = 0L
 
+    /** How many times in a row the first alarm was opened again after a passing read failure. */
+    private var openRetries = 0
+
     /** Step 6's checklist: Story 5.4's own; its maker row opens the guidance over the step. */
     private val reliability = OnboardingChecklist(checklist, viewModelScope) { openGuidance() }
 
@@ -120,7 +125,7 @@ class OnboardingViewModel(
                 object : OnboardingFirstAlarm.Events {
                     override fun saved(id: String) = alarmSaved(id)
 
-                    override fun openFailed() = alarmUnreadable()
+                    override fun gone(id: String?) = alarmGone(id)
 
                     override fun saveFailed() {
                         local.update { it.copy(saveFailed = true) }
@@ -287,8 +292,16 @@ class OnboardingViewModel(
 
             // The editor's Save: with no check it refuses, with QR/Barcode and no code it opens Check setup.
             OnboardingStep.Checks -> {
-                local.update { it.copy(saveFailed = false) }
-                alarm.send(EditorIntent.SaveClicked)
+                if (alarm.failedToOpen) {
+                    // The first alarm could not be read: nothing is saved; it is read again for the next tap.
+                    local.update { it.copy(saveFailed = true) }
+                    openRetries = 0
+                    alarm.ensureOpen(local.value.alarmId)
+                    alarm.openChecks()
+                } else {
+                    local.update { it.copy(saveFailed = false) }
+                    alarm.send(EditorIntent.SaveClicked)
+                }
             }
 
             OnboardingStep.Reliability -> {
@@ -321,7 +334,10 @@ class OnboardingViewModel(
      */
     private fun opened(step: OnboardingStep) {
         if (step == OnboardingStep.BaseFee) refreshPrices()
-        if (step == OnboardingStep.FirstAlarm || step == OnboardingStep.Checks) alarm.ensureOpen(local.value.alarmId)
+        if (step == OnboardingStep.FirstAlarm || step == OnboardingStep.Checks) {
+            openRetries = 0
+            alarm.ensureOpen(local.value.alarmId)
+        }
         if (step == OnboardingStep.Checks) alarm.openChecks() else alarm.leaveChecks()
         if (step == OnboardingStep.Reliability) reliability.refresh()
     }
@@ -334,12 +350,43 @@ class OnboardingViewModel(
         opened(OnboardingStep.Reliability)
     }
 
-    /** The stored first alarm cannot be read (or is gone): a new alarm opens, and the id is forgotten. */
-    private fun alarmUnreadable() {
-        local.update { it.copy(alarmId = null) }
-        ops.trySend(Op.RememberAlarm(null))
-        alarm.open(null)
+    /**
+     * The first alarm [id] could not be opened, or a save found it deleted (review fix: never a second alarm). The stored
+     * alarms decide, since while onboarding is required every one of them is onboarding's:
+     * - [id] is still stored (a passing read failure): it opens again, [MAX_OPEN_RETRIES] times; after that the next
+     *   "Continue" or step 4 / 5 tries again;
+     * - else the newest stored alarm is adopted and remembered, or with none a new alarm opens and the id is forgotten;
+     * - the alarms cannot be read: nothing is forgotten and nothing new opens; "Continue" shows "Couldn't save. Try again."
+     *   and tries again.
+     */
+    private fun alarmGone(id: String?) {
+        viewModelScope.launch {
+            when (val read = firstAlarm.alarms.listAll()) {
+                is Outcome.Success -> {
+                    val stored = read.value
+                    if (id != null && stored.any { it.id == id }) {
+                        if (openRetries++ < MAX_OPEN_RETRIES) alarm.open(id)
+                    } else {
+                        val adopted = stored.maxByOrNull { it.createdAt }?.id
+                        local.update { it.copy(alarmId = adopted) }
+                        ops.trySend(Op.RememberAlarm(adopted))
+                        alarm.open(adopted)
+                    }
+                }
+
+                is Outcome.Failure -> {
+                    logIfFailed(LOAD_ALARMS, read)
+                }
+            }
+        }
     }
+
+    /** The newest stored alarm (onboarding's, while it is required), or null for none or an unreadable store (logged). */
+    private suspend fun storedAlarm(): String? =
+        when (val read = firstAlarm.alarms.listAll()) {
+            is Outcome.Success -> read.value.maxByOrNull { it.createdAt }?.id
+            is Outcome.Failure -> null.also { logIfFailed(LOAD_ALARMS, read) }
+        }
 
     /** "Fix" on the maker row: the guidance over step 6 (a late report after the step was left is ignored). */
     private fun openGuidance() {
@@ -377,13 +424,20 @@ class OnboardingViewModel(
                 }.first()
         val stored = OnboardingStep.entries.firstOrNull { it.name == progress.step } ?: OnboardingStep.Mission
         val built = minOf(stored, LAST_BUILT)
+        // Review fix: an alarm saved just before the process died (its id not stored yet) is adopted, never doubled.
+        val alarmId =
+            when {
+                progress.alarmId != null -> progress.alarmId
+                built >= OnboardingStep.FirstAlarm -> storedAlarm()?.also { ops.trySend(Op.RememberAlarm(it)) }
+                else -> null
+            }
         val step =
             when {
                 built > OnboardingStep.Disclosure && !progress.consented -> OnboardingStep.Disclosure
-                built > OnboardingStep.Checks && progress.alarmId == null -> OnboardingStep.FirstAlarm
+                built > OnboardingStep.Checks && alarmId == null -> OnboardingStep.FirstAlarm
                 else -> built
             }
-        local.update { it.showing(step).copy(alarmId = progress.alarmId) }
+        local.update { it.showing(step).copy(alarmId = alarmId) }
         opened(step)
         // The choice was stored before the process died, but not the step after it: never asked again (FR-ONB-6).
         if (step == OnboardingStep.Analytics && asked()) {
@@ -605,6 +659,10 @@ class OnboardingViewModel(
         const val REFRESH_PRICES = "refresh prices"
         const val LOAD_PRICES = "load prices"
         const val REMEMBER_ALARM = "remember onboarding alarm"
+        const val LOAD_ALARMS = "load alarms for onboarding"
+
+        /** How many times a first alarm that is still stored opens again at once after a passing read failure. */
+        const val MAX_OPEN_RETRIES = 1
         const val LOAD_CONSENT = "load usage stats choice"
         const val SAVE_CONSENT = "save usage stats choice"
 

@@ -1,27 +1,44 @@
 package com.yawnandpawn.app.ui.onboarding
 
 import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.EnterExitState
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.saveable.rememberSaveableStateHolder
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.semantics.paneTitle
+import androidx.compose.ui.semantics.semantics
 import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.ViewModelStore
+import androidx.lifecycle.ViewModelStoreOwner
 import androidx.lifecycle.compose.LifecycleEventEffect
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.lifecycle.viewmodel.compose.LocalViewModelStoreOwner
 import androidx.navigationevent.NavigationEventInfo
 import androidx.navigationevent.compose.NavigationBackHandler
 import androidx.navigationevent.compose.rememberNavigationEventState
+import com.yawnandpawn.app.ui.checks.CheckType
+import com.yawnandpawn.app.ui.checks.displayName
 import com.yawnandpawn.app.ui.components.PpsBackground
 import com.yawnandpawn.app.ui.components.subScreenTransition
 import com.yawnandpawn.app.ui.editor.AlarmEditorScreen
 import com.yawnandpawn.app.ui.editor.EditorIntent
+import com.yawnandpawn.app.ui.editor.EditorPane
+import com.yawnandpawn.app.ui.editor.EditorUiState
 import com.yawnandpawn.app.ui.editor.rememberLastNonNull
 import com.yawnandpawn.app.ui.reliability.ManufacturerGuidanceRoute
+import com.yawnandpawn.app.ui.resources.Res
+import com.yawnandpawn.app.ui.resources.check_try_it
+import com.yawnandpawn.app.ui.resources.reliability_manufacturer
+import org.jetbrains.compose.resources.stringResource
 import org.koin.compose.viewmodel.koinViewModel
 
 /**
@@ -70,7 +87,11 @@ fun OnboardingRoute(
     }
 }
 
-/** The step, or what covers it, sliding in and out; the last Check setup shown stays while it slides out after Back. */
+/**
+ * The step, or what covers it, sliding in and out; the last Check setup shown stays while it slides out after Back.
+ * Taps count only once the slide is over (review fix, as on the steps), and each overlay names itself to TalkBack as a
+ * pane by its title.
+ */
 @Composable
 private fun OnboardingContent(
     state: OnboardingUiState,
@@ -87,28 +108,64 @@ private fun OnboardingContent(
         transitionSpec = { subScreenTransition(forward = targetState != Overlay.None) },
         label = "onboarding overlay",
     ) { showing ->
+        val settled = transition.currentState == EnterExitState.Visible && transition.targetState == EnterExitState.Visible
+        val live by rememberUpdatedState(settled)
+        val guarded: (OnboardingIntent) -> Unit = { if (live) onIntent(it) }
         when (showing) {
             Overlay.None -> {
-                steps.SaveableStateProvider(STEPS_KEY) { OnboardingScreen(state = state, is24Hour = is24Hour, onIntent = onIntent) }
+                steps.SaveableStateProvider(STEPS_KEY) { OnboardingScreen(state = state, is24Hour = is24Hour, onIntent = guarded) }
             }
 
             Overlay.CheckSetup -> {
                 setup?.let {
-                    AlarmEditorScreen(
-                        state = it,
-                        is24Hour = is24Hour,
-                        onIntent = { intent -> onIntent(OnboardingIntent.CheckSetup(intent)) },
-                        resumed = resumed,
-                    )
+                    Box(modifier = Modifier.fillMaxSize().paneTitled(it.overlayTitle())) {
+                        AlarmEditorScreen(
+                            state = it,
+                            is24Hour = is24Hour,
+                            onIntent = { intent -> guarded(OnboardingIntent.CheckSetup(intent)) },
+                            resumed = resumed,
+                        )
+                    }
                 }
             }
 
             Overlay.Guidance -> {
-                ManufacturerGuidanceRoute(onClose = { onIntent(OnboardingIntent.GuidanceClosed) })
+                Box(modifier = Modifier.fillMaxSize().paneTitled(stringResource(Res.string.reliability_manufacturer))) {
+                    GuidanceOpening { ManufacturerGuidanceRoute(onClose = { guarded(OnboardingIntent.GuidanceClosed) }) }
+                }
             }
         }
     }
 }
+
+/**
+ * Gives [content] (the maker guidance) a ViewModel store of its own for this opening, cleared when it leaves (review fix):
+ * a "Close" left over from an earlier opening never closes the next one.
+ */
+@Composable
+private fun GuidanceOpening(content: @Composable () -> Unit) {
+    val store = remember { ViewModelStore() }
+    DisposableEffect(store) { onDispose { store.clear() } }
+    val owner =
+        remember(store) {
+            object : ViewModelStoreOwner {
+                override val viewModelStore: ViewModelStore = store
+            }
+        }
+    CompositionLocalProvider(LocalViewModelStoreOwner provides owner) { content() }
+}
+
+/** The overlay's title, as its own screen shows it: the check's name, "Try it", or QR/Barcode for its registration. */
+@Composable
+private fun EditorUiState.overlayTitle(): String =
+    when (pane) {
+        EditorPane.TryIt -> stringResource(Res.string.check_try_it)
+        EditorPane.ScanCode -> CheckType.QrBarcode.displayName()
+        else -> setupType?.displayName().orEmpty()
+    }
+
+/** TalkBack announces the overlay by [title] when it opens (like a step's headline, Story 5.10). */
+private fun Modifier.paneTitled(title: String): Modifier = semantics { paneTitle = title }
 
 /** What covers the step: nothing, the editor's Check setup (step 5), or the maker guidance (step 6). */
 private enum class Overlay { None, CheckSetup, Guidance }

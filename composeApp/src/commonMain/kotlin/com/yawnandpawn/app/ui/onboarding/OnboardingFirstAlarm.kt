@@ -4,6 +4,7 @@ import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.ViewModelStore
 import androidx.lifecycle.viewmodel.initializer
 import androidx.lifecycle.viewmodel.viewModelFactory
+import com.yawnandpawn.app.core.alarm.AlarmRepository
 import com.yawnandpawn.app.core.onboarding.RememberOnboardingAlarm
 import com.yawnandpawn.app.ui.editor.AlarmEditorViewModel
 import com.yawnandpawn.app.ui.editor.EditorEffect
@@ -28,10 +29,15 @@ fun interface FirstAlarmEditors {
     ): AlarmEditorViewModel
 }
 
-/** What onboarding's steps 4 and 5 need (Story 5.11): the editor, and where the first alarm's id is remembered. */
+/**
+ * What onboarding's steps 4 and 5 need (Story 5.11): the editor, where the first alarm's id is remembered, and (review
+ * fix) the stored [alarms]: while onboarding is required every stored alarm is onboarding's, so an id that was never
+ * stored, or that could not be read once, is found again there instead of starting a second alarm.
+ */
 class FirstAlarmSources(
     val editors: FirstAlarmEditors,
     val remember: RememberOnboardingAlarm,
+    val alarms: AlarmRepository,
 )
 
 /**
@@ -41,8 +47,13 @@ class FirstAlarmSources(
  *
  * The child lives in its own [ViewModelStore], cleared when a fresh child replaces it and when onboarding closes, so its
  * coroutines end with it. A child that saved is left alone (it finishes its notification ask, and stays "saving", so it
- * accepts nothing more); [ensureOpen] then opens a fresh child on the stored id. Its effects go to [events]: a save that
- * failed, and a stored alarm that cannot be opened (or was deleted meanwhile, so a save closed it without storing).
+ * accepts nothing more), and so is one that could not open its alarm; [ensureOpen] then opens a fresh child. Its effects
+ * go to [events]:
+ * - a save that failed;
+ * - "gone" only for an alarm the child could not open (`OpenFailed`) or a save that found it deleted (a close while
+ *   saving, without `onSaved`); onboarding decides from the stored alarms what opens next (review fix);
+ * - a plain close (Back on the editor's main screen, never meant as "deleted") re-opens a child on the same alarm.
+ *
  * [state] keeps the last loaded form while a fresh child reads its alarm, so step 4 never flashes the defaults.
  */
 internal class OnboardingFirstAlarm(
@@ -55,10 +66,10 @@ internal class OnboardingFirstAlarm(
         /** The first alarm was stored as [id]. */
         fun saved(id: String)
 
-        /** The stored alarm cannot be read (or is gone): onboarding opens a new alarm and forgets the id. */
-        fun openFailed()
+        /** The child could not open [id] (or a save found it deleted); null for a new alarm. */
+        fun gone(id: String?)
 
-        /** "Couldn't save the alarm. Try again." */
+        /** "Couldn't save. Try again." */
         fun saveFailed()
     }
 
@@ -71,28 +82,41 @@ internal class OnboardingFirstAlarm(
     private var editor: AlarmEditorViewModel? = null
     private var watch: Job? = null
 
+    /** The alarm the current child edits; null for a new alarm. */
+    private var openedOn: String? = null
+
     /** Numbers the children, so a replaced child's late report is ignored. */
     private var generation = 0
 
     /** The current child stored the alarm. */
     private var saved = false
 
+    /** The current child could not open its alarm: it accepts nothing, and [ensureOpen] replaces it. */
+    private var failed = false
+
     /** Step 5 is open: the child shows its Wake-up check pane (Check setup's Back returns there, TalkBack is read again). */
     private var checksOpen = false
+
+    /** The current child could not open its alarm (a fresh one opens on the next step 4 / 5 or "Continue"). */
+    val failedToOpen: Boolean
+        get() = failed
 
     /** The current child is storing the alarm (until it fails; after a save it is done). */
     val saving: Boolean
         get() = !saved && editor?.state?.value?.isSaving == true
 
-    /** Opens a child on [alarmId] unless one is open that has not saved yet (its unsaved form stays). */
+    /** Opens a child on [alarmId] unless one is open that can still be edited (its unsaved form stays). */
     fun ensureOpen(alarmId: String?) {
-        if (editor == null || saved) open(alarmId)
+        val editable = editor != null && !saved && !failed
+        if (!editable || openedOn != alarmId) open(alarmId)
     }
 
     /** Replaces the child with a fresh one on [alarmId] (null: a new alarm). */
     fun open(alarmId: String?) {
         release()
         saved = false
+        failed = false
+        openedOn = alarmId
         val current = ++generation
         val owner = ViewModelStore()
         val factory =
@@ -112,7 +136,7 @@ internal class OnboardingFirstAlarm(
         watch =
             scope.launch {
                 launch { child.state.collect { show(child, it) } }
-                child.effects.collect { onEffect(it, current) }
+                child.effects.collect { onEffect(it, child, current) }
             }
     }
 
@@ -129,6 +153,7 @@ internal class OnboardingFirstAlarm(
 
     private fun onEffect(
         effect: EditorEffect,
+        child: AlarmEditorViewModel,
         current: Int,
     ) {
         when (effect) {
@@ -136,14 +161,27 @@ internal class OnboardingFirstAlarm(
                 events.saveFailed()
             }
 
-            // Launched apart: opening the fresh child cancels this child's watch, which reports it.
+            // Launched apart: what opens next replaces this child, whose watch reports it.
             EditorEffect.OpenFailed -> {
-                scope.launch { if (current == generation) events.openFailed() }
+                failed = true
+                val id = openedOn
+                scope.launch { if (current == generation) events.gone(id) }
             }
 
-            // A save closes the editor after onSaved; a close without it is an alarm deleted meanwhile.
+            // A save closes the editor after onSaved. Without it, a close while saving is a save that found the alarm
+            // deleted; any other close (Back on the editor's main screen) leaves the alarm as it is: open it again.
             EditorEffect.Close -> {
-                if (!saved) scope.launch { if (current == generation) events.openFailed() }
+                if (!saved) {
+                    val id = openedOn
+                    val deleted = child.state.value.isSaving
+                    scope.launch {
+                        when {
+                            current != generation -> Unit
+                            deleted -> events.gone(id)
+                            else -> open(id)
+                        }
+                    }
+                }
             }
 
             else -> {
@@ -152,9 +190,9 @@ internal class OnboardingFirstAlarm(
         }
     }
 
-    /** Sends [intent] to the child, unless it already saved (a fresh child opens on the id first). */
+    /** Sends [intent] to the child, unless it already saved or could not open (a fresh child opens first). */
     fun send(intent: EditorIntent) {
-        if (!saved) editor?.onIntent(intent)
+        if (!saved && !failed) editor?.onIntent(intent)
     }
 
     /** Step 5 opened: the child's Wake-up check pane (once it has loaded). */

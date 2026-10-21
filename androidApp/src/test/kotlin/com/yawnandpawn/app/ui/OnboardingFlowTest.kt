@@ -3,9 +3,12 @@ package com.yawnandpawn.app.ui
 import android.app.Application
 import android.os.Looper
 import android.provider.Settings
+import androidx.compose.ui.semantics.SemanticsProperties
 import androidx.compose.ui.test.SemanticsMatcher
+import androidx.compose.ui.test.assertIsNotFocused
 import androidx.compose.ui.test.assertIsOff
 import androidx.compose.ui.test.click
+import androidx.compose.ui.test.hasAnyAncestor
 import androidx.compose.ui.test.hasClickAction
 import androidx.compose.ui.test.hasContentDescription
 import androidx.compose.ui.test.hasText
@@ -15,6 +18,7 @@ import androidx.compose.ui.test.onRoot
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performScrollTo
 import androidx.compose.ui.test.performTouchInput
+import androidx.lifecycle.Lifecycle
 import androidx.test.core.app.ActivityScenario
 import androidx.test.core.app.ApplicationProvider
 import com.yawnandpawn.app.APP_WORK_TIMEOUT_MILLIS
@@ -28,12 +32,18 @@ import com.yawnandpawn.app.core.error.Outcome
 import com.yawnandpawn.app.core.error.valueOrNull
 import com.yawnandpawn.app.core.onboarding.OnboardingProgress
 import com.yawnandpawn.app.core.onboarding.OnboardingRepository
+import com.yawnandpawn.app.core.reliability.DeviceInfo
+import com.yawnandpawn.app.core.reliability.DeviceInfoSource
+import com.yawnandpawn.app.core.reliability.DeviceMaker
+import com.yawnandpawn.app.core.reliability.ReliabilityProbe
+import com.yawnandpawn.app.core.reliability.ReliabilityStatus
 import com.yawnandpawn.app.core.reset.DeleteAllData
 import com.yawnandpawn.app.core.session.SessionEngine
 import com.yawnandpawn.app.core.telemetry.AnalyticsConsent
 import com.yawnandpawn.app.core.telemetry.ConsentStore
 import com.yawnandpawn.app.data.settings.SettingsDataStore
 import com.yawnandpawn.app.restartKoin
+import com.yawnandpawn.app.testing.FakeReliabilityProbe
 import com.yawnandpawn.app.ui.onboarding.OnboardingViewModel
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.runBlocking
@@ -43,6 +53,7 @@ import org.junit.Test
 import org.junit.runner.RunWith
 import org.koin.core.Koin
 import org.koin.core.context.GlobalContext
+import org.koin.core.module.Module
 import org.koin.dsl.module
 import org.robolectric.RobolectricTestRunner
 import org.robolectric.Shadows.shadowOf
@@ -86,9 +97,10 @@ class OnboardingFlowTest {
     /** The real app with the real onboarding store, [before] run on it, then MainActivity. */
     private fun launch(
         before: suspend (OnboardingRepository) -> Unit = {},
+        overrides: List<Module> = emptyList(),
         block: (ActivityScenario<MainActivity>) -> Unit,
     ) {
-        restartKoin(app, realOnboarding)
+        restartKoin(app, realOnboarding, *overrides.toTypedArray())
         runBlocking {
             koinGet().get<SessionEngine>().restore()
             before(koinGet().get<OnboardingRepository>())
@@ -125,12 +137,15 @@ class OnboardingFlowTest {
      * Two taps 100 ms apart on the place of the button [text] (a double tap): the second lands on whatever is there by
      * then, the outgoing button or the next step's identical button sliding in. Then the app settles.
      */
-    private fun doubleTap(text: String) {
+    private fun doubleTap(
+        text: String,
+        matcher: SemanticsMatcher = hasText(text) and hasClickAction(),
+    ) {
         composeRule.waitForIdle()
         shadowOf(Looper.getMainLooper()).idleFor(SETTLED)
         val at =
             composeRule
-                .onNode(hasText(text) and hasClickAction())
+                .onNode(matcher)
                 .fetchSemanticsNode()
                 .boundsInRoot.center
         composeRule.mainClock.autoAdvance = false
@@ -250,6 +265,9 @@ class OnboardingFlowTest {
             waitForStored { it.step == "Reliability" && it.alarmId != null }
             tapOnly("Continue")
             waitFor(hasText("Share anonymous usage stats?"))
+            // Neither choice is pre-selected or focused on the live screen (FR-ONB-6).
+            composeRule.onNode(hasText("Share") and hasClickAction()).assertIsNotFocused()
+            composeRule.onNode(hasText("No thanks") and hasClickAction()).assertIsNotFocused()
             tapOnly("No thanks")
 
             waitFor(navCapsule)
@@ -279,6 +297,7 @@ class OnboardingFlowTest {
             shadowOf(Looper.getMainLooper()).idleFor(SETTLED)
             composeRule.onNode(mathSetup).performScrollTo().performClick()
             waitFor(hasText("Try it") and hasClickAction())
+            composeRule.onNode(SemanticsMatcher.expectValue(SemanticsProperties.PaneTitle, "Math")).assertExists()
 
             scenario.onActivity { it.onBackPressedDispatcher.onBackPressed() }
 
@@ -287,6 +306,106 @@ class OnboardingFlowTest {
             composeRule.onNode(hasContentDescription("Step 5 of 8")).assertExists()
             composeRule.onNode(hasText("Try it") and hasClickAction()).assertDoesNotExist()
             assertEquals("Checks", stored().step)
+        }
+
+    @Test
+    fun `a double tap on a check's row opens Check setup without changing it`() =
+        launch(before = { onboarding ->
+            onboarding.setDisclosureAccepted(Instant.parse("2027-03-08T21:00:00Z"))
+            onboarding.setStep("Checks")
+        }) { scenario ->
+            waitFor(hasText("How will you prove you're up?"))
+            val mathSetup = hasText("Math") and hasClickAction() and !isToggleable()
+            waitFor(mathSetup)
+            composeRule.onNode(mathSetup).performScrollTo()
+            val before = setupSummary(mathSetup)
+
+            // The second tap lands on Check setup while it slides in: it counts for nothing.
+            doubleTap("Math", matcher = mathSetup)
+
+            waitFor(hasText("Try it") and hasClickAction())
+            scenario.onActivity { it.onBackPressedDispatcher.onBackPressed() }
+            waitFor(hasText("How will you prove you're up?"))
+            composeRule.waitForIdle()
+            assertEquals(before, setupSummary(mathSetup), "Check setup is as it was")
+        }
+
+    /** The texts of the "Your checks" row [matcher]: the check's name and its setup ("Easy · 3 problems"). */
+    private fun setupSummary(matcher: SemanticsMatcher): String =
+        composeRule
+            .onNode(matcher)
+            .fetchSemanticsNode()
+            .config[SemanticsProperties.Text]
+            .joinToString { it.text }
+
+    /** A first launch on step 6: the consent, an alarm saved before its id was stored (adopted), and the stored step. */
+    private suspend fun onChecklist(onboarding: OnboardingRepository) {
+        onboarding.setDisclosureAccepted(Instant.parse("2027-03-08T21:00:00Z"))
+        assertIs<Outcome.Success<*>>(koinGet().get<SaveAlarm>()(AlarmDraft(time = LocalTime(7, 0))))
+        onboarding.setStep("Reliability")
+    }
+
+    @Test
+    fun `step 6 checks the rows again when the app resumes, after a system settings screen`() =
+        launch(before = { onChecklist(it) }) { scenario ->
+            val probe = koinGet().get<ReliabilityProbe>() as FakeReliabilityProbe
+            probe.status = ReliabilityStatus.ALL_OK.copy(notificationsAllowed = false)
+            scenario.moveToState(Lifecycle.State.STARTED)
+            scenario.moveToState(Lifecycle.State.RESUMED)
+            waitFor(hasText("Make sure it rings"))
+            waitFor(hasText("Fix") and hasClickAction())
+
+            // Back from the system screen with notifications on: paused, then resumed.
+            probe.status = ReliabilityStatus.ALL_OK
+            scenario.moveToState(Lifecycle.State.STARTED)
+            scenario.moveToState(Lifecycle.State.RESUMED)
+
+            composeRule.waitUntil(timeoutMillis = APP_WORK_TIMEOUT_MILLIS) {
+                shadowOf(Looper.getMainLooper()).idle()
+                composeRule.onAllNodes(hasText("Fix") and hasClickAction()).fetchSemanticsNodes().isEmpty()
+            }
+            assertEquals("Reliability", stored().step)
+            assertNotNull(stored().alarmId, "the alarm saved before its id was stored is adopted")
+        }
+
+    @Test
+    fun `Fix on the maker row opens the guidance as a pane, and every opening is its own`() =
+        launch(before = { onChecklist(it) }, overrides = listOf(xiaomi)) { scenario ->
+            waitFor(hasText("Make sure it rings"))
+            val makerFix = hasText("Fix") and hasClickAction() and hasAnyAncestor(hasText("Manufacturer settings", substring = true))
+            waitFor(makerFix)
+            shadowOf(Looper.getMainLooper()).idleFor(SETTLED)
+            composeRule.onNode(makerFix).performScrollTo().performClick()
+            waitFor(hasText("I've done this") and hasClickAction())
+            composeRule
+                .onNode(SemanticsMatcher.expectValue(SemanticsProperties.PaneTitle, "Manufacturer settings"))
+                .assertExists()
+
+            scenario.onActivity { it.onBackPressedDispatcher.onBackPressed() }
+            waitFor(hasText("Make sure it rings"))
+            shadowOf(Looper.getMainLooper()).idleFor(SETTLED)
+            composeRule.onNode(makerFix).performScrollTo().performClick()
+
+            // The second opening stays open (nothing left over from the first closes it).
+            waitFor(hasText("I've done this") and hasClickAction())
+            shadowOf(Looper.getMainLooper()).idleFor(SETTLED)
+            composeRule.waitForIdle()
+            composeRule.onNode(hasText("I've done this") and hasClickAction()).assertExists()
+        }
+
+    /** A Xiaomi phone, so the checklist has the Manufacturer row (Story 5.5). */
+    private val xiaomi =
+        module {
+            single<DeviceInfoSource> {
+                DeviceInfoSource {
+                    DeviceInfo(
+                        sdkInt = 34,
+                        maker = "Xiaomi",
+                        fingerprint = "xiaomi/test",
+                        deviceMaker = DeviceMaker.Xiaomi,
+                    )
+                }
+            }
         }
 
     @Test

@@ -180,7 +180,8 @@ abstract class OnboardingViewModelFixture {
                 clock = clock,
                 moneyFormatter = FakeMoneyFormatter(),
                 logger = logger,
-                firstAlarm = FirstAlarmSources(editors = ::editor, remember = RememberOnboardingAlarm(onboarding, sessionLock)),
+                firstAlarm =
+                    FirstAlarmSources(editors = ::editor, remember = RememberOnboardingAlarm(onboarding, sessionLock), alarms = alarms),
                 checklist = ChecklistScreens(::checklistScreen),
                 usageStats = UsageStatsSources(consents = consents, setConsent = SetAnalyticsConsent(consents, sessionLock)),
                 monotonicClock = ticks,

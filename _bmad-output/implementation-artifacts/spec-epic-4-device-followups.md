@@ -42,10 +42,10 @@ deferred:
 ## Code Map
 
 - `composeApp/.../ui/wake/RingingMapping.kt` -- `ringingUiState(session, availability, zone, now, priceOf)` and `alarmOnlyRingingUiState(now, zone)` show [now].
-- `composeApp/.../ui/wake/WakeClockTicks.kt` (new) -- `minuteTicks(clock)`, `untilNextMinute(now)`.
+- `composeApp/.../ui/wake/WallTime.kt` (new) -- `WallTime`, `wallTimes(clock, zones, changes)`, `rememberWallTime`, `untilNextMinute(now)`.
 - `androidApp/.../android/wake/WakeActivity.kt` -- injects `Clock`, collects `minuteTicks`, passes the time now to every Ringing state.
 - `core/.../billing/PurchaseCoordinator.kt` -- `prepareAndLaunch`: a second `PreLaunch` reconcile after `PRE_LAUNCH_REFRESH` (1 s) when `Reconciled.mayBeStale`; `Reconciled` carries the listed owned and purchased products; `Pass.consumed`.
-- Tests: `RingingMappingTest`, `WakeClockTicksTest` (new), `WakeActivityTest` (fixed `FakeClock`s, a re-ring clock test), `PurchaseCoordinatorTest` (4 new cases), `FakePlay.onQuery`; samples pass the sample's time (`RingingSamples`, `SnoozeVariantSamples`), and `SnoozedScreenshotTest`'s re-ring samples show the re-ring time (baselines re-recorded on purpose).
+- Tests: `RingingMappingTest`, `WallTimeTest` (new), `WakeActivityTest` (fixed `FakeClock`s, a re-ring clock test), `PurchaseCoordinatorRefreshTest` (new: the pre-launch refresh cases), `FakePlay.onQuery`; samples pass the sample's time (`RingingSamples`, `SnoozeVariantSamples`), and `SnoozedScreenshotTest`'s re-ring samples show the re-ring time (baselines re-recorded on purpose).
 
 ## Design Notes
 
@@ -60,9 +60,9 @@ deferred:
 
 Independent review of PR #73: no HIGH findings, and money safety confirmed. All seven items are fixed:
 
-1. **Clock follows the time-change signal.** `wallTimes(clock, zones, changes)` (`WakeClockTicks.kt`) starts with the time now and emits again at every `TimeChangeSignal` (the system's minute tick, a clock set, a zone change, as Home does). Each emission reads `clock.now()` and `zones.current()`. A minute-boundary delay stays as a backstop.
+1. **Clock follows the time-change signal.** `wallTimes(clock, zones, changes)` (`WallTime.kt`) starts with the time now and emits again at every `TimeChangeSignal` (the system's minute tick, a clock set, a zone change, as Home does). Each emission reads `clock.now()` and `zones.current()`. A minute-boundary delay stays as a backstop.
    - `WakeActivity` reads it through `rememberWallTime`, with the `WallTime` class replacing the private `WakeTime`.
-   - Tests: `WakeClockTicksTest` (signal with a new time and zone; the boundary backstop) and `WakeActivityTest` ("moves on at a time-change signal").
+   - Tests: `WallTimeTest` (signal with a new time and zone; the boundary backstop) and `WakeActivityTest` ("moves on at a time-change signal").
 2. **The ring may end during the 1 s wait.** `prepareAndLaunch` returns at once when the session no longer pays the intent after the wait.
    - Test: "a ring that ends during the wait asks nothing more and opens nothing" (1 query, no launch, no reuse sheet).
 3. **An update during the wait keeps its flag.** The update flag is read and cleared together with the first query, inside the same lock (`getAndUpdate`), so an update that lands during the wait still counts for the next Pay.
@@ -93,7 +93,7 @@ Status: done (fast mode; not pushed). Rebased onto main `a7246758`.
 
 **Verification** (`--no-daemon --max-workers=2`, JDK 17), all passing:
 - Coordinator: `PurchaseCoordinatorTest` 28, `PurchaseCoordinatorSequenceTest` 13, `PurchaseCoordinatorReviewTest` 19.
-- Wake mapping: `com.yawnandpawn.app.ui.wake.*`, including `RingingMappingTest` 13 and `WakeClockTicksTest` 2.
+- Wake mapping: `com.yawnandpawn.app.ui.wake.*`, including `RingingMappingTest` 13 and `WallTimeTest` 2.
 - Wake screen: `WakeActivityTest` 20, `PaymentOutcomeMessagesTest` 8, `TestAlarmFlowTest` 14, `DirectBootNoteTest` 3, `TalkBackF5FlowTest` 1, `SnoozedScreenTest` 11.
 - Screenshots: `RingingScreenshotTest` 20, `SnoozedScreenshotTest` 12, `DirectBootNoteScreenshotTest` 4, `SnoozeVariantsTest` 36, `RingingSemanticsTest` 15. Four re-ring baselines were re-recorded on purpose: the 6:15 alarm now shows 6:24.
 - Before the rebase, the whole `com.yawnandpawn.app.android.wake.*` package passed.

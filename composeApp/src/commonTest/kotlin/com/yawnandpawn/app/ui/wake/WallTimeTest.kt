@@ -19,7 +19,7 @@ import kotlin.time.Instant
  * Epic 4 device follow-up 1: the Ringing clock's time and zone come from the app's ports, again at every time-change
  * signal and, as a backstop, at every minute boundary.
  */
-class WakeClockTicksTest {
+class WallTimeTest {
     private val start = Instant.parse("2027-03-03T06:09:40Z")
     private val utc = TimeZone.UTC
 

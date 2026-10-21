@@ -18,10 +18,10 @@ import com.yawnandpawn.app.testing.FakeClock
 import com.yawnandpawn.app.testing.FakeLogger
 import com.yawnandpawn.app.testing.FakeMissedNoteDismissals
 import com.yawnandpawn.app.testing.FakeReliabilityProbe
-import com.yawnandpawn.app.testing.FakeReliabilitySettings
 import com.yawnandpawn.app.testing.FakeSessionHistoryRepository
 import com.yawnandpawn.app.testing.FakeTimeChangeSignal
 import com.yawnandpawn.app.testing.FakeTimeZoneProvider
+import com.yawnandpawn.app.testing.anEvaluateReliability
 import com.yawnandpawn.app.testing.noReRegisterSuggestions
 import com.yawnandpawn.app.ui.home.AlarmActions
 import com.yawnandpawn.app.ui.home.HomeRoute
@@ -68,8 +68,7 @@ class HomeRouteLifecycleTest {
                 FakeTimeZoneProvider(),
                 FakeTimeChangeSignal(),
                 MissedNotes(FakeSessionHistoryRepository(), FakeMissedNoteDismissals()),
-                probe,
-                FakeReliabilitySettings(),
+                anEvaluateReliability(probe = probe, checks = FakeCheckConfigRepository(repository)),
                 noReRegisterSuggestions(),
             )
         val owner = TestOwner()
@@ -83,7 +82,7 @@ class HomeRouteLifecycleTest {
         ) {
             composeRule.waitUntil(timeoutMillis = APP_WORK_TIMEOUT_MILLIS) { bannerShown() }
 
-            // Back from "Fix": stopped, the setting turned on, started again.
+            // Back from the checklist: stopped, the setting turned on, started again.
             composeRule.runOnIdle { owner.registry.currentState = Lifecycle.State.CREATED }
             val beforeStart = probe.checks
             probe.status = ReliabilityStatus.ALL_OK

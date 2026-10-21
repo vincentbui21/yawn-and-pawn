@@ -16,9 +16,7 @@ import com.yawnandpawn.app.core.error.Outcome
 import com.yawnandpawn.app.core.error.errorOrNull
 import com.yawnandpawn.app.core.history.MissedNotes
 import com.yawnandpawn.app.core.history.SessionHistoryRow
-import com.yawnandpawn.app.core.reliability.ReliabilityProbe
-import com.yawnandpawn.app.core.reliability.ReliabilitySettings
-import com.yawnandpawn.app.core.reliability.ReliabilityStatus
+import com.yawnandpawn.app.core.reliability.EvaluateReliability
 import com.yawnandpawn.app.core.stats.ReRegisterInputs
 import com.yawnandpawn.app.core.stats.ReRegisterSuggestion
 import com.yawnandpawn.app.core.stats.ReRegisterSuggestions
@@ -28,6 +26,7 @@ import com.yawnandpawn.app.core.time.TimeZoneProvider
 import com.yawnandpawn.app.ui.checks.toUi
 import com.yawnandpawn.app.ui.format.Countdown
 import com.yawnandpawn.app.ui.format.countdownOf
+import com.yawnandpawn.app.ui.reliability.AlarmBlockingCheck
 import com.yawnandpawn.app.ui.settings.WeakeningNote
 import com.yawnandpawn.app.ui.wake.uiCheckType
 import kotlinx.coroutines.ExperimentalCoroutinesApi
@@ -68,9 +67,10 @@ import com.yawnandpawn.app.ui.checks.CheckType as UiCheckType
  * 2026-10-05); Delete asks first and is logged. A switch or Delete that cannot be stored shows "Couldn't save the
  * alarm. Try again." (owner decision 2026-10-02). Navigation goes out through [effects]. The missed note (Story 1.16)
  * shows the alarm time of the latest Missed session from [missedNotes] until "Dismiss" stores its dismissal. The
- * reliability banner (Story 1.19) shows while [reliability] finds a setting off; it is checked when Home starts and
- * resumes (a permission dialog only pauses it), and "Fix" checks again and opens the setting that is off now through
- * [reliabilitySettings]. The re-register banner (Story 3.13) shows [reRegister]'s suggestion for the listed alarms,
+ * reliability banner shows while [reliability]'s checklist has a blocking row that is not OK
+ * (`ReliabilityChecklist.alarmBlocking`, Story 5.4); it is evaluated again, without waiting, when Home starts and resumes
+ * (a permission dialog only pauses it), and "Fix" opens the reliability checklist. The re-register banner (Story 3.13)
+ * shows [reRegister]'s suggestion for the listed alarms,
  * again on every tick (the 7-day window moves), named by [uiTypeOf]; "Re-register" opens that alarm's editor until QR
  * registration arrives (Story 3.10), "Dismiss" stores the dismissal.
  */
@@ -83,8 +83,7 @@ class HomeViewModel(
     private val timeZoneProvider: TimeZoneProvider,
     timeChanges: TimeChangeSignal,
     private val missedNotes: MissedNotes,
-    private val reliability: ReliabilityProbe,
-    private val reliabilitySettings: ReliabilitySettings,
+    reliability: EvaluateReliability,
     private val reRegister: ReRegisterSuggestions,
     /** The check the banner names; a type without a UI (the placeholder) shows no banner. */
     private val uiTypeOf: (CoreCheckType) -> UiCheckType? = ::uiCheckType,
@@ -92,7 +91,9 @@ class HomeViewModel(
     /** Bumped by "Try again" to subscribe to the alarms again. */
     private val loads = MutableStateFlow(0)
     private val resumes = MutableSharedFlow<Unit>(extraBufferCapacity = 1)
-    private val local = MutableStateFlow(LocalState(reliability = reliability.check()))
+    private val local = MutableStateFlow(LocalState())
+    private val reliabilityBanner =
+        AlarmBlockingCheck(reliability, viewModelScope) { blocking -> local.update { it.copy(reliabilityProblem = blocking) } }
     private val _effects = Channel<HomeEffect>(Channel.BUFFERED)
     val effects: Flow<HomeEffect> = _effects.receiveAsFlow()
     private var snackbarJob: Job? = null
@@ -194,10 +195,10 @@ class HomeViewModel(
                 showMessage(HomeMessage.OpenFailed)
             }
 
-            // A permission dialog answered over Home only pauses it, so a resume checks the settings too.
+            // A permission dialog answered over Home only pauses it, so a resume evaluates the checklist too.
             HomeIntent.Resumed -> {
                 resumes.tryEmit(Unit)
-                checkReliability()
+                reliabilityBanner.refresh()
             }
 
             is HomeIntent.MissedNoteDismissed -> {
@@ -246,19 +247,18 @@ class HomeViewModel(
     }
 
     /**
-     * The reliability banner (Story 1.19) and the re-register banner (Story 3.13); other intents (hero, session panel,
+     * The reliability banner (Story 5.4) and the re-register banner (Story 3.13); other intents (hero, session panel,
      * lock dialog) arrive with their stories.
      */
     private fun onReliabilityIntent(intent: HomeIntent) {
         when (intent) {
-            // A setting may have changed while Home was away (the user came back from "Fix").
+            // A setting may have changed while Home was away (the user came back from the checklist).
             HomeIntent.Started -> {
-                checkReliability()
+                reliabilityBanner.refresh()
             }
 
-            // The setting that is off now, not when Home last checked.
             HomeIntent.FixSettings -> {
-                checkReliability().firstFailing?.let(reliabilitySettings::open)
+                _effects.trySend(HomeEffect.OpenReliability)
             }
 
             // Story 3.10: QR registration of the alarm's code (another camera check: the alarm's editor, where its checks are).
@@ -344,9 +344,6 @@ class HomeViewModel(
         }
     }
 
-    private fun checkReliability(): ReliabilityStatus =
-        reliability.check().also { status -> local.update { it.copy(reliability = status) } }
-
     private fun requestDelete(id: String) {
         val card = state.value.alarms.firstOrNull { it.id == id } ?: return
         local.update { it.copy(deleteDialog = DeleteAlarmDialog(card.id, card.time)) }
@@ -409,7 +406,7 @@ class HomeViewModel(
                     savedUnderLock = (ui.message as? HomeMessage.SavedUnderLock)?.note,
                     missedAlarmAt = missedAlarmAt,
                     missedSessionId = missedSessionId,
-                    reliabilityProblem = !ui.reliability.allOk,
+                    reliabilityProblem = ui.reliabilityProblem,
                 )
             }
 
@@ -428,7 +425,7 @@ class HomeViewModel(
                     savedUnderLock = (ui.message as? HomeMessage.SavedUnderLock)?.note,
                     missedAlarmAt = missedAlarmAt,
                     missedSessionId = missedSessionId,
-                    reliabilityProblem = !ui.reliability.allOk,
+                    reliabilityProblem = ui.reliabilityProblem,
                 )
             }
         }
@@ -529,8 +526,8 @@ private data class LocalState(
     val disableDialog: DisableUnderLock? = null,
     /** The snackbar showing, if any. */
     val message: HomeMessage? = null,
-    /** What the reliability probe found when Home last started (Story 1.19). */
-    val reliability: ReliabilityStatus = ReliabilityStatus.ALL_OK,
+    /** The last checklist evaluation found a blocking row that is not OK (Story 5.4); false until the first one ends. */
+    val reliabilityProblem: Boolean = false,
 )
 
 /**

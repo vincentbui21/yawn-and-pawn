@@ -15,6 +15,7 @@ import com.yawnandpawn.app.core.reliability.ConfirmMakerGuidance
 import com.yawnandpawn.app.core.reliability.DeviceInfo
 import com.yawnandpawn.app.core.reliability.DeviceInfoSource
 import com.yawnandpawn.app.core.reliability.DeviceMaker
+import com.yawnandpawn.app.core.reliability.EvaluateReliability
 import com.yawnandpawn.app.core.reliability.ManufacturerSettings
 import com.yawnandpawn.app.core.reliability.NotificationPermission
 import com.yawnandpawn.app.core.reliability.ReliabilityProbe
@@ -34,6 +35,7 @@ import com.yawnandpawn.app.testing.AlarmUseCasesFixture
 import com.yawnandpawn.app.testing.FakeAccessibilityState
 import com.yawnandpawn.app.testing.FakeAlarmRepository
 import com.yawnandpawn.app.testing.FakeAlarmScheduler
+import com.yawnandpawn.app.testing.FakeCheckConfigRepository
 import com.yawnandpawn.app.testing.FakeClock
 import com.yawnandpawn.app.testing.FakeGlobalSettingsRepository
 import com.yawnandpawn.app.testing.FakeLogger
@@ -58,6 +60,7 @@ import com.yawnandpawn.app.testing.FakeTimeZoneProvider
 import com.yawnandpawn.app.testing.aDeleteAllData
 import com.yawnandpawn.app.testing.anAlarm
 import com.yawnandpawn.app.testing.anAppVersion
+import com.yawnandpawn.app.testing.anEvaluateReliability
 import com.yawnandpawn.app.ui.editor.AlarmEditorArgs
 import com.yawnandpawn.app.ui.editor.AlarmEditorViewModel
 import com.yawnandpawn.app.ui.home.HomeViewModel
@@ -67,7 +70,9 @@ import com.yawnandpawn.app.ui.payments.PaymentsViewModel
 import com.yawnandpawn.app.ui.purchases.PurchaseHistoryViewModel
 import com.yawnandpawn.app.ui.qr.CameraPermission
 import com.yawnandpawn.app.ui.qr.TestCameraPermission
+import com.yawnandpawn.app.ui.reliability.ChecklistItem
 import com.yawnandpawn.app.ui.reliability.ManufacturerGuidanceViewModel
+import com.yawnandpawn.app.ui.reliability.ReliabilityViewModel
 import com.yawnandpawn.app.ui.you.YouUiState
 import com.yawnandpawn.app.ui.you.YouViewModel
 import kotlinx.coroutines.Dispatchers
@@ -136,6 +141,8 @@ class UiModuleTest {
                         ReRegisterSuggestions(FakeSessionHistoryRepository(), CheckRegistrations.None, FakeReRegisterDismissals(), get())
                     }
                     single { ScheduleTestAlarm(FakeAlarmScheduler(), FakeTestAlarmStore(), get(), get()) }
+                    // Story 5.4: Home's banner evaluates the reliability checklist.
+                    factory<EvaluateReliability> { anEvaluateReliability(probe = get(), checks = get()) }
                 }
             val koin = koinApplication { modules(ports, uiModule) }.koin
 
@@ -236,6 +243,39 @@ class UiModuleTest {
         } finally {
             Dispatchers.resetMain()
             app.close()
+        }
+    }
+
+    @OptIn(ExperimentalCoroutinesApi::class)
+    @Test
+    fun `the ui module builds the reliability checklist ViewModel from the core ports (Story 5_4)`() {
+        Dispatchers.setMain(UnconfinedTestDispatcher())
+        try {
+            val ports =
+                module {
+                    single<Logger> { FakeLogger() }
+                    single<Clock> { FakeClock() }
+                    single<TimeZoneProvider> { FakeTimeZoneProvider() }
+                    single<CheckConfigRepository> { FakeCheckConfigRepository() }
+                    single<GlobalSettingsRepository> { FakeGlobalSettingsRepository() }
+                    single<ReliabilitySettings> { FakeReliabilitySettings() }
+                    single<CameraPermission> { TestCameraPermission() }
+                    single { ScheduleTestAlarm(FakeAlarmScheduler(), FakeTestAlarmStore(), get(), get()) }
+                    factory<EvaluateReliability> { anEvaluateReliability(checks = get()) }
+                }
+            val app = koinApplication { modules(ports, uiModule) }
+            val checklist = app.koin.get<ReliabilityViewModel>()
+
+            checklist.refresh()
+
+            val shown =
+                checklist.state.value.rows
+                    .map { it.item }
+            val apiThirtyFour = listOf(ChecklistItem.Notifications, ChecklistItem.FullScreen, ChecklistItem.DoNotDisturb)
+            assertEquals(apiThirtyFour + listOf(ChecklistItem.Battery, ChecklistItem.TestAlarm), shown)
+            app.close()
+        } finally {
+            Dispatchers.resetMain()
         }
     }
 

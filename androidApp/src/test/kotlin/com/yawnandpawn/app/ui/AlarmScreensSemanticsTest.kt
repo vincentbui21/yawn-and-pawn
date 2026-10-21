@@ -38,8 +38,6 @@ import com.yawnandpawn.app.testing.FakeClock
 import com.yawnandpawn.app.testing.FakeLogger
 import com.yawnandpawn.app.testing.FakeMissedNoteDismissals
 import com.yawnandpawn.app.testing.FakeNotificationPermission
-import com.yawnandpawn.app.testing.FakeReliabilityProbe
-import com.yawnandpawn.app.testing.FakeReliabilitySettings
 import com.yawnandpawn.app.testing.FakeSessionHistoryRepository
 import com.yawnandpawn.app.testing.FakeSoundLibrary
 import com.yawnandpawn.app.testing.FakeSoundPreview
@@ -47,6 +45,7 @@ import com.yawnandpawn.app.testing.FakeTestAlarmStore
 import com.yawnandpawn.app.testing.FakeTimeChangeSignal
 import com.yawnandpawn.app.testing.FakeTimeZoneProvider
 import com.yawnandpawn.app.testing.anAlarm
+import com.yawnandpawn.app.testing.anEvaluateReliability
 import com.yawnandpawn.app.testing.noReRegisterSuggestions
 import com.yawnandpawn.app.ui.editor.AlarmEditorRoute
 import com.yawnandpawn.app.ui.editor.AlarmEditorScreen
@@ -551,8 +550,7 @@ class AlarmScreensSemanticsTest {
                 FakeTimeZoneProvider(TimeZone.UTC),
                 FakeTimeChangeSignal(),
                 MissedNotes(FakeSessionHistoryRepository(), FakeMissedNoteDismissals()),
-                FakeReliabilityProbe(),
-                FakeReliabilitySettings(),
+                anEvaluateReliability(checks = FakeCheckConfigRepository(repository)),
                 noReRegisterSuggestions(),
             )
         withScreen(
@@ -619,8 +617,7 @@ class AlarmScreensSemanticsTest {
                 FakeTimeZoneProvider(),
                 FakeTimeChangeSignal(),
                 missedNotes,
-                FakeReliabilityProbe(),
-                FakeReliabilitySettings(),
+                anEvaluateReliability(checks = FakeCheckConfigRepository(repository)),
                 noReRegisterSuggestions(),
             )
         var shown = false

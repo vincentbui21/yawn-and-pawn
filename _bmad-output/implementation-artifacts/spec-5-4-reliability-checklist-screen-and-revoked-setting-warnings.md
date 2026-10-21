@@ -2,7 +2,7 @@
 title: 'Story 5.4: Reliability checklist screen and revoked-setting warnings'
 type: 'feature'
 created: '2026-10-19'
-status: 'ready-for-dev'
+status: 'in-progress'
 baseline_revision: '862bc748dcdbe7781585e62eeadfd8f7717210d0'
 review_loop_iteration: 0
 followup_review_recommended: false
@@ -147,10 +147,10 @@ and `ChecklistCard` (design preview rounds 2–3) are not wired. Story 5.5's mak
 ## Tasks & Acceptance
 
 **Execution:**
-- [ ] Port and Android opener with resolver fallbacks, plus tests.
-- [ ] Checklist ViewModel, route, navigation and wiring, plus tests.
-- [ ] Home and Settings banner and row rewiring, plus tests.
-- [ ] Screenshots, semantics and real-app route tests. Keep the preview catalogue and the existing Home and Settings
+- [x] Port and Android opener with resolver fallbacks, plus tests.
+- [x] Checklist ViewModel, route, navigation and wiring, plus tests.
+- [x] Home and Settings banner and row rewiring, plus tests.
+- [x] Screenshots, semantics and real-app route tests. Keep the preview catalogue and the existing Home and Settings
   tests green; re-record only the baselines that change on purpose.
 
 **Acceptance Criteria:**
@@ -163,18 +163,50 @@ and `ChecklistCard` (design preview rounds 2–3) are not wired. Story 5.5's mak
 
 ## pps-design Done checklist
 
-- [ ] Only tokens from `DESIGN.md` used.
-- [ ] Light, Dark (and Sunrise where relevant) checked with previews / screenshots.
-- [ ] Every colour pair used is in the `DESIGN.md` contrast table.
-- [ ] Touch targets ≥ 48 dp; wake actions ≥ 64 dp.
-- [ ] Works at 200% font scale and with TalkBack; outcome glyphs present.
-- [ ] Reduced-motion path works.
-- [ ] Copy matches `EXPERIENCE.md > Voice and Tone` (no em dashes, no filler, strings in resources).
-- [ ] Every state row in `EXPERIENCE.md > State Patterns` for this surface is handled.
-- [ ] "I'm up" is the most prominent wake action; snooze is visible, plain and priced.
-- [ ] Compose `@Preview`s for each state (light/dark/Sunrise, empty/error) exist; screenshot tests updated.
+- [x] Only tokens from `DESIGN.md` used. The approved `ChecklistCard` / `checklist-row` layout is unchanged; the
+  snackbar is the shared `AppSnackbar`. No raw colour, radius or size.
+- [x] Light, Dark (and Sunrise where relevant) checked with previews / screenshots. `ReliabilityScreenshotTest` (Light,
+  Dark, Light 200 %), inspected. Sunrise does not apply (not a wake screen).
+- [x] Every colour pair used is in the `DESIGN.md` contrast table. Only the approved row pairs (`success`, `error`,
+  `text`, `text-secondary` on glass) and the existing snackbar and button pairs; no new pair.
+- [x] Touch targets ≥ 48 dp; wake actions ≥ 64 dp. `ReliabilitySemanticsTest`: rows ≥ 64 dp, "Fix", Back and "Ring a
+  test alarm" ≥ 48 dp; the Settings row ≥ 48 dp (`DefaultsSettingsSemanticsTest`). No wake action here.
+- [x] Works at 200% font scale and with TalkBack; outcome glyphs present. 200 % screenshots for each state; each row is
+  one TalkBack stop reading title, reason (or the revoked line) and "OK", with "Fix" its own button read right after;
+  OK / error / hollow-ring glyphs carry the status besides colour.
+- [x] Reduced-motion path works. No animation of its own; the push uses the shared screen transition.
+- [x] Copy matches `EXPERIENCE.md > Voice and Tone` (no em dashes, no filler, strings in resources). No new string; the
+  existing verbatim keys only (`CopyRulesTest` passes).
+- [x] Every state row in `EXPERIENCE.md > State Patterns` for this surface is handled. "Permission or setting missing"
+  (Home and Settings banner), "All OK" (every row OK, "Ring a test alarm" stays), "Session active" (the lock replaces
+  the checklist, `TabNavigationTest`).
+- [x] "I'm up" is the most prominent wake action; snooze is visible, plain and priced. Does not apply: not a wake
+  screen.
+- [x] Compose `@Preview`s for each state (light/dark/Sunrise, empty/error) exist; screenshot tests updated. The design
+  preview panes (round 2) keep rendering the same composable; `ReliabilityScreenshotTest` adds 16 goldens; the 8
+  Settings main-screen goldens are re-recorded because the "Reliability checklist" row now shows.
 
 ## Spec Change Log
+
+- 2026-10-20 (implementation, resumed after the first implementer was cut off):
+  - **Port and opener.** `ReliabilitySettings.open(row: ChecklistRow): Boolean`; `ReliabilityItem`, `firstFailing`
+    and `allOk` are gone (and `ReliabilityStatusTest` with them). `AndroidReliabilitySettings` moved to its own file:
+    each target (row screen, app details, `ACTION_SETTINGS`, no repeats) is started only when `resolveActivity`
+    resolves it; a throwing start or lookup falls through; nothing resolving is logged and answers false. The manifest
+    `<queries>` names each settings action (package visibility, not a permission). The old `ReliabilitySettingsTest` is
+    split into `AndroidReliabilitySettingsTest` (the opener) and `AndroidNotificationPermissionTest` (unchanged tests).
+  - **Test alarm failure (DEFAULT 4):** the editor has no test-failure snackbar (it logs and shows nothing), so the
+    checklist does the same: logged, no snackbar, no new string.
+  - **Banner timing:** Home and Settings no longer probe when the ViewModel is created; the banner is false until the
+    first evaluation, which runs (without waiting) on `ON_START` / `ON_RESUME` (`AlarmBlockingCheck`, one at a time).
+  - **TalkBack:** the row's `mergeDescendants` moved from the inner title block to the whole 64 dp row, so one stop
+    covers icon, title, reason and "OK", and its height is the row's; "Fix" stays its own button (no visual change).
+  - **Navigation:** the pushed entries (Purchase history, "Problem with a charge?", the checklist and the maker
+    guidance) moved to `ui/nav/PushedEntries.kt` because of detekt's `TooManyFunctions` and `LongMethod` on
+    `AppNavHost.kt`; `SettingsViewModel.onIntent` hands the three reliability intents to one helper
+    (`CyclomaticComplexMethod`).
+  - **Tests updated for the new behaviour:** `MainActivityTest` and `DefaultsSettingsSemanticsTest` now expect the
+    "Reliability checklist" row; Home tests build the real `EvaluateReliability` over fakes (`anEvaluateReliability`).
 
 ## Review Triage Log
 
@@ -187,3 +219,22 @@ and `ChecklistCard` (design preview rounds 2–3) are not wired. Story 5.5's mak
 - `:androidApp:testDebugUnitTest` for the new reliability tests (Roborazzi record, then verify), plus the Home and
   Settings screenshot, semantics and route tests, `MainActivityTest`, `ReliabilityProbeTest`, the exact-alarm
   reschedule test, and the preview tests that cover reliability, Home and Settings.
+
+**Results (2026-10-20, JDK 17, `--no-daemon --max-workers=2`):**
+- `spotlessCheck detekt`: pass (after moving the pushed entries and the Settings intent helper, see the change log).
+- `:core:jvmTest` (`core.reliability.*`): 22 tests, pass. `:testing:jvmTest` (`ReliabilityFakesTest`): 4, pass.
+- `:composeApp:testAndroidHostTest` (`ui.reliability.*`, `ui.home.*`, `ui.settings.*`, `ui.nav.*`, `UiModuleTest`,
+  `CopyRulesTest`): 170 tests, pass; re-run after the detekt refactors: RERUN_RESULT.
+- `:androidApp:recordRoborazziDebug` for `ReliabilityScreenshotTest` (16 new goldens) and the Settings main-screen
+  classes (8 goldens changed on purpose: the "Reliability checklist" row now shows; the sub-screen goldens are
+  unchanged). Inspected.
+- `:androidApp:testDebugUnitTest` in verify mode, all pass: `ReliabilityScreenshotTest` 16, `ReliabilitySemanticsTest`
+  5, `ReliabilityRouteTest` 3, `AndroidReliabilitySettingsTest` 11, `AndroidNotificationPermissionTest` 4,
+  `ManufacturerSettingsTest` 8, `ReliabilityProbeTest` 23, `SnoozeSettingsScreenshotTest` 18,
+  `DefaultsSettingsScreenshotTest` 11, `SnoozeSettingsSemanticsTest` 6, `DefaultsSettingsSemanticsTest` 6,
+  `SnoozeSettingsRouteTest` 3, `HomeScreenshotTest` 35, `HomeRouteLifecycleTest` 1, `HomeInsetsTest` 3,
+  `AlarmScreensScreenshotTest` 34, `AlarmScreensSemanticsTest` 32, `SessionLockScreenTest` 7, `MainActivityTest` 20,
+  `SystemEventsReceiverTest` 12 and `ReceiversManifestTest` 7 (exact-alarm grant → `rescheduleAll`), and the preview
+  tests `PreviewEditorScreenshotTest` 152, `PreviewEditorSemanticsTest` 342, `Round2TapThroughTest` 6,
+  `Round3TapThroughTest` 8, `TapThroughTest` 5, `PreviewMenuTest` 8, `NavBarScreenshotTest` 4.
+- Not run here (run constraints): the full `qualityGate`, Kover, and the other test classes (CI runs them).

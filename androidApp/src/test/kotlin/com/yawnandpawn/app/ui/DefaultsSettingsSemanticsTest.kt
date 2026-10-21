@@ -110,12 +110,18 @@ class DefaultsSettingsSemanticsTest {
     }
 
     @Test
-    fun `Bright wake screen, weekly summary and the checklist stay hidden, and usage stats shows (Story 5_6)`() =
+    fun `Bright wake screen and weekly summary stay hidden, usage stats shows, and the checklist row is a 48 dp button`() =
         show(DefaultsSettingsSamples.main) {
-            listOf("Bright wake screen", "Weekly summary", "Reliability checklist").forEach {
+            listOf("Bright wake screen", "Weekly summary").forEach {
                 composeRule.onNode(hasText(it, substring = true)).assertDoesNotExist()
             }
+            // Story 5.6.
             composeRule.onNode(hasText("Share anonymous usage stats")).assertExists()
+            // Story 5.4: the row opens the checklist.
+            composeRule
+                .onNode(hasText("Reliability checklist") and hasClickAction())
+                .performScrollTo()
+                .assertHeightIsAtLeast(48.dp)
         }
 
     @Test

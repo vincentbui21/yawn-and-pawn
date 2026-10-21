@@ -1,21 +1,10 @@
 package com.yawnandpawn.app.core.reliability
 
-/** A phone setting an alarm needs to ring reliably (Story 1.19); Epic 5 adds DND, battery and OEM items. */
-enum class ReliabilityItem {
-    /** The ringing notification and its full-screen intent can be shown (`POST_NOTIFICATIONS` on API 33+). */
-    Notifications,
-
-    /** The full-screen intent may open the wake screen over the lock screen (revocable on API 34+). */
-    FullScreenIntent,
-
-    /** Exact alarms may be scheduled (revocable on API 31-32). */
-    ExactAlarms,
-}
-
 /**
- * What [ReliabilityProbe] found; [firstFailing] is the one Home's "Fix" opens. Story 5.3 adds the values the reliability
- * checklist reads ([ReliabilityChecklist]); each defaults to its good value, the one a phone below the API level that has
- * the setting always reads.
+ * What [ReliabilityProbe] found (Story 1.19: notifications, the full-screen intent and exact alarms). Story 5.3 adds the
+ * values the reliability checklist reads ([ReliabilityChecklist]); each defaults to its good value, the one a phone below
+ * the API level that has the setting always reads. Since Story 5.4 the Home and Settings banner follows
+ * [ReliabilityChecklist.alarmBlocking] over these values.
  *
  * @property dndAllowsAlarms Do Not Disturb lets alarms through: not total silence, and unless it is "alarms only", on API
  * 28+ the default policy has the alarms category (a schedule rule or mode with its own policy is not seen, Story 5.3).
@@ -38,24 +27,6 @@ data class ReliabilityStatus(
     val batteryOk: Boolean
         get() = batteryOptimizationIgnored && !backgroundRestricted && !standbyBucketRestricted
 
-    /**
-     * The first of the three Story 1.19 items that fails, in the order notifications, full-screen intent, exact alarms;
-     * null when all three are OK. The Story 5.3 values are not part of it: Home's banner stays on these three until Story
-     * 5.4 moves it to [ReliabilityChecklist.alarmBlocking].
-     */
-    val firstFailing: ReliabilityItem?
-        get() =
-            when {
-                !notificationsAllowed -> ReliabilityItem.Notifications
-                !fullScreenIntentAllowed -> ReliabilityItem.FullScreenIntent
-                !exactAlarmsAllowed -> ReliabilityItem.ExactAlarms
-                else -> null
-            }
-
-    /** The three Story 1.19 items are OK (Home's banner). */
-    val allOk: Boolean
-        get() = firstFailing == null
-
     companion object {
         val ALL_OK = ReliabilityStatus(notificationsAllowed = true, fullScreenIntentAllowed = true, exactAlarmsAllowed = true)
     }
@@ -66,9 +37,14 @@ fun interface ReliabilityProbe {
     fun check(): ReliabilityStatus
 }
 
-/** Opens the system screen where the user can turn [ReliabilityItem] on; only ever from a user tap ("Fix"). */
+/**
+ * Opens the system screen where the user can fix a [ChecklistRow] (Story 5.4), only ever from a user tap ("Fix") on the
+ * screen in front. A screen this phone does not resolve falls back to the app's details page, then to the system
+ * settings; a target that does not resolve is never started.
+ */
 fun interface ReliabilitySettings {
-    fun open(item: ReliabilityItem)
+    /** Opens [row]'s screen, or a fallback; false when nothing could be opened (logged, never thrown). */
+    fun open(row: ChecklistRow): Boolean
 }
 
 /**

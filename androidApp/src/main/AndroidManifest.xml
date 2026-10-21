@@ -55,6 +55,32 @@
         <package android:name="com.vivo.permissionmanager" />
         <package android:name="com.iqoo.secure" />
         <package android:name="com.oneplus.security" />
+        <!-- The reliability checklist's "Fix" screens (Story 5.4): AndroidReliabilitySettings resolves each before it
+             starts one, which API 30+ allows only for what is queried here. Package visibility, not a permission. -->
+        <intent>
+            <action android:name="android.settings.APP_NOTIFICATION_SETTINGS" />
+        </intent>
+        <intent>
+            <action android:name="android.settings.MANAGE_APP_USE_FULL_SCREEN_INTENT" />
+            <data android:scheme="package" />
+        </intent>
+        <intent>
+            <action android:name="android.settings.REQUEST_SCHEDULE_EXACT_ALARM" />
+            <data android:scheme="package" />
+        </intent>
+        <intent>
+            <action android:name="android.settings.ZEN_MODE_PRIORITY_SETTINGS" />
+        </intent>
+        <intent>
+            <action android:name="android.settings.IGNORE_BATTERY_OPTIMIZATION_SETTINGS" />
+        </intent>
+        <intent>
+            <action android:name="android.settings.APPLICATION_DETAILS_SETTINGS" />
+            <data android:scheme="package" />
+        </intent>
+        <intent>
+            <action android:name="android.settings.SETTINGS" />
+        </intent>
     </queries>
 
     <application

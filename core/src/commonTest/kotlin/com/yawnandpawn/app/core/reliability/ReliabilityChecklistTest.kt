@@ -103,7 +103,6 @@ class ReliabilityChecklistTest {
             ok.copy(standbyBucketRestricted = true),
         ).forEach { status ->
             assertFalse(status.batteryOk, "$status")
-            assertTrue(status.allOk, "Home's banner keeps the three Story 1.19 items")
             val rows = ReliabilityChecklist.evaluate(status, emptyList(), api34, none)
             assertEquals(RowStatus.NeedsFix, rows.statusOf(ChecklistRow.Battery))
             assertTrue(ReliabilityChecklist.alarmBlocking(rows))

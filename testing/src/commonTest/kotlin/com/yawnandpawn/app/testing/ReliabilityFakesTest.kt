@@ -5,7 +5,7 @@ import com.yawnandpawn.app.core.error.Outcome
 import com.yawnandpawn.app.core.reliability.ChecklistRow
 import com.yawnandpawn.app.core.reliability.DeviceMaker
 import com.yawnandpawn.app.core.reliability.MakerConfirmation
-import com.yawnandpawn.app.core.reliability.ReliabilityItem
+import com.yawnandpawn.app.core.reliability.ReliabilityChecklist
 import com.yawnandpawn.app.core.reliability.ReliabilityStatus
 import com.yawnandpawn.app.core.reliability.StoredReliability
 import kotlinx.coroutines.test.runTest
@@ -29,8 +29,10 @@ class ReliabilityFakesTest {
     @Test
     fun `settings record what was opened and the permission is asked once`() {
         val settings = FakeReliabilitySettings()
-        settings.open(ReliabilityItem.ExactAlarms)
-        assertEquals(listOf(ReliabilityItem.ExactAlarms), settings.opened)
+        assertTrue(settings.open(ChecklistRow.ExactAlarms))
+        settings.opens = false
+        assertFalse(settings.open(ChecklistRow.Battery))
+        assertEquals(listOf(ChecklistRow.ExactAlarms, ChecklistRow.Battery), settings.opened)
 
         val maker = FakeManufacturerSettings()
         maker.open(DeviceMaker.Vivo)
@@ -67,5 +69,17 @@ class ReliabilityFakesTest {
             assertEquals(Outcome.Failure(failure), records.read())
             assertEquals(setOf(ChecklistRow.Battery), records.stored.lastOk)
             assertEquals(3, records.writes)
+        }
+
+    @Test
+    fun `the evaluation over fakes blocks nothing by default and follows the probe`() =
+        runTest {
+            val probe = FakeReliabilityProbe()
+            val evaluate = anEvaluateReliability(probe = probe)
+            assertFalse(ReliabilityChecklist.alarmBlocking(evaluate()))
+
+            probe.status = ReliabilityStatus.ALL_OK.copy(dndAllowsAlarms = false)
+            assertTrue(ReliabilityChecklist.alarmBlocking(evaluate()))
+            assertEquals(2, probe.checks)
         }
 }

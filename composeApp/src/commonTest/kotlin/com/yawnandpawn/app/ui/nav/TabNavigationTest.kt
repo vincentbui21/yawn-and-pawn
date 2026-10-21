@@ -139,32 +139,68 @@ class TabNavigationTest {
     }
 
     @Test
-    fun `the maker guidance is pushed over the tab on top once, never over a pushed screen or the lock, and closes to the tab`() {
+    fun `the checklist is pushed once over Settings or Home, only while that screen is on top, and Back returns there`() {
+        val settings = stack(Route.Alarms, Route.Settings)
+        assertNull(Route.Reliability.tab)
+
+        settings.openReliability(from = Route.Settings)
+        settings.openReliability(from = Route.Settings)
+        settings.selectTab(AppTab.You)
+        settings.openEditor(alarmId = null)
+        assertEquals(listOf<NavKey>(Route.Alarms, Route.Settings, Route.Reliability), settings)
+
+        settings.close(Route.Reliability)
+        settings.close(Route.Reliability)
+        assertEquals(listOf<NavKey>(Route.Alarms, Route.Settings), settings)
+
+        val home = stack(Route.Alarms)
+        home.openReliability(from = Route.Alarms)
+        assertEquals(listOf<NavKey>(Route.Alarms, Route.Reliability), home)
+        home.pop()
+        assertEquals(listOf<NavKey>(Route.Alarms), home)
+
+        // A late tap from a screen no longer in front, or from a screen that has no checklist entry, does nothing.
+        val you = stack(Route.Alarms, Route.You)
+        you.openReliability(from = Route.Alarms)
+        you.openReliability(from = Route.You)
+        assertEquals(listOf<NavKey>(Route.Alarms, Route.You), you)
+        val editor = stack(Route.Alarms, Route.AlarmEditor(alarmId = null))
+        editor.openReliability(from = Route.Alarms)
+        assertEquals(listOf<NavKey>(Route.Alarms, Route.AlarmEditor(alarmId = null)), editor)
+    }
+
+    @Test
+    fun `the maker guidance is pushed over the checklist once, only from there, and closes to it`() {
         val backStack = stack(Route.Alarms, Route.Settings)
         assertNull(Route.ManufacturerGuidance.tab)
+        backStack.openManufacturerGuidance()
+        assertEquals(listOf<NavKey>(Route.Alarms, Route.Settings), backStack, "never over a tab")
 
+        backStack.openReliability(from = Route.Settings)
         backStack.openManufacturerGuidance()
         backStack.openManufacturerGuidance()
-        backStack.selectTab(AppTab.You)
-        backStack.openEditor(alarmId = null)
-        assertEquals(listOf<NavKey>(Route.Alarms, Route.Settings, Route.ManufacturerGuidance), backStack)
+        backStack.openReliability(from = Route.Settings)
+        assertEquals(listOf<NavKey>(Route.Alarms, Route.Settings, Route.Reliability, Route.ManufacturerGuidance), backStack)
 
         backStack.close(Route.ManufacturerGuidance)
-        backStack.close(Route.ManufacturerGuidance)
-        assertEquals(listOf<NavKey>(Route.Alarms, Route.Settings), backStack)
-
+        assertEquals(listOf<NavKey>(Route.Alarms, Route.Settings, Route.Reliability), backStack)
         backStack.openManufacturerGuidance()
         backStack.pop()
-        assertEquals(listOf<NavKey>(Route.Alarms, Route.Settings), backStack)
+        assertEquals(listOf<NavKey>(Route.Alarms, Route.Settings, Route.Reliability), backStack)
+    }
 
-        val overHistory = stack(Route.Alarms, Route.You, Route.PurchaseHistory)
-        overHistory.openManufacturerGuidance()
-        assertEquals(listOf<NavKey>(Route.Alarms, Route.You, Route.PurchaseHistory), overHistory)
+    @Test
+    fun `a session replaces the checklist and the maker guidance with the lock, and nothing pushes them over it`() {
+        val backStack = stack(Route.Alarms, Route.Settings, Route.Reliability, Route.ManufacturerGuidance)
 
-        backStack.openManufacturerGuidance()
         assertEquals(true, backStack.applySessionLock(active = true))
+        backStack.openReliability(from = Route.Settings)
+        backStack.openReliability(from = Route.Alarms)
         backStack.openManufacturerGuidance()
         assertEquals(listOf<NavKey>(Route.SessionInProgress), backStack)
+
+        assertEquals(true, backStack.applySessionLock(active = false))
+        assertEquals(listOf<NavKey>(Route.Alarms), backStack)
     }
 
     @Test

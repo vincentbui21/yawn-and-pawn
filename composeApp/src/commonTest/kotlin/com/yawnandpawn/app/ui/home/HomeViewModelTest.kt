@@ -10,8 +10,9 @@ import com.yawnandpawn.app.core.history.MissedNotes
 import com.yawnandpawn.app.core.history.SessionHistoryRow
 import com.yawnandpawn.app.core.history.SessionOutcome
 import com.yawnandpawn.app.core.log.LogEvent
-import com.yawnandpawn.app.core.reliability.ReliabilityItem
+import com.yawnandpawn.app.core.reliability.ChecklistRow
 import com.yawnandpawn.app.core.reliability.ReliabilityStatus
+import com.yawnandpawn.app.core.reliability.StoredReliability
 import com.yawnandpawn.app.core.session.SessionState
 import com.yawnandpawn.app.testing.AlarmUseCasesFixture
 import com.yawnandpawn.app.testing.FakeAlarmRepository
@@ -22,7 +23,7 @@ import com.yawnandpawn.app.testing.FakeIdGenerator
 import com.yawnandpawn.app.testing.FakeLogger
 import com.yawnandpawn.app.testing.FakeMissedNoteDismissals
 import com.yawnandpawn.app.testing.FakeReliabilityProbe
-import com.yawnandpawn.app.testing.FakeReliabilitySettings
+import com.yawnandpawn.app.testing.FakeReliabilityRecords
 import com.yawnandpawn.app.testing.FakeRequestCodeSequence
 import com.yawnandpawn.app.testing.FakeSessionHistoryRepository
 import com.yawnandpawn.app.testing.FakeTimeChangeSignal
@@ -30,6 +31,7 @@ import com.yawnandpawn.app.testing.FakeTimeZoneProvider
 import com.yawnandpawn.app.testing.aSession
 import com.yawnandpawn.app.testing.aSessionHistoryRow
 import com.yawnandpawn.app.testing.anAlarm
+import com.yawnandpawn.app.testing.anEvaluateReliability
 import com.yawnandpawn.app.testing.checkConfigsOf
 import com.yawnandpawn.app.testing.noReRegisterSuggestions
 import com.yawnandpawn.app.ui.checks.CheckType
@@ -80,7 +82,7 @@ class HomeViewModelTest {
     private val dismissals = FakeMissedNoteDismissals()
     private val missedNotes = MissedNotes(history, dismissals)
     private val probe = FakeReliabilityProbe()
-    private val settings = FakeReliabilitySettings()
+    private val records = FakeReliabilityRecords()
     private var checkConfigs = FakeCheckConfigRepository()
 
     // Story 3.13 has its own test (HomeReRegisterBannerTest); here nothing is registered, as in production before 3.10.
@@ -138,7 +140,8 @@ class HomeViewModelTest {
     /** Home over [repository]'s alarms; [checkConfigs] then holds their checks. */
     private fun TestScope.home(repository: AlarmRepository): HomeViewModel {
         checkConfigs = FakeCheckConfigRepository(repository)
-        val viewModel = HomeViewModel(checkConfigs, actions(repository), clock, zone, signal, missedNotes, probe, settings, reRegister)
+        val reliability = anEvaluateReliability(probe = probe, checks = checkConfigs, records = records)
+        val viewModel = HomeViewModel(checkConfigs, actions(repository), clock, zone, signal, missedNotes, reliability, reRegister)
         backgroundScope.launch { viewModel.state.collect { } }
         return viewModel
     }
@@ -565,8 +568,7 @@ class HomeViewModelTest {
                     zone,
                     signal,
                     missedNotes,
-                    probe,
-                    settings,
+                    anEvaluateReliability(probe = probe, checks = checkConfigs, records = records),
                     reRegister,
                 )
             val collector = launch { viewModel.state.collect { } }
@@ -703,45 +705,80 @@ class HomeViewModelTest {
         assertEquals(listOf(1, 2, 4, 8, 16, 32, 60, 60, 60).map { it.seconds }, waits)
     }
 
-    // Story 1.19: the reliability banner.
+    // Story 5.4: the reliability banner follows ReliabilityChecklist.alarmBlocking.
 
     @Test
-    fun `no banner while every reliability setting is on`() =
-        runTest(dispatcher) {
-            assertFalse(home(FakeAlarmRepository()).state.value.reliabilityProblem)
-        }
-
-    @Test
-    fun `a setting that is off shows the banner and Fix opens the first failing one`() =
-        runTest(dispatcher) {
-            probe.status = ReliabilityStatus(notificationsAllowed = true, fullScreenIntentAllowed = false, exactAlarmsAllowed = false)
-            val viewModel = home(FakeAlarmRepository())
-
-            assertTrue(viewModel.state.value.reliabilityProblem)
-            viewModel.onIntent(HomeIntent.FixSettings)
-            assertEquals(listOf(ReliabilityItem.FullScreenIntent), settings.opened)
-        }
-
-    @Test
-    fun `the banner is checked again on every start and clears once every setting is on`() =
+    fun `no banner while no blocking row fails, also before the first start`() =
         runTest(dispatcher) {
             probe.status = ReliabilityStatus.ALL_OK.copy(notificationsAllowed = false)
             val viewModel = home(FakeAlarmRepository())
+            assertFalse(viewModel.state.value.reliabilityProblem, "nothing evaluated before Home starts")
+            assertEquals(0, probe.checks)
+
+            probe.status = ReliabilityStatus.ALL_OK
+            viewModel.onIntent(HomeIntent.Started)
+
+            assertFalse(viewModel.state.value.reliabilityProblem)
+        }
+
+    @Test
+    fun `each blocking row raises the banner, and Fix opens the checklist`() =
+        runTest(dispatcher) {
+            val viewModel = home(FakeAlarmRepository())
+            val effects = effectsOf(viewModel)
+            listOf(
+                ReliabilityStatus.ALL_OK.copy(notificationsAllowed = false),
+                ReliabilityStatus.ALL_OK.copy(fullScreenIntentAllowed = false),
+                ReliabilityStatus.ALL_OK.copy(dndAllowsAlarms = false),
+                ReliabilityStatus.ALL_OK.copy(batteryOptimizationIgnored = false),
+                ReliabilityStatus.ALL_OK.copy(backgroundRestricted = true),
+                ReliabilityStatus.ALL_OK.copy(standbyBucketRestricted = true),
+            ).forEach { status ->
+                probe.status = status
+                viewModel.onIntent(HomeIntent.Started)
+                assertTrue(viewModel.state.value.reliabilityProblem, "$status")
+            }
+
+            viewModel.onIntent(HomeIntent.FixSettings)
+
+            assertEquals(listOf<HomeEffect>(HomeEffect.OpenReliability), effects)
+        }
+
+    @Test
+    fun `only non-blocking rows failing shows no banner`() =
+        runTest(dispatcher) {
+            // Camera denied (no camera check), no locked test, and exact alarms on API 34 (the row is Hidden there).
+            probe.status = ReliabilityStatus.ALL_OK.copy(cameraGranted = false, exactAlarmsAllowed = false)
+            val viewModel = home(FakeAlarmRepository())
+
+            viewModel.onIntent(HomeIntent.Started)
+
+            assertFalse(viewModel.state.value.reliabilityProblem)
+        }
+
+    @Test
+    fun `a revoked row raises the banner, and it clears itself on the next start once fixed`() =
+        runTest(dispatcher) {
+            records.stored = StoredReliability(lastOk = setOf(ChecklistRow.Battery))
+            probe.status = ReliabilityStatus.ALL_OK.copy(batteryOptimizationIgnored = false)
+            val viewModel = home(FakeAlarmRepository())
+
+            viewModel.onIntent(HomeIntent.Started)
             assertTrue(viewModel.state.value.reliabilityProblem)
 
             probe.status = ReliabilityStatus.ALL_OK
             viewModel.onIntent(HomeIntent.Started)
 
             assertFalse(viewModel.state.value.reliabilityProblem)
-            viewModel.onIntent(HomeIntent.FixSettings)
-            assertEquals(emptyList(), settings.opened, "nothing to fix")
         }
 
     @Test
-    fun `a resume checks again, as a permission dialog answered over Home only pauses it`() =
+    fun `a resume evaluates again, as a permission dialog answered over Home only pauses it`() =
         runTest(dispatcher) {
             probe.status = ReliabilityStatus.ALL_OK.copy(notificationsAllowed = false)
             val viewModel = home(FakeAlarmRepository())
+            viewModel.onIntent(HomeIntent.Started)
+            assertTrue(viewModel.state.value.reliabilityProblem)
             val checks = probe.checks
 
             probe.status = ReliabilityStatus.ALL_OK
@@ -752,26 +789,16 @@ class HomeViewModelTest {
         }
 
     @Test
-    fun `Fix checks again and opens the setting that is off now`() =
+    fun `the banner also shows when the alarms or the records cannot be read`() =
         runTest(dispatcher) {
-            probe.status = ReliabilityStatus.ALL_OK.copy(notificationsAllowed = false)
-            val viewModel = home(FakeAlarmRepository())
-
-            // Notifications were turned on elsewhere; exact alarms went off.
-            probe.status = ReliabilityStatus.ALL_OK.copy(exactAlarmsAllowed = false)
-            viewModel.onIntent(HomeIntent.FixSettings)
-
-            assertEquals(listOf(ReliabilityItem.ExactAlarms), settings.opened)
-        }
-
-    @Test
-    fun `the banner also shows when the alarms cannot be read`() =
-        runTest(dispatcher) {
-            probe.status = ReliabilityStatus.ALL_OK.copy(exactAlarmsAllowed = false)
+            probe.status = ReliabilityStatus.ALL_OK.copy(dndAllowsAlarms = false)
+            records.readFailure = DomainError.StorageFailure("disk I/O error")
             val repository = FakeAlarmRepository().apply { failure = DomainError.StorageFailure("disk I/O error") }
+            val viewModel = home(repository)
 
-            val state = home(repository).state.value
+            viewModel.onIntent(HomeIntent.Started)
 
+            val state = viewModel.state.value
             assertTrue(state.loadFailed)
             assertTrue(state.reliabilityProblem)
         }

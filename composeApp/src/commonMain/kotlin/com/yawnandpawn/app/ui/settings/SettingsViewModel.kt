@@ -24,6 +24,7 @@ import com.yawnandpawn.app.core.error.DomainError
 import com.yawnandpawn.app.core.error.Outcome
 import com.yawnandpawn.app.core.log.LogEvent
 import com.yawnandpawn.app.core.log.Logger
+import com.yawnandpawn.app.core.reliability.EvaluateReliability
 import com.yawnandpawn.app.core.session.GlobalSettings
 import com.yawnandpawn.app.core.telemetry.AnalyticsConsent
 import com.yawnandpawn.app.core.telemetry.ConsentStore
@@ -31,6 +32,7 @@ import com.yawnandpawn.app.core.telemetry.SetAnalyticsConsent
 import com.yawnandpawn.app.core.time.Clock
 import com.yawnandpawn.app.core.time.TimeChangeSignal
 import com.yawnandpawn.app.core.time.TimeZoneProvider
+import com.yawnandpawn.app.ui.reliability.AlarmBlockingCheck
 import com.yawnandpawn.app.ui.theme.toCore
 import com.yawnandpawn.app.ui.theme.toPps
 import kotlinx.coroutines.CoroutineScope
@@ -45,6 +47,7 @@ import kotlinx.coroutines.flow.catch
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.onStart
+import kotlinx.coroutines.flow.receiveAsFlow
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
@@ -99,6 +102,9 @@ class DefaultSettingSetters(
  * [setAnalyticsConsent] (no Save). A failed write is logged and the switch stays at the stored value; an unreadable
  * choice is logged and shows off.
  *
+ * The reliability banner (Story 5.4) follows the checklist's `alarmBlocking`, evaluated on every start; "Fix" and the
+ * "Reliability checklist" row open the checklist through [effects].
+ *
  * [state] is null until the stored settings are read, so no default value flashes. When the ViewModel is cleared, the
  * base fee and max snoozes saves still queued are logged as dropped, and the defaults and the theme are finished in
  * [outlivingScope] ([onCleared]).
@@ -122,9 +128,24 @@ class SettingsViewModel(
      * leaving the tab right after a change never loses it. Null (tests that never close mid-save) drops it, logged.
      */
     private val outlivingScope: CoroutineScope? = null,
+    /**
+     * The reliability checklist behind the banner (Story 5.4), evaluated on every [SettingsIntent.Started]; null (tests
+     * of the other rows) shows no banner.
+     */
+    reliability: EvaluateReliability? = null,
 ) : ViewModel() {
     private val local = MutableStateFlow(Local())
     private val saves = Channel<Save>(Channel.UNLIMITED)
+
+    private val banner: AlarmBlockingCheck? =
+        reliability?.let { evaluate ->
+            AlarmBlockingCheck(evaluate, viewModelScope) { blocking -> local.update { it.copy(reliabilityProblem = blocking) } }
+        }
+
+    private val mutableEffects = Channel<SettingsEffect>(Channel.BUFFERED)
+
+    /** Navigation out of Settings: the reliability checklist (Story 5.4). */
+    val effects: Flow<SettingsEffect> = mutableEffects.receiveAsFlow()
 
     /** The save running now, if any (logged as dropped when the ViewModel is cleared under it). */
     private var saving: Save? = null
@@ -194,8 +215,19 @@ class SettingsViewModel(
 
             is SettingsIntent.UsageStatsToggled -> setUsageStats(intent.on)
 
+            SettingsIntent.Started, SettingsIntent.FixSettings, SettingsIntent.ReliabilityClicked -> onReliabilityIntent(intent)
+
             // The other rows belong to later Epic 5 stories; production does not show them.
             else -> Unit
+        }
+    }
+
+    /** Story 5.4: a start evaluates the checklist again (back from it, too); "Fix" and its row open it. */
+    private fun onReliabilityIntent(intent: SettingsIntent) {
+        if (intent == SettingsIntent.Started) {
+            banner?.refresh()
+        } else {
+            mutableEffects.trySend(SettingsEffect.OpenReliability)
         }
     }
 
@@ -339,6 +371,7 @@ class SettingsViewModel(
             defaultQuietSeconds = chosen.defaultGraceSeconds,
             vibrateDuringQuietTime = chosen.defaultVibrateInGrace,
             theme = chosen.themeMode.toPps(),
+            reliabilityProblem = ui.reliabilityProblem,
             pane = ui.pane,
             // While a new value is still being saved, the stored note may be the old one: wait for the store.
             baseFeeNote = weakeningNoteOf(saved.pending(LockedField.BaseFee), now, zone).takeIf { tier == saved.tier },
@@ -393,13 +426,17 @@ class SettingsViewModel(
         fun sameField(other: DefaultSetting): Boolean = value::class == other::class
     }
 
-    /** What only this screen holds: the pane and the values requested but not shown by the store yet. */
+    /**
+     * What only this screen holds: the pane, the values requested but not shown by the store yet, and whether the last
+     * checklist evaluation found a blocking row (Story 5.4).
+     */
     private data class Local(
         val pane: SettingsPane = SettingsPane.Main,
         val fee: Request? = null,
         val max: Request? = null,
         /** At most one per field, the latest. */
         val defaults: List<DefaultRequest> = emptyList(),
+        val reliabilityProblem: Boolean = false,
     ) {
         /** [request] is still the latest of its field: one superseded by a newer value is never saved (a drag coalesces). */
         fun holds(request: DefaultRequest): Boolean = defaults.any { it.id == request.id }

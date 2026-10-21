@@ -82,7 +82,7 @@ class SessionLockScreenTest {
     private val engine: SessionEngine
         get() = GlobalContext.get().get()
 
-    /** Counts its checks: HomeViewModel checks once when it is created. */
+    /** Counts its checks: Home evaluates the reliability checklist when it starts (Story 5.4). */
     private val probe = FakeReliabilityProbe()
     private val history = FakeSessionHistoryRepository()
 
@@ -201,7 +201,7 @@ class SessionLockScreenTest {
             composeRule.mainClock.advanceTimeBy(1_000)
             composeRule.waitForIdle()
 
-            assertEquals(0, probe.checks, "HomeViewModel checks the reliability settings when it is created")
+            assertEquals(0, probe.checks, "Home evaluates the reliability checklist when it starts")
             composeRule.onNodeWithContentDescription("Add alarm").assertDoesNotExist()
         }
     }

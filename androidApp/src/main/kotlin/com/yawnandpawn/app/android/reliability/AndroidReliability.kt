@@ -6,14 +6,10 @@ import android.app.ActivityManager
 import android.app.AlarmManager
 import android.app.NotificationManager
 import android.app.usage.UsageStatsManager
-import android.content.ActivityNotFoundException
 import android.content.Context
-import android.content.Intent
 import android.content.pm.PackageManager
-import android.net.Uri
 import android.os.Build
 import android.os.PowerManager
-import android.provider.Settings
 import androidx.core.app.NotificationManagerCompat
 import com.yawnandpawn.app.android.wake.WakeNotifier
 import com.yawnandpawn.app.core.log.LogEvent
@@ -22,9 +18,7 @@ import com.yawnandpawn.app.core.reliability.DeviceInfo
 import com.yawnandpawn.app.core.reliability.DeviceInfoSource
 import com.yawnandpawn.app.core.reliability.DeviceMaker
 import com.yawnandpawn.app.core.reliability.NotificationPermission
-import com.yawnandpawn.app.core.reliability.ReliabilityItem
 import com.yawnandpawn.app.core.reliability.ReliabilityProbe
-import com.yawnandpawn.app.core.reliability.ReliabilitySettings
 import com.yawnandpawn.app.core.reliability.ReliabilityStatus
 
 /**
@@ -138,58 +132,6 @@ private fun NotificationManager.Policy?.allowsAlarms(): Boolean =
 @SuppressLint("NewApi") // The only caller checks the SDK level first (AndroidReliabilityProbe.check).
 private fun platformCanUseFullScreenIntent(context: Context): Boolean =
     context.getSystemService(NotificationManager::class.java).canUseFullScreenIntent()
-
-/**
- * The Android [ReliabilitySettings]: the system screen for each item, opened from "Fix" on Home (a user tap, so never
- * from the background). A screen this phone does not have falls back to the app's details page.
- */
-class AndroidReliabilitySettings(
-    private val context: Context,
-    private val logger: Logger,
-    private val sdkInt: Int = Build.VERSION.SDK_INT,
-) : ReliabilitySettings {
-    /** Opens [item]'s screen, else the app details; a phone with neither (or that refuses) logs it, never crashes. */
-    override fun open(item: ReliabilityItem) {
-        if (!tryStart(intentFor(item))) tryStart(appDetails())
-    }
-
-    private fun tryStart(intent: Intent): Boolean =
-        try {
-            context.startActivity(intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
-            true
-        } catch (e: ActivityNotFoundException) {
-            logger.log(LogEvent.OperationFailed("open reliability setting", e::class.simpleName.orEmpty()))
-            false
-        } catch (e: SecurityException) {
-            logger.log(LogEvent.OperationFailed("open reliability setting", e::class.simpleName.orEmpty()))
-            false
-        }
-
-    /** The settings screen for [item] on this phone's API level. */
-    @SuppressLint("InlinedApi") // Each action is used only on the API level that has it.
-    fun intentFor(item: ReliabilityItem): Intent =
-        when {
-            item == ReliabilityItem.Notifications -> {
-                Intent(Settings.ACTION_APP_NOTIFICATION_SETTINGS).putExtra(Settings.EXTRA_APP_PACKAGE, context.packageName)
-            }
-
-            item == ReliabilityItem.FullScreenIntent && sdkInt >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE -> {
-                Intent(Settings.ACTION_MANAGE_APP_USE_FULL_SCREEN_INTENT, packageUri())
-            }
-
-            item == ReliabilityItem.ExactAlarms && sdkInt >= Build.VERSION_CODES.S -> {
-                Intent(Settings.ACTION_REQUEST_SCHEDULE_EXACT_ALARM, packageUri())
-            }
-
-            else -> {
-                appDetails()
-            }
-        }
-
-    private fun appDetails() = Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS, packageUri())
-
-    private fun packageUri(): Uri = Uri.parse("package:${context.packageName}")
-}
 
 /**
  * The Android [NotificationPermission]: asked once, ever (remembered in the app's preferences), on API 33+ while the

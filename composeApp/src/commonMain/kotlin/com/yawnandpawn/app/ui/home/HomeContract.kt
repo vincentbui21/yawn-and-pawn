@@ -92,6 +92,7 @@ sealed interface HomeIntent {
         val enabled: Boolean,
     ) : HomeIntent
 
+    /** "Fix" on the reliability banner: opens the reliability checklist (Story 5.4). */
     data object FixSettings : HomeIntent
 
     /** "Dismiss" on the missed note of [sessionId], the session the note showed. */
@@ -142,7 +143,7 @@ sealed interface HomeIntent {
     /** Home came back to the foreground: recompute the countdown. */
     data object Resumed : HomeIntent
 
-    /** Home started (`ON_START`, also after returning from a settings screen): check the reliability settings again. */
+    /** Home started (`ON_START`, also after returning from the checklist): evaluate the reliability checklist again. */
     data object Started : HomeIntent
 }
 
@@ -162,4 +163,7 @@ sealed interface HomeEffect {
     data class OpenDuplicate(
         val sourceId: String,
     ) : HomeEffect
+
+    /** Open the reliability checklist ("Fix" on the banner, Story 5.4). */
+    data object OpenReliability : HomeEffect
 }

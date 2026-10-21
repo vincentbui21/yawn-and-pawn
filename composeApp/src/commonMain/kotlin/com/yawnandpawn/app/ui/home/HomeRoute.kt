@@ -17,8 +17,9 @@ import org.koin.compose.viewmodel.koinViewModel
  * calls [onOpenFailedShown]. [savedUnderLock] is its result after a save that left a weakening change waiting under the
  * commitment lock: Home shows "Saved. Takes effect after ..." and calls [onSavedUnderLockShown] (Story 4.6).
  * [onOpenQrRegistration] opens QR registration of an alarm's code ("Re-register", Story 3.10;
- * the editor by default). The countdown is recomputed whenever Home resumes, and the reliability settings are checked
- * again whenever it starts or resumes (Story 1.19).
+ * the editor by default). [onOpenReliability] opens the reliability checklist from the banner's "Fix" (Story 5.4). The
+ * countdown is recomputed whenever Home resumes, and the reliability checklist is evaluated again whenever Home starts
+ * or resumes, so the banner clears itself once the blocking rows are fixed.
  */
 @Composable
 fun HomeRoute(
@@ -29,6 +30,7 @@ fun HomeRoute(
     onOpenQrRegistration: (String) -> Unit = onOpenEditor,
     savedUnderLock: WeakeningNote? = null,
     onSavedUnderLockShown: () -> Unit = {},
+    onOpenReliability: () -> Unit = {},
     viewModel: HomeViewModel = koinViewModel(),
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
@@ -38,6 +40,7 @@ fun HomeRoute(
                 is HomeEffect.OpenEditor -> onOpenEditor(effect.alarmId)
                 is HomeEffect.OpenDuplicate -> onOpenDuplicate(effect.sourceId)
                 is HomeEffect.OpenQrRegistration -> onOpenQrRegistration(effect.alarmId)
+                HomeEffect.OpenReliability -> onOpenReliability()
             }
         }
     }

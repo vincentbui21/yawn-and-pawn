@@ -5,7 +5,10 @@ import com.yawnandpawn.app.ui.editor.AlarmEditorViewModel
 import com.yawnandpawn.app.ui.editor.EditorFeeSources
 import com.yawnandpawn.app.ui.home.AlarmActions
 import com.yawnandpawn.app.ui.home.HomeViewModel
+import com.yawnandpawn.app.ui.onboarding.ChecklistScreens
+import com.yawnandpawn.app.ui.onboarding.FirstAlarmSources
 import com.yawnandpawn.app.ui.onboarding.OnboardingViewModel
+import com.yawnandpawn.app.ui.onboarding.UsageStatsSources
 import com.yawnandpawn.app.ui.payments.PaymentsViewModel
 import com.yawnandpawn.app.ui.payments.ProblemWithChargeViewModel
 import com.yawnandpawn.app.ui.purchases.PurchaseHistoryViewModel
@@ -17,6 +20,7 @@ import com.yawnandpawn.app.ui.settings.SettingsViewModel
 import com.yawnandpawn.app.ui.you.YouViewModel
 import org.koin.core.module.dsl.viewModel
 import org.koin.core.qualifier.named
+import org.koin.core.scope.Scope
 import org.koin.dsl.module
 
 /**
@@ -70,31 +74,49 @@ val uiModule =
                 clock = get(),
                 moneyFormatter = get(),
                 logger = get(),
+                // Story 5.11: steps 4 and 5 are the editor's form, built exactly like the app's editor.
+                firstAlarm =
+                    FirstAlarmSources(
+                        editors = { alarmId, onSaved -> alarmEditor(AlarmEditorArgs(alarmId), onSaved) },
+                        remember = get(),
+                    ),
+                // Step 6 is Story 5.4's own checklist, built exactly like the checklist screen's.
+                checklist = ChecklistScreens { ReliabilityViewModel(get(), get(), get(), get(), get()) },
+                usageStats = UsageStatsSources(consents = get(), setConsent = get()),
                 monotonicClock = get(),
                 timeZoneProvider = get(),
             )
         }
-        viewModel { params ->
-            AlarmEditorViewModel(
-                alarmId = params.get<AlarmEditorArgs>().alarmId,
-                repository = get(),
-                checkConfigs = get(),
-                saveAlarm = get(),
-                clock = get(),
-                timeZoneProvider = get(),
-                actions = get(),
-                soundLibrary = get(),
-                soundPreview = get(),
-                notificationPermission = get(),
-                testAlarm = get(),
-                copyOf = params.get<AlarmEditorArgs>().copyOf,
-                accessibility = get(),
-                cameraPermission = get(),
-                scanCode = params.get<AlarmEditorArgs>().scanCode,
-                reRegisterCode = get(),
-                pendingChanges = get(),
-                fees = EditorFeeSources(globalSettings = get(), priceCatalog = get(), moneyFormatter = get()),
-                newAlarmDefaults = get(),
-            )
-        }
+        viewModel { params -> alarmEditor(params.get<AlarmEditorArgs>()) }
     }
+
+/**
+ * The Alarm editor for [args], shared by the app's editor and onboarding's first alarm (Story 5.11), which passes
+ * [onSaved] to learn the stored alarm's id.
+ */
+private fun Scope.alarmEditor(
+    args: AlarmEditorArgs,
+    onSaved: ((String) -> Unit)? = null,
+): AlarmEditorViewModel =
+    AlarmEditorViewModel(
+        alarmId = args.alarmId,
+        repository = get(),
+        checkConfigs = get(),
+        saveAlarm = get(),
+        clock = get(),
+        timeZoneProvider = get(),
+        actions = get(),
+        soundLibrary = get(),
+        soundPreview = get(),
+        notificationPermission = get(),
+        testAlarm = get(),
+        copyOf = args.copyOf,
+        accessibility = get(),
+        cameraPermission = get(),
+        scanCode = args.scanCode,
+        reRegisterCode = get(),
+        pendingChanges = get(),
+        fees = EditorFeeSources(globalSettings = get(), priceCatalog = get(), moneyFormatter = get()),
+        newAlarmDefaults = get(),
+        onSaved = onSaved,
+    )

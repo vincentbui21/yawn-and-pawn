@@ -123,7 +123,10 @@ internal fun BaseFeeStep(
     NoteInline(text = stringResource(Res.string.purchase_auth_tip), modifier = notePadding)
 }
 
-/** Step 4, the first alarm: "When should it ring?", the time wheels and the repeat quick choices (like the editor). */
+/**
+ * Step 4, the first alarm: "When should it ring?", the time wheels (with "Rings tomorrow at {time}." for a one-time time
+ * already passed today) and the repeat quick choices (like the editor).
+ */
 @Composable
 internal fun FirstAlarmStep(
     state: OnboardingUiState,
@@ -131,23 +134,37 @@ internal fun FirstAlarmStep(
     onIntent: (OnboardingIntent) -> Unit,
 ) {
     StepHeader(title = stringResource(Res.string.onboarding_first_alarm_title))
-    TimeWheelCard(time = state.alarmTime, is24Hour = is24Hour, onTimeChange = { onIntent(OnboardingIntent.TimeChanged(it)) })
+    TimeWheelCard(
+        time = state.alarmTime,
+        is24Hour = is24Hour,
+        onTimeChange = { onIntent(OnboardingIntent.TimeChanged(it)) },
+        ringsTomorrowAt = state.ringsTomorrowAt,
+    )
     RepeatChoiceCard(
         choice = state.repeatChoice,
         days = state.repeatDays,
         onChoose = { onIntent(OnboardingIntent.RepeatChosen(it)) },
         onToggleDay = { onIntent(OnboardingIntent.DayToggled(it)) },
     )
+    // Story 4.6: an edit of the stored first alarm close to its ring waits under the commitment lock.
+    state.firstAlarmNote?.let { WeakeningNoteInline(note = it, is24Hour = is24Hour) }
 }
 
-/** Step 5, the checks: "How will you prove you're up?" and the Check picker (a selected check's row opens Check setup). */
+/**
+ * Step 5, the checks: "How will you prove you're up?" and the Check picker (a selected check's row opens Check setup),
+ * with the commitment lock note while easier checks wait (Story 4.6, as in the editor).
+ */
 @Composable
 internal fun ChecksStep(
     state: OnboardingUiState,
+    is24Hour: Boolean,
     onIntent: (OnboardingIntent) -> Unit,
 ) {
     StepHeader(title = stringResource(Res.string.onboarding_checks_title))
     CheckPickerContent(state = state.checks, onIntent = { onIntent(OnboardingIntent.Checks(it)) })
+    state.checksNote?.let {
+        WeakeningNoteInline(note = it, is24Hour = is24Hour, modifier = Modifier.padding(horizontal = PpsTheme.spacing.cardPadding))
+    }
 }
 
 /** Step 6, "Make sure it rings": the reliability checklist (FR-ONB-2/3), "Fix" deep-links to each setting. */
@@ -157,7 +174,8 @@ internal fun ReliabilityStep(
     onIntent: (OnboardingIntent) -> Unit,
 ) {
     StepHeader(title = stringResource(Res.string.onboarding_reliability_title))
-    ChecklistCard(rows = state.reliability, onFix = { onIntent(OnboardingIntent.FixClicked(it)) })
+    // No empty card while the checklist is first evaluated.
+    if (state.reliability.isNotEmpty()) ChecklistCard(rows = state.reliability, onFix = { onIntent(OnboardingIntent.FixClicked(it)) })
 }
 
 /** Step 7, the analytics choice (FR-ONB-6): "Share anonymous usage stats?" / "Off unless you turn it on.". */

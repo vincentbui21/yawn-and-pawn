@@ -3,6 +3,8 @@ package com.yawnandpawn.app.ui.onboarding
 import com.yawnandpawn.app.core.billing.FeeRules
 import com.yawnandpawn.app.ui.checkpicker.CheckPickerIntent
 import com.yawnandpawn.app.ui.checkpicker.CheckPickerUiState
+import com.yawnandpawn.app.ui.editor.EditorIntent
+import com.yawnandpawn.app.ui.editor.EditorUiState
 import com.yawnandpawn.app.ui.editor.RepeatChoice
 import com.yawnandpawn.app.ui.format.Weekdays
 import com.yawnandpawn.app.ui.reliability.ChecklistItem
@@ -35,13 +37,35 @@ data class OnboardingUiState(
     val repeatDays: Set<DayOfWeek> = Weekdays,
     /** "Custom" was chosen, so the day chips show even while the days match "Once" or "Weekdays". */
     val customRepeat: Boolean = false,
+    /**
+     * A one-time first alarm whose time has passed today: when it actually rings tomorrow, shown on the time card as "Rings
+     * tomorrow at {time}." (like the editor); `null` shows no note.
+     */
+    val ringsTomorrowAt: LocalTime? = null,
+    /**
+     * The stored first alarm, edited after Back close to its ring, keeps a weaker change pending under the commitment lock
+     * (Story 4.6): "Saved. Takes effect after tomorrow's {time} alarm." under step 4's cards, as in the editor.
+     */
+    val firstAlarmNote: WeakeningNote? = null,
+    /** The same note under step 5's Check picker while the easier checks shown wait under the lock. */
+    val checksNote: WeakeningNote? = null,
     val checks: CheckPickerUiState = CheckPickerUiState(),
+    /**
+     * The editor's Check setup, "Try it" or QR registration over step 5 (Story 5.11), opened from a selected check's row,
+     * or by "Continue" with QR/Barcode and no code; `null` shows none.
+     */
+    val checkSetup: EditorUiState? = null,
     /** The checklist rows of "Make sure it rings" (the test alarm is the last step, so it has no row here). */
     val reliability: List<ChecklistRow> = emptyList(),
+    /** "Fix" on the Manufacturer row opened the maker guidance over step 6 (Story 5.5's screen). */
+    val manufacturerGuidance: Boolean = false,
     val testStatus: TestAlarmStatus = TestAlarmStatus.Ready,
     /** A lowered fee waits for an alarm under the commitment lock: "Saved. Takes effect after tomorrow's {time} alarm.". */
     val baseFeeNote: WeakeningNote? = null,
-    /** "I understand" or "Continue" could not be stored: "Couldn't save. Try again." above the action. */
+    /**
+     * The step's action could not be stored ("I understand", "Continue" with the first alarm or the completion, the usage
+     * stats choice): "Couldn't save. Try again." above the action.
+     */
     val saveFailed: Boolean = false,
 ) {
     /** − is enabled above tier 1. */
@@ -60,6 +84,7 @@ data class OnboardingUiState(
             }
 
     companion object {
+        /** The design preview's sample time (flow F1); the app's first alarm opens at the editor's new-alarm time. */
         val DEFAULT_ALARM_TIME = LocalTime(hour = 7, minute = 30)
     }
 }
@@ -97,9 +122,20 @@ sealed interface OnboardingIntent {
         val intent: CheckPickerIntent,
     ) : OnboardingIntent
 
+    /** A tap in the editor's Check setup, "Try it" or QR registration shown over step 5 ([OnboardingUiState.checkSetup]). */
+    data class CheckSetup(
+        val intent: EditorIntent,
+    ) : OnboardingIntent
+
     data class FixClicked(
         val item: ChecklistItem,
     ) : OnboardingIntent
+
+    /** The maker guidance over step 6 closed (its back arrow, system Back, or a stored "I've done this"). */
+    data object GuidanceClosed : OnboardingIntent
+
+    /** The screen came back to the front (`ON_RESUME`): the checklist is evaluated again, e.g. after a "Fix". */
+    data object Resumed : OnboardingIntent
 
     /** "Share" ([share] true) or "No thanks": the analytics choice (FR-ONB-6), off unless turned on. */
     data class UsageStatsChosen(

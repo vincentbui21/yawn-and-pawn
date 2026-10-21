@@ -13,12 +13,14 @@ import kotlin.time.Instant
  * How far the user got through onboarding (FR-ONB-1, FR-ONB-5, Story 5.10): whether it is [completed], the [step] the
  * user is on (its UI name, stored on every change so it survives process death; null before the first change), and
  * when the user tapped "I understand" under the alarm behaviour disclosure ([disclosureAcceptedAt], null until then).
- * No alarm can be saved before that consent ([consented]).
+ * No alarm can be saved before that consent ([consented]). [alarmId] is the first alarm onboarding saved (Story 5.11):
+ * going back to that step edits it instead of adding a second one, and the test alarm (Story 5.12) rings it.
  */
 data class OnboardingProgress(
     val completed: Boolean = false,
     val step: String? = null,
     val disclosureAcceptedAt: Instant? = null,
+    val alarmId: String? = null,
 ) {
     /** The user accepted the alarm behaviour disclosure. */
     val consented: Boolean
@@ -45,6 +47,9 @@ interface OnboardingRepository {
 
     /** Marks onboarding as completed: the app opens on Home from now on. */
     suspend fun setCompleted(): Outcome<Unit, DomainError>
+
+    /** Stores [id] as the first alarm onboarding saved (Story 5.11); null forgets it. */
+    suspend fun setAlarmId(id: String?): Outcome<Unit, DomainError>
 }
 
 /**
@@ -97,4 +102,16 @@ class CompleteOnboarding(
                 if (progress.consented) repository.setCompleted() else Outcome.Failure(DomainError.DisclosureRequired)
             }
         }
+}
+
+/**
+ * Remembers the first alarm onboarding saved (Story 5.11), so the step survives process death without a second alarm:
+ * going back to the first alarm or its checks edits that alarm. Null forgets it (the stored alarm could not be read).
+ * Inside [SessionLockGuard.whenIdle] like every write the user drives.
+ */
+class RememberOnboardingAlarm(
+    private val repository: OnboardingRepository,
+    private val sessionLock: SessionLockGuard,
+) {
+    suspend operator fun invoke(id: String?): Outcome<Unit, DomainError> = sessionLock.whenIdle { repository.setAlarmId(id) }
 }

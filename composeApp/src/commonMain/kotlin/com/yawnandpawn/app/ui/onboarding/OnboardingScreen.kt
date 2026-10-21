@@ -167,7 +167,7 @@ private fun ColumnScope.StepContent(
         OnboardingStep.Disclosure -> DisclosureStep()
         OnboardingStep.BaseFee -> BaseFeeStep(state = state, is24Hour = is24Hour, onIntent = onIntent)
         OnboardingStep.FirstAlarm -> FirstAlarmStep(state = state, is24Hour = is24Hour, onIntent = onIntent)
-        OnboardingStep.Checks -> ChecksStep(state = state, onIntent = onIntent)
+        OnboardingStep.Checks -> ChecksStep(state = state, is24Hour = is24Hour, onIntent = onIntent)
         OnboardingStep.Reliability -> ReliabilityStep(state = state, onIntent = onIntent)
         OnboardingStep.Analytics -> AnalyticsStep()
         OnboardingStep.TestAlarm -> TestAlarmStep(state = state)

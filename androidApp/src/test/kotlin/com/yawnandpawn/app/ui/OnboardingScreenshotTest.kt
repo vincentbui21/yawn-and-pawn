@@ -16,9 +16,10 @@ import org.robolectric.annotation.Config
 import org.robolectric.annotation.GraphicsMode
 
 /**
- * Story 5.10: onboarding steps 1 to 3 as the app wires them (the round 3 layout with string prices): the mission, the
- * disclosure, the base fee with Play's prices and never online (USD with the approximate note), in Light, Dark and Light
- * at 200 % font scale.
+ * Stories 5.10 and 5.11: onboarding steps 1 to 7 as the app wires them (the round 3 layout): the mission, the disclosure,
+ * the base fee with Play's prices and never online (USD with the approximate note), the first alarm (rings tomorrow), the
+ * checks with QR/Barcode selected and with none, the checklist with two "Fix" rows and the usage stats choice, in Light,
+ * Dark and Light at 200 % font scale.
  */
 @RunWith(RobolectricTestRunner::class)
 @GraphicsMode(GraphicsMode.Mode.NATIVE)
@@ -84,4 +85,66 @@ class OnboardingScreenshotTest {
     @Config(fontScale = 2.0f)
     fun `base fee approximate in Light at 200 percent`() =
         screenshot("onboarding_app_base_fee_approximate_light_font200", { OnboardingSamples.baseFeeApproximate }, PpsThemeMode.Light)
+
+    @Test
+    fun `first alarm in Light`() = screenshot("onboarding_app_first_alarm_light", { OnboardingSamples.firstAlarm }, PpsThemeMode.Light)
+
+    @Test
+    fun `first alarm in Dark`() = screenshot("onboarding_app_first_alarm_dark", { OnboardingSamples.firstAlarm }, PpsThemeMode.Dark)
+
+    @Test
+    @Config(fontScale = 2.0f)
+    fun `first alarm in Light at 200 percent`() =
+        screenshot("onboarding_app_first_alarm_light_font200", { OnboardingSamples.firstAlarm }, PpsThemeMode.Light)
+
+    @Test
+    fun `checks with QR selected in Light`() =
+        screenshot("onboarding_app_checks_qr_light", { OnboardingSamples.checksQr }, PpsThemeMode.Light)
+
+    @Test
+    fun `checks with QR selected in Dark`() = screenshot("onboarding_app_checks_qr_dark", { OnboardingSamples.checksQr }, PpsThemeMode.Dark)
+
+    @Test
+    @Config(fontScale = 2.0f)
+    fun `checks with QR selected in Light at 200 percent`() =
+        screenshot("onboarding_app_checks_qr_light_font200", { OnboardingSamples.checksQr }, PpsThemeMode.Light)
+
+    @Test
+    fun `checks none in Light`() = screenshot("onboarding_app_checks_none_light", { OnboardingSamples.checksNone }, PpsThemeMode.Light)
+
+    @Test
+    fun `checks none in Dark`() = screenshot("onboarding_app_checks_none_dark", { OnboardingSamples.checksNone }, PpsThemeMode.Dark)
+
+    @Test
+    @Config(fontScale = 2.0f)
+    fun `checks none in Light at 200 percent`() =
+        screenshot("onboarding_app_checks_none_light_font200", { OnboardingSamples.checksNone }, PpsThemeMode.Light)
+
+    @Test
+    fun `checklist with two Fix rows in Light`() =
+        screenshot("onboarding_app_checklist_light", {
+            OnboardingSamples.checklist
+        }, PpsThemeMode.Light)
+
+    @Test
+    fun `checklist with two Fix rows in Dark`() =
+        screenshot("onboarding_app_checklist_dark", {
+            OnboardingSamples.checklist
+        }, PpsThemeMode.Dark)
+
+    @Test
+    @Config(fontScale = 2.0f)
+    fun `checklist with two Fix rows in Light at 200 percent`() =
+        screenshot("onboarding_app_checklist_light_font200", { OnboardingSamples.checklist }, PpsThemeMode.Light)
+
+    @Test
+    fun `usage stats in Light`() = screenshot("onboarding_app_usage_stats_light", { OnboardingSamples.usageStats }, PpsThemeMode.Light)
+
+    @Test
+    fun `usage stats in Dark`() = screenshot("onboarding_app_usage_stats_dark", { OnboardingSamples.usageStats }, PpsThemeMode.Dark)
+
+    @Test
+    @Config(fontScale = 2.0f)
+    fun `usage stats in Light at 200 percent`() =
+        screenshot("onboarding_app_usage_stats_light_font200", { OnboardingSamples.usageStats }, PpsThemeMode.Light)
 }

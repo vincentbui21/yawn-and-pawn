@@ -4,13 +4,16 @@ import android.app.Application
 import android.os.Looper
 import android.provider.Settings
 import androidx.compose.ui.test.SemanticsMatcher
+import androidx.compose.ui.test.assertIsOff
 import androidx.compose.ui.test.click
 import androidx.compose.ui.test.hasClickAction
 import androidx.compose.ui.test.hasContentDescription
 import androidx.compose.ui.test.hasText
+import androidx.compose.ui.test.isToggleable
 import androidx.compose.ui.test.junit4.v2.createEmptyComposeRule
 import androidx.compose.ui.test.onRoot
 import androidx.compose.ui.test.performClick
+import androidx.compose.ui.test.performScrollTo
 import androidx.compose.ui.test.performTouchInput
 import androidx.test.core.app.ActivityScenario
 import androidx.test.core.app.ApplicationProvider
@@ -18,6 +21,7 @@ import com.yawnandpawn.app.APP_WORK_TIMEOUT_MILLIS
 import com.yawnandpawn.app.MainActivity
 import com.yawnandpawn.app.StopAppRule
 import com.yawnandpawn.app.core.alarm.AlarmDraft
+import com.yawnandpawn.app.core.alarm.AlarmRepository
 import com.yawnandpawn.app.core.alarm.SaveAlarm
 import com.yawnandpawn.app.core.error.DomainError
 import com.yawnandpawn.app.core.error.Outcome
@@ -26,9 +30,12 @@ import com.yawnandpawn.app.core.onboarding.OnboardingProgress
 import com.yawnandpawn.app.core.onboarding.OnboardingRepository
 import com.yawnandpawn.app.core.reset.DeleteAllData
 import com.yawnandpawn.app.core.session.SessionEngine
+import com.yawnandpawn.app.core.telemetry.AnalyticsConsent
+import com.yawnandpawn.app.core.telemetry.ConsentStore
 import com.yawnandpawn.app.data.settings.SettingsDataStore
 import com.yawnandpawn.app.restartKoin
 import com.yawnandpawn.app.ui.onboarding.OnboardingViewModel
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.runBlocking
 import kotlinx.datetime.LocalTime
 import org.junit.Rule
@@ -51,9 +58,10 @@ import kotlin.test.assertTrue
 import kotlin.time.Instant
 
 /**
- * Story 5.10 in the real app, with the real onboarding store (the settings DataStore) instead of the completed fake every
- * other app test uses: a first launch opens onboarding with no nav capsule, no alarm is saved before "I understand",
- * Back steps back, "Continue" on step 3 opens Home, a stored step 3 reopens there, and Story 5.9's real "Delete all data"
+ * Stories 5.10 and 5.11 in the real app, with the real onboarding store (the settings DataStore) instead of the completed
+ * fake every other app test uses: a first launch opens onboarding with no nav capsule, no alarm is saved before "I
+ * understand", Back steps back, "Continue" on step 3 opens the first alarm, steps 4 to 7 with "No thanks" store one
+ * enabled alarm and no usage stats and open Home, a stored step 3 reopens there, and Story 5.9's real "Delete all data"
  * brings onboarding back with no consent.
  */
 @RunWith(RobolectricTestRunner::class)
@@ -174,13 +182,22 @@ class OnboardingFlowTest {
     @Test
     fun `double taps never skip the disclosure or the fee step, with animations off`() = withAnimationsOff { doubleTapsNeverSkipAStep() }
 
+    /** Taps [text] once the step that slid out has gone, so only the new step's button carries it. */
+    private fun tapOnly(text: String) {
+        composeRule.waitUntil(timeoutMillis = APP_WORK_TIMEOUT_MILLIS) {
+            shadowOf(Looper.getMainLooper()).idle()
+            composeRule.onAllNodes(hasText(text) and hasClickAction()).fetchSemanticsNodes().size == 1
+        }
+        tap(text)
+    }
+
     private val mission = hasText(MISSION)
     private val navCapsule = hasContentDescription("Settings") and hasClickAction()
 
     private fun saveAlarm(): Outcome<*, DomainError> = runBlocking { koinGet().get<SaveAlarm>()(AlarmDraft(time = LocalTime(7, 0))) }
 
     @Test
-    fun `a first launch walks steps 1 to 3 with Back, the consent unlocks saving, and Continue opens Home`() =
+    fun `a first launch walks steps 1 to 3 with Back, the consent unlocks saving, and Continue opens the first alarm`() =
         launch {
             waitFor(mission)
             composeRule.onNode(hasContentDescription("Step 1 of 8")).assertExists()
@@ -208,8 +225,68 @@ class OnboardingFlowTest {
             waitFor(hasText("Choose your snooze fee"))
             tap("Continue")
 
+            waitFor(hasText("When should it ring?"))
+            composeRule.onNode(hasContentDescription("Step 4 of 8")).assertExists()
+            waitForStored { it.step == "FirstAlarm" }
+            assertFalse(stored().completed)
+            composeRule.onNode(navCapsule).assertDoesNotExist()
+        }
+
+    @Test
+    fun `steps 4 to 7 with No thanks save one enabled alarm, store no usage stats, and open Home with the switch off`() =
+        launch(before = { onboarding ->
+            onboarding.setDisclosureAccepted(Instant.parse("2027-03-08T21:00:00Z"))
+            onboarding.setStep("BaseFee")
+        }) {
+            waitFor(hasText("Choose your snooze fee"))
+            tapOnly("Continue")
+            waitFor(hasText("When should it ring?"))
+            tapOnly("Continue")
+            waitFor(hasText("How will you prove you're up?"))
+            composeRule.onNode(hasContentDescription("Step 5 of 8")).assertExists()
+            tapOnly("Continue")
+
+            waitFor(hasText("Make sure it rings"))
+            waitForStored { it.step == "Reliability" && it.alarmId != null }
+            tapOnly("Continue")
+            waitFor(hasText("Share anonymous usage stats?"))
+            tapOnly("No thanks")
+
             waitFor(navCapsule)
             assertTrue(stored().completed)
+            val alarm = assertNotNull(runBlocking { koinGet().get<AlarmRepository>().listAll().valueOrNull() }).single()
+            assertTrue(alarm.enabled)
+            assertEquals(stored().alarmId, alarm.id)
+            val consent = runBlocking { koinGet().get<ConsentStore>().observe().first() }
+            assertEquals(AnalyticsConsent(consent = false, asked = true), consent)
+
+            composeRule.onNode(navCapsule).performClick()
+            val usageStats = hasText("Share anonymous usage stats") and isToggleable()
+            waitFor(usageStats)
+            composeRule.onNode(usageStats).assertIsOff()
+        }
+
+    @Test
+    fun `a check's row opens Check setup over step 5, and system Back returns to the checks, not to step 4`() =
+        launch(before = { onboarding ->
+            onboarding.setDisclosureAccepted(Instant.parse("2027-03-08T21:00:00Z"))
+            onboarding.setStep("Checks")
+        }) { scenario ->
+            waitFor(hasText("How will you prove you're up?"))
+            // The "Your checks" row of the default check (the "Checks" card's row is the toggleable one).
+            val mathSetup = hasText("Math") and hasClickAction() and !isToggleable()
+            waitFor(mathSetup)
+            shadowOf(Looper.getMainLooper()).idleFor(SETTLED)
+            composeRule.onNode(mathSetup).performScrollTo().performClick()
+            waitFor(hasText("Try it") and hasClickAction())
+
+            scenario.onActivity { it.onBackPressedDispatcher.onBackPressed() }
+
+            waitFor(hasText("How will you prove you're up?"))
+            composeRule.waitForIdle()
+            composeRule.onNode(hasContentDescription("Step 5 of 8")).assertExists()
+            composeRule.onNode(hasText("Try it") and hasClickAction()).assertDoesNotExist()
+            assertEquals("Checks", stored().step)
         }
 
     @Test

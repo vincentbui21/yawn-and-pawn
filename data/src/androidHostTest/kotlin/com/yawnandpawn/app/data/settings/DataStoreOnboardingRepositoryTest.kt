@@ -68,20 +68,35 @@ class DataStoreOnboardingRepositoryTest {
             assertEquals(Outcome.Success(Unit), onboarding.setDisclosureAccepted(accepted))
             assertEquals(Outcome.Success(Unit), onboarding.setStep("BaseFee"))
             assertEquals(Outcome.Success(Unit), onboarding.setCompleted())
+            assertEquals(Outcome.Success(Unit), onboarding.setAlarmId("alarm-1"))
 
-            val expected = OnboardingProgress(completed = true, step = "BaseFee", disclosureAcceptedAt = accepted)
+            val expected = OnboardingProgress(completed = true, step = "BaseFee", disclosureAcceptedAt = accepted, alarmId = "alarm-1")
             assertEquals(Outcome.Success(expected), onboarding.get())
             val raw = settings.store.data.first()
             assertEquals(true, raw[DataStoreOnboardingRepository.COMPLETED])
             assertEquals("BaseFee", raw[DataStoreOnboardingRepository.STEP])
             assertEquals(accepted.toEpochMilliseconds(), raw[DataStoreOnboardingRepository.ACCEPTED_AT])
+            assertEquals("alarm-1", raw[DataStoreOnboardingRepository.ALARM_ID])
             assertEquals("onboarding_completed", DataStoreOnboardingRepository.COMPLETED.name)
             assertEquals("onboarding_step", DataStoreOnboardingRepository.STEP.name)
             assertEquals("disclosure_accepted_at", DataStoreOnboardingRepository.ACCEPTED_AT.name)
+            assertEquals("onboarding_alarm_id", DataStoreOnboardingRepository.ALARM_ID.name)
 
             settings.close()
             settings = SettingsDataStore(context)
             assertEquals(expected, repository().observe().first())
+        }
+
+    @Test
+    fun `forgetting the first alarm removes its key`() =
+        runTest {
+            val onboarding = repository()
+            onboarding.setAlarmId("alarm-1")
+
+            assertEquals(Outcome.Success(Unit), onboarding.setAlarmId(null))
+
+            assertEquals(Outcome.Success(OnboardingProgress()), onboarding.get())
+            assertEquals(null, settings.store.data.first()[DataStoreOnboardingRepository.ALARM_ID])
         }
 
     @Test
@@ -103,6 +118,7 @@ class DataStoreOnboardingRepositoryTest {
             val onboarding = repository()
             onboarding.setDisclosureAccepted(accepted)
             onboarding.setCompleted()
+            onboarding.setAlarmId("alarm-1")
 
             settings.store.edit { it.clear() }
 
@@ -166,7 +182,12 @@ class DataStoreOnboardingRepositoryTest {
         runTest {
             val onboarding = repository(BrokenStore(IOException("disk unreadable")))
 
-            listOf(onboarding.setStep("Disclosure"), onboarding.setDisclosureAccepted(accepted), onboarding.setCompleted()).forEach {
+            listOf(
+                onboarding.setStep("Disclosure"),
+                onboarding.setDisclosureAccepted(accepted),
+                onboarding.setCompleted(),
+                onboarding.setAlarmId("alarm-1"),
+            ).forEach {
                 assertIs<DomainError.StorageFailure>(assertIs<Outcome.Failure<DomainError>>(it).error)
             }
         }

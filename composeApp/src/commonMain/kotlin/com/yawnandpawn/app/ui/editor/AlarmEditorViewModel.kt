@@ -138,6 +138,11 @@ class AlarmEditorViewModel(
      * not a Duplicate (which keeps the copied alarm's values). Null opens with the built-in defaults (tests).
      */
     private val newAlarmDefaults: GlobalSettingsRepository? = null,
+    /**
+     * Called with the stored alarm's id after every successful save, before the editor closes (Story 5.11: onboarding's
+     * first alarm moves on to the checklist and remembers the id). Null for the app's editor.
+     */
+    private val onSaved: ((String) -> Unit)? = null,
 ) : ViewModel() {
     /**
      * The editor opened on QR registration for "Re-register" (only when the alarm has a QR/Barcode check): "Use this
@@ -680,6 +685,7 @@ class AlarmEditorViewModel(
                     // (Story 1.19); the dialog shows over Home after the editor closes. The alarm is saved, so the
                     // editor closes even when asking fails.
                     notificationPermission.askOnce(actions)
+                    onSaved?.invoke(result.value.alarm.id)
                     // Story 4.6: a weakening change waits under the lock, and Home says until when.
                     val waits = weakeningNoteOf(result.value.pendingUntil?.scheduledAt, clock.now(), timeZoneProvider.current())
                     if (waits == null) close() else closeSavedUnderLock(waits)

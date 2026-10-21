@@ -69,6 +69,8 @@ class FakeOnboardingRepository(
 
     override suspend fun setCompleted(): Outcome<Unit, DomainError> = write { it.copy(completed = true) }
 
+    override suspend fun setAlarmId(id: String?): Outcome<Unit, DomainError> = write { it.copy(alarmId = id) }
+
     private fun write(change: (OnboardingProgress) -> OnboardingProgress): Outcome<Unit, DomainError> {
         writeFailure?.let { return Outcome.Failure(it) }
         stored.value = change(stored.value)

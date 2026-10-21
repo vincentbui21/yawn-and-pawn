@@ -99,3 +99,4 @@ A new user is guided through setup in 8 onboarding steps: mission, alarm behavio
   - Note which shows first: the app's "You already paid …" reuse sheet, or Play's "You already own this item.".
   - Repeat a few times. If Play's dialog still shows first, raise `PurchaseCoordinator.PRE_LAUNCH_REFRESH` (now 1 s) to the value the timings suggest.
   - Also check that a re-ring shows the time it rings, and that the clock turns over at the minute.
+- **5.11 → 5.12 hook:** onboarding completes after step 7 until 5.12 raises `OnboardingViewModel.LAST_BUILT` to `TestAlarm`; `afterUsageStats()` then opens step 8. The first alarm's id is stored as `OnboardingProgress.alarmId` (the alarm the test rings). Back from step 8 must skip step 7 for a user already asked about usage stats. Steps 4 and 5 are a child `AlarmEditorViewModel` (`OnboardingFirstAlarm`); step 6 is a child of 5.4's `ReliabilityViewModel` (`OnboardingChecklist`), its "Test alarm" row left out for step 8.

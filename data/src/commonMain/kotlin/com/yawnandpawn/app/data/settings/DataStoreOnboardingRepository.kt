@@ -29,7 +29,8 @@ import kotlin.time.Instant
 
 /**
  * [OnboardingRepository] in the settings DataStore (device-protected, backed up, so a restored phone opens on Home; Story
- * 5.10): [COMPLETED], the current [STEP] and the disclosure's [ACCEPTED_AT] (epoch milliseconds). "Delete all data"
+ * 5.10): [COMPLETED], the current [STEP], the disclosure's [ACCEPTED_AT] (epoch milliseconds) and the first alarm's
+ * [ALARM_ID] (Story 5.11). "Delete all data"
  * clears that store (Story 5.9), so the app goes back to onboarding by itself.
  *
  * A file read error in [observe] is logged; before the first good read it reads as a fresh [OnboardingProgress] (not
@@ -69,11 +70,15 @@ class DataStoreOnboardingRepository(
 
     override suspend fun setCompleted(): Outcome<Unit, DomainError> = edit { it[COMPLETED] = true }
 
+    override suspend fun setAlarmId(id: String?): Outcome<Unit, DomainError> =
+        edit { if (id == null) it.remove(ALARM_ID) else it[ALARM_ID] = id }
+
     private fun progressOf(preferences: Preferences): OnboardingProgress =
         OnboardingProgress(
             completed = preferences[COMPLETED] ?: false,
             step = preferences[STEP],
             disclosureAcceptedAt = preferences[ACCEPTED_AT]?.let(Instant::fromEpochMilliseconds),
+            alarmId = preferences[ALARM_ID],
         )
 
     private suspend fun edit(change: (MutablePreferences) -> Unit): Outcome<Unit, DomainError> =
@@ -102,6 +107,9 @@ class DataStoreOnboardingRepository(
 
         /** When the user tapped "I understand" under the alarm behaviour disclosure, in epoch milliseconds. */
         val ACCEPTED_AT: Preferences.Key<Long> = longPreferencesKey("disclosure_accepted_at")
+
+        /** The first alarm onboarding saved (Story 5.11), by its id. */
+        val ALARM_ID: Preferences.Key<String> = stringPreferencesKey("onboarding_alarm_id")
 
         /** The operation logged when the progress cannot be read. */
         const val READ_PROGRESS = "read onboarding progress"

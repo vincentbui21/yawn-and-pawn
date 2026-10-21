@@ -125,7 +125,8 @@ object SnoozeVariantSamples {
         input(variant).let { (session, env) -> snoozeAvailability(session, env, UsdFeeLadder, FakeLogger()) }
 
     /** The Ringing screen of [variant]. */
-    fun ringing(variant: SnoozeVariant): RingingUiState = ringingUiState(input(variant).first, availability(variant), utc)
+    fun ringing(variant: SnoozeVariant): RingingUiState =
+        input(variant).first.let { ringingUiState(it, availability(variant), utc, it.config.scheduledAt) }
 
     /** The Math Check screen in Loud of [variant], with the footer's snooze. */
     fun check(variant: SnoozeVariant): CheckUiState {

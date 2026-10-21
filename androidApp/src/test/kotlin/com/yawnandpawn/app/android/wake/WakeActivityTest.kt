@@ -10,6 +10,7 @@ import android.provider.Settings
 import android.view.WindowManager
 import androidx.compose.ui.test.getBoundsInRoot
 import androidx.compose.ui.test.junit4.v2.createEmptyComposeRule
+import androidx.compose.ui.test.onAllNodesWithContentDescription
 import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
@@ -36,7 +37,9 @@ import com.yawnandpawn.app.core.time.TimeZoneProvider
 import com.yawnandpawn.app.launchActivity
 import com.yawnandpawn.app.testing.FakeActiveSessionStore
 import com.yawnandpawn.app.testing.FakeAlarmRepository
+import com.yawnandpawn.app.testing.FakeClock
 import com.yawnandpawn.app.testing.FakeSessionHistoryRepository
+import com.yawnandpawn.app.testing.FakeTimeChangeSignal
 import com.yawnandpawn.app.testing.aSession
 import com.yawnandpawn.app.testing.aSessionConfig
 import com.yawnandpawn.app.ui.format.formatClockTime
@@ -60,6 +63,7 @@ import kotlin.test.assertIs
 import kotlin.test.assertNotEquals
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
+import kotlin.time.Duration.Companion.minutes
 import kotlin.time.Instant
 
 /** Stories 1.14 and 1.15: the wake screen over the lock screen, rendering the approved Ringing screen. */
@@ -151,7 +155,7 @@ class WakeActivityTest {
 
     @Test
     fun `a ringing session renders the Ringing screen with label, alarm time, date, a 72 dp I'm up and snooze waiting for prices`() {
-        val app = WakeApp()
+        val app = WakeApp(clock = FakeClock(aSessionConfig().scheduledAt))
         ringing(app)
 
         launch(app)
@@ -175,7 +179,7 @@ class WakeActivityTest {
 
     @Test
     fun `with the 24-hour setting the clock shows the 24-hour time`() {
-        val app = WakeApp()
+        val app = WakeApp(clock = FakeClock(aSessionConfig().scheduledAt))
         Settings.System.putString(app.app.contentResolver, Settings.System.TIME_12_24, "24")
         ringing(app)
 
@@ -241,7 +245,7 @@ class WakeActivityTest {
 
     @Test
     fun `any other tap dispatches UserInteracted, which resets the interaction deadline`() {
-        val app = WakeApp()
+        val app = WakeApp(clock = FakeClock(aSessionConfig().scheduledAt))
         ringing(app)
         val before = (app.engine.state.value as SessionState.Ringing).session.interactionDeadline
         ShadowSystemClock.advanceBy(Duration.ofSeconds(5))
@@ -336,9 +340,9 @@ class WakeActivityTest {
     }
 
     @Test
-    fun `in the emergency ring it shows the alarm time, I'm up stops it and the screen closes`() {
-        val app = WakeApp()
+    fun `in the emergency ring it shows the time now, I'm up stops it and the screen closes`() {
         val at = Instant.parse("2027-03-03T06:15:00Z")
+        val app = WakeApp(clock = FakeClock(at))
         app.runtime.startEmergency(at, volumePercent = 80, cause = "commit failed")
 
         val activity = buildActivity(WakeActivity::class.java).setup().get()
@@ -353,9 +357,9 @@ class WakeActivityTest {
     }
 
     @Test
-    fun `opened before the session starts it shows the notification's alarm time and waits`() {
-        val app = WakeApp()
+    fun `opened before the session starts it shows the time now and waits`() {
         val at = Instant.parse("2027-03-03T06:30:00Z")
+        val app = WakeApp(clock = FakeClock(at))
         app.koin.get<WakeNotifier>().show(at)
 
         val activity = buildActivity(WakeActivity::class.java).setup().get()
@@ -364,9 +368,65 @@ class WakeActivityTest {
         assertFalse(activity.isFinishing, "still Idle: it waits for the session")
     }
 
+    /**
+     * Epic 4 device follow-up 1 (owner-approved): a ring 9 minutes after the alarm (a re-ring after a snooze, here a late
+     * first ring) shows the time it rings, not the alarm's own time, which the notification keeps.
+     */
+    @Test
+    fun `the Ringing clock shows the time now, not the alarm's scheduled time`() {
+        val scheduled = aSessionConfig().scheduledAt
+        val app = WakeApp(clock = FakeClock(scheduled + 9.minutes))
+        ringing(app)
+
+        buildActivity(WakeActivity::class.java).setup()
+
+        composeRule.onNodeWithContentDescription(alarmTime(app, at = scheduled + 9.minutes)).assertExists()
+        composeRule.onNodeWithContentDescription(alarmTime(app, at = scheduled)).assertDoesNotExist()
+    }
+
+    /** Review fix 1: the clock follows the app's time-change signal (the system's minute tick, a clock set, a zone change). */
+    @Test
+    fun `the Ringing clock moves on at a time-change signal`() {
+        val scheduled = aSessionConfig().scheduledAt
+        val clock = FakeClock(scheduled)
+        val changes = FakeTimeChangeSignal()
+        val app = WakeApp(clock = clock, timeChanges = changes)
+        ringing(app)
+        buildActivity(WakeActivity::class.java).setup()
+        composeRule.onNodeWithContentDescription(alarmTime(app, at = scheduled)).assertExists()
+
+        clock.set(scheduled + 3.minutes)
+        changes.emit()
+
+        composeRule.waitUntil(timeoutMillis = APP_WORK_TIMEOUT_MILLIS) {
+            composeRule.onAllNodesWithContentDescription(alarmTime(app, at = scheduled + 3.minutes)).fetchSemanticsNodes().isNotEmpty()
+        }
+        composeRule.onNodeWithContentDescription(alarmTime(app, at = scheduled)).assertDoesNotExist()
+    }
+
+    /** Review fix 6: with no signal at all, the clock still turns over at the minute boundary. */
+    @Test
+    fun `the Ringing clock turns over at the minute without a signal`() {
+        val clock = FakeClock(Instant.parse("2027-03-03T06:09:40Z"))
+        val app = WakeApp(clock = clock, timeChanges = FakeTimeChangeSignal())
+        ringing(app)
+        buildActivity(WakeActivity::class.java).setup()
+        composeRule.onNodeWithContentDescription(alarmTime(app, at = Instant.parse("2027-03-03T06:09:40Z"))).assertExists()
+
+        clock.set(Instant.parse("2027-03-03T06:10:00Z"))
+        ShadowSystemClock.advanceBy(java.time.Duration.ofSeconds(20))
+        composeRule.mainClock.advanceTimeBy(20_000)
+        composeRule.waitForIdle()
+
+        composeRule.waitUntil(timeoutMillis = APP_WORK_TIMEOUT_MILLIS) {
+            val shown = alarmTime(app, at = Instant.parse("2027-03-03T06:10:00Z"))
+            composeRule.onAllNodesWithContentDescription(shown).fetchSemanticsNodes().isNotEmpty()
+        }
+    }
+
     @Test
     fun `opened by the full-screen intent before the session starts it waits, shows the session and Success when it ends`() {
-        val app = WakeApp()
+        val app = WakeApp(clock = FakeClock(aSessionConfig().scheduledAt))
 
         val activity = buildActivity(WakeActivity::class.java).setup().get()
         composeRule.waitForIdle()

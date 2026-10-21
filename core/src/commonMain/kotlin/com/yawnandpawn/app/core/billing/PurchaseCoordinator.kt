@@ -111,6 +111,15 @@ class PurchaseCoordinator(
 
     private val pendingListed = MutableStateFlow<Set<String>>(emptySet())
 
+    /**
+     * Products an update recorded stranded since the last Pay of them (Epic 4 device follow-up 2): Play's list may not
+     * show them yet, so the next Pay of one asks Play again before it launches.
+     */
+    private val strandedByUpdate = MutableStateFlow<Set<String>>(emptySet())
+
+    /** Pending tokens Play's list was already asked again for (review fix 4): each delays one Pay at most. */
+    private val refreshedForPending = MutableStateFlow<Set<PurchaseToken>>(emptySet())
+
     /** The stranded payment offered for this snooze, if any (Story 4.13's "already paid" sheet). */
     val reuseOffer: StateFlow<ReuseOffer?> = offered.asStateFlow()
 
@@ -224,7 +233,9 @@ class PurchaseCoordinator(
      * 2. nothing happens when the session no longer pays this intent;
      * 3. the grant ledger is settled, so a granted token Play still owns is consumed first;
      * 4. the owned purchases are reconciled with `PreLaunch`: a grant, a reuse offer or a pending payment of this product
-     *    for this session ends it without opening Play;
+     *    for this session ends it without opening Play; when the list may lag a payment of this product (one it still
+     *    lists that did not stop the launch, or one stranded before the query that it no longer lists as purchased), it is
+     *    asked once more after [PRE_LAUNCH_REFRESH] (Epic 4 device follow-up 2);
      * 5. otherwise Play opens with the install id and the session id.
      * Anything that throws on the way ends the payment with "No charge." (the sheet never opened).
      */
@@ -270,9 +281,36 @@ class PurchaseCoordinator(
     ) {
         // A granted payment Play still owns blocks buying the same product again: consume it first (Story 4.10's path).
         ledger.settleAll()
-        val found = mutex.withLock { reconcileOwned(ReconcileContext.PreLaunch(intent.productId), intent, installId) }
+        val productId = intent.productId
+        // The update flag is read and cleared with the query (review fix 3): an update that strands the product while this
+        // Pay waits sets it again for the next Pay. Asked again at most once per update, so a refunded token never delays
+        // every later Pay.
+        var strandedBefore: Set<String> = emptySet()
+        var found =
+            mutex.withLock {
+                strandedBefore = stranded.value + strandedByUpdate.getAndUpdate { it - productId }
+                reconcileOwned(ReconcileContext.PreLaunch(productId), intent, installId)
+            }
+        // Epic 4 device follow-up 2: right after a slow payment is approved, Play's list may still show it pending, or not
+        // yet at all while its update already said it is stranded. Launching then gets Play's own "You already own this
+        // item." before the reuse sheet, so the owned purchases are asked once more first. Still unresolved, Play opens and
+        // ITEM_ALREADY_OWNED recovers as before.
+        val pendingNotAskedAgain = found.pendingTokens(productId) - refreshedForPending.value
+        val listLags = pendingNotAskedAgain.isNotEmpty() || (productId in strandedBefore && productId !in found.purchasedProducts)
+        if (found.queried && !found.stopsLaunch && listLags) {
+            // A pending payment that never resolves delays one Pay, not every Pay of its product (review fix 4).
+            refreshedForPending.update { it + pendingNotAskedAgain }
+            delay(PRE_LAUNCH_REFRESH)
+            // The ring may have ended, or the payment been answered, while it waited (review fix 2).
+            if (!paysFor(intent.intentId)) return
+            found = mutex.withLock { reconcileOwned(ReconcileContext.PreLaunch(productId), intent, installId) }
+        }
         if (!found.stopsLaunch) openSheet(InFlight(intent, installId, retried = false))
     }
+
+    /** The tokens of [productId] Play lists as pending for this install. */
+    private fun Reconciled.pendingTokens(productId: String): Set<PurchaseToken> =
+        pending.filter { it.first == productId }.mapTo(mutableSetOf()) { it.second }
 
     /** Opens Play's sheet for [launch] while the session still pays it and no other sheet is open for it. */
     private suspend fun openSheet(launch: InFlight) {
@@ -382,6 +420,7 @@ class PurchaseCoordinator(
             val installId = installId() ?: return
             val pass = Pass(launching = null)
             purchases.forEach { reconcileOne(it, ReconcileContext.Update, pass, installId) }
+            strandedByUpdate.update { it + pass.strandedProducts }
         }
     }
 
@@ -501,13 +540,37 @@ class PurchaseCoordinator(
         var offered = false
         val strandedProducts = mutableSetOf<String>()
         val pendingSessions = mutableSetOf<String>()
+
+        /**
+         * What the reconciler made of each listed purchase (the purchase rules stay in `PurchaseReconciler`, Story 4.9): the
+         * tokens it found pending for this install, by product, and the products it found paid (any decision but pending or
+         * another install's).
+         */
+        val pendingTokens = mutableSetOf<Pair<String, PurchaseToken>>()
+        val paidProducts = mutableSetOf<String>()
+
+        fun note(
+            snapshot: PurchaseSnapshot,
+            decision: PurchaseDecision,
+        ) {
+            when ((decision as? PurchaseDecision.Ignore)?.reason) {
+                IgnoreReason.Pending -> pendingTokens += snapshot.productId to snapshot.token
+                IgnoreReason.OtherInstall -> Unit
+                else -> paidProducts += snapshot.productId
+            }
+        }
     }
 
-    /** The outcome of a full query: [queried] false when Play could not be asked. */
+    /**
+     * The outcome of a full query: [queried] false when Play could not be asked. [pending] are the tokens the reconciler
+     * found pending for this install, by product, [purchasedProducts] the products it found paid.
+     */
     private class Reconciled(
         val queried: Boolean,
         val stopsLaunch: Boolean,
         val consumedForRetry: Boolean,
+        val pending: Set<Pair<String, PurchaseToken>> = emptySet(),
+        val purchasedProducts: Set<String> = emptySet(),
     )
 
     /**
@@ -524,7 +587,13 @@ class PurchaseCoordinator(
         owned.forEach { reconcileOne(it, context, pass, installId) }
         stranded.value = pass.strandedProducts.toSet()
         pendingListed.value = pass.pendingSessions.toSet()
-        return Reconciled(queried = true, stopsLaunch = pass.stopsLaunch, consumedForRetry = pass.consumedForRetry)
+        return Reconciled(
+            queried = true,
+            stopsLaunch = pass.stopsLaunch,
+            consumedForRetry = pass.consumedForRetry,
+            pending = pass.pendingTokens.toSet(),
+            purchasedProducts = pass.paidProducts.toSet(),
+        )
     }
 
     /** Decides [snapshot] against the ledger, the record and the session now, and carries the decision out. */
@@ -553,6 +622,7 @@ class PurchaseCoordinator(
         state: SessionState,
         pass: Pass,
     ) {
+        pass.note(snapshot, decision)
         when (decision) {
             is PurchaseDecision.Grant -> {
                 val price = intentPrice(snapshot.profileId, snapshot.productId)
@@ -730,5 +800,12 @@ class PurchaseCoordinator(
 
         /** Review 15 (default taken): a sheet open this long whose result never came is cancelled on the next resume. */
         val STALE_SHEET: Duration = 2.minutes
+
+        /**
+         * Epic 4 device follow-up 2 (default taken): the pause before Play's owned purchases are asked again when the
+         * pre-launch list may lag a just-approved payment, so the reuse sheet shows instead of Play's "You already own this
+         * item.".
+         */
+        val PRE_LAUNCH_REFRESH: Duration = 1.seconds
     }
 }

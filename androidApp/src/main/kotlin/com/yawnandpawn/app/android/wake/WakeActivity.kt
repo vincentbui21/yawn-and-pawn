@@ -43,7 +43,9 @@ import com.yawnandpawn.app.core.session.SessionState
 import com.yawnandpawn.app.core.session.SnoozeAvailability
 import com.yawnandpawn.app.core.session.SnoozeAvailabilityPolicy
 import com.yawnandpawn.app.core.session.UserLockState
+import com.yawnandpawn.app.core.time.Clock
 import com.yawnandpawn.app.core.time.MonotonicClock
+import com.yawnandpawn.app.core.time.TimeChangeSignal
 import com.yawnandpawn.app.core.time.TimeZoneProvider
 import com.yawnandpawn.app.ui.components.LocalViewfinderFeed
 import com.yawnandpawn.app.ui.format.is24HourClock
@@ -64,9 +66,11 @@ import com.yawnandpawn.app.ui.wake.SuccessScreen
 import com.yawnandpawn.app.ui.wake.WakeIntent
 import com.yawnandpawn.app.ui.wake.WakeMessage
 import com.yawnandpawn.app.ui.wake.WakeSurface
+import com.yawnandpawn.app.ui.wake.WallTime
 import com.yawnandpawn.app.ui.wake.alarmOnlyRingingUiState
 import com.yawnandpawn.app.ui.wake.checkPosition
 import com.yawnandpawn.app.ui.wake.placeholderStepDue
+import com.yawnandpawn.app.ui.wake.rememberWallTime
 import com.yawnandpawn.app.ui.wake.ringingUiState
 import com.yawnandpawn.app.ui.wake.snoozedUiState
 import com.yawnandpawn.app.ui.wake.successUiState
@@ -81,6 +85,7 @@ import org.koin.android.ext.android.get
 import org.koin.android.ext.android.inject
 import kotlin.time.Duration
 import kotlin.time.Duration.Companion.seconds
+import kotlin.time.Instant
 
 /**
  * The wake screen over the lock screen (AD-5): the approved Ringing screen (`ui/wake/RingingScreen`, Story 1.15) and,
@@ -146,6 +151,10 @@ class WakeActivity : ComponentActivity() {
     private val unlockSignals: UnlockSignals by inject()
     private val purchases: PurchaseCoordinator by inject()
     private val monotonicClock: MonotonicClock by inject()
+
+    /** The wall clock the Ringing screen's clock shows (Epic 4 device follow-up 1): the app's, so tests control it. */
+    private val clock: Clock by inject()
+    private val timeChanges: TimeChangeSignal by inject()
 
     /** The snooze confirm sheet (Story 4.13); process-wide, so a recreated screen shows the same sheet. */
     private val sheet: ConfirmSheetHost by inject()
@@ -237,8 +246,7 @@ class WakeActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
         end = WakeScreenEnd(this, ended = { engine.ended.value }, elapsedMillis = monotonicClock::elapsedMillis)
         showOverLockScreen()
-        // A restore entry point (Story 2.1): opened after a kill, the screen takes over the stored session and shows the
-        // same step from memory (nothing when the engine already holds it).
+        // A restore entry point (Story 2.1): opened after a kill, it takes over the stored session (no-op once held).
         appScope.launch { engine.restore() }
         onBackPressedDispatcher.addCallback(
             this,
@@ -285,7 +293,8 @@ class WakeActivity : ComponentActivity() {
             } else {
                 // Restored with a Success whose session this process no longer knows (it was killed): nothing to show.
                 if (end.successSessionId != null) LaunchedEffect(Unit) { finish() }
-                val zone = timeZones.current()
+                // The clock shows the time now, turning over at each minute (Epic 4 device follow-up 1).
+                val time = rememberWallTime(clock, timeZones, timeChanges)
                 val session = (state as? SessionState.Active)?.session?.takeIf { state.isRinging() }
                 val availability = session?.let { key(env) { snoozePolicy.availability(it) } }
                 // Story 4.13: the confirm sheet and its message over the session's Ringing or Check screen.
@@ -294,12 +303,12 @@ class WakeActivity : ComponentActivity() {
                 // was shown, an ended session (Missed, or Completed before Success shows, with the notification still
                 // posted) keeps its last screen, so a check never flips back to the Ringing screen (Story 3.2 review).
                 val current =
-                    emergency?.let { WakeScreen.Ringing(alarmOnlyRingingUiState(it.alarmAt, zone)) }
-                        ?: sessionScreen(state, session, availability, zone, check, overlay)
+                    emergency?.let { WakeScreen.Ringing(alarmOnlyRingingUiState(time.now, time.zone)) }
+                        ?: sessionScreen(state, session, availability, time, check, overlay)
                         ?: runtime
                             .shownAlarmAt()
                             ?.takeIf { !last.sessionShown }
-                            ?.let { WakeScreen.Ringing(alarmOnlyRingingUiState(it, zone)) }
+                            ?.let { WakeScreen.Ringing(alarmOnlyRingingUiState(time.now, time.zone)) }
                 if (session != null) last.sessionShown = true
                 if (current != null) last.state = current
                 val shown = current ?: last.state
@@ -571,14 +580,14 @@ private fun sessionScreen(
     state: SessionState,
     session: SessionData?,
     availability: SnoozeAvailability?,
-    zone: TimeZone,
+    time: WallTime,
     check: WakeCheck,
     overlay: SheetOverlay,
 ): WakeScreen? {
     if (session == null || availability == null) return null
     return when (state) {
         is SessionState.Snoozed -> {
-            snoozedUiState(session, zone)?.let { WakeScreen.Snoozed(it, SnoozedKey.of(session)) }
+            snoozedUiState(session, time.zone)?.let { WakeScreen.Snoozed(it, SnoozedKey.of(session)) }
         }
 
         else -> {
@@ -586,7 +595,8 @@ private fun sessionScreen(
             check.picker(state)?.let(WakeScreen::Fallback)
                 ?: checkScreen?.let { WakeScreen.Check(it.copy(sheet = overlay.sheet, message = overlay.message)) }
                 ?: WakeScreen.Ringing(
-                    ringingUiState(session, availability, zone, overlay.priceOf).copy(sheet = overlay.sheet, message = overlay.message),
+                    ringingUiState(session, availability, time.zone, time.now, overlay.priceOf)
+                        .copy(sheet = overlay.sheet, message = overlay.message),
                 )
         }
     }

@@ -1,0 +1,116 @@
+---
+title: 'Epic 4 device follow-ups: the re-ring clock and the reuse sheet after a slow approval'
+type: 'bugfix'
+created: '2026-10-19'
+status: 'done'
+baseline_revision: '620fb48d'
+context:
+  - '{project-root}/_bmad-output/implementation-artifacts/spec-1-15-ringing-screen-over-the-lock-screen-with-i-m-up.md'
+  - '{project-root}/_bmad-output/implementation-artifacts/spec-4-11-billing-orchestration-launch-recovery-item-already-owned-and-stranded-reuse.md'
+warnings: []
+deferred:
+  - 'Story 5.13 (human-verify): on the Oppo, a re-ring shows the time it rings and the clock turns over at the minute; a slow test-card approval followed by Pay shows the reuse sheet with no Play "You already own this item." dialog'
+---
+
+<intent-contract>
+
+## Intent
+
+**Problem:** two Story 4.18 device findings (Epic 4 retro, branch `fix/epic-4-device-followups`). (1) After a snooze the Ringing screen's big clock shows the session's first ring (`config.scheduledAt`, 23:01 shown at 23:11), not the time now. (2) Right after a slow test-card approval, the next Pay at that price shows Play's own "You already own this item." before the app's reuse sheet, because the pre-launch owned-purchases list had not caught up.
+
+**Approach:** (1) every Ringing screen (session ring, re-ring, test alarm, Direct Boot, emergency ring, the screen opened before the session) shows the injected `Clock`'s time now, refreshed at each minute boundary; the notification and history keep the alarm's own time. (2) Before launching, when the pre-launch list may lag a payment of the launched product, the coordinator asks Play's owned purchases once more and reconciles; a reuse found then shows the reuse sheet without opening Play. Still unresolved, Play opens and the `ITEM_ALREADY_OWNED` recovery stays the fallback.
+
+## Boundaries & Constraints
+
+**Always:** the app's injected `Clock` (never `Clock.System` in UI code); never grant twice; never launch while a reuse is known to be possible; nothing consumed without the user's yes; no new strings.
+
+**Never:** no change to the notification's time, history rows, the Snoozed screen's "Next ring at" or the reconciler rules.
+
+## I/O & Edge-Case Matrix
+
+| Scenario | Input / State | Expected Output / Behavior | Error Handling |
+|----------|--------------|---------------------------|----------------|
+| Re-ring | session scheduled 06:00, now 06:09 | clock 06:09 | — |
+| Minute turns | clock at 06:09:40 | new time at 06:10:00, then each minute | — |
+| Approved after the query | pre-launch list shows the product pending (another session), the second query shows it purchased | reuse sheet, Play never opened | — |
+| Stranded by an update, list lagging | product stranded before the query, list lacks it, second query lists it | reuse sheet, Play never opened | — |
+| Still lagging | both lists show it pending | Play opens once; `ITEM_ALREADY_OWNED` recovers the reuse | — |
+| Nothing of the product listed | — | Play opens at once, one query | failed query: launch as before |
+
+</intent-contract>
+
+## Code Map
+
+- `composeApp/.../ui/wake/RingingMapping.kt` -- `ringingUiState(session, availability, zone, now, priceOf)` and `alarmOnlyRingingUiState(now, zone)` show [now].
+- `composeApp/.../ui/wake/WallTime.kt` (new) -- `WallTime`, `wallTimes(clock, zones, changes)`, `rememberWallTime`, `untilNextMinute(now)`.
+- `androidApp/.../android/wake/WakeActivity.kt` -- injects `Clock`, collects `minuteTicks`, passes the time now to every Ringing state.
+- `core/.../billing/PurchaseCoordinator.kt` -- `prepareAndLaunch`: a second `PreLaunch` reconcile after `PRE_LAUNCH_REFRESH` (1 s) when `Reconciled.mayBeStale`; `Reconciled` carries the listed owned and purchased products; `Pass.consumed`.
+- Tests: `RingingMappingTest`, `WallTimeTest` (new), `WakeActivityTest` (fixed `FakeClock`s, a re-ring clock test), `PurchaseCoordinatorRefreshTest` (new: the pre-launch refresh cases), `FakePlay.onQuery`; samples pass the sample's time (`RingingSamples`, `SnoozeVariantSamples`), and `SnoozedScreenshotTest`'s re-ring samples show the re-ring time (baselines re-recorded on purpose).
+
+## Design Notes
+
+- **DEFAULT TAKEN (owner can change): the refresh waits `PRE_LAUNCH_REFRESH` = 1 s** and runs at most once per Pay, only on evidence the list lags (the launched product still listed without stopping the launch, or stranded before the query and not listed as purchased). The alarm keeps ringing; the confirm sheet's Pay is already committed.
+- **DEFAULT TAKEN: the emergency ring and the screen opened before the session also show the time now** (they were the alarm's time).
+
+## Spec Change Log
+
+## Review Triage Log
+
+## Review (fast mode)
+
+Independent review of PR #73: no HIGH findings, and money safety confirmed. All seven items are fixed:
+
+1. **Clock follows the time-change signal.** `wallTimes(clock, zones, changes)` (`WallTime.kt`) starts with the time now and emits again at every `TimeChangeSignal` (the system's minute tick, a clock set, a zone change, as Home does). Each emission reads `clock.now()` and `zones.current()`. A minute-boundary delay stays as a backstop.
+   - `WakeActivity` reads it through `rememberWallTime`, with the `WallTime` class replacing the private `WakeTime`.
+   - Tests: `WallTimeTest` (signal with a new time and zone; the boundary backstop) and `WakeActivityTest` ("moves on at a time-change signal").
+2. **The ring may end during the 1 s wait.** `prepareAndLaunch` returns at once when the session no longer pays the intent after the wait.
+   - Test: "a ring that ends during the wait asks nothing more and opens nothing" (1 query, no launch, no reuse sheet).
+3. **An update during the wait keeps its flag.** The update flag is read and cleared together with the first query, inside the same lock (`getAndUpdate`), so an update that lands during the wait still counts for the next Pay.
+   - Test: "an update that strands the product during the wait keeps its flag for the next Pay".
+4. **A pending payment that never resolves no longer delays every Pay.** The refresh runs once per pending token (`refreshedForPending`).
+   - Test: two Pays with the same pending payment make 3 queries.
+5. **New coordinator cases:**
+   - the second query fails: exactly one launch;
+   - once per update;
+   - the ring ends during the wait;
+   - a recovery runs during the wait: one reuse sheet, no launch;
+   - an approval is delivered during the wait: reuse, no launch, nothing consumed.
+6. **The screen clock ticks.** `WakeActivityTest` "turns over at the minute without a signal": the fake clock starts at 06:09:40 and is moved to 06:10:00, then the system clock and the compose clock both advance 20 s, and the screen shows 6:10.
+8. **CI on `cc0b5bcc`: `PurchaseStateReaderScanTest` (Story 4.9, AD-7).** The coordinator read the purchase state itself. It now takes the pending tokens and the paid products from the reconciler's decisions: `Ignore(Pending)` means pending for this install, `Ignore(OtherInstall)` is skipped, and any other decision means paid. The purchase rules stay only in `PurchaseReconciler`. The scan's allowlist is unchanged.
+9. **Detekt:** the file is renamed to `WallTime.kt` (MatchingDeclarationName), and the refresh tests moved from `PurchaseCoordinatorTest` (LargeClass) to `PurchaseCoordinatorRefreshTest`.
+
+**Verification after the review**, on main `2d35e706`, with `--no-daemon --max-workers=2`. All pass:
+- Coordinator: `PurchaseCoordinatorRefreshTest` 11, `PurchaseCoordinatorTest` 24, `PurchaseCoordinatorSequenceTest` 13, `PurchaseCoordinatorReviewTest` 19.
+- Scan: `PurchaseStateReaderScanTest` 4.
+- Wake mapping: `com.yawnandpawn.app.ui.wake.*`, including `WallTimeTest` 3.
+- Wake screen: `WakeActivityTest` 22, `PaymentOutcomeMessagesTest` 8, `SnoozedScreenTest` 11, `SnoozeConfirmSheetTest` 20, `TestAlarmFlowTest` 14, `DirectBootNoteTest` 3.
+- Screenshots: `RingingScreenshotTest` 20, `SnoozedScreenshotTest` 12.
+- `spotlessCheck` and `detekt`.
+
+An earlier run timed out once in `SnoozedScreenTest` while waiting for Play to launch, under load. It passed on the re-run, which looks like the same timing flake as the earlier `PaymentOutcomeMessagesTest` one.
+
+7. **Device-check note.** `epic-5-context.md` "Notes from implemented stories" now asks the Story 5.13 run to log the time from approval to the next Pay and which dialog showed first, then tune `PRE_LAUNCH_REFRESH`.
+
+## Verification
+
+**Commands** (`--no-daemon --max-workers=2`, JDK 17):
+- `:core:jvmTest --tests "*PurchaseCoordinator*"` -- expected: pass
+- `:composeApp:testAndroidHostTest --tests "com.yawnandpawn.app.ui.wake.*"` -- expected: pass
+- `:androidApp:recordRoborazziDebug` for `SnoozedScreenshotTest`, then `:androidApp:testDebugUnitTest` for the wake screenshot classes and `WakeActivityTest`, `TalkBackF5FlowTest`, `DirectBootNoteTest`, `TestAlarmFlowTest` -- expected: pass
+- `spotlessCheck detekt` -- expected: pass
+
+## Auto Run Result
+
+Status: done (fast mode; not pushed). Rebased onto main `a7246758`.
+
+**Verification** (`--no-daemon --max-workers=2`, JDK 17), all passing:
+- Coordinator: `PurchaseCoordinatorTest` 28, `PurchaseCoordinatorSequenceTest` 13, `PurchaseCoordinatorReviewTest` 19.
+- Wake mapping: `com.yawnandpawn.app.ui.wake.*`, including `RingingMappingTest` 13 and `WallTimeTest` 2.
+- Wake screen: `WakeActivityTest` 20, `PaymentOutcomeMessagesTest` 8, `TestAlarmFlowTest` 14, `DirectBootNoteTest` 3, `TalkBackF5FlowTest` 1, `SnoozedScreenTest` 11.
+- Screenshots: `RingingScreenshotTest` 20, `SnoozedScreenshotTest` 12, `DirectBootNoteScreenshotTest` 4, `SnoozeVariantsTest` 36, `RingingSemanticsTest` 15. Four re-ring baselines were re-recorded on purpose: the 6:15 alarm now shows 6:24.
+- Before the rebase, the whole `com.yawnandpawn.app.android.wake.*` package passed.
+- `spotlessCheck detekt`.
+
+**Residual risks:**
+- The 1 s refresh and Play's list timing are tested on the host only; the Story 5.13 device check covers them.
+- `PaymentOutcomeMessagesTest` failed once under load before the rebase, then passed on both re-runs. It looks like a timing flake unrelated to this change.

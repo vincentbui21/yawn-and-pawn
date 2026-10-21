@@ -8,7 +8,6 @@ import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -33,6 +32,7 @@ import com.yawnandpawn.app.ui.home.HomeIntent
 import com.yawnandpawn.app.ui.home.HomeRoute
 import com.yawnandpawn.app.ui.home.HomeScreen
 import com.yawnandpawn.app.ui.home.HomeUiState
+import com.yawnandpawn.app.ui.onboarding.OnboardingRoute
 import com.yawnandpawn.app.ui.progress.CalendarMonth
 import com.yawnandpawn.app.ui.progress.ProgressScreen
 import com.yawnandpawn.app.ui.progress.ProgressUiState
@@ -65,6 +65,11 @@ import org.koin.compose.koinInject
  * shows the same neutral screen while `ResumePendingDeletion` finishes it, so nothing is created on top of it; then the
  * empty Home. When the resume gives up the app goes on to Home (the next start tries again). A ring or snooze is never
  * held up: the session lock shows first.
+ *
+ * Behind the session lock sits the onboarding gate (Story 5.10, [onboardingGate]): until onboarding is completed only
+ * [Route.Onboarding] is shown, again from the same composition, with no nav capsule; the stack is replaced right after
+ * ([applyOnboarding]) and becomes Home once onboarding is completed. The same neutral screen shows until the stored
+ * progress is read, so a first launch never flashes Home.
  */
 @Composable
 fun AppNavHost(modifier: Modifier = Modifier) {
@@ -72,10 +77,10 @@ fun AppNavHost(modifier: Modifier = Modifier) {
     val lock = sessionLock()
     val locked = lock == SessionLock.Locked
     if (lock == SessionLock.Restoring || (!locked && pendingDeletion(backStack))) return RestoringScreen(modifier)
-    SideEffect { backStack.applySessionLock(locked) }
-    // What is shown follows the lock in the same composition, so a locked app never composes the route it held (Home
-    // or the editor would start their loads and previews); the SideEffect then makes the real stack match.
-    val shown: List<NavKey> = if (locked) LockedStack else backStack
+    // What is shown follows the lock and the onboarding gate (Story 5.10) in the same composition, so a locked app never
+    // composes the route it held (Home or the editor would start their loads and previews), and a new user never sees
+    // Home; the real stack is made to match right after.
+    val shown = shownStack(backStack, locked) ?: return RestoringScreen(modifier)
     // The editor's result for Home: its alarm could not be read, so Home shows "Couldn't open this alarm.".
     var openFailed by rememberSaveable { mutableStateOf(false) }
     // The editor's other result (Story 4.6): a weakening change waits under the lock, so Home says until when.
@@ -119,6 +124,7 @@ fun AppNavHost(modifier: Modifier = Modifier) {
                     entry<Route.Settings>(metadata = TabMetadata) { SettingsTab() }
                     entry<Route.You>(metadata = TabMetadata) { YouEntry(backStack) }
                     entry<Route.SessionInProgress>(metadata = LockMetadata) { SessionInProgressScreen() }
+                    entry<Route.Onboarding>(metadata = LockMetadata) { OnboardingRoute(is24Hour = is24HourClock()) }
                     entry<Route.AlarmEditor> { route ->
                         EditorEntry(route, backStack, onOpenFailed = { openFailed = true }, onSavedUnderLock = { savedUnderLock = it })
                     }
@@ -137,15 +143,15 @@ fun AppNavHost(modifier: Modifier = Modifier) {
 private const val TAB_ENTRY = "yawnandpawn.tab"
 private val TabMetadata: Map<String, Any> = mapOf(TAB_ENTRY to true)
 
-/** Marks the session lock entry: the lock and its end replace the screen at once, with no slide (Story 2.6). */
+/**
+ * Marks the session lock entry: the lock and its end replace the screen at once, with no slide (Story 2.6). The
+ * onboarding gate (Story 5.10) replaces the whole stack the same way, so its entry carries it too.
+ */
 private const val LOCK_ENTRY = "yawnandpawn.lock"
 private val LockMetadata: Map<String, Any> = mapOf(LOCK_ENTRY to true)
 
 /** Home as the session lock shows it: only `panel-session-in-progress` under the header. */
 private val SessionLockedHome = HomeUiState(sessionInProgress = true)
-
-/** What a locked app shows: only the session lock. */
-private val LockedStack: List<NavKey> = listOf(Route.SessionInProgress)
 
 /** The approved `home-session` screen: the Home header and `panel-session-in-progress`, no nav capsule. */
 @Composable

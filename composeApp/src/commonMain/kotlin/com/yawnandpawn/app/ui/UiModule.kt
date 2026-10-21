@@ -5,6 +5,7 @@ import com.yawnandpawn.app.ui.editor.AlarmEditorViewModel
 import com.yawnandpawn.app.ui.editor.EditorFeeSources
 import com.yawnandpawn.app.ui.home.AlarmActions
 import com.yawnandpawn.app.ui.home.HomeViewModel
+import com.yawnandpawn.app.ui.onboarding.OnboardingViewModel
 import com.yawnandpawn.app.ui.payments.PaymentsViewModel
 import com.yawnandpawn.app.ui.payments.ProblemWithChargeViewModel
 import com.yawnandpawn.app.ui.purchases.PurchaseHistoryViewModel
@@ -20,7 +21,8 @@ import org.koin.dsl.module
  * Koin bindings of :composeApp (AD-13): one ViewModel per screen. The core ports and use cases they take
  * (`AlarmRepository`, the alarm use cases, `Clock`, `MonotonicClock`, `TimeZoneProvider`, `TimeChangeSignal`, `Logger`,
  * `SoundLibrary`, `SoundPreview`, `ExternalLinks`, `AppLinks`, `DeviceInfoSource`, `ManufacturerSettings`,
- * `ConfirmMakerGuidance`, `ConsentStore`, `SetAnalyticsConsent`) are bound by :androidApp and :data.
+ * `ConfirmMakerGuidance`, `ConsentStore`, `SetAnalyticsConsent`, `OnboardingRepository` and the onboarding use cases) are
+ * bound by :androidApp and :data.
  */
 val uiModule =
     module {
@@ -50,6 +52,22 @@ val uiModule =
         // The You tab (Stories 5.8 and 5.9): its links, and "Delete all data" through core's DeleteAllData (bound by :androidApp).
         viewModel { YouViewModel(links = get(), appLinks = get(), clock = get(), deleteAllData = get(), sessionLock = get()) }
         viewModel { PaymentsViewModel(priceCatalog = get(), clock = get(), logger = get()) }
+        viewModel {
+            OnboardingViewModel(
+                onboarding = get(),
+                saveStep = get(),
+                acceptDisclosure = get(),
+                completeOnboarding = get(),
+                globalSettings = get(),
+                priceCatalog = get(),
+                setBaseFee = get(),
+                clock = get(),
+                moneyFormatter = get(),
+                logger = get(),
+                monotonicClock = get(),
+                timeZoneProvider = get(),
+            )
+        }
         viewModel { params ->
             AlarmEditorViewModel(
                 alarmId = params.get<AlarmEditorArgs>().alarmId,

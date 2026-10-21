@@ -17,6 +17,7 @@ import com.yawnandpawn.app.core.config.PendingChangeRepository
 import com.yawnandpawn.app.core.config.SettingsSnapshotCache
 import com.yawnandpawn.app.core.history.MissedNoteDismissals
 import com.yawnandpawn.app.core.history.SessionHistoryRepository
+import com.yawnandpawn.app.core.onboarding.OnboardingRepository
 import com.yawnandpawn.app.core.reliability.ReliabilityRecords
 import com.yawnandpawn.app.core.reset.DeletionMarker
 import com.yawnandpawn.app.core.reset.LocalDataEraser
@@ -104,12 +105,15 @@ val dataModule =
         // "Delete all data" (Story 5.9) forgets the id when no payment is still owed a consume.
         single<InstallIdReset> { get<DataStoreInstallIdProvider>() }
         // The settings DataStore (Story 1.16), device-protected; released when Koin stops, like the databases.
-        single { SettingsDataStore(get<Context>()) } withOptions { onClose { it?.close() } }
+        single { SettingsDataStore(get<Context>(), get()) } withOptions { onClose { it?.close() } }
         single<MissedNoteDismissals> { DataStoreMissedNoteDismissals(get<SettingsDataStore>().store, get()) }
         // The pending test ring (Story 1.18), in the same device-protected DataStore.
         single<TestAlarmStore> { DataStoreTestAlarmStore(get<SettingsDataStore>().store, get()) }
         // When each re-register banner was dismissed (Story 3.13), in the same device-protected DataStore.
         single<ReRegisterDismissals> { DataStoreReRegisterDismissals(get<SettingsDataStore>().store, get()) }
+        // The onboarding progress and the disclosure consent (Story 5.10), in the same backed-up DataStore, so "Delete all
+        // data" (which clears it) sends the user back through onboarding.
+        single<OnboardingRepository> { get<SettingsDataStore>().onboarding(get()) }
         // The reliability checklist's records (Story 5.3): the rows seen OK, the locked test pass and the maker
         // confirmation, in their own device-protected DataStore, never backed up (review fix 14); released like the others.
         single { ReliabilityDataStore(get<Context>()) } withOptions { onClose { it?.close() } }

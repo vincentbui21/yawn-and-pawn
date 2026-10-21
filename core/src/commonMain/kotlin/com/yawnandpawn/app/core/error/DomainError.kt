@@ -67,6 +67,13 @@ sealed interface DomainError {
      */
     data object SessionActive : DomainError
 
+    /**
+     * The user has not accepted the alarm behaviour disclosure yet ("I understand" in onboarding, FR-ONB-5, Story 5.10),
+     * so no alarm may be saved; nothing was stored or armed. Returned by `SaveAlarm` (and `CompleteOnboarding`). The app
+     * shows onboarding until then, so no screen shows this error.
+     */
+    data object DisclosureRequired : DomainError
+
     /** Two amounts in different currencies were added (AD-8); totals are grouped by currency instead. */
     data class CurrencyMismatch(
         val left: String,

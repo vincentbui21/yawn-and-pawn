@@ -20,6 +20,7 @@ import com.yawnandpawn.app.core.error.DomainError
 import com.yawnandpawn.app.core.error.Outcome
 import com.yawnandpawn.app.core.id.IdGenerator
 import com.yawnandpawn.app.core.log.Logger
+import com.yawnandpawn.app.core.onboarding.OnboardingRepository
 import com.yawnandpawn.app.core.session.SessionLockGuard
 import com.yawnandpawn.app.core.session.SessionState
 import com.yawnandpawn.app.core.time.Clock
@@ -177,13 +178,27 @@ class AlarmUseCasesFixture(
     val pendingChanges: PendingChangeRepository = FakePendingChangeRepository(),
     /** Where turning off or deleting an alarm inside its lock window is logged (Story 4.6). */
     val commitmentEvents: FakeCommitmentEventRepository = FakeCommitmentEventRepository(),
+    /** The onboarding progress SaveAlarm checks for the disclosure consent (Story 5.10); completed unless a test says. */
+    val onboarding: OnboardingRepository = FakeOnboardingRepository(),
 ) {
     /** The commitment events' ids come from their own generator, so they never shift the alarm ids a test expects. */
     val commitments = CommitmentLog(commitmentEvents, FakeIdGenerator(), timeZoneProvider)
     val scheduling = AlarmScheduling(repository, scheduler, clock, timeZoneProvider, lock, logger)
     val sessionLock = SessionLockGuard(sessionState, restored = MutableStateFlow(true), emergency = MutableStateFlow(false))
     val save =
-        SaveAlarm(repository, ids, clock, lock, requestCodes, scheduling, sessionLock, checkConfigs, pendingChanges, timeZoneProvider)
+        SaveAlarm(
+            repository,
+            ids,
+            clock,
+            lock,
+            requestCodes,
+            scheduling,
+            sessionLock,
+            checkConfigs,
+            pendingChanges,
+            timeZoneProvider,
+            onboarding,
+        )
     val setEnabled = SetAlarmEnabled(repository, clock, lock, scheduling, sessionLock, commitments, logger)
     val delete = DeleteAlarm(repository, lock, scheduling, sessionLock, checkConfigs, clock, commitments, logger)
     val duplicate = DuplicateAlarm(repository, ids, clock, lock, requestCodes, scheduling, sessionLock, checkConfigs)

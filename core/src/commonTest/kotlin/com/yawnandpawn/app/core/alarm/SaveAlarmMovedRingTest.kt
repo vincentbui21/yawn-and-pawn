@@ -12,6 +12,7 @@ import com.yawnandpawn.app.core.config.Occurrence
 import com.yawnandpawn.app.core.config.PendingChange
 import com.yawnandpawn.app.core.config.SettingValue
 import com.yawnandpawn.app.core.error.Outcome
+import com.yawnandpawn.app.core.onboarding.InMemoryOnboarding
 import com.yawnandpawn.app.core.session.ConfigResolver
 import com.yawnandpawn.app.core.session.GlobalSettings
 import com.yawnandpawn.app.core.session.SessionLockGuard
@@ -45,7 +46,19 @@ class SaveAlarmMovedRingTest {
     private val checkConfigs = InMemoryCheckConfigs(repository)
     private val pending = InMemoryPendingChanges()
     private val save =
-        SaveAlarm(repository, SequentialIds(), clock, lock, InMemorySequence(), scheduling, sessionLock, checkConfigs, pending, zone)
+        SaveAlarm(
+            repository,
+            SequentialIds(),
+            clock,
+            lock,
+            InMemorySequence(),
+            scheduling,
+            sessionLock,
+            checkConfigs,
+            pending,
+            zone,
+            InMemoryOnboarding(),
+        )
 
     private val math = CheckEntry(CheckType.Math, Difficulty.Medium, 3)
     private val draft = AlarmDraft(time = LocalTime(7, 30), graceSeconds = 20, checks = listOf(math))

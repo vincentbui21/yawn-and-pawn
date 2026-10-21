@@ -1,6 +1,7 @@
 package com.yawnandpawn.app.ui.onboarding
 
 import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.EnterExitState
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -22,28 +23,46 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.IconButtonDefaults
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clipToBounds
+import androidx.compose.ui.semantics.LiveRegionMode
 import androidx.compose.ui.semantics.heading
+import androidx.compose.ui.semantics.liveRegion
+import androidx.compose.ui.semantics.paneTitle
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.traversalIndex
 import com.yawnandpawn.app.ui.components.PpsBackground
 import com.yawnandpawn.app.ui.components.PpsFilledButton
 import com.yawnandpawn.app.ui.components.PpsOutlinedButton
 import com.yawnandpawn.app.ui.components.PpsTextButton
 import com.yawnandpawn.app.ui.components.ProgressDots
+import com.yawnandpawn.app.ui.components.RowIcon
+import com.yawnandpawn.app.ui.components.glass
 import com.yawnandpawn.app.ui.components.subScreenTransition
 import com.yawnandpawn.app.ui.resources.Res
+import com.yawnandpawn.app.ui.resources.app_name
 import com.yawnandpawn.app.ui.resources.editor_back
+import com.yawnandpawn.app.ui.resources.onboarding_analytics_title
+import com.yawnandpawn.app.ui.resources.onboarding_base_fee_title
+import com.yawnandpawn.app.ui.resources.onboarding_checks_title
 import com.yawnandpawn.app.ui.resources.onboarding_continue
+import com.yawnandpawn.app.ui.resources.onboarding_disclosure_title
+import com.yawnandpawn.app.ui.resources.onboarding_first_alarm_title
 import com.yawnandpawn.app.ui.resources.onboarding_no_thanks
+import com.yawnandpawn.app.ui.resources.onboarding_reliability_title
+import com.yawnandpawn.app.ui.resources.onboarding_save_failed
 import com.yawnandpawn.app.ui.resources.onboarding_share
 import com.yawnandpawn.app.ui.resources.onboarding_skip_test
 import com.yawnandpawn.app.ui.resources.onboarding_start
 import com.yawnandpawn.app.ui.resources.onboarding_step
+import com.yawnandpawn.app.ui.resources.onboarding_test_title
 import com.yawnandpawn.app.ui.resources.onboarding_understand
 import com.yawnandpawn.app.ui.resources.reliability_ring_test
 import com.yawnandpawn.app.ui.resources.symbol_arrow_back
+import com.yawnandpawn.app.ui.resources.symbol_error
 import com.yawnandpawn.app.ui.theme.PpsTheme
 import org.jetbrains.compose.resources.DrawableResource
 import org.jetbrains.compose.resources.painterResource
@@ -72,12 +91,23 @@ fun OnboardingScreen(
                 transitionSpec = { subScreenTransition(forward = targetState.ordinal > initialState.ordinal) },
                 label = "onboarding step",
             ) { step ->
-                Column(modifier = Modifier.fillMaxSize()) {
+                // A step's actions count only once its slide is over (review fix): a double tap never reaches the
+                // next step's button while it slides in. With animations off there is no slide; the ViewModel's own
+                // dwell time covers that case.
+                val settled = transition.currentState == EnterExitState.Visible && transition.targetState == EnterExitState.Visible
+                val live by rememberUpdatedState(settled)
+                val guarded: (OnboardingIntent) -> Unit = { if (live) onIntent(it) }
+                val headline = stepHeadline(step)
+                // TalkBack announces the new step by its headline when it changes (review fix: focus follows the step).
+                Column(modifier = Modifier.fillMaxSize().semantics { paneTitle = headline }) {
                     Column(
                         modifier =
                             Modifier
                                 .fillMaxWidth()
                                 .weight(1f)
+                                // The step's content reads before the back arrow and the dots, headline first, also
+                                // where TalkBack orders a scrolling column as one group.
+                                .semantics { traversalIndex = HEADLINE_TRAVERSAL_INDEX }
                                 .clipToBounds()
                                 .verticalScroll(rememberScrollState())
                                 .padding(horizontal = PpsTheme.spacing.screenMargin, vertical = PpsTheme.spacing.space2),
@@ -85,7 +115,7 @@ fun OnboardingScreen(
                     ) {
                         StepContent(step = step, state = state, is24Hour = is24Hour, onIntent = onIntent)
                     }
-                    Actions(step = step, state = state, onIntent = onIntent)
+                    Actions(step = step, state = state, onIntent = guarded)
                 }
             }
         }
@@ -135,7 +165,7 @@ private fun ColumnScope.StepContent(
     when (step) {
         OnboardingStep.Mission -> MissionStep()
         OnboardingStep.Disclosure -> DisclosureStep()
-        OnboardingStep.BaseFee -> BaseFeeStep(state = state, onIntent = onIntent)
+        OnboardingStep.BaseFee -> BaseFeeStep(state = state, is24Hour = is24Hour, onIntent = onIntent)
         OnboardingStep.FirstAlarm -> FirstAlarmStep(state = state, is24Hour = is24Hour, onIntent = onIntent)
         OnboardingStep.Checks -> ChecksStep(state = state, onIntent = onIntent)
         OnboardingStep.Reliability -> ReliabilityStep(state = state, onIntent = onIntent)
@@ -166,7 +196,8 @@ private fun Actions(
         verticalArrangement = Arrangement.spacedBy(spacing.space2),
     ) {
         val wide = Modifier.fillMaxWidth()
-        val next = { onIntent(OnboardingIntent.Next) }
+        val next = { onIntent(OnboardingIntent.Next(from = step)) }
+        if (state.saveFailed && step == state.step) SaveFailedNote()
         when (step) {
             OnboardingStep.Mission -> {
                 PpsFilledButton(text = stringResource(Res.string.onboarding_start), onClick = next, modifier = wide)
@@ -217,6 +248,40 @@ private fun Actions(
     }
 }
 
+/** "Couldn't save. Try again." above the step's action, with the `error` icon, read out politely when it appears. */
+@Composable
+private fun SaveFailedNote() {
+    val spacing = PpsTheme.spacing
+    Row(
+        modifier =
+            Modifier
+                .fillMaxWidth()
+                .glass(PpsTheme.shapes.md)
+                .semantics(mergeDescendants = true) { liveRegion = LiveRegionMode.Polite }
+                .padding(spacing.cardPadding),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        RowIcon(icon = Res.drawable.symbol_error, tint = PpsTheme.colors.error, modifier = Modifier.padding(end = spacing.space3))
+        Text(text = stringResource(Res.string.onboarding_save_failed), style = PpsTheme.typography.body, color = PpsTheme.colors.text)
+    }
+}
+
+/** The headline of [step], also its pane title. */
+@Composable
+private fun stepHeadline(step: OnboardingStep): String =
+    stringResource(
+        when (step) {
+            OnboardingStep.Mission -> Res.string.app_name
+            OnboardingStep.Disclosure -> Res.string.onboarding_disclosure_title
+            OnboardingStep.BaseFee -> Res.string.onboarding_base_fee_title
+            OnboardingStep.FirstAlarm -> Res.string.onboarding_first_alarm_title
+            OnboardingStep.Checks -> Res.string.onboarding_checks_title
+            OnboardingStep.Reliability -> Res.string.onboarding_reliability_title
+            OnboardingStep.Analytics -> Res.string.onboarding_analytics_title
+            OnboardingStep.TestAlarm -> Res.string.onboarding_test_title
+        },
+    )
+
 /** A step's headline (`headline`, a heading for TalkBack) and optional body line. */
 @Composable
 internal fun StepHeader(
@@ -228,10 +293,23 @@ internal fun StepHeader(
         modifier = Modifier.padding(top = PpsTheme.spacing.space2, bottom = PpsTheme.spacing.space2),
         verticalArrangement = Arrangement.spacedBy(PpsTheme.spacing.space2),
     ) {
-        Text(text = title, modifier = Modifier.semantics { heading() }, style = PpsTheme.typography.headline, color = colors.text)
+        Text(text = title, modifier = Modifier.headline(), style = PpsTheme.typography.headline, color = colors.text)
         if (body != null) Text(text = body, style = PpsTheme.typography.body, color = colors.textSecondary)
     }
 }
+
+/**
+ * A step's headline: a heading that TalkBack reads first on the step (Story 5.10, "onboarding focus starts on each step's
+ * headline"), ahead of the back arrow and the dots above it.
+ */
+internal fun Modifier.headline(): Modifier =
+    semantics {
+        heading()
+        traversalIndex = HEADLINE_TRAVERSAL_INDEX
+    }
+
+/** Before every other element of the step (0 by default). */
+private const val HEADLINE_TRAVERSAL_INDEX = -1f
 
 /** A row of a card with a leading icon and a line of `body` text. */
 @Composable

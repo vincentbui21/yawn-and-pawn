@@ -71,6 +71,9 @@ import com.yawnandpawn.app.core.id.IdGenerator
 import com.yawnandpawn.app.core.id.UuidV4IdGenerator
 import com.yawnandpawn.app.core.log.Logger
 import com.yawnandpawn.app.core.net.Connectivity
+import com.yawnandpawn.app.core.onboarding.AcceptDisclosure
+import com.yawnandpawn.app.core.onboarding.CompleteOnboarding
+import com.yawnandpawn.app.core.onboarding.SaveOnboardingStep
 import com.yawnandpawn.app.core.reliability.LockedTestReporter
 import com.yawnandpawn.app.core.reliability.ReliabilityRecords
 import com.yawnandpawn.app.core.reset.DeleteAllData
@@ -188,7 +191,12 @@ val appModule =
         }
         // The session slot armed from runtime.db without the engine (Story 2.1): after system events and refused starts.
         single { SessionSlotRearm(get(), get(), get(), get(), get(), get()) }
-        factory { SaveAlarm(get(), get(), get(), get(), get(), get(), get(), get(), get(), get()) }
+        // Story 5.10: no alarm is saved before the disclosure is accepted (OnboardingRepository from dataModule).
+        factory { SaveAlarm(get(), get(), get(), get(), get(), get(), get(), get(), get(), get(), get()) }
+        // Onboarding (Story 5.10): the consent, the step and completion, each inside the session lock.
+        factory { AcceptDisclosure(get(), get(), get()) }
+        factory { SaveOnboardingStep(get(), get()) }
+        factory { CompleteOnboarding(get(), get()) }
         factory { SetAlarmEnabled(get(), get(), get(), get(), get(), get(), get()) }
         // Story 3.10: Home's "Re-register" stores a new code alone.
         factory { ReRegisterCode(get(), get(), get(), get(), get()) }

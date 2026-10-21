@@ -7,6 +7,7 @@ import com.yawnandpawn.app.core.error.DomainError
 import com.yawnandpawn.app.core.error.Outcome
 import com.yawnandpawn.app.core.log.FireKind
 import com.yawnandpawn.app.core.log.LogEvent
+import com.yawnandpawn.app.core.onboarding.InMemoryOnboarding
 import com.yawnandpawn.app.core.session.SessionLockGuard
 import com.yawnandpawn.app.core.session.SessionState
 import com.yawnandpawn.app.core.session.ringSession
@@ -49,7 +50,19 @@ class AlarmSchedulingTest {
     private val sessionLock = SessionLockGuard(sessionState, restored = MutableStateFlow(true), emergency = MutableStateFlow(false))
     private val checkConfigs = InMemoryCheckConfigs(repository)
     private val save =
-        SaveAlarm(repository, ids, clock, lock, sequence, scheduling, sessionLock, checkConfigs, InMemoryPendingChanges(), zone)
+        SaveAlarm(
+            repository,
+            ids,
+            clock,
+            lock,
+            sequence,
+            scheduling,
+            sessionLock,
+            checkConfigs,
+            InMemoryPendingChanges(),
+            zone,
+            InMemoryOnboarding(),
+        )
     private val commitmentEvents = InMemoryCommitmentEvents()
     private val useCaseLogger = RecordingLogger()
     private val commitments = CommitmentLog(commitmentEvents, SequentialIds(), zone)

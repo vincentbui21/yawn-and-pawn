@@ -1,6 +1,5 @@
 package com.yawnandpawn.app.debug.preview
 
-import com.yawnandpawn.app.core.billing.Money
 import com.yawnandpawn.app.ui.checkpicker.CheckPickerIntent
 import com.yawnandpawn.app.ui.checkpicker.CheckPickerUiState
 import com.yawnandpawn.app.ui.checks.CheckType
@@ -79,8 +78,10 @@ internal fun reduceOnboarding(
     intent: OnboardingIntent,
 ): OnboardingUiState =
     when (intent) {
-        OnboardingIntent.Next -> {
-            if (state.step == OnboardingStep.Checks && state.checks.checks.isEmpty()) {
+        is OnboardingIntent.Next -> {
+            if (intent.from != state.step) {
+                state
+            } else if (state.step == OnboardingStep.Checks && state.checks.checks.isEmpty()) {
                 state.copy(checks = state.checks.copy(noCheckError = true))
             } else {
                 state.copy(step = OnboardingStep.entries[(state.step.ordinal + 1).coerceAtMost(OnboardingStep.entries.lastIndex)])
@@ -92,11 +93,11 @@ internal fun reduceOnboarding(
         }
 
         OnboardingIntent.LowerBaseFee -> {
-            state.lowerFee?.let { state.withFee(it) } ?: state
+            if (state.canLowerFee) state.withPreviewFee(state.baseFeeTier - 1) else state
         }
 
         OnboardingIntent.RaiseBaseFee -> {
-            state.higherFee?.let { state.withFee(it) } ?: state
+            if (state.canRaiseFee) state.withPreviewFee(state.baseFeeTier + 1) else state
         }
 
         else -> {
@@ -179,26 +180,6 @@ internal fun List<CheckChip>.moved(
     if (from < 0 || to !in indices) return this
     return toMutableList().also { it.add(to, it.removeAt(from)) }
 }
-
-/** One price tier down or up, in whole multiples of the preview base fee (like Settings). */
-private fun OnboardingUiState.withFee(fee: Money): OnboardingUiState {
-    val unit = Money(baseFee.micros / multipleOf(baseFee), baseFee.currency)
-    val multiple = (fee.micros / unit.micros).toInt()
-    return copy(
-        baseFee = fee,
-        lowerFee = if (multiple > 1) unit * (multiple - 1) else null,
-        higherFee = if (multiple < MAX_FEE_MULTIPLE) unit * (multiple + 1) else null,
-    )
-}
-
-/** The base fee's multiple of the lowest tier: the lowest tier has no lower fee. */
-private fun OnboardingUiState.multipleOf(fee: Money): Long {
-    val lower = lowerFee ?: return 1
-    return fee.micros / (fee.micros - lower.micros)
-}
-
-/** The preview's base fee goes up to 5 tiers (like Settings). */
-private const val MAX_FEE_MULTIPLE = 5
 
 /** Home after onboarding: the 7:30 alarm rings in 7 h 50 min (set up at 23:40, F1). */
 private const val NEXT_RING_HOURS = 7

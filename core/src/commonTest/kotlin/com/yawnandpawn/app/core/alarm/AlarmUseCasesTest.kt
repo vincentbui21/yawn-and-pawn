@@ -6,6 +6,7 @@ import com.yawnandpawn.app.core.config.InMemoryPendingChanges
 import com.yawnandpawn.app.core.error.DomainError
 import com.yawnandpawn.app.core.error.Outcome
 import com.yawnandpawn.app.core.error.valueOrNull
+import com.yawnandpawn.app.core.onboarding.InMemoryOnboarding
 import com.yawnandpawn.app.core.session.SessionLockGuard
 import com.yawnandpawn.app.core.session.SessionState
 import com.yawnandpawn.app.core.session.ringSession
@@ -52,6 +53,7 @@ class AlarmUseCasesTest {
             checkConfigs,
             InMemoryPendingChanges(),
             TestZone(TimeZone.UTC),
+            InMemoryOnboarding(),
         )
     private val commitmentEvents = InMemoryCommitmentEvents()
     private val useCaseLogger = RecordingLogger()

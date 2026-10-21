@@ -13,6 +13,7 @@ import com.yawnandpawn.app.core.history.SessionHistoryRepository
 import com.yawnandpawn.app.core.id.IdGenerator
 import com.yawnandpawn.app.core.id.UuidV4IdGenerator
 import com.yawnandpawn.app.core.log.Logger
+import com.yawnandpawn.app.core.onboarding.OnboardingRepository
 import com.yawnandpawn.app.core.reliability.ReliabilityRecords
 import com.yawnandpawn.app.core.session.ActiveSessionStore
 import com.yawnandpawn.app.core.stats.CheckRegistrations
@@ -33,6 +34,7 @@ import com.yawnandpawn.app.data.settings.ConsentDataStore
 import com.yawnandpawn.app.data.settings.DataStoreConsentStore
 import com.yawnandpawn.app.data.settings.DataStoreInstallIdProvider
 import com.yawnandpawn.app.data.settings.DataStoreMissedNoteDismissals
+import com.yawnandpawn.app.data.settings.DataStoreOnboardingRepository
 import com.yawnandpawn.app.data.settings.DataStorePriceCacheStore
 import com.yawnandpawn.app.data.settings.DataStoreReRegisterDismissals
 import com.yawnandpawn.app.data.settings.DataStoreReliabilityRecords
@@ -103,6 +105,8 @@ class DataModuleTest {
         val first = app.koin.get<MissedNoteDismissals>()
         assertIs<DataStoreMissedNoteDismissals>(first)
         assertIs<DataStoreReRegisterDismissals>(app.koin.get<ReRegisterDismissals>())
+        // Story 5.10: the onboarding progress lives in the same (backed-up) settings DataStore.
+        assertIs<DataStoreOnboardingRepository>(app.koin.get<OnboardingRepository>())
         assertIs<DataStoreReliabilityRecords>(app.koin.get<ReliabilityRecords>())
         // Story 5.3 review fix 14: the reliability records have their own (not backed up) DataStore file.
         assertSame(app.koin.get<ReliabilityDataStore>(), app.koin.get<ReliabilityDataStore>())

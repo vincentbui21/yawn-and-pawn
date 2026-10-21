@@ -8,7 +8,6 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.semantics.LiveRegionMode
-import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.liveRegion
 import androidx.compose.ui.semantics.semantics
 import com.yawnandpawn.app.ui.checkpicker.CheckPickerContent
@@ -21,14 +20,12 @@ import com.yawnandpawn.app.ui.components.TextCard
 import com.yawnandpawn.app.ui.components.glass
 import com.yawnandpawn.app.ui.editor.RepeatChoiceCard
 import com.yawnandpawn.app.ui.editor.TimeWheelCard
-import com.yawnandpawn.app.ui.format.formatMoney
 import com.yawnandpawn.app.ui.reliability.ChecklistCard
 import com.yawnandpawn.app.ui.resources.Res
 import com.yawnandpawn.app.ui.resources.app_name
 import com.yawnandpawn.app.ui.resources.disclosure_escape_body
 import com.yawnandpawn.app.ui.resources.disclosure_ringing_body
 import com.yawnandpawn.app.ui.resources.disclosure_usable_body
-import com.yawnandpawn.app.ui.resources.editor_fee_ladder
 import com.yawnandpawn.app.ui.resources.onboarding_analytics_body
 import com.yawnandpawn.app.ui.resources.onboarding_analytics_title
 import com.yawnandpawn.app.ui.resources.onboarding_base_fee_title
@@ -53,6 +50,8 @@ import com.yawnandpawn.app.ui.resources.stepper_value
 import com.yawnandpawn.app.ui.resources.symbol_error
 import com.yawnandpawn.app.ui.resources.symbol_snooze
 import com.yawnandpawn.app.ui.resources.symbol_wb_sunny
+import com.yawnandpawn.app.ui.settings.WeakeningNoteInline
+import com.yawnandpawn.app.ui.settings.feeLadderText
 import com.yawnandpawn.app.ui.theme.PpsTheme
 import org.jetbrains.compose.resources.stringResource
 
@@ -65,7 +64,7 @@ internal fun MissionStep() {
     val colors = PpsTheme.colors
     Text(
         text = stringResource(Res.string.app_name),
-        modifier = Modifier.padding(top = PpsTheme.spacing.space6).semantics { heading() },
+        modifier = Modifier.padding(top = PpsTheme.spacing.space6).headline(),
         style = PpsTheme.typography.display,
         color = colors.text,
     )
@@ -98,10 +97,11 @@ internal fun DisclosureStep() {
 @Composable
 internal fun BaseFeeStep(
     state: OnboardingUiState,
+    is24Hour: Boolean,
     onIntent: (OnboardingIntent) -> Unit,
 ) {
     val setting = stringResource(Res.string.settings_base_fee)
-    val fee = formatMoney(state.baseFee)
+    val fee = state.baseFee
     val notePadding = Modifier.padding(horizontal = PpsTheme.spacing.cardPadding)
     StepHeader(title = stringResource(Res.string.onboarding_base_fee_title))
     GroupCard(title = setting) {
@@ -112,21 +112,13 @@ internal fun BaseFeeStep(
             increaseLabel = stringResource(Res.string.stepper_raise, setting),
             onDecrease = { onIntent(OnboardingIntent.LowerBaseFee) },
             onIncrease = { onIntent(OnboardingIntent.RaiseBaseFee) },
-            canDecrease = state.lowerFee != null,
-            canIncrease = state.higherFee != null,
+            canDecrease = state.canLowerFee,
+            canIncrease = state.canRaiseFee,
         )
     }
-    NoteInline(
-        text =
-            stringResource(
-                Res.string.editor_fee_ladder,
-                formatMoney(state.baseFee),
-                formatMoney(state.baseFee * 2),
-                formatMoney(state.baseFee * FEE_LADDER_THIRD),
-            ),
-        modifier = notePadding,
-    )
+    feeLadderText(state.feeLadder)?.let { NoteInline(text = it, modifier = notePadding) }
     NoteInline(text = stringResource(Res.string.settings_base_fee_lock), modifier = notePadding)
+    state.baseFeeNote?.let { WeakeningNoteInline(note = it, is24Hour = is24Hour, modifier = notePadding) }
     if (state.pricesApproximate) NoteInline(text = stringResource(Res.string.settings_prices_approximate), modifier = notePadding)
     NoteInline(text = stringResource(Res.string.purchase_auth_tip), modifier = notePadding)
 }
@@ -202,6 +194,3 @@ internal fun TestAlarmStep(state: OnboardingUiState) {
     }
     NoteInline(text = stringResource(Res.string.onboarding_bright_wake), modifier = Modifier.padding(horizontal = spacing.cardPadding))
 }
-
-/** The fee ladder preview shows snoozes 1 to 3. */
-private const val FEE_LADDER_THIRD = 3

@@ -43,19 +43,21 @@ object PreviewRound3 {
     ) = PreviewItem(id, SETUP_ROUND, group, title, wake = wake, primary = primary, hasDialog = hasDialog, tall = tall, render = render)
 
     // A phone-sized window: the step's actions sit at the bottom of the screen; the long steps (checks, checklist)
-    // get the tall one so every card is in the picture.
+    // get the tall one so every card is in the picture. [state] is read when the item renders: the samples format
+    // their prices with the phone's formatter (PreviewSetupSamples.onboarding).
     private fun onboarding(
         id: String,
         title: String,
-        state: OnboardingUiState,
+        step: OnboardingStep,
+        state: () -> OnboardingUiState,
         primary: Boolean = false,
     ) = item(
         id,
         "Onboarding",
         title,
         primary = primary,
-        tall = state.step == OnboardingStep.Checks || state.step == OnboardingStep.Reliability,
-    ) { is24 -> OnboardingScreen(state = state, is24Hour = is24, onIntent = {}) }
+        tall = step == OnboardingStep.Checks || step == OnboardingStep.Reliability,
+    ) { is24 -> OnboardingScreen(state = state(), is24Hour = is24, onIntent = {}) }
 
     private fun picker(
         id: String,
@@ -112,17 +114,33 @@ object PreviewRound3 {
 
     val items: List<PreviewItem> =
         listOf(
-            onboarding("onboarding_mission", "1 Mission", s.onboarding, primary = true),
-            onboarding("onboarding_disclosure", "2 Alarm behaviour disclosure", s.onboardingDisclosure, primary = true),
-            onboarding("onboarding_base_fee", "3 Base fee", s.onboardingBaseFee),
-            onboarding("onboarding_base_fee_approximate", "3 Base fee, prices never loaded", s.onboardingBaseFeeApproximate),
-            onboarding("onboarding_first_alarm", "4 First alarm", s.onboardingFirstAlarm, primary = true),
-            onboarding("onboarding_checks", "5 Checks", s.onboardingChecks),
-            onboarding("onboarding_checks_none", "5 Checks, none selected", s.onboardingChecksNone),
-            onboarding("onboarding_reliability", "6 Reliability checklist", s.onboardingReliability),
-            onboarding("onboarding_analytics", "7 Analytics choice", s.onboardingAnalytics),
-            onboarding("onboarding_test", "8 Test alarm", s.onboardingTest, primary = true),
-            onboarding("onboarding_test_not_locked", "8 Test alarm, phone not locked", s.onboardingTestNotLocked),
+            onboarding("onboarding_mission", "1 Mission", OnboardingStep.Mission, { s.onboarding }, primary = true),
+            onboarding(
+                "onboarding_disclosure",
+                "2 Alarm behaviour disclosure",
+                OnboardingStep.Disclosure,
+                { s.onboardingDisclosure },
+                primary = true,
+            ),
+            onboarding("onboarding_base_fee", "3 Base fee", OnboardingStep.BaseFee, { s.onboardingBaseFee }),
+            onboarding(
+                "onboarding_base_fee_approximate",
+                "3 Base fee, prices never loaded",
+                OnboardingStep.BaseFee,
+                { s.onboardingBaseFeeApproximate },
+            ),
+            onboarding("onboarding_first_alarm", "4 First alarm", OnboardingStep.FirstAlarm, { s.onboardingFirstAlarm }, primary = true),
+            onboarding("onboarding_checks", "5 Checks", OnboardingStep.Checks, { s.onboardingChecks }),
+            onboarding("onboarding_checks_none", "5 Checks, none selected", OnboardingStep.Checks, { s.onboardingChecksNone }),
+            onboarding("onboarding_reliability", "6 Reliability checklist", OnboardingStep.Reliability, { s.onboardingReliability }),
+            onboarding("onboarding_analytics", "7 Analytics choice", OnboardingStep.Analytics, { s.onboardingAnalytics }),
+            onboarding("onboarding_test", "8 Test alarm", OnboardingStep.TestAlarm, { s.onboardingTest }, primary = true),
+            onboarding(
+                "onboarding_test_not_locked",
+                "8 Test alarm, phone not locked",
+                OnboardingStep.TestAlarm,
+                { s.onboardingTestNotLocked },
+            ),
             item("home_test_skipped", "Onboarding", "Home after skipping the test alarm") { is24 ->
                 AppShell(selected = AppTab.Alarms, onSelect = {}) { HomeScreen(state = s.homeTestSkipped, is24Hour = is24, onIntent = {}) }
             },

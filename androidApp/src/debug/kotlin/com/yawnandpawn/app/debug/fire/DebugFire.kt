@@ -1,5 +1,6 @@
 package com.yawnandpawn.app.debug.fire
 
+import android.util.Log
 import com.yawnandpawn.app.core.alarm.Alarm
 import com.yawnandpawn.app.core.alarm.AlarmDraft
 import com.yawnandpawn.app.core.alarm.AlarmRepository
@@ -13,6 +14,7 @@ import com.yawnandpawn.app.core.error.DomainError
 import com.yawnandpawn.app.core.error.Outcome
 import com.yawnandpawn.app.core.error.flatMap
 import com.yawnandpawn.app.core.error.map
+import com.yawnandpawn.app.core.onboarding.AcceptDisclosure
 import com.yawnandpawn.app.core.session.ScheduleTestAlarm
 import com.yawnandpawn.app.core.time.Clock
 import com.yawnandpawn.app.core.time.TimeZoneProvider
@@ -28,7 +30,9 @@ import kotlin.time.Instant
  *   [ScheduleTestAlarm]. Without [checkConfigs] (older device tests) a stored alarm tests with the default checks.
  * - Real, with an alarm id: that alarm armed under its own request code; when it fires, its schedule is put right again
  *   by the normal fire path. A disabled alarm does not ring (the fire path ignores it).
- * - Real, no alarm id: a one-time alarm "Debug fire" is saved first, then armed the same way.
+ * - Real, no alarm id: a one-time alarm "Debug fire" is saved first, then armed the same way. No alarm is saved before
+ *   the alarm behaviour disclosure is accepted (Story 5.10), so with [acceptDisclosure] the hook accepts it first and
+ *   logs that (debug builds only): an adb fire works on a fresh install before onboarding.
  */
 class DebugFire(
     private val repository: AlarmRepository,
@@ -38,6 +42,7 @@ class DebugFire(
     private val clock: Clock,
     private val timeZoneProvider: TimeZoneProvider,
     private val checkConfigs: CheckConfigRepository? = null,
+    private val acceptDisclosure: AcceptDisclosure? = null,
 ) {
     /** What `adb shell am broadcast -a com.yawnandpawn.app.debug.FIRE` asked for. */
     data class FireRequest(
@@ -61,7 +66,8 @@ class DebugFire(
                 stored?.let { alarm -> checksOf(alarm).map { alarm.toDraft(it) } } ?: Outcome.Success(syntheticDraft())
             draft.flatMap { scheduleTest(it, delay = seconds.seconds) }
         } else {
-            val alarm: Outcome<Alarm, DomainError> = stored?.let { Outcome.Success(it) } ?: saveAlarm(syntheticDraft())
+            val alarm: Outcome<Alarm, DomainError> =
+                stored?.let { Outcome.Success(it) } ?: acceptFirst().flatMap { saveAlarm(syntheticDraft()) }
             val ringsAt = Instant.fromEpochMilliseconds(clock.now().toEpochMilliseconds() + seconds * MILLIS_PER_SECOND)
             alarm.flatMap { armed ->
                 when (val result = scheduler.schedule(armed.id, armed.requestCode, ringsAt.toEpochMilliseconds())) {
@@ -70,6 +76,12 @@ class DebugFire(
                 }
             }
         }
+    }
+
+    /** Accepts the disclosure before the synthetic alarm is saved (debug only), logged; without [acceptDisclosure] nothing. */
+    private suspend fun acceptFirst(): Outcome<Unit, DomainError> {
+        val accept = acceptDisclosure ?: return Outcome.Success(Unit)
+        return accept().map { at -> Log.i(DebugFireReceiver.TAG, "alarm behaviour disclosure accepted for the debug fire at $at") }
     }
 
     /** A one-time alarm with the defaults at the current minute, labelled so it is easy to spot (and delete). */

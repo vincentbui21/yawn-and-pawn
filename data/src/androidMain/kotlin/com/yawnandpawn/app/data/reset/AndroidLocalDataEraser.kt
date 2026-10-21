@@ -38,7 +38,7 @@ class AndroidLocalDataEraser(
 
     override suspend fun clearSettings(): Outcome<Unit, DomainError> =
         storage {
-            settings.store.edit { it.clear() }
+            settings.clear()
             check(settingsCache.clear()) { "settings fallback not cleared" }
             prices.store.edit { it.clear() }
             reliability.store.edit { it.clear() }

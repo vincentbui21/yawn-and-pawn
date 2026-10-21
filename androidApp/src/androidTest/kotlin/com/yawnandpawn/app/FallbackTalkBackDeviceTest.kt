@@ -33,6 +33,7 @@ import com.yawnandpawn.app.core.checks.Difficulty
 import com.yawnandpawn.app.core.checks.qr.CodeFormat
 import com.yawnandpawn.app.core.checks.qr.RegisteredCode
 import com.yawnandpawn.app.core.error.Outcome
+import com.yawnandpawn.app.core.onboarding.AcceptDisclosure
 import com.yawnandpawn.app.core.session.CheckRun
 import com.yawnandpawn.app.core.session.SessionEngine
 import com.yawnandpawn.app.core.session.SessionState
@@ -148,7 +149,7 @@ class FallbackTalkBackDeviceTest {
         val scanner = koin.get<CodeScanner>()
         loadKoinModules(module { single<CodeScanner> { NoPermissionScanner } })
         try {
-            val fire = DebugFire(koin.get(), koin.get(), koin.get(), koin.get(), koin.get(), koin.get())
+            val fire = DebugFire(koin.get(), koin.get(), koin.get(), koin.get(), koin.get(), koin.get(), acceptDisclosure = koin.get())
             val armed = runBlocking { fire.fire(DebugFire.FireRequest(seconds = 1, alarmId = alarmId)) }
             assertTrue("the alarm is armed", armed is Outcome.Success)
             composeRule.waitUntil(RING_TIMEOUT) { engine.state.value is SessionState.Ringing }
@@ -196,6 +197,8 @@ class FallbackTalkBackDeviceTest {
                 label = LABEL,
                 checks = listOf(CheckEntry(CheckType.QrBarcode, Difficulty.Medium, count = 1, code = code)),
             )
+        // No alarm is saved before the disclosure is accepted (Story 5.10): a fresh install accepts it first.
+        runBlocking { koin.get<AcceptDisclosure>()() }
         val saved = runBlocking { koin.get<SaveAlarm>()(draft) }
         assertTrue("the QR alarm is saved: $saved", saved is Outcome.Success)
         return (saved as Outcome.Success).value.id

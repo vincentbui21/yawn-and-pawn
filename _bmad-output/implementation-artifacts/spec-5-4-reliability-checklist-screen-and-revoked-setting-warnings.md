@@ -371,6 +371,20 @@ are unchanged.
   `ReliabilityRouteTest` was re-run: 6 tests pass.
 - No Roborazzi baseline changed: the fixes change semantics only, not pixels.
 
+**CI follow-up (PR #74):**
+- **Problem:** Story 5.6's `UsageStatsSettingsTest` baselines failed. They predate the now-visible "Reliability
+  checklist" row.
+- **Fix:** I re-recorded `settings_usage_stats_on/off_light/dark` on the tree rebased onto main bbef79f0. Before and
+  after, only that row was added under the usage stats card. The 200 % images are unchanged, because the row is below
+  the fold.
+- **Final run after the rebase** (JDK 17, `--no-daemon --max-workers=2`):
+  - `spotlessCheck`, `detekt` and `:core:jvmTest` (`core.reliability.*`) pass.
+  - `:composeApp:testAndroidHostTest` passes for the reliability, home, settings, nav and qr packages, plus
+    `AlarmEditorQrTest`, `UiModuleTest` and `CopyRulesTest`.
+  - `:androidApp:testDebugUnitTest` passes in verify mode for `UsageStatsSettingsTest`, the Reliability classes, the
+    `android.reliability` and `android.qr` packages, the Settings and Home classes, `SessionLockScreenTest`,
+    `MainActivityTest`, `ReceiversManifestTest` and the preview tap-throughs and menu.
+
 ## Auto Run Result
 
 Status: done (fast mode). The coordinator runs the independent review and CI.

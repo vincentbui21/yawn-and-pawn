@@ -17,6 +17,10 @@ class AndroidLogger : Logger {
                 Log.i(TAG, "AlarmDeleted alarmId=${event.alarmId} at=${event.at}")
             }
 
+            is LogEvent.AllDataDeleted -> {
+                Log.i(TAG, "AllDataDeleted alarms=${event.alarms} keptRecords=${event.keptRecords} at=${event.at}")
+            }
+
             is LogEvent.OperationFailed -> {
                 Log.w(TAG, "OperationFailed operation=${event.operation} cause=${event.cause}")
             }

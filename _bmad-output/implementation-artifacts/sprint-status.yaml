@@ -122,7 +122,7 @@ development_status:
   5-6-anonymous-usage-stats-off-until-the-user-says-yes: review  # Epic 5 auto-run, fast mode (lane A)
   5-7-privacy-policy-terms-and-support-pages-on-github-pages: review  # Epic 5 auto-run, fast mode; owner review and live URLs pending (human-verify)
   5-8-how-payments-refunds-work-privacy-terms-and-support-in-setti: review
-  5-9-delete-all-data: backlog
+  5-9-delete-all-data: review  # Epic 5 auto-run, fast mode
   5-10-onboarding-part-1-mission-alarm-behaviour-disclosure-and-bas: backlog
   5-11-onboarding-part-2-first-alarm-checks-checklist-and-usage-sta: backlog
   5-12-onboarding-test-alarm-on-a-locked-screen: backlog

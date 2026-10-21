@@ -3,6 +3,7 @@ package com.yawnandpawn.app.core.session
 import com.yawnandpawn.app.core.error.DomainError
 import com.yawnandpawn.app.core.error.Outcome
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.map
@@ -30,7 +31,10 @@ val SessionState.inProgress: Boolean
  *
  * Completed and Missed are not locked: the morning is over and only the history row is pending, which may keep failing.
  *
- * [state] and [restored] are `SessionEngine`'s, [emergency] the wake runtime's; the app wires them.
+ * [state] and [restored] are `SessionEngine`'s, [emergency] the wake runtime's; the app wires them. [deletionPending] is
+ * an unfinished "Delete all data" (`PendingDeletion`, Story 5.9 review): while it is true [whenIdle] refuses too, so
+ * nothing is created on top of a half-done delete; only the deletion itself writes then ([whenIdleForDeletion]). It
+ * never holds up a session: [startingSession] does not look at it.
  *
  * **Every mutating use case must run its writes inside [whenIdle]:** the alarm use cases today, and the later ones too
  * (settings, the base fee, "Delete all data"). `SessionLockGuardScanTest` fails for a use case in the scanned packages
@@ -41,6 +45,7 @@ class SessionLockGuard(
     val state: StateFlow<SessionState>,
     val restored: StateFlow<Boolean>,
     val emergency: StateFlow<Boolean>,
+    private val deletionPending: StateFlow<Boolean> = MutableStateFlow(false),
 ) {
     /** Serializes [whenIdle] with [startingSession], so a session never starts in the middle of a guarded write. */
     private val mutex = Mutex()
@@ -59,6 +64,13 @@ class SessionLockGuard(
      * ([startingSession] waits for it), so the check holds for the whole write.
      */
     suspend fun <T> whenIdle(block: suspend () -> Outcome<T, DomainError>): Outcome<T, DomainError> =
+        mutex.withLock { if (isLocked || deletionPending.value) Outcome.Failure(DomainError.SessionActive) else block() }
+
+    /**
+     * [whenIdle] for "Delete all data" only (Story 5.9): the same lock and refusal, but it runs while a deletion is
+     * pending, because finishing that deletion is what it does. `SessionLockGuardScanTest` counts it as a guard.
+     */
+    suspend fun <T> whenIdleForDeletion(block: suspend () -> Outcome<T, DomainError>): Outcome<T, DomainError> =
         mutex.withLock { if (isLocked) Outcome.Failure(DomainError.SessionActive) else block() }
 
     /**

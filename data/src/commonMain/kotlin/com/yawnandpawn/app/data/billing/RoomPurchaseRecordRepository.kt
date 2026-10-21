@@ -43,6 +43,13 @@ class RoomPurchaseRecordRepository(
 
     override suspend fun all(): Outcome<List<PurchaseRecord>, DomainError> = storage { readable(dao.all()).records }
 
+    // Story 5.9: only PurchaseLedger calls it, under its Mutex, so nothing writes a record between the delete and the count.
+    override suspend fun deleteNotOwed(keep: Set<String>): Outcome<Int, DomainError> =
+        storage {
+            dao.deleteNotOwedRows(keep.toList())
+            dao.count()
+        }
+
     override fun observeAll(): Flow<PurchaseRecordsRead> = dao.observeAll().map(::readable)
 
     /** The records of [rows], with the count of rows that are not records, which is logged when there are any. */

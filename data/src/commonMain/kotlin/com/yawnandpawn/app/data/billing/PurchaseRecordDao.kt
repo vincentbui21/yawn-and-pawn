@@ -24,4 +24,15 @@ interface PurchaseRecordDao {
 
     @Query("SELECT COUNT(*) FROM purchase_record")
     suspend fun count(): Int
+
+    /**
+     * "Delete all data" (Story 5.9): deletes the rows no consume is owed for (consumed, stranded, and reused once
+     * consumed); granted rows, reused rows not consumed yet, rows of any other status and the rows of [keep] (the token
+     * hashes a pending grant ledger row still settles) stay. Returns how many went.
+     */
+    @Query(
+        "DELETE FROM purchase_record WHERE (status IN ('consumed', 'stranded') OR (status = 'reused' AND consumed_at IS NOT NULL))" +
+            " AND token_hash NOT IN (:keep)",
+    )
+    suspend fun deleteNotOwedRows(keep: List<String>): Int
 }

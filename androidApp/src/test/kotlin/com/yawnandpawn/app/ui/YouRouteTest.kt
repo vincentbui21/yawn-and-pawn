@@ -100,10 +100,8 @@ class YouRouteTest {
     @Test
     fun `You shows Money, Privacy and your data and Help with the built rows only`() =
         onYou {
-            listOf("Purchase history", "How payments & refunds work", "Privacy policy", "Support", "Email support", "Terms").forEach {
-                row(it).performScrollTo()
-            }
-            composeRule.onAllNodes(hasText("Delete all data")).assertCountEquals(0)
+            val rows = listOf("Purchase history", "How payments & refunds work", "Privacy policy", "Delete all data")
+            (rows + listOf("Support", "Email support", "Terms")).forEach { row(it).performScrollTo() }
             composeRule.onAllNodes(hasText("About")).assertCountEquals(0)
         }
 

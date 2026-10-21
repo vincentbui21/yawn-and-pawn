@@ -205,10 +205,16 @@ kover {
     }
 }
 
-// core.session, core.checks, core.billing and core.config have their own 90% rules (core/build.gradle.kts, variants
-// "session", "checks", "billing" and "config"); they run with this verify task.
+// core.session, core.checks, core.billing, core.config and core.reset have their own 90% rules (core/build.gradle.kts,
+// variants "session", "checks", "billing", "config" and "reset"); they run with this verify task.
 tasks.named("koverVerify") {
-    dependsOn(":core:koverVerifySession", ":core:koverVerifyChecks", ":core:koverVerifyBilling", ":core:koverVerifyConfig")
+    dependsOn(
+        ":core:koverVerifySession",
+        ":core:koverVerifyChecks",
+        ":core:koverVerifyBilling",
+        ":core:koverVerifyConfig",
+        ":core:koverVerifyReset",
+    )
 }
 
 // ---------------------------------------------------------------------------------------------

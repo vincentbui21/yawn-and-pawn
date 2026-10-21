@@ -53,6 +53,8 @@ data class YouUiState(
     /** The app's version name for the About row ("0.1.0"). */
     val appVersion: String,
     val showDeleteDialog: Boolean = false,
+    /** "Delete all data" could run now: no session in progress or unfinished, no deletion running (Story 5.9). */
+    val deleteEnabled: Boolean = true,
     /** A link had no app to open it: "No browser found.", for 4 s. */
     val noBrowser: Boolean = false,
     /**
@@ -118,7 +120,7 @@ fun YouScreen(
             overlay = { YouSnackbar(state) },
         ) {
             MoneyCard(onIntent = onIntent, rows = rows)
-            PrivacyCard(onIntent = onIntent, rows = rows)
+            PrivacyCard(onIntent = onIntent, rows = rows, deleteEnabled = state.deleteEnabled)
             HelpCard(appVersion = state.appVersion, onIntent = onIntent, rows = rows)
             state.noEmailAppAddress?.let { address ->
                 NoEmailAppNote(
@@ -198,6 +200,7 @@ private fun MoneyCard(
 private fun PrivacyCard(
     onIntent: (YouIntent) -> Unit,
     rows: Set<YouRow>,
+    deleteEnabled: Boolean,
 ) {
     GroupCardOf(
         title = stringResource(Res.string.you_privacy_data),
@@ -210,6 +213,7 @@ private fun PrivacyCard(
                     NavRow(
                         label = stringResource(Res.string.settings_delete_all),
                         onClick = { onIntent(YouIntent.DeleteAllClicked) },
+                        enabled = deleteEnabled,
                         titleColor = PpsTheme.colors.error,
                         chevron = false,
                     )

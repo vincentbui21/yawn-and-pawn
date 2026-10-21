@@ -6,6 +6,7 @@ import com.yawnandpawn.app.core.history.SessionHistoryRepository
 import com.yawnandpawn.app.core.history.SessionHistoryRow
 import com.yawnandpawn.app.core.history.SessionMergeRow
 import com.yawnandpawn.app.core.history.SessionOutcome
+import com.yawnandpawn.app.core.reset.SessionHistoryEraser
 import com.yawnandpawn.app.core.stats.FallbackHistory
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
@@ -14,12 +15,14 @@ import kotlin.coroutines.cancellation.CancellationException
 /**
  * [SessionHistoryRepository] over `session_history` in `app.db`. The only user of [SessionHistoryDao]'s writes; core's
  * `SessionRecorder` is its only caller of [upsert] (AD-18). Storage exceptions become `StorageFailure`. Also Home's
- * [FallbackHistory] (Story 3.13), a read only.
+ * [FallbackHistory] (Story 3.13), a read only, and the history part of "Delete all data" ([SessionHistoryEraser], Story
+ * 5.9), so the history keeps one adapter that writes it.
  */
 class RoomSessionHistoryRepository(
     private val dao: SessionHistoryDao,
 ) : SessionHistoryRepository,
-    FallbackHistory {
+    FallbackHistory,
+    SessionHistoryEraser {
     override suspend fun upsert(row: SessionHistoryRow): Outcome<Unit, DomainError> = storage { dao.upsertRow(row.toEntity()) }
 
     // Row mapping runs inside storage { } too: an unreadable row (an unknown outcome) is a StorageFailure.
@@ -34,6 +37,9 @@ class RoomSessionHistoryRepository(
 
     // Story 2.9: insert or ignore, so a replayed merge leaves one row. SessionRecorder is the only caller.
     override suspend fun recordMerge(merge: SessionMergeRow): Outcome<Unit, DomainError> = storage { dao.insertMerge(merge.toEntity()) }
+
+    // Story 5.9: every history row and merge, in one transaction; called only by core's DeleteAllData.
+    override suspend fun deleteAllHistory(): Outcome<Unit, DomainError> = storage { dao.deleteRowsAndMerges() }
 
     override suspend fun merges(sessionId: String): Outcome<List<SessionMergeRow>, DomainError> =
         storage { dao.mergesOf(sessionId).map { it.toRow() } }

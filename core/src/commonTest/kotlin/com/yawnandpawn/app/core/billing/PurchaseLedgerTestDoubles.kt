@@ -69,6 +69,9 @@ internal class LedgerWorld(
     var ledgerDeleteFailure: DomainError? = null
     var recordFailure: DomainError? = null
     var recordWriteFailure: DomainError? = null
+
+    /** Runs first in the records' delete ("Delete all data", Story 5.9): an error it returns fails the delete; it may throw. */
+    var beforeRecordDelete: () -> DomainError? = { null }
     var cachedPrices: Map<String, Money> = emptyMap()
 
     val ledgerStore = MemoryLedgerStore(this)
@@ -151,6 +154,12 @@ internal class MemoryRecords(
 
     override suspend fun all(): Outcome<List<PurchaseRecord>, DomainError> =
         world.recordFailure?.let { Outcome.Failure(it) } ?: Outcome.Success(world.recordRows.values.sortedByDescending { it.purchasedAt })
+
+    override suspend fun deleteNotOwed(keep: Set<String>): Outcome<Int, DomainError> {
+        val failure = world.beforeRecordDelete() ?: world.recordWriteFailure
+        if (failure == null) world.recordRows.values.removeAll { it.reconcilerStatus != RecordStatus.Granted && it.tokenHash !in keep }
+        return failure?.let { Outcome.Failure(it) } ?: Outcome.Success(world.recordRows.size)
+    }
 
     // The ledger never observes the records; Purchase history (Story 4.16) does, with its own fake.
     override fun observeAll(): Flow<PurchaseRecordsRead> = emptyFlow()

@@ -4,6 +4,7 @@ import androidx.room3.Dao
 import androidx.room3.Insert
 import androidx.room3.OnConflictStrategy
 import androidx.room3.Query
+import androidx.room3.Transaction
 import androidx.room3.Upsert
 import kotlinx.coroutines.flow.Flow
 
@@ -43,4 +44,17 @@ abstract class SessionHistoryDao {
 
     @Query("SELECT * FROM session_merge WHERE session_id = :sessionId ORDER BY merged_at, scheduled_at, alarm_id")
     abstract suspend fun mergesOf(sessionId: String): List<SessionMergeEntity>
+
+    @Query("DELETE FROM session_history")
+    abstract suspend fun deleteAllRows()
+
+    @Query("DELETE FROM session_merge")
+    abstract suspend fun deleteAllMerges()
+
+    /** "Delete all data" (Story 5.9): every history row and every merge, in one transaction. */
+    @Transaction
+    open suspend fun deleteRowsAndMerges() {
+        deleteAllRows()
+        deleteAllMerges()
+    }
 }

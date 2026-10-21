@@ -47,7 +47,8 @@ val uiModule =
         }
         viewModel { ProblemWithChargeViewModel(get(), get(), get(), get(), get()) }
         viewModel { ManufacturerGuidanceViewModel(get(), get(), get()) }
-        viewModel { YouViewModel(links = get(), appLinks = get(), clock = get()) }
+        // The You tab (Stories 5.8 and 5.9): its links, and "Delete all data" through core's DeleteAllData (bound by :androidApp).
+        viewModel { YouViewModel(links = get(), appLinks = get(), clock = get(), deleteAllData = get(), sessionLock = get()) }
         viewModel { PaymentsViewModel(priceCatalog = get(), clock = get(), logger = get()) }
         viewModel { params ->
             AlarmEditorViewModel(

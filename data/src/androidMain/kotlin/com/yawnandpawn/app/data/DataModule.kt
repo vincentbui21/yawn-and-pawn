@@ -3,9 +3,11 @@ package com.yawnandpawn.app.data
 import android.content.Context
 import com.yawnandpawn.app.core.alarm.AlarmRepository
 import com.yawnandpawn.app.core.alarm.CheckConfigRepository
+import com.yawnandpawn.app.core.alarm.RequestCodeHighWaterMark
 import com.yawnandpawn.app.core.alarm.RequestCodeSequence
 import com.yawnandpawn.app.core.billing.GrantLedgerStore
 import com.yawnandpawn.app.core.billing.InstallIdProvider
+import com.yawnandpawn.app.core.billing.InstallIdReset
 import com.yawnandpawn.app.core.billing.PriceCacheStore
 import com.yawnandpawn.app.core.billing.PurchaseIntentStore
 import com.yawnandpawn.app.core.billing.PurchaseRecordRepository
@@ -16,6 +18,9 @@ import com.yawnandpawn.app.core.config.SettingsSnapshotCache
 import com.yawnandpawn.app.core.history.MissedNoteDismissals
 import com.yawnandpawn.app.core.history.SessionHistoryRepository
 import com.yawnandpawn.app.core.reliability.ReliabilityRecords
+import com.yawnandpawn.app.core.reset.DeletionMarker
+import com.yawnandpawn.app.core.reset.LocalDataEraser
+import com.yawnandpawn.app.core.reset.SessionHistoryEraser
 import com.yawnandpawn.app.core.session.ActiveSessionStore
 import com.yawnandpawn.app.core.session.TestAlarmStore
 import com.yawnandpawn.app.core.stats.CheckRegistrations
@@ -37,6 +42,8 @@ import com.yawnandpawn.app.data.db.RuntimeDatabase
 import com.yawnandpawn.app.data.db.buildAppDatabase
 import com.yawnandpawn.app.data.db.buildRuntimeDatabase
 import com.yawnandpawn.app.data.history.RoomSessionHistoryRepository
+import com.yawnandpawn.app.data.reset.AndroidLocalDataEraser
+import com.yawnandpawn.app.data.reset.FileDeletionMarker
 import com.yawnandpawn.app.data.session.RoomActiveSessionStore
 import com.yawnandpawn.app.data.session.RoomGrantLedgerStore
 import com.yawnandpawn.app.data.session.RoomPurchaseIntentStore
@@ -71,10 +78,15 @@ val dataModule =
         // check_config (Story 3.5): written only by the guarded alarm use cases.
         single { get<AppDatabase>().checkConfigDao() }
         single<CheckConfigRepository> { RoomCheckConfigRepository(get()) }
-        single<RequestCodeSequence> { RoomRequestCodeSequence(get()) }
+        single { RoomRequestCodeSequence(get()) }
+        single<RequestCodeSequence> { get<RoomRequestCodeSequence>() }
+        // "Delete all data" (Story 5.9) cancels every code up to the high-water mark, which it never resets.
+        single<RequestCodeHighWaterMark> { get<RoomRequestCodeSequence>() }
         // session_history (Story 1.13): written only by core's SessionRecorder, wired in the app.
         single { get<AppDatabase>().sessionHistoryDao() }
         single<SessionHistoryRepository> { RoomSessionHistoryRepository(get()) }
+        // "Delete all data" (Story 5.9) deletes the history through the same adapter, its only writer (AD-18).
+        single<SessionHistoryEraser> { RoomSessionHistoryRepository(get()) }
         // Home's re-register banner (Story 3.13) reads the fallback rows; stateless over the same DAO.
         single<FallbackHistory> { RoomSessionHistoryRepository(get()) }
         // Story 3.10: the stored QR/Barcode codes and when each was registered (the re-register banner, Story 3.13).
@@ -87,7 +99,10 @@ val dataModule =
         single<PurchaseIntentStore> { RoomPurchaseIntentStore(get<RuntimeDatabase>().purchaseIntentDao()) }
         // The install id (Story 4.8) in its own device-protected DataStore, excluded from backup; released like the others.
         single { InstallIdDataStore(get<Context>(), get(), get()) } withOptions { onClose { it?.close() } }
-        single<InstallIdProvider> { DataStoreInstallIdProvider(get<InstallIdDataStore>().store, get(), get()) }
+        single { DataStoreInstallIdProvider(get<InstallIdDataStore>().store, get(), get()) }
+        single<InstallIdProvider> { get<DataStoreInstallIdProvider>() }
+        // "Delete all data" (Story 5.9) forgets the id when no payment is still owed a consume.
+        single<InstallIdReset> { get<DataStoreInstallIdProvider>() }
         // The settings DataStore (Story 1.16), device-protected; released when Koin stops, like the databases.
         single { SettingsDataStore(get<Context>()) } withOptions { onClose { it?.close() } }
         single<MissedNoteDismissals> { DataStoreMissedNoteDismissals(get<SettingsDataStore>().store, get()) }
@@ -106,7 +121,8 @@ val dataModule =
         // The commitment lock (Story 4.4): the global settings and their pending changes in the same DataStore (AD-6),
         // the alarms' pending changes and the commitment events in app.db.
         // The last-known settings for a fire that cannot read the DataStore in time (review fix 11); not backed up.
-        single<SettingsSnapshotCache> { SharedPreferencesSettingsCache(get<Context>()) }
+        single { SharedPreferencesSettingsCache(get<Context>()) }
+        single<SettingsSnapshotCache> { get<SharedPreferencesSettingsCache>() }
         single { DataStoreGlobalSettings(get<SettingsDataStore>().store, get(), get()) }
         single<GlobalSettingsRepository> { get<DataStoreGlobalSettings>() }
         single { get<AppDatabase>().pendingChangeDao() }
@@ -121,4 +137,17 @@ val dataModule =
         // The cached Play prices (Story 4.3): their own device-protected DataStore, never backed up; released like the others.
         single { PriceCacheDataStore(get<Context>()) } withOptions { onClose { it?.close() } }
         single<PriceCacheStore> { DataStorePriceCacheStore(get<PriceCacheDataStore>().store, get()) }
+        // "Delete all data" (Story 5.9): its marker in device-protected no_backup storage, and the stores it empties.
+        single<DeletionMarker> { FileDeletionMarker(get<Context>()) }
+        single<LocalDataEraser> {
+            AndroidLocalDataEraser(
+                alarmData = get<AppDatabase>().alarmDataDao(),
+                intents = get<RuntimeDatabase>().purchaseIntentDao(),
+                settings = get(),
+                settingsCache = get(),
+                prices = get(),
+                reliability = get(),
+                consent = get(),
+            )
+        }
     }

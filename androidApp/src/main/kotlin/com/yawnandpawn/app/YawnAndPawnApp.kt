@@ -13,7 +13,10 @@ import com.yawnandpawn.app.android.WordListLoader
 import com.yawnandpawn.app.android.androidTimeModule
 import com.yawnandpawn.app.android.billing.ResumedWakeScreen
 import com.yawnandpawn.app.android.billing.billingModule
+import com.yawnandpawn.app.android.crash.CrashlyticsSink
+import com.yawnandpawn.app.android.crash.CrashlyticsUnsentReports
 import com.yawnandpawn.app.android.crash.FirebaseStartup
+import com.yawnandpawn.app.android.crash.isFirebaseConfigured
 import com.yawnandpawn.app.android.qr.qrModule
 import com.yawnandpawn.app.android.reliability.reliabilityModule
 import com.yawnandpawn.app.android.screen.AndroidExternalLinks
@@ -61,6 +64,7 @@ import com.yawnandpawn.app.core.config.SetDefaultSnoozeLength
 import com.yawnandpawn.app.core.config.SetDefaultVibrateInGrace
 import com.yawnandpawn.app.core.config.SetMaxSnoozes
 import com.yawnandpawn.app.core.config.SetThemeMode
+import com.yawnandpawn.app.core.crash.UnsentCrashReports
 import com.yawnandpawn.app.core.error.valueOrNull
 import com.yawnandpawn.app.core.history.MissedNotes
 import com.yawnandpawn.app.core.id.IdGenerator
@@ -69,6 +73,10 @@ import com.yawnandpawn.app.core.log.Logger
 import com.yawnandpawn.app.core.net.Connectivity
 import com.yawnandpawn.app.core.reliability.LockedTestReporter
 import com.yawnandpawn.app.core.reliability.ReliabilityRecords
+import com.yawnandpawn.app.core.reset.DeleteAllData
+import com.yawnandpawn.app.core.reset.DeletionMarker
+import com.yawnandpawn.app.core.reset.PendingDeletion
+import com.yawnandpawn.app.core.reset.ResumePendingDeletion
 import com.yawnandpawn.app.core.session.ActiveSessionStore
 import com.yawnandpawn.app.core.session.CameraFallbackPolicy
 import com.yawnandpawn.app.core.session.CheckValidator
@@ -132,7 +140,19 @@ val appModule =
         // (Story 1.14), then re-arms through RearmOnFire (device test round 1: the ring first).
         single<AlarmScheduler> { AndroidAlarmScheduler(androidContext(), get(), get(), get(), get()) }
         // rescheduleAll() promotes the due pending changes first (Story 4.4).
-        single { AlarmScheduling(get(), get(), get(), get(), get(), get(), promotion = get<PromotePendingChanges>()) }
+        // While a "Delete all data" is pending it arms nothing (Story 5.9 review), so no start re-arms its alarms.
+        single {
+            AlarmScheduling(
+                get(),
+                get(),
+                get(),
+                get(),
+                get(),
+                get(),
+                promotion = get<PromotePendingChanges>(),
+                deletionPending = get<PendingDeletion>().pending,
+            )
+        }
         // The commitment lock (Story 4.4): promotion skips the occurrence the session in progress rings, read lazily (the
         // engine is built after the scheduling it may need).
         // Before the engine is restored (a cold start), the stored session in runtime.db is read instead (review fix 9).
@@ -285,7 +305,12 @@ val appModule =
         // "Back to alarm" opens the wake screen.
         single {
             val engine = get<SessionEngine>()
-            SessionLockGuard(engine.state, engine.restored, get<WakeRuntime>().emergencyRinging)
+            SessionLockGuard(
+                engine.state,
+                engine.restored,
+                get<WakeRuntime>().emergencyRinging,
+                deletionPending = get<PendingDeletion>().pending,
+            )
         }
         single<WakeScreenOpener> {
             AndroidWakeScreenOpener(
@@ -306,12 +331,61 @@ val appModule =
             )
         }
         single<ExternalLinks> { AndroidExternalLinks(androidContext(), get()) }
+        // "Delete all data" (Story 5.9): an unfinished deletion holds the app (the guard refuses other writes,
+        // rescheduleAll arms nothing, the restoring screen shows) until it completes or the resume gives up. One per
+        // process, made from the marker (dataModule).
+        single { PendingDeletion(get<DeletionMarker>().exists()) }
+        // One instance; the marker, the erasers and the high-water mark come from dataModule. It runs off the main thread.
+        single {
+            DeleteAllData(
+                lock = get(),
+                sessionLock = get(),
+                marker = get(),
+                alarms = get(),
+                highWaterMark = get(),
+                scheduler = get(),
+                eraser = get(),
+                history = get(),
+                ledger = get(),
+                activeSession = get(),
+                installId = get(),
+                crashReports = get(),
+                analytics = get(),
+                work = get(),
+                clock = get(),
+                logger = get(),
+                pendingDeletion = get(),
+            )
+        }
+        // The deletion drops the unsent Crashlytics reports; without a Firebase configuration there are none.
+        single<UnsentCrashReports> {
+            val context = androidContext()
+            if (isFirebaseConfigured(context)) CrashlyticsUnsentReports(CrashlyticsSink(context), get()) else UnsentCrashReports {}
+        }
+        // An unfinished deletion is finished from the app start, also with no activity (boot, a time change): with no
+        // session stored it restores the (empty) session itself, so the guard opens; with one stored it waits for the
+        // restore entry points (Story 2.1). On the app's scope, so a test's teardown cancels a resume left waiting.
+        single {
+            val engine = get<SessionEngine>()
+            val store = get<ActiveSessionStore>()
+            ResumePendingDeletion(
+                deleteAllData = get(),
+                pendingDeletion = get(),
+                marker = get(),
+                sessionLock = get(),
+                scope = get<ApplicationScope>(),
+                logger = get(),
+                restoreSession = { if (store.load().valueOrNull()?.holdsNoSession() == true) engine.restore() },
+            )
+        }
     }
 
 /**
  * The app process: starts Koin and re-arms alarms. It never restores the session (Story 2.1): a process started for a
  * broadcast must not run the ringing entry effects or start a foreground service. `WakeService`, `MainActivity` and
- * `WakeActivity` restore it; a system event arms the session slot instead. Open for the Robolectric test application.
+ * `WakeActivity` restore it; a system event arms the session slot instead. The one exception is an unfinished "Delete
+ * all data" (Story 5.9 review) with no session stored: then the resume restores the empty session itself, which runs no
+ * entry effect. Open for the Robolectric test application.
  *
  * It provides WorkManager's configuration (Story 4.3): the default initializer is removed from the manifest, so
  * WorkManager starts on demand at its first use, which happens only after the first unlock (`AndroidBackgroundWork`).
@@ -345,6 +419,9 @@ open class YawnAndPawnApp :
         // so a Koin graph a test restarts still sees it).
         registerActivityLifecycleCallbacks(resumedWakeScreen)
         val scope = koin.get<ApplicationScope>()
+        // Story 5.9 review: an unfinished "Delete all data" holds the app and resumes, before anything re-arms alarms (a
+        // start with no activity finishes it too); after 3 starts that found it, it gives up and the app runs as usual.
+        koin.get<ResumePendingDeletion>().onAppStart()
         // App start re-arms every alarm (AD-4); it also covers a backup restore, which restarts the app.
         val scheduling = koin.get<AlarmScheduling>()
         // It also promotes the due pending changes of the commitment lock first (Story 4.4); the wake service promotes
@@ -378,7 +455,8 @@ open class YawnAndPawnApp :
             if (store.load().valueOrNull()?.holdsNoSession() == true) runtime.restoreVolumeIfIdle()
         }
     }
-
-    private fun StoredSession.holdsNoSession(): Boolean =
-        this == StoredSession.Empty || this is StoredSession.Unreadable || this == StoredSession.Found(SessionState.Idle)
 }
+
+/** Nothing to take over: no row, an unreadable one or a stored Idle (restoring it runs no entry effect). */
+private fun StoredSession.holdsNoSession(): Boolean =
+    this == StoredSession.Empty || this is StoredSession.Unreadable || this == StoredSession.Found(SessionState.Idle)

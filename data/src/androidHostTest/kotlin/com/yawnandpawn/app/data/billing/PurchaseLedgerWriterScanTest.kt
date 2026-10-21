@@ -10,9 +10,11 @@ import kotlin.test.assertTrue
  * debug build's) of `:core`, `:data`, `:androidApp` and `:composeApp`, with comments blanked out. Every write has a
  * name of its own, so a call is found whatever its receiver (a parameter, a chained DAO getter, an adapter built by its
  * concrete type, a Koin lookup or a function reference):
- * - only `PurchaseLedger` writes records (`putRecord`), changes the grant ledger (`markConsumed`, `markSettled`,
- *   `purgeSettledBefore`) and calls any `consume`: consuming a token that granted nothing keeps money for nothing;
- * - only the Room adapters use the DAO writes (`upsertRecord`; `setConsumed`, `setSettled`, `deleteSettledBefore`);
+ * - only `PurchaseLedger` writes records (`putRecord`, and `deleteNotOwed` for "Delete all data", Story 5.9), changes
+ *   the grant ledger (`markConsumed`, `markSettled`, `purgeSettledBefore`) and calls any `consume`: consuming a token
+ *   that granted nothing keeps money for nothing;
+ * - only the Room adapters use the DAO writes (`upsertRecord`, `deleteNotOwedRows`; `setConsumed`, `setSettled`,
+ *   `deleteSettledBefore`);
  * - grant rows are inserted only through `RoomActiveSessionStore`'s commit (`insertGrant`, `commit(..., grants)`), and
  *   only `SessionEngine` makes a `RuntimeWrite.PutGrant`, in the transaction of the paid snooze.
  */
@@ -57,6 +59,9 @@ class PurchaseLedgerWriterScanTest {
                 Source("core/k/Engine.kt", "suspend fun p() = store.commit(state, listOf(RuntimeWrite.PutGrant(grant)))"),
                 Source("androidApp/l/Coordinator.kt", "suspend fun q(billing: Billing) = billing.consume(token)"),
                 Source("composeApp/m/Ui.kt", "val c = Billing::consume"),
+                // Story 5.9: records are deleted only through the ledger, and the DAO delete only by the Room adapter.
+                Source("composeApp/o/Reset.kt", "suspend fun s(records: PurchaseRecordRepository) = records.deleteNotOwed()"),
+                Source("data/p/Reset.kt", "suspend fun t(db: AppDatabase) = db.purchaseRecordDao().deleteNotOwedRows()"),
                 // Not a write: reads of the records, an unrelated delete and a map put.
                 Source(
                     "composeApp/n/History.kt",
@@ -79,6 +84,8 @@ class PurchaseLedgerWriterScanTest {
                 "core/k/Engine.kt calls PutGrant",
                 "androidApp/l/Coordinator.kt calls consume",
                 "composeApp/m/Ui.kt calls consume",
+                "composeApp/o/Reset.kt calls record deletes",
+                "data/p/Reset.kt calls record DAO deletes",
             ),
             offenders(rogue),
         )
@@ -106,6 +113,8 @@ class PurchaseLedgerWriterScanTest {
             linkedMapOf(
                 "putRecord" to Regex("""(?:\.|::)putRecord\b"""),
                 "upsertRecord" to Regex("""(?:\.|::)upsertRecord\b"""),
+                "record deletes" to Regex("""(?:\.|::)deleteNotOwed\b"""),
+                "record DAO deletes" to Regex("""(?:\.|::)deleteNotOwedRows\b"""),
                 "ledger writes" to Regex("""(?:\.|::)(?:markConsumed|markSettled|purgeSettledBefore)\b"""),
                 "ledger DAO writes" to Regex("""(?:\.|::)(?:setConsumed|setSettled|deleteSettledBefore)\b"""),
                 "grant inserts" to Regex("""(?:\.|::)insertGrant\b|\.commit\([^)]*\bgrants\b"""),
@@ -117,6 +126,8 @@ class PurchaseLedgerWriterScanTest {
             mapOf(
                 "putRecord" to LEDGER_PATH,
                 "upsertRecord" to RECORD_REPOSITORY_PATH,
+                "record deletes" to LEDGER_PATH,
+                "record DAO deletes" to RECORD_REPOSITORY_PATH,
                 "ledger writes" to LEDGER_PATH,
                 "ledger DAO writes" to LEDGER_STORE_PATH,
                 "grant inserts" to SESSION_STORE_PATH,

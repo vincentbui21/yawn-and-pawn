@@ -12,3 +12,12 @@ fun interface InstallIdProvider {
     /** The install id, created and stored on the first call. Failure only for a storage error. */
     suspend fun installId(): Outcome<String, DomainError>
 }
+
+/**
+ * Port for forgetting this install's id ("Delete all data", Story 5.9): the next [InstallIdProvider.installId] makes and
+ * stores a new one. Only called when no payment is still owed a consume, because the reconciler ignores a token launched
+ * under another install id (`PurchaseReconciler` rule 1).
+ */
+fun interface InstallIdReset {
+    suspend fun resetInstallId(): Outcome<Unit, DomainError>
+}

@@ -30,10 +30,10 @@ kotlin {
     }
 }
 
-// The wake-session package (Story 1.11), the check plugins (Story 3.1), billing (Story 4.2) and the commitment lock
-// (Story 4.4) need their own 90% line coverage, on top of the root rule for all of :core. `koverVerifySession`,
-// `koverVerifyChecks`, `koverVerifyBilling` and `koverVerifyConfig` run inside the root `koverVerify` that qualityGate
-// uses.
+// The wake-session package (Story 1.11), the check plugins (Story 3.1), billing (Story 4.2), the commitment lock
+// (Story 4.4) and "Delete all data" (Story 5.9) need their own 90% line coverage, on top of the root rule for all of
+// :core. `koverVerifySession`, `koverVerifyChecks`, `koverVerifyBilling`, `koverVerifyConfig` and `koverVerifyReset` run
+// inside the root `koverVerify` that qualityGate uses.
 kover {
     currentProject {
         createVariant("session") {
@@ -46,6 +46,9 @@ kover {
             add("jvm")
         }
         createVariant("config") {
+            add("jvm")
+        }
+        createVariant("reset") {
             add("jvm")
         }
     }
@@ -94,6 +97,18 @@ kover {
             }
             verify {
                 rule("core.config line coverage") {
+                    minBound(90)
+                }
+            }
+        }
+        variant("reset") {
+            filters {
+                includes {
+                    packages("com.yawnandpawn.app.core.reset")
+                }
+            }
+            verify {
+                rule("core.reset line coverage") {
                     minBound(90)
                 }
             }

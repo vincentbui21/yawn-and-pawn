@@ -9,6 +9,7 @@ import com.yawnandpawn.app.core.alarm.CheckConfigRepository
 import com.yawnandpawn.app.core.alarm.DeleteAlarm
 import com.yawnandpawn.app.core.alarm.DuplicateAlarm
 import com.yawnandpawn.app.core.alarm.ReRegisterCode
+import com.yawnandpawn.app.core.alarm.RequestCodeHighWaterMark
 import com.yawnandpawn.app.core.alarm.RequestCodeSequence
 import com.yawnandpawn.app.core.alarm.RequestCodes
 import com.yawnandpawn.app.core.alarm.SaveAlarm
@@ -133,12 +134,13 @@ class FakeAlarmScheduler : AlarmScheduler {
 }
 
 /**
- * In-memory [RequestCodeSequence]: hands out [lastUsed] + 1 and remembers it, like the persisted high-water mark.
- * Set [failure] to make [next] fail with it (and hand out nothing).
+ * In-memory [RequestCodeSequence]: hands out [lastUsed] + 1 and remembers it, like the persisted high-water mark, which
+ * [highWaterMark] reads (Story 5.9). Set [failure] to make both fail with it (and hand out nothing).
  */
 class FakeRequestCodeSequence(
     lastUsed: Int = RequestCodes.INITIAL_HIGH_WATER_MARK,
-) : RequestCodeSequence {
+) : RequestCodeSequence,
+    RequestCodeHighWaterMark {
     /** The highest code handed out so far (the mark). */
     var lastUsed: Int = lastUsed
         private set
@@ -150,6 +152,8 @@ class FakeRequestCodeSequence(
         lastUsed += 1
         return Outcome.Success(lastUsed)
     }
+
+    override suspend fun highWaterMark(): Outcome<Int, DomainError> = failure?.let { Outcome.Failure(it) } ?: Outcome.Success(lastUsed)
 }
 
 /**

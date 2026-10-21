@@ -16,3 +16,13 @@ fun interface RequestCodeSequence {
      */
     suspend fun next(): Outcome<Int, DomainError>
 }
+
+/**
+ * Port for reading the request-code high-water mark without moving it ("Delete all data", Story 5.9): every code from
+ * [RequestCodes.FIRST_ALARM] up to it may have been armed once, so all of them are cancelled. The mark itself is never
+ * reset, so a code is never handed out twice. `RoomRequestCodeSequence` in production.
+ */
+fun interface RequestCodeHighWaterMark {
+    /** The highest code handed out so far; [RequestCodes.INITIAL_HIGH_WATER_MARK] when none was. */
+    suspend fun highWaterMark(): Outcome<Int, DomainError>
+}

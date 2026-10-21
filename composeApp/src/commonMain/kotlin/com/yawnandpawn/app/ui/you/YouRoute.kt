@@ -7,11 +7,11 @@ import org.koin.compose.viewmodel.koinViewModel
 
 /**
  * The You rows whose screens are built (Story 5.8): Money (Purchase history, How payments & refunds work), Privacy and
- * your data (Privacy policy) and Help (Support, Email support, Terms). "Delete all data" (Story 5.9) and "About" (no
- * story) stay hidden, so no row leads nowhere.
+ * your data (Privacy policy, and "Delete all data" with its dialog, Story 5.9) and Help (Support, Email support, Terms).
+ * "About" (no story) stays hidden, so no row leads nowhere.
  */
 val BuiltYouRows: Set<YouRow> =
-    setOf(YouRow.PurchaseHistory, YouRow.Payments, YouRow.Privacy, YouRow.Support, YouRow.EmailSupport, YouRow.Terms)
+    setOf(YouRow.PurchaseHistory, YouRow.Payments, YouRow.Privacy, YouRow.DeleteAll, YouRow.Support, YouRow.EmailSupport, YouRow.Terms)
 
 /**
  * The You tab route (Story 5.8): [YouViewModel] (scoped to the nav entry) feeding [YouScreen] with [BuiltYouRows].

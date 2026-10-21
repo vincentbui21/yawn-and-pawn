@@ -45,9 +45,22 @@ class CrashReportingTest {
         override var isReady: Boolean = true,
     ) : CrashSink {
         val recorded = mutableListOf<Throwable>()
+        var unsentDeletes = 0
+
+        /** The unsent-report calls in order: "collection off", "delete", "collection on". */
+        val unsentCalls = mutableListOf<String>()
 
         override fun recordException(throwable: Throwable) {
             recorded += throwable
+        }
+
+        override fun deleteUnsentReports() {
+            unsentDeletes++
+            unsentCalls += "delete"
+        }
+
+        override fun setCollectionEnabled(enabled: Boolean) {
+            unsentCalls += if (enabled) "collection on" else "collection off"
         }
     }
 
@@ -147,6 +160,8 @@ class CrashReportingTest {
                 override val isReady = true
 
                 override fun recordException(throwable: Throwable) = throw IllegalStateException("Crashlytics not initialized")
+
+                override fun deleteUnsentReports() = throw IllegalStateException("Crashlytics not initialized")
             }
         val missing =
             object : CrashSink {
@@ -154,6 +169,8 @@ class CrashReportingTest {
                     get() = throw NoClassDefFoundError("com/google/firebase/FirebaseApp")
 
                 override fun recordException(throwable: Throwable) = Unit
+
+                override fun deleteUnsentReports() = Unit
             }
 
         FirebaseCrashReporter(broken, logger).report(RuntimeException("boom"))
@@ -163,6 +180,49 @@ class CrashReportingTest {
             listOf<LogEvent>(
                 LogEvent.OperationFailed("report crash", "IllegalStateException"),
                 LogEvent.OperationFailed("report crash", "NoClassDefFoundError"),
+            ),
+            logger.events,
+        )
+    }
+
+    @Test
+    fun `Delete all data drops the unsent reports once Crashlytics has started, and never throws (Story 5_9)`() {
+        val sink = RecordingSink(isReady = false)
+        val unsent = CrashlyticsUnsentReports(sink, logger)
+
+        unsent.deleteUnsent()
+        assertEquals(0, sink.unsentDeletes, "nothing to drop before Crashlytics started")
+
+        sink.isReady = true
+        unsent.deleteUnsent()
+        assertEquals(1, sink.unsentDeletes)
+        // Collection is off around the delete and back on after it (review item 6).
+        assertEquals(listOf("collection off", "delete", "collection on"), sink.unsentCalls)
+
+        val broken =
+            object : CrashSink {
+                override val isReady = true
+
+                override fun recordException(throwable: Throwable) = Unit
+
+                override fun deleteUnsentReports() = throw IllegalStateException("Crashlytics not initialized")
+            }
+        val missing =
+            object : CrashSink {
+                override val isReady: Boolean
+                    get() = throw NoClassDefFoundError("com/google/firebase/FirebaseApp")
+
+                override fun recordException(throwable: Throwable) = Unit
+
+                override fun deleteUnsentReports() = Unit
+            }
+        CrashlyticsUnsentReports(broken, logger).deleteUnsent()
+        CrashlyticsUnsentReports(missing, logger).deleteUnsent()
+
+        assertEquals(
+            listOf<LogEvent>(
+                LogEvent.OperationFailed("delete unsent crash reports", "IllegalStateException"),
+                LogEvent.OperationFailed("delete unsent crash reports", "NoClassDefFoundError"),
             ),
             logger.events,
         )

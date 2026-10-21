@@ -19,6 +19,7 @@ import com.yawnandpawn.app.data.config.PendingChangeEntity
 import com.yawnandpawn.app.data.history.SessionHistoryDao
 import com.yawnandpawn.app.data.history.SessionHistoryEntity
 import com.yawnandpawn.app.data.history.SessionMergeEntity
+import com.yawnandpawn.app.data.reset.AlarmDataDao
 
 /**
  * `app.db` (AD-6): user data that is backed up. Version 1 held only `alarm`; version 2 (Story 1.10) adds
@@ -61,6 +62,9 @@ abstract class AppDatabase : RoomDatabase() {
     abstract fun commitmentEventDao(): CommitmentEventDao
 
     abstract fun purchaseRecordDao(): PurchaseRecordDao
+
+    /** "Delete all data" (Story 5.9): no table of its own, the deletes of the alarm tables in one transaction. */
+    abstract fun alarmDataDao(): AlarmDataDao
 
     companion object {
         /** File name in the device-protected database directory; also named in the backup rules. */

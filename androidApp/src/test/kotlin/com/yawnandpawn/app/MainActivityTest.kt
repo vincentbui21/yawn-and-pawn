@@ -31,7 +31,9 @@ import androidx.lifecycle.Lifecycle
 import com.github.takahirom.roborazzi.captureRoboImage
 import com.yawnandpawn.app.StopAppRule
 import com.yawnandpawn.app.core.alarm.Alarm
+import com.yawnandpawn.app.core.alarm.AlarmDraft
 import com.yawnandpawn.app.core.alarm.AlarmRepository
+import com.yawnandpawn.app.core.alarm.SaveAlarm
 import com.yawnandpawn.app.core.billing.Money
 import com.yawnandpawn.app.core.billing.PurchaseRecordRepository
 import com.yawnandpawn.app.core.billing.RecordStatus
@@ -314,10 +316,38 @@ class MainActivityTest {
         composeRule.onNodeWithText("Bright wake screen").assertDoesNotExist()
         composeRule.onNodeWithText("Reliability checklist").assertDoesNotExist()
 
+        // Story 5.8 built the links and 5.9 "Delete all data"; only About stays hidden.
         tab("You").performClick()
         waitForText("You")
         composeRule.onNodeWithText("About").assertDoesNotExist()
-        composeRule.onNodeWithText("Delete all data").assertDoesNotExist()
+    }
+
+    @Test
+    fun `Delete all data asks first, Keep it deletes nothing, and Delete returns to an empty Home with no alarm armed`() {
+        waitForText("No alarms yet.")
+        val koin = GlobalContext.get()
+        val saved = runBlocking { koin.get<SaveAlarm>()(AlarmDraft(time = LocalTime(7, 0))) }
+        assertTrue(saved is Outcome.Success, "$saved")
+        waitForGone("No alarms yet.")
+        assertEquals(1, armedAlarmCount(composeRule.activity))
+
+        tab("You").performClick()
+        composeRule.onNode(hasText("Delete all data") and hasClickAction()).performClick()
+        waitForText("Delete all data?")
+        composeRule
+            .onNodeWithText("Alarms, history, purchase records and settings are removed from this phone. This can't be undone.")
+            .assertExists()
+        composeRule.onNodeWithText("Keep it").performClick()
+        waitForGone("Delete all data?")
+        assertEquals(1, (runBlocking { koin.get<AlarmRepository>().listAll() } as Outcome.Success).value.size)
+
+        composeRule.onNode(hasText("Delete all data") and hasClickAction()).performClick()
+        waitForText("Delete all data?")
+        composeRule.onNodeWithText("Delete").performClick()
+
+        waitForText("No alarms yet.")
+        tab("Alarms").assertIsSelected()
+        assertEquals(0, armedAlarmCount(composeRule.activity), "no alarm left in AlarmManager")
     }
 
     @Test

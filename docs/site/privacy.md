@@ -97,7 +97,7 @@ The app is for adults (18 and over) and is not directed at children. Because sno
 
 - **Delete all data:** in the app, open You, then "Delete all data". It deletes everything the app stores on your phone: alarms, history, purchase records, settings, photos and recordings. It also turns usage stats off and deletes the analytics data on your phone, deletes crash reports not sent yet, and makes a new install id. If a snooze payment is still being finished with Google Play, the app keeps only what it needs to finish it. "Delete all data" isn't available while an alarm is ringing or snoozed.
 - **Uninstall the app:** this removes all of the app's data from your phone.
-- **The backup copy** in your Google account: see "Backup" above.
+- **The backup copy** in your Google account: "Delete all data" does not remove it. If you restore a phone from that backup before Android makes a new one, your old alarms, history, purchase records and settings come back. To remove it, see "Backup" above.
 - **Google's own records:** Google Play keeps its own record of your payments (your Google Play order history), under Google's privacy policy.
 
 ## Changes to this policy

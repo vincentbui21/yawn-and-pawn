@@ -1,10 +1,14 @@
 package com.yawnandpawn.app.ui.you
 
+import com.yawnandpawn.app.core.session.SessionLockGuard
+import com.yawnandpawn.app.core.session.SessionState
 import com.yawnandpawn.app.core.time.MonotonicClock
+import com.yawnandpawn.app.testing.aDeleteAllData
 import com.yawnandpawn.app.ui.links.AppLinks
 import com.yawnandpawn.app.ui.links.ExternalLinks
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.test.UnconfinedTestDispatcher
 import kotlinx.coroutines.test.advanceTimeBy
 import kotlinx.coroutines.test.resetMain
@@ -46,13 +50,24 @@ class YouViewModelTest {
         Dispatchers.resetMain()
     }
 
-    /** The ViewModel on the test's virtual clock, so a double tap and "1 s later" are exact. */
-    private fun screen(): YouViewModel = YouViewModel(links, appLinks, MonotonicClock { dispatcher.scheduler.currentTime })
+    private val guard = SessionLockGuard(MutableStateFlow<SessionState>(SessionState.Idle), MutableStateFlow(true), MutableStateFlow(false))
+
+    /** The ViewModel on the test's virtual clock, so a double tap and "1 s later" are exact ("Delete all data": YouDeleteAllDataTest). */
+    private fun screen(): YouViewModel =
+        YouViewModel(links, appLinks, MonotonicClock { dispatcher.scheduler.currentTime }, aDeleteAllData(guard), guard)
 
     @Test
-    fun `production shows the built rows, never Delete all data or About`() {
+    fun `production shows the built rows, Delete all data too (Story 5_9), never About`() {
         assertEquals(
-            setOf(YouRow.PurchaseHistory, YouRow.Payments, YouRow.Privacy, YouRow.Support, YouRow.EmailSupport, YouRow.Terms),
+            setOf(
+                YouRow.PurchaseHistory,
+                YouRow.Payments,
+                YouRow.Privacy,
+                YouRow.DeleteAll,
+                YouRow.Support,
+                YouRow.EmailSupport,
+                YouRow.Terms,
+            ),
             BuiltYouRows,
         )
     }

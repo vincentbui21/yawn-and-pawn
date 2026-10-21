@@ -53,6 +53,10 @@ class SessionLockGuardScanTest {
                 "SetAnalyticsConsent",
                 // "Delete all data" (Story 5.9), in core.reset: found as a use case outside the fully scanned packages.
                 "DeleteAllData",
+                // The onboarding progress and the disclosure consent (Story 5.10).
+                "AcceptDisclosure",
+                "SaveOnboardingStep",
+                "CompleteOnboarding",
             ),
             writers - ALLOWED.keys,
         )

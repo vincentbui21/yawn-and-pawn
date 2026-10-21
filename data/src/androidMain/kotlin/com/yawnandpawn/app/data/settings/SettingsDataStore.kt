@@ -4,6 +4,9 @@ import android.content.Context
 import androidx.datastore.core.DataStore
 import androidx.datastore.preferences.core.PreferenceDataStoreFactory
 import androidx.datastore.preferences.core.Preferences
+import androidx.datastore.preferences.core.edit
+import com.yawnandpawn.app.core.log.Logger
+import com.yawnandpawn.app.core.onboarding.OnboardingRepository
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -28,6 +31,17 @@ class SettingsDataStore(
 
     /** Releases the file (Koin closing, a test restarting the app). */
     fun close() = runBlocking { scope.coroutineContext.job.cancelAndJoin() }
+
+    /**
+     * The onboarding progress and the disclosure consent kept in this store (Story 5.10), so they are backed up with the
+     * settings and cleared with them.
+     */
+    fun onboarding(logger: Logger): OnboardingRepository = DataStoreOnboardingRepository(store, logger)
+
+    /** Removes every key, as "Delete all data" does (Story 5.9): the app then opens onboarding again (Story 5.10). */
+    suspend fun clear() {
+        store.edit { it.clear() }
+    }
 
     companion object {
         const val FILE_NAME = "settings.preferences_pb"

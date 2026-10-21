@@ -5,11 +5,14 @@ import com.yawnandpawn.app.android.billing.FakeBillingClientFacade
 import com.yawnandpawn.app.android.crash.FirebaseConfiguration
 import com.yawnandpawn.app.android.crash.FirebaseStartup
 import com.yawnandpawn.app.core.net.Connectivity
+import com.yawnandpawn.app.core.onboarding.OnboardingRepository
 import com.yawnandpawn.app.core.reliability.ReliabilityProbe
 import com.yawnandpawn.app.core.work.BackgroundWork
 import com.yawnandpawn.app.testing.FakeBackgroundWork
 import com.yawnandpawn.app.testing.FakeConnectivity
+import com.yawnandpawn.app.testing.FakeOnboardingRepository
 import com.yawnandpawn.app.testing.FakeReliabilityProbe
+import com.yawnandpawn.app.testing.OnboardingPresets
 import org.koin.android.ext.koin.androidContext
 import org.koin.core.module.Module
 import org.koin.dsl.module
@@ -40,6 +43,9 @@ val testAppModule: Module =
         // network. AndroidConnectivityTest tests the real adapter.
         single<Connectivity> { FakeConnectivity(online = true) }
         single<BillingClientFacade> { FakeBillingClientFacade() }
+        // A user who finished onboarding (Story 5.10), so every app test opens on Home and can save alarms.
+        // OnboardingFlowTest boots the real DataStore adapter instead.
+        single<OnboardingRepository> { FakeOnboardingRepository(OnboardingPresets.Completed) }
     }
 
 /**

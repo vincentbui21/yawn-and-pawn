@@ -34,6 +34,7 @@ class LoggerTest {
         assertEquals("product details failed (transient): offline", DomainError.ProductDetailsFailed(true, "offline").diagnostic())
         assertEquals("product details failed (permanent): no billing", DomainError.ProductDetailsFailed(false, "no billing").diagnostic())
         assertEquals("background work failure: locked", DomainError.BackgroundWorkFailure("locked").diagnostic())
+        assertEquals("the alarm behaviour disclosure is not accepted", DomainError.DisclosureRequired.diagnostic())
     }
 
     @Test

@@ -27,6 +27,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.traversalIndex
 import com.yawnandpawn.app.ui.components.PpsBackground
 import com.yawnandpawn.app.ui.components.PpsFilledButton
 import com.yawnandpawn.app.ui.components.PpsOutlinedButton
@@ -78,6 +79,9 @@ fun OnboardingScreen(
                             Modifier
                                 .fillMaxWidth()
                                 .weight(1f)
+                                // The step's content reads before the back arrow and the dots, headline first, also
+                                // where TalkBack orders a scrolling column as one group.
+                                .semantics { traversalIndex = HEADLINE_TRAVERSAL_INDEX }
                                 .clipToBounds()
                                 .verticalScroll(rememberScrollState())
                                 .padding(horizontal = PpsTheme.spacing.screenMargin, vertical = PpsTheme.spacing.space2),
@@ -166,7 +170,7 @@ private fun Actions(
         verticalArrangement = Arrangement.spacedBy(spacing.space2),
     ) {
         val wide = Modifier.fillMaxWidth()
-        val next = { onIntent(OnboardingIntent.Next) }
+        val next = { onIntent(OnboardingIntent.Next(from = step)) }
         when (step) {
             OnboardingStep.Mission -> {
                 PpsFilledButton(text = stringResource(Res.string.onboarding_start), onClick = next, modifier = wide)
@@ -228,10 +232,23 @@ internal fun StepHeader(
         modifier = Modifier.padding(top = PpsTheme.spacing.space2, bottom = PpsTheme.spacing.space2),
         verticalArrangement = Arrangement.spacedBy(PpsTheme.spacing.space2),
     ) {
-        Text(text = title, modifier = Modifier.semantics { heading() }, style = PpsTheme.typography.headline, color = colors.text)
+        Text(text = title, modifier = Modifier.headline(), style = PpsTheme.typography.headline, color = colors.text)
         if (body != null) Text(text = body, style = PpsTheme.typography.body, color = colors.textSecondary)
     }
 }
+
+/**
+ * A step's headline: a heading that TalkBack reads first on the step (Story 5.10, "onboarding focus starts on each step's
+ * headline"), ahead of the back arrow and the dots above it.
+ */
+internal fun Modifier.headline(): Modifier =
+    semantics {
+        heading()
+        traversalIndex = HEADLINE_TRAVERSAL_INDEX
+    }
+
+/** Before every other element of the step (0 by default). */
+private const val HEADLINE_TRAVERSAL_INDEX = -1f
 
 /** A row of a card with a leading icon and a line of `body` text. */
 @Composable

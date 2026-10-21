@@ -10,6 +10,7 @@ import com.yawnandpawn.app.ui.editor.CheckChip
 import com.yawnandpawn.app.ui.editor.CheckMode
 import com.yawnandpawn.app.ui.format.Countdown
 import com.yawnandpawn.app.ui.format.Weekdays
+import com.yawnandpawn.app.ui.format.formatMoney
 import com.yawnandpawn.app.ui.home.AlarmCard
 import com.yawnandpawn.app.ui.home.HomeUiState
 import com.yawnandpawn.app.ui.househunt.HouseHuntError
@@ -26,6 +27,7 @@ import com.yawnandpawn.app.ui.recordings.RecordingsUiState
 import com.yawnandpawn.app.ui.reliability.ChecklistItem
 import com.yawnandpawn.app.ui.reliability.ChecklistRow
 import com.yawnandpawn.app.ui.reliability.ItemStatus
+import com.yawnandpawn.app.ui.settings.SnoozePrices
 import com.yawnandpawn.app.ui.wake.CheckContent
 import com.yawnandpawn.app.ui.wake.HouseHuntResult
 import com.yawnandpawn.app.ui.wake.MathOperator
@@ -38,8 +40,6 @@ import kotlinx.datetime.LocalTime
  * through [PreviewSamples.price], so they are the phone's own currency.
  */
 object PreviewSetupSamples {
-    private val p = PreviewSamples
-
     // Check picker --------------------------------------------------------------------------------------------------
 
     /** F1: Math (Medium, 2 problems) and QR/Barcode (a code saved), one of them at random each morning. */
@@ -82,39 +82,43 @@ object PreviewSetupSamples {
             ChecklistRow(ChecklistItem.Camera, ItemStatus.Ok),
         )
 
-    val onboarding =
+    /**
+     * Step 1 at the lowest tier. The onboarding samples are getters, and the catalogue takes them as lambdas, because they
+     * format prices with the phone's `MoneyFormatter` (ICU), which is not available when the parameterized tests build
+     * their case list (like the Settings samples, Story 4.5).
+     */
+    val onboarding: OnboardingUiState get() =
         OnboardingUiState(
-            baseFee = p.price(1),
-            higherFee = p.price(2),
             checks = picker,
             reliability = onboardingChecklist,
-        )
+        ).withPreviewFee(tier = 1)
 
-    val onboardingDisclosure = onboarding.copy(step = OnboardingStep.Disclosure)
+    val onboardingDisclosure: OnboardingUiState get() = onboarding.copy(step = OnboardingStep.Disclosure)
 
-    val onboardingBaseFee = onboarding.copy(step = OnboardingStep.BaseFee)
+    val onboardingBaseFee: OnboardingUiState get() = onboarding.copy(step = OnboardingStep.BaseFee)
 
     /** Offline on first launch (F1 failure): USD tiers with the approximate-price note. */
-    val onboardingBaseFeeApproximate =
+    val onboardingBaseFeeApproximate: OnboardingUiState get() =
         onboardingBaseFee.copy(
-            baseFee = Money.of(1, USD),
-            higherFee = Money.of(2, USD),
+            baseFee = formatMoney(Money.of(1, USD)),
+            feeLadder = (1..SnoozePrices.LADDER_ENTRIES).map { formatMoney(Money.of(it, USD)) },
             pricesApproximate = true,
         )
 
-    val onboardingFirstAlarm = onboarding.copy(step = OnboardingStep.FirstAlarm)
+    val onboardingFirstAlarm: OnboardingUiState get() = onboarding.copy(step = OnboardingStep.FirstAlarm)
 
-    val onboardingChecks = onboarding.copy(step = OnboardingStep.Checks)
+    val onboardingChecks: OnboardingUiState get() = onboarding.copy(step = OnboardingStep.Checks)
 
-    val onboardingChecksNone = onboardingChecks.copy(checks = CheckPickerUiState(checks = emptyList(), noCheckError = true))
+    val onboardingChecksNone: OnboardingUiState get() =
+        onboardingChecks.copy(checks = CheckPickerUiState(checks = emptyList(), noCheckError = true))
 
-    val onboardingReliability = onboarding.copy(step = OnboardingStep.Reliability)
+    val onboardingReliability: OnboardingUiState get() = onboarding.copy(step = OnboardingStep.Reliability)
 
-    val onboardingAnalytics = onboarding.copy(step = OnboardingStep.Analytics)
+    val onboardingAnalytics: OnboardingUiState get() = onboarding.copy(step = OnboardingStep.Analytics)
 
-    val onboardingTest = onboarding.copy(step = OnboardingStep.TestAlarm)
+    val onboardingTest: OnboardingUiState get() = onboarding.copy(step = OnboardingStep.TestAlarm)
 
-    val onboardingTestNotLocked = onboardingTest.copy(testStatus = TestAlarmStatus.NotLocked)
+    val onboardingTestNotLocked: OnboardingUiState get() = onboardingTest.copy(testStatus = TestAlarmStatus.NotLocked)
 
     /** Home after onboarding with the test skipped: the new 7:30 alarm and the note recommending the test (FR-ONB-4). */
     val homeTestSkipped =
@@ -226,3 +230,15 @@ object PreviewSetupSamples {
 
 /** Prices never loaded: onboarding shows US dollar tiers. */
 private const val USD = "USD"
+
+/**
+ * Onboarding at the preview's base fee [tier] (Story 5.10): snooze N costs N x [tier] x the preview base fee, in the
+ * phone's currency ([PreviewSamples.price]), with the 3-entry ladder (max snoozes 5), as the real step shows Play's
+ * prices.
+ */
+internal fun OnboardingUiState.withPreviewFee(tier: Int): OnboardingUiState =
+    copy(
+        baseFeeTier = tier,
+        baseFee = formatMoney(PreviewSamples.price(tier)),
+        feeLadder = (1..SnoozePrices.LADDER_ENTRIES).map { formatMoney(PreviewSamples.price(tier * it)) },
+    )

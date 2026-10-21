@@ -1,6 +1,6 @@
 package com.yawnandpawn.app.ui.onboarding
 
-import com.yawnandpawn.app.core.billing.Money
+import com.yawnandpawn.app.core.billing.FeeRules
 import com.yawnandpawn.app.ui.checkpicker.CheckPickerIntent
 import com.yawnandpawn.app.ui.checkpicker.CheckPickerUiState
 import com.yawnandpawn.app.ui.editor.RepeatChoice
@@ -19,10 +19,15 @@ enum class TestAlarmStatus { Ready, NotLocked }
 /** What onboarding renders. */
 data class OnboardingUiState(
     val step: OnboardingStep = OnboardingStep.Mission,
-    /** Snooze 1 costs the base fee B; snooze N costs B x N (FR-SET-1). */
-    val baseFee: Money,
-    val lowerFee: Money? = null,
-    val higherFee: Money? = null,
+    /**
+     * The base fee tier B the user chose (1 to 10; the requested one while it is being saved): snooze 1 costs B, snooze N
+     * costs B x N (FR-SET-1).
+     */
+    val baseFeeTier: Int = FeeRules.BASE_FEE_TIERS.first,
+    /** The price of [baseFeeTier] as shown: Play's own `formattedPrice`, or a USD approximation ([pricesApproximate]). */
+    val baseFee: String = "",
+    /** The fee ladder preview: the prices of snoozes 1 to min(3, max snoozes) as shown. */
+    val feeLadder: List<String> = emptyList(),
     /** Prices never loaded: USD tiers with "Approximate. Your local price shows when you're online.". */
     val pricesApproximate: Boolean = false,
     val alarmTime: LocalTime = DEFAULT_ALARM_TIME,
@@ -34,6 +39,12 @@ data class OnboardingUiState(
     val reliability: List<ChecklistRow> = emptyList(),
     val testStatus: TestAlarmStatus = TestAlarmStatus.Ready,
 ) {
+    /** − is enabled above tier 1. */
+    val canLowerFee: Boolean get() = baseFeeTier > FeeRules.BASE_FEE_TIERS.first
+
+    /** + is enabled below tier 10. */
+    val canRaiseFee: Boolean get() = baseFeeTier < FeeRules.BASE_FEE_TIERS.last
+
     val repeatChoice: RepeatChoice
         get() =
             when {
@@ -50,8 +61,13 @@ data class OnboardingUiState(
 
 /** Everything the user can do in onboarding. */
 sealed interface OnboardingIntent {
-    /** The step's primary action: "Let's set it up", "I understand", "Continue". */
-    data object Next : OnboardingIntent
+    /**
+     * The step's primary action on the step [from]: "Let's set it up", "I understand", "Continue". A tap that lands on a
+     * step already left (a double tap, or a tap on the outgoing step during the slide) is ignored, so no step is skipped.
+     */
+    data class Next(
+        val from: OnboardingStep,
+    ) : OnboardingIntent
 
     /** The back arrow or system Back: the step before (the first step leaves onboarding alone). */
     data object Back : OnboardingIntent

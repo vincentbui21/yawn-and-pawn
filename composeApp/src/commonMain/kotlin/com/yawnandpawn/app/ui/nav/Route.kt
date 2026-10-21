@@ -78,6 +78,13 @@ sealed interface Route : NavKey {
      */
     @Serializable
     data object SessionInProgress : Route
+
+    /**
+     * Onboarding (Story 5.10, FR-ONB-1): until it is completed it is the whole back stack ([applyOnboarding]), behind the
+     * session lock, which still wins. Not a tab, so the nav capsule hides.
+     */
+    @Serializable
+    data object Onboarding : Route
 }
 
 /** Saves and restores the back stack: every [Route] is registered as a polymorphic [NavKey]. */

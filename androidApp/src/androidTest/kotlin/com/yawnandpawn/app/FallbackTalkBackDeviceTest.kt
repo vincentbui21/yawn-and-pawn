@@ -33,6 +33,7 @@ import com.yawnandpawn.app.core.checks.Difficulty
 import com.yawnandpawn.app.core.checks.qr.CodeFormat
 import com.yawnandpawn.app.core.checks.qr.RegisteredCode
 import com.yawnandpawn.app.core.error.Outcome
+import com.yawnandpawn.app.core.onboarding.AcceptDisclosure
 import com.yawnandpawn.app.core.session.CheckRun
 import com.yawnandpawn.app.core.session.SessionEngine
 import com.yawnandpawn.app.core.session.SessionState
@@ -196,6 +197,8 @@ class FallbackTalkBackDeviceTest {
                 label = LABEL,
                 checks = listOf(CheckEntry(CheckType.QrBarcode, Difficulty.Medium, count = 1, code = code)),
             )
+        // No alarm is saved before the disclosure is accepted (Story 5.10): a fresh install accepts it first.
+        runBlocking { koin.get<AcceptDisclosure>()() }
         val saved = runBlocking { koin.get<SaveAlarm>()(draft) }
         assertTrue("the QR alarm is saved: $saved", saved is Outcome.Success)
         return (saved as Outcome.Success).value.id

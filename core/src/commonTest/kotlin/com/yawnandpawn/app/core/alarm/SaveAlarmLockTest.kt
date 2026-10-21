@@ -14,6 +14,7 @@ import com.yawnandpawn.app.core.config.PendingChange
 import com.yawnandpawn.app.core.config.SettingValue
 import com.yawnandpawn.app.core.error.DomainError
 import com.yawnandpawn.app.core.error.Outcome
+import com.yawnandpawn.app.core.onboarding.InMemoryOnboarding
 import com.yawnandpawn.app.core.session.SessionLockGuard
 import com.yawnandpawn.app.core.session.SessionState
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -51,6 +52,7 @@ class SaveAlarmLockTest {
             checkConfigs,
             pending,
             TestZone(TimeZone.UTC),
+            InMemoryOnboarding(),
         )
 
     private val sevenThirty = Occurrence("id-1", Instant.parse("2027-03-09T07:30:00Z"))

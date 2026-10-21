@@ -7,8 +7,8 @@ import com.yawnandpawn.app.ui.shell.AppTab
 // editor, the maker guidance (Story 5.5), or the You tab's pushed screens on top: Purchase history (Story 4.16) or
 // Payments (Story 5.8), Purchase history over Payments, and "Problem with a charge?" (4.17) over either of those (their
 // push rules are in YouNavigation.kt). Every change below keeps it that way, and a late or repeated call (a double tap)
-// changes nothing. During a session it is only [SessionInProgress] (Story 2.6): no tab is on top then, so the tab,
-// editor and push calls below change nothing.
+// changes nothing. During a session it is only [SessionInProgress] (Story 2.6), and until onboarding is completed only
+// [Onboarding] (Story 5.10): no tab is on top then, so the tab, editor and push calls below change nothing.
 
 /** The nav-bar tab this route is, or `null` for a pushed screen (the editor, Purchase history, Payments). */
 val Route.tab: AppTab?
@@ -24,6 +24,7 @@ val Route.tab: AppTab?
             Route.ProblemWithCharge -> null
             Route.ManufacturerGuidance -> null
             Route.SessionInProgress -> null
+            Route.Onboarding -> null
         }
 
 /** The route of [this] tab. */
@@ -90,6 +91,21 @@ fun MutableList<NavKey>.applySessionLock(active: Boolean): Boolean {
     return when {
         active && !locked -> replaceWith(Route.SessionInProgress)
         !active && Route.SessionInProgress in this -> replaceWith(Route.Alarms)
+        else -> false
+    }
+}
+
+/**
+ * The onboarding gate (Story 5.10, FR-ONB-1). While onboarding is [required], the whole stack is replaced by
+ * [Route.Onboarding], like the session lock, so the user cannot reach a tab or the editor before the consent. Once it is
+ * completed, an onboarding stack becomes Home ([Route.Alarms]). Otherwise nothing changes. Call it only while the
+ * session lock is off: the lock wins. True when the stack changed.
+ */
+fun MutableList<NavKey>.applyOnboarding(required: Boolean): Boolean {
+    val onboarding = size == 1 && single() == Route.Onboarding
+    return when {
+        required && !onboarding -> replaceWith(Route.Onboarding)
+        !required && Route.Onboarding in this -> replaceWith(Route.Alarms)
         else -> false
     }
 }

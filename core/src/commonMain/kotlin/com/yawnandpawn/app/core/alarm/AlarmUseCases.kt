@@ -23,6 +23,7 @@ import com.yawnandpawn.app.core.error.map
 import com.yawnandpawn.app.core.id.IdGenerator
 import com.yawnandpawn.app.core.log.LogEvent
 import com.yawnandpawn.app.core.log.Logger
+import com.yawnandpawn.app.core.onboarding.OnboardingRepository
 import com.yawnandpawn.app.core.session.SessionLockGuard
 import com.yawnandpawn.app.core.time.Clock
 import com.yawnandpawn.app.core.time.TimeZoneProvider
@@ -98,6 +99,11 @@ class AlarmWriteLock {
  * new one (when the draft is on), whichever are inside the window; a weakening change waits for the latest of them. The
  * other fields are stored at once, the weakened ones keep their effective values in the row and are stored as
  * [PendingChange]s after it ([save] returns when they take effect). A new alarm has no commitment yet.
+ *
+ * **Consent (Story 5.10, FR-ONB-5):** until the user has accepted the alarm behaviour disclosure in onboarding
+ * ([OnboardingRepository]), every save (a new alarm or an edit) returns [DomainError.DisclosureRequired] and nothing is
+ * stored or armed. A progress that cannot be read refuses the save too, with its `StorageFailure` (fail closed). An alarm
+ * stored before this rule is left as it is and still rings.
  */
 class SaveAlarm(
     private val repository: AlarmRepository,
@@ -110,6 +116,7 @@ class SaveAlarm(
     private val checkConfigRepository: CheckConfigRepository,
     private val pendingRepository: PendingChangeRepository,
     private val timeZoneProvider: TimeZoneProvider,
+    private val onboarding: OnboardingRepository,
 ) {
     /** [save], returning the stored alarm (its locked fields hold their effective values). */
     suspend operator fun invoke(draft: AlarmDraft): Outcome<Alarm, DomainError> = save(draft).map { it.alarm }
@@ -118,6 +125,7 @@ class SaveAlarm(
     suspend fun save(draft: AlarmDraft): Outcome<AlarmSaved, DomainError> =
         lock.withLock {
             sessionLock.whenIdle {
+                consentMissing()?.let { return@whenIdle Outcome.Failure(it) }
                 val now = clock.nowMillis()
                 val id = draft.id
                 if (id == null) {
@@ -161,6 +169,16 @@ class SaveAlarm(
                     repository.get(id).flatMap { stored -> storeEdit(stored, draft, now) }
                 }
             }
+        }
+
+    /**
+     * Why no alarm may be saved yet: [DomainError.DisclosureRequired] before "I understand", or the read failure when the
+     * onboarding progress cannot be read (fail closed); null once the disclosure is accepted.
+     */
+    private suspend fun consentMissing(): DomainError? =
+        when (val progress = onboarding.get()) {
+            is Outcome.Failure -> progress.error
+            is Outcome.Success -> DomainError.DisclosureRequired.takeUnless { progress.value.consented }
         }
 
     /**

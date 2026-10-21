@@ -64,6 +64,8 @@ val uiModule =
                 clock = get(),
                 moneyFormatter = get(),
                 logger = get(),
+                monotonicClock = get(),
+                timeZoneProvider = get(),
             )
         }
         viewModel { params ->

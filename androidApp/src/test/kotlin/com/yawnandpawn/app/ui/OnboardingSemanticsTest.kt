@@ -1,5 +1,8 @@
 package com.yawnandpawn.app.ui
 
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.semantics.SemanticsProperties
 import androidx.compose.ui.test.SemanticsMatcher
 import androidx.compose.ui.test.assertHeightIsAtLeast
@@ -93,6 +96,24 @@ class OnboardingSemanticsTest {
             raise.assertIsEnabled()
             composeRule.assertControlsLabelledWithRoles()
         }
+
+    @Test
+    fun `a step change carries the new headline as the pane title, so TalkBack moves to the new step`() {
+        var state by mutableStateOf<OnboardingUiState?>(null)
+        withScreen(PpsThemeMode.Light, content = { state?.let { OnboardingScreen(state = it, is24Hour = false, onIntent = {}) } }) {
+            composeRule.runOnIdle { state = OnboardingSamples.mission }
+            composeRule.waitForIdle()
+            composeRule.onNode(paneTitled("Yawn & Pawn")).assertExists()
+
+            composeRule.runOnIdle { state = OnboardingSamples.disclosure }
+            composeRule.waitForIdle()
+
+            composeRule.onNode(paneTitled("How your alarm works")).assertExists()
+            composeRule.onNode(paneTitled("Yawn & Pawn")).assertDoesNotExist()
+        }
+    }
+
+    private fun paneTitled(title: String) = SemanticsMatcher.expectValue(SemanticsProperties.PaneTitle, title)
 
     @Test
     fun `step 3 with Play's prices enables both stepper ends`() =

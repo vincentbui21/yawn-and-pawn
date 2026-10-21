@@ -2,12 +2,16 @@ package com.yawnandpawn.app.ui
 
 import android.app.Application
 import android.os.Looper
+import android.provider.Settings
 import androidx.compose.ui.test.SemanticsMatcher
+import androidx.compose.ui.test.click
 import androidx.compose.ui.test.hasClickAction
 import androidx.compose.ui.test.hasContentDescription
 import androidx.compose.ui.test.hasText
 import androidx.compose.ui.test.junit4.v2.createEmptyComposeRule
+import androidx.compose.ui.test.onRoot
 import androidx.compose.ui.test.performClick
+import androidx.compose.ui.test.performTouchInput
 import androidx.test.core.app.ActivityScenario
 import androidx.test.core.app.ApplicationProvider
 import com.yawnandpawn.app.APP_WORK_TIMEOUT_MILLIS
@@ -23,6 +27,7 @@ import com.yawnandpawn.app.core.onboarding.OnboardingRepository
 import com.yawnandpawn.app.core.session.SessionEngine
 import com.yawnandpawn.app.data.settings.SettingsDataStore
 import com.yawnandpawn.app.restartKoin
+import com.yawnandpawn.app.ui.onboarding.OnboardingViewModel
 import kotlinx.coroutines.runBlocking
 import kotlinx.datetime.LocalTime
 import org.junit.Rule
@@ -35,9 +40,12 @@ import org.robolectric.RobolectricTestRunner
 import org.robolectric.Shadows.shadowOf
 import org.robolectric.annotation.Config
 import org.robolectric.annotation.GraphicsMode
+import java.time.Duration
 import kotlin.test.assertEquals
+import kotlin.test.assertFalse
 import kotlin.test.assertIs
 import kotlin.test.assertNotNull
+import kotlin.test.assertNull
 import kotlin.test.assertTrue
 import kotlin.time.Instant
 
@@ -94,7 +102,76 @@ class OnboardingFlowTest {
         }
     }
 
-    private fun tap(text: String) = composeRule.onNode(hasText(text) and hasClickAction()).performClick()
+    /**
+     * Taps [text] the way a person does: once the step has finished sliding in and has shown for longer than the
+     * ViewModel's dwell time (the monotonic clock is the main looper's in Robolectric).
+     */
+    private fun tap(text: String) {
+        composeRule.waitForIdle()
+        shadowOf(Looper.getMainLooper()).idleFor(SETTLED)
+        composeRule.onNode(hasText(text) and hasClickAction()).performClick()
+    }
+
+    /**
+     * Two taps 100 ms apart on the place of the button [text] (a double tap): the second lands on whatever is there by
+     * then, the outgoing button or the next step's identical button sliding in. Then the app settles.
+     */
+    private fun doubleTap(text: String) {
+        composeRule.waitForIdle()
+        shadowOf(Looper.getMainLooper()).idleFor(SETTLED)
+        val at =
+            composeRule
+                .onNode(hasText(text) and hasClickAction())
+                .fetchSemanticsNode()
+                .boundsInRoot.center
+        composeRule.mainClock.autoAdvance = false
+        try {
+            composeRule.onRoot().performTouchInput { click(at) }
+            composeRule.mainClock.advanceTimeBy(DOUBLE_TAP_GAP_MILLIS)
+            shadowOf(Looper.getMainLooper()).idleFor(Duration.ofMillis(DOUBLE_TAP_GAP_MILLIS))
+            composeRule.onRoot().performTouchInput { click(at) }
+        } finally {
+            composeRule.mainClock.autoAdvance = true
+        }
+        composeRule.waitForIdle()
+    }
+
+    /** Runs [block] with the animator duration scale at 0 (animations off), then back to 1. */
+    private fun withAnimationsOff(block: () -> Unit) {
+        Settings.Global.putFloat(app.contentResolver, Settings.Global.ANIMATOR_DURATION_SCALE, 0f)
+        try {
+            block()
+        } finally {
+            Settings.Global.putFloat(app.contentResolver, Settings.Global.ANIMATOR_DURATION_SCALE, 1f)
+        }
+    }
+
+    /** A double tap on "Let's set it up" opens the disclosure without accepting it; one on "I understand" never skips the fee. */
+    private fun doubleTapsNeverSkipAStep() =
+        launch {
+            waitFor(mission)
+
+            doubleTap("Let's set it up")
+
+            waitFor(hasText("How your alarm works"))
+            composeRule.onNode(hasContentDescription("Step 2 of 8")).assertExists()
+            assertNull(stored().disclosureAcceptedAt, "the disclosure was never skipped")
+
+            doubleTap("I understand")
+
+            waitFor(hasText("Choose your snooze fee"))
+            waitForStored { it.disclosureAcceptedAt != null }
+            shadowOf(Looper.getMainLooper()).idleFor(SETTLED)
+            composeRule.waitForIdle()
+            composeRule.onNode(hasText("Choose your snooze fee")).assertExists()
+            assertFalse(stored().completed, "the fee step was never skipped")
+        }
+
+    @Test
+    fun `double taps never skip the disclosure or the fee step, with animations on`() = doubleTapsNeverSkipAStep()
+
+    @Test
+    fun `double taps never skip the disclosure or the fee step, with animations off`() = withAnimationsOff { doubleTapsNeverSkipAStep() }
 
     private val mission = hasText(MISSION)
     private val navCapsule = hasContentDescription("Settings") and hasClickAction()
@@ -175,5 +252,10 @@ class OnboardingFlowTest {
 
     private companion object {
         const val MISSION = "This app makes money only when you snooze. We hope you never pay us."
+
+        /** Longer than the step slide (250 ms) and the ViewModel's dwell time (500 ms). */
+        val SETTLED: Duration = Duration.ofMillis(OnboardingViewModel.STEP_DWELL_MILLIS + 100)
+
+        const val DOUBLE_TAP_GAP_MILLIS = 100L
     }
 }

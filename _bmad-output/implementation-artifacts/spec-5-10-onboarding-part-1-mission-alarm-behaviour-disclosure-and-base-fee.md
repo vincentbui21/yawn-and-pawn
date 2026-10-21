@@ -246,3 +246,39 @@ Status: done (fast mode, one combined self-review). Rebased onto main 2d35e706 (
 - Not run (run constraints): the full `qualityGate`, Kover, lint, the instrumented tests (`FallbackTalkBackDeviceTest`, `MainActivitySmokeTest`, which still finds "Yawn & Pawn" on step 1).
 
 **Residual risks:** 5.9 merge order in `AppNavHost` (deferred item 1); an installed debug build with alarms opens onboarding once after upgrading; the full `qualityGate` runs in CI only.
+
+## Review (fast mode)
+
+PR #75 review (one combined reviewer): 1 HIGH, 3 MEDIUM, 3 LOW. All applied in `fix(5.10): review fixes`.
+
+1. **HIGH, double tap still skipped the disclosure or the fee step.**
+   - The cause: the incoming step's identical full-width button was live at once.
+   - Fix, in the ViewModel: a step's action counts only after the step has shown for 500 ms on `MonotonicClock` (`STEP_DWELL_MILLIS`, reset on every step change and on restore). It works with animations off too.
+   - Fix, in the screen: the step's actions are ignored until its slide has settled (`transition` Visible to Visible), with no visual change.
+   - Tests: `OnboardingFlowTest` taps twice, 100 ms apart, with the main clock paused, with animations on and off. After the mission double tap the disclosure is not accepted and step 2 shows. After the "I understand" double tap onboarding is not completed and the fee step shows. `OnboardingViewModelTest` covers the dwell, including a restored step.
+2. **MEDIUM, a corrupt settings file locked the user out.**
+   - Fix: `SettingsDataStore` now has a `ReplaceFileCorruptionHandler` that resets to empty preferences and logs "read settings: corrupt file, settings reset". The user goes through onboarding again (DEFAULT TAKEN, owner can change).
+   - Fix: a failed "I understand" or "Continue" now shows "Couldn't save. Try again." on glass with the error icon, read out politely. This is a **new string** for owner sign-off (`onboarding_save_failed`); no existing string fitted.
+   - Tests: garbage bytes in the settings file give a usable store (`DataStoreOnboardingRepositoryTest`); `saveFailed` is covered in `OnboardingViewModelTest`.
+3. **MEDIUM, DebugFire with no alarm id failed with `DisclosureRequired`.**
+   - Fix: the debug hook takes an optional `AcceptDisclosure`, accepts the disclosure first and logs it to logcat. The receiver and both device tests (`MathCheckDeviceTest`, `FallbackTalkBackDeviceTest`) pass it.
+   - Test: `DebugFireTest` on an empty onboarding store returns Success and stores the acceptance.
+4. **MEDIUM, TalkBack focus did not follow the step.**
+   - Fix: each step's container carries its headline as `paneTitle`, so TalkBack announces the new step.
+   - Test: `OnboardingSemanticsTest` checks that a step change carries the new pane title.
+5. **LOW, a lowered fee under the commitment lock showed as live.**
+   - Fix: when `SetBaseFee` returns a pending date, the step shows Settings' note "Saved. Takes effect after tomorrow's {time} alarm." (existing strings). Raising the fee applies at once and clears it.
+   - Tests in `OnboardingViewModelTest`.
+6. **LOW, the upgrade path was untested.**
+   - New test `OnboardingUpgradeTest`: the real empty onboarding store and an alarm stored before the update. BOOT_COMPLETED and MY_PACKAGE_REPLACED still arm it; MainActivity then opens onboarding.
+7. **LOW, Delete all data is only simulated.**
+   - 5.9 (PR #72) is still not on main, so the `clear()` simulation stays.
+   - Note for the 5.9 merge: use 5.9's real `DeleteAllData` in `OnboardingFlowTest`, and keep one shared clear (`SettingsDataStore.clear()`, which 5.9's `AndroidLocalDataEraser` can call).
+
+**Public shapes changed** (5.11 builds on these):
+- `OnboardingViewModel` gains two trailing constructor parameters, `monotonicClock: MonotonicClock?` and `timeZoneProvider: TimeZoneProvider?`. Both are nullable and default to null, so existing call sites compile; `UiModule` passes the app's. Without a clock there is no dwell time, but the `Next(from)` step check still applies; without a zone there is no pending note. They are not given system defaults, because the `NoDirectTimeAccess` detekt rule forbids that.
+- `OnboardingUiState` gains `baseFeeNote: WeakeningNote?` and `saveFailed: Boolean`, both defaulted.
+- `OnboardingViewModel.STEP_DWELL_MILLIS` is new and public. Tests that send `Next` must advance the clock by it.
+- `SettingsDataStore` gains an optional `logger` constructor parameter.
+- `DebugFire` gains an optional `acceptDisclosure` parameter.
+- `BaseFeeStep` (internal) takes `is24Hour`.

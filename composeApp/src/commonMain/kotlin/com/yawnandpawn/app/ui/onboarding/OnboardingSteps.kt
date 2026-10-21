@@ -50,6 +50,7 @@ import com.yawnandpawn.app.ui.resources.stepper_value
 import com.yawnandpawn.app.ui.resources.symbol_error
 import com.yawnandpawn.app.ui.resources.symbol_snooze
 import com.yawnandpawn.app.ui.resources.symbol_wb_sunny
+import com.yawnandpawn.app.ui.settings.WeakeningNoteInline
 import com.yawnandpawn.app.ui.settings.feeLadderText
 import com.yawnandpawn.app.ui.theme.PpsTheme
 import org.jetbrains.compose.resources.stringResource
@@ -96,6 +97,7 @@ internal fun DisclosureStep() {
 @Composable
 internal fun BaseFeeStep(
     state: OnboardingUiState,
+    is24Hour: Boolean,
     onIntent: (OnboardingIntent) -> Unit,
 ) {
     val setting = stringResource(Res.string.settings_base_fee)
@@ -116,6 +118,7 @@ internal fun BaseFeeStep(
     }
     feeLadderText(state.feeLadder)?.let { NoteInline(text = it, modifier = notePadding) }
     NoteInline(text = stringResource(Res.string.settings_base_fee_lock), modifier = notePadding)
+    state.baseFeeNote?.let { WeakeningNoteInline(note = it, is24Hour = is24Hour, modifier = notePadding) }
     if (state.pricesApproximate) NoteInline(text = stringResource(Res.string.settings_prices_approximate), modifier = notePadding)
     NoteInline(text = stringResource(Res.string.purchase_auth_tip), modifier = notePadding)
 }

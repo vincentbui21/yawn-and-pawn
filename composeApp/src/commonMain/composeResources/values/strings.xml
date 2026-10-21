@@ -465,6 +465,8 @@
     <string name="onboarding_test_not_locked">Your phone wasn't locked. Try again with it locked.</string>
     <string name="onboarding_skip_test">Skip for now</string>
     <string name="onboarding_step">Step %1$d of %2$d</string>
+    <!-- Story 5.10 review: "I understand" or "Continue" could not be stored. New string, for owner sign-off. -->
+    <string name="onboarding_save_failed">Couldn't save. Try again.</string>
     <string name="home_test_skipped">Ring a test alarm with your phone locked to check it works.</string>
 
     <!-- Check picker and Check setup -->

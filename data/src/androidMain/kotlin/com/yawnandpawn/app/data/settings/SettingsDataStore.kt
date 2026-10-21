@@ -2,9 +2,12 @@ package com.yawnandpawn.app.data.settings
 
 import android.content.Context
 import androidx.datastore.core.DataStore
+import androidx.datastore.core.handlers.ReplaceFileCorruptionHandler
 import androidx.datastore.preferences.core.PreferenceDataStoreFactory
 import androidx.datastore.preferences.core.Preferences
 import androidx.datastore.preferences.core.edit
+import androidx.datastore.preferences.core.emptyPreferences
+import com.yawnandpawn.app.core.log.LogEvent
 import com.yawnandpawn.app.core.log.Logger
 import com.yawnandpawn.app.core.onboarding.OnboardingRepository
 import kotlinx.coroutines.CoroutineScope
@@ -20,14 +23,27 @@ import java.io.File
  * The app's settings Preferences DataStore (Story 1.16: the missed-note dismissals; Epic 5 adds the settings), in
  * device-protected storage so it reads before the first unlock. One instance per process (a Koin single): DataStore
  * refuses two active instances on one file, so [close] cancels its scope and waits until the file is released.
+ *
+ * A file that cannot be parsed (Story 5.10 review) is replaced by an empty one and that is logged through [logger]: otherwise
+ * every read would fail for good, the app could never leave onboarding and no alarm could be saved. The settings then
+ * read as their defaults (the fire falls back on the last-known snapshot) and onboarding runs again (DEFAULT TAKEN, owner
+ * can change). A plain I/O error is not corruption and still fails the read.
  */
 class SettingsDataStore(
     context: Context,
+    logger: Logger? = null,
 ) {
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
 
     val store: DataStore<Preferences> =
-        PreferenceDataStoreFactory.createWithPath(scope = scope) { settingsFile(context).absolutePath.toPath() }
+        PreferenceDataStoreFactory.createWithPath(
+            corruptionHandler =
+                ReplaceFileCorruptionHandler {
+                    logger?.log(LogEvent.OperationFailed("read settings", "corrupt file, settings reset"))
+                    emptyPreferences()
+                },
+            scope = scope,
+        ) { settingsFile(context).absolutePath.toPath() }
 
     /** Releases the file (Koin closing, a test restarting the app). */
     fun close() = runBlocking { scope.coroutineContext.job.cancelAndJoin() }

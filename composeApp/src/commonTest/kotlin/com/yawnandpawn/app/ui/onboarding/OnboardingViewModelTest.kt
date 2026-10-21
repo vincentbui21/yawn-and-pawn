@@ -23,6 +23,7 @@ import com.yawnandpawn.app.testing.FakeClock
 import com.yawnandpawn.app.testing.FakeGlobalSettingsRepository
 import com.yawnandpawn.app.testing.FakeLogger
 import com.yawnandpawn.app.testing.FakeMoneyFormatter
+import com.yawnandpawn.app.testing.FakeMonotonicClock
 import com.yawnandpawn.app.testing.FakeOnboardingRepository
 import com.yawnandpawn.app.testing.FakePendingChangeRepository
 import com.yawnandpawn.app.testing.FakePriceCatalog
@@ -30,6 +31,7 @@ import com.yawnandpawn.app.testing.FakeTimeZoneProvider
 import com.yawnandpawn.app.testing.OnboardingPresets
 import com.yawnandpawn.app.testing.aPriceSnapshot
 import com.yawnandpawn.app.testing.anAlarm
+import com.yawnandpawn.app.ui.settings.WeakeningNote
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.Flow
@@ -52,6 +54,7 @@ import kotlin.test.assertIs
 import kotlin.test.assertNotNull
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
+import kotlin.time.Duration.Companion.milliseconds
 import kotlin.time.Instant
 
 /**
@@ -72,6 +75,7 @@ class OnboardingViewModelTest {
     private val settings = FakeGlobalSettingsRepository(GlobalSettings(baseFeeTier = 1), pending)
     private val prices = FakePriceCatalog(aPriceSnapshot(currency = "EUR"))
     private val onboarding = FakeOnboardingRepository(OnboardingPresets.Fresh)
+    private val ticks = FakeMonotonicClock(1_000)
     private val sessionLock =
         SessionLockGuard(MutableStateFlow<SessionState>(SessionState.Idle), MutableStateFlow(true), MutableStateFlow(false))
 
@@ -99,9 +103,17 @@ class OnboardingViewModelTest {
                 clock = clock,
                 moneyFormatter = FakeMoneyFormatter(),
                 logger = logger,
+                monotonicClock = ticks,
+                timeZoneProvider = zone,
             )
         backgroundScope.launch(dispatcher) { viewModel.state.collect {} }
         return viewModel
+    }
+
+    /** A tap on the step's action once the step has shown for the dwell time. */
+    private fun OnboardingViewModel.next() {
+        ticks.advanceBy(OnboardingViewModel.STEP_DWELL_MILLIS.milliseconds)
+        onIntent(OnboardingIntent.Next(shown.step))
     }
 
     private val OnboardingViewModel.shown: OnboardingUiState
@@ -117,7 +129,7 @@ class OnboardingViewModelTest {
             val viewModel = viewModel()
             assertEquals(OnboardingStep.Mission, viewModel.shown.step)
 
-            viewModel.onIntent(OnboardingIntent.Next(viewModel.shown.step))
+            viewModel.next()
 
             assertEquals(OnboardingStep.Disclosure, viewModel.shown.step)
             assertEquals(listOf("Disclosure"), onboarding.steps)
@@ -166,7 +178,7 @@ class OnboardingViewModelTest {
             onboarding.current = OnboardingProgress(step = "Disclosure")
             val viewModel = viewModel()
 
-            viewModel.onIntent(OnboardingIntent.Next(viewModel.shown.step))
+            viewModel.next()
 
             assertEquals(lateEvening, onboarding.current.disclosureAcceptedAt)
             assertEquals(OnboardingStep.BaseFee, viewModel.shown.step)
@@ -182,14 +194,14 @@ class OnboardingViewModelTest {
             val viewModel = viewModel()
             onboarding.writeFailure = DomainError.StorageFailure("disk full")
 
-            viewModel.onIntent(OnboardingIntent.Next(viewModel.shown.step))
+            viewModel.next()
 
             assertEquals(OnboardingStep.Disclosure, viewModel.shown.step)
             assertNull(onboarding.current.disclosureAcceptedAt)
             assertEquals(1, failed(OnboardingViewModel.ACCEPT_DISCLOSURE).size)
 
             onboarding.writeFailure = null
-            viewModel.onIntent(OnboardingIntent.Next(viewModel.shown.step))
+            viewModel.next()
             assertEquals(OnboardingStep.BaseFee, viewModel.shown.step, "a second tap tries again")
         }
 
@@ -241,7 +253,7 @@ class OnboardingViewModelTest {
             assertTrue(viewModel.shown.pricesApproximate)
             assertEquals(1, failed(OnboardingViewModel.REFRESH_PRICES).size)
 
-            viewModel.onIntent(OnboardingIntent.Next(viewModel.shown.step))
+            viewModel.next()
 
             assertTrue(onboarding.current.completed)
         }
@@ -293,6 +305,21 @@ class OnboardingViewModelTest {
             assertEquals(3, settings.current.baseFeeTier, "the live fee stays until the alarm has rung")
             assertEquals(listOf(SettingValue.BaseFeeTier(2)), pending.current.map { it.value })
             assertEquals(2, viewModel.shown.baseFeeTier)
+            assertEquals(WeakeningNote(LocalTime(7, 30), today = false), viewModel.shown.baseFeeNote, "Settings' pending note")
+
+            viewModel.onIntent(OnboardingIntent.RaiseBaseFee)
+            assertNull(viewModel.shown.baseFeeNote, "raising applies at once")
+        }
+
+    @Test
+    fun `a fee saved at once shows no pending note`() =
+        runTest {
+            onboarding.current = OnboardingPresets.Consented
+            val viewModel = viewModel()
+
+            viewModel.onIntent(OnboardingIntent.RaiseBaseFee)
+
+            assertNull(viewModel.shown.baseFeeNote)
         }
 
     @Test
@@ -302,14 +329,15 @@ class OnboardingViewModelTest {
             val viewModel = viewModel()
             onboarding.writeFailure = DomainError.StorageFailure("disk full")
 
-            viewModel.onIntent(OnboardingIntent.Next(viewModel.shown.step))
+            viewModel.next()
 
             assertFalse(onboarding.current.completed)
             assertEquals(OnboardingStep.BaseFee, viewModel.shown.step)
             assertEquals(1, failed(OnboardingViewModel.COMPLETE).size)
+            assertTrue(viewModel.shown.saveFailed, "Couldn't save. Try again.")
 
             onboarding.writeFailure = null
-            viewModel.onIntent(OnboardingIntent.Next(viewModel.shown.step))
+            viewModel.next()
 
             assertTrue(onboarding.current.completed)
         }
@@ -319,12 +347,19 @@ class OnboardingViewModelTest {
         runTest {
             val viewModel = viewModel()
 
-            // Both taps come from the mission's button: the second lands on a step already left.
+            // The first tap opens the disclosure; the second lands 100 ms later, from the mission's button (a step already
+            // left) or from the disclosure's identical button sliding in: neither accepts it.
+            viewModel.next()
+            ticks.advanceBy(100.milliseconds)
             viewModel.onIntent(OnboardingIntent.Next(OnboardingStep.Mission))
-            viewModel.onIntent(OnboardingIntent.Next(OnboardingStep.Mission))
+            viewModel.onIntent(OnboardingIntent.Next(OnboardingStep.Disclosure))
 
             assertEquals(OnboardingStep.Disclosure, viewModel.shown.step)
             assertNull(onboarding.current.disclosureAcceptedAt, "the disclosure was never skipped")
+
+            ticks.advanceBy(OnboardingViewModel.STEP_DWELL_MILLIS.milliseconds)
+            viewModel.onIntent(OnboardingIntent.Next(OnboardingStep.Disclosure))
+            assertEquals(OnboardingStep.BaseFee, viewModel.shown.step, "a tap once the disclosure has shown counts")
         }
 
     @Test
@@ -333,11 +368,42 @@ class OnboardingViewModelTest {
             onboarding.current = OnboardingProgress(step = "Disclosure")
             val viewModel = viewModel()
 
+            viewModel.next()
+            ticks.advanceBy(100.milliseconds)
             viewModel.onIntent(OnboardingIntent.Next(OnboardingStep.Disclosure))
-            viewModel.onIntent(OnboardingIntent.Next(OnboardingStep.Disclosure))
+            viewModel.onIntent(OnboardingIntent.Next(OnboardingStep.BaseFee))
 
             assertEquals(OnboardingStep.BaseFee, viewModel.shown.step)
+            assertFalse(onboarding.current.completed, "the fee step was never skipped")
+        }
+
+    @Test
+    fun `a restored step also waits the dwell time before its action counts`() =
+        runTest {
+            onboarding.current = OnboardingPresets.Consented
+            val viewModel = viewModel()
+
+            viewModel.onIntent(OnboardingIntent.Next(OnboardingStep.BaseFee))
             assertFalse(onboarding.current.completed)
+
+            viewModel.next()
+            assertTrue(onboarding.current.completed)
+        }
+
+    @Test
+    fun `a failed I understand shows Couldn't save, and the next attempt clears it`() =
+        runTest {
+            onboarding.current = OnboardingProgress(step = "Disclosure")
+            val viewModel = viewModel()
+            onboarding.writeFailure = DomainError.StorageFailure("disk full")
+
+            viewModel.next()
+            assertTrue(viewModel.shown.saveFailed)
+
+            onboarding.writeFailure = null
+            viewModel.next()
+            assertFalse(viewModel.shown.saveFailed)
+            assertEquals(OnboardingStep.BaseFee, viewModel.shown.step)
         }
 
     @Test

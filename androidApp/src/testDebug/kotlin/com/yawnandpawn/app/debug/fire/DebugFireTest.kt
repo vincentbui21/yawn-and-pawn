@@ -12,14 +12,17 @@ import com.yawnandpawn.app.core.checks.CheckType
 import com.yawnandpawn.app.core.checks.Difficulty
 import com.yawnandpawn.app.core.error.DomainError
 import com.yawnandpawn.app.core.error.Outcome
+import com.yawnandpawn.app.core.onboarding.AcceptDisclosure
 import com.yawnandpawn.app.core.session.ScheduleTestAlarm
 import com.yawnandpawn.app.testing.AlarmUseCasesFixture
 import com.yawnandpawn.app.testing.FakeAlarmRepository
 import com.yawnandpawn.app.testing.FakeAlarmScheduler
 import com.yawnandpawn.app.testing.FakeClock
 import com.yawnandpawn.app.testing.FakeLogger
+import com.yawnandpawn.app.testing.FakeOnboardingRepository
 import com.yawnandpawn.app.testing.FakeTestAlarmStore
 import com.yawnandpawn.app.testing.FakeTimeZoneProvider
+import com.yawnandpawn.app.testing.OnboardingPresets
 import com.yawnandpawn.app.testing.aRegisteredCode
 import com.yawnandpawn.app.testing.anAlarm
 import com.yawnandpawn.app.testing.checkConfigsOf
@@ -110,6 +113,30 @@ class DebugFireTest {
         assertEquals(DebugFire.LABEL, saved.label)
         assertTrue(saved.repeatDays.isEmpty())
         assertEquals(inSeconds(3), scheduler.armed[saved.requestCode])
+    }
+
+    @Test
+    fun `a real fire on a fresh install accepts the disclosure first, then saves and arms the Debug fire alarm`() {
+        val onboarding = FakeOnboardingRepository(OnboardingPresets.Fresh)
+        val alarms = FakeAlarmRepository()
+        val fresh = AlarmUseCasesFixture(repository = alarms, clock = clock, scheduler = scheduler, onboarding = onboarding)
+        val fire =
+            DebugFire(
+                fresh.repository,
+                fresh.save,
+                scheduler,
+                ScheduleTestAlarm(scheduler, testAlarms, clock, FakeLogger()),
+                clock,
+                FakeTimeZoneProvider(),
+                checkConfigs = fresh.checkConfigs,
+                acceptDisclosure = AcceptDisclosure(onboarding, clock, fresh.sessionLock),
+            )
+
+        val armed = runBlocking { fire.fire(DebugFire.FireRequest(seconds = 3)) }
+
+        assertIs<Outcome.Success<*>>(armed)
+        assertEquals(clock.now(), onboarding.current.disclosureAcceptedAt)
+        assertEquals(DebugFire.LABEL, alarms.current.single().label)
     }
 
     @Test

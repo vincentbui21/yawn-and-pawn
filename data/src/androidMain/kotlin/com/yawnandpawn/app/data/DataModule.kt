@@ -105,7 +105,7 @@ val dataModule =
         // "Delete all data" (Story 5.9) forgets the id when no payment is still owed a consume.
         single<InstallIdReset> { get<DataStoreInstallIdProvider>() }
         // The settings DataStore (Story 1.16), device-protected; released when Koin stops, like the databases.
-        single { SettingsDataStore(get<Context>()) } withOptions { onClose { it?.close() } }
+        single { SettingsDataStore(get<Context>(), get()) } withOptions { onClose { it?.close() } }
         single<MissedNoteDismissals> { DataStoreMissedNoteDismissals(get<SettingsDataStore>().store, get()) }
         // The pending test ring (Story 1.18), in the same device-protected DataStore.
         single<TestAlarmStore> { DataStoreTestAlarmStore(get<SettingsDataStore>().store, get()) }

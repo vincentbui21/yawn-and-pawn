@@ -55,7 +55,7 @@ class MathCheckDeviceTest {
     fun a_debug_alarm_stops_once_every_Math_problem_is_solved() {
         // Whatever ran before (another device test, its Success screen, an engine not restored yet): idle first.
         awaitAppIdle(engine, koin.get(), koin.get(), "before the Math test")
-        val fire = DebugFire(koin.get(), koin.get(), koin.get(), koin.get(), koin.get(), koin.get())
+        val fire = DebugFire(koin.get(), koin.get(), koin.get(), koin.get(), koin.get(), koin.get(), acceptDisclosure = koin.get())
         assertTrue("the debug alarm is armed", runBlocking { fire.fire(DebugFire.FireRequest(seconds = 1)) } is Outcome.Success)
         composeRule.waitUntil(RING_TIMEOUT) { engine.state.value is SessionState.Ringing }
         val alarmId = (engine.state.value as SessionState.Ringing).session.config.alarmId

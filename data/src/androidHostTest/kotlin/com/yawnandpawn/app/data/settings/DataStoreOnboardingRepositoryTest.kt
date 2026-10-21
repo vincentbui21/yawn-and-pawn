@@ -139,6 +139,23 @@ class DataStoreOnboardingRepositoryTest {
         }
 
     @Test
+    fun `a corrupt settings file is replaced by an empty one and logged, so onboarding can run again`() =
+        runTest {
+            settings.close()
+            val file = SettingsDataStore.settingsFile(context)
+            file.parentFile?.mkdirs()
+            file.writeBytes(byteArrayOf(0x7f, 0x00, 0x13, 0x37, 0x42, 0x0a, 0x01))
+            settings = SettingsDataStore(context, logger)
+            val onboarding = repository()
+
+            assertEquals(Outcome.Success(OnboardingProgress()), onboarding.get())
+            assertEquals(Outcome.Success(Unit), onboarding.setDisclosureAccepted(accepted))
+            assertEquals(Outcome.Success(Unit), onboarding.setCompleted())
+            assertEquals(OnboardingProgress(completed = true, disclosureAcceptedAt = accepted), repository().observe().first())
+            assertEquals(listOf<LogEvent>(LogEvent.OperationFailed("read settings", "corrupt file, settings reset")), logger.events)
+        }
+
+    @Test
     fun `an error that is not a file read error is not hidden`() =
         runTest {
             assertFailsWith<IllegalStateException> { repository(BrokenStore(IllegalStateException("bug"))).observe().first() }

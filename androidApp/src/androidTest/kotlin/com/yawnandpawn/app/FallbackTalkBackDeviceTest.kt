@@ -149,7 +149,7 @@ class FallbackTalkBackDeviceTest {
         val scanner = koin.get<CodeScanner>()
         loadKoinModules(module { single<CodeScanner> { NoPermissionScanner } })
         try {
-            val fire = DebugFire(koin.get(), koin.get(), koin.get(), koin.get(), koin.get(), koin.get())
+            val fire = DebugFire(koin.get(), koin.get(), koin.get(), koin.get(), koin.get(), koin.get(), acceptDisclosure = koin.get())
             val armed = runBlocking { fire.fire(DebugFire.FireRequest(seconds = 1, alarmId = alarmId)) }
             assertTrue("the alarm is armed", armed is Outcome.Success)
             composeRule.waitUntil(RING_TIMEOUT) { engine.state.value is SessionState.Ringing }

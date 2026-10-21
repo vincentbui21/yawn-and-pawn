@@ -7,6 +7,7 @@ import com.yawnandpawn.app.ui.editor.RepeatChoice
 import com.yawnandpawn.app.ui.format.Weekdays
 import com.yawnandpawn.app.ui.reliability.ChecklistItem
 import com.yawnandpawn.app.ui.reliability.ChecklistRow
+import com.yawnandpawn.app.ui.settings.WeakeningNote
 import kotlinx.datetime.DayOfWeek
 import kotlinx.datetime.LocalTime
 
@@ -38,6 +39,10 @@ data class OnboardingUiState(
     /** The checklist rows of "Make sure it rings" (the test alarm is the last step, so it has no row here). */
     val reliability: List<ChecklistRow> = emptyList(),
     val testStatus: TestAlarmStatus = TestAlarmStatus.Ready,
+    /** A lowered fee waits for an alarm under the commitment lock: "Saved. Takes effect after tomorrow's {time} alarm.". */
+    val baseFeeNote: WeakeningNote? = null,
+    /** "I understand" or "Continue" could not be stored: "Couldn't save. Try again." above the action. */
+    val saveFailed: Boolean = false,
 ) {
     /** − is enabled above tier 1. */
     val canLowerFee: Boolean get() = baseFeeTier > FeeRules.BASE_FEE_TIERS.first

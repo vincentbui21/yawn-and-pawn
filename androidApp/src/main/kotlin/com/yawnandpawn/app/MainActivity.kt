@@ -58,7 +58,11 @@ class MainActivity : ComponentActivity() {
     private val requestNotifications = registerForActivityResult(ActivityResultContracts.RequestPermission()) { }
 
     // Story 3.10: the camera dialog (picking QR/Barcode, QR registration); "Don't ask again" answers false at once.
-    private val requestCamera = registerForActivityResult(ActivityResultContracts.RequestPermission()) { cameraPermission.onResult(it) }
+    // Story 5.4: a "no" after which the dialog cannot show again is blocked (the checklist then opens the app details).
+    private val requestCamera =
+        registerForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
+            cameraPermission.onResult(granted, blocked = !granted && !shouldShowRequestPermissionRationale(Manifest.permission.CAMERA))
+        }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         enableEdgeToEdge()

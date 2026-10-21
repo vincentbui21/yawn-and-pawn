@@ -262,6 +262,115 @@ and `ChecklistCard` (design preview rounds 2–3) are not wired. Story 5.5's mak
     Home classes, `SessionLockScreenTest`, `AlarmScreensSemanticsTest`, `MainActivityTest`, `YouRouteTest`,
     `ThemeOverrideTest`, and the preview tap-throughs, `PreviewMenuTest` and `NavBarScreenshotTest`.
 
+## Review (fast mode)
+
+2026-10-21, one combined reviewer (PR #74, head 3cad248d): 8 findings, 1 medium and 7 low, no high. All 8 are fixed,
+each with its test. No new string, token or colour pair. Story 5.3's rules (`evaluate`, `lastOkAfter`, `BLOCKING_ROWS`)
+are unchanged.
+
+1. **[medium] Camera "Fix" did nothing visible once the permission was blocked.**
+   - Fix: an additive port change.
+     - `CameraPermission` gains `enum class CameraAnswer { Granted, Denied, Blocked }` and `requestAnswer()`. Its
+       default bridges `request()`, so Story 3.10's callers and fakes are unchanged.
+     - `AndroidCameraPermission.onResult(granted, blocked)` reports Blocked when `MainActivity` sees
+       `shouldShowRequestPermissionRationale` false after a "no".
+     - The checklist's Camera Fix: Granted refreshes. Denied changes nothing visible on this tap (the next tap opens
+       the app details, as before). Blocked opens the app details (`settings.open(Camera)`) in the same tap.
+   - DEFAULT TAKEN (owner can change): a first dialog dismissed without an answer also reads "rationale false" on API
+     30+, so it counts as Blocked and opens the app details. The app cannot tell these two apart without storing
+     whether it asked before.
+   - Tests:
+     - `ReliabilityViewModelTest`: "Camera blocked (no dialog showed) opens the app details in the same tap".
+     - `AndroidCameraPermissionTest` (Robolectric): Denied, Blocked, `request()` still false, and Granted.
+2. **[low] Notifications Fix opened the app page when only the Alarms channel was blocked.**
+   - Fix: `AndroidReliabilitySettings` opens `ACTION_CHANNEL_NOTIFICATION_SETTINGS` when app notifications are on and
+     the Alarms channel is at `IMPORTANCE_NONE`. It passes `EXTRA_APP_PACKAGE` and `EXTRA_CHANNEL_ID` =
+     `WakeNotifier.CHANNEL_ID`.
+     - Otherwise it opens the app's notification settings, as before.
+     - It keeps the same resolver fallbacks (app details, then `ACTION_SETTINGS`).
+     - A channel read that throws is logged and counts as not blocked.
+     - The action is added to the manifest `<queries>`.
+   - Test: `AndroidReliabilitySettingsTest` uses a real Robolectric channel at `IMPORTANCE_NONE` and checks the extras,
+     the start, and the app page once notifications are off.
+3. **[low] A revoked Battery row blamed battery optimisation for every cause.**
+   - Fix (additive in `:core`): `EvaluateReliability.evaluation()` returns `ReliabilityEvaluation(rows, status)` from
+     one probe read. `invoke()` returns its rows, as before. `toChecklistRows(status)` shows "Alarm may not ring:
+     battery optimization turned back on" only when `!batteryOptimizationIgnored`.
+   - DEFAULT TAKEN (owner can change): a revoked Battery row caused by background restriction or the restricted bucket
+     maps to `ItemStatus.Missing`. It shows the normal Battery reason, the error icon and "Fix". It stays Revoked in
+     `lastOk` and still raises the banner. No UI field was added, because Missing renders exactly that row.
+   - Tests:
+     - `ReliabilityViewModelTest`: "a revoked battery row names battery optimisation only when that is the cause".
+     - `ReliabilityChecklistTest`: the evaluation hands out the rows with its one probe status.
+4. **[low] Evaluation ran twice per start (`ON_START` and `ON_RESUME`) on Main.**
+   - Fix: the checklist route and Home now refresh on `ON_RESUME` only, which ends every start. `HomeIntent.Started` is
+     gone. Settings already had a single `ON_START` trigger and keeps it.
+     - The evaluation runs in an injected `evaluationContext` (default `Dispatchers.Default`). It is used by
+       `ReliabilityViewModel`, `AlarmBlockingCheck`, `HomeViewModel` and `SettingsViewModel`.
+     - Tests pass their test dispatcher, or `EmptyCoroutineContext` in Robolectric route tests for exact counts.
+   - Tests:
+     - `ReliabilityRouteLifecycleTest` (new): one probe call per stop/start and one per pause/resume.
+     - `HomeRouteLifecycleTest`: exactly +1 per cycle.
+     - `HomeViewModelTest`: one probe call per resume.
+5. **[low] "Ring a test alarm" failed silently on API 31-32 with exact alarms denied, and ignored the Settings.**
+   - Fix: after the test, success or failure, the checklist calls `refresh()`, so the Exact alarms row shows.
+     `ChecklistTestAlarm` now reads the Settings on every test and passes them as `ScheduleTestAlarm(globalSettings =
+     ...)`, so the base fee tier and max snoozes are the user's. The alarms are read first, then the Settings, so the
+     log order is unchanged.
+   - Tests (`ReliabilityViewModelTest`):
+     - The failure test (API 31, exact alarms denied) now expects the Exact alarms row after the failed test.
+     - The success test checks one re-read.
+     - New: "the test rings with the Settings' base fee tier and max snoozes".
+6. **[low] Fix buttons read only "Fix" to TalkBack.**
+   - Fix: each Fix button's `contentDescription` is "<row title>, <Fix>", built from the row title and `home_fix`.
+   - DEFAULT TAKEN (owner can change): the Test alarm row, while not OK (no Fix, hollow ring), gets the
+     `stateDescription` "Ring a test alarm" (`reliability_ring_test`). Its reason is already read as text, and that
+     label names the button below that turns the row OK. No new string.
+   - Tests (`ReliabilitySemanticsTest`):
+     - New: "each Fix names its row, and the Test alarm row not yet rung reads its state". The OK row has no state.
+     - The reading-order test now expects "Notifications, Fix" and "Do Not Disturb, Fix".
+7. **[low] The manifest `<queries>` test compared action names only.**
+   - Fix: it now parses each `<intent>` into (action, data scheme). It compares that set with the targets the opener
+     builds for every row on API 28, 31 and 34, with the battery exempt or not and the Alarms channel blocked or not.
+   - Test: `AndroidReliabilitySettingsTest` "the manifest queries every settings target the checklist opens, by action
+     and data scheme".
+8. **[low] Missing real-wiring tests.**
+   - Fix: three new `ReliabilityRouteTest` cases in the real app, with the real Koin graph, navigation, DataStore,
+     `ScheduleTestAlarm` and `AlarmManager`:
+     - "Ring a test alarm" with no alarms arms the test alarm (`RequestCodes.TEST_ALARM` in `ShadowAlarmManager`) and
+       shows "Lock your phone. We'll ring in 10 seconds.".
+     - An enabled QR alarm (saved through `SaveAlarm`) with the camera denied: the banner clears once only the camera
+       fails, and the checklist shows the Camera row with "Camera, Fix".
+     - On API 31 with exact alarms denied, the Home banner shows. Its Fix opens the checklist at the Exact alarms row,
+       whose Fix opens `ChecklistRow.ExactAlarms`.
+   - The probe stays a fake there (as in the existing route tests), because Robolectric's power manager reports the
+     app as optimised, which would raise the banner for Battery.
+   - API 31 comes from the `DeviceInfo` the checklist reads (`sdkInt = 31`), and Robolectric stays on SDK 34. Under
+     `@Config(sdk = [31])` the evaluation started (one probe call), but Home's alarm list and the banner never loaded
+     within 30 s. The Exact alarms screen opener on API 31 is covered by `AndroidReliabilitySettingsTest`
+     (`@Config(sdk = [31])`).
+
+**Verification (2026-10-21, JDK 17, `--no-daemon --max-workers=2`, targeted):**
+- `spotlessApply`, then `spotlessCheck` and `detekt`: pass.
+- `:core:jvmTest` (`core.reliability.*`): pass.
+- `:composeApp:testAndroidHostTest`: 211 tests across `ui.reliability.*`, `ui.home.*`, `ui.settings.*`, `ui.qr.*`,
+  `AlarmEditorQrTest`, `ui.nav.*`, `UiModuleTest` and `CopyRulesTest`.
+  - `UiModuleTest`'s checklist case first failed, because the app's default context now evaluates off the main
+    thread. It now waits for the rows in real time, and passes.
+- `:androidApp:testDebugUnitTest`: 421 tests across these classes:
+  - the reliability classes (route, route lifecycle, semantics, screenshot in verify mode);
+  - `AndroidReliabilitySettingsTest`, `AndroidNotificationPermissionTest`, `ReliabilityProbeTest`;
+  - `AndroidCameraPermissionTest`, `QrCheckScreenTest`, `QrScreenshotTest`;
+  - the Home classes (screenshot, insets, route lifecycle) and `AlarmScreensSemanticsTest`;
+  - `SessionLockScreenTest`, `DefaultsSettingsSemanticsTest`, `SnoozeSettingsRouteTest`, `MainActivityTest`,
+    `ReceiversManifestTest`;
+  - the preview tap-throughs (`TapThroughTest`, `Round2TapThroughTest`, `Round3TapThroughTest`) and
+    `PreviewSemanticsTest`.
+
+  The only failure was the API 31 route case under `@Config(sdk = [31])`. It was changed as described in item 8, and
+  `ReliabilityRouteTest` was re-run: 6 tests pass.
+- No Roborazzi baseline changed: the fixes change semantics only, not pixels.
+
 ## Auto Run Result
 
 Status: done (fast mode). The coordinator runs the independent review and CI.

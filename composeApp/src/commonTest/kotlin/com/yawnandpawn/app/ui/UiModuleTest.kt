@@ -77,10 +77,14 @@ import com.yawnandpawn.app.ui.you.YouUiState
 import com.yawnandpawn.app.ui.you.YouViewModel
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.test.UnconfinedTestDispatcher
 import kotlinx.coroutines.test.resetMain
+import kotlinx.coroutines.test.runTest
 import kotlinx.coroutines.test.setMain
+import kotlinx.coroutines.withContext
+import kotlinx.coroutines.withTimeout
 import kotlinx.datetime.LocalTime
 import org.koin.core.parameter.parametersOf
 import org.koin.dsl.koinApplication
@@ -267,6 +271,9 @@ class UiModuleTest {
             val checklist = app.koin.get<ReliabilityViewModel>()
 
             checklist.refresh()
+
+            // The app evaluates on Dispatchers.Default (review item 4): wait for the rows in real time.
+            runTest { withContext(Dispatchers.Default) { withTimeout(5_000) { checklist.state.first { it.rows.isNotEmpty() } } } }
 
             val shown =
                 checklist.state.value.rows

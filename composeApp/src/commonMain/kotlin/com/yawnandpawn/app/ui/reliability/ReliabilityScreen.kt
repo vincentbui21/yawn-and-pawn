@@ -13,7 +13,9 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.unit.dp
 import com.yawnandpawn.app.core.reliability.DeviceMaker
 import com.yawnandpawn.app.ui.components.AppSnackbar
@@ -208,13 +210,16 @@ private fun ChecklistRowView(
     val spacing = PpsTheme.spacing
     // The test alarm is not a setting to fix: until it has rung it shows a hollow ring, and the button below rings it.
     val isTest = row.item == ChecklistItem.TestAlarm
+    val title = stringResource(row.item.title)
+    // The hollow ring's state for TalkBack (no new string): the button below that rings it.
+    val testState = stringResource(Res.string.reliability_ring_test).takeIf { isTest && row.status != ItemStatus.Ok }
     // One TalkBack stop per row (Story 5.4): title, reason, then "OK", or its own "Fix" button read right after.
     Row(
         modifier =
             Modifier
                 .fillMaxWidth()
                 .heightIn(min = ROW_HEIGHT)
-                .semantics(mergeDescendants = true) { }
+                .semantics(mergeDescendants = true) { testState?.let { stateDescription = it } }
                 .padding(start = spacing.cardPadding, end = spacing.space3, top = spacing.space2, bottom = spacing.space2),
         verticalAlignment = Alignment.CenterVertically,
     ) {
@@ -228,7 +233,7 @@ private fun ChecklistRowView(
                 else -> RowIcon(icon = Res.drawable.symbol_error, tint = colors.error)
             }
             Column(modifier = Modifier.weight(1f).padding(horizontal = spacing.space3)) {
-                Text(text = stringResource(row.item.title), style = PpsTheme.typography.body, color = colors.text)
+                Text(text = title, style = PpsTheme.typography.body, color = colors.text)
                 val revoked = row.item.revoked?.takeIf { row.status == ItemStatus.Revoked }
                 Text(
                     text = stringResource(revoked ?: row.item.reason),
@@ -246,7 +251,13 @@ private fun ChecklistRowView(
             }
         }
         if (row.status != ItemStatus.Ok && !isTest) {
-            PpsOutlinedButton(text = stringResource(Res.string.home_fix), onClick = onFix, modifier = Modifier.widthIn(min = FIX_WIDTH))
+            val fix = stringResource(Res.string.home_fix)
+            // Read on its own, "Fix" names its row: "Battery, Fix".
+            PpsOutlinedButton(
+                text = fix,
+                onClick = onFix,
+                modifier = Modifier.widthIn(min = FIX_WIDTH).semantics { contentDescription = "$title, $fix" },
+            )
         }
     }
 }

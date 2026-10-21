@@ -10,9 +10,9 @@ import org.koin.compose.viewmodel.koinViewModel
 
 /**
  * The reliability checklist route (Story 5.4), pushed from the Settings row or the Home and Settings banner:
- * [ReliabilityViewModel] (scoped to the nav entry) feeding [ReliabilityScreen]. Every `ON_START` and `ON_RESUME` re-reads
- * the rows, so a setting fixed in the system settings (or a permission dialog answered over the screen) shows "OK" on
- * return. The back arrow calls [onBack]; "Fix" on "Manufacturer settings" calls [onOpenManufacturerGuidance].
+ * [ReliabilityViewModel] (scoped to the nav entry) feeding [ReliabilityScreen]. Every `ON_RESUME` (which follows every
+ * start) re-reads the rows once, so a setting fixed in the system settings (or a permission dialog answered over the
+ * screen) shows "OK" on return. The back arrow calls [onBack]; "Fix" on "Manufacturer settings" calls [onOpenManufacturerGuidance].
  */
 @Composable
 fun ReliabilityRoute(
@@ -28,7 +28,6 @@ fun ReliabilityRoute(
             }
         }
     }
-    LifecycleEventEffect(Lifecycle.Event.ON_START) { viewModel.refresh() }
     LifecycleEventEffect(Lifecycle.Event.ON_RESUME) { viewModel.refresh() }
     ReliabilityScreen(
         state = state,

@@ -107,6 +107,7 @@ class HomeReRegisterBannerTest {
                 anEvaluateReliability(checks = FakeCheckConfigRepository(repository)),
                 suggestions,
                 uiTypeOf,
+                evaluationContext = dispatcher,
             )
         backgroundScope.launch { viewModel.state.collect { } }
         return viewModel

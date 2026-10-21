@@ -18,8 +18,8 @@ import org.koin.compose.viewmodel.koinViewModel
  * commitment lock: Home shows "Saved. Takes effect after ..." and calls [onSavedUnderLockShown] (Story 4.6).
  * [onOpenQrRegistration] opens QR registration of an alarm's code ("Re-register", Story 3.10;
  * the editor by default). [onOpenReliability] opens the reliability checklist from the banner's "Fix" (Story 5.4). The
- * countdown is recomputed whenever Home resumes, and the reliability checklist is evaluated again whenever Home starts
- * or resumes, so the banner clears itself once the blocking rows are fixed.
+ * countdown is recomputed and the reliability checklist evaluated again (once) whenever Home resumes, which also ends
+ * every start, so the banner clears itself once the blocking rows are fixed.
  */
 @Composable
 fun HomeRoute(
@@ -56,7 +56,6 @@ fun HomeRoute(
             onSavedUnderLockShown()
         }
     }
-    LifecycleEventEffect(Lifecycle.Event.ON_START) { viewModel.onIntent(HomeIntent.Started) }
     LifecycleEventEffect(Lifecycle.Event.ON_RESUME) { viewModel.onIntent(HomeIntent.Resumed) }
     HomeScreen(state = state, is24Hour = is24HourClock(), onIntent = viewModel::onIntent)
 }

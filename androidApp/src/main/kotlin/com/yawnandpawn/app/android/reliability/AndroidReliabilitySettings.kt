@@ -1,12 +1,14 @@
 package com.yawnandpawn.app.android.reliability
 
 import android.annotation.SuppressLint
+import android.app.NotificationManager
 import android.content.Context
 import android.content.Intent
 import android.net.Uri
 import android.os.Build
 import android.os.PowerManager
 import android.provider.Settings
+import com.yawnandpawn.app.android.wake.WakeNotifier
 import com.yawnandpawn.app.core.log.LogEvent
 import com.yawnandpawn.app.core.log.Logger
 import com.yawnandpawn.app.core.reliability.ChecklistRow
@@ -27,6 +29,8 @@ class AndroidReliabilitySettings(
     private val sdkInt: Int = Build.VERSION.SDK_INT,
     /** Whether the app is exempt from battery optimisation now (a test seam); null reads `PowerManager` at the tap. */
     private val batteryExempt: (() -> Boolean)? = null,
+    /** Whether only the Alarms channel is blocked now (a test seam); null reads `NotificationManager` at the tap. */
+    private val alarmChannelBlocked: (() -> Boolean)? = null,
 ) : ReliabilitySettings {
     override fun open(row: ChecklistRow): Boolean {
         val opened = targets(row).any { target -> resolves(target) && tryStart(target) }
@@ -40,7 +44,8 @@ class AndroidReliabilitySettings(
 
     /**
      * The screen for [row] on this phone's API level:
-     * - Notifications: the app's notification settings;
+     * - Notifications: the Alarms channel's settings when app notifications are on but that channel is blocked, else the
+     *   app's notification settings;
      * - Full-screen alarm (API 34+) and Exact alarms (API 31+): their special app access page for this app;
      * - Do Not Disturb: its priority settings, where alarms are allowed;
      * - Battery: the battery optimisation list while the app is not exempt; once exempt, the app details, where
@@ -50,6 +55,12 @@ class AndroidReliabilitySettings(
     @SuppressLint("InlinedApi") // Each action is used only on the API level that has it.
     fun intentFor(row: ChecklistRow): Intent =
         when {
+            row == ChecklistRow.Notifications && onlyAlarmChannelBlocked() -> {
+                Intent(Settings.ACTION_CHANNEL_NOTIFICATION_SETTINGS)
+                    .putExtra(Settings.EXTRA_APP_PACKAGE, context.packageName)
+                    .putExtra(Settings.EXTRA_CHANNEL_ID, WakeNotifier.CHANNEL_ID)
+            }
+
             row == ChecklistRow.Notifications -> {
                 Intent(Settings.ACTION_APP_NOTIFICATION_SETTINGS).putExtra(Settings.EXTRA_APP_PACKAGE, context.packageName)
             }
@@ -106,6 +117,23 @@ class AndroidReliabilitySettings(
             false
         }
 
+    /**
+     * App notifications are on but the Alarms channel ([WakeNotifier.CHANNEL_ID]) is blocked; a read that throws is logged
+     * and counts as not blocked (the app's notification settings, which also list the channel).
+     */
+    private fun onlyAlarmChannelBlocked(): Boolean = alarmChannelBlocked?.invoke() ?: platformAlarmChannelBlocked()
+
+    @Suppress("TooGenericExceptionCaught") // An OEM's broken service: the app's notification page is the safe screen.
+    private fun platformAlarmChannelBlocked(): Boolean =
+        try {
+            val notifications = context.getSystemService(NotificationManager::class.java)
+            notifications.areNotificationsEnabled() &&
+                notifications.getNotificationChannel(WakeNotifier.CHANNEL_ID)?.importance == NotificationManager.IMPORTANCE_NONE
+        } catch (e: RuntimeException) {
+            logger.log(LogEvent.OperationFailed(READ_CHANNEL, e::class.simpleName.orEmpty()))
+            false
+        }
+
     private fun appDetails() = Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS, packageUri())
 
     private fun packageUri(): Uri = Uri.parse("package:${context.packageName}")
@@ -113,6 +141,9 @@ class AndroidReliabilitySettings(
     companion object {
         /** The log operation of a battery exemption read that threw. */
         const val READ_BATTERY = "read battery exemption"
+
+        /** The log operation of an Alarms channel read that threw. */
+        const val READ_CHANNEL = "read alarms channel"
 
         /** The log operation of a settings screen that could not be opened. */
         const val OPEN = "open reliability setting"

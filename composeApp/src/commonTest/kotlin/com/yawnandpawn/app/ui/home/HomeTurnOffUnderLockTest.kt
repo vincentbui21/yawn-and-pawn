@@ -112,6 +112,7 @@ class HomeTurnOffUnderLockTest {
                 MissedNotes(FakeSessionHistoryRepository(), FakeMissedNoteDismissals()),
                 anEvaluateReliability(checks = FakeCheckConfigRepository(store)),
                 noReRegisterSuggestions(clock),
+                evaluationContext = dispatcher,
             )
         if (collect) backgroundScope.launch { viewModel.state.collect { } }
         return viewModel

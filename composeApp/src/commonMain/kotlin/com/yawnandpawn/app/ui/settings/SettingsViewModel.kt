@@ -36,6 +36,7 @@ import com.yawnandpawn.app.ui.reliability.AlarmBlockingCheck
 import com.yawnandpawn.app.ui.theme.toCore
 import com.yawnandpawn.app.ui.theme.toPps
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.channels.Channel
@@ -52,6 +53,7 @@ import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import kotlin.coroutines.CoroutineContext
 
 /**
  * The Story 5.1 setters of Settings: the new-alarm defaults and the theme, each through its own core use case (no
@@ -133,13 +135,17 @@ class SettingsViewModel(
      * of the other rows) shows no banner.
      */
     reliability: EvaluateReliability? = null,
+    /** Where the banner's evaluation runs (system service calls): off the main thread in the app, the test's in tests. */
+    evaluationContext: CoroutineContext = Dispatchers.Default,
 ) : ViewModel() {
     private val local = MutableStateFlow(Local())
     private val saves = Channel<Save>(Channel.UNLIMITED)
 
     private val banner: AlarmBlockingCheck? =
         reliability?.let { evaluate ->
-            AlarmBlockingCheck(evaluate, viewModelScope) { blocking -> local.update { it.copy(reliabilityProblem = blocking) } }
+            AlarmBlockingCheck(evaluate, viewModelScope, evaluationContext) { blocking ->
+                local.update { it.copy(reliabilityProblem = blocking) }
+            }
         }
 
     private val mutableEffects = Channel<SettingsEffect>(Channel.BUFFERED)

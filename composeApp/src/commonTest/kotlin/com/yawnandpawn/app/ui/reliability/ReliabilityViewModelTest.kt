@@ -108,6 +108,7 @@ class ReliabilityViewModelTest {
             camera = camera,
             ringTest = testAlarm(),
             logger = logger,
+            evaluationContext = dispatcher,
         )
 
     private fun TestScope.effectsOf(viewModel: ReliabilityViewModel): List<ReliabilityEffect> {
@@ -212,6 +213,32 @@ class ReliabilityViewModelTest {
         }
 
     @Test
+    fun `a revoked battery row names battery optimisation only when that is the cause`() =
+        runTest(dispatcher) {
+            val viewModel = screen()
+            viewModel.refresh()
+            listOf(
+                ReliabilityStatus.ALL_OK.copy(backgroundRestricted = true),
+                ReliabilityStatus.ALL_OK.copy(standbyBucketRestricted = true),
+            ).forEach { status ->
+                probe.status = status
+
+                viewModel.refresh()
+
+                // Still revoked for Story 5.3's rules (the banner), but it reads the normal reason with "Fix".
+                assertEquals(ItemStatus.Missing, viewModel.shown().toMap()[ChecklistItem.Battery], "$status")
+                assertTrue(CoreRow.Battery in records.stored.lastOk, "still revoked in the records")
+            }
+
+            probe.status = ReliabilityStatus.ALL_OK.copy(batteryOptimizationIgnored = false, backgroundRestricted = true)
+            viewModel.refresh()
+
+            assertEquals(ItemStatus.Revoked, viewModel.shown().toMap()[ChecklistItem.Battery])
+            val revoked = listOf(ChecklistEntry(CoreRow.Battery, RowStatus.Revoked))
+            assertEquals(ItemStatus.Revoked, revoked.toChecklistRows().single().status, "no status: as revoked")
+        }
+
+    @Test
     fun `the camera row shows only while an enabled alarm has a camera check, and API 31 shows exact alarms`() =
         runTest(dispatcher) {
             alarmsOf(anAlarm(id = "qr", time = LocalTime(7, 0)), configs = checkConfigsOf("qr", listOf(qrCheck)))
@@ -273,11 +300,27 @@ class ReliabilityViewModelTest {
         }
 
     @Test
+    fun `Camera blocked (no dialog showed) opens the app details in the same tap`() =
+        runTest(dispatcher) {
+            val blocked = TestCameraPermission(granted = false, answer = false, blocked = true)
+            val evaluate = anEvaluateReliability(probe = probe, checks = checks, records = records)
+            val viewModel = ReliabilityViewModel(evaluate, settings, blocked, testAlarm(), logger, dispatcher)
+
+            viewModel.onIntent(ReliabilityIntent.FixClicked(ChecklistItem.Camera))
+            assertEquals(1, blocked.requests)
+            assertEquals(listOf(CoreRow.Camera), settings.opened, "the first tap already shows where to allow it")
+
+            viewModel.onIntent(ReliabilityIntent.FixClicked(ChecklistItem.Camera))
+            assertEquals(1, blocked.requests, "not asked again")
+            assertEquals(listOf(CoreRow.Camera, CoreRow.Camera), settings.opened)
+        }
+
+    @Test
     fun `Camera granted from the dialog re-reads the rows`() =
         runTest(dispatcher) {
             val granting = TestCameraPermission(granted = false, answer = true)
             val evaluate = anEvaluateReliability(probe = probe, checks = checks, records = records)
-            val viewModel = ReliabilityViewModel(evaluate, settings, granting, testAlarm(), logger)
+            val viewModel = ReliabilityViewModel(evaluate, settings, granting, testAlarm(), logger, dispatcher)
 
             viewModel.onIntent(ReliabilityIntent.FixClicked(ChecklistItem.Camera))
             viewModel.onIntent(ReliabilityIntent.FixClicked(ChecklistItem.Camera))
@@ -319,6 +362,7 @@ class ReliabilityViewModelTest {
             assertEquals(listOf(CheckType.QrBarcode), config.checkPlan.entries.map { it.type })
             assertTrue(config.testMode)
             assertTrue(viewModel.state.value.testScheduled)
+            assertEquals(1, probe.checks, "the rows are read again after the test")
 
             advanceTimeBy(ReliabilityViewModel.SNACKBAR_MILLIS - 1)
             assertTrue(viewModel.state.value.testScheduled)
@@ -362,14 +406,33 @@ class ReliabilityViewModelTest {
         }
 
     @Test
-    fun `a test that cannot be armed is logged and shows no snackbar`() =
+    fun `a test that cannot be armed is logged, shows no snackbar, and the rows show what blocks it`() =
         runTest(dispatcher) {
+            // API 31 with exact alarms denied: arming fails, and the re-read shows the Exact alarms row.
+            device = DeviceInfo(sdkInt = 31, maker = "Google", fingerprint = "google/31")
+            probe.status = ReliabilityStatus.ALL_OK.copy(exactAlarmsAllowed = false)
             scheduler.failure = DomainError.ExactAlarmNotPermitted
             val viewModel = screen()
 
             viewModel.onIntent(ReliabilityIntent.RingTestAlarm)
 
             assertFalse(viewModel.state.value.testScheduled)
-            assertEquals(ReliabilityViewModel.SCHEDULE_TEST, (logger.events.last() as LogEvent.OperationFailed).operation)
+            assertTrue(logger.events.any { it is LogEvent.OperationFailed && it.operation == ReliabilityViewModel.SCHEDULE_TEST })
+            assertEquals(ItemStatus.Missing, viewModel.shown().toMap()[ChecklistItem.ExactAlarms])
+        }
+
+    @Test
+    fun `the test rings with the Settings' base fee tier and max snoozes`() =
+        runTest(dispatcher) {
+            globalSettings.setBaseFeeTier(3)
+            globalSettings.setMaxSnoozes(2)
+            alarmsOf(anAlarm(id = "soon", time = LocalTime(6, 0)))
+
+            testAlarm().invoke()
+
+            val config = testStore.pending!!
+            assertEquals("soon", config.alarmId)
+            assertEquals(3, config.baseFeeTier)
+            assertEquals(2, config.maxSnoozes)
         }
 }

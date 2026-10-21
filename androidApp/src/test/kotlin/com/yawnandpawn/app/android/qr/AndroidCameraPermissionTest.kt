@@ -6,6 +6,7 @@ import android.content.Intent
 import android.provider.Settings
 import androidx.test.core.app.ApplicationProvider
 import com.yawnandpawn.app.testing.FakeLogger
+import com.yawnandpawn.app.ui.qr.CameraAnswer
 import kotlinx.coroutines.CoroutineStart
 import kotlinx.coroutines.async
 import kotlinx.coroutines.test.runTest
@@ -52,6 +53,27 @@ class AndroidCameraPermissionTest {
             permission.detach(launch)
             assertFalse(stopped.await())
             assertFalse(permission.request(), "detached")
+        }
+
+    @Test
+    fun `a no the dialog can still change is Denied, one it cannot is Blocked (Story 5_4)`() =
+        runTest {
+            permission.attach {}
+
+            val denied = async(start = CoroutineStart.UNDISPATCHED) { permission.requestAnswer() }
+            permission.onResult(false)
+            assertEquals(CameraAnswer.Denied, denied.await())
+
+            val blocked = async(start = CoroutineStart.UNDISPATCHED) { permission.requestAnswer() }
+            permission.onResult(false, blocked = true)
+            assertEquals(CameraAnswer.Blocked, blocked.await())
+
+            val asBoolean = async(start = CoroutineStart.UNDISPATCHED) { permission.request() }
+            permission.onResult(false, blocked = true)
+            assertFalse(asBoolean.await(), "Story 3.10's callers still read a no")
+
+            shadowOf(app).grantPermissions(Manifest.permission.CAMERA)
+            assertEquals(CameraAnswer.Granted, permission.requestAnswer(), "granted: no dialog")
         }
 
     @Test

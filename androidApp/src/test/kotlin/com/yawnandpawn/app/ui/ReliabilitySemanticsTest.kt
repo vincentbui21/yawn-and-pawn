@@ -7,6 +7,7 @@ import androidx.compose.ui.test.assert
 import androidx.compose.ui.test.assertHeightIsAtLeast
 import androidx.compose.ui.test.assertWidthIsAtLeast
 import androidx.compose.ui.test.hasClickAction
+import androidx.compose.ui.test.hasContentDescription
 import androidx.compose.ui.test.hasText
 import androidx.compose.ui.test.junit4.v2.createEmptyComposeRule
 import androidx.compose.ui.test.onAllNodesWithText
@@ -32,7 +33,8 @@ import kotlin.test.assertEquals
 /**
  * Story 5.4 with TalkBack in mind, at 200 % font on a 360 dp phone: each `checklist-row` is one TalkBack stop of at
  * least 64 dp that reads its title, its reason (or the revoked line) and "OK", with "Fix" its own 48 dp button read
- * right after; Back and "Ring a test alarm" are 48 dp buttons.
+ * right after as "<title>, Fix"; the Test alarm row's hollow ring reads "Ring a test alarm" as its state; Back and "Ring
+ * a test alarm" are 48 dp buttons.
  */
 @RunWith(RobolectricTestRunner::class)
 @GraphicsMode(GraphicsMode.Mode.NATIVE)
@@ -78,7 +80,15 @@ class ReliabilitySemanticsTest {
             val notifications = row("Notifications", "Needed to show your alarm.")
             notifications.performScrollTo().assertHeightIsAtLeast(64.dp)
             notifications.assert(!hasText("OK") and !hasText("Fix") and !hasClickAction())
-            composeRule.assertReadsInOrder("Notifications", "Fix", "Full-screen alarm", "Do Not Disturb", "Fix", "Battery", "Test alarm")
+            composeRule.assertReadsInOrder(
+                "Notifications",
+                "Notifications, Fix",
+                "Full-screen alarm",
+                "Do Not Disturb",
+                "Do Not Disturb, Fix",
+                "Battery",
+                "Test alarm",
+            )
 
             val fixes = composeRule.onAllNodes(hasText("Fix") and hasClickAction())
             assertEquals(2, fixes.fetchSemanticsNodes().size, "the Test alarm row has no Fix: the button below rings it")
@@ -99,6 +109,21 @@ class ReliabilitySemanticsTest {
                 ),
                 intents,
             )
+        }
+    }
+
+    @Test
+    fun `each Fix names its row, and the Test alarm row not yet rung reads its state (review item 6)`() {
+        show(ReliabilitySamples.severalNeedFix) {
+            composeRule.onNode(hasContentDescription("Notifications, Fix") and hasClickAction()).assertExists()
+            composeRule.onNode(hasContentDescription("Do Not Disturb, Fix") and hasClickAction()).assertExists()
+            row("Test alarm", "Ring a test with your phone locked.")
+                .assert(SemanticsMatcher.expectValue(SemanticsProperties.StateDescription, "Ring a test alarm"))
+        }
+        show(ReliabilitySamples.allOk) {
+            row("Test alarm", "Ring a test with your phone locked.")
+                .assert(SemanticsMatcher.keyNotDefined(SemanticsProperties.StateDescription))
+                .assert(hasText("OK"))
         }
     }
 

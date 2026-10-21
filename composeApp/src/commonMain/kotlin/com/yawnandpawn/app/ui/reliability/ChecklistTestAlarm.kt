@@ -38,16 +38,27 @@ class ChecklistTestAlarm(
     private val zones: TimeZoneProvider,
     private val logger: Logger,
 ) {
-    /** Schedules the test; returns when it will ring, or why it could not be armed. */
-    suspend operator fun invoke(): Outcome<Instant, DomainError> = testAlarm(draft())
+    /**
+     * Schedules the test with the Settings it read (base fee tier and max snoozes, as a real ring would have); returns
+     * when it will ring, or why it could not be armed.
+     */
+    suspend operator fun invoke(): Outcome<Instant, DomainError> {
+        val alarms = alarms()
+        val settings = defaults()
+        return testAlarm(draft(alarms, settings), globalSettings = settings)
+    }
 
     /** The draft the test rings: the soonest enabled alarm's, else the defaults. */
-    suspend fun draft(): AlarmDraft {
+    suspend fun draft(): AlarmDraft = draft(alarms(), defaults())
+
+    private fun draft(
+        alarms: List<AlarmWithChecks>,
+        defaults: GlobalSettings,
+    ): AlarmDraft {
         val now = clock.now()
         val zone = zones.current()
-        val soonest = alarms().filter { it.alarm.enabled }.minByOrNull { nextOccurrence(it.alarm.toRule(), now, zone) }
+        val soonest = alarms.filter { it.alarm.enabled }.minByOrNull { nextOccurrence(it.alarm.toRule(), now, zone) }
         if (soonest != null) return soonest.toTestDraft()
-        val defaults = defaults()
         val time = now.toLocalDateTime(zone).time
         return AlarmDraft(
             time = LocalTime(time.hour, time.minute),

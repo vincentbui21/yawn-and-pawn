@@ -1,6 +1,8 @@
 package com.yawnandpawn.app.android.reliability
 
 import android.app.Application
+import android.app.NotificationChannel
+import android.app.NotificationManager
 import android.content.Context
 import android.content.ContextWrapper
 import android.content.Intent
@@ -12,6 +14,7 @@ import android.os.PowerManager
 import android.provider.Settings
 import androidx.test.core.app.ApplicationProvider
 import com.yawnandpawn.app.StopAppRule
+import com.yawnandpawn.app.android.wake.WakeNotifier
 import com.yawnandpawn.app.core.log.LogEvent
 import com.yawnandpawn.app.core.reliability.ChecklistRow
 import com.yawnandpawn.app.testing.FakeLogger
@@ -60,7 +63,8 @@ class AndroidReliabilitySettingsTest {
         sdkInt: Int = 34,
         exempt: Boolean = false,
         context: Context = app,
-    ) = AndroidReliabilitySettings(context, logger, sdkInt = sdkInt, batteryExempt = { exempt })
+        channelBlocked: Boolean = false,
+    ) = AndroidReliabilitySettings(context, logger, sdkInt = sdkInt, batteryExempt = { exempt }, alarmChannelBlocked = { channelBlocked })
 
     /** The row's own screen on API 34 (Exact alarms is Hidden there, but its screen still exists). */
     private val api34Screens =
@@ -140,6 +144,30 @@ class AndroidReliabilitySettingsTest {
         assertEquals(Settings.ACTION_IGNORE_BATTERY_OPTIMIZATION_SETTINGS, platform.intentFor(ChecklistRow.Battery).action)
         power.setIgnoringBatteryOptimizations(app.packageName, true)
         assertEquals(Settings.ACTION_APPLICATION_DETAILS_SETTINGS, platform.intentFor(ChecklistRow.Battery).action)
+    }
+
+    @Test
+    @Config(sdk = [34])
+    fun `notifications open the Alarms channel's settings when only that channel is blocked (review item 2)`() {
+        val notifications = app.getSystemService(NotificationManager::class.java)
+        val platform = AndroidReliabilitySettings(app, logger)
+        assertEquals(Settings.ACTION_APP_NOTIFICATION_SETTINGS, platform.intentFor(ChecklistRow.Notifications).action, "no channel yet")
+
+        notifications.createNotificationChannel(NotificationChannel(WakeNotifier.CHANNEL_ID, "Alarms", NotificationManager.IMPORTANCE_NONE))
+        val channel = platform.intentFor(ChecklistRow.Notifications)
+        assertEquals(Settings.ACTION_CHANNEL_NOTIFICATION_SETTINGS, channel.action)
+        assertEquals(app.packageName, channel.getStringExtra(Settings.EXTRA_APP_PACKAGE))
+        assertEquals(WakeNotifier.CHANNEL_ID, channel.getStringExtra(Settings.EXTRA_CHANNEL_ID))
+        handles(channel)
+        assertTrue(platform.open(ChecklistRow.Notifications))
+        val started = nextStarted()
+        assertEquals(Settings.ACTION_CHANNEL_NOTIFICATION_SETTINGS, started?.action)
+        assertEquals(WakeNotifier.CHANNEL_ID, started?.getStringExtra(Settings.EXTRA_CHANNEL_ID))
+
+        // With the app's notifications off, their page comes first (the channel's page cannot turn them on).
+        shadowOf(notifications).setNotificationsEnabled(false)
+        assertEquals(Settings.ACTION_APP_NOTIFICATION_SETTINGS, platform.intentFor(ChecklistRow.Notifications).action)
+        assertEquals(emptyList(), logger.events)
     }
 
     @Test
@@ -239,7 +267,7 @@ class AndroidReliabilitySettingsTest {
     }
 
     @Test
-    fun `the manifest queries every settings action the checklist opens`() {
+    fun `the manifest queries every settings target the checklist opens, by action and data scheme`() {
         val manifest = File("src/main/AndroidManifest.xml").readText()
         val queries =
             Regex("<queries>(.*?)</queries>", RegexOption.DOT_MATCHES_ALL)
@@ -247,11 +275,26 @@ class AndroidReliabilitySettingsTest {
                 ?.groupValues
                 ?.get(1)
                 .orEmpty()
-        val queried = Regex("""<action\s+android:name="([^"]+)"""").findAll(queries).map { it.groupValues[1] }.toSet()
+        val queried =
+            Regex("<intent>(.*?)</intent>", RegexOption.DOT_MATCHES_ALL)
+                .findAll(queries)
+                .map { intent ->
+                    val body = intent.groupValues[1]
+                    val action = Regex("""<action\s+android:name="([^"]+)"""").find(body)?.groupValues?.get(1)
+                    val scheme = Regex("""<data\s+android:scheme="([^"]+)"""").find(body)?.groupValues?.get(1)
+                    action to scheme
+                }.toSet()
         val opened =
-            listOf(31, 34).flatMap { sdk ->
+            listOf(28, 31, 34).flatMap { sdk ->
                 listOf(true, false).flatMap { exempt ->
-                    ChecklistRow.entries.flatMap { row -> settings(sdkInt = sdk, exempt = exempt).targets(row).mapNotNull { it.action } }
+                    listOf(true, false).flatMap { blocked ->
+                        ChecklistRow.entries.flatMap { row ->
+                            settings(sdkInt = sdk, exempt = exempt, channelBlocked = blocked).targets(row).map {
+                                it.action to
+                                    it.data?.scheme
+                            }
+                        }
+                    }
                 }
             }
 

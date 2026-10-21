@@ -8,8 +8,11 @@ import com.yawnandpawn.app.core.log.Logger
 import com.yawnandpawn.app.core.reliability.ChecklistEntry
 import com.yawnandpawn.app.core.reliability.EvaluateReliability
 import com.yawnandpawn.app.core.reliability.ReliabilitySettings
+import com.yawnandpawn.app.core.reliability.ReliabilityStatus
 import com.yawnandpawn.app.core.reliability.RowStatus
+import com.yawnandpawn.app.ui.qr.CameraAnswer
 import com.yawnandpawn.app.ui.qr.CameraPermission
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.channels.Channel
@@ -24,6 +27,7 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
+import kotlin.coroutines.CoroutineContext
 import com.yawnandpawn.app.core.reliability.ChecklistRow as CoreRow
 
 /** One-off results of the reliability checklist. */
@@ -35,16 +39,18 @@ sealed interface ReliabilityEffect {
 /**
  * The reliability checklist (Story 5.4, FR-ONB-2/3, flow F7).
  *
- * - **Rows:** [refresh] (every `ON_START` and `ON_RESUME`, so a row fixed in the system settings reads "OK" on return
- *   without a tap) runs [evaluate] and shows each row that is not Hidden ([toChecklistRows]); evaluations run one after
- *   the other, so the latest decides. Before the first one ends there are no rows.
+ * - **Rows:** [refresh] (every `ON_RESUME`, so a row fixed in the system settings reads "OK" on return without a tap)
+ *   runs [evaluate] in [evaluationContext] (off the main thread in the app) and shows each row that is not Hidden
+ *   ([toChecklistRows]); evaluations run one after the other, so the latest decides. Before the first one ends there
+ *   are no rows.
  * - **Fix:** each row's own target, from the user's tap. Manufacturer opens the maker guidance ([effects]). Camera asks
- *   the runtime permission through [camera] on the first tap (granted: the row re-reads); after a "no" (also "Don't ask
- *   again", which the app cannot tell apart) the next tap opens the app details through [settings] (DEFAULT TAKEN 2).
- *   Every other row opens its system screen through [settings], which checks it resolves and falls back.
+ *   the runtime permission through [camera] on the first tap (granted: the row re-reads). After a "no" the dialog can
+ *   still change, the next tap opens the app details through [settings] (DEFAULT TAKEN 2); after a blocked one (the
+ *   system answered without the dialog) the same tap opens them. Every other row opens its system screen through
+ *   [settings], which checks it resolves and falls back.
  * - **Ring a test alarm:** [ringTest] schedules a test 10 s from now, one at a time, then the snackbar "Lock your
  *   phone. We'll ring in 10 seconds." shows for 4 s. A test that cannot be armed is logged and shows nothing, as in the
- *   editor (no new string).
+ *   editor (no new string). Either way the rows are read again, so a missing exact alarm permission shows.
  */
 class ReliabilityViewModel(
     private val evaluate: EvaluateReliability,
@@ -52,6 +58,7 @@ class ReliabilityViewModel(
     private val camera: CameraPermission,
     private val ringTest: ChecklistTestAlarm,
     private val logger: Logger,
+    private val evaluationContext: CoroutineContext = Dispatchers.Default,
 ) : ViewModel() {
     private val mutableState = MutableStateFlow(ReliabilityUiState(rows = emptyList()))
     val state: StateFlow<ReliabilityUiState> = mutableState.asStateFlow()
@@ -61,16 +68,16 @@ class ReliabilityViewModel(
 
     private val evaluations = Mutex()
 
-    /** The camera permission was asked from this screen and refused: the next "Fix" opens the app details. */
+    /** The camera permission was asked from this screen and refused (or blocked): the next "Fix" opens the app details. */
     private var cameraRefused = false
     private var testInFlight = false
     private var snackbarJob: Job? = null
 
-    /** Re-reads every row (the screen started or resumed). */
+    /** Re-reads every row (the screen resumed, a permission answer came back, or a test alarm was rung). */
     fun refresh() {
         viewModelScope.launch {
             evaluations.withLock {
-                val rows = evaluate().toChecklistRows()
+                val rows = withContext(evaluationContext) { evaluate.evaluation().let { it.rows.toChecklistRows(it.status) } }
                 mutableState.update { it.copy(rows = rows) }
             }
         }
@@ -97,8 +104,10 @@ class ReliabilityViewModel(
 
             item == ChecklistItem.Camera && !cameraRefused -> {
                 viewModelScope.launch {
-                    cameraRefused = !camera.request()
-                    refresh()
+                    val answer = camera.requestAnswer()
+                    cameraRefused = answer != CameraAnswer.Granted
+                    // Blocked: no dialog showed, so the app details open from this same tap.
+                    if (answer == CameraAnswer.Blocked) settings.open(item.row) else refresh()
                 }
             }
 
@@ -120,6 +129,8 @@ class ReliabilityViewModel(
                 is Outcome.Success -> showTestScheduled()
                 is Outcome.Failure -> logger.log(LogEvent.OperationFailed.of(SCHEDULE_TEST, result.error))
             }
+            // A test that could not be armed (exact alarms denied on API 31-32) shows the row that needs fixing.
+            refresh()
         }
     }
 
@@ -142,18 +153,25 @@ class ReliabilityViewModel(
     }
 }
 
-/** The rows the checklist shows: every row that is not Hidden, in order; NeedsFix reads as missing. */
-fun List<ChecklistEntry>.toChecklistRows(): List<ChecklistRow> =
-    mapNotNull { entry ->
-        val status =
+/**
+ * The rows the checklist shows: every row that is not Hidden, in order; NeedsFix reads as missing. A revoked Battery row
+ * says "battery optimization turned back on" only when [status] shows that cause; revoked by background restriction or
+ * the restricted bucket it reads as missing (its normal reason, still "Fix"; a review default). Without a [status] every
+ * revoked row reads revoked.
+ */
+fun List<ChecklistEntry>.toChecklistRows(status: ReliabilityStatus? = null): List<ChecklistRow> {
+    val optimisationNotTheCause = status?.batteryOptimizationIgnored == true
+    return mapNotNull { entry ->
+        val shown =
             when (entry.status) {
                 RowStatus.Ok -> ItemStatus.Ok
                 RowStatus.NeedsFix -> ItemStatus.Missing
-                RowStatus.Revoked -> ItemStatus.Revoked
+                RowStatus.Revoked -> if (entry.row == CoreRow.Battery && optimisationNotTheCause) ItemStatus.Missing else ItemStatus.Revoked
                 RowStatus.Hidden -> null
             }
-        status?.let { ChecklistRow(entry.row.item, it) }
+        shown?.let { ChecklistRow(entry.row.item, it) }
     }
+}
 
 /** The approved row of this checklist row. */
 val CoreRow.item: ChecklistItem

@@ -92,6 +92,7 @@ class SettingsReliabilityViewModelTest {
                 consents = consents,
                 setAnalyticsConsent = SetAnalyticsConsent(consents, sessionLock),
                 reliability = reliability,
+                evaluationContext = dispatcher,
             )
         backgroundScope.launch(dispatcher) { viewModel.state.collect {} }
         return viewModel

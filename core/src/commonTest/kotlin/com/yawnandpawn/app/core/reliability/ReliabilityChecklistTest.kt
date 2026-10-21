@@ -256,6 +256,20 @@ class ReliabilityChecklistTest {
         }
 
     @Test
+    fun `an evaluation hands out the rows with the one probe status they came from (Story 5_4)`() =
+        runTest {
+            var probes = 0
+            val restricted = ok.copy(backgroundRestricted = true)
+            val evaluate = EvaluateReliability({ restricted.also { probes++ } }, { api34 }, Checks(), Records(), Logs())
+
+            val evaluation = evaluate.evaluation()
+
+            assertEquals(restricted, evaluation.status)
+            assertEquals(RowStatus.NeedsFix, evaluation.rows.statusOf(ChecklistRow.Battery))
+            assertEquals(1, probes)
+        }
+
+    @Test
     fun `a read error evaluates as nothing stored and writes nothing, a write error and unreadable alarms are logged`() =
         runTest {
             val logger = Logs()

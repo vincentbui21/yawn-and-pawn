@@ -141,7 +141,18 @@ class HomeViewModelTest {
     private fun TestScope.home(repository: AlarmRepository): HomeViewModel {
         checkConfigs = FakeCheckConfigRepository(repository)
         val reliability = anEvaluateReliability(probe = probe, checks = checkConfigs, records = records)
-        val viewModel = HomeViewModel(checkConfigs, actions(repository), clock, zone, signal, missedNotes, reliability, reRegister)
+        val viewModel =
+            HomeViewModel(
+                checkConfigs,
+                actions(repository),
+                clock,
+                zone,
+                signal,
+                missedNotes,
+                reliability,
+                reRegister,
+                evaluationContext = dispatcher,
+            )
         backgroundScope.launch { viewModel.state.collect { } }
         return viewModel
     }
@@ -570,6 +581,7 @@ class HomeViewModelTest {
                     missedNotes,
                     anEvaluateReliability(probe = probe, checks = checkConfigs, records = records),
                     reRegister,
+                    evaluationContext = dispatcher,
                 )
             val collector = launch { viewModel.state.collect { } }
             assertEquals(1, signal.subscribers)
@@ -716,9 +728,10 @@ class HomeViewModelTest {
             assertEquals(0, probe.checks)
 
             probe.status = ReliabilityStatus.ALL_OK
-            viewModel.onIntent(HomeIntent.Started)
+            viewModel.onIntent(HomeIntent.Resumed)
 
             assertFalse(viewModel.state.value.reliabilityProblem)
+            assertEquals(1, probe.checks, "one evaluation per resume (review fix: not on both start and resume)")
         }
 
     @Test
@@ -735,7 +748,7 @@ class HomeViewModelTest {
                 ReliabilityStatus.ALL_OK.copy(standbyBucketRestricted = true),
             ).forEach { status ->
                 probe.status = status
-                viewModel.onIntent(HomeIntent.Started)
+                viewModel.onIntent(HomeIntent.Resumed)
                 assertTrue(viewModel.state.value.reliabilityProblem, "$status")
             }
 
@@ -751,7 +764,7 @@ class HomeViewModelTest {
             probe.status = ReliabilityStatus.ALL_OK.copy(cameraGranted = false, exactAlarmsAllowed = false)
             val viewModel = home(FakeAlarmRepository())
 
-            viewModel.onIntent(HomeIntent.Started)
+            viewModel.onIntent(HomeIntent.Resumed)
 
             assertFalse(viewModel.state.value.reliabilityProblem)
         }
@@ -763,11 +776,11 @@ class HomeViewModelTest {
             probe.status = ReliabilityStatus.ALL_OK.copy(batteryOptimizationIgnored = false)
             val viewModel = home(FakeAlarmRepository())
 
-            viewModel.onIntent(HomeIntent.Started)
+            viewModel.onIntent(HomeIntent.Resumed)
             assertTrue(viewModel.state.value.reliabilityProblem)
 
             probe.status = ReliabilityStatus.ALL_OK
-            viewModel.onIntent(HomeIntent.Started)
+            viewModel.onIntent(HomeIntent.Resumed)
 
             assertFalse(viewModel.state.value.reliabilityProblem)
         }
@@ -777,7 +790,7 @@ class HomeViewModelTest {
         runTest(dispatcher) {
             probe.status = ReliabilityStatus.ALL_OK.copy(notificationsAllowed = false)
             val viewModel = home(FakeAlarmRepository())
-            viewModel.onIntent(HomeIntent.Started)
+            viewModel.onIntent(HomeIntent.Resumed)
             assertTrue(viewModel.state.value.reliabilityProblem)
             val checks = probe.checks
 
@@ -796,7 +809,7 @@ class HomeViewModelTest {
             val repository = FakeAlarmRepository().apply { failure = DomainError.StorageFailure("disk I/O error") }
             val viewModel = home(repository)
 
-            viewModel.onIntent(HomeIntent.Started)
+            viewModel.onIntent(HomeIntent.Resumed)
 
             val state = viewModel.state.value
             assertTrue(state.loadFailed)

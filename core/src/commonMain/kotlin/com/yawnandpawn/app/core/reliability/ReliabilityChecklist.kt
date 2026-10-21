@@ -194,6 +194,15 @@ object ReliabilityChecklist {
 }
 
 /**
+ * One evaluation: the [rows] and the probe [status] they came from (Story 5.4: the checklist tells which Battery setting
+ * failed, so a revoked row names battery optimisation only when that is the cause).
+ */
+data class ReliabilityEvaluation(
+    val rows: List<ChecklistEntry>,
+    val status: ReliabilityStatus,
+)
+
+/**
  * Evaluates the reliability checklist now (Story 5.4 calls it on every start of the checklist screen): the probe, the
  * alarms with their checks, the phone and the stored records through [ReliabilityChecklist.evaluate], then keeps the
  * rows seen OK ([ReliabilityChecklist.lastOkAfter]) when they changed.
@@ -208,11 +217,15 @@ class EvaluateReliability(
     private val records: ReliabilityRecords,
     private val logger: Logger,
 ) {
-    suspend operator fun invoke(): List<ChecklistEntry> {
+    suspend operator fun invoke(): List<ChecklistEntry> = evaluation().rows
+
+    /** [invoke] with the probe's status the rows came from (one probe read). */
+    suspend fun evaluation(): ReliabilityEvaluation {
         val stored = records.read()
         val previous = (stored as? Outcome.Success)?.value
         if (stored is Outcome.Failure) logger.log(LogEvent.OperationFailed.of("read reliability records", stored.error))
-        val rows = ReliabilityChecklist.evaluate(probe.check(), alarms(), device.current(), previous ?: StoredReliability())
+        val status = probe.check()
+        val rows = ReliabilityChecklist.evaluate(status, alarms(), device.current(), previous ?: StoredReliability())
         if (previous != null) {
             val lastOk = ReliabilityChecklist.lastOkAfter(rows, previous.lastOk)
             if (lastOk != previous.lastOk) {
@@ -220,7 +233,7 @@ class EvaluateReliability(
                 if (saved is Outcome.Failure) logger.log(LogEvent.OperationFailed.of("save reliability rows", saved.error))
             }
         }
-        return rows
+        return ReliabilityEvaluation(rows, status)
     }
 
     // A failing read of the alarms fails their flow (CheckConfigRepository); the checklist still shows, without Camera.

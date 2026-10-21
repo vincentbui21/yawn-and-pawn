@@ -140,11 +140,11 @@ sealed interface HomeIntent {
     /** The editor closed because its alarm could not be read (a navigation result): shows "Couldn't open this alarm.". */
     data object EditorOpenFailed : HomeIntent
 
-    /** Home came back to the foreground: recompute the countdown. */
+    /**
+     * Home came back to the foreground (`ON_RESUME`, which also follows every start, e.g. back from the checklist):
+     * recompute the countdown and evaluate the reliability checklist again.
+     */
     data object Resumed : HomeIntent
-
-    /** Home started (`ON_START`, also after returning from the checklist): evaluate the reliability checklist again. */
-    data object Started : HomeIntent
 }
 
 /** One-shot events for the Home route. */

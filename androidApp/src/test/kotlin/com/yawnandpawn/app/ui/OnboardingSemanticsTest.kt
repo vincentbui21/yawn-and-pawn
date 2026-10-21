@@ -5,9 +5,11 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.semantics.SemanticsProperties
 import androidx.compose.ui.test.SemanticsMatcher
+import androidx.compose.ui.test.assertCountEquals
 import androidx.compose.ui.test.assertHeightIsAtLeast
 import androidx.compose.ui.test.assertIsEnabled
 import androidx.compose.ui.test.assertIsNotEnabled
+import androidx.compose.ui.test.assertIsNotFocused
 import androidx.compose.ui.test.assertWidthIsAtLeast
 import androidx.compose.ui.test.hasClickAction
 import androidx.compose.ui.test.hasContentDescription
@@ -30,9 +32,10 @@ import org.robolectric.annotation.GraphicsMode
 import kotlin.test.assertEquals
 
 /**
- * Story 5.10 with TalkBack in mind, at 200 % font on a small phone: each of steps 1 to 3 reads its headline first, as a
- * heading; the dots read "Step N of 8"; every control is labelled, has a role and is at least 48 dp; step 1 has no
- * in-app Back; the stepper ends follow the tier.
+ * Stories 5.10 and 5.11 with TalkBack in mind, at 200 % font on a small phone: each of steps 1 to 7 reads its headline
+ * first, as a heading; the dots read "Step N of 8"; every control is labelled, has a role and is at least 48 dp; step 1
+ * has no in-app Back; the stepper ends follow the tier; with no check "Continue" is disabled; "Share" and "No thanks"
+ * are the same size and neither is focused.
  */
 @RunWith(RobolectricTestRunner::class)
 @GraphicsMode(GraphicsMode.Mode.NATIVE)
@@ -120,5 +123,51 @@ class OnboardingSemanticsTest {
         show({ OnboardingSamples.baseFee }) {
             composeRule.onNodeWithContentDescription("Lower Base fee").assertIsEnabled()
             composeRule.onNodeWithContentDescription("Raise Base fee").assertIsEnabled()
+        }
+
+    @Test
+    fun `step 4 reads its headline first, and its controls are labelled and 48 dp`() =
+        show({ OnboardingSamples.firstAlarm }) {
+            assertStartsOnHeadline("When should it ring?", step = 4)
+            composeRule.onNode(hasText("Continue") and hasClickAction()).assertHeightIsAtLeast(48.dp).assertIsEnabled()
+            composeRule.assertControlsLabelledWithRoles()
+        }
+
+    @Test
+    fun `step 5 reads its headline first, and with no check Continue is disabled under Pick at least one check`() =
+        show({ OnboardingSamples.checksNone }) {
+            assertStartsOnHeadline("How will you prove you're up?", step = 5)
+            composeRule.onNode(hasText("Pick at least one check.")).assertExists()
+            composeRule.onNode(hasText("Continue")).assertIsNotEnabled()
+            composeRule.assertControlsLabelledWithRoles()
+        }
+
+    @Test
+    fun `step 5 with a check enables Continue`() =
+        show({ OnboardingSamples.checksQr }) {
+            composeRule.onNode(hasText("Continue") and hasClickAction()).assertIsEnabled()
+            composeRule.assertControlsLabelledWithRoles()
+        }
+
+    @Test
+    fun `step 6 reads its headline first, and each Fix is 48 dp`() =
+        show({ OnboardingSamples.checklist }) {
+            assertStartsOnHeadline("Make sure it rings", step = 6)
+            val fixes = composeRule.onAllNodes(hasText("Fix") and hasClickAction())
+            fixes.assertCountEquals(2)
+            (0 until 2).forEach { fixes[it].assertHeightIsAtLeast(48.dp).assertWidthIsAtLeast(48.dp) }
+            composeRule.assertControlsLabelledWithRoles()
+        }
+
+    @Test
+    fun `step 7 reads its headline first, and Share and No thanks are equal and not focused`() =
+        show({ OnboardingSamples.usageStats }) {
+            assertStartsOnHeadline("Share anonymous usage stats?", step = 7)
+            val share = composeRule.onNode(hasText("Share") and hasClickAction())
+            val noThanks = composeRule.onNode(hasText("No thanks") and hasClickAction())
+            listOf(share, noThanks).forEach { it.assertHeightIsAtLeast(48.dp).assertIsNotFocused() }
+            val shareSize = share.fetchSemanticsNode().size
+            assertEquals(shareSize, noThanks.fetchSemanticsNode().size, "two equal buttons")
+            composeRule.assertControlsLabelledWithRoles()
         }
 }

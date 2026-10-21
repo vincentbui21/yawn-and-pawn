@@ -91,9 +91,9 @@ fun OnboardingScreen(
                 transitionSpec = { subScreenTransition(forward = targetState.ordinal > initialState.ordinal) },
                 label = "onboarding step",
             ) { step ->
-                // A step's actions count only once its slide is over (review fix): a double tap never reaches the
-                // next step's button while it slides in. With animations off there is no slide; the ViewModel's own
-                // dwell time covers that case.
+                // A step's taps (its cards and its actions) count only once its slide is over (review fixes): a double
+                // tap never reaches the next step's controls while they slide in. With animations off there is no slide;
+                // the ViewModel's own dwell time covers that case.
                 val settled = transition.currentState == EnterExitState.Visible && transition.targetState == EnterExitState.Visible
                 val live by rememberUpdatedState(settled)
                 val guarded: (OnboardingIntent) -> Unit = { if (live) onIntent(it) }
@@ -113,7 +113,7 @@ fun OnboardingScreen(
                                 .padding(horizontal = PpsTheme.spacing.screenMargin, vertical = PpsTheme.spacing.space2),
                         verticalArrangement = Arrangement.spacedBy(PpsTheme.spacing.space3),
                     ) {
-                        StepContent(step = step, state = state, is24Hour = is24Hour, onIntent = onIntent)
+                        StepContent(step = step, state = state, is24Hour = is24Hour, onIntent = guarded)
                     }
                     Actions(step = step, state = state, onIntent = guarded)
                 }
@@ -167,7 +167,7 @@ private fun ColumnScope.StepContent(
         OnboardingStep.Disclosure -> DisclosureStep()
         OnboardingStep.BaseFee -> BaseFeeStep(state = state, is24Hour = is24Hour, onIntent = onIntent)
         OnboardingStep.FirstAlarm -> FirstAlarmStep(state = state, is24Hour = is24Hour, onIntent = onIntent)
-        OnboardingStep.Checks -> ChecksStep(state = state, onIntent = onIntent)
+        OnboardingStep.Checks -> ChecksStep(state = state, is24Hour = is24Hour, onIntent = onIntent)
         OnboardingStep.Reliability -> ReliabilityStep(state = state, onIntent = onIntent)
         OnboardingStep.Analytics -> AnalyticsStep()
         OnboardingStep.TestAlarm -> TestAlarmStep(state = state)

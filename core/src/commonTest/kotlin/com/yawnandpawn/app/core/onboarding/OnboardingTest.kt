@@ -16,7 +16,7 @@ import kotlin.test.assertTrue
 import kotlin.time.Duration.Companion.minutes
 import kotlin.time.Instant
 
-/** Story 5.10: the onboarding consent and progress rules (FR-ONB-1, FR-ONB-5). */
+/** Stories 5.10 and 5.11: the onboarding consent and progress rules (FR-ONB-1, FR-ONB-5), and the first alarm's id. */
 class OnboardingTest {
     private val now = Instant.parse("2027-03-08T21:00:00Z")
     private val clock = TestClock(now)
@@ -26,6 +26,7 @@ class OnboardingTest {
     private val accept = AcceptDisclosure(repository, clock, sessionLock)
     private val saveStep = SaveOnboardingStep(repository, sessionLock)
     private val complete = CompleteOnboarding(repository, sessionLock)
+    private val rememberAlarm = RememberOnboardingAlarm(repository, sessionLock)
 
     @Test
     fun `a fresh user has not completed onboarding, has no step and has not consented`() {
@@ -103,6 +104,27 @@ class OnboardingTest {
         }
 
     @Test
+    fun `the first alarm's id is remembered, and null forgets it`() =
+        runTest {
+            assertNull(OnboardingProgress().alarmId, "no first alarm before onboarding saves one")
+
+            assertEquals(Outcome.Success(Unit), rememberAlarm("alarm-1"))
+            assertEquals("alarm-1", repository.current.alarmId)
+
+            assertEquals(Outcome.Success(Unit), rememberAlarm(null))
+            assertNull(repository.current.alarmId)
+        }
+
+    @Test
+    fun `a failed first alarm write is returned`() =
+        runTest {
+            repository.writeFailure = DomainError.StorageFailure("disk full")
+
+            assertEquals(Outcome.Failure(DomainError.StorageFailure("disk full")), rememberAlarm("alarm-1"))
+            assertNull(repository.current.alarmId)
+        }
+
+    @Test
     fun `during a session every onboarding write returns SessionActive and writes nothing`() =
         runTest {
             sessionState.value = SessionState.Ringing(ringSession())
@@ -110,6 +132,7 @@ class OnboardingTest {
             assertEquals(Outcome.Failure(DomainError.SessionActive), accept())
             assertEquals(Outcome.Failure(DomainError.SessionActive), saveStep("Disclosure"))
             assertEquals(Outcome.Failure(DomainError.SessionActive), complete())
+            assertEquals(Outcome.Failure(DomainError.SessionActive), rememberAlarm("alarm-1"))
             assertEquals(OnboardingProgress(), repository.current)
             assertEquals(0, repository.writes)
         }

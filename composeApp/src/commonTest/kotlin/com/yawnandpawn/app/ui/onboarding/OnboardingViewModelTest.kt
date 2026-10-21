@@ -1,128 +1,43 @@
 package com.yawnandpawn.app.ui.onboarding
 
 import com.yawnandpawn.app.core.alarm.AlarmDraft
-import com.yawnandpawn.app.core.alarm.AlarmWriteLock
 import com.yawnandpawn.app.core.billing.PriceCatalog
 import com.yawnandpawn.app.core.billing.PriceCatalogSnapshot
-import com.yawnandpawn.app.core.config.SaveGlobalSetting
 import com.yawnandpawn.app.core.config.SetBaseFee
 import com.yawnandpawn.app.core.config.SettingValue
 import com.yawnandpawn.app.core.error.DomainError
 import com.yawnandpawn.app.core.error.Outcome
-import com.yawnandpawn.app.core.log.LogEvent
-import com.yawnandpawn.app.core.onboarding.AcceptDisclosure
-import com.yawnandpawn.app.core.onboarding.CompleteOnboarding
 import com.yawnandpawn.app.core.onboarding.OnboardingProgress
-import com.yawnandpawn.app.core.onboarding.SaveOnboardingStep
-import com.yawnandpawn.app.core.session.GlobalSettings
-import com.yawnandpawn.app.core.session.SessionLockGuard
-import com.yawnandpawn.app.core.session.SessionState
+import com.yawnandpawn.app.core.telemetry.AnalyticsConsent
 import com.yawnandpawn.app.testing.AlarmUseCasesFixture
-import com.yawnandpawn.app.testing.FakeAlarmRepository
-import com.yawnandpawn.app.testing.FakeClock
-import com.yawnandpawn.app.testing.FakeGlobalSettingsRepository
-import com.yawnandpawn.app.testing.FakeLogger
-import com.yawnandpawn.app.testing.FakeMoneyFormatter
-import com.yawnandpawn.app.testing.FakeMonotonicClock
-import com.yawnandpawn.app.testing.FakeOnboardingRepository
-import com.yawnandpawn.app.testing.FakePendingChangeRepository
-import com.yawnandpawn.app.testing.FakePriceCatalog
-import com.yawnandpawn.app.testing.FakeTimeZoneProvider
 import com.yawnandpawn.app.testing.OnboardingPresets
-import com.yawnandpawn.app.testing.aPriceSnapshot
 import com.yawnandpawn.app.testing.anAlarm
+import com.yawnandpawn.app.ui.checkpicker.CheckPickerIntent
+import com.yawnandpawn.app.ui.checks.CheckType
+import com.yawnandpawn.app.ui.reliability.ChecklistItem
 import com.yawnandpawn.app.ui.settings.WeakeningNote
-import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.Flow
-import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.test.TestScope
-import kotlinx.coroutines.test.UnconfinedTestDispatcher
-import kotlinx.coroutines.test.resetMain
 import kotlinx.coroutines.test.runTest
-import kotlinx.coroutines.test.setMain
 import kotlinx.datetime.LocalTime
-import kotlinx.datetime.TimeZone
-import kotlin.test.AfterTest
-import kotlin.test.BeforeTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
 import kotlin.test.assertIs
-import kotlin.test.assertNotNull
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
 import kotlin.time.Duration.Companion.milliseconds
-import kotlin.time.Instant
+import com.yawnandpawn.app.core.reliability.ChecklistRow as CoreRow
 
 /**
  * Story 5.10: onboarding steps 1 to 3 with the real core use cases on fakes: the stored step, the consent, the base fee
- * through `SetBaseFee` (Play prices or the USD approximation), completion, and the logged failures.
+ * through `SetBaseFee` (Play prices or the USD approximation), the dwell before a step's action, and the logged
+ * failures; and that the intents of a step not shown are ignored.
  */
 @OptIn(ExperimentalCoroutinesApi::class)
-class OnboardingViewModelTest {
-    private val dispatcher = UnconfinedTestDispatcher()
-
-    /** Monday 2027-03-08, 23:40 UTC (the price cache, fetched on the 3rd, is still fresh). */
-    private val lateEvening = Instant.parse("2027-03-08T23:40:00Z")
-    private val clock = FakeClock(lateEvening)
-    private val zone = FakeTimeZoneProvider(TimeZone.UTC)
-    private val logger = FakeLogger()
-    private val alarms = FakeAlarmRepository()
-    private val pending = FakePendingChangeRepository()
-    private val settings = FakeGlobalSettingsRepository(GlobalSettings(baseFeeTier = 1), pending)
-    private val prices = FakePriceCatalog(aPriceSnapshot(currency = "EUR"))
-    private val onboarding = FakeOnboardingRepository(OnboardingPresets.Fresh)
-    private val ticks = FakeMonotonicClock(1_000)
-    private val sessionLock =
-        SessionLockGuard(MutableStateFlow<SessionState>(SessionState.Idle), MutableStateFlow(true), MutableStateFlow(false))
-
-    @BeforeTest
-    fun setUp() {
-        Dispatchers.setMain(dispatcher)
-    }
-
-    @AfterTest
-    fun tearDown() {
-        Dispatchers.resetMain()
-    }
-
-    private fun TestScope.viewModel(): OnboardingViewModel {
-        val save = SaveGlobalSetting(settings, pending, alarms, clock, zone, AlarmWriteLock(), sessionLock)
-        val viewModel =
-            OnboardingViewModel(
-                onboarding = onboarding,
-                saveStep = SaveOnboardingStep(onboarding, sessionLock),
-                acceptDisclosure = AcceptDisclosure(onboarding, clock, sessionLock),
-                completeOnboarding = CompleteOnboarding(onboarding, sessionLock),
-                globalSettings = settings,
-                priceCatalog = prices,
-                setBaseFee = SetBaseFee(save),
-                clock = clock,
-                moneyFormatter = FakeMoneyFormatter(),
-                logger = logger,
-                monotonicClock = ticks,
-                timeZoneProvider = zone,
-            )
-        backgroundScope.launch(dispatcher) { viewModel.state.collect {} }
-        return viewModel
-    }
-
-    /** A tap on the step's action once the step has shown for the dwell time. */
-    private fun OnboardingViewModel.next() {
-        ticks.advanceBy(OnboardingViewModel.STEP_DWELL_MILLIS.milliseconds)
-        onIntent(OnboardingIntent.Next(shown.step))
-    }
-
-    private val OnboardingViewModel.shown: OnboardingUiState
-        get() = assertNotNull(state.value, "the stored progress was read")
-
-    /** The failures logged for [operation]. */
-    private fun failed(operation: String): List<LogEvent> =
-        logger.events.filter { (it as? LogEvent.OperationFailed)?.operation == operation }
-
+class OnboardingViewModelTest : OnboardingViewModelFixture() {
     @Test
     fun `a first launch opens step 1, and Let's set it up opens the disclosure and stores the step`() =
         runTest {
@@ -156,8 +71,11 @@ class OnboardingViewModelTest {
             onboarding.current = OnboardingProgress(step = "BaseFee")
             assertEquals(OnboardingStep.Disclosure, viewModel().shown.step, "the base fee without consent opens the disclosure")
 
-            onboarding.current = OnboardingPresets.Consented.copy(step = "TestAlarm")
-            assertEquals(OnboardingStep.BaseFee, viewModel().shown.step, "steps 4 to 8 are not built yet")
+            onboarding.current = OnboardingPresets.Consented.copy(step = "Reliability")
+            assertEquals(OnboardingStep.FirstAlarm, viewModel().shown.step, "past the checks without a first alarm: step 4")
+
+            onboarding.current = OnboardingPresets.Consented.copy(step = "TestAlarm", alarmId = "alarm-1")
+            assertEquals(OnboardingStep.Analytics, viewModel().shown.step, "step 8 is not built yet")
         }
 
     @Test
@@ -255,7 +173,7 @@ class OnboardingViewModelTest {
 
             viewModel.next()
 
-            assertTrue(onboarding.current.completed)
+            assertEquals(OnboardingStep.FirstAlarm, viewModel.shown.step)
         }
 
     @Test
@@ -323,23 +241,16 @@ class OnboardingViewModelTest {
         }
 
     @Test
-    fun `Continue on step 3 completes onboarding, and a failed write stays and is logged`() =
+    fun `Continue on step 3 opens the first alarm and stores the step, without completing onboarding`() =
         runTest {
             onboarding.current = OnboardingPresets.Consented
             val viewModel = viewModel()
-            onboarding.writeFailure = DomainError.StorageFailure("disk full")
 
             viewModel.next()
 
+            assertEquals(OnboardingStep.FirstAlarm, viewModel.shown.step)
+            assertEquals("FirstAlarm", onboarding.current.step)
             assertFalse(onboarding.current.completed)
-            assertEquals(OnboardingStep.BaseFee, viewModel.shown.step)
-            assertEquals(1, failed(OnboardingViewModel.COMPLETE).size)
-            assertTrue(viewModel.shown.saveFailed, "Couldn't save. Try again.")
-
-            onboarding.writeFailure = null
-            viewModel.next()
-
-            assertTrue(onboarding.current.completed)
         }
 
     @Test
@@ -384,10 +295,10 @@ class OnboardingViewModelTest {
             val viewModel = viewModel()
 
             viewModel.onIntent(OnboardingIntent.Next(OnboardingStep.BaseFee))
-            assertFalse(onboarding.current.completed)
+            assertEquals(OnboardingStep.BaseFee, viewModel.shown.step)
 
             viewModel.next()
-            assertTrue(onboarding.current.completed)
+            assertEquals(OnboardingStep.FirstAlarm, viewModel.shown.step)
         }
 
     @Test
@@ -428,36 +339,27 @@ class OnboardingViewModelTest {
                     override suspend fun refresh(): Outcome<Unit, DomainError> = Outcome.Success(Unit)
                 }
             onboarding.current = OnboardingPresets.Consented
-            val save = SaveGlobalSetting(settings, pending, alarms, clock, zone, AlarmWriteLock(), sessionLock)
-            val viewModel =
-                OnboardingViewModel(
-                    onboarding = onboarding,
-                    saveStep = SaveOnboardingStep(onboarding, sessionLock),
-                    acceptDisclosure = AcceptDisclosure(onboarding, clock, sessionLock),
-                    completeOnboarding = CompleteOnboarding(onboarding, sessionLock),
-                    globalSettings = settings,
-                    priceCatalog = broken,
-                    setBaseFee = SetBaseFee(save),
-                    clock = clock,
-                    moneyFormatter = FakeMoneyFormatter(),
-                    logger = logger,
-                )
-            backgroundScope.launch(dispatcher) { viewModel.state.collect {} }
+            val viewModel = viewModel(priceCatalog = broken)
 
             assertTrue(viewModel.shown.pricesApproximate)
             assertEquals(1, failed(OnboardingViewModel.LOAD_PRICES).size)
         }
 
     @Test
-    fun `the intents of steps 4 to 8 are ignored`() =
+    fun `the intents of another step, and of step 8, are ignored`() =
         runTest {
             val viewModel = viewModel()
 
             viewModel.onIntent(OnboardingIntent.TimeChanged(LocalTime(6, 0)))
+            viewModel.onIntent(OnboardingIntent.Checks(CheckPickerIntent.Toggled(CheckType.Math, selected = false)))
+            viewModel.onIntent(OnboardingIntent.FixClicked(ChecklistItem.Notifications))
             viewModel.onIntent(OnboardingIntent.UsageStatsChosen(share = true))
             viewModel.onIntent(OnboardingIntent.SkipTestAlarm)
 
             assertEquals(OnboardingStep.Mission, viewModel.shown.step)
             assertEquals(OnboardingPresets.Fresh, onboarding.current)
+            assertEquals(emptyList<CoreRow>(), systemScreens.opened)
+            assertEquals(AnalyticsConsent(), consents.current)
+            assertEquals(0, editorsOpened, "the editor opens with step 4")
         }
 }

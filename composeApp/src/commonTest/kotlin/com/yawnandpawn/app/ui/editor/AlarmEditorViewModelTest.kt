@@ -343,6 +343,41 @@ class AlarmEditorViewModelTest {
         }
 
     @Test
+    fun `onSaved gets the stored alarm's id after a successful save only, and the editor stays saving (Story 5_11)`() =
+        runTest(dispatcher) {
+            val saved = mutableListOf<String>()
+            val viewModel =
+                AlarmEditorViewModel(
+                    alarmId = null,
+                    repository = repository,
+                    checkConfigs = alarms.checkConfigs,
+                    saveAlarm = alarms.save,
+                    clock = clock,
+                    timeZoneProvider = zone,
+                    actions = AlarmActions(alarms.setEnabled, alarms.delete, logger),
+                    soundLibrary = FakeSoundLibrary(),
+                    soundPreview = FakeSoundPreview(),
+                    notificationPermission = permission,
+                    testAlarm = ScheduleTestAlarm(testAlarmScheduler, testAlarmStore, clock, logger),
+                    onSaved = { saved += it },
+                )
+            val effects = effectsOf(viewModel)
+            repository.failure = DomainError.StorageFailure("disk I/O error")
+
+            viewModel.onIntent(EditorIntent.SaveClicked)
+            advanceUntilIdle()
+            assertEquals(emptyList<String>(), saved, "a failed save reports nothing")
+
+            repository.failure = null
+            viewModel.onIntent(EditorIntent.SaveClicked)
+            advanceUntilIdle()
+
+            assertEquals(listOf(repository.current.single().id), saved)
+            assertTrue(viewModel.state.value.isSaving, "nothing more is accepted")
+            assertEquals(listOf(EditorEffect.ShowSaveFailed, EditorEffect.Close), effects)
+        }
+
+    @Test
     fun `a failed save does not ask for notifications`() =
         runTest(dispatcher) {
             permission.needed = true

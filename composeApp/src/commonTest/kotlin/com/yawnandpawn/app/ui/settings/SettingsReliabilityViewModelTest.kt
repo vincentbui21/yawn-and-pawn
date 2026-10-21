@@ -11,8 +11,10 @@ import com.yawnandpawn.app.core.reliability.ReliabilityStatus
 import com.yawnandpawn.app.core.reliability.StoredReliability
 import com.yawnandpawn.app.core.session.SessionLockGuard
 import com.yawnandpawn.app.core.session.SessionState
+import com.yawnandpawn.app.core.telemetry.SetAnalyticsConsent
 import com.yawnandpawn.app.testing.FakeAlarmRepository
 import com.yawnandpawn.app.testing.FakeClock
+import com.yawnandpawn.app.testing.FakeConsentStore
 import com.yawnandpawn.app.testing.FakeGlobalSettingsRepository
 import com.yawnandpawn.app.testing.FakeLogger
 import com.yawnandpawn.app.testing.FakeMoneyFormatter
@@ -68,6 +70,8 @@ class SettingsReliabilityViewModelTest {
         Dispatchers.resetMain()
     }
 
+    private val consents = FakeConsentStore()
+
     private fun TestScope.viewModel(
         reliability: EvaluateReliability? = anEvaluateReliability(probe = probe, records = records),
     ): SettingsViewModel {
@@ -85,6 +89,8 @@ class SettingsReliabilityViewModelTest {
                 moneyFormatter = FakeMoneyFormatter(),
                 logger = FakeLogger(),
                 defaults = DefaultSettingSetters(SaveDefaultSetting(settings, sessionLock)),
+                consents = consents,
+                setAnalyticsConsent = SetAnalyticsConsent(consents, sessionLock),
                 reliability = reliability,
             )
         backgroundScope.launch(dispatcher) { viewModel.state.collect {} }

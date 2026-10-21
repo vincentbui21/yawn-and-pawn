@@ -2,7 +2,7 @@
 title: 'Story 5.4: Reliability checklist screen and revoked-setting warnings'
 type: 'feature'
 created: '2026-10-19'
-status: 'in-progress'
+status: 'done'
 baseline_revision: '862bc748dcdbe7781585e62eeadfd8f7717210d0'
 review_loop_iteration: 0
 followup_review_recommended: false
@@ -210,6 +210,14 @@ and `ChecklistCard` (design preview rounds 2–3) are not wired. Story 5.5's mak
 
 ## Review Triage Log
 
+### 2026-10-21 — Review pass (fast mode: one combined self-review; the coordinator runs the independent review)
+- verdicts: 4 findings — high 0, medium 0, low 4, false 0, maybe-false 0
+- findings:
+  - `[low]` `[patch]` `ReliabilityRouteTest` checked the rows as soon as the screen showed, before the first evaluation (which reads the records DataStore on the main looper) had filled them. It failed on the merged tree. It now waits for the row (`waitForRow`) after the banner's Fix in both tests.
+  - `[low]` `[patch]` After the rebase onto Story 5.6, `SettingsViewModel` broke detekt's `TooManyFunctions` and `CyclomaticComplexMethod`. The usage-stats and reliability intents now share one handler (`onGeneralIntent`), and the read-failure log moved to a top-level `Logger.logFailure`. No behaviour change.
+  - `[low]` `[reject]` Home, Settings and the checklist each evaluate on resume, so two writes of `lastOk` can overlap. Each write is the full set computed from the same probe and records, so the last writer is the right value. Locking across screens would only add machinery.
+  - `[low]` `[reject]` Each foreground re-reads the records DataStore once per visible screen. It is cheap (one small preferences file), and the AC asks for re-evaluation on every start.
+
 ## Verification
 
 **Commands (targeted, `--no-daemon --max-workers=2`, run once at the end):**
@@ -224,7 +232,7 @@ and `ChecklistCard` (design preview rounds 2–3) are not wired. Story 5.5's mak
 - `spotlessCheck detekt`: pass (after moving the pushed entries and the Settings intent helper, see the change log).
 - `:core:jvmTest` (`core.reliability.*`): 22 tests, pass. `:testing:jvmTest` (`ReliabilityFakesTest`): 4, pass.
 - `:composeApp:testAndroidHostTest` (`ui.reliability.*`, `ui.home.*`, `ui.settings.*`, `ui.nav.*`, `UiModuleTest`,
-  `CopyRulesTest`): 170 tests, pass; re-run after the detekt refactors: RERUN_RESULT.
+  `CopyRulesTest`): 170 tests, pass; re-run after the detekt refactors: pass (see the rebase results below).
 - `:androidApp:recordRoborazziDebug` for `ReliabilityScreenshotTest` (16 new goldens) and the Settings main-screen
   classes (8 goldens changed on purpose: the "Reliability checklist" row now shows; the sub-screen goldens are
   unchanged). Inspected.
@@ -238,3 +246,46 @@ and `ChecklistCard` (design preview rounds 2–3) are not wired. Story 5.5's mak
   tests `PreviewEditorScreenshotTest` 152, `PreviewEditorSemanticsTest` 342, `Round2TapThroughTest` 6,
   `Round3TapThroughTest` 8, `TapThroughTest` 5, `PreviewMenuTest` 8, `NavBarScreenshotTest` 4.
 - Not run here (run constraints): the full `qualityGate`, Kover, and the other test classes (CI runs them).
+
+**Rebase onto main 2d35e706 (Stories 5.6 and 5.8), 2026-10-21, JDK 17, `--no-daemon --max-workers=2`:**
+- Conflicts were resolved by keeping both sides:
+  - Koin modules, the nav comments, the You/Payments entries now inside `pushedEntries`.
+  - Settings: the usage stats row and the reliability row, the consent ports and the checklist.
+  - `UiModuleTest` and `DefaultsSettingsSemanticsTest`.
+- Five Settings main-screen baselines were re-recorded on the merged tree, because they now show usage stats and the
+  checklist row: `settings_defaults_light/dark/changed_light` and `settings_snooze_light/dark`.
+- Passed:
+  - `spotlessCheck`, `detekt`, `:core:jvmTest` (`core.reliability.*`) and `:testing:jvmTest` (`ReliabilityFakesTest`).
+  - `:composeApp:testAndroidHostTest`, filtered to the reliability, home, settings, nav and you packages, plus
+    `UiModuleTest` and `CopyRulesTest`: 190 tests.
+  - `:androidApp:testDebugUnitTest`: the reliability classes, the Settings screenshot, semantics and route classes, the
+    Home classes, `SessionLockScreenTest`, `AlarmScreensSemanticsTest`, `MainActivityTest`, `YouRouteTest`,
+    `ThemeOverrideTest`, and the preview tap-throughs, `PreviewMenuTest` and `NavBarScreenshotTest`.
+
+## Auto Run Result
+
+Status: done (fast mode). The coordinator runs the independent review and CI.
+
+- **Built:**
+  - `Route.Reliability` shows the approved checklist. It is re-evaluated on every start and resume, and each Fix opens
+    its row's own target, resolver-checked with fallbacks.
+    - Camera asks the permission first.
+    - Manufacturer opens Story 5.5's guidance over the checklist.
+    - "Ring a test alarm" uses the soonest enabled alarm's settings.
+  - Home and Settings show the banner from `alarmBlocking`. Its Fix, and the new Settings row, open the checklist.
+  - `ReliabilitySettings` takes a `ChecklistRow`, and the Story 1.19 item API is gone.
+- **Review:** 4 findings: 2 patched (low), 2 rejected (reasons in the triage log).
+- **Follow-up review:** false. Nothing medium or high was patched.
+- **Defaults taken:** see `## DEFAULTS TAKEN`. These are:
+  - no Fix on the Test alarm row;
+  - Camera asks first, then app details;
+  - the camera reason keeps EXPERIENCE.md's House Hunt wording;
+  - the test-alarm settings;
+  - the Manufacturer route;
+  - the Battery target;
+  - test-alarm failure is logged with no snackbar.
+- **Residual risks:**
+  - The deep links, DND and battery have not been checked on a phone (Story 5.13).
+  - The manifest `<queries>` list must name every settings action a Fix uses. A new target needs a new entry, or
+    API 30+ falls back to app details.
+

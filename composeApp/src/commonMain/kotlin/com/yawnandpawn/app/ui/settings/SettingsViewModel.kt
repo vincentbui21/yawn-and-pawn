@@ -157,11 +157,11 @@ class SettingsViewModel(
     private val stored: Flow<Stored> =
         combine(
             globalSettings.observe().catch { cause ->
-                logFailure(LOAD_SETTINGS, cause)
+                logger.logFailure(LOAD_SETTINGS, cause)
                 emit(GlobalSettings())
             },
             pendingChanges.observe().catch { cause ->
-                logFailure(LOAD_PENDING, cause)
+                logger.logFailure(LOAD_PENDING, cause)
                 emit(emptyList())
             },
         ) { settings, pending -> Stored(settings, pending.filter { it.alarmId == null }) }
@@ -173,7 +173,7 @@ class SettingsViewModel(
         consents
             .observe()
             .catch { cause ->
-                logFailure(LOAD_CONSENT, cause)
+                logger.logFailure(LOAD_CONSENT, cause)
                 emit(AnalyticsConsent())
             }.map { it.consent }
 
@@ -195,39 +195,62 @@ class SettingsViewModel(
 
     fun onIntent(intent: SettingsIntent) {
         when (intent) {
-            is SettingsIntent.OpenPane -> local.update { it.copy(pane = intent.pane) }
+            is SettingsIntent.OpenPane -> {
+                local.update { it.copy(pane = intent.pane) }
+            }
 
-            SettingsIntent.Back -> local.update { it.copy(pane = SettingsPane.Main) }
+            SettingsIntent.Back -> {
+                local.update { it.copy(pane = SettingsPane.Main) }
+            }
 
-            SettingsIntent.LowerBaseFee -> currentTier()?.let { request(SettingValue.BaseFeeTier(it - 1)) }
+            SettingsIntent.LowerBaseFee -> {
+                currentTier()?.let { request(SettingValue.BaseFeeTier(it - 1)) }
+            }
 
-            SettingsIntent.RaiseBaseFee -> currentTier()?.let { request(SettingValue.BaseFeeTier(it + 1)) }
+            SettingsIntent.RaiseBaseFee -> {
+                currentTier()?.let { request(SettingValue.BaseFeeTier(it + 1)) }
+            }
 
-            is SettingsIntent.MaxSnoozesChanged -> request(SettingValue.MaxSnoozes(intent.value))
+            is SettingsIntent.MaxSnoozesChanged -> {
+                request(SettingValue.MaxSnoozes(intent.value))
+            }
 
-            is SettingsIntent.SnoozeLengthSelected -> request(DefaultSetting.SnoozeLength(intent.minutes))
+            is SettingsIntent.SnoozeLengthSelected -> {
+                request(DefaultSetting.SnoozeLength(intent.minutes))
+            }
 
-            is SettingsIntent.QuietTimeChanged -> request(DefaultSetting.GraceSeconds(intent.seconds))
+            is SettingsIntent.QuietTimeChanged -> {
+                request(DefaultSetting.GraceSeconds(intent.seconds))
+            }
 
-            is SettingsIntent.VibrateDuringQuietTimeToggled -> request(DefaultSetting.VibrateInGrace(intent.on))
+            is SettingsIntent.VibrateDuringQuietTimeToggled -> {
+                request(DefaultSetting.VibrateInGrace(intent.on))
+            }
 
-            is SettingsIntent.ThemeSelected -> request(DefaultSetting.Theme(intent.mode.toCore()))
+            is SettingsIntent.ThemeSelected -> {
+                request(DefaultSetting.Theme(intent.mode.toCore()))
+            }
 
-            is SettingsIntent.UsageStatsToggled -> setUsageStats(intent.on)
-
-            SettingsIntent.Started, SettingsIntent.FixSettings, SettingsIntent.ReliabilityClicked -> onReliabilityIntent(intent)
+            is SettingsIntent.UsageStatsToggled, SettingsIntent.Started, SettingsIntent.FixSettings, SettingsIntent.ReliabilityClicked -> {
+                onGeneralIntent(intent)
+            }
 
             // The other rows belong to later Epic 5 stories; production does not show them.
-            else -> Unit
+            else -> {
+                Unit
+            }
         }
     }
 
-    /** Story 5.4: a start evaluates the checklist again (back from it, too); "Fix" and its row open it. */
-    private fun onReliabilityIntent(intent: SettingsIntent) {
-        if (intent == SettingsIntent.Started) {
-            banner?.refresh()
-        } else {
-            mutableEffects.trySend(SettingsEffect.OpenReliability)
+    /**
+     * The usage stats switch (Story 5.6) and the reliability checklist (Story 5.4): a start evaluates the checklist again
+     * (back from it, too); "Fix" and its row open it.
+     */
+    private fun onGeneralIntent(intent: SettingsIntent) {
+        when (intent) {
+            is SettingsIntent.UsageStatsToggled -> setUsageStats(intent.on)
+            SettingsIntent.Started -> banner?.refresh()
+            else -> mutableEffects.trySend(SettingsEffect.OpenReliability)
         }
     }
 
@@ -379,11 +402,6 @@ class SettingsViewModel(
         )
     }
 
-    private fun logFailure(
-        operation: String,
-        cause: Throwable,
-    ) = logger.log(LogEvent.OperationFailed(operation, cause.message ?: cause::class.simpleName.orEmpty()))
-
     /** One save in the queue: a commitment-locked setting (Story 4.5) or a default (Story 5.1). */
     private sealed interface Save {
         data class Locked(
@@ -523,3 +541,9 @@ private fun DefaultSetting.isValid(): Boolean =
 private fun Logger.logDefaultFailure(result: Outcome<Unit, DomainError>) {
     if (result is Outcome.Failure) log(LogEvent.OperationFailed.of(SettingsViewModel.SAVE_DEFAULT, result.error))
 }
+
+/** Logs a store read that failed with [cause] as [operation]. */
+private fun Logger.logFailure(
+    operation: String,
+    cause: Throwable,
+) = log(LogEvent.OperationFailed(operation, cause.message ?: cause::class.simpleName.orEmpty()))

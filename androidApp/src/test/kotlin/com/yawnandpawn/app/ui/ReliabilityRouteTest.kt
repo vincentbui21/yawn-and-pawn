@@ -79,7 +79,7 @@ class ReliabilityRouteTest {
         composeRule.onAllNodes(hasText(text, substring = true)).fetchSemanticsNodes().isNotEmpty() == shown
     }
 
-    /** The merged checklist row of [title] reads [status] ("OK"); waits for it. */
+    /** The merged checklist row of [title] reads [status] ("OK", or its reason); waits for it. */
     private fun waitForRow(
         title: String,
         status: String,
@@ -106,7 +106,8 @@ class ReliabilityRouteTest {
             waitForText(banner)
             composeRule.onNode(hasText("Fix") and hasClickAction()).performClick()
 
-            waitForText("Ring a test alarm")
+            // The rows come with the first evaluation, which reads the records DataStore on the main looper.
+            waitForRow("Battery", "Stops Android from pausing your alarm.")
             composeRule.onNode(hasText("Fix") and hasClickAction()).performClick()
             assertEquals(listOf(ChecklistRow.Battery), settings.opened)
         }
@@ -119,8 +120,7 @@ class ReliabilityRouteTest {
         ActivityScenario.launch(MainActivity::class.java).use { scenario ->
             waitForText(banner)
             composeRule.onNode(hasText("Fix") and hasClickAction()).performClick()
-            waitForText("Ring a test alarm")
-            composeRule.onNode(hasText("Do Not Disturb") and hasText("Do Not Disturb must allow alarms.")).assertExists()
+            waitForRow("Do Not Disturb", "Do Not Disturb must allow alarms.")
 
             composeRule.onNode(hasText("Fix") and hasClickAction()).performClick()
             assertEquals(listOf(ChecklistRow.DoNotDisturb), settings.opened)

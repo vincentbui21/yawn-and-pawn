@@ -177,7 +177,8 @@ class OnboardingSemanticsTest {
         show({ OnboardingSamples.testReady }) {
             assertStartsOnHeadline("Test your alarm", step = 8)
             composeRule.onNode(hasText("Lock your phone. We'll ring in 10 seconds.")).assertExists()
-            composeRule.onNode(hasText(BRIGHT_WAKE_NOTE)).assertDoesNotExist()
+            // Story 5.2: the note shows while Bright wake screen is on (the default).
+            composeRule.onNode(hasText(BRIGHT_WAKE_NOTE)).assertExists()
             composeRule.onNode(hasText("Ring a test alarm") and hasClickAction()).assertHeightIsAtLeast(48.dp).assertIsEnabled()
             composeRule.onNode(hasText("Skip for now") and hasClickAction()).assertHeightIsAtLeast(48.dp).assertIsEnabled()
             composeRule.assertControlsLabelledWithRoles()

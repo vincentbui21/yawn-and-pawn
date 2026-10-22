@@ -776,8 +776,8 @@ class OnboardingViewModel(
             reliability = checklistRows,
             manufacturerGuidance = ui.guidance && step == OnboardingStep.Reliability,
             testStatus = testStatusOf(testResult(ui)),
-            // The Bright wake screen setting arrives with Story 5.2; until then its note is hidden.
-            brightWakeNote = false,
+            // Story 5.2: the note shows while "Bright wake screen" is on (the stored setting, on by default).
+            brightWakeNote = stored.brightWakeScreen,
         )
     }
 

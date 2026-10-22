@@ -92,9 +92,9 @@ internal object OnboardingSamples {
 
     /**
      * Step 8 as the app shows it (Story 5.12): "Test your alarm", "Lock your phone. We'll ring in 10 seconds.", "Ring a
-     * test alarm" and "Skip for now"; no Bright wake screen note until Story 5.2.
+     * test alarm" and "Skip for now", with the Bright wake screen note (Story 5.2: on by default).
      */
-    val testReady: OnboardingUiState get() = firstAlarm(OnboardingStep.TestAlarm).copy(brightWakeNote = false)
+    val testReady: OnboardingUiState get() = firstAlarm(OnboardingStep.TestAlarm)
 
     /** Step 8 while the test is pending: "Ring a test alarm" disabled, "Skip for now" still there. */
     val testWaiting: OnboardingUiState get() = testReady.copy(testStatus = TestAlarmStatus.Waiting)

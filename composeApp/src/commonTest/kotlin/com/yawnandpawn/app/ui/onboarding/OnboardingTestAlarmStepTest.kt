@@ -2,7 +2,9 @@ package com.yawnandpawn.app.ui.onboarding
 
 import com.yawnandpawn.app.core.alarm.RequestCodes
 import com.yawnandpawn.app.core.error.DomainError
+import com.yawnandpawn.app.core.onboarding.OnboardingTestAlarm
 import com.yawnandpawn.app.core.reliability.StoredReliability
+import com.yawnandpawn.app.testing.FakeAlarmScheduler
 import com.yawnandpawn.app.testing.OnboardingPresets
 import com.yawnandpawn.app.testing.SchedulerCall
 import com.yawnandpawn.app.testing.anAlarm
@@ -17,6 +19,7 @@ import kotlin.test.assertNotNull
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
 import kotlin.time.Duration.Companion.hours
+import kotlin.time.Duration.Companion.minutes
 import kotlin.time.Duration.Companion.seconds
 import kotlin.time.Instant
 
@@ -73,6 +76,92 @@ class OnboardingTestAlarmStepTest : OnboardingViewModelFixture() {
             viewModel.onIntent(OnboardingIntent.RingTestAlarm)
             assertEquals(1, testsArmed, "no second test while one is pending")
             assertFalse(onboarding.current.completed)
+            // Review fix: only the test request code was armed; the first alarm itself is untouched.
+            assertEquals(listOf<SchedulerCall>(SchedulerCall.ScheduleTest(ringsAt.toEpochMilliseconds())), testArming.calls)
+            val first = alarms.current.single { it.id == FIRST }
+            assertFalse(first.enabled, "the test never switches the first alarm on")
+            assertEquals(RequestCodes.FIRST_ALARM, first.requestCode)
+            assertEquals(emptyList(), (fixture.scheduler as FakeAlarmScheduler).calls, "no real alarm was armed or cancelled")
+        }
+
+    @Test
+    fun `a ring time that cannot be stored arms nothing and shows Couldn't save, so no pass is ever lost`() =
+        runTest {
+            onTestStep()
+            val viewModel = viewModel()
+            settle()
+            onboarding.writeFailure = DomainError.StorageFailure("disk full")
+
+            viewModel.onIntent(OnboardingIntent.RingTestAlarm)
+
+            assertTrue(viewModel.shown.saveFailed, "Couldn't save. Try again.")
+            assertEquals(0, testsArmed, "no test rings whose result could not be kept")
+            assertNull(testStore.pending)
+            assertEquals(TestAlarmStatus.Ready, viewModel.shown.testStatus)
+            assertEquals(1, failed(OnboardingViewModel.REMEMBER_TEST).size)
+
+            onboarding.writeFailure = null
+            viewModel.onIntent(OnboardingIntent.RingTestAlarm)
+            assertEquals(ringsAt, onboarding.current.testRingsAt, "stored before the test was armed")
+            assertEquals(1, testsArmed)
+
+            // A new screen (the session replaced this one) reads the stored ring time and takes the pass.
+            records.stored = StoredReliability(lockedTestPassedAt = ringsAt + 20.seconds)
+            viewModel()
+            assertTrue(onboarding.current.completed)
+        }
+
+    @Test
+    fun `a wall clock set back 2 min after Ring still takes the locked pass`() =
+        runTest {
+            onTestStep()
+            ringOnStep8()
+
+            clock.advanceBy((-2).minutes)
+            records.stored = StoredReliability(lockedTestPassedAt = clock.now() + 20.seconds)
+
+            assertTrue(onboarding.current.completed)
+            assertFalse(onboarding.current.testNoteDue)
+        }
+
+    @Test
+    fun `a wall clock set back while waiting never keeps the step waiting, and a clock change renders it again`() =
+        runTest {
+            onTestStep()
+            val back = ringOnStep8()
+            clock.advanceBy((-1).hours)
+
+            testScheduler.advanceTimeBy(OnboardingTestAlarm.MAX_WAIT + 1.seconds)
+            testScheduler.runCurrent()
+
+            assertEquals(TestAlarmStatus.NotLocked, back.shown.testStatus, "the wait is over in elapsed time")
+
+            // A clock set forward past the wait: the change signal renders the step again before the elapsed wait ends.
+            clock.set(lateEvening)
+            onTestStep()
+            val forward = ringOnStep8()
+            assertEquals(TestAlarmStatus.Waiting, forward.shown.testStatus)
+            clock.advanceBy(1.minutes)
+
+            timeChanges.emit()
+
+            assertEquals(TestAlarmStatus.NotLocked, forward.shown.testStatus)
+        }
+
+    @Test
+    fun `after a locked pass whose completion failed, Skip for now completes it as passed, without Home's note`() =
+        runTest {
+            onTestStep()
+            val viewModel = ringOnStep8()
+            onboarding.writeFailure = DomainError.StorageFailure("disk full")
+            records.stored = StoredReliability(lockedTestPassedAt = ringsAt + 20.seconds)
+            assertTrue(viewModel.shown.saveFailed)
+
+            onboarding.writeFailure = null
+            viewModel.onIntent(OnboardingIntent.SkipTestAlarm)
+
+            assertTrue(onboarding.current.completed)
+            assertFalse(onboarding.current.testNoteDue, "the test passed: no note")
         }
 
     @Test

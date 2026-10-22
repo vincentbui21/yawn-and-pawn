@@ -14,6 +14,7 @@ import kotlin.test.assertEquals
 import kotlin.test.assertFalse
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
+import kotlin.time.Duration.Companion.hours
 import kotlin.time.Duration.Companion.minutes
 import kotlin.time.Duration.Companion.seconds
 import kotlin.time.Instant
@@ -202,11 +203,16 @@ class OnboardingTest {
         assertEquals(OnboardingTestResult.Passed, result(ringsAt, ringsAt + 30.seconds, ringsAt + 40.seconds))
         assertEquals(OnboardingTestResult.Passed, result(ringsAt, now, now), "a pass from the moment the ring was asked for")
         assertEquals(
-            OnboardingTestResult.NotLocked,
-            result(ringsAt, now - 1.seconds, ringsAt + 1.minutes),
-            "a pass from before the ring was asked for does not count",
+            OnboardingTestResult.Passed,
+            result(ringsAt, now - 2.minutes, ringsAt + 1.minutes),
+            "review fix: a pass after the clock was set back 2 min still counts",
         )
-        assertEquals(OnboardingTestResult.Waiting, result(ringsAt, now - 1.seconds, now))
+        assertEquals(
+            OnboardingTestResult.NotLocked,
+            result(ringsAt, now - OnboardingTestAlarm.CLOCK_SKEW - 1.seconds, ringsAt + 1.minutes),
+            "a pass from well before the ring was asked for does not count",
+        )
+        assertEquals(OnboardingTestResult.Waiting, result(ringsAt, now - 1.hours, now))
     }
 
     @Test

@@ -38,6 +38,7 @@ import com.yawnandpawn.app.testing.FakeReliabilitySettings
 import com.yawnandpawn.app.testing.FakeSoundLibrary
 import com.yawnandpawn.app.testing.FakeSoundPreview
 import com.yawnandpawn.app.testing.FakeTestAlarmStore
+import com.yawnandpawn.app.testing.FakeTimeChangeSignal
 import com.yawnandpawn.app.testing.FakeTimeZoneProvider
 import com.yawnandpawn.app.testing.OnboardingPresets
 import com.yawnandpawn.app.testing.aPriceSnapshot
@@ -116,6 +117,9 @@ abstract class OnboardingViewModelFixture {
     /** Where step 8's test is stored and armed (Story 5.12): the pending config, and a switch to fail the arming. */
     protected val testStore = FakeTestAlarmStore()
     protected val testArming = FakeAlarmScheduler()
+
+    /** The clock's changes (each minute, a time set, a zone change) step 8 renders again on (Story 5.12 review fix). */
+    protected val timeChanges = FakeTimeChangeSignal()
 
     /** How many first-alarm editors onboarding opened (Story 5.11). */
     protected var editorsOpened = 0
@@ -202,6 +206,7 @@ abstract class OnboardingViewModelFixture {
                             ),
                         remember = RememberOnboardingTest(onboarding, sessionLock),
                         records = records,
+                        timeChanges = timeChanges,
                     ),
                 monotonicClock = ticks,
                 timeZoneProvider = zone,

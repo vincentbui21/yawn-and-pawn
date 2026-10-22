@@ -87,7 +87,7 @@ val uiModule =
                 checklist = ChecklistScreens { ReliabilityViewModel(get(), get(), get(), get(), get()) },
                 usageStats = UsageStatsSources(consents = get(), setConsent = get()),
                 // Step 8 rings the checklist's own test on the first alarm and watches 5.3's locked pass.
-                testAlarm = TestAlarmSources(ring = get(), remember = get(), records = get()),
+                testAlarm = TestAlarmSources(ring = get(), remember = get(), records = get(), timeChanges = get()),
                 monotonicClock = get(),
                 timeZoneProvider = get(),
             )

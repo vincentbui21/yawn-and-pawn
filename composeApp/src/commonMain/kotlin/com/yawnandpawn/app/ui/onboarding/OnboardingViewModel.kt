@@ -20,6 +20,7 @@ import com.yawnandpawn.app.core.onboarding.OnboardingTestAlarm
 import com.yawnandpawn.app.core.onboarding.OnboardingTestResult
 import com.yawnandpawn.app.core.onboarding.SaveOnboardingStep
 import com.yawnandpawn.app.core.session.GlobalSettings
+import com.yawnandpawn.app.core.session.ScheduleTestAlarm
 import com.yawnandpawn.app.core.telemetry.AnalyticsConsent
 import com.yawnandpawn.app.core.time.Clock
 import com.yawnandpawn.app.core.time.MonotonicClock
@@ -184,6 +185,13 @@ class OnboardingViewModel(
                 .catch { cause -> logFailure(LOAD_RECORDS, cause) }
                 .collect { stored -> lockedTestRead(stored.lockedTestPassedAt) }
         }
+        // Review fix: a set clock, a zone change or the next minute renders step 8 again against the clock.
+        viewModelScope.launch {
+            testAlarm.timeChanges
+                .changes()
+                .catch { cause -> logFailure(LOAD_TIME_CHANGES, cause) }
+                .collect { if (local.value.step == OnboardingStep.TestAlarm) rerender() }
+        }
     }
 
     fun onIntent(intent: OnboardingIntent) {
@@ -265,9 +273,11 @@ class OnboardingViewModel(
                 if (testStep && settled() && testResult(local.value) in RINGABLE) queueBusy(Op.RingTest)
             }
 
-            // Works in every step 8 state, a pending test included: onboarding can always be finished.
+            // Works in every step 8 state, a pending test included: onboarding can always be finished. After a locked pass
+            // whose completion failed it completes as passed, without Home's note (review fix).
             OnboardingIntent.SkipTestAlarm -> {
-                if (testStep && settled()) queueBusy(Op.Complete(testSkipped = true))
+                val passed = testResult(local.value) == OnboardingTestResult.Passed
+                if (testStep && settled()) queueBusy(Op.Complete(testSkipped = !passed))
             }
 
             else -> {
@@ -408,17 +418,28 @@ class OnboardingViewModel(
     private fun rereadTest() {
         viewModelScope.launch {
             when (val read = testAlarm.records.read()) {
-                is Outcome.Success -> lockedTestRead(read.value.lockedTestPassedAt)
-                is Outcome.Failure -> logger.log(LogEvent.OperationFailed.of(LOAD_RECORDS, read.error))
+                is Outcome.Success -> {
+                    lockedTestRead(read.value.lockedTestPassedAt)
+                }
+
+                is Outcome.Failure -> {
+                    logger.log(LogEvent.OperationFailed.of(LOAD_RECORDS, read.error))
+                    local.update { it.copy(recordsRead = true) }
+                }
             }
-            local.update { it.copy(tick = it.tick + 1) }
-            finishIfPassed()
+            rerender()
         }
+    }
+
+    /** Step 8 renders again against the clock, and completes onboarding if its test passed. */
+    private fun rerender() {
+        local.update { it.copy(tick = it.tick + 1) }
+        finishIfPassed()
     }
 
     /** The last locked pass is [passedAt]: if it passes step 8's test, onboarding completes. */
     private fun lockedTestRead(passedAt: Instant?) {
-        local.update { it.copy(passedAt = passedAt) }
+        local.update { it.copy(passedAt = passedAt, recordsRead = true) }
         finishIfPassed()
     }
 
@@ -433,17 +454,31 @@ class OnboardingViewModel(
         }
     }
 
-    private fun testResult(ui: Local): OnboardingTestResult = OnboardingTestAlarm.result(ui.testRingsAt, ui.passedAt, clock.now())
+    /**
+     * Step 8's result as shown: [OnboardingTestAlarm.result] at the wall clock's now, except that a wait already over in
+     * elapsed time ([Local.waitOver]) reads as not locked whatever the wall clock says, and a "not locked" before the
+     * locked pass was first read stays waiting (review fixes: a clock set back, and 5.3's write landing late).
+     */
+    private fun testResult(ui: Local): OnboardingTestResult =
+        when (val result = OnboardingTestAlarm.result(ui.testRingsAt, ui.passedAt, clock.now())) {
+            OnboardingTestResult.Waiting -> if (ui.waitOver) OnboardingTestResult.NotLocked else result
+            OnboardingTestResult.NotLocked -> if (ui.recordsRead) result else OnboardingTestResult.Waiting
+            else -> result
+        }
 
-    /** Step 8 renders again once the test ringing at [ringsAt] is over without a pass (it then reads as not locked). */
+    /**
+     * Step 8 renders again once the test ringing at [ringsAt] is over without a pass (it then reads as not locked). The
+     * wait runs in elapsed time and is never longer than [OnboardingTestAlarm.MAX_WAIT], so a wall clock set back while
+     * it waits never keeps the step waiting (review fix).
+     */
     private fun awaitTest(ringsAt: Instant) {
         testWait?.cancel()
-        val wait = ringsAt + OnboardingTestAlarm.RESULT_SLACK - clock.now()
-        if (!wait.isPositive()) return
+        local.update { it.copy(waitOver = false) }
+        val wait = minOf(ringsAt + OnboardingTestAlarm.RESULT_SLACK - clock.now(), OnboardingTestAlarm.MAX_WAIT)
         testWait =
             viewModelScope.launch {
-                delay(wait)
-                local.update { it.copy(tick = it.tick + 1) }
+                if (wait.isPositive()) delay(wait)
+                local.update { it.copy(waitOver = true, tick = it.tick + 1) }
             }
     }
 
@@ -617,20 +652,34 @@ class OnboardingViewModel(
     }
 
     /**
-     * "Ring a test alarm": the first alarm rings as a test in 10 seconds; when it rings shows at once and is stored. A
-     * test that cannot be armed shows "Couldn't save. Try again.", logged.
+     * "Ring a test alarm": the first alarm rings as a test in 10 seconds. When it will ring is stored first (review fix:
+     * a pass must never be lost to a ring time that was not stored), so a store that refuses it arms nothing; then the
+     * test is armed and its exact ring time stored. A test that cannot be armed takes the stored time back. Either
+     * failure shows "Couldn't save. Try again.", logged.
      */
     private suspend fun ringTest() {
+        val previous = local.value.testRingsAt
+        val planned = clock.now() + ScheduleTestAlarm.TEST_DELAY
+        val remembered = testAlarm.remember(planned)
+        logIfFailed(REMEMBER_TEST, remembered)
+        if (remembered is Outcome.Failure) {
+            local.update { it.copy(busy = false, saveFailed = true) }
+            return
+        }
         val armed = testAlarm.ring(local.value.alarmId)
         logIfFailed(RING_TEST, armed)
         when (armed) {
             is Outcome.Success -> {
                 local.update { it.copy(busy = false, testRingsAt = armed.value) }
                 awaitTest(armed.value)
-                logIfFailed(REMEMBER_TEST, testAlarm.remember(armed.value))
+                // The armed time is milliseconds from the planned one, which already counts if this write fails.
+                if (armed.value != planned) logIfFailed(REMEMBER_TEST, testAlarm.remember(armed.value))
+                // A pass read while the test was being armed (the step was busy then) completes onboarding now.
+                finishIfPassed()
             }
 
             is Outcome.Failure -> {
+                logIfFailed(REMEMBER_TEST, testAlarm.remember(previous))
                 local.update { it.copy(busy = false, saveFailed = true) }
             }
         }
@@ -726,7 +775,7 @@ class OnboardingViewModel(
             checkSetup = editor?.takeIf { step == OnboardingStep.Checks && it.pane in OVERLAY_PANES },
             reliability = checklistRows,
             manufacturerGuidance = ui.guidance && step == OnboardingStep.Reliability,
-            testStatus = testStatusOf(OnboardingTestAlarm.result(ui.testRingsAt, ui.passedAt, now)),
+            testStatus = testStatusOf(testResult(ui)),
             // The Bright wake screen setting arrives with Story 5.2; until then its note is hidden.
             brightWakeNote = false,
         )
@@ -820,6 +869,10 @@ class OnboardingViewModel(
         val passedAt: Instant? = null,
         /** Bumped to render step 8 again against the clock (a resume, the end of a test's wait). */
         val tick: Int = 0,
+        /** The pending test's wait is over in elapsed time ([OnboardingTestAlarm.MAX_WAIT] at most). */
+        val waitOver: Boolean = false,
+        /** The locked pass was read at least once (watched or re-read), so "not locked" can show. */
+        val recordsRead: Boolean = false,
     )
 
     companion object {
@@ -848,6 +901,7 @@ class OnboardingViewModel(
         const val LOAD_CONSENT = "load usage stats choice"
         const val SAVE_CONSENT = "save usage stats choice"
         const val LOAD_RECORDS = "load locked test"
+        const val LOAD_TIME_CHANGES = "watch clock changes for the test alarm"
         const val RING_TEST = "ring onboarding test alarm"
         const val REMEMBER_TEST = "remember onboarding test alarm"
 

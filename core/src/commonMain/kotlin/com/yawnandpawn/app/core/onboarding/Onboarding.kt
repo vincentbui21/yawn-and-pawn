@@ -13,6 +13,7 @@ import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.map
 import kotlin.time.Duration
+import kotlin.time.Duration.Companion.minutes
 import kotlin.time.Duration.Companion.seconds
 import kotlin.time.Instant
 
@@ -172,10 +173,19 @@ object OnboardingTestAlarm {
     val RESULT_SLACK: Duration = 10.seconds
 
     /**
+     * How far the wall clock may have been set back between the ring and its pass (review fix: a time sync or a manual
+     * change), so a real locked pass still counts.
+     */
+    val CLOCK_SKEW: Duration = 5.minutes
+
+    /** The longest a test reads as waiting on screen, in elapsed time, whatever the wall clock does (review fix). */
+    val MAX_WAIT: Duration = ScheduleTestAlarm.TEST_DELAY + RESULT_SLACK
+
+    /**
      * The result of the test that rings at [ringsAt] (null: none rung), with the last locked pass at [passedAt] (5.3's
      * `lockedTestPassedAt`), at [now]: [OnboardingTestResult.Passed] when the pass came after the ring was asked for
-     * ([ringsAt] − [ScheduleTestAlarm.TEST_DELAY]); else [OnboardingTestResult.Waiting] before [ringsAt] +
-     * [RESULT_SLACK]; else [OnboardingTestResult.NotLocked].
+     * ([ringsAt] − [ScheduleTestAlarm.TEST_DELAY], less [CLOCK_SKEW]); else [OnboardingTestResult.Waiting] before
+     * [ringsAt] + [RESULT_SLACK]; else [OnboardingTestResult.NotLocked].
      */
     fun result(
         ringsAt: Instant?,
@@ -184,7 +194,7 @@ object OnboardingTestAlarm {
     ): OnboardingTestResult =
         when {
             ringsAt == null -> OnboardingTestResult.NotRung
-            passedAt != null && passedAt >= ringsAt - ScheduleTestAlarm.TEST_DELAY -> OnboardingTestResult.Passed
+            passedAt != null && passedAt >= ringsAt - ScheduleTestAlarm.TEST_DELAY - CLOCK_SKEW -> OnboardingTestResult.Passed
             now < ringsAt + RESULT_SLACK -> OnboardingTestResult.Waiting
             else -> OnboardingTestResult.NotLocked
         }

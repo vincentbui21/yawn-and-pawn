@@ -148,6 +148,14 @@ deferred:
   - `[false]` `[reject]` (intent) Bright wake note missing in the app — Story 5.2 has not built the setting; showing it would claim a behaviour the app lacks; DEFAULT TAKEN.
   - `[false]` `[reject]` (intent) `qualityGate` not run — lane run constraints; CI runs it on the PR.
 
+### 2026-10-22 — PR #79 review (coordinator): no high, 3 medium, 3 low; all patched
+- `[medium]` `[patch]` Wall-clock dependence: a clock set back between Ring and the pass lost a real pass, and a clock set back while waiting kept the step waiting. `OnboardingTestAlarm.CLOCK_SKEW` (5 min) widens the pass window; the wait runs in elapsed time, at most `MAX_WAIT` (20 s), so the step can never get stuck; step 8 renders again on `TimeChangeSignal` (bound in `UiModule`). Tests: core rule (pass after a 2 min set-back), `OnboardingTestAlarmStepTest` (set back 2 min then a pass completes; set back 1 h still ends the wait; a set-forward clock re-renders on the signal).
+- `[medium]` `[patch]` A ring time that could not be stored lost the pass. The planned ring time is now stored before arming; if that write fails nothing is armed and "Couldn't save. Try again." shows; a failed arming puts the earlier time back. Test: the write fails → no test armed, error shown; then Ring stores first and a new screen takes the pass.
+- `[medium]` `[patch]` Acceptance criterion 2 was only covered with fakes. `OnboardingFlowTest` now taps "Ring a test alarm" in the real app, records a locked pass through the real `ReliabilityRecords`, and checks Home without the note, `completed`, no `testNoteDue` and the checklist's test row OK. Writing it found a race, also patched: a pass read while the test was still being armed (step busy) waited for the next resume; the step now completes as soon as arming ends.
+- `[low]` `[patch]` "Wasn't locked" could flash before 5.3's write landed: "not locked" shows only after the locked pass was read once (watched or re-read; a failed read counts as read, logged). No dedicated test: the fakes emit at once, so the window cannot be held open without a suspending records fake.
+- `[low]` `[patch]` A failed completion after a pass left only a resume to retry. "Skip for now" after a pass now completes it as passed (no Home note). Test added.
+- `[low]` `[patch]` Test gap: the Ring test now asserts exactly one `ScheduleTest`, the first alarm still off with its request code, and no call on the alarm scheduler.
+
 ## Implementation notes
 
 - **Name deviation:** the pure rule is `OnboardingTestAlarm.result` (with `OnboardingTestResult`), not `OnboardingTest.result`: core's existing test class `com.yawnandpawn.app.core.onboarding.OnboardingTest` has the same fully qualified name, so an `OnboardingTest` object in main would not compile.

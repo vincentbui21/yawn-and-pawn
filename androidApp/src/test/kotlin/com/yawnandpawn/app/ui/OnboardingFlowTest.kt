@@ -12,6 +12,7 @@ import androidx.compose.ui.test.hasAnyAncestor
 import androidx.compose.ui.test.hasClickAction
 import androidx.compose.ui.test.hasContentDescription
 import androidx.compose.ui.test.hasText
+import androidx.compose.ui.test.isNotEnabled
 import androidx.compose.ui.test.isToggleable
 import androidx.compose.ui.test.junit4.v2.createEmptyComposeRule
 import androidx.compose.ui.test.onRoot
@@ -24,6 +25,7 @@ import androidx.test.core.app.ApplicationProvider
 import com.yawnandpawn.app.APP_WORK_TIMEOUT_MILLIS
 import com.yawnandpawn.app.MainActivity
 import com.yawnandpawn.app.StopAppRule
+import com.yawnandpawn.app.core.alarm.Alarm
 import com.yawnandpawn.app.core.alarm.AlarmDraft
 import com.yawnandpawn.app.core.alarm.AlarmRepository
 import com.yawnandpawn.app.core.alarm.SaveAlarm
@@ -35,13 +37,16 @@ import com.yawnandpawn.app.core.onboarding.OnboardingRepository
 import com.yawnandpawn.app.core.reliability.DeviceInfo
 import com.yawnandpawn.app.core.reliability.DeviceInfoSource
 import com.yawnandpawn.app.core.reliability.DeviceMaker
+import com.yawnandpawn.app.core.reliability.EvaluateReliability
 import com.yawnandpawn.app.core.reliability.ReliabilityProbe
 import com.yawnandpawn.app.core.reliability.ReliabilityRecords
 import com.yawnandpawn.app.core.reliability.ReliabilityStatus
+import com.yawnandpawn.app.core.reliability.RowStatus
 import com.yawnandpawn.app.core.reset.DeleteAllData
 import com.yawnandpawn.app.core.session.SessionEngine
 import com.yawnandpawn.app.core.telemetry.AnalyticsConsent
 import com.yawnandpawn.app.core.telemetry.ConsentStore
+import com.yawnandpawn.app.core.time.Clock
 import com.yawnandpawn.app.data.settings.SettingsDataStore
 import com.yawnandpawn.app.restartKoin
 import com.yawnandpawn.app.testing.FakeReliabilityProbe
@@ -67,7 +72,9 @@ import kotlin.test.assertIs
 import kotlin.test.assertNotNull
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
+import kotlin.time.Duration.Companion.seconds
 import kotlin.time.Instant
+import com.yawnandpawn.app.core.reliability.ChecklistRow as CoreChecklistRow
 
 /**
  * Stories 5.10 to 5.12 in the real app, with the real onboarding store (the settings DataStore) instead of the completed
@@ -303,6 +310,33 @@ class OnboardingFlowTest {
             val usageStats = hasText("Share anonymous usage stats") and isToggleable()
             waitFor(usageStats)
             composeRule.onNode(usageStats).assertIsOff()
+        }
+
+    @Test
+    fun `Ring a test alarm then a locked pass opens Home without the note, and the checklist's test row is OK`() =
+        launch(before = { onboarding ->
+            onboarding.setDisclosureAccepted(Instant.parse("2027-03-08T21:00:00Z"))
+            val first = assertIs<Outcome.Success<Alarm>>(koinGet().get<SaveAlarm>()(AlarmDraft(time = LocalTime(7, 0)))).value
+            onboarding.setAlarmId(first.id)
+            onboarding.setStep("TestAlarm")
+        }) {
+            waitFor(hasText("Test your alarm"))
+            tapOnly("Ring a test alarm")
+            waitForStored { it.testRingsAt != null }
+            // Armed: "Ring a test alarm" is disabled while the test is pending.
+            waitFor(hasText("Ring a test alarm") and isNotEnabled())
+            assertFalse(stored().completed)
+
+            // What 5.3's reporter writes when the test, rung over the lock screen, is completed.
+            val passedAt = koinGet().get<Clock>().now() + 20.seconds
+            runBlocking { koinGet().get<ReliabilityRecords>().lockedTestPassed(passedAt) }
+
+            waitFor(navCapsule)
+            assertTrue(stored().completed)
+            assertFalse(stored().testNoteDue)
+            composeRule.onNode(hasText(TEST_NOTE)).assertDoesNotExist()
+            val rows = runBlocking { koinGet().get<EvaluateReliability>()() }
+            assertEquals(RowStatus.Ok, rows.single { it.row == CoreChecklistRow.LockedScreenTest }.status)
         }
 
     @Test

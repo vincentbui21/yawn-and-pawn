@@ -79,11 +79,13 @@ private class GatedDefaults(
     override suspend fun setDefaultSnoozeLength(minutes: Int) = gated("snooze=$minutes") { inner.setDefaultSnoozeLength(minutes) }
 
     override suspend fun setThemeMode(mode: ThemeMode) = gated("theme=$mode") { inner.setThemeMode(mode) }
+
+    override suspend fun setBrightWakeScreen(on: Boolean) = gated("bright=$on") { inner.setBrightWakeScreen(on) }
 }
 
 /**
- * Story 5.1: Settings shows the stored new-alarm defaults and theme, and saves each change at once through its use case,
- * in order; a failed save is logged and the stored value comes back.
+ * Stories 5.1 and 5.2: Settings shows the stored new-alarm defaults, theme and "Bright wake screen", and saves each
+ * change at once through its use case, in order; a failed save is logged and the stored value comes back.
  */
 @OptIn(ExperimentalCoroutinesApi::class)
 class SettingsDefaultsViewModelTest {
@@ -151,6 +153,7 @@ class SettingsDefaultsViewModelTest {
             inner.setDefaultGraceSeconds(30)
             inner.setDefaultVibrateInGrace(false)
             inner.setThemeMode(ThemeMode.Dark)
+            inner.setBrightWakeScreen(false)
 
             val state = viewModel().now
 
@@ -158,10 +161,11 @@ class SettingsDefaultsViewModelTest {
             assertEquals(30, state.defaultQuietSeconds)
             assertEquals(false, state.vibrateDuringQuietTime)
             assertEquals(PpsThemeMode.Dark, state.theme)
+            assertEquals(false, state.brightWakeScreen)
         }
 
     @Test
-    fun `the built-in defaults show when nothing is stored - 9 min, 20 s, vibration on, System`() =
+    fun `the built-in defaults show when nothing is stored - 9 min, 20 s, vibration on, System, bright wake on`() =
         runTest {
             val state = viewModel().now
 
@@ -169,6 +173,7 @@ class SettingsDefaultsViewModelTest {
             assertEquals(20, state.defaultQuietSeconds)
             assertEquals(true, state.vibrateDuringQuietTime)
             assertEquals(PpsThemeMode.System, state.theme)
+            assertEquals(true, state.brightWakeScreen)
         }
 
     @Test
@@ -180,6 +185,7 @@ class SettingsDefaultsViewModelTest {
             viewModel.onIntent(SettingsIntent.QuietTimeChanged(25))
             viewModel.onIntent(SettingsIntent.VibrateDuringQuietTimeToggled(false))
             viewModel.onIntent(SettingsIntent.ThemeSelected(PpsThemeMode.Dark))
+            viewModel.onIntent(SettingsIntent.BrightWakeScreenToggled(false))
 
             assertEquals(
                 GlobalSettings(
@@ -187,6 +193,7 @@ class SettingsDefaultsViewModelTest {
                     defaultGraceSeconds = 25,
                     defaultVibrateInGrace = false,
                     themeMode = ThemeMode.Dark,
+                    brightWakeScreen = false,
                 ),
                 inner.current,
             )
@@ -195,7 +202,41 @@ class SettingsDefaultsViewModelTest {
             assertEquals(25, state.defaultQuietSeconds)
             assertEquals(false, state.vibrateDuringQuietTime)
             assertEquals(PpsThemeMode.Dark, state.theme)
-            assertEquals(listOf("snooze=10", "grace=25", "vibrate=false", "theme=Dark"), settings.writes)
+            assertEquals(false, state.brightWakeScreen)
+            assertEquals(listOf("snooze=10", "grace=25", "vibrate=false", "theme=Dark", "bright=false"), settings.writes)
+        }
+
+    @Test
+    fun `Bright wake screen moves at once, is stored, and comes back on when its save fails (Story 5_2)`() =
+        runTest {
+            val viewModel = viewModel()
+            viewModel.onIntent(SettingsIntent.BrightWakeScreenToggled(true))
+            assertTrue(settings.writes.isEmpty(), "on is already shown: nothing saved")
+
+            settings.open.value = false
+            viewModel.onIntent(SettingsIntent.BrightWakeScreenToggled(false))
+            assertEquals(false, viewModel.now.brightWakeScreen, "the switch moves at once")
+            settings.open.value = true
+            assertEquals(false, inner.current.brightWakeScreen)
+            assertEquals(false, viewModel.now.brightWakeScreen)
+
+            settings.fail = DomainError.StorageFailure("disk full")
+            viewModel.onIntent(SettingsIntent.BrightWakeScreenToggled(true))
+            assertEquals(false, viewModel.now.brightWakeScreen, "back to the stored value")
+            assertTrue(saveFailed())
+        }
+
+    @Test
+    fun `before the session is restored Bright wake screen is refused by the session lock and stays as stored (Story 5_2)`() =
+        runTest {
+            val viewModel = viewModel()
+            restored.value = false
+
+            viewModel.onIntent(SettingsIntent.BrightWakeScreenToggled(false))
+
+            assertTrue(settings.writes.isEmpty())
+            assertEquals(true, inner.current.brightWakeScreen)
+            assertEquals(true, viewModel.now.brightWakeScreen)
         }
 
     @Test

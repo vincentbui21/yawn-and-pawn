@@ -113,9 +113,9 @@ class SnoozeSettingsRouteTest {
             composeRule.onNodeWithContentDescription("Settings").performClick()
             waitForText("USD 1.00")
             composeRule.onNode(hasText("Max snoozes per session", substring = true) and hasClickAction()).assertExists()
-            // Story 5.1: the card's third row; Bright wake screen (Story 5.2) stays hidden.
+            // Story 5.1: the card's third row; Story 5.2: the Wake card's Bright wake screen switch.
             composeRule.onNode(hasText("Default snooze length", substring = true) and hasClickAction()).assertExists()
-            composeRule.onNodeWithText("Bright wake screen").assertDoesNotExist()
+            composeRule.onNode(hasText("Bright wake screen") and hasClickAction()).assertExists()
 
             composeRule.onNode(hasText("Base fee", substring = true) and hasClickAction()).performClick()
             composeRule.onNodeWithText("Snooze 1: USD 1.00 · 2: USD 2.00 · 3: USD 3.00").assertExists()

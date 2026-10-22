@@ -173,3 +173,12 @@ adb shell am start -S -n com.yawnandpawn.app/.debug.preview.PreviewActivity --es
 | `recordings-mic-denied` | Recordings | Microphone off |
 | `recordings-too-short` | Recordings | Too short |
 | `recordings-delete-dialog` | Recordings | Delete a message |
+
+## Round 4 · Bright wake screen
+
+| Id | Screen | State |
+|---|---|---|
+| `bright-c-ringing` | Bright wake screen · Ringing only | Ringing (full brightness) (Sunrise) |
+| `bright-c-check` | Bright wake screen · Ringing only | Math check (phone's level, simulated) (Sunrise) |
+| `bright-settings-on` | Bright wake screen · Settings | Settings: Bright wake screen on (default) |
+| `bright-settings-off` | Bright wake screen · Settings | Settings: Bright wake screen off |

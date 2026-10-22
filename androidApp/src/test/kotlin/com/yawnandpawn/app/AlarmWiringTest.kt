@@ -20,6 +20,7 @@ import com.yawnandpawn.app.core.config.PromotePendingChanges
 import com.yawnandpawn.app.core.config.ReadFireSettings
 import com.yawnandpawn.app.core.config.RecordCommitmentEvent
 import com.yawnandpawn.app.core.config.SetBaseFee
+import com.yawnandpawn.app.core.config.SetBrightWakeScreen
 import com.yawnandpawn.app.core.config.SetDefaultGrace
 import com.yawnandpawn.app.core.config.SetDefaultSnoozeLength
 import com.yawnandpawn.app.core.config.SetDefaultVibrateInGrace
@@ -75,6 +76,7 @@ class AlarmWiringTest {
         assertNotNull(koin.get<SetDefaultVibrateInGrace>())
         assertNotNull(koin.get<SetDefaultSnoozeLength>())
         assertNotNull(koin.get<SetThemeMode>())
+        assertNotNull(koin.get<SetBrightWakeScreen>())
         assertNotNull(koin.get<RecordCommitmentEvent>())
         assertSame(koin.get<PromotePendingChanges>(), koin.get<PromotePendingChanges>())
         assertNotNull(koin.get<ReadFireSettings>())

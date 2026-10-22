@@ -14,7 +14,10 @@ import kotlin.test.assertEquals
 import kotlin.test.assertNull
 import kotlin.time.Instant
 
-/** Story 5.1: the new-alarm defaults and the theme, saved at once with no commitment lock, inside the session lock. */
+/**
+ * Stories 5.1 and 5.2: the new-alarm defaults, the theme and "Bright wake screen", saved at once with no commitment lock,
+ * inside the session lock.
+ */
 class DefaultSettingsUseCasesTest {
     private val settings = InMemoryGlobalSettings(GlobalSettings(baseFeeTier = 3, maxSnoozes = 2))
     private val sessionState = MutableStateFlow<SessionState>(SessionState.Idle)
@@ -25,6 +28,7 @@ class DefaultSettingsUseCasesTest {
     private val setVibrate = SetDefaultVibrateInGrace(save)
     private val setSnooze = SetDefaultSnoozeLength(save)
     private val setTheme = SetThemeMode(save)
+    private val setBright = SetBrightWakeScreen(save)
 
     @Test
     fun `each default is stored at once, and the fee settings stay as they are`() =
@@ -33,6 +37,7 @@ class DefaultSettingsUseCasesTest {
             assertEquals(Outcome.Success(Unit), setVibrate(false))
             assertEquals(Outcome.Success(Unit), setSnooze(10))
             assertEquals(Outcome.Success(Unit), setTheme(ThemeMode.Dark))
+            assertEquals(Outcome.Success(Unit), setBright(false))
 
             assertEquals(
                 GlobalSettings(
@@ -42,10 +47,14 @@ class DefaultSettingsUseCasesTest {
                     defaultSnoozeLengthMinutes = 10,
                     defaultVibrateInGrace = false,
                     themeMode = ThemeMode.Dark,
+                    brightWakeScreen = false,
                 ),
                 settings.settings.value,
             )
-            assertEquals(4, settings.writes)
+            assertEquals(5, settings.writes)
+
+            assertEquals(Outcome.Success(Unit), setBright(true))
+            assertEquals(true, settings.settings.value.brightWakeScreen)
         }
 
     @Test
@@ -78,12 +87,15 @@ class DefaultSettingsUseCasesTest {
             assertEquals(Outcome.Failure(DomainError.SessionActive), setVibrate(false))
             assertEquals(Outcome.Failure(DomainError.SessionActive), setSnooze(10))
             assertEquals(Outcome.Failure(DomainError.SessionActive), setTheme(ThemeMode.Light))
+            assertEquals(Outcome.Failure(DomainError.SessionActive), setBright(false))
 
             sessionState.value = SessionState.Idle
             restored.value = false
             assertEquals(Outcome.Failure(DomainError.SessionActive), setTheme(ThemeMode.Light))
+            assertEquals(Outcome.Failure(DomainError.SessionActive), setBright(false))
 
             assertEquals(0, settings.writes)
+            assertEquals(true, settings.settings.value.brightWakeScreen)
         }
 
     @Test
@@ -102,6 +114,7 @@ class DefaultSettingsUseCasesTest {
         assertEquals(base.copy(defaultVibrateInGrace = false), base.with(DefaultSetting.VibrateInGrace(false)))
         assertEquals(base.copy(defaultSnoozeLengthMinutes = 15), base.with(DefaultSetting.SnoozeLength(15)))
         assertEquals(base.copy(themeMode = ThemeMode.Light), base.with(DefaultSetting.Theme(ThemeMode.Light)))
+        assertEquals(base.copy(brightWakeScreen = false), base.with(DefaultSetting.BrightWakeScreen(false)))
     }
 
     @Test
@@ -113,7 +126,7 @@ class DefaultSettingsUseCasesTest {
     }
 
     @Test
-    fun `the last-known snapshot keeps the defaults and the theme`() {
+    fun `the last-known snapshot keeps the defaults, the theme and Bright wake screen`() {
         val snapshot =
             SettingsSnapshot(
                 GlobalSettings(
@@ -122,6 +135,7 @@ class DefaultSettingsUseCasesTest {
                     defaultSnoozeLengthMinutes = 15,
                     defaultVibrateInGrace = false,
                     themeMode = ThemeMode.Dark,
+                    brightWakeScreen = false,
                 ),
                 listOf(PendingChange(null, SettingValue.MaxSnoozes(4), Occurrence("a", Instant.parse("2027-03-09T07:30:00Z")))),
             )
@@ -142,5 +156,16 @@ class DefaultSettingsUseCasesTest {
             SettingsSnapshot(GlobalSettings(baseFeeTier = 4, maxSnoozes = 2, defaultVibrateInGrace = false), emptyList()),
             PendingChangeJson.decodeSnapshot(garbage),
         )
+    }
+
+    @Test
+    fun `Bright wake screen is on by default, and a snapshot saved before Story 5_2 reads it as on`() {
+        assertEquals(true, GlobalSettings().brightWakeScreen)
+        val older =
+            """{"baseFeeTier":4,"maxSnoozes":2,"pending":[],"defaultGraceSeconds":25,"defaultSnoozeLengthMinutes":10,""" +
+                """"defaultVibrateInGrace":true,"themeMode":"Dark"}"""
+        assertEquals(true, PendingChangeJson.decodeSnapshot(older)?.settings?.brightWakeScreen)
+        val off = SettingsSnapshot(GlobalSettings(brightWakeScreen = false), emptyList())
+        assertEquals(false, PendingChangeJson.decodeSnapshot(PendingChangeJson.encodeSnapshot(off))?.settings?.brightWakeScreen)
     }
 }

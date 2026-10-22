@@ -35,8 +35,8 @@ interface PendingChangeRepository {
 
 /**
  * Port for the persisted global settings (FR-SET-1) in the settings DataStore (device-protected, backed up): the base
- * fee tier and max snoozes (Story 4.4), and the new-alarm defaults and the theme (Story 5.1). A missing value, or one
- * stored outside its range (an unknown theme name too), reads as the default.
+ * fee tier and max snoozes (Story 4.4), the new-alarm defaults and the theme (Story 5.1), and "Bright wake screen"
+ * (Story 5.2). A missing value, or one stored outside its range (an unknown theme name too), reads as the default.
  */
 interface GlobalSettingsRepository {
     /** The live settings; emits again after each change. */
@@ -59,6 +59,9 @@ interface GlobalSettingsRepository {
 
     /** The app screens' theme (Appearance). */
     suspend fun setThemeMode(mode: ThemeMode): Outcome<Unit, DomainError>
+
+    /** "Bright wake screen" (Story 5.2): the Ringing screen at full brightness, frozen into each session at its fire. */
+    suspend fun setBrightWakeScreen(on: Boolean): Outcome<Unit, DomainError>
 
     /** The live settings and the global pending changes from one read of the store, so the two always agree (the fire). */
     suspend fun snapshot(): Outcome<SettingsSnapshot, DomainError>

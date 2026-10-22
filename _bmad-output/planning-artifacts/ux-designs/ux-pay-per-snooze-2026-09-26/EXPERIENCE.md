@@ -18,7 +18,7 @@ How the app works: structure, behaviour, states, words and journeys. How it look
 - **Form factor:** single-surface Android phone app (Kotlin Multiplatform, Compose Multiplatform). iOS later; no Responsive & Platform section until then.
 - **UI system:** Material 3 components and interaction patterns, with our own tokens from `DESIGN.md`. This spine specifies only the behavioural delta from Material 3.
 - **Dynamic colour off.** Icons: Material Symbols Rounded, weight 400, fill 0 (fill 1 for the selected nav item and outcome markers).
-- **Themes:** app screens follow the system light/dark setting, with a manual override (System / Light / Dark). Wake screens always use the Sunrise token set and, with "Bright wake screen" on (default), raise brightness to maximum.
+- **Themes:** app screens follow the system light/dark setting, with a manual override (System / Light / Dark). Wake screens always use the Sunrise token set. With "Bright wake screen" on (default), the ringing screen and its snooze sheet are at full brightness; the checks, the fallback check picker, Snoozed and Success are at the phone's own level (owner decision 2026-10-22, Story 5.2).
 - **Design-originated scope** (not in PRD v0.1, sent back for acknowledgement): theme override, the "Bright wake screen" setting, the selectable accessible fallback check picker and the unlock step copy.
 - **Taste Skill** is not installed in the app; its adapted rules live in `DESIGN.md > Do's and Don'ts`.
 
@@ -204,7 +204,7 @@ All strings live in resources (NFR-10). `{price}`, `{nextPrice}`, `{minutes}`, `
 | Settings, fee ladder preview (also onboarding) | "Snooze 1: {price1} · 2: {price2} · 3: {price3}"; with max snoozes 1 or 2 (Story 4.5): "Snooze 1: {price1}" · "Snooze 1: {price1} · 2: {price2}" |
 | Settings, weakening under lock (today) | "Saved. Takes effect after today's {time} alarm." |
 | Settings, Wake section | "Wake" · "Default quiet time" · "Bright wake screen" (owner decision 2026-09-27, was "Default grace window") |
-| Settings, bright wake screen caption | "Raises screen brightness on alarm screens." |
+| Settings, bright wake screen caption | "Raises screen brightness while the alarm rings." |
 | Settings, Appearance section | "Appearance" · "System" / "Light" / "Dark" |
 | Settings, usage stats | "Share anonymous usage stats" |
 | Settings, weekly summary switch | "Weekly summary" |
@@ -376,7 +376,7 @@ Behavioural rules. Visual specs for every row live in `DESIGN.md > Components` u
 | Restored after crash, kill or reboot | Wake screens | Same step as before (ringing, check progress, snoozed); snooze count and paid amount kept (FR-SES-1/2). No "restored" message. |
 | Overlapping alarm | Wake screens | Merged silently; noted in Day detail "{time} alarm merged into this session" (FR-SES-7). |
 | Missed (30 min, no interaction) | Wake screens | Alarm stops, session logged Missed (FR-ALM-9); Home shows the missed note next open. |
-| Success, zero snooze | Success | Celebration once (owner decision 2026-09-28): the number counts up from n−1 to n with a small bounce, a 1.5 s confetti burst, one success haptic; motivation playback if set, brightness restored on "Done". Reduced motion: the final state at once, no confetti (the haptic stays). |
+| Success, zero snooze | Success | Celebration once (owner decision 2026-09-28): the number counts up from n−1 to n with a small bounce, a 1.5 s confetti burst, one success haptic; motivation playback if set, at the phone's own brightness (Bright wake screen covers only the ringing screen). Reduced motion: the final state at once, no confetti (the haptic stays). |
 | Success, after snooze | Success | "You're up. That's what counts." plus "{paid} paid this morning" in `{colors.text-secondary-sunrise}`. No animation. |
 | Snoozed | Snoozed | "Snoozed. Next ring at {time}." for 3 s, then screen off. |
 
@@ -510,11 +510,11 @@ Failure: offline on first launch → base fee shows USD tiers with "Approximate.
 ### F2 — On-time morning with the grace window (Marco, 5:45, Ana asleep)
 
 1. Alarm rings at 5:45; volume ramps; brightness goes up.
-2. Marco taps "I'm up" (72 dp, bottom of screen).
+2. Marco taps "I'm up" (72 dp, bottom of screen); brightness returns to normal.
 3. Alarm goes silent; `countdown-ring` shows "Quiet for 20s".
 4. He solves two Math problems in 14 s.
 5. **Climax:** "Up on time. 12 days in a row." The streak number scales once; Ana never heard a second ring.
-6. He taps "Done"; brightness returns to normal.
+6. He taps "Done".
 
 Failure: see F3.
 

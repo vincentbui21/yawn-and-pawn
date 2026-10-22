@@ -139,7 +139,7 @@ object PendingChangeJson {
     private fun PendingChange.toStored() = StoredGlobal(value, effectiveAfter.alarmId, effectiveAfter.scheduledAt.toEpochMilliseconds())
 
     /**
-     * A [SettingsSnapshot] as the fallback cache keeps it. The Story 5.1 fields are optional, so a snapshot saved by an
+     * A [SettingsSnapshot] as the fallback cache keeps it. The Story 5.1 and 5.2 fields are optional, so a snapshot saved by an
      * older build still decodes (as the defaults); the theme is its name, so an unknown one reads as System instead of
      * losing the fire's fallback.
      */
@@ -152,6 +152,7 @@ object PendingChangeJson {
         val defaultSnoozeLengthMinutes: Int? = null,
         val defaultVibrateInGrace: Boolean? = null,
         val themeMode: String? = null,
+        val brightWakeScreen: Boolean? = null,
     )
 
     /** [snapshot] as JSON (the last-known settings, review fix 11; the theme too, so the first frame uses it). */
@@ -167,6 +168,7 @@ object PendingChangeJson {
                 defaultSnoozeLengthMinutes = settings.defaultSnoozeLengthMinutes,
                 defaultVibrateInGrace = settings.defaultVibrateInGrace,
                 themeMode = settings.themeMode.name,
+                brightWakeScreen = settings.brightWakeScreen,
             ),
         )
     }
@@ -187,6 +189,7 @@ object PendingChangeJson {
                             ?: defaults.defaultSnoozeLengthMinutes,
                     defaultVibrateInGrace = stored.defaultVibrateInGrace ?: defaults.defaultVibrateInGrace,
                     themeMode = ThemeMode.parse(stored.themeMode) ?: defaults.themeMode,
+                    brightWakeScreen = stored.brightWakeScreen ?: defaults.brightWakeScreen,
                 ),
                 stored.pending.map { it.toChange() },
             )

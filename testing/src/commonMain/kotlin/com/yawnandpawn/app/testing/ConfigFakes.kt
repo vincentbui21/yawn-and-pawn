@@ -101,6 +101,8 @@ class FakeGlobalSettingsRepository(
 
     override suspend fun setThemeMode(mode: ThemeMode): Outcome<Unit, DomainError> = write { it.copy(themeMode = mode) }
 
+    override suspend fun setBrightWakeScreen(on: Boolean): Outcome<Unit, DomainError> = write { it.copy(brightWakeScreen = on) }
+
     override suspend fun snapshot(): Outcome<SettingsSnapshot, DomainError> {
         delay(snapshotDelay)
         failure?.let { return Outcome.Failure(it) }

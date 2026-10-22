@@ -270,12 +270,14 @@ class DeleteAllDataIntegrationTest {
         // The DataStores and preferences: settings (a dismissal and a key a later story adds), its fallback, the prices.
         assertIs<Outcome.Success<*>>(koin.get<MissedNoteDismissals>().dismiss("missed-session"))
         koin.get<SettingsDataStore>().store.edit { it[FUTURE_KEY] = "later story" }
-        // Story 5.1's defaults and theme: their DataStore keys, and the same fields in the settings fallback snapshot.
+        // Story 5.1's defaults and theme and Story 5.2's Bright wake screen: their DataStore keys, and the same fields in
+        // the settings fallback snapshot.
         koin.get<SettingsDataStore>().store.edit {
             it[DataStoreGlobalSettings.DEFAULT_GRACE_SECONDS] = 25
             it[DataStoreGlobalSettings.DEFAULT_SNOOZE_LENGTH] = 15
             it[DataStoreGlobalSettings.DEFAULT_VIBRATE_IN_GRACE] = false
             it[DataStoreGlobalSettings.THEME_MODE] = ThemeMode.Dark.name
+            it[DataStoreGlobalSettings.BRIGHT_WAKE_SCREEN] = false
         }
         koin.get<SettingsSnapshotCache>().save(
             SettingsSnapshot(
@@ -286,6 +288,7 @@ class DeleteAllDataIntegrationTest {
                     defaultSnoozeLengthMinutes = 15,
                     defaultVibrateInGrace = false,
                     themeMode = ThemeMode.Dark,
+                    brightWakeScreen = false,
                 ),
                 emptyList(),
             ),

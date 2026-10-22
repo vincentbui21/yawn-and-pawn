@@ -31,6 +31,11 @@ sealed interface DefaultSetting {
     data class Theme(
         val mode: ThemeMode,
     ) : DefaultSetting
+
+    /** "Bright wake screen" (Story 5.2): frozen into a session at its fire, so a change mid-session has no effect. */
+    data class BrightWakeScreen(
+        val on: Boolean,
+    ) : DefaultSetting
 }
 
 /** These settings with [value] set, valid or not (the ViewModel shows a requested value at once with it). */
@@ -40,6 +45,7 @@ fun GlobalSettings.with(value: DefaultSetting): GlobalSettings =
         is DefaultSetting.VibrateInGrace -> copy(defaultVibrateInGrace = value.on)
         is DefaultSetting.SnoozeLength -> copy(defaultSnoozeLengthMinutes = value.minutes)
         is DefaultSetting.Theme -> copy(themeMode = value.mode)
+        is DefaultSetting.BrightWakeScreen -> copy(brightWakeScreen = value.on)
     }
 
 /**
@@ -62,13 +68,14 @@ class SaveDefaultSetting(
             is DefaultSetting.VibrateInGrace -> settingsRepository.setDefaultVibrateInGrace(value.on)
             is DefaultSetting.SnoozeLength -> settingsRepository.setDefaultSnoozeLength(value.minutes)
             is DefaultSetting.Theme -> settingsRepository.setThemeMode(value.mode)
+            is DefaultSetting.BrightWakeScreen -> settingsRepository.setBrightWakeScreen(value.on)
         }
 
     private fun invalidField(value: DefaultSetting): SettingField? =
         when (value) {
             is DefaultSetting.GraceSeconds -> SettingField.DefaultGrace.takeUnless { value.seconds in GRACE_SECONDS }
             is DefaultSetting.SnoozeLength -> SettingField.DefaultSnoozeLength.takeUnless { value.minutes in SNOOZE_LENGTHS }
-            is DefaultSetting.VibrateInGrace, is DefaultSetting.Theme -> null
+            is DefaultSetting.VibrateInGrace, is DefaultSetting.Theme, is DefaultSetting.BrightWakeScreen -> null
         }
 
     companion object {
@@ -106,4 +113,11 @@ class SetThemeMode(
     private val saveDefaultSetting: SaveDefaultSetting,
 ) {
     suspend operator fun invoke(mode: ThemeMode): Outcome<Unit, DomainError> = saveDefaultSetting(DefaultSetting.Theme(mode))
+}
+
+/** Sets "Bright wake screen" (Story 5.2), used from the next fire on ([SaveDefaultSetting]). */
+class SetBrightWakeScreen(
+    private val saveDefaultSetting: SaveDefaultSetting,
+) {
+    suspend operator fun invoke(on: Boolean): Outcome<Unit, DomainError> = saveDefaultSetting(DefaultSetting.BrightWakeScreen(on))
 }

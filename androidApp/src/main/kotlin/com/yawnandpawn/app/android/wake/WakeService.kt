@@ -23,6 +23,7 @@ import com.yawnandpawn.app.core.billing.SessionStartPriceRefresh
 import com.yawnandpawn.app.core.checks.AccessibilityState
 import com.yawnandpawn.app.core.checks.CheckAnswer
 import com.yawnandpawn.app.core.checks.Puzzle
+import com.yawnandpawn.app.core.config.GlobalSettingsRepository
 import com.yawnandpawn.app.core.config.PromotePendingChanges
 import com.yawnandpawn.app.core.config.ReadFireSettings
 import com.yawnandpawn.app.core.crash.CrashReporter
@@ -85,7 +86,8 @@ import kotlin.time.Instant
  *   nothing.
  * - **Slot (Story 2.1):** the kill-recovery path; see [onSlot]. **Restore:** it loads the stored session
  *   (`SessionEngine.restore`).
- * - **Test:** it takes the pending test config and dispatches `TestAlarmFired` (Story 1.18).
+ * - **Test:** it takes the pending test config and dispatches `TestAlarmFired` (Story 1.18), with "Bright wake screen"
+ *   from the last-known settings snapshot (Story 5.2: a synchronous cache, never the store).
  * - A dispatch that may start a session (`AlarmFired`, `TestAlarmFired`) runs in [SessionLockGuard.startingSession], so
  *   it never lands in the middle of a guarded alarm write (Story 2.6).
  * - **Repost** (the ringing notification's delete intent, Story 2.5): entering the foreground posts the notification
@@ -132,6 +134,7 @@ class WakeService :
     private val accessibility: AccessibilityState by inject()
     private val sessionLock: SessionLockGuard by inject()
     private val fireSettings: ReadFireSettings by inject()
+    private val globalSettings: GlobalSettingsRepository by inject()
     private val promotePending: PromotePendingChanges by inject()
     private val unlockSignals: UnlockSignals by inject()
     private val calls: CallDetector by inject()
@@ -474,11 +477,14 @@ class WakeService :
             return
         }
         val locked = !userLock.isUserUnlocked()
+        // Story 5.2: "Bright wake screen" as the settings are now, from the last-known snapshot (synchronous, never the
+        // store, never a throw); without one, the value stored with the test config when "Test alarm" was tapped.
+        val bright = runCatching { globalSettings.lastKnown() }.getOrNull()?.settings?.brightWakeScreen ?: pending.brightWakeScreen
         val event =
             SessionEvent.TestAlarmFired(
                 sessionId = ids.newId(),
                 // The editor's checks (Epic 3 device check, bug 1); TalkBack's numbered Memory Sequence is chosen now, as for a real ring.
-                config = ConfigResolver.withAccessibleChecks(pending, accessibility.isScreenReaderOn()),
+                config = ConfigResolver.withAccessibleChecks(pending.copy(brightWakeScreen = bright), accessibility.isScreenReaderOn()),
                 beforeFirstUnlock = locked,
             )
         val started = sessionLock.startingSession { engine.dispatch(event) }

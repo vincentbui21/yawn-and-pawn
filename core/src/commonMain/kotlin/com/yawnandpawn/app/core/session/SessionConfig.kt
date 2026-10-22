@@ -28,6 +28,8 @@ import kotlin.time.Instant
  * @property testStartedLocked a test ring that started with the keyguard showing (or before the first unlock), frozen at
  * the fire (Story 5.3): once it is completed the reliability checklist's locked-screen test passes. Always false for a
  * real ring; the default lets rows and pending test rings stored before Story 5.3 decode.
+ * @property brightWakeScreen "Bright wake screen" frozen at the fire (Story 5.2): while the Ringing screen shows, the wake
+ * window is at full brightness. The default lets rows and pending test rings stored before Story 5.2 decode.
  */
 @Serializable
 data class SessionConfig(
@@ -47,6 +49,7 @@ data class SessionConfig(
     val vibration: Boolean,
     val checkPlan: CheckPlan,
     val testStartedLocked: Boolean = false,
+    val brightWakeScreen: Boolean = true,
 )
 
 /**
@@ -65,6 +68,8 @@ data class GlobalSettings(
     val defaultVibrateInGrace: Boolean = Alarm.DEFAULT_VIBRATE_IN_GRACE,
     /** Appearance: System / Light / Dark. Wake screens always use Sunrise, whatever it says. */
     val themeMode: ThemeMode = ThemeMode.System,
+    /** "Bright wake screen" (Story 5.2): the Ringing screen at full brightness. Frozen into [SessionConfig] at the fire. */
+    val brightWakeScreen: Boolean = true,
 ) {
     companion object {
         const val DEFAULT_BASE_FEE_TIER = 1
@@ -145,6 +150,7 @@ object ConfigResolver {
                         ringableEntries(plan.entries, accessible, wordsAvailable),
                     )
                 },
+            brightWakeScreen = globalSettings.brightWakeScreen,
         )
 
     /**
@@ -189,6 +195,8 @@ object ConfigResolver {
                 } else {
                     CheckPlan(draft.checkMode, ringableEntries(draft.checks, accessible = false, wordsAvailable = wordsAvailable))
                 },
+            // The value when "Test alarm" is tapped; the fire takes the last-known snapshot's (Story 5.2, WakeService).
+            brightWakeScreen = globalSettings.brightWakeScreen,
         )
 
     /**

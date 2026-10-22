@@ -125,7 +125,7 @@ development_status:
   5-9-delete-all-data: review  # Epic 5 auto-run, fast mode
   5-10-onboarding-part-1-mission-alarm-behaviour-disclosure-and-bas: review  # Epic 5 auto-run, fast mode
   5-11-onboarding-part-2-first-alarm-checks-checklist-and-usage-sta: review  # Epic 5 auto-run, fast mode
-  5-12-onboarding-test-alarm-on-a-locked-screen: backlog
+  5-12-onboarding-test-alarm-on-a-locked-screen: review  # Epic 5 auto-run, fast mode
   5-13-epic-5-device-verification-checklist: backlog
   5-14-start-the-14-day-closed-test-owner-task: backlog
   epic-5-retrospective: optional

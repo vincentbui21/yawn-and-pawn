@@ -198,6 +198,18 @@ class SessionJsonTest {
     }
 
     @Test
+    fun `a config stored before Story 5_2 decodes with Bright wake screen on, and off round trips`() {
+        assertEquals(true, SessionJson.decodeConfig(CONFIG_V1)?.brightWakeScreen)
+        val stored = assertIs<StoredSession.Found>(SessionJson.decode(v1("Loud"))).state
+        assertEquals(true, assertIs<SessionState.Active>(stored).session.config.brightWakeScreen)
+
+        val off = testConfig(testMode = true).copy(brightWakeScreen = false)
+        assertEquals(off, SessionJson.decodeConfig(SessionJson.encodeConfig(off)))
+        val state = SessionState.Ringing(ringSession(off))
+        assertEquals(StoredSession.Found(state), SessionJson.decode(SessionJson.encode(state)))
+    }
+
+    @Test
     fun `a version 1 row with a damaged check stays unreadable`() {
         listOf(
             v1("Loud").replace(""""step":1""", """"step":"one""""),

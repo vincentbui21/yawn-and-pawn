@@ -35,6 +35,8 @@ import com.yawnandpawn.app.core.billing.SnoozeConditions
 import com.yawnandpawn.app.core.billing.TaxNote
 import com.yawnandpawn.app.core.checks.CheckAnswer
 import com.yawnandpawn.app.core.error.Outcome
+import com.yawnandpawn.app.core.log.LogEvent
+import com.yawnandpawn.app.core.log.Logger
 import com.yawnandpawn.app.core.log.WakeStage
 import com.yawnandpawn.app.core.session.SessionData
 import com.yawnandpawn.app.core.session.SessionEngine
@@ -137,6 +139,10 @@ import kotlin.time.Instant
  *
  * While it is visible (`onStart` to `onStop`) the ringing notification is the quiet on-screen one, so no heads-up covers
  * the countdown; left while the alarm rings, it heads up again as the way back (Epic 3 device check, bug 2).
+ *
+ * "Bright wake screen" (Story 5.2, option C): while a session's Ringing screen shows (the confirm sheet over it too) and
+ * the session's frozen config has it on, the window is at full brightness; every other screen, and the screen once
+ * left, is at the phone's own level ([WakeBrightness]).
  */
 @Suppress("TooManyFunctions") // One override per platform callback (lifecycle, keys, focus), each a few lines.
 class WakeActivity : ComponentActivity() {
@@ -155,6 +161,17 @@ class WakeActivity : ComponentActivity() {
     /** The wall clock the Ringing screen's clock shows (Epic 4 device follow-up 1): the app's, so tests control it. */
     private val clock: Clock by inject()
     private val timeChanges: TimeChangeSignal by inject()
+
+    /** The window's brightness (Story 5.2): full only on a ringing session's Ringing screen, while visible. */
+    private val brightness =
+        WakeBrightness(
+            window = { window },
+            extraDim = {
+                // A failed read is logged (at most once per start), so the Story 5.13 device check can tell it from Extra dim on.
+                WakeBrightness.extraDimOn(contentResolver) { cause -> logger.log(LogEvent.OperationFailed(READ_EXTRA_DIM, cause)) }
+            },
+        )
+    private val logger: Logger by inject()
 
     /** The snooze confirm sheet (Story 4.13); process-wide, so a recreated screen shows the same sheet. */
     private val sheet: ConfirmSheetHost by inject()
@@ -175,6 +192,16 @@ class WakeActivity : ComponentActivity() {
     /** "I'm up" was tapped before the session existed; replayed once it rings. */
     private var pendingImUp by mutableStateOf(false)
 
+    /**
+     * The ring ([ringKey]) whose "I'm up", tapped before the session existed, was replayed: it stays at the phone's level
+     * until that "I'm up" lands (Story 5.2, PR #80 review), so the screen never flashes bright in between.
+     */
+    private var imUpReplayedFor by mutableStateOf<String?>(null)
+
+    /** "I'm up" was tapped before the session existed and has not landed yet on the ringing [state]. */
+    private fun imUpWaiting(state: SessionState): Boolean =
+        pendingImUp || (imUpReplayedFor != null && (state as? SessionState.Ringing)?.session?.let(::ringKey) == imUpReplayedFor)
+
     /** When the screen shows Success and when it closes (Story 3.3); made in [onCreate]. */
     private lateinit var end: WakeScreenEnd
 
@@ -188,6 +215,11 @@ class WakeActivity : ComponentActivity() {
     override fun onStart() {
         super.onStart()
         runtime.wakeScreenShown(visible = true, ringing = forwardsToWakeScreen(engine.state.value, runtime.emergency.value))
+        // Story 5.2: the level from the session now, not the one shown before the stop (it may have moved on meanwhile);
+        // a ringing session's Ringing screen is what the composition shows for it (Success only after it ends).
+        val state = engine.state.value
+        brightness.show(full = end.success() == null && ringsBright(runtime.emergency.value != null, state, true, imUpWaiting(state)))
+        brightness.onStart()
     }
 
     /** Left (Home, another app, the screen off): while the alarm rings, the notification heads up again as the way back. */
@@ -200,6 +232,8 @@ class WakeActivity : ComponentActivity() {
             // Story 4.15 review: the Snoozed note closed just as the snooze ended, so the ring needs its full-screen intent.
             finishing = isFinishing,
         )
+        // Story 5.2: Home, Recents, the screen off or finish: back to the phone's own brightness.
+        brightness.onStop()
         super.onStop()
     }
 
@@ -275,21 +309,7 @@ class WakeActivity : ComponentActivity() {
             val last = remember { LastShown() }
             val success = end.success()
             if (success != null) {
-                // Story 4.15 review: the pending note only while Play's latest list still holds this session's pending payment.
-                val pendingSessions by purchases.pendingSessions.collectAsState()
-                key(success.sessionId) {
-                    SuccessScreen(
-                        state = successUiState(success, pendingStillListed = success.sessionId in pendingSessions),
-                        onIntent = ::onIntent,
-                        basic = true,
-                        claimHaptic = { end.claimHaptic(success.sessionId) },
-                    )
-                    // Counted from when Success started, so a recreated screen still closes 60 s after it first showed.
-                    LaunchedEffect(Unit) {
-                        delay(end.successRemaining(SUCCESS_TIMEOUT))
-                        finish()
-                    }
-                }
+                SuccessShown(success)
             } else {
                 // Restored with a Success whose session this process no longer knows (it was killed): nothing to show.
                 if (end.successSessionId != null) LaunchedEffect(Unit) { finish() }
@@ -310,6 +330,9 @@ class WakeActivity : ComponentActivity() {
                             ?.takeIf { !last.sessionShown }
                             ?.let { WakeScreen.Ringing(alarmOnlyRingingUiState(time.now, time.zone)) }
                 if (session != null) last.sessionShown = true
+                // Story 5.2: full brightness only on a ringing session's Ringing screen, as its frozen config says.
+                val waiting = imUpWaiting(state)
+                SideEffect { brightness.show(full = ringsBright(emergency != null, state, current is WakeScreen.Ringing, waiting)) }
                 if (current != null) last.state = current
                 val shown = current ?: last.state
                 // Story 4.15: the Snoozed note shows for 3 s, then the screen closes; the next ring opens a new one.
@@ -318,6 +341,30 @@ class WakeActivity : ComponentActivity() {
                 CompositionLocalProvider(LocalWakeClock provides monotonicClock::elapsedMillis) {
                     WakeScreenWithCamera(shown, check.qr, ::onIntent, ::screenTapped, send = ::sendAll)
                 }
+            }
+        }
+    }
+
+    /**
+     * The Success screen of the [success] session (Story 3.3), at the phone's own brightness (Story 5.2). It closes by
+     * itself [SUCCESS_TIMEOUT] after it first showed, also when the screen was recreated meanwhile.
+     */
+    @Composable
+    private fun SuccessShown(success: SessionData) {
+        SideEffect { brightness.show(full = false) }
+        // Story 4.15 review: the pending note only while Play's latest list still holds this session's pending payment.
+        val pendingSessions by purchases.pendingSessions.collectAsState()
+        key(success.sessionId) {
+            SuccessScreen(
+                state = successUiState(success, pendingStillListed = success.sessionId in pendingSessions),
+                onIntent = ::onIntent,
+                basic = true,
+                claimHaptic = { end.claimHaptic(success.sessionId) },
+            )
+            // Counted from when Success started, so a recreated screen still closes 60 s after it first showed.
+            LaunchedEffect(Unit) {
+                delay(end.successRemaining(SUCCESS_TIMEOUT))
+                finish()
             }
         }
     }
@@ -387,6 +434,8 @@ class WakeActivity : ComponentActivity() {
         val ringing = state is SessionState.Ringing
         LaunchedEffect(pendingImUp, ringing, emergencyRinging) {
             if (pendingImUp && (ringing || emergencyRinging)) {
+                // Story 5.2: this ring stays at the phone's level until the replayed "I'm up" lands.
+                imUpReplayedFor = (engine.state.value as? SessionState.Ringing)?.session?.let(::ringKey)
                 pendingImUp = false
                 onIntent(WakeIntent.ImUpClicked)
             }
@@ -533,6 +582,9 @@ class WakeActivity : ComponentActivity() {
         /** A payment message stays at least this long, then until the next tap (EXPERIENCE.md wake snackbar, Story 4.14). */
         val MESSAGE_MINIMUM: Duration = 10.seconds
 
+        /** The operation logged when the system Extra dim setting cannot be read (Story 5.2). */
+        const val READ_EXTRA_DIM = "read extra dim"
+
         /** How long the Snoozed note shows before the screen closes (EXPERIENCE.md State Patterns, Story 4.15). */
         val SNOOZED_SCREEN_TIME: Duration = 3.seconds
 
@@ -602,6 +654,21 @@ private fun sessionScreen(
     }
 }
 
+/**
+ * Whether the screen is at full brightness (Story 5.2, option C): only a session still in its Ringing step ([state],
+ * before "I'm up") on its Ringing screen ([ringingScreen], the confirm sheet over it too) whose frozen config has "Bright
+ * wake screen" on. Never the [emergency] ring or the wait before the session (no frozen config), nor any other screen;
+ * after "I'm up" a session whose check has no screen of its own (a placeholder step) is at the phone's level too, and so
+ * is a ring whose "I'm up" was tapped before the session existed ([imUpWaiting], until its replay lands; if that replay
+ * cannot be saved, the ring stays at the phone's level, the safe side).
+ */
+private fun ringsBright(
+    emergency: Boolean,
+    state: SessionState,
+    ringingScreen: Boolean,
+    imUpWaiting: Boolean,
+): Boolean = !emergency && !imUpWaiting && ringingScreen && state is SessionState.Ringing && state.session.config.brightWakeScreen
+
 /** The confirm sheet and payment message over a wake screen, and the prices its snooze shows (Story 4.13). */
 private class SheetOverlay(
     val sheet: SnoozeSheet?,
@@ -632,6 +699,9 @@ private sealed interface WakeScreen {
         val key: SnoozedKey,
     ) : WakeScreen
 }
+
+/** One ring of [session]: its id and how many snoozes it has had, so a re-ring after a snooze is another ring (Story 5.2). */
+private fun ringKey(session: SessionData): String = "${session.sessionId}#${session.snoozesGranted}"
 
 /** One paid snooze of a session: its id and how many snoozes it has had ([SessionData.snoozesGranted]). */
 private data class SnoozedKey(

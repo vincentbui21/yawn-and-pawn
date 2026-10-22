@@ -115,7 +115,7 @@ development_status:
 
   epic-5: backlog
   5-1-wake-and-snooze-defaults-and-theme-override-in-settings: review
-  5-2-bright-wake-screen: backlog
+  5-2-bright-wake-screen: review  # Epic 5 auto-run, fast mode; owner chose option C (ringing only) 2026-10-22
   5-3-full-reliability-probe-do-not-disturb-battery-and-the-locked: review  # Epic 5 auto-run, fast mode (lane A)
   5-4-reliability-checklist-screen-and-revoked-setting-warnings: review
   5-5-manufacturer-background-guidance: review  # Epic 5 auto-run, fast mode
@@ -125,7 +125,7 @@ development_status:
   5-9-delete-all-data: review  # Epic 5 auto-run, fast mode
   5-10-onboarding-part-1-mission-alarm-behaviour-disclosure-and-bas: review  # Epic 5 auto-run, fast mode
   5-11-onboarding-part-2-first-alarm-checks-checklist-and-usage-sta: review  # Epic 5 auto-run, fast mode
-  5-12-onboarding-test-alarm-on-a-locked-screen: review  # Epic 5 auto-run, fast mode
+  5-12-onboarding-test-alarm-on-a-locked-screen: done  # Epic 5 auto-run, fast mode; merged as PR #79
   5-13-epic-5-device-verification-checklist: backlog
   5-14-start-the-14-day-closed-test-owner-task: backlog
   epic-5-retrospective: optional

@@ -36,7 +36,7 @@ class ConfigResolverTest {
         )
 
     @Test
-    fun `global settings default to base fee tier 1, 5 snoozes, 20 s grace, 9 min snooze, vibration in grace and the system theme`() {
+    fun `global settings default to fee tier 1, 5 snoozes, 20 s grace, 9 min snooze, grace vibration, system theme, bright wake`() {
         assertEquals(
             GlobalSettings(
                 baseFeeTier = 1,
@@ -45,6 +45,7 @@ class ConfigResolverTest {
                 defaultSnoozeLengthMinutes = 9,
                 defaultVibrateInGrace = true,
                 themeMode = ThemeMode.System,
+                brightWakeScreen = true,
             ),
             GlobalSettings(),
         )
@@ -193,6 +194,17 @@ class ConfigResolverTest {
         val draft = AlarmDraft(time = LocalTime(7, 0), vibration = false, vibrateInGrace = true)
         assertEquals(false, ConfigResolver.resolveTest(draft, GlobalSettings(), SCHEDULED_AT).vibrateInGrace)
         assertEquals(true, ConfigResolver.resolveTest(draft.copy(vibration = true), GlobalSettings(), SCHEDULED_AT).vibrateInGrace)
+    }
+
+    @Test
+    fun `Bright wake screen is frozen into the config at the fire, real or test (Story 5_2)`() {
+        val off = GlobalSettings(brightWakeScreen = false)
+        val draft = AlarmDraft(time = LocalTime(7, 0))
+
+        assertEquals(true, ConfigResolver.resolve(alarm, NO_CHECKS, GlobalSettings(), false, SCHEDULED_AT).brightWakeScreen)
+        assertEquals(false, ConfigResolver.resolve(alarm, NO_CHECKS, off, false, SCHEDULED_AT).brightWakeScreen)
+        assertEquals(true, ConfigResolver.resolveTest(draft, GlobalSettings(), SCHEDULED_AT).brightWakeScreen)
+        assertEquals(false, ConfigResolver.resolveTest(draft, off, SCHEDULED_AT).brightWakeScreen)
     }
 }
 

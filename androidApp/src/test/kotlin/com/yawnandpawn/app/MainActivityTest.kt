@@ -17,6 +17,7 @@ import androidx.compose.ui.test.hasContentDescription
 import androidx.compose.ui.test.hasSetTextAction
 import androidx.compose.ui.test.hasText
 import androidx.compose.ui.test.isEnabled
+import androidx.compose.ui.test.isToggleable
 import androidx.compose.ui.test.junit4.v2.createAndroidComposeRule
 import androidx.compose.ui.test.longClick
 import androidx.compose.ui.test.onNodeWithContentDescription
@@ -308,12 +309,16 @@ class MainActivityTest {
         waitForText("Your first morning shows up here.")
         composeRule.onNodeWithText("Purchase history").assertDoesNotExist()
 
-        // Story 4.5 built the Snooze card's base fee and max snoozes, Story 5.1 the defaults and Appearance, Story 5.4
-        // the Reliability checklist row (it leads to the checklist); the later Epic 5 rows stay hidden.
+        // Story 4.5 built the Snooze card's base fee and max snoozes, Story 5.1 the defaults and Appearance, Story 5.2
+        // "Bright wake screen" (on by default, with its caption), Story 5.4 the Reliability checklist row (it leads to the
+        // checklist); the weekly summary stays hidden.
         tab("Settings").performClick()
         waitForText("Max snoozes per session")
         composeRule.onNode(hasText("Default snooze length", substring = true) and hasClickAction()).assertExists()
-        composeRule.onNodeWithText("Bright wake screen").assertDoesNotExist()
+        composeRule
+            .onNode(hasText("Bright wake screen") and hasText("Raises screen brightness while the alarm rings.") and isToggleable())
+            .assertIsOn()
+        composeRule.onNodeWithText("Weekly summary").assertDoesNotExist()
         composeRule.onNode(hasText("Reliability checklist") and hasClickAction()).assertExists()
 
         // Story 5.8 built the links and 5.9 "Delete all data"; only About stays hidden.

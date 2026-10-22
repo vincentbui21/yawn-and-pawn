@@ -59,6 +59,7 @@ import com.yawnandpawn.app.core.config.RecordCommitmentEvent
 import com.yawnandpawn.app.core.config.SaveDefaultSetting
 import com.yawnandpawn.app.core.config.SaveGlobalSetting
 import com.yawnandpawn.app.core.config.SetBaseFee
+import com.yawnandpawn.app.core.config.SetBrightWakeScreen
 import com.yawnandpawn.app.core.config.SetDefaultGrace
 import com.yawnandpawn.app.core.config.SetDefaultSnoozeLength
 import com.yawnandpawn.app.core.config.SetDefaultVibrateInGrace
@@ -185,6 +186,7 @@ val appModule =
         factory { SetDefaultVibrateInGrace(get()) }
         factory { SetDefaultSnoozeLength(get()) }
         factory { SetThemeMode(get()) }
+        factory { SetBrightWakeScreen(get()) }
         factory { RecordCommitmentEvent(get(), get(), get(), get(), get()) }
         // Story 4.6: turning an alarm off or deleting it inside its lock window is logged by the alarm use cases.
         factory { CommitmentLog(get(), get(), get()) }

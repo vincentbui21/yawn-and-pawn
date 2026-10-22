@@ -58,7 +58,7 @@ class OnboardingTestAlarmStepTest : OnboardingViewModelFixture() {
             val viewModel = viewModel()
             assertEquals(OnboardingStep.TestAlarm, viewModel.shown.step)
             assertEquals(TestAlarmStatus.Ready, viewModel.shown.testStatus)
-            assertFalse(viewModel.shown.brightWakeNote, "Bright wake screen arrives with Story 5.2")
+            assertTrue(viewModel.shown.brightWakeNote, "Bright wake screen is on by default (Story 5.2)")
 
             viewModel.onIntent(OnboardingIntent.RingTestAlarm)
             assertNull(testStore.pending, "a tap before the dwell counts for nothing")
@@ -82,6 +82,21 @@ class OnboardingTestAlarmStepTest : OnboardingViewModelFixture() {
             assertFalse(first.enabled, "the test never switches the first alarm on")
             assertEquals(RequestCodes.FIRST_ALARM, first.requestCode)
             assertEquals(emptyList(), (fixture.scheduler as FakeAlarmScheduler).calls, "no real alarm was armed or cancelled")
+        }
+
+    @Test
+    fun `the bright wake screen note follows the setting (Story 5_2)`() =
+        runTest {
+            onTestStep()
+            settings.setBrightWakeScreen(false)
+            val viewModel = viewModel()
+            settle()
+
+            assertFalse(viewModel.shown.brightWakeNote, "off: no note")
+
+            settings.setBrightWakeScreen(true)
+            settle()
+            assertTrue(viewModel.shown.brightWakeNote, "on: the note shows")
         }
 
     @Test

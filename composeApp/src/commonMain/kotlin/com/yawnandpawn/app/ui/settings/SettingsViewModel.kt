@@ -13,6 +13,7 @@ import com.yawnandpawn.app.core.config.PendingChange
 import com.yawnandpawn.app.core.config.PendingChangeRepository
 import com.yawnandpawn.app.core.config.SaveDefaultSetting
 import com.yawnandpawn.app.core.config.SetBaseFee
+import com.yawnandpawn.app.core.config.SetBrightWakeScreen
 import com.yawnandpawn.app.core.config.SetDefaultGrace
 import com.yawnandpawn.app.core.config.SetDefaultSnoozeLength
 import com.yawnandpawn.app.core.config.SetDefaultVibrateInGrace
@@ -56,21 +57,23 @@ import kotlinx.coroutines.withContext
 import kotlin.coroutines.CoroutineContext
 
 /**
- * The Story 5.1 setters of Settings: the new-alarm defaults and the theme, each through its own core use case (no
- * commitment lock).
+ * The setters of Settings with no commitment lock: the new-alarm defaults and the theme (Story 5.1) and "Bright wake
+ * screen" (Story 5.2), each through its own core use case.
  */
 class DefaultSettingSetters(
     private val setDefaultGrace: SetDefaultGrace,
     private val setDefaultVibrateInGrace: SetDefaultVibrateInGrace,
     private val setDefaultSnoozeLength: SetDefaultSnoozeLength,
     private val setThemeMode: SetThemeMode,
+    private val setBrightWakeScreen: SetBrightWakeScreen,
 ) {
-    /** The four setters over one [save]. */
+    /** The five setters over one [save]. */
     constructor(save: SaveDefaultSetting) : this(
         SetDefaultGrace(save),
         SetDefaultVibrateInGrace(save),
         SetDefaultSnoozeLength(save),
         SetThemeMode(save),
+        SetBrightWakeScreen(save),
     )
 
     suspend fun save(value: DefaultSetting): Outcome<Unit, DomainError> =
@@ -79,12 +82,13 @@ class DefaultSettingSetters(
             is DefaultSetting.VibrateInGrace -> setDefaultVibrateInGrace(value.on)
             is DefaultSetting.SnoozeLength -> setDefaultSnoozeLength(value.minutes)
             is DefaultSetting.Theme -> setThemeMode(value.mode)
+            is DefaultSetting.BrightWakeScreen -> setBrightWakeScreen(value.on)
         }
 }
 
 /**
  * Settings: the Snooze card's base fee and max snoozes per session, set through the commitment lock (Story 4.5), and the
- * new-alarm defaults and the theme, applied at once (Story 5.1).
+ * new-alarm defaults and the theme (Story 5.1) and "Bright wake screen" (Story 5.2), applied at once.
  *
  * - **Shown values:** what the user chose, which is the global pending change from [pendingChanges] when one waits,
  *   else the live value from [globalSettings]. While a pending change waits for an occurrence still to come, its
@@ -221,20 +225,10 @@ class SettingsViewModel(
                 request(SettingValue.MaxSnoozes(intent.value))
             }
 
-            is SettingsIntent.SnoozeLengthSelected -> {
-                request(DefaultSetting.SnoozeLength(intent.minutes))
-            }
-
-            is SettingsIntent.QuietTimeChanged -> {
-                request(DefaultSetting.GraceSeconds(intent.seconds))
-            }
-
-            is SettingsIntent.VibrateDuringQuietTimeToggled -> {
-                request(DefaultSetting.VibrateInGrace(intent.on))
-            }
-
-            is SettingsIntent.ThemeSelected -> {
-                request(DefaultSetting.Theme(intent.mode.toCore()))
+            is SettingsIntent.SnoozeLengthSelected, is SettingsIntent.QuietTimeChanged, is SettingsIntent.VibrateDuringQuietTimeToggled,
+            is SettingsIntent.ThemeSelected, is SettingsIntent.BrightWakeScreenToggled,
+            -> {
+                defaultOf(intent)?.let { request(it) }
             }
 
             is SettingsIntent.UsageStatsToggled, SettingsIntent.Started, SettingsIntent.FixSettings, SettingsIntent.ReliabilityClicked -> {
@@ -400,6 +394,7 @@ class SettingsViewModel(
             defaultQuietSeconds = chosen.defaultGraceSeconds,
             vibrateDuringQuietTime = chosen.defaultVibrateInGrace,
             theme = chosen.themeMode.toPps(),
+            brightWakeScreen = chosen.brightWakeScreen,
             reliabilityProblem = ui.reliabilityProblem,
             pane = ui.pane,
             // While a new value is still being saved, the stored note may be the old one: wait for the store.
@@ -526,6 +521,17 @@ class SettingsViewModel(
     }
 }
 
+/** The default a Settings control asks for (Stories 5.1 and 5.2), or null for any other intent. */
+private fun defaultOf(intent: SettingsIntent): DefaultSetting? =
+    when (intent) {
+        is SettingsIntent.SnoozeLengthSelected -> DefaultSetting.SnoozeLength(intent.minutes)
+        is SettingsIntent.QuietTimeChanged -> DefaultSetting.GraceSeconds(intent.seconds)
+        is SettingsIntent.VibrateDuringQuietTimeToggled -> DefaultSetting.VibrateInGrace(intent.on)
+        is SettingsIntent.ThemeSelected -> DefaultSetting.Theme(intent.mode.toCore())
+        is SettingsIntent.BrightWakeScreenToggled -> DefaultSetting.BrightWakeScreen(intent.on)
+        else -> null
+    }
+
 /** Whether this state shows [value]. */
 private fun SettingsUiState.shows(value: DefaultSetting): Boolean =
     when (value) {
@@ -533,6 +539,7 @@ private fun SettingsUiState.shows(value: DefaultSetting): Boolean =
         is DefaultSetting.VibrateInGrace -> vibrateDuringQuietTime == value.on
         is DefaultSetting.SnoozeLength -> defaultSnoozeMinutes == value.minutes
         is DefaultSetting.Theme -> theme == value.mode.toPps()
+        is DefaultSetting.BrightWakeScreen -> brightWakeScreen == value.on
     }
 
 /** Whether [this] is a value its use case accepts (the ViewModel never queues one it would refuse). */
@@ -540,7 +547,7 @@ private fun DefaultSetting.isValid(): Boolean =
     when (this) {
         is DefaultSetting.GraceSeconds -> seconds in SaveDefaultSetting.GRACE_SECONDS
         is DefaultSetting.SnoozeLength -> minutes in SaveDefaultSetting.SNOOZE_LENGTHS
-        is DefaultSetting.VibrateInGrace, is DefaultSetting.Theme -> true
+        is DefaultSetting.VibrateInGrace, is DefaultSetting.Theme, is DefaultSetting.BrightWakeScreen -> true
     }
 
 /** Logs a default or theme save that failed (Story 5.1). */

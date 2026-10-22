@@ -38,8 +38,8 @@ import okio.IOException
  * The global settings (FR-SET-1) and the global pending changes (Story 4.4) in the settings DataStore (device-protected,
  * so a ring before the first unlock reads them; backed up). AD-6: no copy in `app.db`.
  * - [BASE_FEE_TIER] and [MAX_SNOOZES], and the Story 5.1 defaults and theme ([DEFAULT_GRACE_SECONDS],
- *   [DEFAULT_VIBRATE_IN_GRACE], [DEFAULT_SNOOZE_LENGTH], [THEME_MODE]): a missing or out-of-range value (an unknown theme
- *   name too) reads as the `GlobalSettings` default.
+ *   [DEFAULT_VIBRATE_IN_GRACE], [DEFAULT_SNOOZE_LENGTH], [THEME_MODE]) and Story 5.2's [BRIGHT_WAKE_SCREEN]: a missing
+ *   or out-of-range value (an unknown theme name too) reads as the `GlobalSettings` default.
  * - [PENDING_GLOBAL]: the global pending changes as one `PendingChangeJson` list; a list that does not decode reads as
  *   none (the live settings, the stronger ones, apply).
  * - Every successful [snapshot] and every write keeps the resulting snapshot in [cache] ([lastKnown], review fix 11), so a
@@ -78,6 +78,8 @@ class DataStoreGlobalSettings(
     override suspend fun setDefaultSnoozeLength(minutes: Int): Outcome<Unit, DomainError> = edit { it[DEFAULT_SNOOZE_LENGTH] = minutes }
 
     override suspend fun setThemeMode(mode: ThemeMode): Outcome<Unit, DomainError> = edit { it[THEME_MODE] = mode.name }
+
+    override suspend fun setBrightWakeScreen(on: Boolean): Outcome<Unit, DomainError> = edit { it[BRIGHT_WAKE_SCREEN] = on }
 
     override suspend fun snapshot(): Outcome<SettingsSnapshot, DomainError> = storage { snapshotOf(store.data.first()).also(cache::save) }
 
@@ -139,6 +141,9 @@ class DataStoreGlobalSettings(
         /** The app theme as a `ThemeMode` name (Story 5.1); an unknown name reads as System. */
         val THEME_MODE: Preferences.Key<String> = stringPreferencesKey("theme_mode")
 
+        /** "Bright wake screen" (Story 5.2); missing reads as on. */
+        val BRIGHT_WAKE_SCREEN: Preferences.Key<Boolean> = booleanPreferencesKey("bright_wake_screen")
+
         /** The global pending changes (`PendingChangeJson.encodeGlobal`). */
         val PENDING_GLOBAL: Preferences.Key<String> = stringPreferencesKey("pending_global_changes")
 
@@ -154,6 +159,7 @@ class DataStoreGlobalSettings(
                         ?: defaults.defaultSnoozeLengthMinutes,
                 defaultVibrateInGrace = preferences[DEFAULT_VIBRATE_IN_GRACE] ?: defaults.defaultVibrateInGrace,
                 themeMode = ThemeMode.parse(preferences[THEME_MODE]) ?: defaults.themeMode,
+                brightWakeScreen = preferences[BRIGHT_WAKE_SCREEN] ?: defaults.brightWakeScreen,
             )
         }
 

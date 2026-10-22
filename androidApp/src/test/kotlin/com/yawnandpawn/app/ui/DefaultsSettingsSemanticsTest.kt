@@ -1,5 +1,6 @@
 package com.yawnandpawn.app.ui
 
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.SemanticsProperties
 import androidx.compose.ui.test.SemanticsMatcher
 import androidx.compose.ui.test.assert
@@ -37,7 +38,8 @@ import kotlin.test.assertEquals
  * Story 5.1 with TalkBack in mind, at 200 % font on a small phone: the Default snooze length and Default quiet time rows
  * are 56 dp buttons with their values, the "Vibrate during quiet time" switch row, the theme segments, the radio rows
  * and Back are at least 48 dp, the segments and radio rows are selectable with their labels, and the slider exposes its
- * range and its value text. Bright wake screen and the later cards stay hidden; the usage stats switch (Story 5.6) shows.
+ * range and its value text. The "Bright wake screen" switch row (Story 5.2) and the usage stats switch (Story 5.6) show;
+ * the weekly summary stays hidden.
  */
 @RunWith(RobolectricTestRunner::class)
 @GraphicsMode(GraphicsMode.Mode.NATIVE)
@@ -110,11 +112,27 @@ class DefaultsSettingsSemanticsTest {
     }
 
     @Test
-    fun `Bright wake screen and weekly summary stay hidden, usage stats shows, and the checklist row is a 48 dp button`() =
+    fun `Bright wake screen is a 48 dp switch row, on by default with its caption, that applies at once (Story 5_2)`() {
+        val intents = mutableListOf<SettingsIntent>()
+        show(DefaultsSettingsSamples.main, onIntent = { intents += it }) {
+            val switch =
+                composeRule.onNode(
+                    hasText("Bright wake screen") and hasText("Raises screen brightness while the alarm rings.") and isToggleable(),
+                )
+            // TalkBack reads the label, the caption and the On/Off state of one switch.
+            switch.performScrollTo().assertHeightIsAtLeast(48.dp).assertIsOn()
+            switch.assert(SemanticsMatcher.expectValue(SemanticsProperties.Role, Role.Switch))
+
+            switch.performClick()
+
+            assertEquals(listOf<SettingsIntent>(SettingsIntent.BrightWakeScreenToggled(false)), intents)
+        }
+    }
+
+    @Test
+    fun `weekly summary stays hidden, usage stats shows, and the checklist row is a 48 dp button`() =
         show(DefaultsSettingsSamples.main) {
-            listOf("Bright wake screen", "Weekly summary").forEach {
-                composeRule.onNode(hasText(it, substring = true)).assertDoesNotExist()
-            }
+            composeRule.onNode(hasText("Weekly summary", substring = true)).assertDoesNotExist()
             // Story 5.6.
             composeRule.onNode(hasText("Share anonymous usage stats")).assertExists()
             // Story 5.4: the row opens the checklist.

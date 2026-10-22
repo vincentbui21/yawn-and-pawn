@@ -330,7 +330,7 @@
     <string name="settings_wake">Wake</string>
     <string name="settings_default_quiet_time">Default quiet time</string>
     <string name="settings_bright_wake">Bright wake screen</string>
-    <string name="settings_bright_wake_caption">Raises screen brightness on alarm screens.</string>
+    <string name="settings_bright_wake_caption">Raises screen brightness while the alarm rings.</string>
     <string name="settings_appearance">Appearance</string>
     <string name="settings_theme_system">System</string>
     <string name="settings_theme_light">Light</string>

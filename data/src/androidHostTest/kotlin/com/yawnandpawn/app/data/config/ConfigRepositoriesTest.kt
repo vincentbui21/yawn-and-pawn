@@ -165,7 +165,7 @@ class ConfigRepositoriesTest {
         }
 
     @Test
-    fun `the new-alarm defaults and the theme persist, keep the last-known snapshot, and read garbage as the defaults`() =
+    fun `the new-alarm defaults, the theme and bright wake persist, keep the last-known snapshot, and read garbage as defaults`() =
         runTest(timeout = TIMEOUT) {
             val chosen =
                 GlobalSettings(
@@ -173,11 +173,13 @@ class ConfigRepositoriesTest {
                     defaultSnoozeLengthMinutes = 15,
                     defaultVibrateInGrace = false,
                     themeMode = ThemeMode.Dark,
+                    brightWakeScreen = false,
                 )
             global.setDefaultGraceSeconds(25)
             global.setDefaultSnoozeLength(15)
             global.setDefaultVibrateInGrace(false)
             global.setThemeMode(ThemeMode.Dark)
+            global.setBrightWakeScreen(false)
             assertEquals(chosen, global.observe().first())
             assertEquals(SettingsSnapshot(chosen, emptyList()), global.lastKnown(), "the first frame's theme")
 
@@ -191,7 +193,21 @@ class ConfigRepositoriesTest {
                 it[DataStoreGlobalSettings.DEFAULT_SNOOZE_LENGTH] = 7
                 it[DataStoreGlobalSettings.THEME_MODE] = "Purple"
             }
-            assertEquals(Outcome.Success(GlobalSettings(defaultVibrateInGrace = false)), reopened.get())
+            assertEquals(Outcome.Success(GlobalSettings(defaultVibrateInGrace = false, brightWakeScreen = false)), reopened.get())
+        }
+
+    @Test
+    fun `Bright wake screen reads on when its key is missing, and its off and on are stored (Story 5_2)`() =
+        runTest(timeout = TIMEOUT) {
+            assertEquals(true, assertIs<Outcome.Success<GlobalSettings>>(global.get()).value.brightWakeScreen)
+            assertEquals(null, settingsStore.store.data.first()[DataStoreGlobalSettings.BRIGHT_WAKE_SCREEN], "fresh store")
+
+            assertEquals(Outcome.Success(Unit), global.setBrightWakeScreen(false))
+            assertEquals(false, global.observe().first().brightWakeScreen)
+            assertEquals(false, global.lastKnown()?.settings?.brightWakeScreen, "the test ring's fire reads it")
+            assertEquals(Outcome.Success(Unit), global.setBrightWakeScreen(true))
+            assertEquals(true, global.observe().first().brightWakeScreen)
+            assertEquals("bright_wake_screen", DataStoreGlobalSettings.BRIGHT_WAKE_SCREEN.name)
         }
 
     @Test

@@ -253,7 +253,7 @@ FR-SET-3, FR-SET-4 and FR-SET-5, together with Purchase history (FR-PRG-4), are 
 - UX-DR7: Colour usage rules enforced: one accent (Sunrise orange) for primary actions, selection and countdown ring; accent-coloured text on light backgrounds uses `accent-text`; prices always in `text` colour (never accent, green or red); `success` means on-time only and never money; `error` only for real errors; disabled uses the `disabled-container`/`disabled-content` token pair, not opacity; inverse tokens only for snackbars; accent never placed on `surface-variant-sunrise` (2.89:1) or the sunrise gradient (2.73:1).
 - UX-DR8: The DESIGN.md verified contrast table is the gate: every colour pair used ships with a recorded WCAG ratio (text ≥ 4.5, graphics ≥ 3.0); any new pair is added to the table before it ships.
 - UX-DR9: The ringing screen follows DESIGN.md v0.5 as built in the preview's `ui/wake` Ringing composable (Sunrise gradient over the top 40%, flat `bg-sunrise` thumb zone); accent never sits on the gradient.
-- UX-DR10: "Bright wake screen" setting (default on) raises screen brightness to maximum on wake screens, restores it on "Done", respects the system Extra dim setting, and is explained in onboarding ("Your alarm screen turns bright to help you wake. Change it in Settings."); no blue-light health claims.
+- UX-DR10: "Bright wake screen" setting (default on) raises screen brightness to maximum on wake screens (owner decision 2026-10-22, option C: only the ringing screen and the snooze sheet over it; brightness returns to the phone's level on "I'm up" and whenever the screen is left), respects the system Extra dim setting, and is explained in onboarding ("Your alarm screen turns bright to help you wake. Change it in Settings."); no blue-light health claims.
 - UX-DR11: Icons are Material Symbols Rounded, weight 400, fill 0 (fill 1 for selected nav item and outcome markers).
 
 #### Components — wake screens (Sunrise tokens)
@@ -2790,7 +2790,7 @@ So that the light helps me wake up.
 **Given** `GlobalSettings.brightWakeScreen` (default on)
 **When** a session starts
 **Then** `ConfigResolver` copies it into the frozen `SessionConfig` (`brightWakeScreen`), so changing the setting during a session has no effect until the next session (AD-16) (test)
-**And** the Settings "Wake" section has a `switch` "Bright wake screen" (default on) with the caption "Raises screen brightness on alarm screens." (EXPERIENCE.md Key strings); the onboarding key string "Your alarm screen turns bright to help you wake. Change it in Settings." is used in Story 5.12
+**And** the Settings "Wake" section has a `switch` "Bright wake screen" (default on) with the caption "Raises screen brightness while the alarm rings." (EXPERIENCE.md Key strings; was "Raises screen brightness on alarm screens." before the option C decision, new wording for owner sign-off); the onboarding key string "Your alarm screen turns bright to help you wake. Change it in Settings." is used in Story 5.12
 
 **Given** `config.brightWakeScreen` is true
 **When** `WakeActivity` shows any wake screen (Ringing, Snooze confirm, Check, Fallback check picker, Success)
@@ -2798,6 +2798,7 @@ So that the light helps me wake up.
 **And** brightness returns to the system level when the user taps "Done" on Success, on the Snoozed surface, and whenever `WakeActivity` stops or finishes (Home, Recents, crash), because the override is window-scoped (Robolectric test on window attributes for each case)
 **And** when the system Extra dim setting is active (`Settings.Secure` `reduce_bright_colors_activated` = 1, API 31+) the override is not applied (owner-approved default 2026-09-26)
 **And** with the setting off, the window brightness is never touched (test)
+**And** (owner decision 2026-10-22, option C "Ringing only", replacing "any wake screen" above) full brightness applies only while the Ringing screen shows, with the snooze confirm sheet over it; the Check screen, the Fallback check picker, Snoozed and Success are at the phone's own level (Story 5.2 spec)
 **And** no copy anywhere makes a blue-light or health claim (reviewed in the `pps-design` checklist)
 **And** the `pps-design` Done checklist is ticked in the story file, all strings are resources, key strings match EXPERIENCE.md verbatim and `CopyRulesTest` passes (FR-MSG-4)
 **And** `./gradlew qualityGate` passes
@@ -3131,7 +3132,7 @@ So that closed testers get an app that sets itself up correctly on their devices
 4. With a DND schedule that blocks alarms (DND currently off), the Do Not Disturb row shows Fix and the Home banner appears.
 5. Turning battery optimization back on after it was OK shows "Alarms may not ring. Fix settings" on Home and "Alarm may not ring: battery optimization turned back on" in the checklist; fixing clears both.
 6. On the Xiaomi and Samsung, the Manufacturer settings row appears, "Open settings" opens the right OEM screen, and "I've done this" marks it OK; on the Pixel the row is hidden.
-7. The onboarding test alarm rings over the locked screen with "Test · no charge", the screen goes fully bright, brightness returns to normal on "Done", and the Test alarm row turns OK; an unlocked test shows the retry message; "Skip for now" leaves the Home note.
+7. The onboarding test alarm rings over the locked screen with "Test · no charge", the ringing screen goes fully bright, brightness returns to normal on "I'm up" (Story 5.2 option C), and the Test alarm row turns OK; an unlocked test shows the retry message; "Skip for now" leaves the Home note.
 8. With Extra dim on (API 31+), the wake screen does not force full brightness; with "Bright wake screen" off, brightness is untouched.
 9. Theme System / Light / Dark switches every app screen immediately; wake screens stay Sunrise.
 10. New default grace window and snooze length apply to a new alarm but not to existing ones.

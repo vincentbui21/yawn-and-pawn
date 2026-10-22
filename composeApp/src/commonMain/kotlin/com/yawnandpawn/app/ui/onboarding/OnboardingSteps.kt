@@ -188,8 +188,9 @@ internal fun AnalyticsStep() {
 }
 
 /**
- * Step 8, the test alarm: "Lock your phone. We'll ring in 10 seconds." and the bright wake screen note; when the phone
- * was not locked, "Your phone wasn't locked. Try again with it locked." on glass with the `error` icon.
+ * Step 8, the test alarm: "Lock your phone. We'll ring in 10 seconds." and, while Bright wake screen is on, its note
+ * ([OnboardingUiState.brightWakeNote]); when the phone was not locked, "Your phone wasn't locked. Try again with it
+ * locked." on glass with the `error` icon.
  */
 @Composable
 internal fun TestAlarmStep(state: OnboardingUiState) {
@@ -210,5 +211,7 @@ internal fun TestAlarmStep(state: OnboardingUiState) {
             Text(text = stringResource(Res.string.onboarding_test_not_locked), style = PpsTheme.typography.body, color = colors.text)
         }
     }
-    NoteInline(text = stringResource(Res.string.onboarding_bright_wake), modifier = Modifier.padding(horizontal = spacing.cardPadding))
+    if (state.brightWakeNote) {
+        NoteInline(text = stringResource(Res.string.onboarding_bright_wake), modifier = Modifier.padding(horizontal = spacing.cardPadding))
+    }
 }

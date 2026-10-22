@@ -205,4 +205,16 @@ class HomeScreenshotTest {
     @Config(fontScale = 2.0f)
     fun `re-register under the reliability banner in Light at 200 percent`() =
         home("home_reregister_reliability_light_font200", HomeSamples.reRegisterUnderReliability, PpsThemeMode.Light)
+
+    // Story 5.12: the note after "Skip for now" on onboarding's test alarm.
+
+    @Test
+    fun `test note in Light`() = home("home_test_note_light", HomeSamples.testNote, PpsThemeMode.Light)
+
+    @Test
+    fun `test note in Dark`() = home("home_test_note_dark", HomeSamples.testNote, PpsThemeMode.Dark)
+
+    @Test
+    @Config(fontScale = 2.0f)
+    fun `test note in Light at 200 percent`() = home("home_test_note_light_font200", HomeSamples.testNote, PpsThemeMode.Light)
 }

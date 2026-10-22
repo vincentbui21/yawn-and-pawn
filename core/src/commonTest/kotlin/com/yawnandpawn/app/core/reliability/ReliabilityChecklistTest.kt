@@ -377,6 +377,8 @@ class ReliabilityChecklistTest {
         override suspend fun confirmMaker(confirmation: MakerConfirmation): Outcome<Unit, DomainError> = Outcome.Success(Unit)
 
         override suspend fun lockedTestPassed(at: Instant): Outcome<Unit, DomainError> = Outcome.Success(Unit)
+
+        override fun observe(): Flow<StoredReliability> = flowOf(stored)
     }
 
     private class Checks(

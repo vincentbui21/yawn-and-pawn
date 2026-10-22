@@ -4,9 +4,17 @@ import com.yawnandpawn.app.core.error.DomainError
 import com.yawnandpawn.app.core.error.Outcome
 import com.yawnandpawn.app.core.error.flatMap
 import com.yawnandpawn.app.core.error.map
+import com.yawnandpawn.app.core.reliability.ReliabilityRecords
+import com.yawnandpawn.app.core.session.ScheduleTestAlarm
 import com.yawnandpawn.app.core.session.SessionLockGuard
 import com.yawnandpawn.app.core.time.Clock
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.map
+import kotlin.time.Duration
+import kotlin.time.Duration.Companion.minutes
+import kotlin.time.Duration.Companion.seconds
 import kotlin.time.Instant
 
 /**
@@ -15,12 +23,17 @@ import kotlin.time.Instant
  * when the user tapped "I understand" under the alarm behaviour disclosure ([disclosureAcceptedAt], null until then).
  * No alarm can be saved before that consent ([consented]). [alarmId] is the first alarm onboarding saved (Story 5.11):
  * going back to that step edits it instead of adding a second one, and the test alarm (Story 5.12) rings it.
+ * [testRingsAt] is when step 8's last test rings (Story 5.12), so its result survives a cleared screen or process death;
+ * [testNoteDue] is set when step 8 was skipped: Home shows "Ring a test alarm with your phone locked to check it works."
+ * until a locked test passes or the note is dismissed ([OnboardingTestNote]).
  */
 data class OnboardingProgress(
     val completed: Boolean = false,
     val step: String? = null,
     val disclosureAcceptedAt: Instant? = null,
     val alarmId: String? = null,
+    val testRingsAt: Instant? = null,
+    val testNoteDue: Boolean = false,
 ) {
     /** The user accepted the alarm behaviour disclosure. */
     val consented: Boolean
@@ -50,6 +63,12 @@ interface OnboardingRepository {
 
     /** Stores [id] as the first alarm onboarding saved (Story 5.11); null forgets it. */
     suspend fun setAlarmId(id: String?): Outcome<Unit, DomainError>
+
+    /** Stores [at] as when step 8's last test rings (Story 5.12); null forgets it. */
+    suspend fun setTestRingsAt(at: Instant?): Outcome<Unit, DomainError>
+
+    /** Stores whether Home shows the skipped-test note (Story 5.12). */
+    suspend fun setTestNoteDue(due: Boolean): Outcome<Unit, DomainError>
 }
 
 /**
@@ -90,16 +109,22 @@ class SaveOnboardingStep(
 
 /**
  * Finishes onboarding: the app opens on Home from now on. Refused with [DomainError.DisclosureRequired] while the
- * disclosure is not accepted, so no path skips the consent screen. Inside [SessionLockGuard.whenIdle].
+ * disclosure is not accepted, so no path skips the consent screen. With [testSkipped] ("Skip for now" on step 8, Story
+ * 5.12) Home's test note is stored first, so a completed onboarding never misses it; a failed note write completes
+ * nothing. Inside [SessionLockGuard.whenIdle].
  */
 class CompleteOnboarding(
     private val repository: OnboardingRepository,
     private val sessionLock: SessionLockGuard,
 ) {
-    suspend operator fun invoke(): Outcome<Unit, DomainError> =
+    suspend operator fun invoke(testSkipped: Boolean = false): Outcome<Unit, DomainError> =
         sessionLock.whenIdle {
             repository.get().flatMap { progress ->
-                if (progress.consented) repository.setCompleted() else Outcome.Failure(DomainError.DisclosureRequired)
+                when {
+                    !progress.consented -> Outcome.Failure(DomainError.DisclosureRequired)
+                    testSkipped -> repository.setTestNoteDue(true).flatMap { repository.setCompleted() }
+                    else -> repository.setCompleted()
+                }
             }
         }
 }
@@ -114,4 +139,84 @@ class RememberOnboardingAlarm(
     private val sessionLock: SessionLockGuard,
 ) {
     suspend operator fun invoke(id: String?): Outcome<Unit, DomainError> = sessionLock.whenIdle { repository.setAlarmId(id) }
+}
+
+/**
+ * Remembers when step 8's test rings (Story 5.12), so the step reads its result again after a cleared screen or process
+ * death. Inside [SessionLockGuard.whenIdle] like every write the user drives.
+ */
+class RememberOnboardingTest(
+    private val repository: OnboardingRepository,
+    private val sessionLock: SessionLockGuard,
+) {
+    suspend operator fun invoke(ringsAt: Instant?): Outcome<Unit, DomainError> = sessionLock.whenIdle { repository.setTestRingsAt(ringsAt) }
+}
+
+/** What step 8's test alarm came to (Story 5.12). */
+enum class OnboardingTestResult {
+    /** No test was rung from step 8. */
+    NotRung,
+
+    /** Rung; its ring (and a locked pass) may still come. */
+    Waiting,
+
+    /** A test rung with the phone locked was completed after the ring was asked for. */
+    Passed,
+
+    /** Over without a locked pass: the phone was not locked (or the ring never came, was missed or was preempted). */
+    NotLocked,
+}
+
+/** Step 8's rule (Story 5.12). Pure. */
+object OnboardingTestAlarm {
+    /** How long after its ring time a test without a locked pass still counts as waiting. */
+    val RESULT_SLACK: Duration = 10.seconds
+
+    /**
+     * How far the wall clock may have been set back between the ring and its pass (review fix: a time sync or a manual
+     * change), so a real locked pass still counts.
+     */
+    val CLOCK_SKEW: Duration = 5.minutes
+
+    /** The longest a test reads as waiting on screen, in elapsed time, whatever the wall clock does (review fix). */
+    val MAX_WAIT: Duration = ScheduleTestAlarm.TEST_DELAY + RESULT_SLACK
+
+    /**
+     * The result of the test that rings at [ringsAt] (null: none rung), with the last locked pass at [passedAt] (5.3's
+     * `lockedTestPassedAt`), at [now]: [OnboardingTestResult.Passed] when the pass came after the ring was asked for
+     * ([ringsAt] − [ScheduleTestAlarm.TEST_DELAY], less [CLOCK_SKEW]); else [OnboardingTestResult.Waiting] before
+     * [ringsAt] + [RESULT_SLACK]; else [OnboardingTestResult.NotLocked].
+     */
+    fun result(
+        ringsAt: Instant?,
+        passedAt: Instant?,
+        now: Instant,
+    ): OnboardingTestResult =
+        when {
+            ringsAt == null -> OnboardingTestResult.NotRung
+            passedAt != null && passedAt >= ringsAt - ScheduleTestAlarm.TEST_DELAY - CLOCK_SKEW -> OnboardingTestResult.Passed
+            now < ringsAt + RESULT_SLACK -> OnboardingTestResult.Waiting
+            else -> OnboardingTestResult.NotLocked
+        }
+}
+
+/**
+ * Home's note after "Skip for now" on step 8 (Story 5.12): "Ring a test alarm with your phone locked to check it works."
+ * shows while the note is due and no locked test has passed ([shown]); "Dismiss" ends it ([dismiss]). A failing read
+ * fails [shown] (the caller logs it and shows no note).
+ */
+class OnboardingTestNote(
+    private val repository: OnboardingRepository,
+    private val records: ReliabilityRecords,
+    private val sessionLock: SessionLockGuard,
+) {
+    fun shown(): Flow<Boolean> =
+        combine(
+            repository.observe().map { it.testNoteDue },
+            records.observe().map { it.lockedTestPassedAt != null },
+        ) { due, passed -> due && !passed }
+            .distinctUntilChanged()
+
+    /** "Dismiss": the note is no longer due. Inside [SessionLockGuard.whenIdle]. */
+    suspend fun dismiss(): Outcome<Unit, DomainError> = sessionLock.whenIdle { repository.setTestNoteDue(false) }
 }

@@ -2,6 +2,10 @@ package com.yawnandpawn.app.core.onboarding
 
 import com.yawnandpawn.app.core.error.DomainError
 import com.yawnandpawn.app.core.error.Outcome
+import com.yawnandpawn.app.core.reliability.ChecklistRow
+import com.yawnandpawn.app.core.reliability.MakerConfirmation
+import com.yawnandpawn.app.core.reliability.ReliabilityRecords
+import com.yawnandpawn.app.core.reliability.StoredReliability
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlin.time.Instant
@@ -42,10 +46,35 @@ internal class InMemoryOnboarding(
 
     override suspend fun setAlarmId(id: String?): Outcome<Unit, DomainError> = write { it.copy(alarmId = id) }
 
+    override suspend fun setTestRingsAt(at: Instant?): Outcome<Unit, DomainError> = write { it.copy(testRingsAt = at) }
+
+    override suspend fun setTestNoteDue(due: Boolean): Outcome<Unit, DomainError> = write { it.copy(testNoteDue = due) }
+
     private fun write(change: (OnboardingProgress) -> OnboardingProgress): Outcome<Unit, DomainError> {
         writeFailure?.let { return Outcome.Failure(it) }
         stored.value = change(stored.value)
         writes++
         return Outcome.Success(Unit)
     }
+}
+
+/** In-memory [ReliabilityRecords] for Home's test note (Story 5.12): [passedAt] is the locked pass [observe] emits. */
+internal class InMemoryRecords : ReliabilityRecords {
+    private val stored = MutableStateFlow(StoredReliability())
+
+    var passedAt: Instant?
+        get() = stored.value.lockedTestPassedAt
+        set(value) {
+            stored.value = stored.value.copy(lockedTestPassedAt = value)
+        }
+
+    override fun observe(): Flow<StoredReliability> = stored
+
+    override suspend fun read(): Outcome<StoredReliability, DomainError> = Outcome.Success(stored.value)
+
+    override suspend fun saveLastOk(rows: Set<ChecklistRow>): Outcome<Unit, DomainError> = error("not used")
+
+    override suspend fun confirmMaker(confirmation: MakerConfirmation): Outcome<Unit, DomainError> = error("not used")
+
+    override suspend fun lockedTestPassed(at: Instant): Outcome<Unit, DomainError> = error("not used")
 }

@@ -11,6 +11,7 @@ import com.yawnandpawn.app.core.config.PendingChangeRepository
 import com.yawnandpawn.app.core.history.MissedNotes
 import com.yawnandpawn.app.core.history.SessionHistoryRepository
 import com.yawnandpawn.app.core.log.Logger
+import com.yawnandpawn.app.core.onboarding.OnboardingTestNote
 import com.yawnandpawn.app.core.reliability.ConfirmMakerGuidance
 import com.yawnandpawn.app.core.reliability.DeviceInfo
 import com.yawnandpawn.app.core.reliability.DeviceInfoSource
@@ -44,6 +45,7 @@ import com.yawnandpawn.app.testing.FakeMissedNoteDismissals
 import com.yawnandpawn.app.testing.FakeMoneyFormatter
 import com.yawnandpawn.app.testing.FakeMonotonicClock
 import com.yawnandpawn.app.testing.FakeNotificationPermission
+import com.yawnandpawn.app.testing.FakeOnboardingRepository
 import com.yawnandpawn.app.testing.FakePendingChangeRepository
 import com.yawnandpawn.app.testing.FakePriceCatalog
 import com.yawnandpawn.app.testing.FakePurchaseRecordRepository
@@ -105,6 +107,53 @@ class UiModuleTest {
         app.close()
     }
 
+    /** Story 5.12: Home's note after "Skip for now" on onboarding's test alarm, on fakes. */
+    private fun aTestNote(): OnboardingTestNote =
+        OnboardingTestNote(
+            FakeOnboardingRepository(),
+            FakeReliabilityRecords(),
+            SessionLockGuard(MutableStateFlow<SessionState>(SessionState.Idle), MutableStateFlow(true), MutableStateFlow(false)),
+        )
+
+    /** The core ports the Home, Purchase history and editor ViewModels take, on fakes over [repository]. */
+    private fun homePorts(repository: FakeAlarmRepository) =
+        module {
+            single<AlarmRepository> { repository }
+            single<Clock> { FakeClock() }
+            single<TimeZoneProvider> { FakeTimeZoneProvider() }
+            single<TimeChangeSignal> { FakeTimeChangeSignal() }
+            single<Logger> { FakeLogger() }
+            single<SoundLibrary> { FakeSoundLibrary() }
+            single<SoundPreview> { FakeSoundPreview() }
+            single<ReliabilityProbe> { FakeReliabilityProbe() }
+            single<ReliabilitySettings> { FakeReliabilitySettings() }
+            single<NotificationPermission> { FakeNotificationPermission() }
+            single<AccessibilityState> { FakeAccessibilityState() }
+            single<CameraPermission> { TestCameraPermission() }
+            single<PurchaseRecordRepository> { FakePurchaseRecordRepository() }
+            single<SessionHistoryRepository> { FakeSessionHistoryRepository() }
+            // Story 4.6: the editor's pending values and fee ladder.
+            single<PendingChangeRepository> { FakePendingChangeRepository() }
+            single<GlobalSettingsRepository> { FakeGlobalSettingsRepository() }
+            single<PriceCatalog> { FakePriceCatalog() }
+            single<MoneyFormatter> { FakeMoneyFormatter() }
+            single { AlarmUseCasesFixture(repository = get(), clock = get(), timeZoneProvider = get()) }
+            single<CheckConfigRepository> { get<AlarmUseCasesFixture>().checkConfigs }
+            factory { get<AlarmUseCasesFixture>().save }
+            factory { get<AlarmUseCasesFixture>().setEnabled }
+            factory { get<AlarmUseCasesFixture>().delete }
+            factory { get<AlarmUseCasesFixture>().duplicate }
+            factory { get<AlarmUseCasesFixture>().reRegisterCode }
+            single { MissedNotes(FakeSessionHistoryRepository(), FakeMissedNoteDismissals()) }
+            single {
+                ReRegisterSuggestions(FakeSessionHistoryRepository(), CheckRegistrations.None, FakeReRegisterDismissals(), get())
+            }
+            single { ScheduleTestAlarm(FakeAlarmScheduler(), FakeTestAlarmStore(), get(), get()) }
+            // Story 5.4: Home's banner evaluates the reliability checklist.
+            factory<EvaluateReliability> { anEvaluateReliability(probe = get(), checks = get()) }
+            single { aTestNote() }
+        }
+
     @OptIn(ExperimentalCoroutinesApi::class)
     @Test
     fun `the ui module builds the Home, Purchase history and editor ViewModels from the core ports`() {
@@ -112,43 +161,7 @@ class UiModuleTest {
         try {
             val source = anAlarm(id = "source", time = LocalTime(6, 45), label = "Gym")
             val repository = FakeAlarmRepository(listOf(source))
-            val ports =
-                module {
-                    single<AlarmRepository> { repository }
-                    single<Clock> { FakeClock() }
-                    single<TimeZoneProvider> { FakeTimeZoneProvider() }
-                    single<TimeChangeSignal> { FakeTimeChangeSignal() }
-                    single<Logger> { FakeLogger() }
-                    single<SoundLibrary> { FakeSoundLibrary() }
-                    single<SoundPreview> { FakeSoundPreview() }
-                    single<ReliabilityProbe> { FakeReliabilityProbe() }
-                    single<ReliabilitySettings> { FakeReliabilitySettings() }
-                    single<NotificationPermission> { FakeNotificationPermission() }
-                    single<AccessibilityState> { FakeAccessibilityState() }
-                    single<CameraPermission> { TestCameraPermission() }
-                    single<PurchaseRecordRepository> { FakePurchaseRecordRepository() }
-                    single<SessionHistoryRepository> { FakeSessionHistoryRepository() }
-                    // Story 4.6: the editor's pending values and fee ladder.
-                    single<PendingChangeRepository> { FakePendingChangeRepository() }
-                    single<GlobalSettingsRepository> { FakeGlobalSettingsRepository() }
-                    single<PriceCatalog> { FakePriceCatalog() }
-                    single<MoneyFormatter> { FakeMoneyFormatter() }
-                    single { AlarmUseCasesFixture(repository = get(), clock = get(), timeZoneProvider = get()) }
-                    single<CheckConfigRepository> { get<AlarmUseCasesFixture>().checkConfigs }
-                    factory { get<AlarmUseCasesFixture>().save }
-                    factory { get<AlarmUseCasesFixture>().setEnabled }
-                    factory { get<AlarmUseCasesFixture>().delete }
-                    factory { get<AlarmUseCasesFixture>().duplicate }
-                    factory { get<AlarmUseCasesFixture>().reRegisterCode }
-                    single { MissedNotes(FakeSessionHistoryRepository(), FakeMissedNoteDismissals()) }
-                    single {
-                        ReRegisterSuggestions(FakeSessionHistoryRepository(), CheckRegistrations.None, FakeReRegisterDismissals(), get())
-                    }
-                    single { ScheduleTestAlarm(FakeAlarmScheduler(), FakeTestAlarmStore(), get(), get()) }
-                    // Story 5.4: Home's banner evaluates the reliability checklist.
-                    factory<EvaluateReliability> { anEvaluateReliability(probe = get(), checks = get()) }
-                }
-            val koin = koinApplication { modules(ports, uiModule) }.koin
+            val koin = koinApplication { modules(homePorts(repository), uiModule) }.koin
 
             val home = koin.get<HomeViewModel>()
             assertTrue(home.state.value.isLoading)

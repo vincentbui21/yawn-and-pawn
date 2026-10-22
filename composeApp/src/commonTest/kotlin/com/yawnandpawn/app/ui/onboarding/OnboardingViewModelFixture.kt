@@ -9,6 +9,7 @@ import com.yawnandpawn.app.core.log.LogEvent
 import com.yawnandpawn.app.core.onboarding.AcceptDisclosure
 import com.yawnandpawn.app.core.onboarding.CompleteOnboarding
 import com.yawnandpawn.app.core.onboarding.RememberOnboardingAlarm
+import com.yawnandpawn.app.core.onboarding.RememberOnboardingTest
 import com.yawnandpawn.app.core.onboarding.SaveOnboardingStep
 import com.yawnandpawn.app.core.reliability.DeviceInfo
 import com.yawnandpawn.app.core.reliability.EvaluateReliability
@@ -37,6 +38,7 @@ import com.yawnandpawn.app.testing.FakeReliabilitySettings
 import com.yawnandpawn.app.testing.FakeSoundLibrary
 import com.yawnandpawn.app.testing.FakeSoundPreview
 import com.yawnandpawn.app.testing.FakeTestAlarmStore
+import com.yawnandpawn.app.testing.FakeTimeChangeSignal
 import com.yawnandpawn.app.testing.FakeTimeZoneProvider
 import com.yawnandpawn.app.testing.OnboardingPresets
 import com.yawnandpawn.app.testing.aPriceSnapshot
@@ -62,11 +64,11 @@ import kotlin.time.Duration.Companion.milliseconds
 import kotlin.time.Instant
 
 /**
- * The fakes and helpers shared by the onboarding ViewModel tests (Stories 5.10 and 5.11): the real core use cases on
- * fakes, the app's editor as the first alarm and Story 5.4's checklist as step 6.
+ * The fakes and helpers shared by the onboarding ViewModel tests (Stories 5.10 to 5.12): the real core use cases on
+ * fakes, the app's editor as the first alarm, Story 5.4's checklist as step 6 and its test alarm as step 8.
  */
 @OptIn(ExperimentalCoroutinesApi::class)
-@Suppress("UnnecessaryAbstractClass") // A base for the two test classes, never run itself.
+@Suppress("UnnecessaryAbstractClass") // A base for the test classes, never run itself.
 abstract class OnboardingViewModelFixture {
     protected val dispatcher = UnconfinedTestDispatcher()
 
@@ -111,6 +113,13 @@ abstract class OnboardingViewModelFixture {
     protected val records = FakeReliabilityRecords()
     protected val systemScreens = FakeReliabilitySettings()
     protected val consents = FakeConsentStore()
+
+    /** Where step 8's test is stored and armed (Story 5.12): the pending config, and a switch to fail the arming. */
+    protected val testStore = FakeTestAlarmStore()
+    protected val testArming = FakeAlarmScheduler()
+
+    /** The clock's changes (each minute, a time set, a zone change) step 8 renders again on (Story 5.12 review fix). */
+    protected val timeChanges = FakeTimeChangeSignal()
 
     /** How many first-alarm editors onboarding opened (Story 5.11). */
     protected var editorsOpened = 0
@@ -184,6 +193,21 @@ abstract class OnboardingViewModelFixture {
                     FirstAlarmSources(editors = ::editor, remember = RememberOnboardingAlarm(onboarding, sessionLock), alarms = alarms),
                 checklist = ChecklistScreens(::checklistScreen),
                 usageStats = UsageStatsSources(consents = consents, setConsent = SetAnalyticsConsent(consents, sessionLock)),
+                testAlarm =
+                    TestAlarmSources(
+                        ring =
+                            ChecklistTestAlarm(
+                                checkRows,
+                                settings,
+                                ScheduleTestAlarm(testArming, testStore, clock, logger),
+                                clock,
+                                zone,
+                                logger,
+                            ),
+                        remember = RememberOnboardingTest(onboarding, sessionLock),
+                        records = records,
+                        timeChanges = timeChanges,
+                    ),
                 monotonicClock = ticks,
                 timeZoneProvider = zone,
             )

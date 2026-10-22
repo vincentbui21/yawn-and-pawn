@@ -13,7 +13,10 @@ import com.yawnandpawn.app.core.reliability.ChecklistRow
 import com.yawnandpawn.app.core.reliability.MakerConfirmation
 import com.yawnandpawn.app.core.reliability.ReliabilityRecords
 import com.yawnandpawn.app.core.reliability.StoredReliability
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.map
 import kotlin.coroutines.cancellation.CancellationException
 import kotlin.time.Instant
 
@@ -28,6 +31,9 @@ class DataStoreReliabilityRecords(
     private val store: DataStore<Preferences>,
 ) : ReliabilityRecords {
     override suspend fun read(): Outcome<StoredReliability, DomainError> = storage { stored(store.data.first()) }
+
+    // A read error fails the flow (the port's contract); the callers log it.
+    override fun observe(): Flow<StoredReliability> = store.data.map(::stored).distinctUntilChanged()
 
     override suspend fun saveLastOk(rows: Set<ChecklistRow>): Outcome<Unit, DomainError> =
         edit { preferences -> preferences[LAST_OK] = rows.map { it.name }.toSet() }

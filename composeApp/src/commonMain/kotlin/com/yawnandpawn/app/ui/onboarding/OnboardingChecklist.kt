@@ -4,19 +4,24 @@ import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.ViewModelStore
 import androidx.lifecycle.viewmodel.initializer
 import androidx.lifecycle.viewmodel.viewModelFactory
+import com.yawnandpawn.app.core.onboarding.RememberOnboardingTest
+import com.yawnandpawn.app.core.reliability.ReliabilityRecords
 import com.yawnandpawn.app.core.telemetry.ConsentStore
 import com.yawnandpawn.app.core.telemetry.SetAnalyticsConsent
+import com.yawnandpawn.app.core.time.TimeChangeSignal
 import com.yawnandpawn.app.ui.checkpicker.CheckPickerIntent
 import com.yawnandpawn.app.ui.checkpicker.CheckPickerUiState
 import com.yawnandpawn.app.ui.editor.EditorIntent
 import com.yawnandpawn.app.ui.editor.FullEditorSections
 import com.yawnandpawn.app.ui.reliability.ChecklistItem
 import com.yawnandpawn.app.ui.reliability.ChecklistRow
+import com.yawnandpawn.app.ui.reliability.ChecklistTestAlarm
 import com.yawnandpawn.app.ui.reliability.ReliabilityEffect
 import com.yawnandpawn.app.ui.reliability.ReliabilityIntent
 import com.yawnandpawn.app.ui.reliability.ReliabilityViewModel
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.emptyFlow
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
 
@@ -33,6 +38,18 @@ fun interface ChecklistScreens {
 class UsageStatsSources(
     val consents: ConsentStore,
     val setConsent: SetAnalyticsConsent,
+)
+
+/**
+ * What onboarding's step 8 needs (Story 5.12): the checklist's own test ([ring], Story 1.18 through 5.4, rung on the
+ * first alarm), where its ring time is stored ([remember]), where 5.3 records a locked pass ([records], read only), and
+ * the clock's changes ([timeChanges]: each minute, a time set, a zone change), on which step 8 renders again (review fix).
+ */
+class TestAlarmSources(
+    val ring: ChecklistTestAlarm,
+    val remember: RememberOnboardingTest,
+    val records: ReliabilityRecords,
+    val timeChanges: TimeChangeSignal = TimeChangeSignal { emptyFlow() },
 )
 
 /**

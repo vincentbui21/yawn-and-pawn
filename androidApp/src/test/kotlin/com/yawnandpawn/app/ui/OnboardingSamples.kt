@@ -9,13 +9,14 @@ import com.yawnandpawn.app.ui.editor.CheckChip
 import com.yawnandpawn.app.ui.format.formatMoney
 import com.yawnandpawn.app.ui.onboarding.OnboardingStep
 import com.yawnandpawn.app.ui.onboarding.OnboardingUiState
+import com.yawnandpawn.app.ui.onboarding.TestAlarmStatus
 import com.yawnandpawn.app.ui.reliability.ChecklistItem
 import com.yawnandpawn.app.ui.reliability.ChecklistRow
 import com.yawnandpawn.app.ui.reliability.ItemStatus
 import kotlinx.datetime.LocalTime
 
 /**
- * Onboarding steps 1 to 7 as the app shows them (Stories 5.10 and 5.11). Getters, because they format prices with the
+ * Onboarding steps 1 to 8 as the app shows them (Stories 5.10 to 5.12). Getters, because they format prices with the
  * phone's `MoneyFormatter` (ICU), which only runs inside a Robolectric test.
  */
 internal object OnboardingSamples {
@@ -88,4 +89,16 @@ internal object OnboardingSamples {
 
     /** Step 7: "Share anonymous usage stats?" with "Share" and "No thanks". */
     val usageStats: OnboardingUiState get() = firstAlarm(OnboardingStep.Analytics)
+
+    /**
+     * Step 8 as the app shows it (Story 5.12): "Test your alarm", "Lock your phone. We'll ring in 10 seconds.", "Ring a
+     * test alarm" and "Skip for now"; no Bright wake screen note until Story 5.2.
+     */
+    val testReady: OnboardingUiState get() = firstAlarm(OnboardingStep.TestAlarm).copy(brightWakeNote = false)
+
+    /** Step 8 while the test is pending: "Ring a test alarm" disabled, "Skip for now" still there. */
+    val testWaiting: OnboardingUiState get() = testReady.copy(testStatus = TestAlarmStatus.Waiting)
+
+    /** Step 8 after a ring without a locked pass: "Your phone wasn't locked. Try again with it locked.". */
+    val testNotLocked: OnboardingUiState get() = testReady.copy(testStatus = TestAlarmStatus.NotLocked)
 }

@@ -74,4 +74,10 @@ object HomeSamples {
 
     /** Story 3.13 with a reliability setting off too: the reliability banner stays above the re-register one. */
     val reRegisterUnderReliability = reliability.copy(reregisterCheck = CheckType.QrBarcode)
+
+    /**
+     * Story 5.12: onboarding's test alarm was skipped: "Ring a test alarm with your phone locked to check it works." with
+     * "Dismiss", over the first alarm.
+     */
+    val testNote = one.copy(testSkipped = true)
 }

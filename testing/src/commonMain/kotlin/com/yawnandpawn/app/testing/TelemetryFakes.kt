@@ -8,6 +8,7 @@ import com.yawnandpawn.app.core.telemetry.Telemetry
 import com.yawnandpawn.app.core.telemetry.TelemetryEvent
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.flow
 
 /** [Telemetry] that keeps every logged event in order, in [events]. */
 class FakeTelemetry : Telemetry {
@@ -22,8 +23,8 @@ class FakeTelemetry : Telemetry {
 }
 
 /**
- * In-memory [ConsentStore] holding [initial]. Set [setFailure] to make [setConsent] fail (nothing is stored); every
- * requested value is kept in [requests], failed or not.
+ * In-memory [ConsentStore] holding [initial]. Set [setFailure] to make [setConsent] fail (nothing is stored), or
+ * [observeFailure] to make [observe] throw it; every requested value is kept in [requests], failed or not.
  */
 class FakeConsentStore(
     initial: AnalyticsConsent = AnalyticsConsent(),
@@ -32,6 +33,7 @@ class FakeConsentStore(
     private val asked = mutableListOf<Boolean>()
 
     var setFailure: DomainError? = null
+    var observeFailure: Throwable? = null
 
     /** The stored choice right now. */
     val current: AnalyticsConsent
@@ -40,7 +42,10 @@ class FakeConsentStore(
     val requests: List<Boolean>
         get() = asked.toList()
 
-    override fun observe(): Flow<AnalyticsConsent> = stored
+    override fun observe(): Flow<AnalyticsConsent> {
+        val failure = observeFailure ?: return stored
+        return flow { throw failure }
+    }
 
     override suspend fun setConsent(on: Boolean): Outcome<Unit, DomainError> {
         asked += on

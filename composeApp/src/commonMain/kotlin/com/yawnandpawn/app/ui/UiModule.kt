@@ -8,6 +8,7 @@ import com.yawnandpawn.app.ui.home.HomeViewModel
 import com.yawnandpawn.app.ui.onboarding.ChecklistScreens
 import com.yawnandpawn.app.ui.onboarding.FirstAlarmSources
 import com.yawnandpawn.app.ui.onboarding.OnboardingViewModel
+import com.yawnandpawn.app.ui.onboarding.TestAlarmSources
 import com.yawnandpawn.app.ui.onboarding.UsageStatsSources
 import com.yawnandpawn.app.ui.payments.PaymentsViewModel
 import com.yawnandpawn.app.ui.payments.ProblemWithChargeViewModel
@@ -28,13 +29,14 @@ import org.koin.dsl.module
  * (`AlarmRepository`, the alarm use cases, `Clock`, `MonotonicClock`, `TimeZoneProvider`, `TimeChangeSignal`, `Logger`,
  * `SoundLibrary`, `SoundPreview`, `ExternalLinks`, `AppLinks`, `DeviceInfoSource`, `ManufacturerSettings`,
  * `ConfirmMakerGuidance`, `ConsentStore`, `SetAnalyticsConsent`, `EvaluateReliability`, `ReliabilitySettings`,
- * `CameraPermission`, `ScheduleTestAlarm`, `OnboardingRepository` and the onboarding use cases) are bound by :androidApp
- * and :data.
+ * `CameraPermission`, `ScheduleTestAlarm`, `OnboardingRepository`, `ReliabilityRecords`, the onboarding use cases and
+ * `OnboardingTestNote`) are bound by :androidApp and :data.
  */
 val uiModule =
     module {
         factory { AlarmActions(get(), get(), get()) }
-        viewModel { HomeViewModel(get(), get(), get(), get(), get(), get(), get(), get()) }
+        // Story 5.12: Home's note after "Skip for now" on onboarding's test alarm.
+        viewModel { HomeViewModel(get(), get(), get(), get(), get(), get(), get(), get(), testNote = get()) }
         viewModel { PurchaseHistoryViewModel(get(), get(), get(), get(), get()) }
         viewModel {
             SettingsViewModel(
@@ -84,6 +86,8 @@ val uiModule =
                 // Step 6 is Story 5.4's own checklist, built exactly like the checklist screen's.
                 checklist = ChecklistScreens { ReliabilityViewModel(get(), get(), get(), get(), get()) },
                 usageStats = UsageStatsSources(consents = get(), setConsent = get()),
+                // Step 8 rings the checklist's own test on the first alarm and watches 5.3's locked pass.
+                testAlarm = TestAlarmSources(ring = get(), remember = get(), records = get()),
                 monotonicClock = get(),
                 timeZoneProvider = get(),
             )

@@ -16,8 +16,11 @@ import kotlinx.datetime.LocalTime
 /** The eight onboarding steps, in order (EXPERIENCE.md IA, FR-ONB-1/5/6). */
 enum class OnboardingStep { Mission, Disclosure, BaseFee, FirstAlarm, Checks, Reliability, Analytics, TestAlarm }
 
-/** The test alarm step: ready to ring, or the phone was not locked when it rang. */
-enum class TestAlarmStatus { Ready, NotLocked }
+/**
+ * The test alarm step (Story 5.12): ready to ring; a test is pending ("Ring a test alarm" disabled until its ring is
+ * over); or the ring is over without a locked pass ("Your phone wasn't locked. Try again with it locked.").
+ */
+enum class TestAlarmStatus { Ready, Waiting, NotLocked }
 
 /** What onboarding renders. */
 data class OnboardingUiState(
@@ -60,6 +63,11 @@ data class OnboardingUiState(
     /** "Fix" on the Manufacturer row opened the maker guidance over step 6 (Story 5.5's screen). */
     val manufacturerGuidance: Boolean = false,
     val testStatus: TestAlarmStatus = TestAlarmStatus.Ready,
+    /**
+     * Step 8's Bright wake screen note, shown only while that setting is on. The setting arrives with Story 5.2, so the
+     * app renders false until then (DEFAULT TAKEN, Story 5.12); true keeps the approved preview.
+     */
+    val brightWakeNote: Boolean = true,
     /** A lowered fee waits for an alarm under the commitment lock: "Saved. Takes effect after tomorrow's {time} alarm.". */
     val baseFeeNote: WeakeningNote? = null,
     /**
@@ -142,7 +150,9 @@ sealed interface OnboardingIntent {
         val share: Boolean,
     ) : OnboardingIntent
 
+    /** "Ring a test alarm" on step 8: a test of the first alarm in 10 seconds (Story 5.12). */
     data object RingTestAlarm : OnboardingIntent
 
+    /** "Skip for now" on step 8: onboarding completes, and Home shows the test note (Story 5.12). */
     data object SkipTestAlarm : OnboardingIntent
 }

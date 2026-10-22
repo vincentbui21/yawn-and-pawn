@@ -16,6 +16,8 @@ import com.yawnandpawn.app.core.onboarding.AcceptDisclosure
 import com.yawnandpawn.app.core.onboarding.CompleteOnboarding
 import com.yawnandpawn.app.core.onboarding.OnboardingProgress
 import com.yawnandpawn.app.core.onboarding.OnboardingRepository
+import com.yawnandpawn.app.core.onboarding.OnboardingTestAlarm
+import com.yawnandpawn.app.core.onboarding.OnboardingTestResult
 import com.yawnandpawn.app.core.onboarding.SaveOnboardingStep
 import com.yawnandpawn.app.core.session.GlobalSettings
 import com.yawnandpawn.app.core.telemetry.AnalyticsConsent
@@ -30,7 +32,9 @@ import com.yawnandpawn.app.ui.editor.EditorUiState
 import com.yawnandpawn.app.ui.reliability.ChecklistRow
 import com.yawnandpawn.app.ui.settings.SnoozePrices
 import com.yawnandpawn.app.ui.settings.weakeningNoteOf
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.channels.Channel
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
@@ -44,9 +48,9 @@ import kotlinx.coroutines.launch
 import kotlin.time.Instant
 
 /**
- * Onboarding steps 1 to 7 (Stories 5.10 and 5.11; FR-ONB-1, FR-ONB-2, FR-ONB-5, FR-ONB-6, FR-SET-1, FR-ALM-1): the
- * mission, the alarm behaviour disclosure, the base fee, the first alarm, its checks, the reliability checklist and the
- * usage stats choice. Step 8, the test alarm, comes with Story 5.12, so its intents are ignored here.
+ * Onboarding's eight steps (Stories 5.10 to 5.12; FR-ONB-1, FR-ONB-2, FR-ONB-4, FR-ONB-5, FR-ONB-6, FR-SET-1, FR-ALM-1,
+ * FR-ALM-8): the mission, the alarm behaviour disclosure, the base fee, the first alarm, its checks, the reliability
+ * checklist, the usage stats choice and the test alarm on a locked screen.
  *
  * - **Step:** read once from the stored progress ([onboarding]); an unknown stored name opens step 1, a step past the
  *   disclosure without its consent opens the disclosure (no skip), and a step past the checks without a stored first
@@ -73,9 +77,18 @@ import kotlin.time.Instant
  *   checklist screen's own (each row's system screen, the camera ask); on the maker row it opens the maker guidance over
  *   the step ([OnboardingUiState.manufacturerGuidance]).
  * - **Usage stats (step 7):** "Share" or "No thanks" is stored through [UsageStatsSources.setConsent] (asked, on or off),
- *   then onboarding completes ([afterUsageStats]); a failed write stays, logged. A user already asked skips the step.
+ *   then the test alarm opens ([afterUsageStats]); a failed write stays, logged. A user already asked skips the step
+ *   (and Back from step 8 goes to step 6 for them).
+ * - **Test alarm (step 8, Story 5.12):** "Ring a test alarm" rings the first alarm as a test in 10 seconds
+ *   ([TestAlarmSources.ring], "Test · no charge"); when it rings is stored ([TestAlarmSources.remember]), so the result
+ *   survives a cleared screen or process death. The result is derived ([OnboardingTestAlarm.result]) from that time, 5.3's
+ *   locked pass ([TestAlarmSources.records], watched, and read again on every resume) and the clock (one re-render at the
+ *   end of the wait): a locked pass completes onboarding; a ring over without one shows "Your phone wasn't locked. Try
+ *   again with it locked."; while a test is pending "Ring a test alarm" is disabled. "Skip for now" always completes,
+ *   with Home's test note. A failed arming shows "Couldn't save. Try again.", logged.
  *   Completing ([completeOnboarding]) lets the app gate open Home. A failed "I understand", consent, completion or alarm
- *   save stays on the step, logged, with "Couldn't save. Try again." ([OnboardingUiState.saveFailed]).
+ *   save stays on the step, logged, with "Couldn't save. Try again." ([OnboardingUiState.saveFailed]); a completion after
+ *   a locked pass that failed is tried again on the next resume.
  * - **No skipped step (5.10 review fix, FR-ONB-5):** a step's action ("Continue", "Share", "No thanks", ...) counts only
  *   when it comes from the step shown ([OnboardingIntent.Next.from]) and that step has been shown for
  *   [STEP_DWELL_MILLIS] on [monotonicClock], so a double tap never lands on the next step's button, also with
@@ -99,6 +112,7 @@ class OnboardingViewModel(
     private val firstAlarm: FirstAlarmSources,
     checklist: ChecklistScreens,
     private val usageStats: UsageStatsSources,
+    private val testAlarm: TestAlarmSources,
     /** The app binds it (`UiModule`); null (an older call site) leaves out the dwell time, never the step check. */
     private val monotonicClock: MonotonicClock? = null,
     /** The app binds it (`UiModule`); null leaves out the pending fee note. */
@@ -112,6 +126,9 @@ class OnboardingViewModel(
 
     /** How many times in a row the first alarm was opened again after a passing read failure. */
     private var openRetries = 0
+
+    /** Re-renders step 8 when its pending test's wait is over. */
+    private var testWait: Job? = null
 
     /** Step 6's checklist: Story 5.4's own; its maker row opens the guidance over the step. */
     private val reliability = OnboardingChecklist(checklist, viewModelScope) { openGuidance() }
@@ -160,6 +177,13 @@ class OnboardingViewModel(
             restore()
             for (op in ops) run(op)
         }
+        // Step 8 (Story 5.12): 5.3 writes a locked pass a moment after the test's Completed.
+        viewModelScope.launch {
+            testAlarm.records
+                .observe()
+                .catch { cause -> logFailure(LOAD_RECORDS, cause) }
+                .collect { stored -> lockedTestRead(stored.lockedTestPassedAt) }
+        }
     }
 
     fun onIntent(intent: OnboardingIntent) {
@@ -167,7 +191,7 @@ class OnboardingViewModel(
         val step = ui.step ?: return
         when (intent) {
             // Never held back: a re-check or closing the guidance changes nothing stored.
-            OnboardingIntent.Resumed -> if (step == OnboardingStep.Reliability) reliability.refresh()
+            OnboardingIntent.Resumed -> resumed(step)
 
             OnboardingIntent.GuidanceClosed -> closeGuidance()
 
@@ -187,7 +211,12 @@ class OnboardingViewModel(
             }
 
             OnboardingIntent.Back -> {
-                if (step.ordinal > 0 && step <= LAST_BUILT) goTo(OnboardingStep.entries[step.ordinal - 1])
+                when {
+                    // Step 7 is never asked twice (FR-ONB-6): the checklist for a user already asked.
+                    step == OnboardingStep.TestAlarm -> queueBusy(Op.LeaveTest)
+
+                    step > OnboardingStep.Mission -> goTo(OnboardingStep.entries[step.ordinal - 1])
+                }
             }
 
             OnboardingIntent.LowerBaseFee -> {
@@ -204,7 +233,7 @@ class OnboardingViewModel(
         }
     }
 
-    /** Steps 6 and 7's own taps ("Fix", "Share" / "No thanks"), with the same dwell as "Continue"; then steps 4 and 5. */
+    /** Steps 6 and 7's own taps ("Fix", "Share" / "No thanks"), with the same dwell as "Continue"; then steps 8, 4 and 5. */
     private fun onSetupIntent(
         step: OnboardingStep,
         intent: OnboardingIntent,
@@ -216,6 +245,29 @@ class OnboardingViewModel(
 
             is OnboardingIntent.UsageStatsChosen -> {
                 if (step == OnboardingStep.Analytics && settled()) queueBusy(Op.UsageStats(intent.share))
+            }
+
+            else -> {
+                onTestIntent(step, intent)
+            }
+        }
+    }
+
+    /** Step 8's taps ("Ring a test alarm", "Skip for now"), with the same dwell as "Continue"; then steps 4 and 5. */
+    private fun onTestIntent(
+        step: OnboardingStep,
+        intent: OnboardingIntent,
+    ) {
+        val testStep = step == OnboardingStep.TestAlarm
+        when (intent) {
+            // Disabled while a test is pending (or a pass is completing onboarding).
+            OnboardingIntent.RingTestAlarm -> {
+                if (testStep && settled() && testResult(local.value) in RINGABLE) queueBusy(Op.RingTest)
+            }
+
+            // Works in every step 8 state, a pending test included: onboarding can always be finished.
+            OnboardingIntent.SkipTestAlarm -> {
+                if (testStep && settled()) queueBusy(Op.Complete(testSkipped = true))
             }
 
             else -> {
@@ -244,7 +296,6 @@ class OnboardingViewModel(
             // never reaches the editor's main screen (where a Back would close it).
             is OnboardingIntent.CheckSetup -> if (checksStep && state.value?.checkSetup != null) alarm.send(intent.intent)
 
-            // The test alarm belongs to Story 5.12.
             else -> Unit
         }
     }
@@ -308,7 +359,7 @@ class OnboardingViewModel(
                 queueBusy(Op.LeaveChecklist)
             }
 
-            // Step 7 has its two choices; step 8 belongs to Story 5.12.
+            // Step 7 has its two choices; step 8 "Ring a test alarm" and "Skip for now".
             OnboardingStep.Analytics, OnboardingStep.TestAlarm -> {
                 Unit
             }
@@ -330,7 +381,8 @@ class OnboardingViewModel(
 
     /**
      * What a step does as it opens: the base fee refreshes the prices; the first alarm and its checks open the editor
-     * (on the stored first alarm, if any) and step 5 its Wake-up check pane; the checklist is read again.
+     * (on the stored first alarm, if any) and step 5 its Wake-up check pane; the checklist is read again; the test alarm
+     * reads the locked pass again.
      */
     private fun opened(step: OnboardingStep) {
         if (step == OnboardingStep.BaseFee) refreshPrices()
@@ -340,6 +392,59 @@ class OnboardingViewModel(
         }
         if (step == OnboardingStep.Checks) alarm.openChecks() else alarm.leaveChecks()
         if (step == OnboardingStep.Reliability) reliability.refresh()
+        if (step == OnboardingStep.TestAlarm) rereadTest()
+    }
+
+    /** The screen came back to the front: step 6 re-checks the checklist, step 8 reads its test's result again. */
+    private fun resumed(step: OnboardingStep) {
+        when (step) {
+            OnboardingStep.Reliability -> reliability.refresh()
+            OnboardingStep.TestAlarm -> rereadTest()
+            else -> Unit
+        }
+    }
+
+    /** Step 8 reads the locked pass again (the watch may have failed) and re-renders against the clock. */
+    private fun rereadTest() {
+        viewModelScope.launch {
+            when (val read = testAlarm.records.read()) {
+                is Outcome.Success -> lockedTestRead(read.value.lockedTestPassedAt)
+                is Outcome.Failure -> logger.log(LogEvent.OperationFailed.of(LOAD_RECORDS, read.error))
+            }
+            local.update { it.copy(tick = it.tick + 1) }
+            finishIfPassed()
+        }
+    }
+
+    /** The last locked pass is [passedAt]: if it passes step 8's test, onboarding completes. */
+    private fun lockedTestRead(passedAt: Instant?) {
+        local.update { it.copy(passedAt = passedAt) }
+        finishIfPassed()
+    }
+
+    /**
+     * Step 8's test passed with the phone locked: onboarding completes (not while another write decides the step; a
+     * failed completion is tried again on the next resume).
+     */
+    private fun finishIfPassed() {
+        val ui = local.value
+        if (ui.step == OnboardingStep.TestAlarm && !ui.busy && testResult(ui) == OnboardingTestResult.Passed) {
+            queueBusy(Op.Complete(testSkipped = false))
+        }
+    }
+
+    private fun testResult(ui: Local): OnboardingTestResult = OnboardingTestAlarm.result(ui.testRingsAt, ui.passedAt, clock.now())
+
+    /** Step 8 renders again once the test ringing at [ringsAt] is over without a pass (it then reads as not locked). */
+    private fun awaitTest(ringsAt: Instant) {
+        testWait?.cancel()
+        val wait = ringsAt + OnboardingTestAlarm.RESULT_SLACK - clock.now()
+        if (!wait.isPositive()) return
+        testWait =
+            viewModelScope.launch {
+                delay(wait)
+                local.update { it.copy(tick = it.tick + 1) }
+            }
     }
 
     /** The first alarm is stored as [id]: the checklist opens at once; the id, then the step, are stored. */
@@ -437,7 +542,9 @@ class OnboardingViewModel(
                 built > OnboardingStep.Checks && alarmId == null -> OnboardingStep.FirstAlarm
                 else -> built
             }
-        local.update { it.showing(step).copy(alarmId = alarmId) }
+        // Step 8's test may have rung while this screen was gone: its result is derived again.
+        local.update { it.showing(step).copy(alarmId = alarmId, testRingsAt = progress.testRingsAt) }
+        progress.testRingsAt?.let(::awaitTest)
         opened(step)
         // The choice was stored before the process died, but not the step after it: never asked again (FR-ONB-6).
         if (step == OnboardingStep.Analytics && asked()) {
@@ -480,6 +587,52 @@ class OnboardingViewModel(
                 logIfFailed(SAVE_CONSENT, result)
                 if (result is Outcome.Success) afterUsageStats() else local.update { it.copy(busy = false, saveFailed = true) }
             }
+
+            else -> {
+                runTestOp(op)
+            }
+        }
+    }
+
+    /** Step 8's writes: ring the test, finish (after a locked pass or "Skip for now"), or go back. */
+    private suspend fun runTestOp(op: Op) {
+        when (op) {
+            Op.RingTest -> {
+                ringTest()
+            }
+
+            is Op.Complete -> {
+                complete(testSkipped = op.testSkipped)
+            }
+
+            // A user already asked about usage stats goes back to the checklist; an unreadable choice asks again.
+            Op.LeaveTest -> {
+                show(if (asked()) OnboardingStep.Reliability else OnboardingStep.Analytics)
+            }
+
+            else -> {
+                Unit
+            }
+        }
+    }
+
+    /**
+     * "Ring a test alarm": the first alarm rings as a test in 10 seconds; when it rings shows at once and is stored. A
+     * test that cannot be armed shows "Couldn't save. Try again.", logged.
+     */
+    private suspend fun ringTest() {
+        val armed = testAlarm.ring(local.value.alarmId)
+        logIfFailed(RING_TEST, armed)
+        when (armed) {
+            is Outcome.Success -> {
+                local.update { it.copy(busy = false, testRingsAt = armed.value) }
+                awaitTest(armed.value)
+                logIfFailed(REMEMBER_TEST, testAlarm.remember(armed.value))
+            }
+
+            is Outcome.Failure -> {
+                local.update { it.copy(busy = false, saveFailed = true) }
+            }
         }
     }
 
@@ -490,16 +643,14 @@ class OnboardingViewModel(
         logIfFailed(SAVE_STEP, saveStep(step.name))
     }
 
-    /**
-     * What follows the usage stats choice (or its skip): onboarding completes until Story 5.12 raises [LAST_BUILT], then
-     * the test alarm opens.
-     */
+    /** What follows the usage stats choice (or its skip): the test alarm (Story 5.12 raised [LAST_BUILT] to it). */
     private suspend fun afterUsageStats() {
-        if (LAST_BUILT > OnboardingStep.Analytics) show(OnboardingStep.TestAlarm) else complete()
+        if (LAST_BUILT > OnboardingStep.Analytics) show(OnboardingStep.TestAlarm) else complete(testSkipped = false)
     }
 
-    private suspend fun complete() {
-        val result = completeOnboarding()
+    /** Completes onboarding; [testSkipped] ("Skip for now") also stores Home's test note. */
+    private suspend fun complete(testSkipped: Boolean) {
+        val result = completeOnboarding(testSkipped)
         logIfFailed(COMPLETE, result)
         // Once stored the app gate opens Home and clears this ViewModel; a failure stays on the step.
         if (result is Outcome.Failure) local.update { it.copy(busy = false, saveFailed = true) }
@@ -575,8 +726,19 @@ class OnboardingViewModel(
             checkSetup = editor?.takeIf { step == OnboardingStep.Checks && it.pane in OVERLAY_PANES },
             reliability = checklistRows,
             manufacturerGuidance = ui.guidance && step == OnboardingStep.Reliability,
+            testStatus = testStatusOf(OnboardingTestAlarm.result(ui.testRingsAt, ui.passedAt, now)),
+            // The Bright wake screen setting arrives with Story 5.2; until then its note is hidden.
+            brightWakeNote = false,
         )
     }
+
+    /** A pass that is completing onboarding keeps "Ring a test alarm" disabled, like a pending test. */
+    private fun testStatusOf(result: OnboardingTestResult): TestAlarmStatus =
+        when (result) {
+            OnboardingTestResult.NotRung -> TestAlarmStatus.Ready
+            OnboardingTestResult.Waiting, OnboardingTestResult.Passed -> TestAlarmStatus.Waiting
+            OnboardingTestResult.NotLocked -> TestAlarmStatus.NotLocked
+        }
 
     private fun logIfFailed(
         operation: String,
@@ -613,6 +775,17 @@ class OnboardingViewModel(
         data class UsageStats(
             val share: Boolean,
         ) : Op
+
+        /** "Ring a test alarm" on step 8. */
+        data object RingTest : Op
+
+        /** Onboarding completes: after a locked pass, or "Skip for now" ([testSkipped], with Home's note). */
+        data class Complete(
+            val testSkipped: Boolean,
+        ) : Op
+
+        /** Back from step 8: step 7, or step 6 for a user already asked about usage stats. */
+        data object LeaveTest : Op
     }
 
     /** The [id]th base fee tier the user asked for. */
@@ -641,14 +814,23 @@ class OnboardingViewModel(
         val saveFailed: Boolean = false,
         /** The ring the last saved fee waits for under the commitment lock; null when it applied at once. */
         val pendingAfter: Instant? = null,
+        /** When step 8's last test rings (stored, so it survives this screen); null before one is rung. */
+        val testRingsAt: Instant? = null,
+        /** The last locked test pass 5.3 recorded; null before one. */
+        val passedAt: Instant? = null,
+        /** Bumped to render step 8 again against the clock (a resume, the end of a test's wait). */
+        val tick: Int = 0,
     )
 
     companion object {
-        /** The last step built so far; step 8, the test alarm, comes with Story 5.12. */
-        val LAST_BUILT: OnboardingStep = OnboardingStep.Analytics
+        /** The last step built: step 8, the test alarm (Story 5.12). */
+        val LAST_BUILT: OnboardingStep = OnboardingStep.TestAlarm
 
         /** The editor panes shown over step 5: Check setup, its "Try it" and QR registration. */
         private val OVERLAY_PANES = setOf(EditorPane.CheckSetup, EditorPane.TryIt, EditorPane.ScanCode)
+
+        /** Step 8's results that let "Ring a test alarm" ring (none pending, none passed). */
+        private val RINGABLE = setOf(OnboardingTestResult.NotRung, OnboardingTestResult.NotLocked)
 
         const val LOAD_PROGRESS = "load onboarding progress"
         const val LOAD_SETTINGS = "load global settings"
@@ -665,6 +847,9 @@ class OnboardingViewModel(
         const val MAX_OPEN_RETRIES = 1
         const val LOAD_CONSENT = "load usage stats choice"
         const val SAVE_CONSENT = "save usage stats choice"
+        const val LOAD_RECORDS = "load locked test"
+        const val RING_TEST = "ring onboarding test alarm"
+        const val REMEMBER_TEST = "remember onboarding test alarm"
 
         /** How long a step shows before its action counts (review fix): longer than the 250 ms slide and a double tap. */
         const val STEP_DWELL_MILLIS = 500L

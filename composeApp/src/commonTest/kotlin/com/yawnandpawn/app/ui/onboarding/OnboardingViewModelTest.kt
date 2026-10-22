@@ -75,7 +75,7 @@ class OnboardingViewModelTest : OnboardingViewModelFixture() {
             assertEquals(OnboardingStep.FirstAlarm, viewModel().shown.step, "past the checks without a first alarm: step 4")
 
             onboarding.current = OnboardingPresets.Consented.copy(step = "TestAlarm", alarmId = "alarm-1")
-            assertEquals(OnboardingStep.Analytics, viewModel().shown.step, "step 8 is not built yet")
+            assertEquals(OnboardingStep.TestAlarm, viewModel().shown.step, "step 8 is built (Story 5.12)")
         }
 
     @Test
@@ -346,18 +346,21 @@ class OnboardingViewModelTest : OnboardingViewModelFixture() {
         }
 
     @Test
-    fun `the intents of another step, and of step 8, are ignored`() =
+    fun `the intents of another step, step 8's included, are ignored`() =
         runTest {
             val viewModel = viewModel()
+            settle()
 
             viewModel.onIntent(OnboardingIntent.TimeChanged(LocalTime(6, 0)))
             viewModel.onIntent(OnboardingIntent.Checks(CheckPickerIntent.Toggled(CheckType.Math, selected = false)))
             viewModel.onIntent(OnboardingIntent.FixClicked(ChecklistItem.Notifications))
             viewModel.onIntent(OnboardingIntent.UsageStatsChosen(share = true))
+            viewModel.onIntent(OnboardingIntent.RingTestAlarm)
             viewModel.onIntent(OnboardingIntent.SkipTestAlarm)
 
             assertEquals(OnboardingStep.Mission, viewModel.shown.step)
             assertEquals(OnboardingPresets.Fresh, onboarding.current)
+            assertNull(testStore.pending, "no test was rung")
             assertEquals(emptyList<CoreRow>(), systemScreens.opened)
             assertEquals(AnalyticsConsent(), consents.current)
             assertEquals(0, editorsOpened, "the editor opens with step 4")

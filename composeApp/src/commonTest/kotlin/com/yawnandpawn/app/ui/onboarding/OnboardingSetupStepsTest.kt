@@ -39,7 +39,7 @@ import com.yawnandpawn.app.core.reliability.ChecklistRow as CoreRow
 /**
  * Story 5.11: onboarding steps 4 to 7 on fakes: the first alarm through the app's editor and `SaveAlarm` (exactly one
  * alarm, even after Back or a process death), Check setup over step 5, Story 5.4's checklist and its "Fix" targets,
- * the usage stats choice (asked once), completion, the dwell, and the logged failures.
+ * the usage stats choice (asked once) leading to step 8 (Story 5.12), the dwell, and the logged failures.
  */
 @OptIn(ExperimentalCoroutinesApi::class)
 class OnboardingSetupStepsTest : OnboardingViewModelFixture() {
@@ -61,7 +61,7 @@ class OnboardingSetupStepsTest : OnboardingViewModelFixture() {
         }
 
     @Test
-    fun `steps 3 to 7 with No thanks store exactly one enabled alarm with the choices and the defaults, then complete`() =
+    fun `steps 3 to 7 with No thanks store exactly one enabled alarm with the choices and the defaults, then open step 8`() =
         runTest {
             settings.setDefaultSnoozeLength(10)
             settings.setDefaultGraceSeconds(25)
@@ -117,19 +117,25 @@ class OnboardingSetupStepsTest : OnboardingViewModelFixture() {
             settle()
             viewModel.onIntent(OnboardingIntent.UsageStatsChosen(share = false))
 
-            assertTrue(onboarding.current.completed)
+            assertEquals(OnboardingStep.TestAlarm, viewModel.shown.step, "Story 5.12: step 8, not Home")
+            assertFalse(onboarding.current.completed)
             assertEquals(AnalyticsConsent(consent = false, asked = true), consents.current)
-            val stored = alarms.current.single()
-            assertEquals(saved.id, stored.id)
-            assertTrue(stored.enabled)
-            assertEquals(LocalTime(6, 15), stored.time)
-            assertEquals(Weekdays, stored.repeatDays)
-            assertEquals(10, stored.snoozeLengthMinutes)
-            assertEquals(25, stored.graceSeconds)
-            assertFalse(stored.vibrateInGrace)
-            assertEquals(listOf(CoreCheckType.Math), checkRows.current.getValue(stored.id).map { it.entry.type })
+            assertOneAlarmWithTheChoices(saved.id)
             assertEquals(1, notifications.requests, "asked once")
         }
+
+    /** Exactly one enabled alarm [id] is stored: 6:15 on weekdays, Math, and the Settings defaults set above. */
+    private fun assertOneAlarmWithTheChoices(id: String) {
+        val stored = alarms.current.single()
+        assertEquals(id, stored.id)
+        assertTrue(stored.enabled)
+        assertEquals(LocalTime(6, 15), stored.time)
+        assertEquals(Weekdays, stored.repeatDays)
+        assertEquals(10, stored.snoozeLengthMinutes)
+        assertEquals(25, stored.graceSeconds)
+        assertFalse(stored.vibrateInGrace)
+        assertEquals(listOf(CoreCheckType.Math), checkRows.current.getValue(stored.id).map { it.entry.type })
+    }
 
     @Test
     fun `an alarm saved before its id was stored is adopted on restore, so Back and Continue keep one alarm`() =
@@ -431,7 +437,7 @@ class OnboardingSetupStepsTest : OnboardingViewModelFixture() {
         }
 
     @Test
-    fun `a user already asked about usage stats skips step 7 and onboarding completes`() =
+    fun `a user already asked about usage stats skips step 7 and the test alarm opens`() =
         runTest {
             consents.setConsent(true)
             onStep(OnboardingStep.Reliability, alarmId = "alarm-1")
@@ -439,25 +445,27 @@ class OnboardingSetupStepsTest : OnboardingViewModelFixture() {
 
             viewModel.next()
 
-            assertTrue(onboarding.current.completed)
+            assertEquals(OnboardingStep.TestAlarm, viewModel.shown.step)
+            assertEquals("TestAlarm", onboarding.current.step)
+            assertFalse(onboarding.current.completed)
             assertEquals(listOf(true), consents.requests, "the choice is not asked again")
             assertEquals(AnalyticsConsent(consent = true, asked = true), consents.current)
         }
 
     @Test
-    fun `a step 7 restored after the choice was stored completes without asking again`() =
+    fun `a step 7 restored after the choice was stored opens step 8 without asking again`() =
         runTest {
             consents.setConsent(false)
             onStep(OnboardingStep.Analytics, alarmId = "alarm-1")
 
-            viewModel()
+            val viewModel = viewModel()
 
-            assertTrue(onboarding.current.completed)
+            assertEquals(OnboardingStep.TestAlarm, viewModel.shown.step)
             assertEquals(listOf(false), consents.requests, "the choice is not asked again")
         }
 
     @Test
-    fun `Share turns usage stats on, and a failed choice or completion stays on step 7, logged`() =
+    fun `Share turns usage stats on and opens step 8, and a failed choice stays on step 7, logged`() =
         runTest {
             onStep(OnboardingStep.Analytics, alarmId = "alarm-1")
             val viewModel = viewModel()
@@ -467,20 +475,16 @@ class OnboardingSetupStepsTest : OnboardingViewModelFixture() {
             settle()
             viewModel.onIntent(OnboardingIntent.UsageStatsChosen(share = true))
             assertEquals(OnboardingStep.Analytics, viewModel.shown.step)
-            assertFalse(onboarding.current.completed)
             assertEquals(1, failed(OnboardingViewModel.SAVE_CONSENT).size)
             assertTrue(viewModel.shown.saveFailed, "Couldn't save. Try again.")
 
             consents.setFailure = null
-            onboarding.writeFailure = DomainError.StorageFailure("disk full")
             viewModel.onIntent(OnboardingIntent.UsageStatsChosen(share = true))
-            assertEquals(AnalyticsConsent(consent = true, asked = true), consents.current)
-            assertFalse(onboarding.current.completed)
-            assertEquals(1, failed(OnboardingViewModel.COMPLETE).size)
 
-            onboarding.writeFailure = null
-            viewModel.onIntent(OnboardingIntent.UsageStatsChosen(share = true))
-            assertTrue(onboarding.current.completed)
+            assertEquals(AnalyticsConsent(consent = true, asked = true), consents.current)
+            assertEquals(OnboardingStep.TestAlarm, viewModel.shown.step)
+            assertFalse(viewModel.shown.saveFailed)
+            assertFalse(onboarding.current.completed)
         }
 
     @Test

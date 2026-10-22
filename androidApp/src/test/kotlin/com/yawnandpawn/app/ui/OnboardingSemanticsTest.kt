@@ -32,10 +32,11 @@ import org.robolectric.annotation.GraphicsMode
 import kotlin.test.assertEquals
 
 /**
- * Stories 5.10 and 5.11 with TalkBack in mind, at 200 % font on a small phone: each of steps 1 to 7 reads its headline
+ * Stories 5.10 to 5.12 with TalkBack in mind, at 200 % font on a small phone: each of steps 1 to 8 reads its headline
  * first, as a heading; the dots read "Step N of 8"; every control is labelled, has a role and is at least 48 dp; step 1
  * has no in-app Back; the stepper ends follow the tier; with no check "Continue" is disabled; "Share" and "No thanks"
- * are the same size and neither is focused.
+ * are the same size and neither is focused; step 8 disables "Ring a test alarm" while a test is pending, never "Skip
+ * for now".
  */
 @RunWith(RobolectricTestRunner::class)
 @GraphicsMode(GraphicsMode.Mode.NATIVE)
@@ -170,4 +171,37 @@ class OnboardingSemanticsTest {
             assertEquals(shareSize, noThanks.fetchSemanticsNode().size, "two equal buttons")
             composeRule.assertControlsLabelledWithRoles()
         }
+
+    @Test
+    fun `step 8 reads its headline first, and Ring a test alarm and Skip for now are 48 dp and enabled`() =
+        show({ OnboardingSamples.testReady }) {
+            assertStartsOnHeadline("Test your alarm", step = 8)
+            composeRule.onNode(hasText("Lock your phone. We'll ring in 10 seconds.")).assertExists()
+            composeRule.onNode(hasText(BRIGHT_WAKE_NOTE)).assertDoesNotExist()
+            composeRule.onNode(hasText("Ring a test alarm") and hasClickAction()).assertHeightIsAtLeast(48.dp).assertIsEnabled()
+            composeRule.onNode(hasText("Skip for now") and hasClickAction()).assertHeightIsAtLeast(48.dp).assertIsEnabled()
+            composeRule.assertControlsLabelledWithRoles()
+        }
+
+    @Test
+    fun `step 8 while a test is pending disables Ring a test alarm, and Skip for now still works`() =
+        show({ OnboardingSamples.testWaiting }) {
+            composeRule.onNode(hasText("Ring a test alarm")).assertIsNotEnabled()
+            composeRule.onNode(hasText("Skip for now") and hasClickAction()).assertIsEnabled()
+            composeRule.onNode(hasText(NOT_LOCKED)).assertDoesNotExist()
+        }
+
+    @Test
+    fun `step 8 after a ring without a locked pass says so, and Ring a test alarm is enabled again`() =
+        show({ OnboardingSamples.testNotLocked }) {
+            assertStartsOnHeadline("Test your alarm", step = 8)
+            composeRule.onNode(hasText(NOT_LOCKED)).assertExists()
+            composeRule.onNode(hasText("Ring a test alarm") and hasClickAction()).assertIsEnabled()
+            composeRule.assertControlsLabelledWithRoles()
+        }
+
+    private companion object {
+        const val NOT_LOCKED = "Your phone wasn't locked. Try again with it locked."
+        const val BRIGHT_WAKE_NOTE = "Your alarm screen turns bright to help you wake. Change it in Settings."
+    }
 }

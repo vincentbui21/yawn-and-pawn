@@ -6,6 +6,7 @@ import com.yawnandpawn.app.core.error.DomainError
 import com.yawnandpawn.app.core.error.Outcome
 import com.yawnandpawn.app.core.log.LogEvent
 import com.yawnandpawn.app.core.log.Logger
+import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.first
 import kotlin.coroutines.cancellation.CancellationException
 import kotlin.time.Instant
@@ -101,9 +102,18 @@ interface LockedTestRecorder {
     suspend fun lockedTestPassed(at: Instant): Outcome<Unit, DomainError>
 }
 
-/** Port: the [StoredReliability] in the device-protected settings DataStore. Storage errors are `StorageFailure`, never thrown. */
+/**
+ * Port: the [StoredReliability] in the device-protected settings DataStore. Storage errors are `StorageFailure`, never
+ * thrown, except in [observe], whose flow fails on a read error (like `CheckConfigRepository`; the caller catches it).
+ */
 interface ReliabilityRecords : LockedTestRecorder {
     suspend fun read(): Outcome<StoredReliability, DomainError>
+
+    /**
+     * The stored records, then again after every change (Story 5.12: onboarding's step 8 and Home's test note learn of a
+     * locked pass, which 5.3 writes after the test's Completed).
+     */
+    fun observe(): Flow<StoredReliability>
 
     /** Replaces the rows seen OK ([StoredReliability.lastOk]). */
     suspend fun saveLastOk(rows: Set<ChecklistRow>): Outcome<Unit, DomainError>

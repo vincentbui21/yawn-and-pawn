@@ -16,6 +16,7 @@ import com.yawnandpawn.app.core.error.Outcome
 import com.yawnandpawn.app.core.error.errorOrNull
 import com.yawnandpawn.app.core.history.MissedNotes
 import com.yawnandpawn.app.core.history.SessionHistoryRow
+import com.yawnandpawn.app.core.onboarding.OnboardingTestNote
 import com.yawnandpawn.app.core.reliability.EvaluateReliability
 import com.yawnandpawn.app.core.stats.ReRegisterInputs
 import com.yawnandpawn.app.core.stats.ReRegisterSuggestion
@@ -75,7 +76,9 @@ import com.yawnandpawn.app.ui.checks.CheckType as UiCheckType
  * reliability checklist. The re-register banner (Story 3.13)
  * shows [reRegister]'s suggestion for the listed alarms,
  * again on every tick (the 7-day window moves), named by [uiTypeOf]; "Re-register" opens that alarm's editor until QR
- * registration arrives (Story 3.10), "Dismiss" stores the dismissal.
+ * registration arrives (Story 3.10), "Dismiss" stores the dismissal. After "Skip for now" on onboarding's test alarm,
+ * [testNote] shows "Ring a test alarm with your phone locked to check it works." until a locked test passes or "Dismiss"
+ * is stored (Story 5.12); a failing read is logged and shows no note, a failed dismissal is logged and the note stays.
  */
 @Suppress("TooManyFunctions") // One small handler per Home action (toggle, turn-off dialog, delete, banners, snackbars).
 class HomeViewModel(
@@ -92,6 +95,8 @@ class HomeViewModel(
     private val uiTypeOf: (CoreCheckType) -> UiCheckType? = ::uiCheckType,
     /** Where the banner's evaluation runs (system service calls): off the main thread in the app, the test's in tests. */
     evaluationContext: CoroutineContext = Dispatchers.Default,
+    /** Onboarding's skipped-test note (Story 5.12); the app binds it (`UiModule`), null shows none. */
+    private val testNote: OnboardingTestNote? = null,
 ) : ViewModel() {
     /** Bumped by "Try again" to subscribe to the alarms again. */
     private val loads = MutableStateFlow(0)
@@ -164,6 +169,19 @@ class HomeViewModel(
             shownSuggestion = suggestion
             render(alarms, ui, missedRow).copy(reregisterCheck = suggestion?.type?.let(uiTypeOf))
         }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(STOP_TIMEOUT_MILLIS), HomeUiState(isLoading = true))
+
+    init {
+        testNote?.let { note ->
+            viewModelScope.launch {
+                note
+                    .shown()
+                    .catch { cause ->
+                        actions.logFailure("load test note", cause)
+                        emit(false)
+                    }.collect { shown -> local.update { it.copy(testNote = shown) } }
+            }
+        }
+    }
 
     fun onIntent(intent: HomeIntent) {
         when (intent) {
@@ -278,6 +296,11 @@ class HomeViewModel(
 
             HomeIntent.ReregisterDismissed -> {
                 shownSuggestion?.let { shown -> dismiss("dismiss re-register banner") { reRegister.dismiss(shown) } }
+            }
+
+            // Story 5.12: it hides once the store has the dismissal.
+            HomeIntent.TestNoteDismissed -> {
+                testNote?.let { note -> dismiss("dismiss test note") { note.dismiss() } }
             }
 
             else -> {
@@ -409,6 +432,7 @@ class HomeViewModel(
                     missedAlarmAt = missedAlarmAt,
                     missedSessionId = missedSessionId,
                     reliabilityProblem = ui.reliabilityProblem,
+                    testSkipped = ui.testNote,
                 )
             }
 
@@ -428,6 +452,7 @@ class HomeViewModel(
                     missedAlarmAt = missedAlarmAt,
                     missedSessionId = missedSessionId,
                     reliabilityProblem = ui.reliabilityProblem,
+                    testSkipped = ui.testNote,
                 )
             }
         }
@@ -530,6 +555,8 @@ private data class LocalState(
     val message: HomeMessage? = null,
     /** The last checklist evaluation found a blocking row that is not OK (Story 5.4); false until the first one ends. */
     val reliabilityProblem: Boolean = false,
+    /** Onboarding's test alarm was skipped and no locked test has passed since (Story 5.12); false until read. */
+    val testNote: Boolean = false,
 )
 
 /**

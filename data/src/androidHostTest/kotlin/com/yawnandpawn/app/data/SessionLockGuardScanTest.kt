@@ -59,6 +59,8 @@ class SessionLockGuardScanTest {
                 "CompleteOnboarding",
                 // The first alarm onboarding saved (Story 5.11).
                 "RememberOnboardingAlarm",
+                // When onboarding's test alarm rings (Story 5.12).
+                "RememberOnboardingTest",
             ),
             writers - ALLOWED.keys,
         )

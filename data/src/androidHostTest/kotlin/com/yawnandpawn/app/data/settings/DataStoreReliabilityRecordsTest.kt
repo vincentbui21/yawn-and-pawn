@@ -10,16 +10,24 @@ import com.yawnandpawn.app.core.error.Outcome
 import com.yawnandpawn.app.core.reliability.ChecklistRow
 import com.yawnandpawn.app.core.reliability.MakerConfirmation
 import com.yawnandpawn.app.core.reliability.StoredReliability
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.flow
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.test.runTest
+import kotlinx.coroutines.withContext
+import kotlinx.coroutines.withTimeout
 import org.junit.After
 import org.junit.Test
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
 import java.io.IOException
 import kotlin.test.assertEquals
+import kotlin.test.assertFailsWith
 import kotlin.test.assertIs
+import kotlin.time.Duration.Companion.seconds
 import kotlin.time.Instant
 
 /** Story 5.3: the reliability checklist's records in their own device-protected DataStore (review fix 14). */
@@ -96,7 +104,30 @@ class DataStoreReliabilityRecordsTest {
             assertIs<DomainError.StorageFailure>(assertIs<Outcome.Failure<DomainError>>(broken.confirmMaker(maker)).error)
         }
 
+    @Test
+    fun `observe emits the records, then a locked pass as it is written (Story 5_12)`() =
+        runTest {
+            val records = DataStoreReliabilityRecords(dataStore.store)
+            val seen = MutableStateFlow<StoredReliability?>(null)
+            backgroundScope.launch(Dispatchers.Default) { records.observe().collect { seen.value = it } }
+            withContext(Dispatchers.Default) { withTimeout(WAIT) { seen.first { it == StoredReliability() } } }
+
+            records.lockedTestPassed(passedAt)
+
+            withContext(Dispatchers.Default) { withTimeout(WAIT) { seen.first { it?.lockedTestPassedAt == passedAt } } }
+        }
+
+    @Test
+    fun `a read error fails the observed flow, for the caller to log`() =
+        runTest {
+            assertFailsWith<IOException> { DataStoreReliabilityRecords(BrokenStore()).observe().first() }
+        }
+
     private fun Instant.plusMillis(millis: Long): Instant = Instant.fromEpochMilliseconds(toEpochMilliseconds() + millis)
+
+    private companion object {
+        val WAIT = 10.seconds
+    }
 
     /** A DataStore whose reads and writes fail. */
     private class BrokenStore : DataStore<Preferences> {

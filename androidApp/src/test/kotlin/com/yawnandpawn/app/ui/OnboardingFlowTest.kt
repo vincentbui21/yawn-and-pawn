@@ -36,6 +36,7 @@ import com.yawnandpawn.app.core.reliability.DeviceInfo
 import com.yawnandpawn.app.core.reliability.DeviceInfoSource
 import com.yawnandpawn.app.core.reliability.DeviceMaker
 import com.yawnandpawn.app.core.reliability.ReliabilityProbe
+import com.yawnandpawn.app.core.reliability.ReliabilityRecords
 import com.yawnandpawn.app.core.reliability.ReliabilityStatus
 import com.yawnandpawn.app.core.reset.DeleteAllData
 import com.yawnandpawn.app.core.session.SessionEngine
@@ -69,11 +70,12 @@ import kotlin.test.assertTrue
 import kotlin.time.Instant
 
 /**
- * Stories 5.10 and 5.11 in the real app, with the real onboarding store (the settings DataStore) instead of the completed
+ * Stories 5.10 to 5.12 in the real app, with the real onboarding store (the settings DataStore) instead of the completed
  * fake every other app test uses: a first launch opens onboarding with no nav capsule, no alarm is saved before "I
  * understand", Back steps back, "Continue" on step 3 opens the first alarm, steps 4 to 7 with "No thanks" store one
- * enabled alarm and no usage stats and open Home, a stored step 3 reopens there, and Story 5.9's real "Delete all data"
- * brings onboarding back with no consent.
+ * enabled alarm and no usage stats and open step 8, whose "Skip for now" opens Home with the test note until "Dismiss"
+ * (Story 5.12), a stored step 3 reopens there, and Story 5.9's real "Delete all data" brings onboarding back with no
+ * consent.
  */
 @RunWith(RobolectricTestRunner::class)
 @GraphicsMode(GraphicsMode.Mode.NATIVE)
@@ -248,7 +250,7 @@ class OnboardingFlowTest {
         }
 
     @Test
-    fun `steps 4 to 7 with No thanks save one enabled alarm, store no usage stats, and open Home with the switch off`() =
+    fun `steps 4 to 8 with No thanks and Skip for now save one enabled alarm, store no usage stats, and open Home with the note`() =
         launch(before = { onboarding ->
             onboarding.setDisclosureAccepted(Instant.parse("2027-03-08T21:00:00Z"))
             onboarding.setStep("BaseFee")
@@ -270,13 +272,32 @@ class OnboardingFlowTest {
             composeRule.onNode(hasText("No thanks") and hasClickAction()).assertIsNotFocused()
             tapOnly("No thanks")
 
+            // Story 5.12: step 7 leads to the test alarm, not Home.
+            waitFor(hasText("Test your alarm"))
+            composeRule.onNode(hasContentDescription("Step 8 of 8")).assertExists()
+            waitForStored { it.step == "TestAlarm" }
+            assertFalse(stored().completed)
+            composeRule.onNode(navCapsule).assertDoesNotExist()
+            tapOnly("Skip for now")
+
             waitFor(navCapsule)
             assertTrue(stored().completed)
+            assertTrue(stored().testNoteDue)
+            waitFor(hasText(TEST_NOTE))
+            val records = runBlocking { koinGet().get<ReliabilityRecords>().read().valueOrNull() }
+            assertNull(assertNotNull(records).lockedTestPassedAt, "the checklist's test row stays unticked")
             val alarm = assertNotNull(runBlocking { koinGet().get<AlarmRepository>().listAll().valueOrNull() }).single()
             assertTrue(alarm.enabled)
             assertEquals(stored().alarmId, alarm.id)
             val consent = runBlocking { koinGet().get<ConsentStore>().observe().first() }
             assertEquals(AnalyticsConsent(consent = false, asked = true), consent)
+
+            composeRule.onNode(hasContentDescription("Dismiss") and hasClickAction()).performClick()
+            waitForStored { !it.testNoteDue }
+            composeRule.waitUntil(timeoutMillis = APP_WORK_TIMEOUT_MILLIS) {
+                shadowOf(Looper.getMainLooper()).idle()
+                composeRule.onAllNodes(hasText(TEST_NOTE)).fetchSemanticsNodes().isEmpty()
+            }
 
             composeRule.onNode(navCapsule).performClick()
             val usageStats = hasText("Share anonymous usage stats") and isToggleable()
@@ -454,6 +475,9 @@ class OnboardingFlowTest {
 
     private companion object {
         const val MISSION = "This app makes money only when you snooze. We hope you never pay us."
+
+        /** Home's note after "Skip for now" (Story 5.12). */
+        const val TEST_NOTE = "Ring a test alarm with your phone locked to check it works."
 
         /** Longer than the step slide (250 ms) and the ViewModel's dwell time (500 ms). */
         val SETTLED: Duration = Duration.ofMillis(OnboardingViewModel.STEP_DWELL_MILLIS + 100)

@@ -73,7 +73,9 @@ import com.yawnandpawn.app.core.log.Logger
 import com.yawnandpawn.app.core.net.Connectivity
 import com.yawnandpawn.app.core.onboarding.AcceptDisclosure
 import com.yawnandpawn.app.core.onboarding.CompleteOnboarding
+import com.yawnandpawn.app.core.onboarding.OnboardingTestNote
 import com.yawnandpawn.app.core.onboarding.RememberOnboardingAlarm
+import com.yawnandpawn.app.core.onboarding.RememberOnboardingTest
 import com.yawnandpawn.app.core.onboarding.SaveOnboardingStep
 import com.yawnandpawn.app.core.reliability.LockedTestReporter
 import com.yawnandpawn.app.core.reliability.ReliabilityRecords
@@ -200,6 +202,9 @@ val appModule =
         factory { CompleteOnboarding(get(), get()) }
         // Story 5.11: the first alarm onboarding saved, so going back edits it instead of adding a second one.
         factory { RememberOnboardingAlarm(get(), get()) }
+        // Story 5.12: when step 8's test rings, and Home's note after "Skip for now".
+        factory { RememberOnboardingTest(get(), get()) }
+        factory { OnboardingTestNote(get(), get(), get()) }
         factory { SetAlarmEnabled(get(), get(), get(), get(), get(), get(), get()) }
         // Story 3.10: Home's "Re-register" stores a new code alone.
         factory { ReRegisterCode(get(), get(), get(), get(), get()) }

@@ -229,11 +229,13 @@ private fun Actions(
                 )
             }
 
+            // Story 5.12: disabled while a test is pending; "Skip for now" always works.
             OnboardingStep.TestAlarm -> {
                 PpsFilledButton(
                     text = stringResource(Res.string.reliability_ring_test),
                     onClick = { onIntent(OnboardingIntent.RingTestAlarm) },
                     modifier = wide,
+                    enabled = state.testStatus != TestAlarmStatus.Waiting,
                 )
                 PpsTextButton(
                     text = stringResource(Res.string.onboarding_skip_test),

@@ -16,10 +16,10 @@ import org.robolectric.annotation.Config
 import org.robolectric.annotation.GraphicsMode
 
 /**
- * Stories 5.10 and 5.11: onboarding steps 1 to 7 as the app wires them (the round 3 layout): the mission, the disclosure,
+ * Stories 5.10 to 5.12: onboarding steps 1 to 8 as the app wires them (the round 3 layout): the mission, the disclosure,
  * the base fee with Play's prices and never online (USD with the approximate note), the first alarm (rings tomorrow), the
- * checks with QR/Barcode selected and with none, the checklist with two "Fix" rows and the usage stats choice, in Light,
- * Dark and Light at 200 % font scale.
+ * checks with QR/Barcode selected and with none, the checklist with two "Fix" rows, the usage stats choice and the test
+ * alarm (ready, waiting, not locked), in Light, Dark and Light at 200 % font scale.
  */
 @RunWith(RobolectricTestRunner::class)
 @GraphicsMode(GraphicsMode.Mode.NATIVE)
@@ -147,4 +147,43 @@ class OnboardingScreenshotTest {
     @Config(fontScale = 2.0f)
     fun `usage stats in Light at 200 percent`() =
         screenshot("onboarding_app_usage_stats_light_font200", { OnboardingSamples.usageStats }, PpsThemeMode.Light)
+
+    // Story 5.12: step 8, the test alarm.
+
+    @Test
+    fun `test alarm ready in Light`() = screenshot("onboarding_app_test_ready_light", { OnboardingSamples.testReady }, PpsThemeMode.Light)
+
+    @Test
+    fun `test alarm ready in Dark`() = screenshot("onboarding_app_test_ready_dark", { OnboardingSamples.testReady }, PpsThemeMode.Dark)
+
+    @Test
+    @Config(fontScale = 2.0f)
+    fun `test alarm ready in Light at 200 percent`() =
+        screenshot("onboarding_app_test_ready_light_font200", { OnboardingSamples.testReady }, PpsThemeMode.Light)
+
+    @Test
+    fun `test alarm waiting in Light`() =
+        screenshot("onboarding_app_test_waiting_light", { OnboardingSamples.testWaiting }, PpsThemeMode.Light)
+
+    @Test
+    fun `test alarm waiting in Dark`() =
+        screenshot("onboarding_app_test_waiting_dark", { OnboardingSamples.testWaiting }, PpsThemeMode.Dark)
+
+    @Test
+    @Config(fontScale = 2.0f)
+    fun `test alarm waiting in Light at 200 percent`() =
+        screenshot("onboarding_app_test_waiting_light_font200", { OnboardingSamples.testWaiting }, PpsThemeMode.Light)
+
+    @Test
+    fun `test alarm not locked in Light`() =
+        screenshot("onboarding_app_test_not_locked_light", { OnboardingSamples.testNotLocked }, PpsThemeMode.Light)
+
+    @Test
+    fun `test alarm not locked in Dark`() =
+        screenshot("onboarding_app_test_not_locked_dark", { OnboardingSamples.testNotLocked }, PpsThemeMode.Dark)
+
+    @Test
+    @Config(fontScale = 2.0f)
+    fun `test alarm not locked in Light at 200 percent`() =
+        screenshot("onboarding_app_test_not_locked_light_font200", { OnboardingSamples.testNotLocked }, PpsThemeMode.Light)
 }

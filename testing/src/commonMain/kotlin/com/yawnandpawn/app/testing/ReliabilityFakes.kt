@@ -16,6 +16,9 @@ import com.yawnandpawn.app.core.reliability.ReliabilityRecords
 import com.yawnandpawn.app.core.reliability.ReliabilitySettings
 import com.yawnandpawn.app.core.reliability.ReliabilityStatus
 import com.yawnandpawn.app.core.reliability.StoredReliability
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.flow
 import kotlin.time.Instant
 
 /** [ReliabilityProbe] returning [status]; [checks] counts the calls. */
@@ -76,19 +79,35 @@ class FakeNotificationPermission(
 }
 
 /**
- * [ReliabilityRecords] in memory: [stored] is what a read returns and what the writes change. With [readFailure] or
- * [writeFailure] set, reads or writes fail with it and change nothing. [writes] counts the successful writes.
+ * [ReliabilityRecords] in memory: [stored] is what a read returns and what the writes change; [observe] emits it on every
+ * change, setting it from a test included. With [readFailure] or [writeFailure] set, reads or writes fail with it and
+ * change nothing; with [observeFailure] set, [observe] throws it. [writes] counts the successful writes.
  */
 class FakeReliabilityRecords(
-    var stored: StoredReliability = StoredReliability(),
+    stored: StoredReliability = StoredReliability(),
     var readFailure: DomainError? = null,
     var writeFailure: DomainError? = null,
 ) : ReliabilityRecords {
+    private val state = MutableStateFlow(stored)
+
+    var stored: StoredReliability
+        get() = state.value
+        set(value) {
+            state.value = value
+        }
+
+    var observeFailure: Throwable? = null
+
     var writes = 0
         private set
 
     override suspend fun read(): Outcome<StoredReliability, DomainError> =
         readFailure?.let { Outcome.Failure(it) } ?: Outcome.Success(stored)
+
+    override fun observe(): Flow<StoredReliability> {
+        val failure = observeFailure ?: return state
+        return flow { throw failure }
+    }
 
     override suspend fun saveLastOk(rows: Set<ChecklistRow>): Outcome<Unit, DomainError> = write { it.copy(lastOk = rows) }
 

@@ -100,6 +100,33 @@ class DataStoreOnboardingRepositoryTest {
         }
 
     @Test
+    fun `step 8's ring time and Home's test note are stored under their keys, and forgetting the time removes it`() =
+        runTest {
+            val onboarding = repository()
+            val ringsAt = Instant.parse("2027-03-08T21:00:10.250Z")
+
+            assertEquals(Outcome.Success(Unit), onboarding.setTestRingsAt(ringsAt))
+            assertEquals(Outcome.Success(Unit), onboarding.setTestNoteDue(true))
+
+            assertEquals(Outcome.Success(OnboardingProgress(testRingsAt = ringsAt, testNoteDue = true)), onboarding.get())
+            val raw = settings.store.data.first()
+            assertEquals(ringsAt.toEpochMilliseconds(), raw[DataStoreOnboardingRepository.TEST_RINGS_AT])
+            assertEquals(true, raw[DataStoreOnboardingRepository.TEST_NOTE_DUE])
+            assertEquals("onboarding_test_rings_at", DataStoreOnboardingRepository.TEST_RINGS_AT.name)
+            assertEquals("onboarding_test_note_due", DataStoreOnboardingRepository.TEST_NOTE_DUE.name)
+
+            settings.close()
+            settings = SettingsDataStore(context)
+            val reopened = repository()
+            assertEquals(OnboardingProgress(testRingsAt = ringsAt, testNoteDue = true), reopened.observe().first())
+
+            reopened.setTestRingsAt(null)
+            reopened.setTestNoteDue(false)
+            assertEquals(Outcome.Success(OnboardingProgress()), reopened.get())
+            assertEquals(null, settings.store.data.first()[DataStoreOnboardingRepository.TEST_RINGS_AT])
+        }
+
+    @Test
     fun `an open collection sees each change`() =
         runTest {
             val onboarding = repository()
@@ -119,6 +146,8 @@ class DataStoreOnboardingRepositoryTest {
             onboarding.setDisclosureAccepted(accepted)
             onboarding.setCompleted()
             onboarding.setAlarmId("alarm-1")
+            onboarding.setTestRingsAt(accepted)
+            onboarding.setTestNoteDue(true)
 
             settings.store.edit { it.clear() }
 
@@ -187,6 +216,8 @@ class DataStoreOnboardingRepositoryTest {
                 onboarding.setDisclosureAccepted(accepted),
                 onboarding.setCompleted(),
                 onboarding.setAlarmId("alarm-1"),
+                onboarding.setTestRingsAt(accepted),
+                onboarding.setTestNoteDue(true),
             ).forEach {
                 assertIs<DomainError.StorageFailure>(assertIs<Outcome.Failure<DomainError>>(it).error)
             }

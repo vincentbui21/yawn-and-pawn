@@ -40,12 +40,14 @@ class ChecklistTestAlarm(
 ) {
     /**
      * Schedules the test with the Settings it read (base fee tier and max snoozes, as a real ring would have); returns
-     * when it will ring, or why it could not be armed.
+     * when it will ring, or why it could not be armed. With [preferred] (onboarding's first alarm, Story 5.12) the test
+     * rings that stored alarm, enabled or not; one that is not stored rings as without it.
      */
-    suspend operator fun invoke(): Outcome<Instant, DomainError> {
+    suspend operator fun invoke(preferred: String? = null): Outcome<Instant, DomainError> {
         val alarms = alarms()
         val settings = defaults()
-        return testAlarm(draft(alarms, settings), globalSettings = settings)
+        val chosen = preferred?.let { id -> alarms.firstOrNull { it.alarm.id == id } }
+        return testAlarm(chosen?.toTestDraft() ?: draft(alarms, settings), globalSettings = settings)
     }
 
     /** The draft the test rings: the soonest enabled alarm's, else the defaults. */

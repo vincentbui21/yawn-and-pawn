@@ -149,8 +149,14 @@ change to the onboarding note (Story 5.12 uses it).
   - `WakeBrightness` (androidApp) owns the window attribute and writes it only when the wanted level changes, so with
     the setting off it is never written. `WakeActivity` feeds it from the composition (`SideEffect`): full only when the
     screen is `WakeScreen.Ringing`, no emergency ring, and the shown session's frozen config is on; Success always off.
-    `onStart`/`onStop` drive it. Extra dim is read through `Settings.Secure` on API 31+ only when full would apply; a
-    failed read counts as on.
+    `onStart`/`onStop` drive it; `onStart` first sets the level from the session as it is now, after
+    `runtime.wakeScreenShown`. Extra dim is read through `Settings.Secure` on API 31+ only when full would apply, at most
+    once per start; a failed read counts as on and is logged.
+  - PR #80 review fixes (all low): no full brightness while an "I'm up" tapped before the session waits for its replay
+    (`pendingImUp`, and then that ring's key until the replayed "I'm up" lands: `!pendingImUp` alone still flashed for the
+    frames between the replay and its dispatch, which the new test caught); no stale full level on `onStart` after the session moved on while stopped; Extra dim read lazily (not
+    on every start); `extraDimOn`'s failure and pre-API 31 branches tested through an internal overload that takes the
+    API level and the read; the after-Done check that could not fail replaced by a finish-while-bright test.
   - To stay under detekt's limits, the Success branch of `WakeActivity.onCreate` moved to `SuccessShown`, and the
     Settings default intents map through one `defaultOf(intent)`.
   - The test ring: `WakeService.onTest` copies `lastKnown()?.settings?.brightWakeScreen` into the pending config
@@ -200,7 +206,7 @@ Status: done (fast mode, one combined review pass; the coordinator runs the inde
 - **Built (option C, "Ringing only"):**
   - `GlobalSettings.brightWakeScreen` (on by default), stored as `bright_wake_screen` in the settings DataStore and the last-known snapshot, saved by `SetBrightWakeScreen` through `SaveDefaultSetting` (session lock, no commitment lock).
   - `SessionConfig.brightWakeScreen`, frozen by `ConfigResolver` at the fire (real rings through `ReadFireSettings`, so the 500 ms rule and the last-known fallback apply); a test ring takes it from the last-known snapshot at its fire.
-  - `WakeBrightness` sets the wake window to full brightness only on a session's Ringing step and screen (the sheet over it too), while started and with Extra dim off (read once per start; a failed read counts as on and is logged). Every other screen and every exit is at the phone's own level; with the setting off the window is never written.
+  - `WakeBrightness` sets the wake window to full brightness only on a session's Ringing step and screen (the sheet over it too), while started and with Extra dim off (read only when full could apply, at most once per start; a failed read counts as on and is logged). Every other screen and every exit is at the phone's own level; with the setting off the window is never written.
   - Settings Wake card shows the switch, with the caption "Raises screen brightness while the alarm rings.".
   - After the rebase on Story 5.12: onboarding step 8's `brightWakeNote` follows the stored setting.
   - Design preview round 4 keeps option C and the Settings switch; the doc records the owner's choice.

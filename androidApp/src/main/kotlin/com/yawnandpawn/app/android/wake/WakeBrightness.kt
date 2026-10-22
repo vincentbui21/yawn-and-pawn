@@ -12,15 +12,15 @@ import android.view.WindowManager
  * - the shown screen is a session's Ringing screen (with or without the snooze confirm sheet over it) and that
  *   session's frozen config has the setting on ([show]);
  * - the activity is started ([onStart] to [onStop]);
- * - the system Extra dim is off ([extraDim], read once at each [onStart], never again per frame).
+ * - the system Extra dim is off ([extraDim], read only when full brightness could apply, at most once per start).
  *
  * Everything else is at the phone's own level (`BRIGHTNESS_OVERRIDE_NONE`): the Check screen, the Fallback check
  * picker, Snoozed, Success, the emergency ring, the wait before the session shows, and after Home, Recents, the screen
  * off or finish. The override is window-scoped (no `WRITE_SETTINGS`), so leaving the window ends it anyway.
  *
  * The window attribute is written only when the wanted level changes, and never while the full level was never applied:
- * with the setting off it is not touched at all. Nothing here suspends or throws; the only read is the Extra dim setting
- * once per start, so brightness never delays or breaks a ring.
+ * with the setting off it is not touched at all. Nothing here suspends or throws; the only read is the Extra dim setting,
+ * at most once per start and only on a bright Ringing screen, so brightness never delays or breaks a ring.
  */
 internal class WakeBrightness(
     private val window: () -> Window,
@@ -35,8 +35,8 @@ internal class WakeBrightness(
     /** This helper wrote `BRIGHTNESS_OVERRIDE_FULL` and has not taken it back yet. */
     private var applied = false
 
-    /** Extra dim as read at the last [onStart]. */
-    private var dim = false
+    /** Extra dim as read since the last [onStart]; null until full brightness first applies in that start. */
+    private var dim: Boolean? = null
 
     /** The screen now shown: [full] for a session's Ringing screen whose frozen config has "Bright wake screen" on. */
     fun show(full: Boolean) {
@@ -47,7 +47,7 @@ internal class WakeBrightness(
     /** Visible again (back from Home or Recents, the screen on): full again while the Ringing screen shows. */
     fun onStart() {
         started = true
-        dim = extraDim()
+        dim = null
         update()
     }
 
@@ -58,7 +58,8 @@ internal class WakeBrightness(
     }
 
     private fun update() {
-        val full = wanted && started && !dim
+        // Extra dim is read only when full brightness could apply, at most once per start.
+        val full = wanted && started && !(dim ?: extraDim().also { dim = it })
         if (full == applied) return
         applied = full
         val target = window()
@@ -83,9 +84,16 @@ internal class WakeBrightness(
         fun extraDimOn(
             resolver: ContentResolver,
             onFailure: (cause: String) -> Unit = {},
+        ): Boolean = extraDimOn(Build.VERSION.SDK_INT, onFailure) { Settings.Secure.getInt(resolver, EXTRA_DIM_KEY, 0) }
+
+        /** [extraDimOn] on API [sdk] with the setting's value from [read] (tests give it a failing read). */
+        internal fun extraDimOn(
+            sdk: Int,
+            onFailure: (cause: String) -> Unit,
+            read: () -> Int,
         ): Boolean {
-            if (Build.VERSION.SDK_INT < Build.VERSION_CODES.S) return false
-            return runCatching { Settings.Secure.getInt(resolver, EXTRA_DIM_KEY, 0) == 1 }
+            if (sdk < Build.VERSION_CODES.S) return false
+            return runCatching { read() == 1 }
                 .onFailure { onFailure(it::class.simpleName ?: "exception") }
                 .getOrDefault(true)
         }

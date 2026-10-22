@@ -167,7 +167,7 @@ class WakeActivity : ComponentActivity() {
         WakeBrightness(
             window = { window },
             extraDim = {
-                // A failed read is logged (once per start), so the Story 5.13 device check can tell it from Extra dim on.
+                // A failed read is logged (at most once per start), so the Story 5.13 device check can tell it from Extra dim on.
                 WakeBrightness.extraDimOn(contentResolver) { cause -> logger.log(LogEvent.OperationFailed(READ_EXTRA_DIM, cause)) }
             },
         )
@@ -192,6 +192,16 @@ class WakeActivity : ComponentActivity() {
     /** "I'm up" was tapped before the session existed; replayed once it rings. */
     private var pendingImUp by mutableStateOf(false)
 
+    /**
+     * The ring ([ringKey]) whose "I'm up", tapped before the session existed, was replayed: it stays at the phone's level
+     * until that "I'm up" lands (Story 5.2, PR #80 review), so the screen never flashes bright in between.
+     */
+    private var imUpReplayedFor by mutableStateOf<String?>(null)
+
+    /** "I'm up" was tapped before the session existed and has not landed yet on the ringing [state]. */
+    private fun imUpWaiting(state: SessionState): Boolean =
+        pendingImUp || (imUpReplayedFor != null && (state as? SessionState.Ringing)?.session?.let(::ringKey) == imUpReplayedFor)
+
     /** When the screen shows Success and when it closes (Story 3.3); made in [onCreate]. */
     private lateinit var end: WakeScreenEnd
 
@@ -204,8 +214,12 @@ class WakeActivity : ComponentActivity() {
     /** Visible: the ringing notification goes quiet, so no heads-up covers the countdown (Epic 3 device check, bug 2). */
     override fun onStart() {
         super.onStart()
-        brightness.onStart()
         runtime.wakeScreenShown(visible = true, ringing = forwardsToWakeScreen(engine.state.value, runtime.emergency.value))
+        // Story 5.2: the level from the session now, not the one shown before the stop (it may have moved on meanwhile);
+        // a ringing session's Ringing screen is what the composition shows for it (Success only after it ends).
+        val state = engine.state.value
+        brightness.show(full = end.success() == null && ringsBright(runtime.emergency.value != null, state, true, imUpWaiting(state)))
+        brightness.onStart()
     }
 
     /** Left (Home, another app, the screen off): while the alarm rings, the notification heads up again as the way back. */
@@ -317,7 +331,8 @@ class WakeActivity : ComponentActivity() {
                             ?.let { WakeScreen.Ringing(alarmOnlyRingingUiState(time.now, time.zone)) }
                 if (session != null) last.sessionShown = true
                 // Story 5.2: full brightness only on a ringing session's Ringing screen, as its frozen config says.
-                SideEffect { brightness.show(full = ringsBright(emergency != null, state, current, session)) }
+                val waiting = imUpWaiting(state)
+                SideEffect { brightness.show(full = ringsBright(emergency != null, state, current is WakeScreen.Ringing, waiting)) }
                 if (current != null) last.state = current
                 val shown = current ?: last.state
                 // Story 4.15: the Snoozed note shows for 3 s, then the screen closes; the next ring opens a new one.
@@ -419,6 +434,8 @@ class WakeActivity : ComponentActivity() {
         val ringing = state is SessionState.Ringing
         LaunchedEffect(pendingImUp, ringing, emergencyRinging) {
             if (pendingImUp && (ringing || emergencyRinging)) {
+                // Story 5.2: this ring stays at the phone's level until the replayed "I'm up" lands.
+                imUpReplayedFor = (engine.state.value as? SessionState.Ringing)?.session?.let(::ringKey)
                 pendingImUp = false
                 onIntent(WakeIntent.ImUpClicked)
             }
@@ -638,17 +655,19 @@ private fun sessionScreen(
 }
 
 /**
- * Whether [current] is shown at full brightness (Story 5.2, option C): only a [session] still in its Ringing step
- * ([state], before "I'm up") on its Ringing screen (the confirm sheet over it too) whose frozen config has "Bright wake
- * screen" on. Never the [emergency] ring or the wait before the session (no frozen config), nor any other screen; after
- * "I'm up" a session whose check has no screen of its own (a placeholder step) is at the phone's level too.
+ * Whether the screen is at full brightness (Story 5.2, option C): only a session still in its Ringing step ([state],
+ * before "I'm up") on its Ringing screen ([ringingScreen], the confirm sheet over it too) whose frozen config has "Bright
+ * wake screen" on. Never the [emergency] ring or the wait before the session (no frozen config), nor any other screen;
+ * after "I'm up" a session whose check has no screen of its own (a placeholder step) is at the phone's level too, and so
+ * is a ring whose "I'm up" was tapped before the session existed ([imUpWaiting], until its replay lands; if that replay
+ * cannot be saved, the ring stays at the phone's level, the safe side).
  */
 private fun ringsBright(
     emergency: Boolean,
     state: SessionState,
-    current: WakeScreen?,
-    session: SessionData?,
-): Boolean = !emergency && state is SessionState.Ringing && current is WakeScreen.Ringing && session?.config?.brightWakeScreen == true
+    ringingScreen: Boolean,
+    imUpWaiting: Boolean,
+): Boolean = !emergency && !imUpWaiting && ringingScreen && state is SessionState.Ringing && state.session.config.brightWakeScreen
 
 /** The confirm sheet and payment message over a wake screen, and the prices its snooze shows (Story 4.13). */
 private class SheetOverlay(
@@ -680,6 +699,9 @@ private sealed interface WakeScreen {
         val key: SnoozedKey,
     ) : WakeScreen
 }
+
+/** One ring of [session]: its id and how many snoozes it has had, so a re-ring after a snooze is another ring (Story 5.2). */
+private fun ringKey(session: SessionData): String = "${session.sessionId}#${session.snoozesGranted}"
 
 /** One paid snooze of a session: its id and how many snoozes it has had ([SessionData.snoozesGranted]). */
 private data class SnoozedKey(

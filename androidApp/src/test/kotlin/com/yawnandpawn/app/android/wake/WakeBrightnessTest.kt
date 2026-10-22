@@ -2,7 +2,10 @@ package com.yawnandpawn.app.android.wake
 
 import android.app.Activity
 import android.content.Intent
+import android.os.Build
 import android.provider.Settings
+import android.view.Window
+import android.view.WindowManager
 import androidx.compose.ui.test.hasText
 import androidx.compose.ui.test.junit4.v2.createEmptyComposeRule
 import androidx.compose.ui.test.onNodeWithText
@@ -172,7 +175,7 @@ class WakeBrightnessTest {
     }
 
     @Test
-    fun `Success and Done are at the phone's level`() {
+    fun `Success is at the phone's level`() {
         val app = app()
         ring(app)
         launch(app).use { scenario ->
@@ -180,12 +183,61 @@ class WakeBrightnessTest {
 
             composeRule.onNodeWithText("I'm up").performClick()
             composeRule.awaitSuccess(app, "Up on time.")
-            val screen = screen(app, scenario)
-            assertEquals(NONE, screen.brightness(), "Success")
 
-            composeRule.onNodeWithText("Done").performClick()
-            composeRule.waitUntil { screen.isFinishing }
-            assertEquals(NONE, screen.brightness(), "Done")
+            assertEquals(NONE, screen(app, scenario).brightness())
+        }
+    }
+
+    @Test
+    fun `the screen finishing while bright goes back to the phone's level`() {
+        val app = app()
+        ring(app)
+        launch(app).use { scenario ->
+            val screen = screen(app, scenario) { shown("I'm up") }
+            assertEquals(FULL, screen.brightness())
+
+            // Finishes it and runs its onStop and onDestroy, with the session still ringing (nothing else changes the level).
+            scenario.moveToState(Lifecycle.State.DESTROYED)
+
+            assertTrue(screen.isFinishing)
+            assertIs<SessionState.Ringing>(app.engine.state.value)
+            assertEquals(NONE, screen.brightness())
+        }
+    }
+
+    @Test
+    fun `I'm up tapped before the session exists never turns the screen bright`() {
+        val app = WakeApp()
+        app.koin.get<WakeNotifier>().show(aSessionConfig().scheduledAt)
+        val screen = buildActivity(WakeActivity::class.java).setup().get()
+        val levels = brightnessWrites(screen)
+
+        composeRule.onNodeWithText("I'm up").performClick()
+        composeRule.waitForIdle()
+        app.dispatch(SessionEvent.AlarmFired("session-1", aSessionConfig(), beforeFirstUnlock = false))
+        composeRule.awaitSuccess(app, "Up on time.")
+
+        assertFalse(FULL in levels, "never full: $levels")
+        assertEquals(NONE, screen.brightness())
+    }
+
+    @Test
+    fun `back on a session that moved on while away, the screen never flashes bright`() {
+        val app = app()
+        ring(app, aSessionConfig().copy(checkPlan = CheckPlan.default()))
+        launch(app).use { scenario ->
+            val screen = screen(app, scenario) { shown("I'm up") }
+            assertEquals(FULL, screen.brightness())
+
+            scenario.moveToState(Lifecycle.State.CREATED) // away: Home, or the screen off
+            val levels = brightnessWrites(screen)
+            app.dispatch(SessionEvent.UserInteracted, SessionEvent.ImUpTapped)
+            assertIs<SessionState.Grace>(app.engine.state.value)
+            scenario.moveToState(Lifecycle.State.RESUMED)
+            screen(app, scenario, "the check") { !shown("I'm up") }
+
+            assertFalse(FULL in levels, "never full again: $levels")
+            assertEquals(NONE, screen.brightness())
         }
     }
 
@@ -322,7 +374,7 @@ class WakeBrightnessTest {
     }
 
     @Test
-    fun `the helper writes the window only when the level changes, never with the setting off`() {
+    fun `the helper writes the window only when the level changes, and not while full is never wanted`() {
         val window = buildActivity(Activity::class.java).setup().get().window
         var writes = 0
         var dim = false
@@ -332,13 +384,15 @@ class WakeBrightnessTest {
         brightness.onStart()
         brightness.show(full = false)
         brightness.show(full = false)
-        assertEquals(0, writes, "off: never written")
+        assertEquals(0, writes, "not wanted: never written")
+        assertEquals(0, dimReads, "Extra dim is not read while full cannot apply")
         assertEquals(NONE, window.attributes.screenBrightness)
 
         brightness.show(full = true)
         brightness.show(full = true)
         assertEquals(FULL, window.attributes.screenBrightness)
         assertEquals(1, writes)
+        assertEquals(1, dimReads, "read once when full first applies")
 
         brightness.onStop()
         assertEquals(NONE, window.attributes.screenBrightness)
@@ -348,14 +402,30 @@ class WakeBrightnessTest {
         brightness.show(full = false)
         assertEquals(NONE, window.attributes.screenBrightness)
 
-        // Extra dim is read once per start, never per frame: turned on, it counts from the next start.
+        // Extra dim is read at most once per start: turned on, it counts from the next start.
         dim = true
         brightness.onStop()
         brightness.onStart()
         brightness.show(full = true)
         assertEquals(NONE, window.attributes.screenBrightness, "Extra dim on")
         assertEquals(4, writes)
-        assertEquals(3, dimReads, "one read per start")
+        assertEquals(3, dimReads, "at most one read per start")
+    }
+
+    @Test
+    fun `a screen no longer wanted while stopped is not written full on the next start`() {
+        val window = buildActivity(Activity::class.java).setup().get().window
+        val brightness = WakeBrightness(window = { window }, extraDim = { false })
+        brightness.onStart()
+        brightness.show(full = true)
+        brightness.onStop()
+        val levels = brightnessWrites(window)
+
+        brightness.show(full = false)
+        brightness.onStart()
+
+        assertFalse(FULL in levels, "no full write: $levels")
+        assertEquals(NONE, window.attributes.screenBrightness)
     }
 
     @Test
@@ -366,6 +436,43 @@ class WakeBrightnessTest {
         Settings.Secure.putInt(app.contentResolver, WakeBrightness.EXTRA_DIM_KEY, 1)
 
         assertTrue(WakeBrightness.extraDimOn(app.contentResolver))
+    }
+
+    @Test
+    fun `an Extra dim read that throws counts as on and reports its cause`() {
+        val failures = mutableListOf<String>()
+
+        val dim = WakeBrightness.extraDimOn(Build.VERSION_CODES.S, failures::add) { throw SecurityException("hidden setting") }
+
+        assertTrue(dim)
+        assertEquals(listOf("SecurityException"), failures)
+    }
+
+    @Test
+    fun `before API 31 there is no Extra dim, and nothing is read`() {
+        var reads = 0
+
+        val dim = WakeBrightness.extraDimOn(Build.VERSION_CODES.R, onFailure = {}) { reads++.let { 1 } }
+
+        assertFalse(dim)
+        assertEquals(0, reads)
+    }
+
+    /** Every brightness [activity]'s window is set to from now on. */
+    private fun brightnessWrites(activity: Activity): List<Float> = brightnessWrites(activity.window)
+
+    /** Every brightness [window] is set to from now on (each attribute change reaches its callback). */
+    private fun brightnessWrites(window: Window): List<Float> {
+        val levels = mutableListOf<Float>()
+        val original = window.callback
+        window.callback =
+            object : Window.Callback by original {
+                override fun onWindowAttributesChanged(attrs: WindowManager.LayoutParams) {
+                    levels += attrs.screenBrightness
+                    original.onWindowAttributesChanged(attrs)
+                }
+            }
+        return levels
     }
 
     private fun savedAlarm(app: WakeApp): Alarm {

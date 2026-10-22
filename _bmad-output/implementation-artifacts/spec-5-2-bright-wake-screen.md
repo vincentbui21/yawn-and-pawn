@@ -2,7 +2,7 @@
 title: 'Story 5.2: Bright wake screen'
 type: 'feature'
 created: '2026-10-22'
-status: 'in-review'
+status: 'done'
 baseline_revision: 'ae9743af13583f44f8c65e5d269426c9f68dd53b'
 review_loop_iteration: 0
 followup_review_recommended: false
@@ -192,3 +192,20 @@ change to the onboarding note (Story 5.12 uses it).
 - `:composeApp:testAndroidHostTest` filtered to `com.yawnandpawn.app.ui.settings.*`.
 - `:androidApp:testDebugUnitTest` filtered to `WakeBrightnessTest`, `MainActivityTest`, `AlarmWiringTest`, the Settings screenshot tests and `com.yawnandpawn.app.debug.preview.*`, Roborazzi record then verify.
 - `spotlessCheck detekt`.
+
+## Auto Run Result
+
+Status: done (fast mode, one combined review pass; the coordinator runs the independent review and CI).
+
+- **Built (option C, "Ringing only"):**
+  - `GlobalSettings.brightWakeScreen` (on by default), stored as `bright_wake_screen` in the settings DataStore and the last-known snapshot, saved by `SetBrightWakeScreen` through `SaveDefaultSetting` (session lock, no commitment lock).
+  - `SessionConfig.brightWakeScreen`, frozen by `ConfigResolver` at the fire (real rings through `ReadFireSettings`, so the 500 ms rule and the last-known fallback apply); a test ring takes it from the last-known snapshot at its fire.
+  - `WakeBrightness` sets the wake window to full brightness only on a session's Ringing step and screen (the sheet over it too), while started and with Extra dim off (read once per start; a failed read counts as on and is logged). Every other screen and every exit is at the phone's own level; with the setting off the window is never written.
+  - Settings Wake card shows the switch, with the caption "Raises screen brightness while the alarm rings.".
+  - After the rebase on Story 5.12: onboarding step 8's `brightWakeNote` follows the stored setting.
+  - Design preview round 4 keeps option C and the Settings switch; the doc records the owner's choice.
+- **Files:** core (`SessionConfig.kt`, `DefaultSettingsUseCases.kt`, `ConfigPorts.kt`, `PendingChange.kt`), data (`DataStoreGlobalSettings.kt`), testing (`ConfigFakes.kt`), composeApp (`SettingsViewModel.kt`, `SettingsRoute.kt`, `UiModule.kt`, `OnboardingViewModel.kt`, `strings.xml`), androidApp (`WakeBrightness.kt` new, `WakeActivity.kt`, `WakeService.kt`, `YawnAndPawnApp.kt`, preview `PreviewRound4.kt` new, `PreviewCatalog.kt`, `PreviewIndex.kt`), docs (`EXPERIENCE.md` and `DESIGN.md` both copies, `epics.md`, `round-4-bright-wake.md`, `states.md`), tests and baselines.
+- **Review:** 17 findings. 8 patched (1 medium: `epics.md`; 7 low: the Ringing-step gate, Extra dim read once per start with a logged failure, two new tests, a test that could not fail removed, a test renamed, a preview comment). 1 deferred (the Extra dim key's readability, high if true, settled in 5.13). 8 rejected, each with its reason in the triage log.
+- **Follow-up review:** not recommended (false): no high patched, one medium patched.
+- **Verification (`--no-daemon --max-workers=2`):** `spotlessCheck` and `detekt` pass; `:core:jvmTest` (`DefaultSettingsUseCasesTest`, `ConfigResolverTest`, `PendingChangeJsonTest`, `SessionJsonTest`), `:data:testAndroidHostTest` (`ConfigRepositoriesTest`, `DeleteAllDataIntegrationTest`, `SessionLockGuardScanTest`), `:composeApp:testAndroidHostTest` (`ui.settings.*`, `ui.onboarding.*`) and `:androidApp:testDebugUnitTest` (`WakeBrightnessTest`, `Onboarding*`, `MainActivityTest`, `AlarmWiringTest`, `DefaultsSettings*`, `SnoozeSettings*`, `UsageStatsSettingsTest`, `TestAlarmFlowTest`, `debug.preview.*`) pass with Roborazzi verify. The full `qualityGate` was not run.
+- **Residual risks:** the Extra dim read on a real API 31+ phone (5.13); the screen visibly turning bright is device-only; baselines recorded on Windows.

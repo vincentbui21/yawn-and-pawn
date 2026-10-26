@@ -38,8 +38,9 @@ import kotlin.test.assertFalse
 /**
  * Story 3.2 screenshots of the Math Check screen as `WakeActivity` maps it ([CheckSamples]), always Sunrise, at 100% and
  * 200% font scale: Grace, Loud after grace, a wrong answer and the last problem. On a 360 × 640 dp phone at 200% the
- * problem scrolls, but "Check" and the snooze control stay on screen, and every key is at least 64 dp. In a 640 × 360 dp
- * window (landscape) the pad scrolls with the problem and snooze stays on screen.
+ * problem scrolls, but "Check" and the snooze control stay on screen, and every key is at least 64 dp. In a short
+ * 640 × 360 dp window the pad scrolls with the problem and snooze stays on screen. The app is portrait only (owner
+ * decision 2026-10-26), but split screen and large screens (Android 16 ignores the lock there) still give short windows.
  */
 @RunWith(RobolectricTestRunner::class)
 @GraphicsMode(GraphicsMode.Mode.NATIVE)
@@ -199,11 +200,11 @@ class CheckScreenshotTest {
 
     @Test
     @Config(qualifiers = "w640dp-h360dp")
-    fun `in landscape the pad scrolls so Check can be reached, and snooze stays on screen`() =
+    fun `in a short window the pad scrolls so Check can be reached, and snooze stays on screen`() =
         check("wake_check_math_grace_sunrise_w640_h360", CheckSamples.grace) { checkReachableAndSnoozeOnScreen() }
 
     @Test
     @Config(qualifiers = "w640dp-h360dp", fontScale = 2.0f)
-    fun `in landscape at 200 percent Check can still be reached, and snooze stays on screen`() =
+    fun `in a short window at 200 percent Check can still be reached, and snooze stays on screen`() =
         check("wake_check_math_grace_sunrise_w640_h360_font200", CheckSamples.grace) { checkReachableAndSnoozeOnScreen() }
 }

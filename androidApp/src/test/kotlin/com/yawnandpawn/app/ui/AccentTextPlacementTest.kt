@@ -121,7 +121,7 @@ class AccentTextPlacementTest {
 
     @Test
     @Config(qualifiers = "w640dp-h360dp-mdpi")
-    fun `in landscape`() {
+    fun `in a short wide window (split screen, or a large screen that ignores the portrait lock)`() {
         wake(qrWithLink, listOf(link))
         wake(word, actions + link)
         tryItWord()

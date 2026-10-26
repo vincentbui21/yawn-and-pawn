@@ -13,13 +13,15 @@
         <!-- Exported without an intent filter so `adb shell am start -n` can open it in debug builds. -->
         <activity
             android:name=".debug.ThemeShowcaseActivity"
-            android:exported="true" />
+            android:exported="true"
+            android:screenOrientation="portrait" />
 
         <!-- Design preview: its own launcher icon "Yawn & Pawn Preview" and its own task, next to the real app. -->
         <activity
             android:name=".debug.preview.PreviewActivity"
             android:exported="true"
             android:label="@string/preview_launcher_label"
+            android:screenOrientation="portrait"
             android:taskAffinity="com.yawnandpawn.app.preview"
             android:windowSoftInputMode="adjustResize">
             <intent-filter>

@@ -140,9 +140,10 @@ fun CheckScreen(
  * scrolling area (Story 3.2), Word Unscramble "Shuffle" and "Clear" (Story 3.7); Story 3.12's 200% rule (360 × 640 dp)
  * adds Memory Sequence's grid, Word Unscramble's letters and QR/Barcode's viewfinder, which fell below the window there.
  * So at 200% font on a small phone the input and snooze stay on screen, and the scrolling area shows its end, next to
- * the input ([rememberEndScroll]). When the input and the footer together do not fit ([pinned] false: landscape, split
- * screen, or a payment message on a small phone at 200%), the input scrolls with the rest instead of being squashed, so
- * it can always be reached, and snooze stays pinned (Story 3.2 review). Where everything fits, it looks the same.
+ * the input ([rememberEndScroll]). When the input and the footer together do not fit ([pinned] false: split screen, a
+ * large screen that ignores the portrait lock, or a payment message on a small phone at 200%), the input scrolls with
+ * the rest instead of being squashed, so it can always be reached, and snooze stays pinned (Story 3.2 review). Where
+ * everything fits, it looks the same.
  */
 @Composable
 private fun PinnedInputCheck(

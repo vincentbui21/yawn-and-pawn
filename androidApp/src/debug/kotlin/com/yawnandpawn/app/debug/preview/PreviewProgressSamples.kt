@@ -100,7 +100,7 @@ object PreviewProgressSamples {
             ring = ring,
             stats = ProgressStats(currentStreak = 5, bestStreak = 12, onTime30Days = 80, averageMinutesToUp = 3, snoozes30Days = 8),
             calendar = september,
-            paidThisMonth = price(9),
+            paidThisMonth = listOf(price(9)),
             insight = Insight.FastestOnWeekdays,
         )
 

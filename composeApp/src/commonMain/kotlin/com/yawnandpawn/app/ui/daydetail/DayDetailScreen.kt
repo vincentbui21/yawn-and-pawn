@@ -52,6 +52,8 @@ import com.yawnandpawn.app.ui.resources.day_event_quiet_ended
 import com.yawnandpawn.app.ui.resources.day_event_rang
 import com.yawnandpawn.app.ui.resources.day_event_rang_again
 import com.yawnandpawn.app.ui.resources.day_event_snoozed
+import com.yawnandpawn.app.ui.resources.day_event_snoozed_paid
+import com.yawnandpawn.app.ui.resources.day_event_solved
 import com.yawnandpawn.app.ui.resources.day_event_solved_first
 import com.yawnandpawn.app.ui.resources.day_event_solved_tries
 import com.yawnandpawn.app.ui.resources.day_event_stopped
@@ -77,9 +79,13 @@ import kotlinx.datetime.LocalDate
 import kotlinx.datetime.LocalTime
 import org.jetbrains.compose.resources.stringResource
 
-/** One moment of a morning, in the order it happened (Day detail timeline, owner decision 2026-10-01). */
+/**
+ * One moment of a morning, in the order it happened (Day detail timeline, owner decision 2026-10-01). A `null` [time]
+ * (or snooze length, or try count) is a fact the session history does not hold: the row shows no time and the text
+ * leaves it out (Epic 6 owner question Q1, default: the timeline shows only stored facts).
+ */
 sealed interface MorningEvent {
-    val time: LocalTime
+    val time: LocalTime?
 
     /** The alarm rang ([again] after a snooze), or rang before the first unlock after a restart. */
     data class Rang(
@@ -88,9 +94,10 @@ sealed interface MorningEvent {
         val beforeFirstUnlock: Boolean = false,
     ) : MorningEvent
 
+    /** A paid snooze at its purchase [time]; [minutes] `null` when the snooze length is not stored. */
     data class Snoozed(
         override val time: LocalTime,
-        val minutes: Int,
+        val minutes: Int?,
         val price: Money,
     ) : MorningEvent
 
@@ -108,8 +115,9 @@ sealed interface MorningEvent {
         val to: CheckType,
     ) : MorningEvent
 
+    /** The fallback check [check] was used; `null` [time] when it is not stored (history keeps no time for it). */
     data class FallbackUsed(
-        override val time: LocalTime,
+        override val time: LocalTime?,
         val check: CheckType,
     ) : MorningEvent
 
@@ -118,10 +126,11 @@ sealed interface MorningEvent {
         val alarmTime: LocalTime,
     ) : MorningEvent
 
+    /** [check] solved at [time]; [tries] `null` when the try count is not stored ("Math solved"). */
     data class CheckSolved(
         override val time: LocalTime,
         val check: CheckType,
-        val tries: Int = 1,
+        val tries: Int? = 1,
     ) : MorningEvent
 
     /** No interaction for 30 minutes: the session stopped and was logged as missed. */
@@ -141,7 +150,9 @@ data class SessionDetail(
     val outcome: Outcome,
     val events: List<MorningEvent> = emptyList(),
 ) {
-    val rings: Int get() = events.count { it is MorningEvent.Rang }
+    /** Every snooze ends in one more ring, so rings are 1 + snoozes once the alarm rang (Epic 6 owner question Q1). */
+    val rings: Int get() = if (events.any { it is MorningEvent.Rang }) 1 + snoozes else 0
+
     val snoozes: Int get() = events.count { it is MorningEvent.Snoozed }
 
     /** What this session charged, one total per currency (AD-8); empty when nothing was paid. */
@@ -336,7 +347,7 @@ private fun TimelineRow(
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Text(
-            text = formatClockTime(event.time, is24Hour),
+            text = event.time?.let { formatClockTime(it, is24Hour) }.orEmpty(),
             modifier = Modifier.width(TIME_WIDTH).graphicsLayer { alpha = progress },
             style = PpsTheme.typography.caption.copy(fontFeatureSettings = TABULAR_FIGURES),
             color = colors.textSecondary,
@@ -444,7 +455,12 @@ private fun eventText(
         }
 
         is MorningEvent.Snoozed -> {
-            stringResource(Res.string.day_event_snoozed, event.minutes, formatMoney(event.price))
+            val minutes = event.minutes
+            if (minutes == null) {
+                stringResource(Res.string.day_event_snoozed_paid, formatMoney(event.price))
+            } else {
+                stringResource(Res.string.day_event_snoozed, minutes, formatMoney(event.price))
+            }
         }
 
         is MorningEvent.ImUp -> {
@@ -468,10 +484,11 @@ private fun eventText(
         }
 
         is MorningEvent.CheckSolved -> {
-            if (event.tries <= 1) {
-                stringResource(Res.string.day_event_solved_first, event.check.displayName())
-            } else {
-                stringResource(Res.string.day_event_solved_tries, event.check.displayName(), event.tries)
+            val tries = event.tries
+            when {
+                tries == null -> stringResource(Res.string.day_event_solved, event.check.displayName())
+                tries <= 1 -> stringResource(Res.string.day_event_solved_first, event.check.displayName())
+                else -> stringResource(Res.string.day_event_solved_tries, event.check.displayName(), tries)
             }
         }
 

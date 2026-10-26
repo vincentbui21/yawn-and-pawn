@@ -15,6 +15,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.semantics.semantics
 import com.yawnandpawn.app.core.billing.Money
+import com.yawnandpawn.app.core.billing.totalsByCurrency
 import com.yawnandpawn.app.ui.components.PpsTextButton
 import com.yawnandpawn.app.ui.components.RowIcon
 import com.yawnandpawn.app.ui.components.TabScreen
@@ -266,7 +267,7 @@ private fun StreakCard(
 /** "Money paid" (this month's total in `text`, a link to Purchase history) beside the Insight card; stacked at large font. */
 @Composable
 private fun MoneyAndInsight(
-    paid: Money?,
+    paid: List<Money>,
     insight: Insight?,
     onIntent: ((ProgressIntent) -> Unit)?,
     modifier: Modifier = Modifier,
@@ -287,10 +288,10 @@ private fun MoneyAndInsight(
     }
 }
 
-/** "Money paid" this month; [onIntent] `null` leaves out its Purchase history link. */
+/** "Money paid" this month, one line per currency; [onIntent] `null` leaves out its Purchase history link. */
 @Composable
 private fun MoneyCard(
-    paid: Money?,
+    paid: List<Money>,
     onIntent: ((ProgressIntent) -> Unit)?,
     modifier: Modifier = Modifier,
 ) {
@@ -305,7 +306,8 @@ private fun MoneyCard(
                     .semantics(mergeDescendants = true) { },
         ) {
             Text(text = stringResource(Res.string.progress_money_title), style = PpsTheme.typography.caption, color = colors.textSecondary)
-            paid?.let { Text(text = formatMoney(it), style = PpsTheme.typography.title, color = colors.text) }
+            // One line per currency (FR-PRG-2), never a sum across currencies (AD-8).
+            totalsByCurrency(paid).forEach { Text(text = formatMoney(it), style = PpsTheme.typography.title, color = colors.text) }
             Text(text = stringResource(Res.string.progress_money_month), style = PpsTheme.typography.caption, color = colors.textSecondary)
         }
         if (onIntent != null) {

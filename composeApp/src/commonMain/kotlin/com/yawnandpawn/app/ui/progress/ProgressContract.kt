@@ -76,8 +76,11 @@ data class ProgressUiState(
     val ring: List<RingDay> = emptyList(),
     val stats: ProgressStats? = null,
     val calendar: CalendarMonth? = null,
-    /** Paid this month (money is always `text`, never green or red). */
-    val paidThisMonth: Money? = null,
+    /**
+     * Paid this month, one total per currency, one line each (FR-PRG-2, AD-8: never added across currencies). Money is
+     * always `text`, never green or red. Empty for nothing paid.
+     */
+    val paidThisMonth: List<Money> = emptyList(),
     val insight: Insight? = null,
     /** The ring dot or calendar day tapped once: its label chip shows; a second tap or the chip opens Day detail. */
     val selection: DaySelection? = null,

@@ -92,12 +92,12 @@ object PreviewSamples {
 
     val homeList =
         HomeUiState(
-            hero = HomeHero(streakDays = 12, paidThisWeek = null),
+            hero = HomeHero(streakDays = 12, paidThisWeek = emptyList()),
             nextAlarm = Countdown.HoursMinutes(7, 12),
             alarms = alarmCards,
         )
 
-    val homePaid = homeList.copy(hero = HomeHero(streakDays = 1, paidThisWeek = price(3)), nextAlarm = Countdown.Minutes(45))
+    val homePaid = homeList.copy(hero = HomeHero(streakDays = 1, paidThisWeek = listOf(price(3))), nextAlarm = Countdown.Minutes(45))
 
     val homeDaysAway = homeList.copy(nextAlarm = Countdown.DaysHours(2, 3))
 

@@ -61,7 +61,7 @@ import kotlin.math.sin
  * The hero ring card (owner decisions 2026-09-30 and 2026-10-01, feedback items 21 and 23): the last 30 mornings as
  * `outcome-marker` shapes around a circle, oldest at the top and clockwise to today (in an outlined accent pill); a day
  * without an alarm is a faint dot. No legend: each shape carries its meaning. The centre shows the current streak in
- * `display` (`accent-text`, counting up on entry), "/ 30" and "day streak"; with nothing logged it shows "Your first
+ * `display` (`accent-text`, counting up on entry), "/ 30" (hidden past 30) and "day streak"; with nothing logged it shows "Your first
  * morning shows up here.". The dots sweep in around the circle on entry. Tapping a dot with a session shows its label
  * chip under the ring; a second tap or the chip opens Day detail. The dots are read by TalkBack ("Tuesday 22, Snoozed")
  * but are not separate 48 dp buttons (30 would not fit the ring); the chip and the calendar's days are buttons.
@@ -213,7 +213,10 @@ private fun ringDayDescription(
     return if (isToday) "$base, ${stringResource(Res.string.progress_day_today)}" else base
 }
 
-/** The ring's centre: the streak (counting up on entry), "/ 30" and "day streak"; empty, the prompt. */
+/**
+ * The ring's centre: the streak (counting up on entry), "/ 30" (only while the streak is 30 or less) and "day streak";
+ * empty, the prompt.
+ */
 @Composable
 private fun RingCentre(
     streak: Int?,
@@ -241,12 +244,15 @@ private fun RingCentre(
                     style = PpsTheme.typography.display,
                     color = colors.accentText,
                 )
-                Text(
-                    text = stringResource(Res.string.progress_ring_of, RING_DAYS),
-                    modifier = Modifier.padding(start = PpsTheme.spacing.space1, bottom = PpsTheme.spacing.space1),
-                    style = PpsTheme.typography.title,
-                    color = colors.textSecondary,
-                )
+                // Past 30 the ring can no longer hold the streak, so "/ 30" goes (Epic 6 owner question Q2, default).
+                if (streak <= RING_DAYS) {
+                    Text(
+                        text = stringResource(Res.string.progress_ring_of, RING_DAYS),
+                        modifier = Modifier.padding(start = PpsTheme.spacing.space1, bottom = PpsTheme.spacing.space1),
+                        style = PpsTheme.typography.title,
+                        color = colors.textSecondary,
+                    )
+                }
             }
             Text(
                 text = stringResource(Res.string.progress_ring_streak),

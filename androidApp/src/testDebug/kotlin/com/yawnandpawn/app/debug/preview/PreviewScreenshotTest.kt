@@ -20,7 +20,9 @@ private fun capture(
     case: PreviewCase,
 ) = withPreview(case) {
     composeRule.waitForIdle()
-    val path = "src/test/screenshots/preview/${case.name}.png"
+    // Round 5 (Epic 6, for the owner's look before the build) keeps its baselines next to its review notes.
+    val dir = if (case.item.round == EPIC_6_ROUND) "../docs/design-preview/round-5" else "src/test/screenshots/preview"
+    val path = "$dir/${case.name}.png"
     // A dialog is its own window: capture the whole screen so it is in the picture.
     if (case.item.hasDialog) {
         captureScreenRoboImage(path, roborazziOptions = screenshotOptions)

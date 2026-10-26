@@ -305,6 +305,10 @@
     <string name="day_event_fallback">Fallback check: %1$s</string>
     <string name="day_event_switched">Check switched to %1$s</string>
     <string name="day_event_stopped">Stopped after 30 minutes</string>
+    <!-- The timeline from stored facts only (Epic 6 owner question Q1, default; design preview round 5): history keeps
+         no snooze length and no try count. Drafts in docs/design-preview/round-5-epic-6.md. -->
+    <string name="day_event_snoozed_paid">Snoozed · %1$s</string>
+    <string name="day_event_solved">%1$s solved</string>
     <string name="day_tile_rings">rings</string>
     <string name="day_tile_paid">paid</string>
     <string name="day_tile_no_charge">No charge</string>

@@ -204,10 +204,18 @@ data class CheckUiState(
 
 /** Success after the check. */
 sealed interface SuccessKind {
-    /** Zero snoozes: the streak number, "days in a row" and "Up on time." (only "Up on time." before streaks, [streakDays] 0). */
+    /**
+     * Zero snoozes: the streak number, "days in a row" and "Up on time." (only "Up on time." with [streakDays] 0). With
+     * [countFrom] the number counts up from it with the bounce and the confetti (the streak grew, Story 6.4); null shows
+     * the final number, still.
+     */
     data class OnTime(
         val streakDays: Int,
+        val countFrom: Int?,
     ) : SuccessKind
+
+    /** Zero snoozes but no streak known (the history snapshot is missing, Story 6.4): "You're up. That's what counts." */
+    data object UpNoStreak : SuccessKind
 
     /**
      * After at least one paid snooze: "{paid} paid this morning" with one total per currency of [paidThisMorning]; no

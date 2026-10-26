@@ -1,5 +1,7 @@
 package com.yawnandpawn.app.ui
 
+import android.content.Context
+import android.provider.Settings
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -16,13 +18,17 @@ import androidx.compose.ui.test.captureToImage
 import androidx.compose.ui.test.getBoundsInRoot
 import androidx.compose.ui.test.isHeading
 import androidx.compose.ui.test.junit4.v2.createEmptyComposeRule
+import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.onRoot
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.unit.dp
+import androidx.test.core.app.ApplicationProvider
 import com.yawnandpawn.app.StopAppRule
+import com.yawnandpawn.app.core.stats.SuccessStreak
 import com.yawnandpawn.app.testing.aSession
 import com.yawnandpawn.app.testing.aSessionConfig
+import com.yawnandpawn.app.ui.TalkBackRules.talkBackOrder
 import com.yawnandpawn.app.ui.theme.PpsThemeMode
 import com.yawnandpawn.app.ui.wake.SuccessScreen
 import com.yawnandpawn.app.ui.wake.SuccessUiState
@@ -37,15 +43,32 @@ import org.robolectric.annotation.GraphicsMode
 import kotlin.test.assertEquals
 import kotlin.test.assertTrue
 
-/** The basic Success states, built the way `WakeActivity` builds them (Story 3.3). */
+/** The Success states, built the way `WakeActivity` builds them (Stories 3.3 and 6.4). */
 object SuccessSamples {
     val onTime: SuccessUiState = successUiState(aSession())
     val afterSnooze: SuccessUiState = successUiState(aSession().copy(snoozesGranted = 2))
     val test: SuccessUiState = successUiState(aSession(config = aSessionConfig(testMode = true)))
 
-    /** Each sample with its headline. */
+    /** Story 6.4: the streak grew from 11 to 12, first showing: the count-up and the confetti. */
+    val streakGrew: SuccessUiState = successUiState(aSession(), streak = SuccessStreak.Known(before = 11, after = 12))
+
+    /** Story 6.4: a second on-time session on a day already good: the number, still. */
+    val streakSameDay: SuccessUiState = successUiState(aSession(), streak = SuccessStreak.Known(before = 12, after = 12))
+
+    /** Story 6.4: the first on-time morning ever: "1", "day in a row". */
+    val streakFirst: SuccessUiState = successUiState(aSession(), streak = SuccessStreak.Known(before = 0, after = 1))
+
+    /** Story 6.4: no snapshot: "You're up. That's what counts." with no number. */
+    val snapshotMissing: SuccessUiState = successUiState(aSession(), streak = SuccessStreak.Unknown)
+
+    /** Each sample with its headline (no streak number among them). */
     val all: List<Pair<SuccessUiState, String>> =
-        listOf(onTime to "Up on time.", afterSnooze to "You're up. That's what counts.", test to "Test finished. Your alarm works.")
+        listOf(
+            onTime to "Up on time.",
+            afterSnooze to "You're up. That's what counts.",
+            test to "Test finished. Your alarm works.",
+            snapshotMissing to "You're up. That's what counts.",
+        )
 }
 
 /**
@@ -179,6 +202,90 @@ class SuccessScreenTest {
         }
     }
 
+    // --- Story 6.4: the streak ---
+
+    @Test
+    fun `TalkBack reads the headline first, then the streak, then Done`() =
+        listOf(SuccessSamples.streakGrew, SuccessSamples.streakSameDay).forEach { state ->
+            success(state) {
+                composeRule.waitForIdle()
+                assertEquals(listOf("Up on time.", "12", "days in a row", "Done"), composeRule.talkBackOrder(), "$state")
+            }
+        }
+
+    @Test
+    fun `the first on-time morning reads 1 day in a row`() =
+        success(SuccessSamples.streakFirst) {
+            composeRule.waitForIdle()
+            assertEquals(listOf("Up on time.", "1", "day in a row", "Done"), composeRule.talkBackOrder())
+        }
+
+    @Test
+    fun `a streak that did not grow is the same picture at 32 ms and at 1 s, with the haptic`() =
+        success(SuccessSamples.streakSameDay) {
+            composeRule.mainClock.autoAdvance = false
+            composeRule.mainClock.advanceTimeBy(FRAME)
+            val start = composeRule.onRoot().captureToImage().toPixelMap()
+            composeRule.mainClock.advanceTimeBy(ONE_SECOND)
+            val later = composeRule.onRoot().captureToImage().toPixelMap()
+
+            val changed = (0 until start.height).sumOf { y -> (0 until start.width).count { x -> start[x, y] != later[x, y] } }
+            assertEquals(0, changed, "pixels changed between the two moments")
+            assertEquals(listOf(HapticFeedbackType.Confirm), haptics.played)
+        }
+
+    @Test
+    fun `a streak that grew plays one haptic for the whole celebration`() =
+        success(SuccessSamples.streakGrew) {
+            composeRule.mainClock.autoAdvance = false
+            composeRule.mainClock.advanceTimeBy(FRAME)
+            val start = composeRule.onRoot().captureToImage().toPixelMap()
+            composeRule.mainClock.advanceTimeBy(CELEBRATION_END)
+            val later = composeRule.onRoot().captureToImage().toPixelMap()
+
+            val changed = (0 until start.height).sumOf { y -> (0 until start.width).count { x -> start[x, y] != later[x, y] } }
+            assertTrue(changed > 0, "the count-up and the confetti move")
+            assertEquals(listOf(HapticFeedbackType.Confirm), haptics.played)
+
+            // All of it ends within 3 s: nothing moves between 2 s and 3 s.
+            composeRule.mainClock.advanceTimeBy(ONE_SECOND)
+            val atThree = composeRule.onRoot().captureToImage().toPixelMap()
+            val still = (0 until later.height).sumOf { y -> (0 until later.width).count { x -> later[x, y] != atThree[x, y] } }
+            assertEquals(0, still, "pixels changed between 2 s and 3 s")
+            assertEquals(listOf(HapticFeedbackType.Confirm), haptics.played, "still one haptic")
+        }
+
+    @Test
+    fun `with the animator duration scale at 0 the final number shows at once and the haptic still plays`() {
+        val resolver = ApplicationProvider.getApplicationContext<Context>().contentResolver
+        Settings.Global.putFloat(resolver, Settings.Global.ANIMATOR_DURATION_SCALE, 0f)
+        try {
+            success(SuccessSamples.streakGrew) {
+                composeRule.mainClock.autoAdvance = false
+                composeRule.mainClock.advanceTimeBy(FRAME)
+                val start = composeRule.onRoot().captureToImage().toPixelMap()
+                composeRule.mainClock.advanceTimeBy(CELEBRATION_END)
+                val later = composeRule.onRoot().captureToImage().toPixelMap()
+
+                val changed = (0 until start.height).sumOf { y -> (0 until start.width).count { x -> start[x, y] != later[x, y] } }
+                assertEquals(0, changed, "no count-up, bounce or confetti with reduced motion")
+                composeRule.onNodeWithContentDescription("12").assertExists()
+                assertEquals(listOf(HapticFeedbackType.Confirm), haptics.played)
+            }
+        } finally {
+            Settings.Global.putFloat(resolver, Settings.Global.ANIMATOR_DURATION_SCALE, 1f)
+        }
+    }
+
+    @Test
+    fun `with no snapshot there is no number and no paid line`() =
+        success(SuccessSamples.snapshotMissing) {
+            composeRule.onNodeWithText("You're up. That's what counts.").assertExists()
+            composeRule.onNodeWithText("in a row", substring = true).assertDoesNotExist()
+            composeRule.onNodeWithText("paid this morning", substring = true).assertDoesNotExist()
+            composeRule.onNodeWithText("Up on time.").assertDoesNotExist()
+        }
+
     @Test
     fun `Done sends DoneClicked`() =
         success(SuccessSamples.onTime) {
@@ -189,6 +296,9 @@ class SuccessScreenTest {
     private companion object {
         const val FRAME = 32L
         const val ONE_SECOND = 1_000L
+
+        /** After the 1.5 s celebration. */
+        const val CELEBRATION_END = 2_000L
     }
 }
 

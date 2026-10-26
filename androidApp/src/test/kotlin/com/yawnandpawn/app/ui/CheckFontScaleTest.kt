@@ -310,11 +310,11 @@ class CheckFontScaleTest {
             )
         }
 
-    /** On time with a streak: the production screen (basic until Epic 6) shows "Up on time." and "Done". */
+    /** On time with a streak (Story 6.4): the production screen shows the number, "days in a row", "Up on time." and "Done". */
     @Test
     fun `Success on time with a streak`() =
-        fits("success_on_time_w360_h640", listOf(key("Done"), hasText("Up on time."))) {
-            SuccessScreen(state = SuccessUiState(SuccessKind.OnTime(streakDays = 12)), onIntent = {}, basic = true)
+        fits("success_on_time_w360_h640", listOf(key("Done"), hasText("Up on time."), hasText("days in a row"))) {
+            SuccessScreen(state = SuccessUiState(SuccessKind.OnTime(streakDays = 12, countFrom = null)), onIntent = {}, basic = true)
         }
 
     // Ringing: the clock capped at 1.3x.

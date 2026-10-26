@@ -12,6 +12,7 @@ import kotlinx.coroutines.flow.Flow
  * Access to `session_history` and `session_merge`. Only `RoomSessionHistoryRepository` uses it (a writer scan test
  * enforces it).
  */
+@Suppress("TooManyFunctions") // One query per read or write of the two tables; each is a single SQL statement.
 @Dao
 abstract class SessionHistoryDao {
     /**
@@ -23,6 +24,10 @@ abstract class SessionHistoryDao {
 
     @Query("SELECT * FROM session_history WHERE session_id = :sessionId")
     abstract suspend fun findById(sessionId: String): SessionHistoryEntity?
+
+    /** Every history row (Story 6.4's one read for the celebration snapshot). */
+    @Query("SELECT * FROM session_history")
+    abstract suspend fun allRows(): List<SessionHistoryEntity>
 
     @Query("SELECT COUNT(*) FROM session_history")
     abstract suspend fun count(): Int

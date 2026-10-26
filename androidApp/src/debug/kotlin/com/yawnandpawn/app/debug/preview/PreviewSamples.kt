@@ -312,9 +312,9 @@ object PreviewSamples {
 
     val fallbackPicker = FallbackPickerUiState()
 
-    val successOnTime = SuccessUiState(SuccessKind.OnTime(streakDays = 12))
+    val successOnTime = SuccessUiState(SuccessKind.OnTime(streakDays = 12, countFrom = 11))
 
-    val successFirst = SuccessUiState(SuccessKind.OnTime(streakDays = 0))
+    val successFirst = SuccessUiState(SuccessKind.OnTime(streakDays = 0, countFrom = null))
 
     val successAfterSnooze = SuccessUiState(SuccessKind.AfterSnooze(paidThisMorning = listOf(price(3))))
 

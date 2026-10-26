@@ -421,8 +421,9 @@ class CheckSemanticsSuiteTest {
     fun `every Success reads its headline as a heading first, then Done, a 72 dp button`() {
         val variants =
             listOf(
-                SuccessUiState(SuccessKind.OnTime(streakDays = 0)) to "Up on time.",
-                SuccessUiState(SuccessKind.OnTime(streakDays = 4)) to "Up on time.",
+                SuccessUiState(SuccessKind.OnTime(streakDays = 0, countFrom = null)) to "Up on time.",
+                SuccessUiState(SuccessKind.OnTime(streakDays = 4, countFrom = null)) to "Up on time.",
+                SuccessUiState(SuccessKind.UpNoStreak) to "You're up. That's what counts.",
                 SuccessUiState(SuccessKind.AfterSnooze(paidThisMorning = emptyList())) to "You're up. That's what counts.",
                 SuccessUiState(SuccessKind.AfterSnooze(paidThisMorning = listOf(Money(micros = 2_000_000, currency = "EUR")))) to
                     "You're up. That's what counts.",

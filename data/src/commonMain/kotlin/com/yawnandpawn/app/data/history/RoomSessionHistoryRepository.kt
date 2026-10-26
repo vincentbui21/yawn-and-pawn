@@ -48,6 +48,9 @@ class RoomSessionHistoryRepository(
     override suspend fun merges(sessionId: String): Outcome<List<SessionMergeRow>, DomainError> =
         storage { dao.mergesOf(sessionId).map { it.toRow() } }
 
+    // Story 6.4: a read only; an unreadable row is a StorageFailure, like find.
+    override suspend fun all(): Outcome<List<SessionHistoryRow>, DomainError> = storage { dao.allRows().map { it.toRow() } }
+
     // Same boundary as RoomAlarmRepository: every storage exception is a StorageFailure, cancellation propagates.
     @Suppress("TooGenericExceptionCaught")
     private suspend fun <T> storage(block: suspend () -> T): Outcome<T, DomainError> =

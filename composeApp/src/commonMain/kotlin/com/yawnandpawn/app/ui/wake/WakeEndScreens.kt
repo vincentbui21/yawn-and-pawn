@@ -24,8 +24,10 @@ import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.semantics.LiveRegionMode
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.heading
+import androidx.compose.ui.semantics.isTraversalGroup
 import androidx.compose.ui.semantics.liveRegion
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.traversalIndex
 import androidx.compose.ui.text.style.TextAlign
 import com.yawnandpawn.app.ui.checks.description
 import com.yawnandpawn.app.ui.checks.displayName
@@ -102,14 +104,14 @@ fun FallbackPickerScreen(
 }
 
 /**
- * Success, always Sunrise: zero snooze shows the streak number (`display`, counting up), "days in a row" and "Up on time."
- * with a 1.5 s confetti celebration and one success haptic (owner decisions 2026-09-28),
- * after a snooze "You're up. That's what counts." with the amount paid, a test "Test finished. Your alarm works.",
- * then "Done" (64 dp, thumb zone).
+ * Success, always Sunrise: zero snooze shows the streak number (`display`), "days in a row" and "Up on time." (owner
+ * decisions 2026-09-28; Story 6.4); when the streak grew ([SuccessKind.OnTime.countFrom]) the number counts up with a
+ * 1.5 s confetti celebration. With no streak known, "You're up. That's what counts." After a snooze "You're up. That's
+ * what counts." with the amount paid, a test "Test finished. Your alarm works.", then "Done" (thumb zone). One success
+ * haptic for every kind, when [claimHaptic] allows it (the caller plays it once per session). TalkBack reads the
+ * headline first, then the streak, then "Done".
  *
- * [basic] is the production screen until Epic 6 (Story 3.3): no celebration (no count-up, no confetti), one success
- * haptic for every kind when [claimHaptic] allows it (the caller plays it once per session), and "Done" as a 72 dp
- * `button-wake-primary`.
+ * [basic] is the production "Done" (Story 3.3): a 72 dp `button-wake-primary`; without it, the round 1 preview's 64 dp.
  */
 @Composable
 fun SuccessScreen(
@@ -119,9 +121,12 @@ fun SuccessScreen(
     basic: Boolean = false,
     claimHaptic: () -> Boolean = { true },
 ) {
-    // On time only: the celebration (count-up, confetti, one success haptic); after a snooze or a test, none.
-    val celebration = if (state.kind is SuccessKind.OnTime && !basic) rememberCelebration() else null
-    if (basic) SuccessHaptic(claimHaptic)
+    // A streak only: the celebration, which runs (count-up, confetti) only when the streak grew; after a snooze or a
+    // test, or with no streak, none.
+    val kind = state.kind
+    val celebration =
+        if (kind is SuccessKind.OnTime && kind.streakDays > 0) rememberCelebration(animate = kind.countFrom != null) else null
+    SuccessHaptic(claimHaptic)
     WakeSurface(modifier = modifier, overlay = { celebration?.let { Confetti(it) } }) {
         val colors = PpsTheme.colors
         val spacing = PpsTheme.spacing
@@ -131,16 +136,26 @@ fun SuccessScreen(
                 verticalArrangement = Arrangement.Center,
             ) {
                 // On a glass card: the streak number in accent-text passes on glass (5.11), not on the sunrise gradient.
+                // TalkBack: the headline first (traversal index -1 in this group), then the streak, then "Done".
                 Column(
-                    modifier = Modifier.fillMaxWidth().glass(PpsTheme.shapes.md).padding(spacing.space6),
+                    modifier =
+                        Modifier
+                            .fillMaxWidth()
+                            .semantics { isTraversalGroup = true }
+                            .glass(PpsTheme.shapes.md)
+                            .padding(spacing.space6),
                     verticalArrangement = Arrangement.spacedBy(spacing.space3),
                     horizontalAlignment = Alignment.CenterHorizontally,
                 ) {
-                    when (val kind = state.kind) {
+                    when (kind) {
                         is SuccessKind.OnTime -> {
                             // Owner decision 2026-09-28: the number, "days in a row" under it, then "Up on time."
-                            if (kind.streakDays > 0 && celebration != null) StreakCount(kind.streakDays, celebration)
+                            celebration?.let { StreakCount(kind.streakDays, kind.countFrom, it) }
                             Headline(stringResource(Res.string.success_zero_snooze_first))
+                        }
+
+                        SuccessKind.UpNoStreak -> {
+                            Headline(stringResource(Res.string.success_after_snooze))
                         }
 
                         is SuccessKind.AfterSnooze -> {
@@ -183,7 +198,11 @@ private fun SuccessHaptic(claim: () -> Boolean) {
 private fun Headline(text: String) {
     Text(
         text = text,
-        modifier = Modifier.semantics { heading() },
+        modifier =
+            Modifier.semantics {
+                heading()
+                traversalIndex = HEADLINE_TRAVERSAL_INDEX
+            },
         style = PpsTheme.typography.headline,
         color = PpsTheme.colors.text,
         textAlign = TextAlign.Center,
@@ -213,3 +232,6 @@ fun SnoozedScreen(
         }
     }
 }
+
+/** The Success headline is read first in its card (the onboarding pattern): TalkBack then reads the streak and "Done". */
+private const val HEADLINE_TRAVERSAL_INDEX = -1f

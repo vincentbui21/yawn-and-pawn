@@ -8,6 +8,7 @@ import com.yawnandpawn.app.core.history.SessionMergeRow
 import com.yawnandpawn.app.core.history.SessionOutcome
 import com.yawnandpawn.app.core.reset.SessionHistoryEraser
 import com.yawnandpawn.app.core.stats.FallbackHistory
+import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.map
@@ -84,6 +85,26 @@ class FakeSessionHistoryRepository :
 
     override suspend fun merges(sessionId: String): Outcome<List<SessionMergeRow>, DomainError> =
         Outcome.Success(mergeRows.values.filter { it.sessionId == sessionId })
+
+    /** Set to make [all] fail (Story 6.4). */
+    var failAll: DomainError? = null
+
+    /** While set and not completed, [all] suspends until it completes (Story 6.4's first-frame test). */
+    var allGate: CompletableDeferred<Unit>? = null
+
+    // A state flow, so a test thread polling it sees the count from the app scope's thread.
+    private val allCount = MutableStateFlow(0)
+
+    /** How many times [all] was called (counted when called, before [allGate]). */
+    val allCalls: Int
+        get() = allCount.value
+
+    override suspend fun all(): Outcome<List<SessionHistoryRow>, DomainError> {
+        allCount.update { it + 1 }
+        allGate?.await()
+        failAll?.let { return Outcome.Failure(it) }
+        return Outcome.Success(stored.values.toList())
+    }
 
     /** Like the Room query: the Missed row with the latest end time, again after every upsert. */
     override fun observeLatestMissed(): Flow<SessionHistoryRow?> =

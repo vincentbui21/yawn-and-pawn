@@ -21,6 +21,7 @@ import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.lifecycle.Lifecycle
@@ -45,6 +46,7 @@ import com.yawnandpawn.app.core.session.SessionState
 import com.yawnandpawn.app.core.session.SnoozeAvailability
 import com.yawnandpawn.app.core.session.SnoozeAvailabilityPolicy
 import com.yawnandpawn.app.core.session.UserLockState
+import com.yawnandpawn.app.core.stats.CelebrationStreaks
 import com.yawnandpawn.app.core.time.Clock
 import com.yawnandpawn.app.core.time.MonotonicClock
 import com.yawnandpawn.app.core.time.TimeChangeSignal
@@ -137,6 +139,10 @@ import kotlin.time.Instant
  * [SUCCESS_TIMEOUT], or when the screen is left (Home), so the next app open shows Home. A new ring replaces it. Any
  * other end (Missed, an emergency ring stopped) finishes the screen.
  *
+ * The zero-snooze streak on Success (Story 6.4) comes from [CelebrationStreaks]: its one history read starts after the
+ * first drawn frame of a real session's screen, on [ApplicationScope] and never awaited (NFR-7), and Success reads the
+ * result synchronously, so no screen ever waits for it. Success clears `FLAG_KEEP_SCREEN_ON`; a new ring sets it again.
+ *
  * While it is visible (`onStart` to `onStop`) the ringing notification is the quiet on-screen one, so no heads-up covers
  * the countdown; left while the alarm rings, it heads up again as the way back (Epic 3 device check, bug 2).
  *
@@ -157,6 +163,9 @@ class WakeActivity : ComponentActivity() {
     private val unlockSignals: UnlockSignals by inject()
     private val purchases: PurchaseCoordinator by inject()
     private val monotonicClock: MonotonicClock by inject()
+
+    /** The history snapshot behind the zero-snooze celebration (Story 6.4), read after the first frame. */
+    private val celebrations: CelebrationStreaks by inject()
 
     /** The wall clock the Ringing screen's clock shows (Epic 4 device follow-up 1): the app's, so tests control it. */
     private val clock: Clock by inject()
@@ -330,6 +339,7 @@ class WakeActivity : ComponentActivity() {
                             ?.takeIf { !last.sessionShown }
                             ?.let { WakeScreen.Ringing(alarmOnlyRingingUiState(time.now, time.zone)) }
                 if (session != null) last.sessionShown = true
+                CelebrationAndScreenOn(session, current)
                 // Story 5.2: full brightness only on a ringing session's Ringing screen, as its frozen config says.
                 val waiting = imUpWaiting(state)
                 SideEffect { brightness.show(full = ringsBright(emergency != null, state, current is WakeScreen.Ringing, waiting)) }
@@ -346,17 +356,62 @@ class WakeActivity : ComponentActivity() {
     }
 
     /**
-     * The Success screen of the [success] session (Story 3.3), at the phone's own brightness (Story 5.2). It closes by
-     * itself [SUCCESS_TIMEOUT] after it first showed, also when the screen was recreated meanwhile.
+     * Story 6.4 on a screen other than Success: the celebration's history read for the ringing real [session] (never a
+     * test), and `FLAG_KEEP_SCREEN_ON` set again when a ring replaces Success ([current]; Snoozed clears it itself when
+     * it closes, and a finishing screen is left alone).
+     */
+    @Composable
+    private fun CelebrationAndScreenOn(
+        session: SessionData?,
+        current: WakeScreen?,
+    ) {
+        session?.takeIf { !it.config.testMode }?.let { CelebrationRead(it.sessionId) }
+        SideEffect { if (current !is WakeScreen.Snoozed && !isFinishing) keepScreenOn(true) }
+    }
+
+    /**
+     * Starts the celebration's history read for [sessionId] (Story 6.4) once this screen has drawn its first frame
+     * (NFR-7): on the app scope, so it outlives the screen, and never awaited. [CelebrationStreaks] reads once per id.
+     */
+    @Composable
+    private fun CelebrationRead(sessionId: String) {
+        LaunchedEffect(sessionId) {
+            // Memory only: a Success before the read starts shows "Up on time." (Pending), not the missing-snapshot text.
+            celebrations.request(sessionId)
+            // The first callback runs inside the first frame, before it is drawn; the second one is the next frame's.
+            withFrameNanos { }
+            withFrameNanos { }
+            appScope.launch { celebrations.prepare(sessionId) }
+        }
+    }
+
+    /**
+     * The Success screen of the [success] session (Story 3.3), at the phone's own brightness (Story 5.2) and without
+     * `FLAG_KEEP_SCREEN_ON`, so the system timeout applies (Story 6.4). It closes by itself [SUCCESS_TIMEOUT] after it
+     * first showed, also when the screen was recreated meanwhile.
+     *
+     * A zero-snooze real session shows its streak (Story 6.4): decided once per session from the snapshot read after the
+     * ring's first frame ([CelebrationStreaks]), and celebrated (count-up, confetti) only at its first showing.
      */
     @Composable
     private fun SuccessShown(success: SessionData) {
-        SideEffect { brightness.show(full = false) }
+        SideEffect {
+            brightness.show(full = false)
+            keepScreenOn(false)
+        }
         // Story 4.15 review: the pending note only while Play's latest list still holds this session's pending payment.
         val pendingSessions by purchases.pendingSessions.collectAsState()
         key(success.sessionId) {
+            val streak = remember { celebrations.streakFor(success) }
+            val celebrate = remember { end.claimCelebration(success.sessionId) }
             SuccessScreen(
-                state = successUiState(success, pendingStillListed = success.sessionId in pendingSessions),
+                state =
+                    successUiState(
+                        success,
+                        pendingStillListed = success.sessionId in pendingSessions,
+                        streak = streak,
+                        celebrate = celebrate,
+                    ),
                 onIntent = ::onIntent,
                 basic = true,
                 claimHaptic = { end.claimHaptic(success.sessionId) },
@@ -611,6 +666,20 @@ private fun ComponentActivity.showOverLockScreen() {
         window.addFlags(WindowManager.LayoutParams.FLAG_SHOW_WHEN_LOCKED or WindowManager.LayoutParams.FLAG_TURN_SCREEN_ON)
     }
     window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+}
+
+/**
+ * Sets or clears `FLAG_KEEP_SCREEN_ON` (Story 6.4: cleared while Success shows), only when it changes: called from a
+ * `SideEffect` on every recomposition, it must not send the window manager an unchanged layout each time.
+ */
+private fun ComponentActivity.keepScreenOn(on: Boolean) {
+    val flag = WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON
+    val isOn = window.attributes.flags and flag != 0
+    when {
+        on && !isOn -> window.addFlags(flag)
+        !on && isOn -> window.clearFlags(flag)
+        else -> Unit
+    }
 }
 
 /**

@@ -288,6 +288,27 @@ class ProgressStatsTest {
     }
 
     @Test
+    fun `the first session day is the oldest finished session's local day, a running one left out`() {
+        assertNull(firstSessionDay(emptyList(), zone))
+        assertNull(firstSessionDay(listOf(aSession(today, outcome = null)), zone))
+
+        val history =
+            listOf(
+                aSession(today, OnTime),
+                aSession(today.day(-40), outcome = null),
+                aSession(today.day(-20), Test),
+                aSession(today.day(-10), Missed),
+            )
+        assertEquals(today.day(-20), firstSessionDay(history, zone))
+
+        // A 06:30 morning in Ho Chi Minh City is 23:30 the evening before in London: the day follows the zone.
+        val saigon = TimeZone.of("Asia/Ho_Chi_Minh")
+        val early = aSession(LocalDate(2027, 3, 1), OnTime, zone = saigon)
+        assertEquals(LocalDate(2027, 3, 1), firstSessionDay(listOf(early), saigon))
+        assertEquals(LocalDate(2027, 2, 28), firstSessionDay(listOf(early), TimeZone.of("Europe/London")))
+    }
+
+    @Test
     fun `day summaries cover a range in order, and an empty range gives none`() {
         val history = listOf(aSession(today.day(-29), Missed), aSession(today, OnTime))
         val ring = daySummaries(history, today.day(-29)..today, zone)

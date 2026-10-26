@@ -1,6 +1,9 @@
 package com.yawnandpawn.app.ui.progress
 
 import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.EnterTransition
+import androidx.compose.animation.ExitTransition
+import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -29,16 +32,20 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.layout
+import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.semantics.LiveRegionMode
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.heading
+import androidx.compose.ui.semantics.liveRegion
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import com.yawnandpawn.app.ui.components.glass
+import com.yawnandpawn.app.ui.components.rememberReducedMotion
 import com.yawnandpawn.app.ui.components.subScreenTransition
 import com.yawnandpawn.app.ui.format.DateStyle
 import com.yawnandpawn.app.ui.format.DayNameStyle
@@ -46,7 +53,10 @@ import com.yawnandpawn.app.ui.format.WeekOrder
 import com.yawnandpawn.app.ui.format.dayName
 import com.yawnandpawn.app.ui.format.formatDate
 import com.yawnandpawn.app.ui.resources.Res
+import com.yawnandpawn.app.ui.resources.progress_day_date
+import com.yawnandpawn.app.ui.resources.progress_day_today
 import com.yawnandpawn.app.ui.resources.progress_next_month
+import com.yawnandpawn.app.ui.resources.progress_open_day_a11y
 import com.yawnandpawn.app.ui.resources.progress_previous_month
 import com.yawnandpawn.app.ui.resources.symbol_chevron_left
 import com.yawnandpawn.app.ui.resources.symbol_chevron_right
@@ -84,9 +94,9 @@ private fun DayInitial(
 /**
  * The compact month calendar (owner decisions 2026-09-30 and 2026-10-01): month heading between 48 dp "Previous month" /
  * "Next month", weekday initials, then one 48 dp `calendar-day` per date with its small `outcome-marker` shape under it;
- * today's date sits in an outlined accent pill. The month slides left or right when it changes. A day with a session is
- * a button: the first tap shows its label chip under the grid, a second tap or the chip opens Day detail. The card sits
- * 12 dp from the screen edges so seven 48 dp days fit 360 dp.
+ * today's date sits in an outlined accent pill. The month slides left or right when it changes (at once with reduced
+ * motion). A day with a session up to today is a button: the first tap shows its label chip under the grid, a second tap
+ * or the chip opens Day detail. The card sits 12 dp from the screen edges so seven 48 dp days fit 360 dp.
  */
 @Composable
 internal fun OutcomeCalendar(
@@ -96,10 +106,12 @@ internal fun OutcomeCalendar(
     modifier: Modifier = Modifier,
 ) {
     val spacing = PpsTheme.spacing
+    val reduced = rememberReducedMotion()
     Column(
         modifier =
             modifier
                 .bleed(spacing.screenMargin - spacing.space3)
+                .testTag(PROGRESS_CALENDAR_TAG)
                 .fillMaxWidth()
                 .glass(PpsTheme.shapes.md)
                 .padding(vertical = spacing.space2),
@@ -118,7 +130,13 @@ internal fun OutcomeCalendar(
         }
         AnimatedContent(
             targetState = month,
-            transitionSpec = { subScreenTransition(forward = targetState.firstDay > initialState.firstDay) },
+            transitionSpec = {
+                if (reduced) {
+                    EnterTransition.None togetherWith ExitTransition.None
+                } else {
+                    subScreenTransition(forward = targetState.firstDay > initialState.firstDay)
+                }
+            },
             contentKey = { it.firstDay },
             label = "calendar month",
         ) { shown -> MonthGrid(month = shown, selection = selection, onIntent = onIntent) }
@@ -173,7 +191,12 @@ private fun MonthHeader(
         )
         Text(
             text = formatDate(month.firstDay, DateStyle.MonthYear),
-            modifier = Modifier.weight(1f).semantics { heading() },
+            // Polite: TalkBack reads the new month after "Previous month" or "Next month".
+            modifier =
+                Modifier.weight(1f).semantics {
+                    heading()
+                    liveRegion = LiveRegionMode.Polite
+                },
             style = PpsTheme.typography.title,
             color = PpsTheme.colors.text,
             textAlign = TextAlign.Center,
@@ -205,7 +228,12 @@ private fun MonthButton(
     }
 }
 
-/** One `calendar-day`: the date in `caption` (today in an outlined accent pill), a small marker shape below. */
+/**
+ * One `calendar-day`: the date in `caption` (today in an outlined accent pill), a small marker shape below. A day after
+ * today shows its date only and is never a button, even with a session (the clock was set back). TalkBack reads "{weekday}
+ * {day}, {outcome}" (", today" added on today; only "{weekday} {day}" after today) and, on the selected day, offers
+ * "open day detail" as the double-tap action.
+ */
 @Composable
 private fun DayCell(
     month: CalendarMonth,
@@ -215,8 +243,21 @@ private fun DayCell(
     modifier: Modifier = Modifier,
 ) {
     val date = LocalDate(month.firstDay.year, month.firstDay.month, dayOfMonth)
-    val day = month.day(dayOfMonth)
-    val description = dayDescription(date, day)
+    val today = month.today
+    val future = today != null && date > today
+    val day = month.day(dayOfMonth)?.takeUnless { future }
+    val description =
+        when {
+            // No outcome and no "no alarm" yet: an alarm may still ring that day.
+            future -> stringResource(Res.string.progress_day_date, dayName(date.dayOfWeek, DayNameStyle.Full), date.day)
+
+            date == today -> "${dayDescription(date, day)}, ${stringResource(Res.string.progress_day_today)}"
+
+            else -> dayDescription(date, day)
+        }
+    // The day the chip refers to has a selection ring in `text` (not the accent of today's pill).
+    val isSelected = day != null && selection?.inCalendar == true && selection.date == date
+    val openLabel = stringResource(Res.string.progress_open_day_a11y)
     Box(
         modifier =
             modifier
@@ -225,6 +266,7 @@ private fun DayCell(
                     if (day != null) {
                         Modifier.clickable(
                             role = Role.Button,
+                            onClickLabel = if (isSelected) openLabel else null,
                             onClick = { onIntent(tapIntent(DaySelection(date, day.outcome, inCalendar = true), selection)) },
                         )
                     } else {
@@ -233,8 +275,6 @@ private fun DayCell(
                 ).semantics { contentDescription = description },
         contentAlignment = Alignment.Center,
     ) {
-        // The day the chip refers to has a selection ring in `text` (not the accent of today's pill).
-        val isSelected = selection?.inCalendar == true && selection.date == date
         Column(
             modifier =
                 Modifier
@@ -264,6 +304,9 @@ private fun Modifier.bleed(horizontal: Dp): Modifier =
             )
         layout(placeable.width - 2 * extra, placeable.height) { placeable.place(-extra, 0) }
     }
+
+/** The calendar card, for screenshots of the card alone (Story 6.6). */
+const val PROGRESS_CALENDAR_TAG: String = "progress-calendar"
 
 private const val DAYS_PER_WEEK = 7
 

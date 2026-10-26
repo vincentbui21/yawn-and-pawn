@@ -6,6 +6,7 @@ import com.yawnandpawn.app.ui.editor.AlarmEditorViewModel
 import com.yawnandpawn.app.ui.editor.EditorFeeSources
 import com.yawnandpawn.app.ui.home.AlarmActions
 import com.yawnandpawn.app.ui.home.HomeViewModel
+import com.yawnandpawn.app.ui.nav.AppOpenRequests
 import com.yawnandpawn.app.ui.onboarding.ChecklistScreens
 import com.yawnandpawn.app.ui.onboarding.FirstAlarmSources
 import com.yawnandpawn.app.ui.onboarding.OnboardingViewModel
@@ -20,6 +21,7 @@ import com.yawnandpawn.app.ui.reliability.ManufacturerGuidanceViewModel
 import com.yawnandpawn.app.ui.reliability.ReliabilityViewModel
 import com.yawnandpawn.app.ui.settings.DefaultSettingSetters
 import com.yawnandpawn.app.ui.settings.SettingsViewModel
+import com.yawnandpawn.app.ui.settings.WeeklySummarySwitch
 import com.yawnandpawn.app.ui.you.YouViewModel
 import kotlinx.datetime.LocalDate
 import org.koin.core.module.dsl.viewModel
@@ -33,10 +35,12 @@ import org.koin.dsl.module
  * `SoundLibrary`, `SoundPreview`, `ExternalLinks`, `AppLinks`, `DeviceInfoSource`, `ManufacturerSettings`,
  * `ConfirmMakerGuidance`, `ConsentStore`, `SetAnalyticsConsent`, `EvaluateReliability`, `ReliabilitySettings`,
  * `CameraPermission`, `ScheduleTestAlarm`, `OnboardingRepository`, `ReliabilityRecords`, the onboarding use cases,
- * `OnboardingTestNote` and `ObserveProgress`) are bound by :androidApp and :data.
+ * `OnboardingTestNote`, `ObserveProgress`, `WeeklySummaryStore` and `SetWeeklySummary`) are bound by :androidApp and :data.
  */
 val uiModule =
     module {
+        // Story 6.8: the tab a notification asks the app to open (the weekly summary opens Progress), one per app.
+        single { AppOpenRequests() }
         factory { AlarmActions(get(), get(), get()) }
         // Story 5.12: Home's note after "Skip for now" on onboarding's test alarm. Story 6.3: the hero's stats.
         viewModel { HomeViewModel(get(), get(), get(), get(), get(), get(), get(), get(), testNote = get(), progress = get()) }
@@ -62,6 +66,8 @@ val uiModule =
                 consents = get(),
                 setAnalyticsConsent = get(),
                 reliability = get(),
+                // Story 6.8: the "Weekly summary" switch.
+                weeklySummary = WeeklySummarySwitch(store = get(), set = get()),
             )
         }
         viewModel { ProblemWithChargeViewModel(get(), get(), get(), get(), get()) }

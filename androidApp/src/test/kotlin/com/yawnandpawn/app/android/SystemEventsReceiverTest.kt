@@ -12,7 +12,14 @@ import com.yawnandpawn.app.core.session.SessionEngine
 import com.yawnandpawn.app.core.session.SessionSlotRearm
 import com.yawnandpawn.app.core.session.SessionState
 import com.yawnandpawn.app.core.session.StoredSession
+import com.yawnandpawn.app.core.summary.WeeklySummaryPrefs
+import com.yawnandpawn.app.core.summary.WeeklySummaryScheduler
+import com.yawnandpawn.app.core.summary.WeeklySummaryStore
+import com.yawnandpawn.app.core.work.BackgroundWork
+import com.yawnandpawn.app.core.work.SchedulePolicy
 import com.yawnandpawn.app.testing.FakeActiveSessionStore
+import com.yawnandpawn.app.testing.FakeBackgroundWork
+import com.yawnandpawn.app.testing.FakeWeeklySummaryStore
 import com.yawnandpawn.app.testing.aSession
 import com.yawnandpawn.app.testing.anAlarm
 import kotlinx.coroutines.runBlocking
@@ -32,6 +39,7 @@ import org.robolectric.shadows.ShadowLog
 import kotlin.test.assertEquals
 import kotlin.test.assertIs
 import kotlin.test.assertTrue
+import kotlin.time.Duration
 import kotlin.time.Instant
 
 /** Story 1.10: every enabled alarm re-armed and every disabled code cancelled on each reschedule broadcast. */
@@ -231,5 +239,84 @@ class SystemEventsReceiverTest {
         app.awaitWork()
 
         assertEquals(emptyMap(), app.armed())
+    }
+
+    /**
+     * Story 6.8: the weekly summary scheduler on this test's pinned clock and zone (the app's single captured the real
+     * ones at start), over a [FakeBackgroundWork] that also notes which alarms were armed at each REPLACE. A boot's
+     * unlock signal also starts the scheduler (KEEP, Story 6.8 app start path); the receiver's own syncs are the REPLACEs.
+     */
+    private inner class WeeklyWork(
+        private val recorded: FakeBackgroundWork = FakeBackgroundWork(),
+    ) : BackgroundWork by recorded {
+        val armedAtReplace = mutableListOf<Map<Int, Long>>()
+
+        val schedules: List<Pair<Duration, SchedulePolicy>>
+            get() = recorded.weeklySchedules
+
+        val replaces: List<Pair<Duration, SchedulePolicy>>
+            get() = schedules.filter { it.second == SchedulePolicy.Replace }
+
+        override fun scheduleWeeklySummary(
+            delay: Duration,
+            policy: SchedulePolicy,
+        ): Outcome<Unit, DomainError> {
+            if (policy == SchedulePolicy.Replace) armedAtReplace += app.armed()
+            return recorded.scheduleWeeklySummary(delay, policy)
+        }
+    }
+
+    private fun bindWeeklySummary(
+        work: BackgroundWork,
+        store: WeeklySummaryStore = FakeWeeklySummaryStore(),
+    ) = loadKoinModules(
+        module {
+            single<BackgroundWork> { work }
+            single { WeeklySummaryScheduler(work, store, app.clock, get(), get(), get()) }
+        },
+    )
+
+    @Test
+    fun `a boot, a time set and a zone change re-align the weekly summary after re-arming the alarms (Story 6-8)`() {
+        storeTwoEnabledAndOneDisabled()
+        val work = WeeklyWork()
+        bindWeeklySummary(work)
+
+        listOf(Intent.ACTION_BOOT_COMPLETED, Intent.ACTION_TIME_CHANGED, Intent.ACTION_TIMEZONE_CHANGED).forEach { action ->
+            broadcast(action)
+        }
+
+        // Wednesday 06:00 in Berlin: the next Sunday 19:00 is 4 days 13 h away, so each re-aligns with REPLACE.
+        val delay = berlin("2027-03-07T19:00") - app.clock.now()
+        assertEquals(List(3) { delay to SchedulePolicy.Replace }, work.replaces)
+        assertEquals(List(3) { expectedTwoEnabled }, work.armedAtReplace, "the alarms first")
+        // BOOT_COMPLETED is also an unlock signal: it starts the scheduler once (KEEP, the app start path).
+        assertEquals(listOf(delay to SchedulePolicy.KeepPending), work.schedules.filter { it.second == SchedulePolicy.KeepPending })
+    }
+
+    @Test
+    fun `a locked boot leaves the weekly summary alone (Story 6-8)`() {
+        val work = WeeklyWork()
+        bindWeeklySummary(work)
+
+        broadcast(Intent.ACTION_LOCKED_BOOT_COMPLETED)
+
+        assertEquals(emptyList(), work.schedules)
+    }
+
+    @Test
+    fun `a weekly summary that cannot be aligned is logged and every alarm is still re-armed (Story 6-8)`() {
+        storeTwoEnabledAndOneDisabled()
+        val broken =
+            object : WeeklySummaryStore by FakeWeeklySummaryStore() {
+                override suspend fun read(): Outcome<WeeklySummaryPrefs, DomainError> = throw IllegalStateException("bug")
+            }
+        bindWeeklySummary(WeeklyWork(), broken)
+        ShadowLog.clear()
+
+        broadcast(Intent.ACTION_TIMEZONE_CHANGED)
+
+        assertEquals(expectedTwoEnabled, app.armed())
+        assertTrue(logs().any { it.startsWith("OperationFailed operation=schedule weekly summary") }, "${logs()}")
     }
 }

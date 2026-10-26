@@ -9,8 +9,10 @@ import com.yawnandpawn.app.core.log.LogEvent
 import com.yawnandpawn.app.core.log.Logger
 import com.yawnandpawn.app.core.session.SessionSlotRearm
 import com.yawnandpawn.app.core.session.UserLockState
+import com.yawnandpawn.app.core.summary.WeeklySummaryScheduler
 import org.koin.core.component.KoinComponent
 import org.koin.core.component.get
+import kotlin.coroutines.cancellation.CancellationException
 
 /**
  * Re-arms every alarm (`rescheduleAll()`, AD-4) when the system clears or shifts them: after a reboot, a clock or
@@ -25,6 +27,10 @@ import org.koin.core.component.get
  * Story 2.2: after `TIME_SET` or `TIMEZONE_CHANGED` the slot of a snooze is armed again from its stored `Deadline`
  * (new wall time + the monotonic time left), so a clock change neither ends nor shortens it; a ringing session gets
  * the slot at once. Nothing re-resolves the frozen `SessionConfig`.
+ *
+ * Story 6.8: after a boot, a clock or zone change and an app update, once the alarms and the slot are re-armed, the
+ * weekly summary work is re-aligned to the new local Sunday 19:00 ([WeeklySummaryScheduler.sync]; locked, it does
+ * nothing). Its failure is logged and never touches the alarms.
  */
 class SystemEventsReceiver :
     BroadcastReceiver(),
@@ -44,6 +50,19 @@ class SystemEventsReceiver :
             // leave every alarm unarmed. Then the session slot.
             scheduling.rescheduleAll()
             rearm.afterSystemEvent()
+            if (intent.action in WEEKLY_SUMMARY_ACTIONS) syncWeeklySummary()
+        }
+    }
+
+    /** Story 6.8: re-aligns the weekly summary work last; whatever it throws is logged (it returns its own failures). */
+    @Suppress("TooGenericExceptionCaught")
+    private suspend fun syncWeeklySummary() {
+        try {
+            get<WeeklySummaryScheduler>().sync()
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            get<Logger>().log(LogEvent.OperationFailed(WeeklySummaryScheduler.SCHEDULE_WEEKLY_SUMMARY, e::class.simpleName.orEmpty()))
         }
     }
 
@@ -72,6 +91,15 @@ class SystemEventsReceiver :
                 Intent.ACTION_MY_PACKAGE_REPLACED,
                 // AlarmManager.ACTION_SCHEDULE_EXACT_ALARM_PERMISSION_STATE_CHANGED (API 31); never sent on older versions.
                 "android.app.action.SCHEDULE_EXACT_ALARM_PERMISSION_STATE_CHANGED",
+            )
+
+        /** The actions after which the weekly summary work is re-aligned (Story 6.8): the local Sunday 19:00 may have moved. */
+        val WEEKLY_SUMMARY_ACTIONS: Set<String> =
+            setOf(
+                Intent.ACTION_BOOT_COMPLETED,
+                Intent.ACTION_TIME_CHANGED,
+                Intent.ACTION_TIMEZONE_CHANGED,
+                Intent.ACTION_MY_PACKAGE_REPLACED,
             )
     }
 }

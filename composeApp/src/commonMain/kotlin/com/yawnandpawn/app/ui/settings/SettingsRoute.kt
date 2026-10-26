@@ -15,8 +15,8 @@ import org.koin.compose.viewmodel.koinViewModel
 /**
  * The Settings rows built so far: the Snooze card's base fee and max snoozes (Story 4.5); its default snooze length, the
  * Wake card's default quiet time and "Vibrate during quiet time", and Appearance (Story 5.1); "Bright wake screen"
- * (Story 5.2); the reliability checklist (Story 5.4); the usage stats switch (Story 5.6). The weekly summary comes with
- * its own story.
+ * (Story 5.2); the reliability checklist (Story 5.4); the usage stats switch (Story 5.6); the weekly summary switch
+ * (Story 6.8), in the card with usage stats. Every row of the approved Settings is built.
  */
 val BuiltSettingsRows: Set<SettingsRow> =
     setOf(
@@ -27,6 +27,7 @@ val BuiltSettingsRows: Set<SettingsRow> =
         SettingsRow.VibrateDuringQuietTime,
         SettingsRow.BrightWakeScreen,
         SettingsRow.Appearance,
+        SettingsRow.WeeklySummary,
         SettingsRow.UsageStats,
         SettingsRow.Reliability,
     )

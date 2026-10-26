@@ -7,4 +7,12 @@
     <string name="notification_channel_session">Alarm in progress</string>
     <!-- %1$s is the alarm time, formatted for the phone's 12/24-hour setting. -->
     <string name="notification_ringing_text">%1$s alarm · Tap to return to your alarm</string>
+    <!-- The weekly summary notification (Story 6.8), verbatim from EXPERIENCE.md > Key strings. %1$d is the number of
+         on-time mornings; %s is the amount paid, one per currency joined with " + " (formatted in code, never a symbol here). -->
+    <string name="notification_channel_weekly_summary">Weekly summary</string>
+    <string name="weekly_summary_nothing_paid">%1$d on-time mornings, nothing paid. Nice.</string>
+    <string name="weekly_summary_nothing_paid_one">1 on-time morning, nothing paid. Nice.</string>
+    <string name="weekly_summary_paid">%1$d on-time mornings, %2$s paid this week.</string>
+    <string name="weekly_summary_paid_one">1 on-time morning, %1$s paid this week.</string>
+    <string name="weekly_summary_none">0 on-time mornings this week. Next week\'s a fresh start.</string>
 </resources>

@@ -8,6 +8,7 @@ import com.yawnandpawn.app.core.session.UserLockState
 import com.yawnandpawn.app.core.work.BackgroundJob
 import com.yawnandpawn.app.core.work.BackgroundTaskKind
 import com.yawnandpawn.app.core.work.BackgroundWork
+import com.yawnandpawn.app.core.work.SchedulePolicy
 import com.yawnandpawn.app.core.work.TaskResult
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.flow.Flow
@@ -22,6 +23,7 @@ import kotlin.test.assertFalse
 import kotlin.test.assertNotNull
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
+import kotlin.time.Duration
 import kotlin.time.Duration.Companion.hours
 import kotlin.time.Duration.Companion.minutes
 import kotlin.time.Duration.Companion.seconds
@@ -65,6 +67,13 @@ class PriceRefreshTest {
             enqueued += job
             return Outcome.Success(Unit)
         }
+
+        override fun scheduleWeeklySummary(
+            delay: Duration,
+            policy: SchedulePolicy,
+        ): Outcome<Unit, DomainError> = Outcome.Success(Unit)
+
+        override fun cancelWeeklySummary(): Outcome<Unit, DomainError> = Outcome.Success(Unit)
     }
 
     private val logger = RecordingLogger()

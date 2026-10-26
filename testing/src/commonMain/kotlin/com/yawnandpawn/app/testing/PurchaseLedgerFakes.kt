@@ -17,10 +17,12 @@ import com.yawnandpawn.app.core.error.Outcome
 import com.yawnandpawn.app.core.session.PurchaseToken
 import com.yawnandpawn.app.core.work.BackgroundJob
 import com.yawnandpawn.app.core.work.BackgroundWork
+import com.yawnandpawn.app.core.work.SchedulePolicy
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.update
+import kotlin.time.Duration
 import kotlin.time.Instant
 
 /**
@@ -123,10 +125,25 @@ class FakePurchaseRecordRepository(
 
 /**
  * [BackgroundWork] that keeps every enqueued job in [jobs]; set [failure] to refuse them (for example before the first
- * unlock). Named apart from Story 4.3's `FakeBackgroundWork`, which it can be replaced by once both are merged.
+ * unlock). Named apart from Story 4.3's `FakeBackgroundWork`, which it can be replaced by once both are merged. The weekly
+ * summary calls (Story 6.8) are kept apart from [jobs], in [weeklySchedules] and [weeklyCancels].
  */
 class RecordingBackgroundWork : BackgroundWork {
     private val enqueued = mutableListOf<BackgroundJob>()
+
+    private val weekly = MutableStateFlow<List<Pair<Duration, SchedulePolicy>>>(emptyList())
+    private val cancels = MutableStateFlow(0)
+
+    /** Set to refuse the weekly summary calls (Story 6.8), as the adapter does before the first unlock. */
+    var failWeekly: DomainError? = null
+
+    /** Each [scheduleWeeklySummary] call (delay and policy), oldest first; never in the enqueued jobs. */
+    val weeklySchedules: List<Pair<Duration, SchedulePolicy>>
+        get() = weekly.value
+
+    /** How many times [cancelWeeklySummary] was called. */
+    val weeklyCancels: Int
+        get() = cancels.value
 
     var failure: DomainError? = null
 
@@ -136,6 +153,21 @@ class RecordingBackgroundWork : BackgroundWork {
     override fun enqueue(job: BackgroundJob): Outcome<Unit, DomainError> {
         failure?.let { return Outcome.Failure(it) }
         enqueued += job
+        return Outcome.Success(Unit)
+    }
+
+    override fun scheduleWeeklySummary(
+        delay: Duration,
+        policy: SchedulePolicy,
+    ): Outcome<Unit, DomainError> {
+        failWeekly?.let { return Outcome.Failure(it) }
+        weekly.update { it + (delay to policy) }
+        return Outcome.Success(Unit)
+    }
+
+    override fun cancelWeeklySummary(): Outcome<Unit, DomainError> {
+        failWeekly?.let { return Outcome.Failure(it) }
+        cancels.update { it + 1 }
         return Outcome.Success(Unit)
     }
 }

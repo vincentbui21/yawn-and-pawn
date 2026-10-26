@@ -103,6 +103,7 @@ import com.yawnandpawn.app.core.session.UserLockState
 import com.yawnandpawn.app.core.stats.DayTicker
 import com.yawnandpawn.app.core.stats.ObserveProgress
 import com.yawnandpawn.app.core.stats.ReRegisterSuggestions
+import com.yawnandpawn.app.core.summary.WeeklySummaryScheduler
 import com.yawnandpawn.app.core.telemetry.Telemetry
 import com.yawnandpawn.app.core.telemetry.TelemetryReporter
 import com.yawnandpawn.app.data.dataModule
@@ -465,6 +466,10 @@ open class YawnAndPawnApp :
         // WorkManager; locked (Direct Boot) they wait for the unlock signals, which call the scheduler again.
         val prices = koin.get<PriceRefreshScheduler>()
         scope.launch { prices.start() }
+        // Story 6.8: the weekly summary work is kept (or enqueued at the next Sunday 19:00) the same way: never replaced at a
+        // start, so a run WorkManager started this process for is not cancelled; locked, the unlock signals start it.
+        val weeklySummary = koin.get<WeeklySummaryScheduler>()
+        scope.launch { weeklySummary.start() }
         // Story 4.11: Play's purchase updates are followed for the life of the process, and a recovery query runs once the
         // user has unlocked and a restore entry point (WakeService, MainActivity, WakeActivity) has restored the session.
         val coordinator = koin.get<PurchaseCoordinator>()

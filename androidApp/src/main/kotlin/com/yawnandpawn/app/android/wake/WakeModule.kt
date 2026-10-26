@@ -23,11 +23,13 @@ import com.yawnandpawn.app.core.crash.CrashReporter
 import com.yawnandpawn.app.core.session.SessionEngine
 import com.yawnandpawn.app.core.sound.SoundPreview
 import com.yawnandpawn.app.core.stats.CelebrationStreaks
+import com.yawnandpawn.app.core.summary.WeeklySummaryScheduler
 import com.yawnandpawn.app.core.time.Clock
 import com.yawnandpawn.app.core.time.TimeSnapshot
 import kotlinx.coroutines.launch
 import org.koin.android.ext.koin.androidContext
 import org.koin.core.module.Module
+import org.koin.core.scope.Scope
 import org.koin.dsl.module
 
 /**
@@ -104,15 +106,26 @@ fun wakeModule(): Module =
             )
         }
         // The first unlock after a boot (Story 2.4): UserUnlocked, billing and crash reporting.
-        single {
-            val koin = this
-            // Story 4.10: every unlock signal replays the grant ledger (looked up then: the ledger is in appModule).
-            UnlockSignals(get(), get(), get(), get(), get(), get(), replayLedger = {
-                koin.get<ApplicationScope>().launch { koin.get<ReplayGrantLedger>()() }
-            })
-        }
+        single { unlockSignals(this) }
         includes(confirmSheetModule(), celebrationModule())
     }
+
+/**
+ * The unlock signals (Story 2.4). Every signal replays the grant ledger (Story 4.10; looked up then: the ledger is in
+ * appModule) and starts the weekly summary scheduler (Story 6.8; looked up then: it is in workModule), both launched on
+ * the app scope.
+ */
+private fun unlockSignals(koin: Scope): UnlockSignals =
+    UnlockSignals(
+        koin.get(),
+        koin.get(),
+        koin.get(),
+        koin.get(),
+        koin.get(),
+        koin.get(),
+        replayLedger = { koin.get<ApplicationScope>().launch { koin.get<ReplayGrantLedger>()() } },
+        startWeeklySummary = { koin.get<ApplicationScope>().launch { koin.get<WeeklySummaryScheduler>().start() } },
+    )
 
 /** Story 6.4, included by [wakeModule]: the zero-snooze celebration's history snapshot ([CelebrationStreaks]). */
 private fun celebrationModule(): Module =

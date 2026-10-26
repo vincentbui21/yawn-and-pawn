@@ -3,14 +3,17 @@ package com.yawnandpawn.app.ui
 import android.app.AlarmManager
 import android.app.Application
 import android.os.Looper
+import androidx.compose.ui.semantics.SemanticsActions
 import androidx.compose.ui.test.hasClickAction
 import androidx.compose.ui.test.hasContentDescription
+import androidx.compose.ui.test.hasScrollAction
 import androidx.compose.ui.test.hasText
 import androidx.compose.ui.test.junit4.v2.createEmptyComposeRule
 import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performScrollTo
+import androidx.compose.ui.test.performSemanticsAction
 import androidx.lifecycle.Lifecycle
 import androidx.test.core.app.ActivityScenario
 import androidx.test.core.app.ApplicationProvider
@@ -110,6 +113,9 @@ class ReliabilityRouteTest {
         ActivityScenario.launch(MainActivity::class.java).use {
             composeRule.onNodeWithContentDescription("Settings").performClick()
             waitForText(banner)
+            // Story 6.8: with the "Weekly summary" row this last row is just inside the screen, under the floating nav
+            // capsule; a user scrolls on, and the list's bottom padding (the capsule's clearance) lifts it clear. A real tap.
+            composeRule.onNode(hasScrollAction()).performSemanticsAction(SemanticsActions.ScrollBy) { scrollBy -> scrollBy(0f, 10_000f) }
             composeRule.onNode(hasText("Reliability checklist") and hasClickAction()).performScrollTo().performClick()
 
             waitForRow("Notifications", "OK")

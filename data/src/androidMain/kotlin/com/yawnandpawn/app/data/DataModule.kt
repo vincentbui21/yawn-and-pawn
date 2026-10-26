@@ -28,6 +28,7 @@ import com.yawnandpawn.app.core.stats.CheckRegistrations
 import com.yawnandpawn.app.core.stats.FallbackHistory
 import com.yawnandpawn.app.core.stats.ReRegisterDismissals
 import com.yawnandpawn.app.core.stats.StoredCheckRegistrations
+import com.yawnandpawn.app.core.summary.WeeklySummaryStore
 import com.yawnandpawn.app.core.telemetry.ConsentStore
 import com.yawnandpawn.app.data.alarm.RoomAlarmRepository
 import com.yawnandpawn.app.data.alarm.RoomCheckConfigRepository
@@ -56,6 +57,7 @@ import com.yawnandpawn.app.data.settings.DataStorePriceCacheStore
 import com.yawnandpawn.app.data.settings.DataStoreReRegisterDismissals
 import com.yawnandpawn.app.data.settings.DataStoreReliabilityRecords
 import com.yawnandpawn.app.data.settings.DataStoreTestAlarmStore
+import com.yawnandpawn.app.data.settings.DataStoreWeeklySummaryStore
 import com.yawnandpawn.app.data.settings.InstallIdDataStore
 import com.yawnandpawn.app.data.settings.PriceCacheDataStore
 import com.yawnandpawn.app.data.settings.ReliabilityDataStore
@@ -114,6 +116,8 @@ val dataModule =
         // The onboarding progress and the disclosure consent (Story 5.10), in the same backed-up DataStore, so "Delete all
         // data" (which clears it) sends the user back through onboarding.
         single<OnboardingRepository> { get<SettingsDataStore>().onboarding(get()) }
+        // The weekly summary switch and the last handled week (Story 6.8), in the same backed-up DataStore.
+        single<WeeklySummaryStore> { DataStoreWeeklySummaryStore(get<SettingsDataStore>().store, get()) }
         // The reliability checklist's records (Story 5.3): the rows seen OK, the locked test pass and the maker
         // confirmation, in their own device-protected DataStore, never backed up (review fix 14); released like the others.
         single { ReliabilityDataStore(get<Context>()) } withOptions { onClose { it?.close() } }

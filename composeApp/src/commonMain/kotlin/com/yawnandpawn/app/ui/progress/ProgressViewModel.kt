@@ -108,13 +108,14 @@ class ProgressViewModel(
      */
     private fun page(forward: Boolean) {
         val shown = state.value
-        val calendar = shown.calendar ?: return
-        val today = shown.today ?: return
-        if (forward && !calendar.hasNext || !forward && !calendar.hasPrevious) return
-        val month = calendar.firstDay.yearMonth
-        val target = if (forward) month.plusMonth() else month.minusMonth()
-        shownMonth.value = target.takeIf { it != today.yearMonth }
-        selection.update { if (it?.inCalendar == true) null else it }
+        val calendar = shown.calendar
+        val allowed = if (forward) calendar?.hasNext else calendar?.hasPrevious
+        if (calendar != null && allowed == true) {
+            val month = calendar.firstDay.yearMonth
+            val target = if (forward) month.plusMonth() else month.minusMonth()
+            shownMonth.value = target.takeIf { it != shown.today?.yearMonth }
+            selection.update { if (it?.inCalendar == true) null else it }
+        }
     }
 
     private companion object {

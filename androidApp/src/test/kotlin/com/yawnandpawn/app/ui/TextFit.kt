@@ -28,21 +28,29 @@ internal fun ComposeTestRule.cutOffTexts(): List<String> =
         }
 
 private fun isCutOff(result: TextLayoutResult): Boolean {
-    if (result.didOverflowHeight) return true
-    if (result.lineCount == 0) return result.layoutInput.text.isNotEmpty()
-    val paragraph = result.multiParagraph.width
-    val anyLineCut =
-        (0 until result.lineCount).any { line ->
-            val left = result.getLineLeft(line)
-            val right = result.getLineRight(line)
-            result.isLineEllipsized(line) ||
-                left < -ROUNDING ||
-                right > paragraph + ROUNDING ||
-                right - left > result.size.width + ROUNDING
+    val text = result.layoutInput.text.trimEnd()
+    return result.didOverflowHeight ||
+        if (result.lineCount == 0) {
+            text.isNotEmpty()
+        } else {
+            (0 until result.lineCount).any { isLineCut(result, it) } || lastShownEnd(result) < text.length
         }
-    val lastShown = result.getLineEnd(result.lineCount - 1, visibleEnd = true)
-    return anyLineCut || lastShown < result.layoutInput.text.trimEnd().length
 }
+
+/** [line] is ellipsized, reaches past the paragraph, or its glyphs are wider than the text. */
+private fun isLineCut(
+    result: TextLayoutResult,
+    line: Int,
+): Boolean {
+    val left = result.getLineLeft(line)
+    val right = result.getLineRight(line)
+    return result.isLineEllipsized(line) ||
+        left < -ROUNDING ||
+        right > result.multiParagraph.width + ROUNDING ||
+        right - left > result.size.width + ROUNDING
+}
+
+private fun lastShownEnd(result: TextLayoutResult): Int = result.getLineEnd(result.lineCount - 1, visibleEnd = true)
 
 /** Line edges and the text's width are rounded to whole pixels; one pixel either way is still on the text. */
 private const val ROUNDING = 1f

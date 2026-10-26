@@ -250,7 +250,9 @@ private fun DayCell(
         when {
             // No outcome and no "no alarm" yet: an alarm may still ring that day.
             future -> stringResource(Res.string.progress_day_date, dayName(date.dayOfWeek, DayNameStyle.Full), date.day)
+
             date == today -> "${dayDescription(date, day)}, ${stringResource(Res.string.progress_day_today)}"
+
             else -> dayDescription(date, day)
         }
     // The day the chip refers to has a selection ring in `text` (not the accent of today's pill).

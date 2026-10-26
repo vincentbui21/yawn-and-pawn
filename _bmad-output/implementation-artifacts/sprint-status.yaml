@@ -115,7 +115,7 @@ development_status:
 
   epic-5: backlog
   5-1-wake-and-snooze-defaults-and-theme-override-in-settings: review
-  5-2-bright-wake-screen: review  # Epic 5 auto-run, fast mode; owner chose option C (ringing only) 2026-10-22
+  5-2-bright-wake-screen: done  # Epic 5 auto-run, fast mode; owner chose option C (ringing only) 2026-10-22
   5-3-full-reliability-probe-do-not-disturb-battery-and-the-locked: review  # Epic 5 auto-run, fast mode (lane A)
   5-4-reliability-checklist-screen-and-revoked-setting-warnings: review
   5-5-manufacturer-background-guidance: review  # Epic 5 auto-run, fast mode

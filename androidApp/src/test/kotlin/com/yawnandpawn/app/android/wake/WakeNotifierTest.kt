@@ -25,6 +25,7 @@ import kotlin.test.assertNotNull
 import kotlin.test.assertNull
 import kotlin.test.assertSame
 import kotlin.test.assertTrue
+import kotlin.time.Duration.Companion.minutes
 
 /** Story 1.14: the ringing notification, its channel, its strings and its colour. */
 @RunWith(RobolectricTestRunner::class)
@@ -97,7 +98,7 @@ class WakeNotifierTest {
         assertNull(notifier.shownFor)
     }
 
-    private fun posted(): Notification = assertNotNull(shadowOf(manager).getNotification(WakeNotifier.NOTIFICATION_ID))
+    private fun posted(): Notification = assertNotNull(shadowOf(manager).getNotification(notifier.currentId))
 
     private fun importanceOf(notification: Notification): Int =
         assertNotNull(manager.getNotificationChannel(notification.channelId)).importance
@@ -230,11 +231,161 @@ class WakeNotifierTest {
         notifier.wakeScreenShown(visible = true, ringing = false)
         assertEquals(0, shadowOf(manager).size(), "nothing to change before a notification is posted")
 
-        val foreground = notifier.build(sevenAm)
-        notifier.shownByService(sevenAm)
-        assertEquals(WakeNotifier.QUIET_CHANNEL_ID, foreground.channelId)
+        val service = FakeForegroundHost()
+        notifier.postForeground(service, sevenAm, ringing = true)
+        assertEquals(
+            WakeNotifier.QUIET_CHANNEL_ID,
+            service.posts
+                .single()
+                .second.channelId,
+        )
         notifier.show(sevenAm)
-        assertEquals(0, shadowOf(manager).size(), "the service's post is the quiet one already: nothing posted again")
+        assertEquals(1, service.posts.size, "the service's post is the quiet one already: nothing posted again")
+        assertEquals(0, shadowOf(manager).size())
+    }
+
+    /** The wake service's `startForeground`, recorded: each (id, notification) in order; refused while [refuse]. */
+    private class FakeForegroundHost : WakeNotifier.ForegroundHost {
+        val posts = mutableListOf<Pair<Int, Notification>>()
+        var refuse = false
+
+        override fun startForeground(
+            id: Int,
+            notification: Notification,
+        ) {
+            if (refuse) throw IllegalStateException("startForeground not allowed")
+            posts += id to notification
+        }
+    }
+
+    @Test
+    fun `the full ringing one over the service's quiet start is a new post, and the foreground moves to it (Story 5_13)`() {
+        val service = FakeForegroundHost()
+        notifier.postForeground(service, alarmAt = null, ringing = false)
+        val (quietId, quiet) = service.posts.single()
+        assertEquals(WakeNotifier.NOTIFICATION_ID, quietId)
+        assertEquals(WakeNotifier.QUIET_CHANNEL_ID, quiet.channelId)
+
+        notifier.show(sevenAm)
+
+        val (id, moved) = service.posts.last()
+        assertEquals(WakeNotifier.OTHER_NOTIFICATION_ID, id, "under the other id: a new post, not an update of the quiet one")
+        assertNotNull(moved.fullScreenIntent)
+        assertEquals(WakeNotifier.OTHER_NOTIFICATION_ID, notifier.currentId)
+        assertNotNull(posted().fullScreenIntent)
+        assertNull(shadowOf(manager).getNotification(WakeNotifier.NOTIFICATION_ID), "the quiet one is removed")
+    }
+
+    @Test
+    fun `a test start whose first post rings shows the full-screen intent at once, and its WakeUiShown posts nothing more`() {
+        val service = FakeForegroundHost()
+
+        notifier.postForeground(service, sevenAm, ringing = true)
+        notifier.show(sevenAm)
+
+        val (id, first) = service.posts.single()
+        assertEquals(WakeNotifier.NOTIFICATION_ID, id)
+        assertEquals(WakeNotifier.CHANNEL_ID, first.channelId)
+        assertNotNull(first.fullScreenIntent)
+        assertEquals(0, shadowOf(manager).size(), "nothing posted again")
+    }
+
+    @Test
+    fun `a content change of the full one stays an update under the same id`() {
+        notifier.show(sevenAm)
+        val id = notifier.currentId
+
+        notifier.show(sevenAm + 1.minutes)
+
+        assertEquals(id, notifier.currentId, "same id: only the time changed, the full-screen intent was already there")
+        assertEquals(1, shadowOf(manager).size())
+    }
+
+    @Test
+    fun `a slot start in a snooze keeps the quiet on-screen one, so nothing opens the wake screen before the re-ring`() {
+        val service = FakeForegroundHost()
+        notifier.postForeground(service, sevenAm, ringing = true)
+        notifier.wakeScreenShown(visible = true, ringing = false)
+        notifier.wakeScreenShown(visible = false, ringing = false)
+
+        notifier.postForeground(service, sevenAm, ringing = false)
+
+        assertEquals(
+            WakeNotifier.QUIET_CHANNEL_ID,
+            service.posts
+                .last()
+                .second.channelId,
+        )
+        assertNull(
+            service.posts
+                .last()
+                .second.fullScreenIntent,
+        )
+        // The snooze end's ring step: a new post with the full-screen intent.
+        val before = notifier.currentId
+        notifier.show(sevenAm)
+        assertTrue(notifier.currentId != before, "a new post")
+        assertNotNull(posted().fullScreenIntent)
+    }
+
+    @Test
+    fun `a move the platform refuses keeps the new full post, and every next new post goes under a free third id`() {
+        val service = FakeForegroundHost()
+        notifier.postForeground(service, sevenAm, ringing = true)
+        notifier.wakeScreenShown(visible = true, ringing = true)
+        notifier.wakeScreenShown(visible = false, ringing = true)
+        service.refuse = true
+
+        notifier.show(sevenAm)
+
+        assertEquals(WakeNotifier.OTHER_NOTIFICATION_ID, notifier.currentId, "a new post all the same")
+        assertNotNull(posted().fullScreenIntent)
+        assertNotNull(shadowOf(manager).getNotification(WakeNotifier.NOTIFICATION_ID), "the service's own stays: the platform keeps it")
+
+        // Left and back again: neither the service's id nor the current one; never a cancel and post again (PR #95 review).
+        notifier.wakeScreenShown(visible = true, ringing = true)
+        notifier.wakeScreenShown(visible = false, ringing = true)
+        assertNull(posted().fullScreenIntent)
+        notifier.show(sevenAm)
+        assertEquals(WakeNotifier.THIRD_NOTIFICATION_ID, notifier.currentId)
+        assertNotNull(posted().fullScreenIntent)
+        assertNull(shadowOf(manager).getNotification(WakeNotifier.OTHER_NOTIFICATION_ID), "the old new post is removed")
+
+        // Once the platform lets the foreground move, everything is back to one notification.
+        service.refuse = false
+        notifier.wakeScreenShown(visible = true, ringing = true)
+        notifier.wakeScreenShown(visible = false, ringing = true)
+        notifier.show(sevenAm)
+        assertEquals(WakeNotifier.OTHER_NOTIFICATION_ID, notifier.currentId)
+        assertEquals(WakeNotifier.OTHER_NOTIFICATION_ID, service.posts.last().first, "the foreground moved")
+        assertEquals(1, shadowOf(manager).size())
+        assertNotNull(posted().fullScreenIntent)
+    }
+
+    @Test
+    fun `without the wake service a new post goes under another id, and the old one is removed`() {
+        notifier.show(sevenAm)
+        notifier.wakeScreenShown(visible = true, ringing = true)
+        notifier.wakeScreenShown(visible = false, ringing = true)
+
+        notifier.show(sevenAm)
+
+        assertEquals(WakeNotifier.OTHER_NOTIFICATION_ID, notifier.currentId)
+        assertNotNull(posted().fullScreenIntent)
+        assertEquals(1, shadowOf(manager).size())
+    }
+
+    @Test
+    fun `cancel removes the notification under every id`() {
+        val service = FakeForegroundHost()
+        notifier.postForeground(service, alarmAt = null, ringing = false)
+        notifier.show(sevenAm)
+        assertEquals(WakeNotifier.OTHER_NOTIFICATION_ID, notifier.currentId)
+
+        notifier.cancel()
+
+        assertEquals(0, shadowOf(manager).size())
+        assertNull(notifier.shownFor)
     }
 
     @Test

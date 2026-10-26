@@ -184,7 +184,7 @@ class MathCheckScreenTest {
                 app.app
                     .getSystemService(NotificationManager::class.java)
                     .activeNotifications
-                    .firstOrNull { it.id == WakeNotifier.NOTIFICATION_ID }
+                    .firstOrNull { it.id in WakeNotifier.NOTIFICATION_IDS }
                     ?.notification,
             )
         val opened = shadowOf(notification.contentIntent).savedIntent

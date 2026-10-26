@@ -33,8 +33,14 @@ class WakeServiceStarter(
         retrySince: Instant? = null,
     ): Boolean = start(WakeService.slotIntent(context, alarm, retrySince).withToken(token))
 
-    /** The test alarm fired (Story 1.18): the service rings the pending test. */
-    fun startTest(token: Long): Boolean = start(WakeService.intent(context, WakeService.ACTION_TEST).withToken(token))
+    /**
+     * The test alarm fired (Story 1.18): the service rings the pending test. [scheduledAt], the time the test was armed
+     * for, lets the service's first post be the full ringing notification (Story 5.13 device check).
+     */
+    fun startTest(
+        token: Long,
+        scheduledAt: Instant? = null,
+    ): Boolean = start(WakeService.testIntent(context, scheduledAt).withToken(token))
 
     private fun Intent.withToken(token: Long): Intent = putExtra(WakeService.EXTRA_START_TOKEN, token)
 

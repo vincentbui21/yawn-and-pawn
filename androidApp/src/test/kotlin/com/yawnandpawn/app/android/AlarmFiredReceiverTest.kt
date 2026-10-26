@@ -150,6 +150,18 @@ class AlarmFiredReceiverTest {
     }
 
     @Test
+    fun `a test fire carries its ring time to the wake service's test start (Story 5_13 device check)`() {
+        val ringsAt = berlin("2027-03-07T20:01")
+        scheduler.scheduleTest(ringsAt.toEpochMilliseconds())
+
+        fire(RequestCodes.TEST_ALARM)
+
+        val started = startedServices.single()
+        assertEquals(WakeService.ACTION_TEST, started.action)
+        assertEquals(ringsAt.toEpochMilliseconds(), started.getLongExtra(AlarmFiredReceiver.EXTRA_SCHEDULED_AT, 0))
+    }
+
+    @Test
     fun `a session slot armed by an older version still starts the wake service as a slot fire`() {
         app.armLegacySessionSlot(berlin("2027-03-07T20:01").toEpochMilliseconds())
 

@@ -105,7 +105,7 @@ class WakeAlarmFiredHandlerTest {
                 retrySince: Instant?,
             ) = Unit
 
-            override suspend fun onTestAlarmFired() = Unit
+            override suspend fun onTestAlarmFired(scheduledAt: Instant?) = Unit
         },
         starter,
         logger,
@@ -310,7 +310,7 @@ class WakeAlarmFiredHandlerTest {
             retrySince: Instant?,
         ) = Unit
 
-        override suspend fun onTestAlarmFired() = Unit
+        override suspend fun onTestAlarmFired(scheduledAt: Instant?) = Unit
     }
 
     @Test

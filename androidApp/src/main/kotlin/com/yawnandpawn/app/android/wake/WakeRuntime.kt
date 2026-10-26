@@ -1,6 +1,5 @@
 package com.yawnandpawn.app.android.wake
 
-import android.app.Notification
 import com.yawnandpawn.app.android.call.CallState
 import com.yawnandpawn.app.core.alarm.Alarm
 import com.yawnandpawn.app.core.alarm.AlarmFired
@@ -147,6 +146,15 @@ class WakeRuntime(
     val isServiceRunning: Boolean
         get() = serviceRunning
 
+    private val serviceStoppedState = MutableStateFlow(false)
+
+    /**
+     * [WakeService] ran in this process and has stopped (`onDestroy`), until it starts again. A wake screen its
+     * full-screen intent opened before any ring closes then: nothing is coming (a test with nothing pending, an ignored
+     * fire; Story 5.13 device check). False before the first start.
+     */
+    val serviceStopped: StateFlow<Boolean> = serviceStoppedState.asStateFlow()
+
     override suspend fun run(effect: SessionEffect) = guarded(effect) { synchronized(effectLock) { runEffect(effect) } }
 
     override suspend fun apply(effect: EntryEffect) = guarded(effect) { synchronized(effectLock) { applyEffect(effect) } }
@@ -219,28 +227,30 @@ class WakeRuntime(
     fun onServiceStarted() {
         serviceRunning = true
         startRequested = false
+        serviceStoppedState.value = false
     }
 
     /** [WakeService] stopped (`onDestroy`). */
     fun onServiceStopped() {
         serviceRunning = false
         startRequested = false
+        serviceStoppedState.value = true
     }
 
     /**
-     * The foreground notification [WakeService] posts with `startForeground`: the ringing one for the alarm scheduled at
-     * [alarmAt] (without its full-screen intent unless [fullScreen]), or the quiet one when there is no alarm to show
-     * yet. [foregroundPosted] once a full-screen one is posted.
+     * [WakeService] enters (or stays in) the foreground through [host] with the notification for the alarm scheduled at
+     * [alarmAt]: the full ringing one while the alarm [ringing], else without its full-screen intent; the quiet one when
+     * there is no alarm to show yet ([WakeNotifier.postForeground]). The full one over a version without the full-screen
+     * intent is a new post (Story 5.13 device check). Throws what `startForeground` throws when the platform refuses.
      */
-    fun foregroundNotification(
+    fun enterForeground(
+        host: WakeNotifier.ForegroundHost,
         alarmAt: Instant?,
-        fullScreen: Boolean = true,
-    ): Notification = alarmAt?.let { notifier.build(it, fullScreen) } ?: notifier.buildQuiet()
+        ringing: Boolean,
+    ) = notifier.postForeground(host, alarmAt, ringing)
 
-    /** `startForeground` posted [foregroundNotification] for [alarmAt] (null for the quiet one). */
-    fun foregroundPosted(alarmAt: Instant?) {
-        alarmAt?.let { notifier.shownByService(it) }
-    }
+    /** [WakeService] ([host]) left the foreground with its notification removed, or stopped. */
+    fun foregroundStopped(host: WakeNotifier.ForegroundHost) = notifier.foregroundStopped(host)
 
     /**
      * The user swiped the ringing notification away (its delete intent, Story 2.5): the next `WakeUiShown` posts it
@@ -319,13 +329,17 @@ class WakeRuntime(
      */
     fun onEmergencyCall(inCall: Boolean) =
         synchronized(effectLock) {
-            if (emergency.value == null) return@synchronized
+            val ring = emergency.value ?: return@synchronized
             if (inCall) {
                 player.pause()
                 vibrator.stop()
+                // No full-screen intent during the call (Story 5.13 review).
+                notifier.show(ring.alarmAt, ringing = false)
             } else if (player.isPaused) {
                 player.resume()
                 vibrator.start()
+                // The call is over: the full one again, as a new post, so the wake screen comes back.
+                notifier.show(ring.alarmAt)
             }
         }
 
@@ -382,7 +396,8 @@ class WakeRuntime(
         val inCall = calls.inCall()
         player.playDefault(volumePercent, paused = inCall)
         if (!inCall) vibrator.start()
-        notifier.show(alarmAt)
+        // During a call it never posts the full-screen one either: the wake screen would jump over the call.
+        notifier.show(alarmAt, ringing = !inCall)
         ensureService()
         keepEmergencySlot()
         onRing()
@@ -533,9 +548,31 @@ class WakeRuntime(
         newRing = false
     }
 
+    /**
+     * The ringing notification for the step. A ring paused by a phone call (Story 2.7) never posts the full-screen one,
+     * so the wake screen does not jump over the call (Story 5.13 review); the step that ends the pause posts it.
+     */
     private fun showWakeUi() {
         ensureService()
-        alarmAt()?.let { notifier.show(it) }
+        alarmAt()?.let { notifier.show(it, ringing = fullScreenAllowed()) }
+    }
+
+    /** The session rings, paused by a phone call (Story 2.7). */
+    private fun pausedByCall(): Boolean = (session() as? SessionState.Ring)?.session?.paused == true
+
+    /**
+     * The ringing notification may carry its full-screen intent now: not during a phone call (Story 5.13 review), so
+     * the wake screen never jumps over the call. The emergency ring has no session pause: it follows the call itself.
+     */
+    fun fullScreenAllowed(): Boolean = if (emergency.value != null) !calls.inCall() else !pausedByCall()
+
+    /**
+     * A session that does not ring now (a snooze, Story 5.13 review) never keeps the full-screen version posted (for
+     * example one posted before a restore found the snooze): it becomes the way-back one, so the snooze end's ring step
+     * is a new full post. Nothing when no ringing notification is posted, or none with the full-screen intent.
+     */
+    fun keepQuietUnlessRinging() {
+        notifier.shownFor?.let { notifier.show(it, ringing = false) }
     }
 
     /** The first effect of a new session, so its state is committed (timed for the ring start). */

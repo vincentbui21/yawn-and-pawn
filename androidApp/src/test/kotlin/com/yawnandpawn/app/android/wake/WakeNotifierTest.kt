@@ -329,7 +329,7 @@ class WakeNotifierTest {
     }
 
     @Test
-    fun `a move the platform refuses keeps the new full post, and the next new post never reuses the service's id`() {
+    fun `a move the platform refuses keeps the new full post, and every next new post goes under a free third id`() {
         val service = FakeForegroundHost()
         notifier.postForeground(service, sevenAm, ringing = true)
         notifier.wakeScreenShown(visible = true, ringing = true)
@@ -342,30 +342,41 @@ class WakeNotifierTest {
         assertNotNull(posted().fullScreenIntent)
         assertNotNull(shadowOf(manager).getNotification(WakeNotifier.NOTIFICATION_ID), "the service's own stays: the platform keeps it")
 
-        // Left and back again: the full one is a new post under the id that is not the service's.
+        // Left and back again: neither the service's id nor the current one; never a cancel and post again (PR #95 review).
         notifier.wakeScreenShown(visible = true, ringing = true)
         notifier.wakeScreenShown(visible = false, ringing = true)
         assertNull(posted().fullScreenIntent)
         notifier.show(sevenAm)
+        assertEquals(WakeNotifier.THIRD_NOTIFICATION_ID, notifier.currentId)
+        assertNotNull(posted().fullScreenIntent)
+        assertNull(shadowOf(manager).getNotification(WakeNotifier.OTHER_NOTIFICATION_ID), "the old new post is removed")
+
+        // Once the platform lets the foreground move, everything is back to one notification.
+        service.refuse = false
+        notifier.wakeScreenShown(visible = true, ringing = true)
+        notifier.wakeScreenShown(visible = false, ringing = true)
+        notifier.show(sevenAm)
         assertEquals(WakeNotifier.OTHER_NOTIFICATION_ID, notifier.currentId)
+        assertEquals(WakeNotifier.OTHER_NOTIFICATION_ID, service.posts.last().first, "the foreground moved")
+        assertEquals(1, shadowOf(manager).size())
         assertNotNull(posted().fullScreenIntent)
     }
 
     @Test
-    fun `without the wake service a new post replaces the old one under the same id (removed first)`() {
+    fun `without the wake service a new post goes under another id, and the old one is removed`() {
         notifier.show(sevenAm)
         notifier.wakeScreenShown(visible = true, ringing = true)
         notifier.wakeScreenShown(visible = false, ringing = true)
 
         notifier.show(sevenAm)
 
-        assertEquals(WakeNotifier.NOTIFICATION_ID, notifier.currentId)
+        assertEquals(WakeNotifier.OTHER_NOTIFICATION_ID, notifier.currentId)
         assertNotNull(posted().fullScreenIntent)
         assertEquals(1, shadowOf(manager).size())
     }
 
     @Test
-    fun `cancel removes the notification under both ids`() {
+    fun `cancel removes the notification under every id`() {
         val service = FakeForegroundHost()
         notifier.postForeground(service, alarmAt = null, ringing = false)
         notifier.show(sevenAm)

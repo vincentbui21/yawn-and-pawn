@@ -282,14 +282,16 @@ class WakeService :
         val shown = runtime.shownAlarmAt()
         val state = engine.state.value
         val emergency = runtime.emergency.value != null
-        // A ring paused by a phone call never posts the full-screen one (Story 5.13 review): the wake screen would jump
-        // over the call.
-        val ringing = forwardsToWakeScreen(state, runtime.emergency.value) && (emergency || !runtime.pausedByCall())
-        val idle = state == SessionState.Idle && !emergency
+        // During a phone call nothing posts the full-screen one (Story 5.13 review): the wake screen would jump over it.
+        val allowed = runtime.fullScreenAllowed()
+        val ringing = forwardsToWakeScreen(state, runtime.emergency.value) && allowed
+        // Known Idle only once the stored session is loaded (PR #95 review): in a new process the engine is Idle before
+        // its restore, and a test fired into a stored snooze must not open the wake screen over it.
+        val idle = state == SessionState.Idle && !emergency && engine.restored.value
         return when {
             // In a snooze (or a call) the fire's own ring step posts the full one, once the fire is merged and rings.
             fired != null -> {
-                enterForeground(fired.scheduledAt, ringing = state !is SessionState.Snoozed && !runtime.pausedByCall())
+                enterForeground(fired.scheduledAt, ringing = state !is SessionState.Snoozed && allowed)
             }
 
             intent?.action == ACTION_TEST && shown == null && idle -> {
@@ -633,6 +635,8 @@ class WakeService :
             state.isOngoing() -> startTicking()
             emergency == null -> shutdown()
         }
+        // A snooze (restored or kept) never keeps a stale full-screen version posted (PR #95 review).
+        if (state is SessionState.Snoozed && emergency == null) runtime.keepQuietUnlessRinging()
         watchUnlock(state)
     }
 

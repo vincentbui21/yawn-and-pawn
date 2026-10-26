@@ -31,11 +31,10 @@ import kotlin.time.Instant
  * **New post for the full-screen intent (Story 5.13 device check):** Android's SystemUI acts on a full-screen intent
  * only when the notification is first posted; an update that adds one is ignored, so the alarm rang with the screen off
  * and no wake screen. Whenever the full version replaces a version without the full-screen intent (the quiet start, the
- * on-screen one, the way-back heads-up), it is posted under the other of two ids ([NOTIFICATION_ID],
- * [OTHER_NOTIFICATION_ID]), the wake service's foreground notification moves to it ([ForegroundHost]) and the old id is
- * removed. Without the wake service in the foreground the old one is removed and posted again under the same id, which
- * is a first post too. A change of content only, or a version without the full-screen intent, stays a plain update. A
- * ring paused by a phone call never posts the full version, so the wake screen does not jump over the call.
+ * on-screen one, the way-back heads-up), it is posted under an id with nothing on it (one of three, [NOTIFICATION_IDS]),
+ * the wake service's foreground notification moves to it ([ForegroundHost]) and the old one is removed. A change of
+ * content only, or a version without the full-screen intent, stays a plain update. During a phone call nothing posts
+ * the full version, so the wake screen does not jump over the call.
  */
 @Suppress("TooManyFunctions") // One function per post decision; splitting would split the one owner of what is posted.
 class WakeNotifier(
@@ -56,7 +55,7 @@ class WakeNotifier(
     var shownFor: Instant? = null
         private set
 
-    /** The id the notification is posted under now: [NOTIFICATION_ID] or [OTHER_NOTIFICATION_ID]. */
+    /** The id the notification is posted under now: one of [NOTIFICATION_IDS]. */
     @Volatile
     var currentId: Int = NOTIFICATION_ID
         private set
@@ -321,15 +320,17 @@ class WakeNotifier(
     }
 
     /**
-     * Posts [notification] so that SystemUI sees a first post, and returns its id. The wake service's foreground
-     * notification cannot be removed by the app (the platform ignores that cancel), so when it is the one under
-     * [currentId] the new post goes under the other id; any other notification under [currentId] is removed first and
-     * posted again, which is a new post too.
+     * Posts [notification] so that SystemUI sees a first post, and returns its id: always under an id with nothing on it,
+     * neither [currentId] nor the service's foreground id (one of three, [NOTIFICATION_IDS]). Never a cancel and a post
+     * again under the same id: SystemUI can keep a heads-up entry a moment after a cancel, and the post would count as an
+     * update (PR #95 review). A post under [currentId] that is not the service's own is removed after the new one shows;
+     * the service's own goes when its foreground moves ([moveForeground]).
      */
     private fun postNew(notification: Notification): Int {
-        val id = if (host != null && foregroundId == currentId) otherId(currentId) else currentId
-        if (id == currentId) manager.cancel(id)
+        val service = foregroundId.takeIf { host != null }
+        val id = NOTIFICATION_IDS.first { it != currentId && it != service }
         manager.notify(id, notification)
+        if (currentId != service) manager.cancel(currentId)
         return id
     }
 
@@ -375,8 +376,7 @@ class WakeNotifier(
      */
     fun cancel() {
         synchronized(lock) {
-            manager.cancel(NOTIFICATION_ID)
-            manager.cancel(OTHER_NOTIFICATION_ID)
+            NOTIFICATION_IDS.forEach(manager::cancel)
             shownFor = null
             val foreground = foregroundId.takeIf { host != null }
             if (foreground == null) {
@@ -458,18 +458,22 @@ class WakeNotifier(
         /** The quiet channel of [buildQuiet] and [buildOnScreen]. */
         const val QUIET_CHANNEL_ID = "alarm_in_progress"
 
-        /** The first id of the notification; a new post for the full-screen intent alternates with [OTHER_NOTIFICATION_ID]. */
+        /** The first id of the notification; a new post for the full-screen intent goes under another of [NOTIFICATION_IDS]. */
         const val NOTIFICATION_ID = 1_014
 
-        /** The other id (Story 5.13 device check; 1015 is the weekly summary's): a new post goes under the id not in use. */
+        /** The second id (Story 5.13 device check; 1015 is the weekly summary's). */
         const val OTHER_NOTIFICATION_ID = 1_016
 
-        /** Both ids the ringing notification is posted under. */
-        val NOTIFICATION_IDS: Set<Int> = setOf(NOTIFICATION_ID, OTHER_NOTIFICATION_ID)
+        /**
+         * The third id (PR #95 review): with the service's foreground id and the current one both taken (after a refused
+         * move), a new post still goes under an id with nothing on it.
+         */
+        const val THIRD_NOTIFICATION_ID = 1_017
+
+        /** The ids the ringing notification is posted under, in the order a new post picks a free one. */
+        val NOTIFICATION_IDS: List<Int> = listOf(NOTIFICATION_ID, OTHER_NOTIFICATION_ID, THIRD_NOTIFICATION_ID)
         private const val MOVE_FOREGROUND = "move the wake service notification"
         private const val REQUEST_WAKE_SCREEN = 0
         private const val REQUEST_REPOST = 1
-
-        private fun otherId(id: Int): Int = if (id == NOTIFICATION_ID) OTHER_NOTIFICATION_ID else NOTIFICATION_ID
     }
 }

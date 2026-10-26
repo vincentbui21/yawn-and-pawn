@@ -91,6 +91,17 @@ One combined reviewer (wake-path focus, read-only) on the first version. Every p
 | 7 | LOW | Pre-existing: a full post shown as a heads-up on an in-use phone, then the phone locked without opening it, is never re-posted. | **Deferred** (not caused by this change; same as before). |
 | 8 | LOW | Style: `build()` used by tests only; public `NOTIFICATION_IDS`; 4-term condition; theoretical `show()` between `endSession()` and `stopForeground()`. | **Partly fixed** (the 4-term condition is now `shown == null && idle`); the rest accepted. |
 
+**Independent review of PR #95** (no HIGH, 1 MEDIUM, 5 LOW), fixed on the rebased branch:
+
+| # | Sev | Finding | Decision |
+|---|-----|---------|----------|
+| R1 | MEDIUM | The test branch of `enterForegroundFor` read `engine.state` before `restore()`: in a new process a test fired into a stored snooze posted the full version, the wake screen opened over the snooze, and the snooze end was then a plain update (the original bug). | **Fixed.** The test's full-first path needs `engine.restored`; otherwise the quiet one. A snooze (restored or kept) never keeps a stale full version: `WakeService.evaluate` → `WakeRuntime.keepQuietUnlessRinging()` (`show(alarmAt, ringing = false)`, Full → Away). Test: `FullScreenNewPostTest` "a test fired into a stored snooze in a new process opens nothing, and the snooze end is a new full post". |
+| R2 | LOW | The emergency ring was exempt from the call guard: its notification could go full during a call and jump over it. | **Fixed.** `WakeRuntime.fullScreenAllowed()`: the emergency ring follows `calls.inCall()` (start, ring steps, slot starts); `onEmergencyCall(true)` posts without the full-screen intent, `onEmergencyCall(false)` (the call ended) posts the full one as a new post. Test: `LeaveAndReturnTest` "an emergency ring during a call never posts the full-screen intent over it, and the call's end does". |
+| R3 | LOW | A refused move shows two notifications. | **Accepted**; the coordinator checks logcat on the A96. |
+| R4 | LOW | The cancel-then-notify fallback under the same id can count as an update while SystemUI keeps a heads-up entry after the cancel. | **Fixed.** Third id 1017 (`THIRD_NOTIFICATION_ID`): a new post always goes under an id with nothing on it (neither the current one nor the service's foreground one); the old non-foreground post is removed after the new one shows. Test: `WakeNotifierTest` refused-move test extended (1016 → 1017 → back to one notification once the move is allowed) and "without the wake service a new post goes under another id". |
+| R5 | LOW | `WakeScreenEnd` closed a waiting screen only when `restored`: with a failing store load, a test with nothing pending left a stuck wake screen (Back does nothing). | **Fixed.** The close branch is `!seen && serviceStopped`. Test: `FullScreenNewPostTest` "a test fire with nothing pending and a store that cannot load still closes the waiting wake screen". |
+| R6 | — | Tests for the above. | Added (above). The optional "every not-ringing → ringing move has a new full post" sweep was not added. |
+
 ## Verification
 
 One Gradle invocation at a time, `--no-daemon --max-workers=2`, JDK 17. All passing:

@@ -10,13 +10,20 @@ import com.yawnandpawn.app.awaitChildren
 import com.yawnandpawn.app.buildActivity
 import com.yawnandpawn.app.core.alarm.AlarmFired
 import com.yawnandpawn.app.core.alarm.AlarmRepository
+import com.yawnandpawn.app.core.error.DomainError
 import com.yawnandpawn.app.core.error.Outcome
 import com.yawnandpawn.app.core.session.ActiveSessionStore
+import com.yawnandpawn.app.core.session.SessionEvent
 import com.yawnandpawn.app.core.session.SessionState
+import com.yawnandpawn.app.core.time.Deadline
+import com.yawnandpawn.app.testing.FakeActiveSessionStore
+import com.yawnandpawn.app.testing.FakeClock
+import com.yawnandpawn.app.testing.FakeMonotonicClock
 import com.yawnandpawn.app.testing.FakeTestAlarmStore
 import com.yawnandpawn.app.testing.aSession
 import com.yawnandpawn.app.testing.aSessionConfig
 import com.yawnandpawn.app.testing.anAlarm
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
 import org.junit.Rule
 import org.junit.Test
@@ -29,6 +36,7 @@ import kotlin.test.assertEquals
 import kotlin.test.assertFalse
 import kotlin.test.assertNotNull
 import kotlin.test.assertTrue
+import kotlin.time.Duration.Companion.minutes
 import kotlin.time.Instant
 
 /**
@@ -55,6 +63,15 @@ class FullScreenNewPostTest {
     /** The posts under the wake notification's ids. */
     private fun wakePosts(posts: NotificationPosts) = posts.posts().filter { it.posted.id in WakeNotifier.NOTIFICATION_IDS }
 
+    /**
+     * The app started with no session stored, as when "Test alarm" was tapped: its start restored the engine
+     * (`YawnAndPawnApp`), so the service knows nothing rings.
+     */
+    private fun appStarted(app: WakeApp) {
+        val restore = app.koin.get<ApplicationScope>().launch { app.engine.restore() }
+        app.awaitUntil("the engine is restored") { restore.isCompleted && app.engine.restored.value }
+    }
+
     /** The test alarm's system alarm fires with its ring time, as `AndroidAlarmScheduler.scheduleTest` armed it. */
     private fun fireTestAlarm(app: WakeApp) =
         app.app
@@ -69,7 +86,7 @@ class FullScreenNewPostTest {
 
     @Test
     fun `a test alarm's first post is the full ringing notification with its full-screen intent`() {
-        val app = WakeApp(testAlarms = testAlarms)
+        val app = WakeApp(testAlarms = testAlarms).also(::appStarted)
         testAlarms.pending = aSessionConfig(label = "test", scheduledAt = ringsAt, testMode = true)
         val posts = NotificationPosts(app.app)
 
@@ -133,7 +150,7 @@ class FullScreenNewPostTest {
 
     @Test
     fun `a test fire with nothing pending leaves no wake screen waiting once the service stops`() {
-        val app = WakeApp(testAlarms = testAlarms)
+        val app = WakeApp(testAlarms = testAlarms).also(::appStarted)
         val posts = NotificationPosts(app.app)
 
         fireTestAlarm(app)
@@ -151,6 +168,53 @@ class FullScreenNewPostTest {
         composeRule.waitUntil(timeoutMillis = WAIT_MILLIS) { screen.isFinishing }
         assertEquals(SessionState.Idle, app.engine.state.value)
         assertEquals(0, posts.shownIds(manager(app)).size, "no alarm notification is left")
+    }
+
+    @Test
+    fun `a test fire with nothing pending and a store that cannot load still closes the waiting wake screen (PR 95 review)`() {
+        val broken = FakeActiveSessionStore().apply { loadFailure = DomainError.StorageFailure("disk unreadable") }
+        val app = WakeApp(store = broken, testAlarms = testAlarms)
+
+        val service = app.startService(WakeService.testIntent(app.app, ringsAt))
+        val screen = buildActivity(WakeActivity::class.java).setup().get()
+        app.awaitUntil("the service stops") { shadowOf(service.get()).isStoppedBySelf }
+        assertFalse(app.engine.restored.value, "the stored session never loaded")
+        service.destroy()
+
+        composeRule.waitUntil(timeoutMillis = WAIT_MILLIS) { screen.isFinishing }
+    }
+
+    @Test
+    fun `a test fired into a stored snooze in a new process opens nothing, and the snooze end is a new full post (PR 95 review)`() {
+        val clock = FakeClock(Instant.parse("2027-03-08T06:05:00Z"))
+        val monotonic = FakeMonotonicClock(elapsedMillis = 5_000_000)
+        val app = WakeApp(clock = clock, monotonic = monotonic, testAlarms = testAlarms)
+        testAlarms.pending = aSessionConfig(label = "test", scheduledAt = ringsAt, testMode = true)
+        val snoozeEnd = Deadline.after(app.now(), 9.minutes)
+        val snoozed = SessionState.Snoozed(aSession().copy(interactionDeadline = null, snoozeEnd = snoozeEnd, snoozesGranted = 1))
+        assertEquals(Outcome.Success(Unit), runBlocking { app.koin.get<ActiveSessionStore>().commit(snoozed) })
+        val posts = NotificationPosts(app.app)
+
+        // A new process: the engine has not loaded the stored snooze when the test fire's start arrives.
+        assertFalse(app.engine.restored.value)
+        val service = app.startService(WakeService.testIntent(app.app, ringsAt))
+        app.awaitUntil("the snooze is restored and the test taken") {
+            app.engine.state.value is SessionState.Snoozed && testAlarms.pending == null
+        }
+        assertFalse(assertNotNull(wakePosts(posts).firstOrNull()).posted.fullScreen, "the first post opens nothing")
+        assertTrue(wakePosts(posts).none { it.posted.fullScreen }, "nothing opens the wake screen over the snooze")
+
+        val beforeEnd = posts.mark()
+        clock.advanceBy(9.minutes)
+        monotonic.advanceBy(9.minutes)
+        val tick = app.koin.get<ApplicationScope>().launch { app.engine.tick() }
+        app.awaitUntil("the tick") { tick.isCompleted }
+        app.dispatch(SessionEvent.SlotFired)
+        app.awaitRinging()
+
+        posts.assertNewFullScreenPost(beforeEnd, "the snooze-end re-ring")
+        posts.assertAtMostOneShown(manager(app))
+        service.destroy()
     }
 
     private companion object {

@@ -76,7 +76,8 @@ internal class WakeScreenEnd(
      *
      * Before any ring the screen waits for one only until the wake service stops ([serviceStopped]): the service posts
      * the full-screen intent first and the session after, but once it stopped with nothing ringing (a test fire with
-     * nothing pending, an ignored fire) no ring is coming, so the screen closes (Story 5.13 device check).
+     * nothing pending, an ignored fire) no ring is coming, so the screen closes (Story 5.13 device check), also when the
+     * stored session could not be loaded (PR #95 review: Back does nothing, so a waiting screen would be stuck).
      */
     fun follow(
         active: Boolean,
@@ -92,7 +93,7 @@ internal class WakeScreenEnd(
                 successSessionId = null
             }
 
-            !seen && restored && serviceStopped -> {
+            !seen && serviceStopped -> {
                 activity.finish()
             }
 

@@ -217,6 +217,35 @@ class LeaveAndReturnTest {
     }
 
     @Test
+    fun `an emergency ring during a call never posts the full-screen intent over it, and the call's end does (PR 95 review)`() {
+        var onCall = false
+        val app = WakeApp(calls = object : CallState { override fun inCall() = onCall })
+        app.runtime.startEmergency(fired.scheduledAt, volumePercent = 80, cause = "test")
+        val screen = buildActivity(WakeActivity::class.java).setup()
+        // A call comes in: the emergency ring follows it itself, and the call screen comes over the wake screen.
+        onCall = true
+        app.runtime.onEmergencyCall(inCall = true)
+        screen.pause().stop()
+        val posts = NotificationPosts(app.app)
+        val inCall = posts.mark()
+
+        // Its backup slot fires during the call.
+        val service = app.startService(WakeService.intent(app.app, WakeService.ACTION_SLOT))
+        app.awaitUntil("the slot start is handled") { true }
+
+        assertTrue(posts.posts(inCall).none { it.posted.fullScreen }, "nothing opens the wake screen over the call")
+        assertNull(assertNotNull(posted(app)).fullScreenIntent)
+
+        val afterCall = posts.mark()
+        onCall = false
+        app.runtime.onEmergencyCall(inCall = false)
+        posts.assertNewFullScreenPost(afterCall, "the emergency ring after the call")
+        posts.assertAtMostOneShown(manager(app))
+        app.runtime.stopEmergency()
+        service.destroy()
+    }
+
+    @Test
     fun `left during an emergency ring, the way back heads up and its backup slot posts the full-screen intent (PR 41 review)`() {
         val app = WakeApp()
         app.runtime.startEmergency(fired.scheduledAt, volumePercent = 80, cause = "test")

@@ -319,3 +319,10 @@ Pass 1 (one combined reviewer focused on the wake path; fast mode). No HIGH find
 | 7 | low | The branch base was behind `origin/main` (#82) | patched | Rebased onto `origin/main` before the final runs (after 6.2, #83: 05e4a9e6). |
 
 Verification run (after the rebase on 6.2): `:core:jvmTest :core:koverVerify` pass; `:data:testAndroidHostTest` (SessionHistory, ScanTest, DataModule, DeleteAllData) pass; `:composeApp:testAndroidHostTest` (wake, CopyRules, UiModule, PurchaseHistory, Progress, Home) pass; `:androidApp:verifyRoborazziDebug` with Success, Wake, Celebration, check screens, OneTimeAlarmFlow, SnoozedScreen, CheckFontScale (`a11y_*`), CheckSemanticsSuite, PriceRefreshAtSessionStart, Preview, TalkBackF5, SessionWiring, TestAlarmFlow, Home and Progress: 1,344 tests, 0 failures. `spotlessCheck` and `detekt` pass (`SessionHistoryDao` now carries `@Suppress("TooManyFunctions")`: 6.2's `observeAll` plus this story's `allRows` make 12 queries). An earlier run had one `QrCheckScreenTest` failure ("no camera scan is running") under load; it passed on the re-run with no change to the QR path.
+
+Pass 2 (independent review of PR #85): no HIGH findings; one MEDIUM and three LOWs, all test gaps, and all patched with tests. No code bug was found. `WakeActivitySuccessTest` (18 tests) and `SuccessScreenTest` (14 tests) pass; `spotlessCheck` and `detekt` pass.
+- MEDIUM: the first Success showing on the real app path celebrates. `WakeActivitySuccessTest` "the first Success showing of a grown streak celebrates…": the frames differ over 2 s, "12" shows and exactly one CONFIRM haptic plays.
+- LOW: the celebration ends within 3 s. In `SuccessScreenTest` nothing changes between 2 s and 3 s.
+- LOW: Pending on the wake screen. With the read held, Success shows "Up on time." with no number, and still none after the read lands.
+- LOW: a recreated Success keeps `FLAG_KEEP_SCREEN_ON` cleared, and an emergency ring over Success sets it again.
+- Item 5 (retry after a failed read) was not taken: one read per session stays.

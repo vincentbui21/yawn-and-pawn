@@ -246,6 +246,13 @@ class SuccessScreenTest {
             val changed = (0 until start.height).sumOf { y -> (0 until start.width).count { x -> start[x, y] != later[x, y] } }
             assertTrue(changed > 0, "the count-up and the confetti move")
             assertEquals(listOf(HapticFeedbackType.Confirm), haptics.played)
+
+            // All of it ends within 3 s: nothing moves between 2 s and 3 s.
+            composeRule.mainClock.advanceTimeBy(ONE_SECOND)
+            val atThree = composeRule.onRoot().captureToImage().toPixelMap()
+            val still = (0 until later.height).sumOf { y -> (0 until later.width).count { x -> later[x, y] != atThree[x, y] } }
+            assertEquals(0, still, "pixels changed between 2 s and 3 s")
+            assertEquals(listOf(HapticFeedbackType.Confirm), haptics.played, "still one haptic")
         }
 
     @Test

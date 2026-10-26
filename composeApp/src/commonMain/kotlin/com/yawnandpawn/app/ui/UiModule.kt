@@ -1,5 +1,6 @@
 package com.yawnandpawn.app.ui
 
+import com.yawnandpawn.app.ui.daydetail.DayDetailViewModel
 import com.yawnandpawn.app.ui.editor.AlarmEditorArgs
 import com.yawnandpawn.app.ui.editor.AlarmEditorViewModel
 import com.yawnandpawn.app.ui.editor.EditorFeeSources
@@ -20,6 +21,7 @@ import com.yawnandpawn.app.ui.reliability.ReliabilityViewModel
 import com.yawnandpawn.app.ui.settings.DefaultSettingSetters
 import com.yawnandpawn.app.ui.settings.SettingsViewModel
 import com.yawnandpawn.app.ui.you.YouViewModel
+import kotlinx.datetime.LocalDate
 import org.koin.core.module.dsl.viewModel
 import org.koin.core.qualifier.named
 import org.koin.core.scope.Scope
@@ -41,6 +43,8 @@ val uiModule =
         viewModel { PurchaseHistoryViewModel(get(), get(), get(), get(), get()) }
         // Story 6.5: Progress over core's ObserveProgress (Story 6.2, bound by :androidApp).
         viewModel { ProgressViewModel(observeProgress = get(), logger = get()) }
+        // Story 6.7: Day detail of the date the route passes; CommitmentEventRepository is bound by :data (Story 4.4).
+        viewModel { params -> DayDetailViewModel(params.get<LocalDate>(), get(), get(), get(), get(), get(), get()) }
         viewModel {
             SettingsViewModel(
                 globalSettings = get(),

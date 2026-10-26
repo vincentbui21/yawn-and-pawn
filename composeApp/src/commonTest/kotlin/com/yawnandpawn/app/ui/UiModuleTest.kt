@@ -6,6 +6,7 @@ import com.yawnandpawn.app.core.billing.MoneyFormatter
 import com.yawnandpawn.app.core.billing.PriceCatalog
 import com.yawnandpawn.app.core.billing.PurchaseRecordRepository
 import com.yawnandpawn.app.core.checks.AccessibilityState
+import com.yawnandpawn.app.core.config.CommitmentEventRepository
 import com.yawnandpawn.app.core.config.GlobalSettingsRepository
 import com.yawnandpawn.app.core.config.PendingChangeRepository
 import com.yawnandpawn.app.core.history.MissedNotes
@@ -40,6 +41,7 @@ import com.yawnandpawn.app.testing.FakeAlarmRepository
 import com.yawnandpawn.app.testing.FakeAlarmScheduler
 import com.yawnandpawn.app.testing.FakeCheckConfigRepository
 import com.yawnandpawn.app.testing.FakeClock
+import com.yawnandpawn.app.testing.FakeCommitmentEventRepository
 import com.yawnandpawn.app.testing.FakeGlobalSettingsRepository
 import com.yawnandpawn.app.testing.FakeLogger
 import com.yawnandpawn.app.testing.FakeManufacturerSettings
@@ -65,6 +67,7 @@ import com.yawnandpawn.app.testing.aDeleteAllData
 import com.yawnandpawn.app.testing.anAlarm
 import com.yawnandpawn.app.testing.anAppVersion
 import com.yawnandpawn.app.testing.anEvaluateReliability
+import com.yawnandpawn.app.ui.daydetail.DayDetailViewModel
 import com.yawnandpawn.app.ui.editor.AlarmEditorArgs
 import com.yawnandpawn.app.ui.editor.AlarmEditorViewModel
 import com.yawnandpawn.app.ui.home.HomeHero
@@ -92,6 +95,7 @@ import kotlinx.coroutines.test.runTest
 import kotlinx.coroutines.test.setMain
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeout
+import kotlinx.datetime.LocalDate
 import kotlinx.datetime.LocalTime
 import org.koin.core.parameter.parametersOf
 import org.koin.dsl.koinApplication
@@ -138,6 +142,8 @@ class UiModuleTest {
             single<CameraPermission> { TestCameraPermission() }
             single<PurchaseRecordRepository> { FakePurchaseRecordRepository() }
             single<SessionHistoryRepository> { FakeSessionHistoryRepository() }
+            // Story 6.7: Day detail reads the logged alarm changes.
+            single<CommitmentEventRepository> { FakeCommitmentEventRepository() }
             // Story 4.6: the editor's pending values and fee ladder.
             single<PendingChangeRepository> { FakePendingChangeRepository() }
             single<GlobalSettingsRepository> { FakeGlobalSettingsRepository() }
@@ -165,7 +171,7 @@ class UiModuleTest {
 
     @OptIn(ExperimentalCoroutinesApi::class)
     @Test
-    fun `the ui module builds the Home, Purchase history, Progress and editor ViewModels from the core ports`() {
+    fun `the ui module builds the Home, Purchase history, Progress, Day detail and editor ViewModels from the core ports`() {
         Dispatchers.setMain(UnconfinedTestDispatcher())
         try {
             val source = anAlarm(id = "source", time = LocalTime(6, 45), label = "Gym")
@@ -177,6 +183,9 @@ class UiModuleTest {
             val purchases = koin.get<PurchaseHistoryViewModel>()
             assertTrue(purchases.state.value.loading)
             val progress = koin.get<ProgressViewModel>()
+            val dayDetail = koin.get<DayDetailViewModel> { parametersOf(LocalDate(2027, 3, 2)) }
+            assertTrue(dayDetail.state.value.loading)
+            assertEquals(LocalDate(2027, 3, 2), dayDetail.state.value.date)
             assertTrue(progress.state.value.loading)
             val newEditor = koin.get<AlarmEditorViewModel> { parametersOf(AlarmEditorArgs(alarmId = null)) }
             assertTrue(newEditor.state.value.isNew)

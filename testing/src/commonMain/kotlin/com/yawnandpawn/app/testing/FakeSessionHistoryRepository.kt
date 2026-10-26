@@ -83,8 +83,13 @@ class FakeSessionHistoryRepository :
         return Outcome.Success(Unit)
     }
 
-    override suspend fun merges(sessionId: String): Outcome<List<SessionMergeRow>, DomainError> =
-        Outcome.Success(mergeRows.values.filter { it.sessionId == sessionId })
+    /** Set to make [merges] fail (Day detail, Story 6.7). */
+    var mergesFailure: DomainError? = null
+
+    override suspend fun merges(sessionId: String): Outcome<List<SessionMergeRow>, DomainError> {
+        mergesFailure?.let { return Outcome.Failure(it) }
+        return Outcome.Success(mergeRows.values.filter { it.sessionId == sessionId })
+    }
 
     /** Set to make [all] fail (Story 6.4). */
     var failAll: DomainError? = null

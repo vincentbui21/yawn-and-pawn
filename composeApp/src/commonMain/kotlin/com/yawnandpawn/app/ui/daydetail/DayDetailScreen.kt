@@ -19,6 +19,8 @@ import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.semantics.clearAndSetSemantics
+import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
 import com.yawnandpawn.app.core.billing.Money
@@ -26,14 +28,17 @@ import com.yawnandpawn.app.core.billing.totalsByCurrency
 import com.yawnandpawn.app.ui.checks.CheckType
 import com.yawnandpawn.app.ui.checks.displayName
 import com.yawnandpawn.app.ui.checks.icon
+import com.yawnandpawn.app.ui.components.DelayedSkeleton
 import com.yawnandpawn.app.ui.components.NoteInline
 import com.yawnandpawn.app.ui.components.RowIcon
+import com.yawnandpawn.app.ui.components.SkeletonBlock
 import com.yawnandpawn.app.ui.components.SubScreen
 import com.yawnandpawn.app.ui.components.glass
 import com.yawnandpawn.app.ui.format.DateStyle
 import com.yawnandpawn.app.ui.format.formatClockTime
 import com.yawnandpawn.app.ui.format.formatDate
 import com.yawnandpawn.app.ui.format.formatMoney
+import com.yawnandpawn.app.ui.progress.LoadFailed
 import com.yawnandpawn.app.ui.progress.Outcome
 import com.yawnandpawn.app.ui.progress.OutcomeMarker
 import com.yawnandpawn.app.ui.progress.Tile
@@ -62,10 +67,15 @@ import com.yawnandpawn.app.ui.resources.day_tile_no_charge
 import com.yawnandpawn.app.ui.resources.day_tile_paid
 import com.yawnandpawn.app.ui.resources.day_tile_rings
 import com.yawnandpawn.app.ui.resources.editor_back
+import com.yawnandpawn.app.ui.resources.outcome_snoozed
+import com.yawnandpawn.app.ui.resources.progress_loading_a11y
+import com.yawnandpawn.app.ui.resources.progress_loading_slow
 import com.yawnandpawn.app.ui.resources.progress_minutes
 import com.yawnandpawn.app.ui.resources.progress_tile_snoozes
 import com.yawnandpawn.app.ui.resources.progress_tile_to_get_up
 import com.yawnandpawn.app.ui.resources.progress_under_minute
+import com.yawnandpawn.app.ui.resources.purchase_price_refunded_a11y
+import com.yawnandpawn.app.ui.resources.purchase_stranded
 import com.yawnandpawn.app.ui.resources.symbol_alarm
 import com.yawnandpawn.app.ui.resources.symbol_alt_route
 import com.yawnandpawn.app.ui.resources.symbol_lock
@@ -82,7 +92,9 @@ import org.jetbrains.compose.resources.stringResource
 /**
  * One moment of a morning, in the order it happened (Day detail timeline, owner decision 2026-10-01). A `null` [time]
  * (or snooze length, or try count) is a fact the session history does not hold: the row shows no time and the text
- * leaves it out (Epic 6 owner question Q1, default: the timeline shows only stored facts).
+ * leaves it out (Epic 6 owner question Q1, owner decision 2026-10-26: the timeline shows only stored facts). Production
+ * (Story 6.7) builds [Rang], [Snoozed], [Merged], [FallbackUsed] (no time), [CheckSolved] and [Stopped]; the others stay
+ * for the approved round 2 mock-ups.
  */
 sealed interface MorningEvent {
     val time: LocalTime?
@@ -94,11 +106,14 @@ sealed interface MorningEvent {
         val beforeFirstUnlock: Boolean = false,
     ) : MorningEvent
 
-    /** A paid snooze at its purchase [time]; [minutes] `null` when the snooze length is not stored. */
+    /**
+     * A paid snooze at its purchase [time]; [minutes] `null` when the snooze length is not stored. A `null` [time] is a
+     * payment bought before this ring (a reused one), and a `null` [price] one whose amount is only an estimate.
+     */
     data class Snoozed(
-        override val time: LocalTime,
+        override val time: LocalTime?,
         val minutes: Int?,
-        val price: Money,
+        val price: Money?,
     ) : MorningEvent
 
     data class ImUp(
@@ -126,12 +141,18 @@ sealed interface MorningEvent {
         val alarmTime: LocalTime,
     ) : MorningEvent
 
-    /** [check] solved at [time]; [tries] `null` when the try count is not stored ("Math solved"). */
+    /**
+     * The session's [checks] solved at [time] (a plan with two steps names both, "Math, Word Unscramble solved"); [tries]
+     * `null` when the try count is not stored ("Math solved"). History never stores tries; the round 2 mock-ups do.
+     */
     data class CheckSolved(
         override val time: LocalTime,
-        val check: CheckType,
-        val tries: Int? = 1,
-    ) : MorningEvent
+        val checks: List<CheckType>,
+        val tries: Int? = null,
+    ) : MorningEvent {
+        /** One [check] solved in [tries] (the round 2 mock-ups' shape). */
+        constructor(time: LocalTime, check: CheckType, tries: Int? = 1) : this(time, listOf(check), tries)
+    }
 
     /** No interaction for 30 minutes: the session stopped and was logged as missed. */
     data class Stopped(
@@ -140,33 +161,36 @@ sealed interface MorningEvent {
 }
 
 /**
- * One session of the day: its alarm, outcome and the [events] of the morning in order. Rings, snoozes, the amount paid
- * and the time to get up are all read from the events, so the hero, the tiles and the timeline always agree. Test and
- * skipped sessions have no events and show their outcome label only.
+ * One session of the day: its alarm, outcome and the [events] of the morning in order. Production (Story 6.7) fills
+ * [snoozes], [rings], [paid] and [minutesToUp] from the stored facts (history and purchase records); the preview mock-ups
+ * leave them to their defaults, which read them from the events, so their hero, tiles and timeline always agree. Test
+ * and skipped sessions have no events and show their outcome label only.
+ *
+ * @property rings 1 + snoozes once the alarm rang (Epic 6 owner question Q1); 0 for a test or skipped session.
+ * @property paid what this session charged, one total per currency (AD-8); empty when nothing was paid.
+ * @property minutesToUp whole minutes from the first ring to the end; `null` when unknown or it never ended that way.
+ * @property stranded one entry per payment of this session refunded automatically by Google (never in [paid]); `null`
+ *   when its amount is only an estimate.
  */
 data class SessionDetail(
     val alarmTime: LocalTime,
     val alarmLabel: String?,
     val outcome: Outcome,
     val events: List<MorningEvent> = emptyList(),
+    val snoozes: Int = events.count { it is MorningEvent.Snoozed },
+    val rings: Int = if (events.any { it is MorningEvent.Rang }) 1 + snoozes else 0,
+    val paid: List<Money> = totalsByCurrency(events.filterIsInstance<MorningEvent.Snoozed>().mapNotNull { it.price }),
+    val minutesToUp: Int? = minutesToUpOf(events),
+    val stranded: List<Money?> = emptyList(),
 ) {
-    /** Every snooze ends in one more ring, so rings are 1 + snoozes once the alarm rang (Epic 6 owner question Q1). */
-    val rings: Int get() = if (events.any { it is MorningEvent.Rang }) 1 + snoozes else 0
-
-    val snoozes: Int get() = events.count { it is MorningEvent.Snoozed }
-
-    /** What this session charged, one total per currency (AD-8); empty when nothing was paid. */
-    val paid: List<Money> get() = totalsByCurrency(events.filterIsInstance<MorningEvent.Snoozed>().map { it.price })
-
-    /** Minutes from the first ring to the solved check (the session's end); `null` when it never ended that way. */
-    val minutesToUp: Int?
-        get() {
-            val first = events.firstOrNull { it is MorningEvent.Rang }?.time ?: return null
-            val done = events.lastOrNull { it is MorningEvent.CheckSolved }?.time ?: return null
-            return done.toSecondOfDay() / SECONDS_PER_MINUTE - first.toSecondOfDay() / SECONDS_PER_MINUTE
-        }
-
     val counted: Boolean get() = outcome != Outcome.Test && outcome != Outcome.Skipped
+}
+
+/** The mock-ups' minutes from the first ring to the solved check; `null` when it never ended that way. */
+private fun minutesToUpOf(events: List<MorningEvent>): Int? {
+    val first = events.firstOrNull { it is MorningEvent.Rang }?.time ?: return null
+    val done = events.lastOrNull { it is MorningEvent.CheckSolved }?.time ?: return null
+    return done.toSecondOfDay() / SECONDS_PER_MINUTE - first.toSecondOfDay() / SECONDS_PER_MINUTE
 }
 
 /** A logged change to an alarm that day ("Your 7:30 alarm was turned off. Logged."). */
@@ -175,20 +199,34 @@ data class AlarmChange(
     val deleted: Boolean,
 )
 
-/** What Day detail renders: one section per session of [date], then the logged alarm changes. */
+/**
+ * What Day detail renders: one section per session of [date], then the logged alarm changes. [loading] until the first
+ * read; [loadFailed] when history or the purchase records could not be read; [nothingLogged] when the read found no
+ * session and no change for [date] (the route closes the screen).
+ */
 data class DayDetailUiState(
     val date: LocalDate,
-    val sessions: List<SessionDetail>,
+    val sessions: List<SessionDetail> = emptyList(),
     val changes: List<AlarmChange> = emptyList(),
+    val loading: Boolean = false,
+    val loadFailed: Boolean = false,
+    val nothingLogged: Boolean = false,
 )
+
+/** What the user can do on Day detail besides Back. */
+sealed interface DayDetailIntent {
+    /** "Try again" after a load failure: read again. */
+    data object RetryLoad : DayDetailIntent
+}
 
 /**
  * Day detail, stateless (owner redesign 2026-10-01, feedback item 25; opened from the Progress ring or calendar chip):
  * a one-line title ("Wed, Sep 23" in the phone's locale), then per session a hero card (outcome glyph and label,
  * "{time} · {label}", and the key figure large: "22 min to get up", or "Stopped after 30 minutes"), three small tiles
- * (rings · snoozes · paid, money in `text`, "No charge" when nothing was paid) and a vertical timeline of the morning
- * that draws in top to bottom (instant with reduced motion). Test and skipped days show the hero only. Logged alarm
- * changes follow as notes.
+ * (rings · snoozes · paid, money in `text`, "No charge" when nothing was paid), the payments Google refunded, and a
+ * vertical timeline of the morning that draws in top to bottom (instant with reduced motion). Test and skipped days show
+ * the hero only. Logged alarm changes follow as notes. Loading shows the shared delayed skeleton; a failed read shows
+ * "Couldn't load your progress." with "Try again".
  */
 @Composable
 fun DayDetailScreen(
@@ -196,6 +234,7 @@ fun DayDetailScreen(
     is24Hour: Boolean,
     onBack: () -> Unit,
     modifier: Modifier = Modifier,
+    onIntent: (DayDetailIntent) -> Unit = {},
 ) {
     val entered = rememberEntered()
     SubScreen(
@@ -204,19 +243,36 @@ fun DayDetailScreen(
         onBack = onBack,
         modifier = modifier,
     ) {
-        state.sessions.forEach { session ->
-            HeroCard(session = session, is24Hour = is24Hour)
-            if (session.counted) {
-                SessionTiles(session)
-                if (session.events.isNotEmpty()) Timeline(events = session.events, is24Hour = is24Hour, entered = entered)
+        when {
+            state.loadFailed -> {
+                LoadFailed(onRetry = { onIntent(DayDetailIntent.RetryLoad) })
             }
-        }
-        state.changes.forEach { change ->
-            val time = formatClockTime(change.time, is24Hour)
-            NoteInline(
-                text = stringResource(if (change.deleted) Res.string.day_detail_deleted else Res.string.day_detail_turned_off, time),
-                modifier = Modifier.padding(horizontal = PpsTheme.spacing.cardPadding),
-            )
+
+            state.loading -> {
+                DayDetailSkeleton()
+            }
+
+            else -> {
+                state.sessions.forEach { session ->
+                    HeroCard(session = session, is24Hour = is24Hour)
+                    if (session.counted) {
+                        SessionTiles(session)
+                        if (session.stranded.isNotEmpty()) StrandedPayments(session.stranded)
+                        if (session.events.isNotEmpty()) Timeline(events = session.events, is24Hour = is24Hour, entered = entered)
+                    }
+                }
+                state.changes.forEach { change ->
+                    val time = formatClockTime(change.time, is24Hour)
+                    NoteInline(
+                        text =
+                            stringResource(
+                                if (change.deleted) Res.string.day_detail_deleted else Res.string.day_detail_turned_off,
+                                time,
+                            ),
+                        modifier = Modifier.padding(horizontal = PpsTheme.spacing.cardPadding),
+                    )
+                }
+            }
         }
     }
 }
@@ -301,6 +357,79 @@ private fun SessionTiles(session: SessionDetail) {
 }
 
 /**
+ * The session's payments Google refunded on its own (Story 6.7), in a `glass` card like the timeline: one line each,
+ * "Not used, refunded automatically by Google" in `body` / `text` with the amount on the right in `text-secondary` (as
+ * in Purchase history; no amount when it is only an estimate). One TalkBack stop each, "{note}, {price} refunded".
+ */
+@Composable
+private fun StrandedPayments(stranded: List<Money?>) {
+    val colors = PpsTheme.colors
+    val spacing = PpsTheme.spacing
+    val note = stringResource(Res.string.purchase_stranded)
+    Column(modifier = Modifier.fillMaxWidth().glass(PpsTheme.shapes.md).padding(vertical = spacing.space2)) {
+        stranded.forEach { price ->
+            val amount = price?.let { formatMoney(it) }
+            val refunded = amount?.let { stringResource(Res.string.purchase_price_refunded_a11y, it) }
+            Row(
+                modifier =
+                    Modifier
+                        .fillMaxWidth()
+                        .heightIn(min = ROW_HEIGHT)
+                        .clearAndSetSemantics { contentDescription = listOfNotNull(note, refunded).joinToString(", ") }
+                        .padding(horizontal = spacing.cardPadding, vertical = spacing.space2),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(spacing.space3),
+            ) {
+                Text(text = note, modifier = Modifier.weight(1f), style = PpsTheme.typography.body, color = colors.text)
+                if (amount != null) {
+                    Text(
+                        text = amount,
+                        style = PpsTheme.typography.body.copy(fontFeatureSettings = TABULAR_FIGURES),
+                        color = colors.textSecondary,
+                        maxLines = 1,
+                        softWrap = false,
+                    )
+                }
+            }
+        }
+    }
+}
+
+/**
+ * Day detail loading (EXPERIENCE.md App screens, Loading): after 300 ms the static skeleton of a hero card and a tile
+ * row, read once as "Loading your progress"; after 3 s "Still loading your progress.".
+ */
+@Composable
+private fun DayDetailSkeleton() {
+    val spacing = PpsTheme.spacing
+    DelayedSkeleton(
+        loadingLabel = stringResource(Res.string.progress_loading_a11y),
+        slowText = stringResource(Res.string.progress_loading_slow),
+        modifier = Modifier.fillMaxWidth(),
+    ) {
+        Column(
+            modifier = Modifier.fillMaxWidth().glass(PpsTheme.shapes.md).padding(spacing.cardPadding),
+            verticalArrangement = Arrangement.spacedBy(spacing.space2),
+        ) {
+            SkeletonBlock(Modifier.fillMaxWidth(HERO_TITLE_FRACTION).height(spacing.space6))
+            SkeletonBlock(Modifier.fillMaxWidth(HERO_LINE_FRACTION).height(spacing.space3))
+            SkeletonBlock(Modifier.fillMaxWidth(HERO_FIGURE_FRACTION).height(spacing.space8))
+        }
+        Row(horizontalArrangement = Arrangement.spacedBy(spacing.space2)) {
+            repeat(TILES) {
+                Column(
+                    modifier = Modifier.weight(1f).glass(PpsTheme.shapes.md).padding(spacing.space3),
+                    verticalArrangement = Arrangement.spacedBy(spacing.space2),
+                ) {
+                    SkeletonBlock(Modifier.fillMaxWidth(TILE_VALUE_FRACTION).height(spacing.space6))
+                    SkeletonBlock(Modifier.fillMaxWidth(TILE_LABEL_FRACTION).height(spacing.space3))
+                }
+            }
+        }
+    }
+}
+
+/**
  * The morning as a vertical timeline: time on the left (`caption`, tabular), a glyph on a hairline line, the event in
  * `body`. The line and the events draw in one after another from the top on entry.
  */
@@ -324,6 +453,7 @@ private fun Timeline(
     }
 }
 
+/** One timeline stop, read "{time}, {text}"; a row with no stored time leaves its time column empty and reads its text. */
 @Composable
 private fun TimelineRow(
     event: MorningEvent,
@@ -336,6 +466,7 @@ private fun TimelineRow(
     val spacing = PpsTheme.spacing
     val line = colors.outlineSubtle
     val stroke = with(LocalDensity.current) { LINE_WIDTH.toPx() }
+    val time = event.time
     Row(
         modifier =
             Modifier
@@ -347,8 +478,12 @@ private fun TimelineRow(
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Text(
-            text = event.time?.let { formatClockTime(it, is24Hour) }.orEmpty(),
-            modifier = Modifier.width(TIME_WIDTH).graphicsLayer { alpha = progress },
+            text = time?.let { formatClockTime(it, is24Hour) }.orEmpty(),
+            modifier =
+                Modifier
+                    .width(TIME_WIDTH)
+                    .graphicsLayer { alpha = progress }
+                    .then(if (time == null) Modifier.clearAndSetSemantics { } else Modifier),
             style = PpsTheme.typography.caption.copy(fontFeatureSettings = TABULAR_FIGURES),
             color = colors.textSecondary,
         )
@@ -431,7 +566,7 @@ private fun EventGlyph(event: MorningEvent) {
         }
 
         is MorningEvent.CheckSolved -> {
-            RowIcon(icon = event.check.icon, tint = tint)
+            RowIcon(icon = event.checks.firstOrNull()?.icon ?: Res.drawable.symbol_alarm, tint = tint)
         }
 
         is MorningEvent.Stopped -> {
@@ -487,29 +622,40 @@ private fun eventText(
         }
     }
 
-/** "Snoozed 9 min · $1.00", or "Snoozed · $1.00" when the snooze length is not stored. */
+/**
+ * "Snoozed 9 min · $1.00" (the mock-ups), "Snoozed · $1.00" when the snooze length is not stored, or "Snoozed" when the
+ * amount is only an estimate.
+ */
 @Composable
 private fun snoozedText(event: MorningEvent.Snoozed): String {
     val minutes = event.minutes
+    val price = event.price ?: return stringResource(Res.string.outcome_snoozed)
     return if (minutes == null) {
-        stringResource(Res.string.day_event_snoozed_paid, formatMoney(event.price))
+        stringResource(Res.string.day_event_snoozed_paid, formatMoney(price))
     } else {
-        stringResource(Res.string.day_event_snoozed, minutes, formatMoney(event.price))
+        stringResource(Res.string.day_event_snoozed, minutes, formatMoney(price))
     }
 }
 
-/** "Math solved first try" / "Math solved in 2 tries", or "Math solved" when the try count is not stored. */
+/**
+ * "Math solved first try" / "Math solved in 2 tries" (the mock-ups), or "Math solved" when the try count is not stored,
+ * every check of the session named ("Math, Word Unscramble solved").
+ */
 @Composable
 private fun solvedText(event: MorningEvent.CheckSolved): String {
     val tries = event.tries
+    val first = event.checks.first().displayName()
     return when {
-        tries == null -> stringResource(Res.string.day_event_solved, event.check.displayName())
-        tries <= 1 -> stringResource(Res.string.day_event_solved_first, event.check.displayName())
-        else -> stringResource(Res.string.day_event_solved_tries, event.check.displayName(), tries)
+        tries == null -> stringResource(Res.string.day_event_solved, event.checks.map { it.displayName() }.joinToString(CHECK_SEPARATOR))
+        tries <= 1 -> stringResource(Res.string.day_event_solved_first, first)
+        else -> stringResource(Res.string.day_event_solved_tries, first, tries)
     }
 }
 
 private const val SECONDS_PER_MINUTE = 60
+
+/** Check names in "{checks} solved" (E9). */
+private const val CHECK_SEPARATOR = ", "
 
 /** The timeline starts once the hero and tiles are in. */
 private const val EVENT_DELAY_MILLIS = 150
@@ -527,3 +673,10 @@ private val LINE_WIDTH = 1.5.dp
 
 /** Each event's text slides in from 12 px to the right. */
 private const val SLIDE_PX = 12f
+
+private const val TILES = 3
+private const val HERO_TITLE_FRACTION = 0.4f
+private const val HERO_LINE_FRACTION = 0.6f
+private const val HERO_FIGURE_FRACTION = 0.5f
+private const val TILE_VALUE_FRACTION = 0.6f
+private const val TILE_LABEL_FRACTION = 0.8f

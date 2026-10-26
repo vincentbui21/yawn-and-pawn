@@ -6,7 +6,8 @@ import com.yawnandpawn.app.ui.shell.AppTab
 // Back stack rules of the shell (Story 1.9). The stack is always [Alarms] or [Alarms, other tab], with at most the
 // editor, the reliability checklist (Story 5.4; the maker guidance over it, 5.5), or the You tab's pushed screens on
 // top: Purchase history (Story 4.16) or Payments (Story 5.8), Purchase history over Payments, and "Problem with a
-// charge?" (4.17) over either of those (their push rules are in YouNavigation.kt). Every change below keeps it that way,
+// charge?" (4.17) over either of those (their push rules are in YouNavigation.kt), or Day detail over Progress (Story
+// 6.7, ProgressNavigation.kt). Every change below keeps it that way,
 // and a late or repeated call (a double tap) changes nothing. During a session it is only [SessionInProgress] (Story
 // 2.6), and until onboarding is completed only [Onboarding] (Story 5.10): no tab is on top then, so the tab, editor and
 // push calls below change nothing.
@@ -25,6 +26,7 @@ val Route.tab: AppTab?
             Route.ProblemWithCharge -> null
             Route.Reliability -> null
             Route.ManufacturerGuidance -> null
+            is Route.DayDetail -> null
             Route.SessionInProgress -> null
             Route.Onboarding -> null
         }

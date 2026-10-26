@@ -108,11 +108,11 @@ class SessionLockTest {
                 json.decodeFromJsonElement(Route.serializer(), JsonObject(mapOf("type" to JsonPrimitive(descriptor.serialName)) + fields))
             }
 
+        /** A sample value for [descriptor]; kotlinx-datetime's `LocalDate` is an ISO string (Day detail, Story 6.7). */
         @OptIn(ExperimentalSerializationApi::class)
         fun sample(descriptor: SerialDescriptor): JsonElement =
             when {
                 descriptor.isNullable -> JsonNull
-                // kotlinx-datetime's LocalDate is an ISO string (Day detail, Story 6.7).
                 descriptor.serialName.startsWith("kotlinx.datetime.LocalDate") -> JsonPrimitive("2027-03-28")
                 descriptor.kind == PrimitiveKind.STRING -> JsonPrimitive("sample")
                 descriptor.kind == PrimitiveKind.BOOLEAN -> JsonPrimitive(false)

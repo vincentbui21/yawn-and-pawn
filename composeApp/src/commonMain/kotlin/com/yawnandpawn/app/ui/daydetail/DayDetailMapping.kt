@@ -67,22 +67,23 @@ internal fun sessionDetailOf(
     val outcome = row.outcome?.toUi() ?: return null
     val alarmTime = row.scheduledAt.localTime(zone)
     val label = alarm?.label?.trim()?.takeIf { it.isNotEmpty() }
-    if (outcome == Outcome.Test || outcome == Outcome.Skipped) {
-        // AC 4: the marker, the outcome word and the alarm time only.
-        return SessionDetail(alarmTime, null, outcome, events = emptyList(), snoozes = 0, rings = 0, paid = emptyList(), minutesToUp = null)
-    }
     val timed = outcome == Outcome.OnTime || outcome == Outcome.Snoozed
-    return SessionDetail(
-        alarmTime = alarmTime,
-        alarmLabel = label,
-        outcome = outcome,
-        events = morningEventsOf(row, session.purchases, merges, zone),
-        snoozes = row.snoozeCount,
-        rings = 1 + row.snoozeCount,
-        paid = session.paid,
-        minutesToUp = row.timeToCompleteMs?.takeIf { timed }?.let { wholeMinutes(it.milliseconds) },
-        stranded = session.stranded.map { record -> record.price.takeIf { record.priceSource.isAmountPaid } },
-    )
+    return if (outcome == Outcome.Test || outcome == Outcome.Skipped) {
+        // AC 4: the marker, the outcome word and the alarm time only.
+        SessionDetail(alarmTime, null, outcome, events = emptyList(), snoozes = 0, rings = 0, paid = emptyList(), minutesToUp = null)
+    } else {
+        SessionDetail(
+            alarmTime = alarmTime,
+            alarmLabel = label,
+            outcome = outcome,
+            events = morningEventsOf(row, session.purchases, merges, zone),
+            snoozes = row.snoozeCount,
+            rings = 1 + row.snoozeCount,
+            paid = session.paid,
+            minutesToUp = row.timeToCompleteMs?.takeIf { timed }?.let { wholeMinutes(it.milliseconds) },
+            stranded = session.stranded.map { record -> record.price.takeIf { record.priceSource.isAmountPaid } },
+        )
+    }
 }
 
 /**
@@ -106,7 +107,7 @@ internal fun morningEventsOf(
     val end = row.endedAt ?: (start + UNENDED_SPAN)
     val snoozes =
         paidRecords
-            .sortedWith(compareBy(nullsLast()) { it: PurchaseRecord -> it.snoozeNumber }.thenBy { it.purchasedAt })
+            .sortedWith(compareBy<PurchaseRecord, Int?>(nullsLast(naturalOrder<Int>())) { it.snoozeNumber }.thenBy { it.purchasedAt })
             .map { record ->
                 val inSession = record.purchasedAt in start..end
                 // A payment bought outside this session's span (reused from an earlier session) sits right after the

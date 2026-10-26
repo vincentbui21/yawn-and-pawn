@@ -561,6 +561,9 @@ above.
   shows the time only.
 - **Loading** shows only before the first read and after "Try again", not when the upstream restarts after 5 s away
   (6.5's pattern), so returning to Day detail never blanks it.
+- **Files:** the new parts (the refunded-payments card and the loading skeleton) are in `DayDetailParts.kt`, so
+  `DayDetailScreen.kt` keeps the approved parts within detekt's function limit; the timeline time is its own
+  `TimelineTime` composable.
 - **Flow test** is a new `DayDetailRouteTest` (calendar chip, Back keeps chip and month, a double tap pushes one,
   recreate, second tap on the ring dot, session lock). `ProgressRouteTest`'s calendar test now expects its second tap
   to open Day detail and Back to return with the chip.

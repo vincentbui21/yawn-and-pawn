@@ -20,7 +20,6 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.semantics.clearAndSetSemantics
-import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
 import com.yawnandpawn.app.core.billing.Money
@@ -28,10 +27,8 @@ import com.yawnandpawn.app.core.billing.totalsByCurrency
 import com.yawnandpawn.app.ui.checks.CheckType
 import com.yawnandpawn.app.ui.checks.displayName
 import com.yawnandpawn.app.ui.checks.icon
-import com.yawnandpawn.app.ui.components.DelayedSkeleton
 import com.yawnandpawn.app.ui.components.NoteInline
 import com.yawnandpawn.app.ui.components.RowIcon
-import com.yawnandpawn.app.ui.components.SkeletonBlock
 import com.yawnandpawn.app.ui.components.SubScreen
 import com.yawnandpawn.app.ui.components.glass
 import com.yawnandpawn.app.ui.format.DateStyle
@@ -68,14 +65,10 @@ import com.yawnandpawn.app.ui.resources.day_tile_paid
 import com.yawnandpawn.app.ui.resources.day_tile_rings
 import com.yawnandpawn.app.ui.resources.editor_back
 import com.yawnandpawn.app.ui.resources.outcome_snoozed
-import com.yawnandpawn.app.ui.resources.progress_loading_a11y
-import com.yawnandpawn.app.ui.resources.progress_loading_slow
 import com.yawnandpawn.app.ui.resources.progress_minutes
 import com.yawnandpawn.app.ui.resources.progress_tile_snoozes
 import com.yawnandpawn.app.ui.resources.progress_tile_to_get_up
 import com.yawnandpawn.app.ui.resources.progress_under_minute
-import com.yawnandpawn.app.ui.resources.purchase_price_refunded_a11y
-import com.yawnandpawn.app.ui.resources.purchase_stranded
 import com.yawnandpawn.app.ui.resources.symbol_alarm
 import com.yawnandpawn.app.ui.resources.symbol_alt_route
 import com.yawnandpawn.app.ui.resources.symbol_lock
@@ -188,9 +181,13 @@ data class SessionDetail(
 
 /** The mock-ups' minutes from the first ring to the solved check; `null` when it never ended that way. */
 private fun minutesToUpOf(events: List<MorningEvent>): Int? {
-    val first = events.firstOrNull { it is MorningEvent.Rang }?.time ?: return null
-    val done = events.lastOrNull { it is MorningEvent.CheckSolved }?.time ?: return null
-    return done.toSecondOfDay() / SECONDS_PER_MINUTE - first.toSecondOfDay() / SECONDS_PER_MINUTE
+    val first = events.firstOrNull { it is MorningEvent.Rang }?.time
+    val done = events.lastOrNull { it is MorningEvent.CheckSolved }?.time
+    return if (first == null || done == null) {
+        null
+    } else {
+        done.toSecondOfDay() / SECONDS_PER_MINUTE - first.toSecondOfDay() / SECONDS_PER_MINUTE
+    }
 }
 
 /** A logged change to an alarm that day ("Your 7:30 alarm was turned off. Logged."). */
@@ -366,79 +363,6 @@ private fun SessionTiles(session: SessionDetail) {
 }
 
 /**
- * The session's payments Google refunded on its own (Story 6.7), in a `glass` card like the timeline: one line each,
- * "Not used, refunded automatically by Google" in `body` / `text` with the amount on the right in `text-secondary` (as
- * in Purchase history; no amount when it is only an estimate). One TalkBack stop each, "{note}, {price} refunded".
- */
-@Composable
-private fun StrandedPayments(stranded: List<Money?>) {
-    val colors = PpsTheme.colors
-    val spacing = PpsTheme.spacing
-    val note = stringResource(Res.string.purchase_stranded)
-    Column(modifier = Modifier.fillMaxWidth().glass(PpsTheme.shapes.md).padding(vertical = spacing.space2)) {
-        stranded.forEach { price ->
-            val amount = price?.let { formatMoney(it) }
-            val refunded = amount?.let { stringResource(Res.string.purchase_price_refunded_a11y, it) }
-            Row(
-                modifier =
-                    Modifier
-                        .fillMaxWidth()
-                        .heightIn(min = ROW_HEIGHT)
-                        .clearAndSetSemantics { contentDescription = listOfNotNull(note, refunded).joinToString(", ") }
-                        .padding(horizontal = spacing.cardPadding, vertical = spacing.space2),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(spacing.space3),
-            ) {
-                Text(text = note, modifier = Modifier.weight(1f), style = PpsTheme.typography.body, color = colors.text)
-                if (amount != null) {
-                    Text(
-                        text = amount,
-                        style = PpsTheme.typography.body.copy(fontFeatureSettings = TABULAR_FIGURES),
-                        color = colors.textSecondary,
-                        maxLines = 1,
-                        softWrap = false,
-                    )
-                }
-            }
-        }
-    }
-}
-
-/**
- * Day detail loading (EXPERIENCE.md App screens, Loading): after 300 ms the static skeleton of a hero card and a tile
- * row, read once as "Loading your progress"; after 3 s "Still loading your progress.".
- */
-@Composable
-private fun DayDetailSkeleton() {
-    val spacing = PpsTheme.spacing
-    DelayedSkeleton(
-        loadingLabel = stringResource(Res.string.progress_loading_a11y),
-        slowText = stringResource(Res.string.progress_loading_slow),
-        modifier = Modifier.fillMaxWidth(),
-    ) {
-        Column(
-            modifier = Modifier.fillMaxWidth().glass(PpsTheme.shapes.md).padding(spacing.cardPadding),
-            verticalArrangement = Arrangement.spacedBy(spacing.space2),
-        ) {
-            SkeletonBlock(Modifier.fillMaxWidth(HERO_TITLE_FRACTION).height(spacing.space6))
-            SkeletonBlock(Modifier.fillMaxWidth(HERO_LINE_FRACTION).height(spacing.space3))
-            SkeletonBlock(Modifier.fillMaxWidth(HERO_FIGURE_FRACTION).height(spacing.space8))
-        }
-        Row(horizontalArrangement = Arrangement.spacedBy(spacing.space2)) {
-            repeat(TILES) {
-                Column(
-                    modifier = Modifier.weight(1f).glass(PpsTheme.shapes.md).padding(spacing.space3),
-                    verticalArrangement = Arrangement.spacedBy(spacing.space2),
-                ) {
-                    SkeletonBlock(Modifier.fillMaxWidth(TILE_VALUE_FRACTION).height(spacing.space6))
-                    SkeletonBlock(Modifier.fillMaxWidth(TILE_LABEL_FRACTION).height(spacing.space3))
-                }
-            }
-        }
-    }
-}
-
-/**
  * The morning as a vertical timeline: time on the left (`caption`, tabular), a glyph on a hairline line, the event in
  * `body`. The line and the events draw in one after another from the top on entry.
  */
@@ -475,7 +399,6 @@ private fun TimelineRow(
     val spacing = PpsTheme.spacing
     val line = colors.outlineSubtle
     val stroke = with(LocalDensity.current) { LINE_WIDTH.toPx() }
-    val time = event.time
     Row(
         modifier =
             Modifier
@@ -486,16 +409,7 @@ private fun TimelineRow(
                 .semantics(mergeDescendants = true) { },
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        Text(
-            text = time?.let { formatClockTime(it, is24Hour) }.orEmpty(),
-            modifier =
-                Modifier
-                    .width(TIME_WIDTH)
-                    .graphicsLayer { alpha = progress }
-                    .then(if (time == null) Modifier.clearAndSetSemantics { } else Modifier),
-            style = PpsTheme.typography.caption.copy(fontFeatureSettings = TABULAR_FIGURES),
-            color = colors.textSecondary,
-        )
+        TimelineTime(time = event.time, is24Hour = is24Hour, progress = progress)
         Box(
             modifier =
                 Modifier
@@ -536,6 +450,25 @@ private fun TimelineRow(
             color = colors.text,
         )
     }
+}
+
+/** The row's time in `caption`, tabular; an empty column (and nothing for TalkBack) when the time is not stored. */
+@Composable
+private fun TimelineTime(
+    time: LocalTime?,
+    is24Hour: Boolean,
+    progress: Float,
+) {
+    Text(
+        text = time?.let { formatClockTime(it, is24Hour) }.orEmpty(),
+        modifier =
+            Modifier
+                .width(TIME_WIDTH)
+                .graphicsLayer { alpha = progress }
+                .then(if (time == null) Modifier.clearAndSetSemantics { } else Modifier),
+        style = PpsTheme.typography.caption.copy(fontFeatureSettings = TABULAR_FIGURES),
+        color = PpsTheme.colors.textSecondary,
+    )
 }
 
 /** The event's glyph: outcome shapes where they mean an outcome, otherwise an icon in `text-secondary`. */
@@ -682,10 +615,3 @@ private val LINE_WIDTH = 1.5.dp
 
 /** Each event's text slides in from 12 px to the right. */
 private const val SLIDE_PX = 12f
-
-private const val TILES = 3
-private const val HERO_TITLE_FRACTION = 0.4f
-private const val HERO_LINE_FRACTION = 0.6f
-private const val HERO_FIGURE_FRACTION = 0.5f
-private const val TILE_VALUE_FRACTION = 0.6f
-private const val TILE_LABEL_FRACTION = 0.8f

@@ -176,7 +176,7 @@ class WakeActivity : ComponentActivity() {
         WakeBrightness(
             window = { window },
             extraDim = {
-                // A failed read is logged (at most once per start), so the Story 5.13 device check can tell it from Extra dim on.
+                // A failed read counts as Extra dim off and is logged at most once per process (Story 5.13 device fix).
                 WakeBrightness.extraDimOn(contentResolver) { cause -> logger.log(LogEvent.OperationFailed(READ_EXTRA_DIM, cause)) }
             },
         )

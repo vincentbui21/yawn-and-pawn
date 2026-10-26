@@ -56,6 +56,7 @@ import org.robolectric.RobolectricTestRunner
 import org.robolectric.annotation.Config
 import org.robolectric.annotation.GraphicsMode
 import org.robolectric.shadows.ShadowSystemClock
+import java.util.concurrent.atomic.AtomicBoolean
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
 import kotlin.test.assertIs
@@ -65,9 +66,9 @@ import kotlin.time.Instant
 /**
  * Story 5.2 "Bright wake screen" (option C, "Ringing only"): the wake window is at full brightness (`1f`) only while a
  * session's Ringing screen shows (its snooze confirm sheet too) with the setting frozen on, the screen is started and
- * Extra dim is off; everywhere else, and after every exit, it is at the phone's own level (`-1f`). With the setting off
- * the window attribute is never written. The frozen config comes from the fire (the store) or, for a test ring, the
- * last-known settings snapshot.
+ * Extra dim is not known to be on (an unreadable Extra dim counts as off); everywhere else, and after every exit, it is
+ * at the phone's own level (`-1f`). With the setting off the window attribute is never written. The frozen config comes
+ * from the fire (the store) or, for a test ring, the last-known settings snapshot.
  */
 @RunWith(RobolectricTestRunner::class)
 @GraphicsMode(GraphicsMode.Mode.NATIVE)
@@ -439,13 +440,34 @@ class WakeBrightnessTest {
     }
 
     @Test
-    fun `an Extra dim read that throws counts as on and reports its cause`() {
+    fun `an Extra dim read that throws counts as off and reports its cause once per process`() {
+        // Story 5.13 on the Oppo A96 (API 33): the hidden key throws SecurityException on every start.
         val failures = mutableListOf<String>()
+        val reported = AtomicBoolean(false)
+        val hidden = { throw SecurityException("hidden setting") }
 
-        val dim = WakeBrightness.extraDimOn(Build.VERSION_CODES.S, failures::add) { throw SecurityException("hidden setting") }
+        val first = WakeBrightness.extraDimOn(Build.VERSION_CODES.S, failures::add, reported, hidden)
+        val again = WakeBrightness.extraDimOn(Build.VERSION_CODES.TIRAMISU, failures::add, reported) { error("other failure") }
 
-        assertTrue(dim)
-        assertEquals(listOf("SecurityException"), failures)
+        assertFalse(first, "unreadable counts as off")
+        assertFalse(again, "unreadable counts as off")
+        assertEquals(listOf("SecurityException"), failures, "reported once")
+    }
+
+    @Test
+    fun `with Extra dim unreadable the Ringing screen is at full brightness`() {
+        val window = buildActivity(Activity::class.java).setup().get().window
+        val reported = AtomicBoolean(false)
+        val brightness =
+            WakeBrightness(
+                window = { window },
+                extraDim = { WakeBrightness.extraDimOn(Build.VERSION_CODES.TIRAMISU, {}, reported) { throw SecurityException() } },
+            )
+
+        brightness.onStart()
+        brightness.show(full = true)
+
+        assertEquals(FULL, window.attributes.screenBrightness)
     }
 
     @Test

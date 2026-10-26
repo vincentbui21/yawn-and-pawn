@@ -11,14 +11,7 @@ context:
   - '{project-root}/_bmad-output/implementation-artifacts/spec-5-1-wake-and-snooze-defaults-and-theme-override-in-settings.md'
   - '{project-root}/docs/design-preview/round-4-bright-wake.md'
 warnings: ['oversized']
-deferred:
-  - summary: >-
-      The Extra dim key may not be readable for apps targeting API 31+, which would keep Bright wake screen off on every such phone.
-    evidence: |-
-      reduce_bright_colors_activated is a hidden Settings.Secure key; a read that throws counts as Extra dim on and is now logged as "read extra dim". Settle on the Oppo A96 in Story 5.13: with Extra dim off, the ringing screen must turn fully bright and no such log line may appear.
-    location: >-
-      androidApp/src/main/kotlin/com/yawnandpawn/app/android/wake/WakeBrightness.kt (extraDimOn)
-    severity: high (unverified)
+deferred: []
 ---
 
 <intent-contract>
@@ -52,7 +45,8 @@ path is at the phone's own level (`BRIGHTNESS_OVERRIDE_NONE`).
   (500 ms budget, then the last-known snapshot, then defaults). A test ring takes it from the last-known snapshot at
   its fire (synchronous cache, never the store).
 - Brightness never delays or breaks a ring: no store read, no suspend call and no throw on the wake screen path. An
-  Extra dim read that fails counts as Extra dim on (brightness untouched).
+  Extra dim read that fails counts as Extra dim off (full brightness), logged once per process (Story 5.13 device fix,
+  see the Change Log).
 - Restored on every exit: Check, Fallback, Snoozed, Success, `onStop` (Home, Recents, screen off), finish. Re-applied
   on `onStart` while the Ringing screen shows.
 - With the setting off, the window attribute is never written.
@@ -69,8 +63,9 @@ change to the onboarding note (Story 5.12 uses it).
 2. **Snooze sheet over a check:** stays at the phone's level (the check's level); only the sheet over the Ringing
    screen is full.
 3. **Emergency ring and the brief wait before the session shows:** phone's level (no frozen config exists).
-4. **Extra dim unreadable** (a `SecurityException` or any failure on API 31+): treated as on, so brightness is left
-   alone. 5.13 checks on the Oppo that the screen does turn bright.
+4. **Extra dim unreadable** (a `SecurityException` or any failure on API 31+): treated as off, so the Ringing screen
+   turns bright; logged once per process. Changed 2026-10-26 after the 5.13 device check (was "treated as on"; see the
+   Change Log).
 5. **Test ring:** uses the last-known settings snapshot at its fire, else its stored value (true).
 6. **Deferred work:** `deferred-work.md` assigns no item to Story 5.2.
 
@@ -88,7 +83,8 @@ change to the onboarding note (Story 5.12 uses it).
 | "I'm up" → Check | Grace | `-1f` |
 | Snoozed / Success / Done | screens | `-1f` |
 | Home on Ringing | `onStop` | `-1f`; back (`onStart`) → `1f` |
-| Extra dim on (API 31+) | `reduce_bright_colors_activated = 1` | `-1f` |
+| Extra dim on (API 31+) | `reduce_bright_colors_activated = 1` (readable) | `-1f` |
+| Extra dim unreadable (API 31+) | read throws `SecurityException` | `1f`; the failure logged once per process |
 | Delete all data | 5.9 | key cleared with the whole store and fallback cache |
 
 </intent-contract>
@@ -166,6 +162,29 @@ change to the onboarding note (Story 5.12 uses it).
     F2 (brightness returns on "I'm up", not on "Done"). DESIGN.md (both copies): the theme-strategy sentence.
   - Tests that expected the row hidden now expect it: `MainActivityTest`, `SnoozeSettingsRouteTest`,
     `DefaultsSettingsSemanticsTest`.
+
+- 2026-10-26, Story 5.13 device finding (Oppo A96, ColorOS, Android 13, Play build 0.1.3): the Ringing screen never
+  turned bright. Every wake screen start logged `OperationFailed operation=read extra dim cause=SecurityException`; the
+  phone was at about 22 % manual brightness and it never changed during the ring. This is the deferred review finding
+  (high if true), now confirmed.
+  - **Cause:** `reduce_bright_colors_activated` is `@hide` and has no `@Readable` annotation in AOSP (Android 12, where
+    it was added, through main). From S, `SettingsProvider.enforceSettingReadable` throws `SecurityException` for such a
+    key unless the caller is a system app, platform-signed or installed `testOnly` (an Android Studio debug run is
+    `testOnly`, so dev builds can read it while Play builds never can). Robolectric does not enforce it, so the tests
+    passed. No public API exposes Extra dim: `ColorDisplayManager` is hidden and system-only, and `android.jar` (API 36
+    and 37) has no Extra dim method or `Settings.Secure` constant.
+  - **Decision (DEFAULTS TAKEN 4 reversed):** an unreadable Extra dim counts as off, so the window goes to full
+    brightness. The failure is passed to `onFailure` (the `read extra dim` log line) at most once per process, not on
+    every start. Trade-off: on Play builds the app cannot tell when Extra dim is on, so it raises the window to full
+    while Extra dim still dims the panel on top; the "respects Extra dim" wording (UX-DR10, EXPERIENCE.md) only holds
+    where the key is readable. 5.13 checklist item 27 (v2 ok) will show the screen forced bright with Extra dim on.
+  - **Read kept, not skipped on API 31+:** on every API 31+ phone the read fails for this app, but it stays because it
+    costs one settings call, only when full brightness could apply and at most once per start, and it still respects
+    Extra dim where the key is readable (`testOnly` debug installs, an OEM build that exposes it). Skipping it would
+    leave the Extra dim branch as dead code; removing it is an owner call for v2.
+  - Tests: `WakeBrightnessTest` "an Extra dim read that throws counts as off and reports its cause once per process"
+    (two failing reads, one report) and "with Extra dim unreadable the Ringing screen is at full brightness". The
+    `round-4-bright-wake.md` note now says an unreadable Extra dim does not stop the screen turning bright.
 
 ## Review Triage Log
 

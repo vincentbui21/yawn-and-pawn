@@ -1,11 +1,13 @@
 package com.yawnandpawn.app.ui
 
+import com.yawnandpawn.app.core.billing.Money
 import com.yawnandpawn.app.ui.checks.CheckType
 import com.yawnandpawn.app.ui.format.Countdown
 import com.yawnandpawn.app.ui.format.Weekdays
 import com.yawnandpawn.app.ui.format.Weekends
 import com.yawnandpawn.app.ui.home.AlarmCard
 import com.yawnandpawn.app.ui.home.DeleteAlarmDialog
+import com.yawnandpawn.app.ui.home.HomeHero
 import com.yawnandpawn.app.ui.home.HomeUiState
 import kotlinx.datetime.DayOfWeek
 import kotlinx.datetime.LocalTime
@@ -80,4 +82,27 @@ object HomeSamples {
      * "Dismiss", over the first alarm.
      */
     val testNote = one.copy(testSkipped = true)
+
+    // Story 6.3: card-hero, the streak and this week's money, above every notice.
+
+    /** The first alarm: a 0 streak, nothing paid. */
+    val heroZero = one.copy(hero = HomeHero(0))
+
+    /** One good day: "1" and "day on time". */
+    val heroOne = one.copy(hero = HomeHero(1))
+
+    /** EUR 2.99 + EUR 5.99 paid this week, a 12-day streak. */
+    val heroPaidOne = one.copy(hero = HomeHero(12, listOf(Money(2_990_000 + 5_990_000, "EUR"))))
+
+    /** Paid in two currencies this week: one total each, in currency-code order, joined with " + ". */
+    val heroPaidTwo = one.copy(hero = HomeHero(12, listOf(Money(8_980_000, "EUR"), Money(1_000_000, "USD"))))
+
+    /** The hero above the reliability banner and the missed note. */
+    val heroReliability = heroPaidOne.copy(reliabilityProblem = true, missedAlarmAt = LocalTime(6, 0))
+
+    /** History but no alarm: the hero over the empty state. */
+    val heroNoAlarms = HomeUiState(hero = HomeHero(3))
+
+    /** History but no alarm, with every notice: at 200% the empty state scrolls, so "Add your first alarm" never clips. */
+    val heroNoAlarmsNotices = heroNoAlarms.copy(reliabilityProblem = true, missedAlarmAt = LocalTime(6, 0), testSkipped = true)
 }

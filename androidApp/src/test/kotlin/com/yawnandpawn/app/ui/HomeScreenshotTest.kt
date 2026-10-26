@@ -6,6 +6,7 @@ import androidx.compose.ui.test.hasText
 import androidx.compose.ui.test.isDialog
 import androidx.compose.ui.test.junit4.v2.createEmptyComposeRule
 import androidx.compose.ui.test.longClick
+import androidx.compose.ui.test.onFirst
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.onRoot
 import androidx.compose.ui.test.performTouchInput
@@ -28,7 +29,8 @@ import org.robolectric.annotation.GraphicsMode
 
 /**
  * Story 1.9 screenshots of Home in the app shell (the glass nav capsule): empty, one alarm, many, all off, load failure,
- * the delete dialog and the long-press menu, each in Light, Dark and Light at 200% font scale. 12-hour clock (the
+ * the delete dialog and the long-press menu, and Story 6.3's `card-hero` states (above the notices, and over the empty
+ * state), each in Light, Dark and Light at 200% font scale. 12-hour clock (the
  * Robolectric default locale is en-US).
  */
 @RunWith(RobolectricTestRunner::class)
@@ -54,13 +56,13 @@ class HomeScreenshotTest {
         // Story 1.16: the missed note, verbatim from EXPERIENCE.md (12-hour clock), with its Dismiss action.
         if (state.missedAlarmAt != null) {
             composeRule.onNodeWithText("Your 6:00 AM alarm stopped after 30 minutes. Logged as missed.").assertExists()
-            composeRule.onNode(hasContentDescription("Dismiss") and hasClickAction()).assertExists()
+            composeRule.onAllNodes(hasContentDescription("Dismiss") and hasClickAction()).onFirst().assertExists()
         }
         // Story 3.13: the re-register banner, verbatim from EXPERIENCE.md, with "Re-register" and its close icon.
         if (state.reregisterCheck != null) {
             composeRule.onNodeWithText("Fallback check used 3 times this week. Re-register your QR/Barcode?").assertExists()
             composeRule.onNode(hasText("Re-register") and hasClickAction()).assertExists()
-            composeRule.onNode(hasContentDescription("Dismiss") and hasClickAction()).assertExists()
+            composeRule.onAllNodes(hasContentDescription("Dismiss") and hasClickAction()).onFirst().assertExists()
         }
         longPressTime?.let { time ->
             composeRule.onNode(hasText(time) and hasClickAction()).performTouchInput { longClick() }
@@ -217,4 +219,77 @@ class HomeScreenshotTest {
     @Test
     @Config(fontScale = 2.0f)
     fun `test note in Light at 200 percent`() = home("home_test_note_light_font200", HomeSamples.testNote, PpsThemeMode.Light)
+
+    // Story 6.3: card-hero first, above the notices; at 200% the two-currency line wraps and nothing clips.
+
+    @Test
+    fun `hero with a 0 streak in Light`() = home("home_hero_zero_light", HomeSamples.heroZero, PpsThemeMode.Light)
+
+    @Test
+    fun `hero with a 0 streak in Dark`() = home("home_hero_zero_dark", HomeSamples.heroZero, PpsThemeMode.Dark)
+
+    @Test
+    @Config(fontScale = 2.0f)
+    fun `hero with a 0 streak in Light at 200 percent`() = home("home_hero_zero_light_font200", HomeSamples.heroZero, PpsThemeMode.Light)
+
+    @Test
+    fun `hero with 1 day in Light`() = home("home_hero_one_light", HomeSamples.heroOne, PpsThemeMode.Light)
+
+    @Test
+    fun `hero with 1 day in Dark`() = home("home_hero_one_dark", HomeSamples.heroOne, PpsThemeMode.Dark)
+
+    @Test
+    @Config(fontScale = 2.0f)
+    fun `hero with 1 day in Light at 200 percent`() = home("home_hero_one_light_font200", HomeSamples.heroOne, PpsThemeMode.Light)
+
+    @Test
+    fun `hero paid in one currency in Light`() = home("home_hero_paid_one_light", HomeSamples.heroPaidOne, PpsThemeMode.Light)
+
+    @Test
+    fun `hero paid in one currency in Dark`() = home("home_hero_paid_one_dark", HomeSamples.heroPaidOne, PpsThemeMode.Dark)
+
+    @Test
+    @Config(fontScale = 2.0f)
+    fun `hero paid in one currency in Light at 200 percent`() =
+        home("home_hero_paid_one_light_font200", HomeSamples.heroPaidOne, PpsThemeMode.Light)
+
+    @Test
+    fun `hero paid in two currencies in Light`() = home("home_hero_paid_two_light", HomeSamples.heroPaidTwo, PpsThemeMode.Light)
+
+    @Test
+    fun `hero paid in two currencies in Dark`() = home("home_hero_paid_two_dark", HomeSamples.heroPaidTwo, PpsThemeMode.Dark)
+
+    @Test
+    @Config(fontScale = 2.0f)
+    fun `hero paid in two currencies in Light at 200 percent`() =
+        home("home_hero_paid_two_light_font200", HomeSamples.heroPaidTwo, PpsThemeMode.Light)
+
+    @Test
+    fun `hero above the reliability banner and the missed note in Light`() =
+        home("home_hero_reliability_light", HomeSamples.heroReliability, PpsThemeMode.Light)
+
+    @Test
+    fun `hero above the reliability banner and the missed note in Dark`() =
+        home("home_hero_reliability_dark", HomeSamples.heroReliability, PpsThemeMode.Dark)
+
+    @Test
+    @Config(fontScale = 2.0f)
+    fun `hero above the reliability banner and the missed note in Light at 200 percent`() =
+        home("home_hero_reliability_light_font200", HomeSamples.heroReliability, PpsThemeMode.Light)
+
+    @Test
+    fun `hero over the empty state in Light`() = home("home_hero_no_alarms_light", HomeSamples.heroNoAlarms, PpsThemeMode.Light)
+
+    @Test
+    fun `hero over the empty state in Dark`() = home("home_hero_no_alarms_dark", HomeSamples.heroNoAlarms, PpsThemeMode.Dark)
+
+    @Test
+    @Config(fontScale = 2.0f)
+    fun `hero over the empty state in Light at 200 percent`() =
+        home("home_hero_no_alarms_light_font200", HomeSamples.heroNoAlarms, PpsThemeMode.Light)
+
+    @Test
+    @Config(fontScale = 2.0f)
+    fun `hero and every notice over the empty state in Light at 200 percent`() =
+        home("home_hero_no_alarms_notices_light_font200", HomeSamples.heroNoAlarmsNotices, PpsThemeMode.Light)
 }

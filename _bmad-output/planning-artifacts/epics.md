@@ -354,7 +354,7 @@ FR-SET-3, FR-SET-4 and FR-SET-5, together with Purchase history (FR-PRG-4), are 
 #### Key flows (acceptance sources)
 
 - UX-DR86: F1 First-run setup and test alarm: mission → disclosure "I understand" → base fee stepper with local prices and ladder preview → time + days → checks (Random) with "Try it" → reliability checklist Fix → usage stats off → locked test alarm rings on Sunrise screen with "Test · no charge" → Success; failure paths: offline base fee approximate note; skipped test → Home note.
-- UX-DR87: F2 On-time morning with grace window: ramp + brightness → "I'm up" (72 dp) → silent with "Quiet for 20s" → check done in window → on-time Success shows the big number, then "days in a row", then "Up on time." (no repeated number), with the count-up of UX-DR71 → Done restores brightness.
+- UX-DR87: F2 On-time morning with grace window: ramp + brightness → "I'm up" (72 dp) → silent with "Quiet for 20s" → check done in window → on-time Success shows the big number, then "days in a row", then "Up on time." (no repeated number), with the count-up of UX-DR71 → Success at the phone's own brightness.
 - UX-DR88: F3 Grace expiry: countdown reaches 0 → "Time's up. Alarm's back on until you finish.", strong haptic, full volume, progress kept → completion → "You're up. That's what counts."; snooze during grace keeps mute only until countdown ends.
 - UX-DR89: F4 Paid snooze with rising fee and failed payment: Snooze · price → sheet with 500 ms guard and full copy → Pay → unlocking state → keyguard → Play sheet with alarm at full volume → "Snoozed. Next ring at {time}." screen off → re-ring with session line and next price; failure paths: pending (disabled "payment pending", auto-start if confirmed during check, success note about auto-refund otherwise), unlock cancelled/cancelled/error/offline per outcomes table, late-cleared payment opens already-paid state next time.
 - UX-DR90: F5 Fallback check with TalkBack and revoked camera: TalkBack reads "6:15. I'm up, button." → QR check camera fails → message + link immediately → picker with Math first → spoken problem, announced number pad → alarm stops with no sighted step; Day detail shows fallback badge; failure: link after 5 failed scans, no second fallback per session, re-register prompt after 3 in 7 days.
@@ -3337,7 +3337,7 @@ So that waking on time feels like a win, and a paid morning never feels like a f
 
 **Given** the Success screen
 **When** the user taps "Done" or the activity stops
-**Then** the screen closes, the screen brightness set by the Epic 5 "Bright wake screen" setting is restored, and `FLAG_KEEP_SCREEN_ON` is cleared so the system screen timeout applies while Success is visible
+**Then** the screen closes; Success shows at the phone's own brightness (Story 5.2 option C: "Bright wake screen" covers only the ringing screen), and `FLAG_KEEP_SCREEN_ON` is cleared so the system screen timeout applies while Success is visible
 **And** Back still does nothing on the wake screen (UX-DR74), and TalkBack initial focus is the headline, then "Done"
 
 **Given** Roborazzi, semantic and ViewModel tests with `FakeClock` and fake history
@@ -3536,7 +3536,7 @@ So that closed testers and launch users see numbers and notifications they can t
 2. A zero-snooze morning shows the streak number, "days in a row" and "Up on time." with the count-up, bounce, about 1.5 s of confetti and one success haptic, finishing within 3 s; a second on-time alarm the same day shows the text with no animation.
 3. With "Remove animations" on, the celebration appears instantly and the haptic still fires.
 4. A morning with one paid snooze (license tester) shows "You're up. That's what counts." with the amount paid, no animation; Home then shows "{paid} paid this week" with the Play-localized price, and Progress shows it under "Money paid" for this month.
-5. "Done" on Success restores the screen brightness set before the alarm.
+5. Success shows at the phone's own brightness (Bright wake screen raises only the ringing screen), and "Done" closes it.
 6. Progress matches a hand count from Day detail for current streak, best streak, on-time 7 d and 30 d, average time to up and the 30-day snoozes count; a Test alarm and a skipped occurrence (if Epic 7 skip ships) change none of them.
 7. The calendar shows the correct shape and colour for On time, Snoozed, Missed and Test days, a first tap shows the label chip and a second opens Day detail, Day detail shows the fallback badge after a fallback check, and TalkBack reads "{weekday} {day}, {outcome}".
 8. Day detail for a snoozed morning lists rings, snoozes, paid amount, check and time to up, and its morning timeline draws in with the events in order; a Missed morning shows no time up.

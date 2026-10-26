@@ -9,6 +9,7 @@ import androidx.compose.ui.test.onNodeWithText
 import com.yawnandpawn.app.MainActivity
 import com.yawnandpawn.app.StopAppRule
 import com.yawnandpawn.app.android.ApplicationScope
+import com.yawnandpawn.app.android.call.CallState
 import com.yawnandpawn.app.buildActivity
 import com.yawnandpawn.app.core.alarm.AlarmFired
 import com.yawnandpawn.app.core.alarm.AlarmRepository
@@ -50,7 +51,7 @@ import kotlin.time.Instant
  */
 @RunWith(RobolectricTestRunner::class)
 @GraphicsMode(GraphicsMode.Mode.NATIVE)
-@Config(qualifiers = "w411dp-h891dp-xxhdpi")
+@Config(qualifiers = "w411dp-h891dp-xxhdpi", shadows = [RecordingNotificationManager::class])
 class LeaveAndReturnTest {
     @get:Rule(order = 0)
     val stopApp = StopAppRule()
@@ -65,8 +66,7 @@ class LeaveAndReturnTest {
 
     private fun manager(app: WakeApp) = app.app.getSystemService(NotificationManager::class.java)
 
-    private fun posted(app: WakeApp): Notification? =
-        manager(app).activeNotifications.firstOrNull { it.id == WakeNotifier.NOTIFICATION_ID }?.notification
+    private fun posted(app: WakeApp): Notification? = NotificationPosts.wakeNotification(manager(app))
 
     /** Rings the stored alarm in the real wake service, as its system alarm would. */
     private fun ring(app: WakeApp): ServiceController<WakeService> {
@@ -163,6 +163,8 @@ class LeaveAndReturnTest {
         val away = assertNotNull(posted(app))
         assertEquals(WakeNotifier.CHANNEL_ID, away.channelId)
         assertNull(away.fullScreenIntent)
+        val posts = NotificationPosts(app.app)
+        val beforeLoud = posts.mark()
 
         clock.advanceBy(21.seconds)
         monotonic.advanceBy(21.seconds)
@@ -172,6 +174,45 @@ class LeaveAndReturnTest {
         val loud = assertNotNull(posted(app))
         assertEquals(WakeNotifier.CHANNEL_ID, loud.channelId)
         assertNotNull(loud.fullScreenIntent, "the loud ring can turn the screen on again")
+        // Story 5.13 device check: as a new post, which SystemUI launches (an update adding it is ignored).
+        posts.assertNewFullScreenPost(beforeLoud, "the loud ring after leaving with the power key")
+        assertEquals(app.koin.get<WakeNotifier>().currentId, shadowOf(service.get()).lastForegroundNotificationId, "the foreground moved")
+        service.destroy()
+    }
+
+    @Test
+    fun `a ring paused by a call never posts the full-screen intent over the call, and the call's end does (Story 5_13 review)`() {
+        var onCall = false
+        val app =
+            WakeApp(
+                calls =
+                    object : CallState {
+                        override fun inCall() = onCall
+                    },
+            )
+        val service = ring(app)
+        val screen = buildActivity(WakeActivity::class.java).setup()
+        // A call comes in: the call screen comes over the wake screen.
+        onCall = true
+        screen.pause().stop()
+        app.dispatch(SessionEvent.CallStarted)
+        assertTrue(assertIs<SessionState.Ringing>(app.engine.state.value).session.paused)
+        val posts = NotificationPosts(app.app)
+        val inCall = posts.mark()
+
+        // The heartbeat during the call: its slot start and its ring step.
+        service.withIntent(WakeService.intent(app.app, WakeService.ACTION_SLOT)).startCommand(0, 2)
+        app.awaitUntil("the slot start is handled") { true }
+        app.dispatch(SessionEvent.SlotFired)
+
+        assertTrue(posts.posts(inCall).none { it.posted.fullScreen }, "nothing opens the wake screen over the call")
+        assertNull(assertNotNull(posted(app)).fullScreenIntent)
+
+        val afterCall = posts.mark()
+        onCall = false
+        app.dispatch(SessionEvent.CallEnded)
+        posts.assertNewFullScreenPost(afterCall, "the ring after the call")
+        posts.assertAtMostOneShown(manager(app))
         service.destroy()
     }
 
@@ -187,9 +228,12 @@ class LeaveAndReturnTest {
         assertEquals(WakeNotifier.CHANNEL_ID, away.channelId, "the way back heads up")
         assertNull(away.fullScreenIntent)
 
+        val posts = NotificationPosts(app.app)
+        val beforeSlot = posts.mark()
         val service = app.startService(WakeService.intent(app.app, WakeService.ACTION_SLOT))
         app.awaitUntil("the slot start is handled") { true }
         assertNotNull(assertNotNull(posted(app)).fullScreenIntent)
+        posts.assertNewFullScreenPost(beforeSlot, "the backup slot's start after leaving the emergency ring")
         service.destroy()
     }
 
@@ -200,10 +244,13 @@ class LeaveAndReturnTest {
         val screen = buildActivity(WakeActivity::class.java).setup()
         screen.pause().stop()
         assertNull(assertNotNull(posted(app)).fullScreenIntent)
+        val posts = NotificationPosts(app.app)
+        val beforeEmergency = posts.mark()
 
         app.runtime.startEmergency(fired.scheduledAt + 1.minutes, volumePercent = 80, cause = "test")
 
         assertNotNull(assertNotNull(posted(app)).fullScreenIntent)
+        posts.assertNewFullScreenPost(beforeEmergency, "the emergency ring after leaving")
         app.runtime.stopEmergency()
         service.destroy()
     }
@@ -213,12 +260,15 @@ class LeaveAndReturnTest {
         val app = WakeApp()
         val screen = buildActivity(WakeActivity::class.java).setup()
         screen.pause().stop()
+        val posts = NotificationPosts(app.app)
+        val beforeRing = posts.mark()
 
         val service = ring(app)
 
         val full = assertNotNull(posted(app))
         assertEquals(WakeNotifier.CHANNEL_ID, full.channelId)
         assertNotNull(full.fullScreenIntent)
+        posts.assertNewFullScreenPost(beforeRing, "the next ring")
         service.destroy()
     }
 
@@ -255,7 +305,7 @@ class LeaveAndReturnTest {
         val notification = assertNotNull(posted(app))
 
         // The user swipes it away (Android 14+): the system removes it and sends its delete intent.
-        manager(app).cancel(WakeNotifier.NOTIFICATION_ID)
+        manager(app).cancel(app.koin.get<WakeNotifier>().currentId)
         assertNull(posted(app))
         notification.deleteIntent.send()
         val repost = assertNotNull(shadowOf(app.app).nextStartedService, "the delete intent starts the wake service")
@@ -263,7 +313,7 @@ class LeaveAndReturnTest {
         service.withIntent(repost).startCommand(0, 2)
         app.awaitUntil("the notification is back") { posted(app) != null }
 
-        assertEquals(WakeNotifier.NOTIFICATION_ID, shadowOf(service.get()).lastForegroundNotificationId)
+        assertEquals(app.koin.get<WakeNotifier>().currentId, shadowOf(service.get()).lastForegroundNotificationId)
         assertTrue(app.lastMediaPlayer().isReallyPlaying, "the sound never stopped")
         assertSame(before, app.engine.state.value, "no session event")
         assertTrue(posted(app)!!.actions.isNullOrEmpty())
@@ -302,7 +352,7 @@ class LeaveAndReturnTest {
         val notification = assertNotNull(posted(app))
         startedActivities(app)
 
-        manager(app).cancel(WakeNotifier.NOTIFICATION_ID)
+        manager(app).cancel(app.koin.get<WakeNotifier>().currentId)
         notification.deleteIntent.send()
         service.withIntent(assertNotNull(shadowOf(app.app).nextStartedService)).startCommand(0, 2)
         app.awaitUntil("the main looper settles") { true }
@@ -343,7 +393,7 @@ class LeaveAndReturnTest {
         ring(app)
 
         // The swipe's repost start forgets the notification first; here it never reaches the foreground.
-        manager(app).cancel(WakeNotifier.NOTIFICATION_ID)
+        manager(app).cancel(app.koin.get<WakeNotifier>().currentId)
         app.runtime.notificationSwiped()
         app.dispatch(SessionEvent.SlotFired)
 

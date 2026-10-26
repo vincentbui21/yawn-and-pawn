@@ -73,11 +73,16 @@ internal class WakeScreenEnd(
      * session's id (null for the emergency ring), and whether the engine has [restored] its stored session. A ring is
      * remembered and replaces any Success. Until the stored session is restored the engine is Idle only because nothing
      * is loaded yet (a screen recreated after a kill), so the screen waits instead of closing.
+     *
+     * Before any ring the screen waits for one only until the wake service stops ([serviceStopped]): the service posts
+     * the full-screen intent first and the session after, but once it stopped with nothing ringing (a test fire with
+     * nothing pending, an ignored fire) no ring is coming, so the screen closes (Story 5.13 device check).
      */
     fun follow(
         active: Boolean,
         ringingSessionId: String?,
         restored: Boolean,
+        serviceStopped: Boolean = false,
     ) {
         when {
             active -> {
@@ -85,6 +90,10 @@ internal class WakeScreenEnd(
                 // An emergency ring (no session) forgets the session before it: its end is not that session's Success.
                 shownSessionId = ringingSessionId
                 successSessionId = null
+            }
+
+            !seen && restored && serviceStopped -> {
+                activity.finish()
             }
 
             !seen || successSessionId != null || !restored -> {

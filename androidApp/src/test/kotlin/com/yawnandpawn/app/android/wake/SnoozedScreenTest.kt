@@ -77,7 +77,7 @@ import kotlin.time.Instant
  */
 @RunWith(RobolectricTestRunner::class)
 @GraphicsMode(GraphicsMode.Mode.NATIVE)
-@Config(qualifiers = "w411dp-h891dp-xxhdpi")
+@Config(qualifiers = "w411dp-h891dp-xxhdpi", shadows = [RecordingNotificationManager::class])
 class SnoozedScreenTest {
     @get:Rule(order = 0)
     val stopApp = StopAppRule()
@@ -141,8 +141,7 @@ class SnoozedScreenTest {
     private fun manager(app: WakeApp) = app.app.getSystemService(NotificationManager::class.java)
 
     /** The ringing notification posted now. */
-    private fun posted(app: WakeApp): Notification =
-        assertNotNull(manager(app).activeNotifications.firstOrNull { it.id == WakeNotifier.NOTIFICATION_ID }?.notification)
+    private fun posted(app: WakeApp): Notification = assertNotNull(NotificationPosts.wakeNotification(manager(app)))
 
     private fun installId(app: WakeApp): String =
         assertIs<Outcome.Success<String>>(runBlocking { app.koin.get<InstallIdProvider>().installId() }).value
@@ -222,10 +221,14 @@ class SnoozedScreenTest {
             assertIs<SessionState.Snoozed>(app.engine.state.value, "closing sent nothing")
             assertTrue(slotArmed(app), "the next ring is still armed")
             assertNull(posted(app).fullScreenIntent, "nothing brings the screen back during the snooze")
+            val posts = NotificationPosts(app.app)
+            val beforeReRing = posts.mark()
 
             composeRule.mainClock.autoAdvance = true
             snoozeEnds(app)
             assertNotNull(posted(app).fullScreenIntent, "the re-ring opens the wake screen")
+            // Story 5.13 device check: the full one replaces the quiet one as a new post, never as an update.
+            posts.assertNewFullScreenPost(beforeReRing, "the snooze-end re-ring after the Snoozed screen closed")
         }
     }
 
@@ -244,12 +247,17 @@ class SnoozedScreenTest {
             composeRule.mainClock.autoAdvance = false
             composeRule.mainClock.advanceTimeBy(WakeActivity.SNOOZED_SCREEN_TIME.inWholeMilliseconds + FRAME)
             assertTrue(screen.isFinishing, "the note closed")
+            val posts = NotificationPosts(app.app)
+            val beforeReRing = posts.mark()
             // The slot fires before the system has stopped the closing screen: the ring step finds it still shown.
             app.dispatch(SessionEvent.SlotFired)
             assertIs<SessionState.Ringing>(app.engine.state.value)
 
             scenario.moveToState(Lifecycle.State.DESTROYED)
             assertNotNull(posted(app).fullScreenIntent, "the ring brings the wake screen back at once")
+            // Story 5.13 device check: as a new post, so SystemUI launches it.
+            posts.assertNewFullScreenPost(beforeReRing, "the Snoozed screen finishing exactly at the snooze end")
+            posts.assertAtMostOneShown(manager(app))
             composeRule.mainClock.autoAdvance = true
         }
     }

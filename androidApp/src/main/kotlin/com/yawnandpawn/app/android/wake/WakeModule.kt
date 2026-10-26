@@ -59,7 +59,7 @@ fun wakeModule(): Module =
         single<SoundResolver> { LibrarySoundResolver() }
         single { AlarmVolume(androidContext(), get()) }
         single { AlarmVibrator(androidContext()) }
-        single { WakeNotifier(androidContext(), get()) }
+        single { WakeNotifier(androidContext(), get(), get()) }
         single { WakeServiceStarter(androidContext(), get()) }
         // Device test round 1: the receiver waits for the service's start, and the ring start is timed in the log.
         single { WakeServiceStarts() }

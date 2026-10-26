@@ -1,6 +1,7 @@
 package com.yawnandpawn.app.android.wake
 
 import android.app.ForegroundServiceStartNotAllowedException
+import android.app.Notification
 import android.app.NotificationManager
 import android.content.Context
 import android.content.Intent
@@ -588,16 +589,20 @@ class WakeRuntimeTest {
         assertNull(volume.saved)
     }
 
+    /** The wake service's `startForeground`: each foreground notification it was given, in order. */
+    private val foreground = mutableListOf<Notification>()
+    private val service = WakeNotifier.ForegroundHost { _, notification -> foreground += notification }
+
     @Test
     fun `the foreground notification is the one entry effects would post`() {
         val alarmAt = session.config.scheduledAt
 
-        val notification = runtime.foregroundNotification(alarmAt)
-        runtime.foregroundPosted(alarmAt)
+        runtime.enterForeground(service, alarmAt, ringing = true)
         runtime.onServiceStarted()
         enter(ringing)
 
-        assertEquals(WakeNotifier.CHANNEL_ID, notification.channelId)
+        assertEquals(WakeNotifier.CHANNEL_ID, foreground.single().channelId)
+        assertNotNull(foreground.single().fullScreenIntent, "the first post carries the full-screen intent")
         // The system lists a startForeground post only after a while: WakeUiShown right after it posts nothing more.
         assertEquals(0, shadowOf(notifications).size(), "already shown by startForeground, not posted again")
     }
@@ -605,8 +610,8 @@ class WakeRuntimeTest {
     @Test
     fun `a ringing notification the user swiped away is posted again by the next WakeUiShown`() {
         val alarmAt = session.config.scheduledAt
-        notifications.notify(WakeNotifier.NOTIFICATION_ID, runtime.foregroundNotification(alarmAt))
-        runtime.foregroundPosted(alarmAt)
+        runtime.enterForeground(service, alarmAt, ringing = true)
+        notifications.notify(WakeNotifier.NOTIFICATION_ID, foreground.single())
         runtime.onServiceStarted()
 
         // The swipe removes it and its delete intent tells the runtime (WakeService.ACTION_REPOST).
@@ -618,23 +623,23 @@ class WakeRuntimeTest {
     }
 
     @Test
-    fun `a ringing notification built but not posted does not stop WakeUiShown from posting it`() {
-        runtime.foregroundNotification(session.config.scheduledAt)
-
-        enter(ringing)
-
-        assertEquals(1, shadowOf(notifications).size())
-    }
-
-    @Test
-    fun `a start with no alarm to show uses the quiet notification without a full-screen intent`() {
-        val quiet = runtime.foregroundNotification(null)
-        runtime.foregroundPosted(null)
+    fun `a start with no alarm to show uses the quiet notification, and the ring replaces it with a new full post`() {
+        runtime.enterForeground(service, alarmAt = null, ringing = false)
+        runtime.onServiceStarted()
+        val quiet = foreground.single()
 
         assertEquals(WakeNotifier.QUIET_CHANNEL_ID, quiet.channelId)
         assertNull(quiet.fullScreenIntent)
         assertEquals(NotificationManager.IMPORTANCE_LOW, notifications.getNotificationChannel(WakeNotifier.QUIET_CHANNEL_ID).importance)
         assertNull(runtime.shownAlarmAt())
+
+        enter(ringing)
+
+        // Story 5.13 device check: the full one goes under the other id (a new post) and the foreground moves to it.
+        assertEquals(2, foreground.size)
+        assertNotNull(foreground.last().fullScreenIntent)
+        assertNotNull(shadowOf(notifications).getNotification(WakeNotifier.OTHER_NOTIFICATION_ID)?.fullScreenIntent)
+        assertNull(shadowOf(notifications).getNotification(WakeNotifier.NOTIFICATION_ID), "the quiet one is gone")
     }
 
     @Test

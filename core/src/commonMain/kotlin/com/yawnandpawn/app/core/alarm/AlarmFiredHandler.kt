@@ -31,7 +31,11 @@ interface AlarmFiredHandler {
         retrySince: Instant? = null,
     )
 
-    suspend fun onTestAlarmFired()
+    /**
+     * The test alarm fired (Story 1.18); [scheduledAt] is the time it was armed for, when the fire carried it (the wake
+     * service then posts the full ringing notification first, Story 5.13 device check).
+     */
+    suspend fun onTestAlarmFired(scheduledAt: Instant? = null)
 }
 
 /**
@@ -96,7 +100,7 @@ class RearmOnFire(
         logger.log(LogEvent.FireIgnored(FireKind.SessionSlot, alarmId = null, reason = NOT_BOUND))
     }
 
-    override suspend fun onTestAlarmFired() {
+    override suspend fun onTestAlarmFired(scheduledAt: Instant?) {
         logger.log(LogEvent.FireIgnored(FireKind.TestAlarm, alarmId = null, reason = NOT_BOUND))
     }
 

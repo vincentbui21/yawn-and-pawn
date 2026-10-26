@@ -87,7 +87,11 @@ import kotlin.time.Instant
  * - **Slot (Story 2.1):** the kill-recovery path; see [onSlot]. **Restore:** it loads the stored session
  *   (`SessionEngine.restore`).
  * - **Test:** it takes the pending test config and dispatches `TestAlarmFired` (Story 1.18), with "Bright wake screen"
- *   from the last-known settings snapshot (Story 5.2: a synchronous cache, never the store).
+ *   from the last-known settings snapshot (Story 5.2: a synchronous cache, never the store). Its first foreground post
+ *   is the full ringing notification for the test's ring time (Story 5.13 device check, [testIntent]).
+ * - **Full-screen intent (Story 5.13 device check):** the full ringing notification over a version without its
+ *   full-screen intent is always a new post under the other id, and the foreground notification moves to it
+ *   ([WakeNotifier], its [WakeNotifier.ForegroundHost]): SystemUI launches a full-screen intent only on a first post.
  * - A dispatch that may start a session (`AlarmFired`, `TestAlarmFired`) runs in [SessionLockGuard.startingSession], so
  *   it never lands in the middle of a guarded alarm write (Story 2.6).
  * - **Repost** (the ringing notification's delete intent, Story 2.5): entering the foreground posts the notification
@@ -183,10 +187,10 @@ class WakeService :
         val timed = fired != null || intent?.action == ACTION_TEST
         fired?.let { timings.fired(it.scheduledAt) }
         if (timed) timings.stage(WakeStage.StartCommand)
-        // An alarm start shows its ringing notification at once; a slot or restore start shows the ringing one only when
-        // it is already up, else the quiet one (no full-screen intent) until a ringing state posts its own.
+        // An alarm or test start shows its ringing notification at once; a slot or restore start shows the ringing one only
+        // when it is already up, else the quiet one (no full-screen intent) until a ringing state posts its own.
         val repost = intent?.action == ACTION_REPOST
-        val inForeground = enterForegroundFor(fired, repost)
+        val inForeground = enterForegroundFor(intent, fired)
         if (timed && inForeground) timings.stage(WakeStage.InForeground)
         // The alarm receiver that asked for this start may finish its broadcast now (WakeServiceStarts).
         intent?.takeIf { it.hasExtra(EXTRA_START_TOKEN) }?.let { starts.onStartCommandReached(it.getLongExtra(EXTRA_START_TOKEN, 0)) }
@@ -244,41 +248,75 @@ class WakeService :
     override fun onDestroy() {
         scope.cancel()
         calls.stop()
+        // The platform removes the foreground notification with the service.
+        runtime.foregroundStopped(foregroundHost)
         runtime.onServiceStopped()
         super.onDestroy()
     }
 
+    /** This service's `startForeground` with its type, for the notifier: a new post moves the foreground notification. */
+    private val foregroundHost =
+        WakeNotifier.ForegroundHost { id, notification ->
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                startForeground(id, notification, ServiceInfo.FOREGROUND_SERVICE_TYPE_MEDIA_PLAYBACK)
+            } else {
+                startForeground(id, notification)
+            }
+        }
+
     /**
-     * Enters the foreground for an alarm start ([fired]) with its ringing notification, else with the one already shown
-     * (or the quiet one). A [repost] start (the notification was swiped, Story 2.5) posts it again; during a snooze it
-     * has no full-screen intent, which would open the wake screen with nothing ringing.
+     * Enters the foreground with the notification for this start:
+     * - an alarm start ([fired]): its ringing notification, with the full-screen intent on its first post;
+     * - a test start (Story 5.13 device check): the test's ring time ([EXTRA_SCHEDULED_AT]) when nothing is shown and
+     *   nothing rings, so its first post is the full ringing one with the full-screen intent, never the quiet one that a
+     *   later update could not turn into a full-screen launch; otherwise as a slot start;
+     * - a slot or restore start: the one already shown (full while the alarm rings, without the full-screen intent in a
+     *   snooze), or the quiet one;
+     * - a repost start (the notification was swiped, Story 2.5): posts it again; during a snooze it has no full-screen
+     *   intent, which would open the wake screen with nothing ringing.
      */
     private fun enterForegroundFor(
+        intent: Intent?,
         fired: AlarmFired?,
-        repost: Boolean,
     ): Boolean {
-        if (!repost) return enterForeground(fired?.scheduledAt ?: runtime.shownAlarmAt())
         val shown = runtime.shownAlarmAt()
-        // The next WakeUiShown posts it again, even if this start cannot enter the foreground.
-        runtime.notificationSwiped()
-        return enterForeground(shown, fullScreen = forwardsToWakeScreen(engine.state.value, runtime.emergency.value))
+        val state = engine.state.value
+        val emergency = runtime.emergency.value != null
+        // A ring paused by a phone call never posts the full-screen one (Story 5.13 review): the wake screen would jump
+        // over the call.
+        val ringing = forwardsToWakeScreen(state, runtime.emergency.value) && (emergency || !runtime.pausedByCall())
+        val idle = state == SessionState.Idle && !emergency
+        return when {
+            // In a snooze (or a call) the fire's own ring step posts the full one, once the fire is merged and rings.
+            fired != null -> {
+                enterForeground(fired.scheduledAt, ringing = state !is SessionState.Snoozed && !runtime.pausedByCall())
+            }
+
+            intent?.action == ACTION_TEST && shown == null && idle -> {
+                val testAt = intent.testScheduledAtOrNull()
+                enterForeground(testAt, ringing = testAt != null)
+            }
+
+            intent?.action == ACTION_REPOST -> {
+                // The next WakeUiShown posts it again, even if this start cannot enter the foreground.
+                runtime.notificationSwiped()
+                enterForeground(shown, ringing)
+            }
+
+            else -> {
+                enterForeground(shown, ringing)
+            }
+        }
     }
 
     // startForeground throws ForegroundServiceStartNotAllowedException (an IllegalStateException) or SecurityException
     // when the platform refuses; the armed slot brings the ring back.
     private fun enterForeground(
         alarmAt: Instant?,
-        fullScreen: Boolean = true,
+        ringing: Boolean,
     ): Boolean =
         try {
-            val notification = runtime.foregroundNotification(alarmAt, fullScreen)
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-                startForeground(WakeNotifier.NOTIFICATION_ID, notification, ServiceInfo.FOREGROUND_SERVICE_TYPE_MEDIA_PLAYBACK)
-            } else {
-                startForeground(WakeNotifier.NOTIFICATION_ID, notification)
-            }
-            // One without its full-screen intent is not the ringing one: the next WakeUiShown replaces it.
-            if (fullScreen) runtime.foregroundPosted(alarmAt)
+            runtime.enterForeground(foregroundHost, alarmAt, ringing)
             true
         } catch (e: IllegalStateException) {
             refused(e)
@@ -689,6 +727,7 @@ class WakeService :
         // The commitment lock (Story 4.4): a change that waited for this session's occurrence takes effect now it is over.
         appScope.launch { promotePending() }
         stopForeground(STOP_FOREGROUND_REMOVE)
+        runtime.foregroundStopped(foregroundHost)
         stopSelfResult(lastStartId)
     }
 
@@ -745,6 +784,23 @@ class WakeService :
             alarm: AlarmFired?,
             retrySince: Instant? = null,
         ): Intent = intent(context, ACTION_SLOT).putAlarmFired(alarm).putRetrySince(retrySince)
+
+        /**
+         * The intent of a test alarm fire (Story 1.18), carrying the time the test was armed for ([scheduledAt], the
+         * receiver's [AlarmFiredReceiver.EXTRA_SCHEDULED_AT]) when known: the first foreground post is then the full
+         * ringing notification with its full-screen intent (Story 5.13 device check).
+         */
+        fun testIntent(
+            context: Context,
+            scheduledAt: Instant?,
+        ): Intent =
+            intent(context, ACTION_TEST).apply {
+                scheduledAt?.let { putExtra(AlarmFiredReceiver.EXTRA_SCHEDULED_AT, it.toEpochMilliseconds()) }
+            }
+
+        private fun Intent.testScheduledAtOrNull(): Instant? =
+            takeIf { it.hasExtra(AlarmFiredReceiver.EXTRA_SCHEDULED_AT) }
+                ?.let { Instant.fromEpochMilliseconds(it.getLongExtra(AlarmFiredReceiver.EXTRA_SCHEDULED_AT, 0)) }
 
         /** The intent that rings the stored alarm [fired]. */
         fun alarmIntent(

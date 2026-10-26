@@ -35,7 +35,10 @@ class AlarmFiredReceiver :
             val fired: AlarmFired,
         ) : Fire
 
-        data object TestAlarm : Fire
+        /** The test alarm, armed for [scheduledAt] when the fire carries it (`AndroidAlarmScheduler.scheduleTest`). */
+        data class TestAlarm(
+            val scheduledAt: Instant?,
+        ) : Fire
 
         /** A session slot armed by a version before Story 2.1, still delivered here after an update. */
         data object LegacySessionSlot : Fire
@@ -49,7 +52,7 @@ class AlarmFiredReceiver :
         val fire =
             when (intent.action) {
                 ACTION_ALARM -> intent.alarmFiredOrNull()?.let { Fire.Alarm(it) }
-                ACTION_TEST_ALARM -> Fire.TestAlarm
+                ACTION_TEST_ALARM -> Fire.TestAlarm(intent.takeIf { it.hasExtra(EXTRA_SCHEDULED_AT) }?.let { scheduledAtOf(it) })
                 ACTION_LEGACY_SESSION_SLOT -> Fire.LegacySessionSlot
                 else -> null
             }
@@ -57,27 +60,27 @@ class AlarmFiredReceiver :
             logger.log(LogEvent.FireIgnored(FireKind.Alarm, intent.getStringExtra(EXTRA_ALARM_ID), "unknown action or missing extras"))
             return
         }
-        timeRingStart(fire, intent)
+        timeRingStart(fire)
         val handler = get<AlarmFiredHandler>()
         runWithinBudget(get(), logger, "handle alarm fire") {
             when (fire) {
                 is Fire.Alarm -> handler.onAlarmFired(fire.fired)
-                Fire.TestAlarm -> handler.onTestAlarmFired()
+
+                // The test's ring time goes to the service, so its first post opens the wake screen (Story 5.13 device check).
+                is Fire.TestAlarm -> handler.onTestAlarmFired(fire.scheduledAt)
+
                 Fire.LegacySessionSlot -> handler.onSessionSlotFired(alarm = null)
             }
         }
     }
 
     /** An alarm or test fire starts the ring-start timing ([WakeTimings]). */
-    private fun timeRingStart(
-        fire: Fire,
-        intent: Intent,
-    ) {
+    private fun timeRingStart(fire: Fire) {
         val timings = getKoin().getOrNull<WakeTimings>() ?: return
         val scheduledAt =
             when (fire) {
                 is Fire.Alarm -> fire.fired.scheduledAt
-                Fire.TestAlarm -> intent.takeIf { it.hasExtra(EXTRA_SCHEDULED_AT) }?.let { scheduledAtOf(it) }
+                is Fire.TestAlarm -> fire.scheduledAt
                 Fire.LegacySessionSlot -> return
             }
         scheduledAt?.let(timings::fired)

@@ -312,7 +312,11 @@ class WakeActivity : ComponentActivity() {
             val ringingSessionId = (state as? SessionState.Active)?.takeIf { it.isRinging() }?.session?.sessionId
             // Recreated after a kill, the engine is Idle until it restores the stored session: the screen waits for that.
             val restored by engine.restored.collectAsState()
-            LaunchedEffect(active, ringingSessionId, restored) { end.follow(active, ringingSessionId, restored) }
+            // Opened by a full-screen intent whose service then stopped with nothing ringing: it closes (Story 5.13 device check).
+            val serviceStopped by runtime.serviceStopped.collectAsState()
+            LaunchedEffect(active, ringingSessionId, restored, serviceStopped) {
+                end.follow(active, ringingSessionId, restored, serviceStopped)
+            }
             SessionAnswers(state, emergency != null)
             // Once a session ends the screen keeps its last look until it closes, instead of flashing an empty surface.
             val last = remember { LastShown() }

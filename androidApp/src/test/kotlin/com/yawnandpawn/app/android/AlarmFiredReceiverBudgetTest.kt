@@ -61,7 +61,7 @@ class AlarmFiredReceiverBudgetTest {
                     retrySince: Instant?,
                 ) = onSlot()
 
-                override suspend fun onTestAlarmFired() = Unit
+                override suspend fun onTestAlarmFired(scheduledAt: Instant?) = Unit
             },
         )
 
@@ -176,7 +176,7 @@ class AlarmFiredReceiverBudgetTest {
             retrySince: Instant?,
         ) = Unit
 
-        override suspend fun onTestAlarmFired() = Unit
+        override suspend fun onTestAlarmFired(scheduledAt: Instant?) = Unit
     }
 
     @Test

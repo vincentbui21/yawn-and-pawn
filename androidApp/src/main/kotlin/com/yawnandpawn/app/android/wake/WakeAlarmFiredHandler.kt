@@ -30,8 +30,8 @@ import kotlin.time.TimeSource
  * - The session slot: start the service with the slot action and the alarm the slot stands for, if any.
  * - A refused start of an alarm or the slot (Story 2.1): [rearm] arms the session slot one heartbeat later carrying the
  *   alarm, so its fire tries the start again (`SessionSlotRearm.afterRefusedStart`).
- * - The test alarm (Story 1.18): start the service with the test action; it rings the pending test config. Nothing is
- *   re-armed (a test rings once).
+ * - The test alarm (Story 1.18): start the service with the test action and the time the test was armed for; it rings
+ *   the pending test config. Nothing is re-armed (a test rings once).
  * - The re-arm runs even when the read or the start throws.
  * - After a start, the fire is not handled until [WakeService] took that start (its [WakeServiceStarts] token), at
  *   most [WakeServiceStarts.wait] from the fire's start, so the receiver's budget never cuts the wait: the receiver's
@@ -79,11 +79,12 @@ class WakeAlarmFiredHandler(
         if (starter.startSlot(token, alarm, retrySince)) awaitService(token, begin) else rearm.afterRefusedStart(alarm, retrySince)
     }
 
-    override suspend fun onTestAlarmFired() {
+    override suspend fun onTestAlarmFired(scheduledAt: Instant?) {
         val begin = timeSource.markNow()
         val token = starts.newToken()
-        // No session slot backs a test up: a refused start means this test does not ring.
-        if (start { starter.startTest(token) }) {
+        // No session slot backs a test up: a refused start means this test does not ring. The ring time goes along, so
+        // the service's first post carries the full-screen intent (Story 5.13 device check).
+        if (start { starter.startTest(token, scheduledAt) }) {
             awaitService(token, begin)
         } else {
             logger.log(LogEvent.OperationFailed("start test alarm", "service start refused; the test does not ring"))

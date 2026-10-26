@@ -16,6 +16,7 @@ How the app works: structure, behaviour, states, words and journeys. How it look
 ## Foundation
 
 - **Form factor:** single-surface Android phone app (Kotlin Multiplatform, Compose Multiplatform). iOS later; no Responsive & Platform section until then.
+- **Portrait only (owner decision 2026-10-26).** Every activity is locked to portrait; Android 16 ignores the lock on large screens (smallest width 600 dp or more), which is accepted. Landscape and large-screen layouts are a v2 item.
 - **UI system:** Material 3 components and interaction patterns, with our own tokens from `DESIGN.md`. This spine specifies only the behavioural delta from Material 3.
 - **Dynamic colour off.** Icons: Material Symbols Rounded, weight 400, fill 0 (fill 1 for the selected nav item and outcome markers).
 - **Themes:** app screens follow the system light/dark setting, with a manual override (System / Light / Dark). Wake screens always use the Sunrise token set. With "Bright wake screen" on (default), the ringing screen and its snooze sheet are at full brightness; the checks, the fallback check picker, Snoozed and Success are at the phone's own level (owner decision 2026-10-22, Story 5.2).

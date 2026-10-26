@@ -219,7 +219,13 @@ class LeaveAndReturnTest {
     @Test
     fun `an emergency ring during a call never posts the full-screen intent over it, and the call's end does (PR 95 review)`() {
         var onCall = false
-        val app = WakeApp(calls = object : CallState { override fun inCall() = onCall })
+        val app =
+            WakeApp(
+                calls =
+                    object : CallState {
+                        override fun inCall() = onCall
+                    },
+            )
         app.runtime.startEmergency(fired.scheduledAt, volumePercent = 80, cause = "test")
         val screen = buildActivity(WakeActivity::class.java).setup()
         // A call comes in: the emergency ring follows it itself, and the call screen comes over the wake screen.

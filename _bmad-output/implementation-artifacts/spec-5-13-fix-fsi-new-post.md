@@ -109,6 +109,8 @@ One Gradle invocation at a time, `--no-daemon --max-workers=2`, JDK 17. All pass
 - Scans: `:core:jvmTest` `AlarmSchedulingTest` + `SessionLockGuardTest` (39), `:data:testAndroidHostTest` `PurchaseStateReaderScanTest` + `SessionLockGuardScanTest` (8), `:detekt-rules:test` `NoDirectTimeAccessTest` (6).
 - `spotlessCheck` and `detekt` (all modules).
 
+After the PR #95 review fixes, rebased onto main `a2ba2943`, the same set passed again: androidApp 35 classes, 419 tests (`FullScreenNewPostTest` 6, `LeaveAndReturnTest` 19, `WakeNotifierTest` 21, `WakeServiceTestStartTest` 2), core 39, data 8, detekt-rules 6, `spotlessCheck` and `detekt`.
+
 Note: the `ACTION_TEST` foreground assertions live in `WakeServiceTestStartTest`, not `WakeServiceTest`, because `WakeServiceTest` is at detekt's LargeClass limit.
 
 ## Auto Run Result

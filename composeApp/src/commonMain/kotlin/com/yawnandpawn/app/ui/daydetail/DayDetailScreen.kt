@@ -339,19 +339,28 @@ private fun HeroCard(
     }
 }
 
-/** Rings · snoozes · paid, like the Progress tiles; money in `text`, "No charge" when nothing was paid. */
+/**
+ * Rings · snoozes · paid, like the Progress tiles; money in `text`, "No charge" when nothing was paid. A session with
+ * paid snoozes but no known amount (only estimates, or records that could not be read) never claims "No charge": its
+ * paid tile is left out, as Purchase history leaves out an unknown amount.
+ */
 @Composable
 private fun SessionTiles(session: SessionDetail) {
+    val amountUnknown = session.snoozes > 0 && session.paid.isEmpty()
     TileRow(
         tiles =
-            listOf(
+            listOfNotNull(
                 Tile(Res.drawable.symbol_alarm, session.rings.toString(), stringResource(Res.string.day_tile_rings)),
                 Tile(Res.drawable.symbol_snooze, session.snoozes.toString(), stringResource(Res.string.progress_tile_snoozes)),
-                Tile(
-                    Res.drawable.symbol_payments,
-                    session.paid.takeIf { it.isNotEmpty() }?.let { formatMoney(it) } ?: stringResource(Res.string.day_tile_no_charge),
-                    stringResource(Res.string.day_tile_paid),
-                ),
+                if (amountUnknown) {
+                    null
+                } else {
+                    Tile(
+                        Res.drawable.symbol_payments,
+                        session.paid.takeIf { it.isNotEmpty() }?.let { formatMoney(it) } ?: stringResource(Res.string.day_tile_no_charge),
+                        stringResource(Res.string.day_tile_paid),
+                    )
+                },
             ),
     )
 }
@@ -644,11 +653,11 @@ private fun snoozedText(event: MorningEvent.Snoozed): String {
 @Composable
 private fun solvedText(event: MorningEvent.CheckSolved): String {
     val tries = event.tries
-    val first = event.checks.first().displayName()
+    val names = event.checks.map { it.displayName() }
     return when {
-        tries == null -> stringResource(Res.string.day_event_solved, event.checks.map { it.displayName() }.joinToString(CHECK_SEPARATOR))
-        tries <= 1 -> stringResource(Res.string.day_event_solved_first, first)
-        else -> stringResource(Res.string.day_event_solved_tries, first, tries)
+        tries == null || names.isEmpty() -> stringResource(Res.string.day_event_solved, names.joinToString(CHECK_SEPARATOR))
+        tries <= 1 -> stringResource(Res.string.day_event_solved_first, names.first())
+        else -> stringResource(Res.string.day_event_solved_tries, names.first(), tries)
     }
 }
 

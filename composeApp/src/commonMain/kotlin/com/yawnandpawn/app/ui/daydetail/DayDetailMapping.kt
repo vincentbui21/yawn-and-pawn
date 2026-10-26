@@ -52,8 +52,8 @@ internal fun dayDetailOf(
 }
 
 /**
- * One session: its alarm time (the local time of `scheduledAt`) with the alarm's current label while it has one, the
- * outcome, and for a counted session (On time, Snoozed, Missed) the stored tiles (rings 1 + `snoozeCount`), the money
+ * One session: its alarm time (the local time of `scheduledAt`) with the alarm's current label while it has one (not
+ * for a test or skipped session), the outcome, and for a counted session (On time, Snoozed, Missed) the stored tiles (rings 1 + `snoozeCount`), the money
  * paid per currency, the payments Google refunded, the time to get up and the timeline ([morningEventsOf]). Test and
  * skipped sessions get the hero data only. `null` for a session still running (no outcome).
  */
@@ -68,7 +68,8 @@ internal fun sessionDetailOf(
     val alarmTime = row.scheduledAt.localTime(zone)
     val label = alarm?.label?.trim()?.takeIf { it.isNotEmpty() }
     if (outcome == Outcome.Test || outcome == Outcome.Skipped) {
-        return SessionDetail(alarmTime, label, outcome, events = emptyList(), snoozes = 0, rings = 0, paid = emptyList(), minutesToUp = null)
+        // AC 4: the marker, the outcome word and the alarm time only.
+        return SessionDetail(alarmTime, null, outcome, events = emptyList(), snoozes = 0, rings = 0, paid = emptyList(), minutesToUp = null)
     }
     val timed = outcome == Outcome.OnTime || outcome == Outcome.Snoozed
     return SessionDetail(

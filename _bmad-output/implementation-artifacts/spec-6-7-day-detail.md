@@ -2,8 +2,8 @@
 title: 'Story 6.7: Day detail for each morning'
 type: 'feature'
 created: '2026-10-26'
-status: 'ready-for-dev'
-baseline_commit: 'stack on the merged 6.6 (fill in at start)'
+status: 'review'
+baseline_commit: '54d551e9 (6.6 on main 38323732; rebase onto main once 6.6 merges)'
 route: 'dispatch'
 story_key: '6-7-day-detail-for-each-morning'
 review_loop_iteration: 0
@@ -503,16 +503,18 @@ a Snoozed session today, EUR plus USD and a stranded record, a merge and a Disab
 
 ## pps-design Done checklist
 
-- [ ] Only tokens from `DESIGN.md` used (no raw hex, no new radii, no new font sizes).
-- [ ] Light, Dark (and Sunrise where relevant) checked with previews / screenshots.
-- [ ] Every colour pair used is in the `DESIGN.md` contrast table.
-- [ ] Touch targets ≥ 48 dp; wake actions ≥ 64 dp.
-- [ ] Works at 200% font scale and with TalkBack; outcome glyphs present.
-- [ ] Reduced-motion path works.
-- [ ] Copy matches `EXPERIENCE.md > Voice and Tone` (no em dashes, no filler, strings in resources).
-- [ ] Every state row in `EXPERIENCE.md > State Patterns` for this surface is handled.
-- [ ] "I'm up" is the most prominent wake action; snooze is visible, plain and priced. (Not applicable.)
-- [ ] Compose `@Preview`s for each state (light/dark/Sunrise, empty/error) exist; screenshot tests updated (Roborazzi).
+- [x] Only tokens from `DESIGN.md` used (no raw hex, no new radii, no new font sizes).
+- [x] Light, Dark (and Sunrise where relevant) checked with previews / screenshots. (No Sunrise: not a wake screen.)
+- [x] Every colour pair used is in the `DESIGN.md` contrast table. (No new pair: the refunded amount is
+  `text-secondary` on glass, as in Purchase history.)
+- [x] Touch targets ≥ 48 dp; wake actions ≥ 64 dp. (Back only; semantics test.)
+- [x] Works at 200% font scale and with TalkBack; outcome glyphs present.
+- [x] Reduced-motion path works. (The approved `rememberEntered` / `entranceProgress` snap.)
+- [x] Copy matches `EXPERIENCE.md > Voice and Tone` (no em dashes, no filler, strings in resources). No new string.
+- [x] Every state row in `EXPERIENCE.md > State Patterns` for this surface is handled (loading, failure, data).
+- [x] "I'm up" is the most prominent wake action; snooze is visible, plain and priced. (Not applicable.)
+- [x] Compose `@Preview`s for each state (light/dark/Sunrise, empty/error) exist; screenshot tests updated (Roborazzi).
+  The round 2 and round 5 preview states stay; `DayDetailScreenshotTest` covers the production states.
 
 ## Verification
 
@@ -525,7 +527,58 @@ Use JDK 17 and `--no-daemon --max-workers=2`, targeted runs only.
 
 ## Spec Change Log
 
+**Built on** 6.6's HEAD (`origin/story/6-6-calendar` 54d551e9, itself on main 38323732 with 6.3), unmerged at build
+time. The 6.2, 6.5 and 6.6 code as built, and the owner-approved round 5 preview (`day-facts-*`), win over the plan
+above.
+
+**Contract as built.**
+
+| Spec guess | As built | What 6.7 did |
+|---|---|---|
+| `sessionsOn` may return totals only | 6.2's `SessionOnDay` carries `row`, `purchases` (Granted, Consumed, Reused, estimates included, oldest first), `paid` (amount-paid totals) and `stranded` records | Used as is; no record filtering in the mapper. |
+| `dayDetailOf(date, history, records, merges, events, alarms, zone)` calls `sessionsOn` itself | the ViewModel needs the day's sessions first, to read only their merges | `dayDetailOf(date, sessions: List<SessionOnDay>, merges, events, alarms, zone)` and `sessionDetailOf(session: SessionOnDay, merges, alarm, zone)`. |
+| Move the preview samples to stored fields | round 5 made `MorningEvent.time`, `Snoozed.minutes`, `CheckSolved.tries` nullable, `rings` still derived | `SessionDetail` gained stored constructor fields `snoozes`, `rings`, `paid`, `minutesToUp`, `stranded`, whose **defaults derive them from the events**, so the round 2 and round 5 preview samples are unchanged and their baselines did not move. `Snoozed.time` and `Snoozed.price` are now nullable (E4, estimates). `CheckSolved` takes `checks: List<CheckType>` (E9), with a secondary `(time, check, tries = 1)` constructor for the mock-ups. |
+| `onOpenDay` no-op in `ProgressEntries.kt` | as expected | `onOpenDay = { backStack.openDayDetail(it) }`; `DayDetailEntry` lives beside it and is registered in `PushedEntries.kt`. |
+| `Route.DayDetail(date: LocalDate)` may not survive saved state | `LocalDate` serialises as an ISO string | Kept `LocalDate`. `SessionLockTest`'s sample builder gives a `LocalDate` an ISO sample; a JSON round trip with `RouteSavedStateConfiguration`'s module is in `TabNavigationTest`, and `scenario.recreate()` in `DayDetailRouteTest`. |
+
+**Deviations.**
+- **Fallback (AC 3, E2): the approved round 5 shape, not the hero badge.** The owner approved round 5's `day-facts-fallback`
+  ("the fallback check, with no time, just before the end"), which is a time-less timeline row "Fallback check: {check}"
+  (existing `day_event_fallback`), so production builds `FallbackUsed(time = null, check)` from the first known
+  `checkTypes` id when `fallbackUsed`. No hero badge, so the new string `day_detail_fallback_used` was not added.
+- **No new strings.** `day_event_snoozed_paid` and `day_event_solved` already existed (round 5); the fallback uses
+  `day_event_fallback`; an estimated snooze reads `outcome_snoozed` ("Snoozed"). Nothing for the v2 wording list.
+- **Snooze order:** records sorted by snooze number, then purchase time; a payment bought outside
+  `[firstRingAt, endedAt ?: firstRingAt + 30 min]` gets no time and sorts at the first ring (right after "Alarm rang");
+  then snoozes and merges are sorted by instant (stable).
+- **The stranded line** is a `glass` card per session after the tiles with one row per refunded payment, the amount in
+  `text-secondary` on the right (none for an estimate), read "Not used, refunded automatically by Google, {price}
+  refunded".
+- **"0" is shown for a real zero:** the snoozes tile of an on-time morning reads "snoozes, 0" (a stored fact, as on
+  Progress). AC 7 is read as "a missing fact is never shown as 0": no "0 min", no "null".
+- **Merges** are read only for counted sessions (Test and Skipped show no timeline). A failed `merges` or
+  `commitmentEvents.all()` read logs `OperationFailed` and leaves those rows or notes out; a failed alarms flow logs and
+  shows the time only.
+- **Loading** shows only before the first read and after "Try again", not when the upstream restarts after 5 s away
+  (6.5's pattern), so returning to Day detail never blanks it.
+- **Flow test** is a new `DayDetailRouteTest` (calendar chip, Back keeps chip and month, a double tap pushes one,
+  recreate, second tap on the ring dot, session lock). `ProgressRouteTest`'s calendar test now expects its second tap
+  to open Day detail and Back to return with the chip.
+
 ## Review Triage Log
+
+One combined reviewer (adversarial, edge cases, verification gaps, structure) on `git diff 54d551e9`: 1 HIGH, 1 MEDIUM,
+5 LOW. All fixed except where noted.
+
+| # | Sev | Finding | Action |
+|---|---|---|---|
+| 1 | HIGH | `DayDetailSemanticsTest` "never 0 min" matched "Stopped after 30 minutes" | Fixed: whole-figure regex `(^\|\D)0 min\b`. |
+| 2 | MEDIUM | A session with paid snoozes but no known amount (estimates, or unreadable records) showed "No charge", a false money claim | Fixed: with `snoozes > 0` and empty `paid` the paid tile is left out (as Purchase history leaves out an unknown amount); no new string. `TileRow` skips an empty second row at large font. Semantics test added; `day_detail_missed` baselines re-recorded. |
+| 3 | LOW | Test and Skipped heroes showed the alarm label (AC 4: time only) | Fixed in `sessionDetailOf`; mapping test asserts it. |
+| 4 | LOW | `solvedText` called `checks.first()` on every path | Fixed: names computed once, `first()` only with a try count and a name. |
+| 5 | LOW | ViewModel test gaps: records-flow failure, alarms-flow failure, no loading flash on restart, loading order asserted only via the initial value | Fixed: three tests added; the order is asserted as `[true, false]`. |
+| 6 | LOW | Route test gaps: the screen closing itself with nothing logged; Home after the session | Fixed the first (`Day detail closes itself once its day has nothing logged`). Not added: Home after the session ends is the shell's `applySessionLock(false)`, already covered by `SessionLockTest` and the Story 2.6 tests. |
+| 7 | LOW | `ProgressRouteTest` Back check could pass during the pop animation | Fixed: waits for the Day detail title to go first. |
 
 ## Owner decision (2026-10-26)
 The owner approved all three round 5 defaults ("OK with all"):

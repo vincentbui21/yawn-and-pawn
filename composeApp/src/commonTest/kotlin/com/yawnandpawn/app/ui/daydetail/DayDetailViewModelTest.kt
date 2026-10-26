@@ -1,5 +1,7 @@
 package com.yawnandpawn.app.ui.daydetail
 
+import com.yawnandpawn.app.core.alarm.Alarm
+import com.yawnandpawn.app.core.alarm.AlarmRepository
 import com.yawnandpawn.app.core.billing.Money
 import com.yawnandpawn.app.core.billing.RecordStatus
 import com.yawnandpawn.app.core.config.CommitmentAction
@@ -20,9 +22,12 @@ import com.yawnandpawn.app.testing.aSessionHistoryRow
 import com.yawnandpawn.app.testing.anAlarm
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.test.TestScope
 import kotlinx.coroutines.test.UnconfinedTestDispatcher
+import kotlinx.coroutines.test.advanceTimeBy
 import kotlinx.coroutines.test.resetMain
 import kotlinx.coroutines.test.runTest
 import kotlinx.coroutines.test.setMain
@@ -102,7 +107,7 @@ class DayDetailViewModelTest {
 
             val viewModel = screen(seen)
 
-            assertTrue(seen.first().loading)
+            assertEquals(listOf(true, false), seen.map { it.loading })
             val shown = viewModel.session()
             assertEquals("Work", shown.alarmLabel)
             assertEquals(12, shown.minutesToUp)
@@ -182,6 +187,43 @@ class DayDetailViewModelTest {
 
             assertTrue(seen.drop(1).any { it.loading }, "loading again after Try again: $seen")
             assertFalse(viewModel.state.value.loadFailed)
+            assertEquals(1, viewModel.state.value.sessions.size)
+        }
+
+    @Test
+    fun `a failing records flow shows the load failure, and a failing alarms flow only drops the label`() =
+        runTest(dispatcher) {
+            seedSnoozedMorning()
+            records.observeFailure = IllegalStateException("records")
+            val failing = screen()
+            assertTrue(failing.state.value.loadFailed)
+
+            records.observeFailure = null
+            val failingAlarms =
+                object : AlarmRepository by alarms {
+                    override fun observeAll(): Flow<List<Alarm>> = flow { throw IllegalStateException("alarms") }
+                }
+            val labelless = DayDetailViewModel(today, history, records, failingAlarms, events, FakeTimeZoneProvider(TimeZone.UTC), logger)
+            backgroundScope.launch { labelless.state.collect { } }
+            assertEquals(null, labelless.session().alarmLabel)
+            assertEquals(MorningEvent.Rang(LocalTime(6, 0)), labelless.session().events.first())
+            assertTrue(logger.events.any { it is LogEvent.OperationFailed && it.operation == "load alarm labels" }, "${logger.events}")
+        }
+
+    @Test
+    fun `back on Day detail after more than 5 s away shows the last day, never loading again`() =
+        runTest(dispatcher) {
+            seedSnoozedMorning()
+            val viewModel = DayDetailViewModel(today, history, records, alarms, events, FakeTimeZoneProvider(TimeZone.UTC), logger)
+            val first = backgroundScope.launch { viewModel.state.collect { } }
+            assertEquals(1, viewModel.state.value.sessions.size)
+            first.cancel()
+            advanceTimeBy(6_000)
+
+            val seen = mutableListOf<DayDetailUiState>()
+            backgroundScope.launch { viewModel.state.collect { seen += it } }
+
+            assertTrue(seen.none { it.loading }, "$seen")
             assertEquals(1, viewModel.state.value.sessions.size)
         }
 

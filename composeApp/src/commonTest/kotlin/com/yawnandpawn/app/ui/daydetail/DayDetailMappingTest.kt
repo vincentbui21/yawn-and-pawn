@@ -255,6 +255,7 @@ class DayDetailMappingTest {
             assertFalse(it.counted)
         }
         assertEquals(t(9, 0), shown[1].alarmTime)
+        assertNull(shown[0].alarmLabel, "the hero shows the time only, even while the alarm has a label")
         assertNull(shown[1].alarmLabel)
     }
 

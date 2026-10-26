@@ -185,7 +185,7 @@ class ProgressRouteTest {
             history.upsert(morning(10))
         }
         start()
-        onProgress("snoozes, 1") {
+        onProgress("snoozes, 1") { scenario ->
             composeRule.onNode(hasTestTag(PROGRESS_CALENDAR_TAG)).performScrollTo()
             waitForText("March 2027")
             monthButton("Next month").assertIsNotEnabled()
@@ -201,8 +201,11 @@ class ProgressRouteTest {
             val tuesday = composeRule.onNode(hasContentDescription("Tuesday 2, Snoozed") and inCalendar() and !hasText("Tue 2 · Snoozed"))
             tuesday.performClick()
             waitForText("Tue 2 · Snoozed")
-            // The second tap asks for Day detail (Story 6.7 opens it); Progress stays, with the chip.
+            // The second tap opens Day detail (Story 6.7); Back returns to Progress, with the chip and the month.
             tuesday.performClick()
+            waitForText("Tue, Mar 2")
+            scenario.onActivity { it.onBackPressedDispatcher.onBackPressed() }
+            waitForText("Tue, Mar 2", shown = false)
             waitForText("Tue 2 · Snoozed")
             waitForText("March 2027")
         }

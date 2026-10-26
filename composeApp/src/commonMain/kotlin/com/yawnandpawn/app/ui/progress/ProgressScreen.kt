@@ -173,7 +173,7 @@ internal fun TileRow(
     tiles: List<Tile>,
     modifier: Modifier = Modifier,
 ) {
-    val rows = if (isLargeFont()) listOf(tiles.take(2), tiles.drop(2)) else listOf(tiles)
+    val rows = (if (isLargeFont()) listOf(tiles.take(2), tiles.drop(2)) else listOf(tiles)).filter { it.isNotEmpty() }
     val spacing = PpsTheme.spacing
     Column(modifier = modifier, verticalArrangement = Arrangement.spacedBy(spacing.space2)) {
         rows.forEach { row ->

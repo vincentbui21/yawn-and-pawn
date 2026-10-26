@@ -2,6 +2,10 @@ package com.yawnandpawn.app.ui.nav
 
 import androidx.navigation3.runtime.NavKey
 import com.yawnandpawn.app.ui.shell.AppTab
+import kotlinx.datetime.LocalDate
+import kotlinx.serialization.PolymorphicSerializer
+import kotlinx.serialization.builtins.ListSerializer
+import kotlinx.serialization.json.Json
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertNull
@@ -131,6 +135,60 @@ class TabNavigationTest {
         backStack.openPurchaseHistory(from = Route.Progress)
         backStack.pop()
         assertEquals(listOf<NavKey>(Route.Alarms, Route.Progress), backStack)
+    }
+
+    @Test
+    fun `Day detail is pushed over Progress once, tabs and plus wait under it, and Back returns to Progress (Story 6_7)`() {
+        val day = LocalDate(2027, 3, 2)
+        val backStack = stack(Route.Alarms, Route.Progress)
+
+        backStack.openDayDetail(day)
+        backStack.openDayDetail(day)
+        backStack.openDayDetail(LocalDate(2027, 3, 1))
+        backStack.selectTab(AppTab.Settings)
+        backStack.openEditor(alarmId = null)
+        backStack.openPurchaseHistory(from = Route.Progress)
+        assertEquals(listOf<NavKey>(Route.Alarms, Route.Progress, Route.DayDetail(day)), backStack)
+        assertNull(backStack.topTab())
+        assertNull(Route.DayDetail(day).tab)
+
+        backStack.close(Route.DayDetail(day))
+        assertEquals(listOf<NavKey>(Route.Alarms, Route.Progress), backStack)
+        backStack.close(Route.DayDetail(day))
+        assertEquals(listOf<NavKey>(Route.Alarms, Route.Progress), backStack)
+
+        backStack.openDayDetail(day)
+        backStack.pop()
+        assertEquals(listOf<NavKey>(Route.Alarms, Route.Progress), backStack)
+    }
+
+    @Test
+    fun `Day detail opens only from Progress on top`() {
+        val day = LocalDate(2027, 3, 2)
+        listOf(
+            stack(Route.Alarms),
+            stack(Route.Alarms, Route.Settings),
+            stack(Route.Alarms, Route.You),
+            stack(Route.Alarms, Route.Progress, Route.PurchaseHistory),
+            stack(Route.Alarms, Route.You, Route.PurchaseHistory),
+            stack(Route.Alarms, Route.AlarmEditor(alarmId = null)),
+            stack(Route.SessionInProgress),
+            stack(Route.Onboarding),
+        ).forEach { backStack ->
+            val before = backStack.toList()
+            backStack.openDayDetail(day)
+            assertEquals(before, backStack)
+        }
+    }
+
+    @Test
+    fun `Day detail survives a saved back stack, its date kept (Story 6_7)`() {
+        val json = Json { serializersModule = RouteSavedStateConfiguration.serializersModule }
+        val saved: List<NavKey> = listOf(Route.Alarms, Route.Progress, Route.DayDetail(LocalDate(2027, 3, 28)))
+
+        val serializer = ListSerializer(PolymorphicSerializer(NavKey::class))
+
+        assertEquals(saved, json.decodeFromString(serializer, json.encodeToString(serializer, saved)))
     }
 
     @Test

@@ -2,6 +2,7 @@ package com.yawnandpawn.app.ui.nav
 
 import androidx.navigation3.runtime.NavKey
 import androidx.savedstate.serialization.SavedStateConfiguration
+import kotlinx.datetime.LocalDate
 import kotlinx.serialization.ExperimentalSerializationApi
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.modules.SerializersModule
@@ -78,6 +79,15 @@ sealed interface Route : NavKey {
      */
     @Serializable
     data object ManufacturerGuidance : Route
+
+    /**
+     * Day detail of [date] (Story 6.7), pushed over Progress from a ring or calendar chip, or a second tap on the
+     * selected day; Back returns to Progress. Not a tab, so the nav capsule hides.
+     */
+    @Serializable
+    data class DayDetail(
+        val date: LocalDate,
+    ) : Route
 
     /**
      * The session lock (Story 2.6, FR-SES-3): while a wake session is active it is the whole back stack, showing only

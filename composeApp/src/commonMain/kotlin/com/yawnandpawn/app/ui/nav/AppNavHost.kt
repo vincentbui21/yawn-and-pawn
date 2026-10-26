@@ -44,7 +44,8 @@ import org.koin.compose.koinInject
  * under the editor, which slides in and out; switching tabs is instant. Its "+" pushes the editor from any tab. Back on
  * a tab returns to Alarms, Back on Alarms leaves the app (see TabNavigation.kt). Each entry gets its own saveable state
  * (scroll position) and ViewModel store, so an editor's ViewModel is cleared when the editor leaves the back stack.
- * Progress (Story 6.5, ProgressEntries.kt) pushes Purchase history over itself, so its scroll and chip are kept under it.
+ * Progress (Story 6.5, ProgressEntries.kt) pushes Purchase history and Day detail (6.7) over itself, so its scroll and
+ * chip are kept under them.
  *
  * While a ring, snooze or emergency ring is in progress ([SessionLockGuard.isLocked]) only [Route.SessionInProgress] is
  * shown, from the same composition (Story 2.6): Home's approved session state, whose "Back to alarm" opens the wake

@@ -140,6 +140,12 @@ val CheckType.core: CoreCheckType?
  */
 fun CoreCheckType.toUi(): CheckType? = CheckType.entries.firstOrNull { it.core?.id == id }
 
+/**
+ * The UI check stored in session history under [id] (`CheckType.id`, as `SessionRecorder` writes it), or null for an
+ * unknown id or one a user never sees (Day detail, Story 6.7).
+ */
+fun checkTypeOfId(id: String): CheckType? = CheckType.entries.firstOrNull { it.core?.id == id }
+
 fun Difficulty.toCore(): CoreDifficulty = CoreDifficulty.valueOf(name)
 
 fun CoreDifficulty.toUi(): Difficulty = Difficulty.valueOf(name)

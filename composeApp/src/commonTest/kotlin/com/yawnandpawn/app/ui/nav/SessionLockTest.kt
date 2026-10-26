@@ -32,6 +32,7 @@ class SessionLockTest {
         val known = listOf(Route.Alarms, Route.Progress, Route.Settings, Route.You, Route.SessionInProgress)
         assertTrue(everyRoute.containsAll(known), "$everyRoute")
         assertTrue(everyRoute.any { it is Route.AlarmEditor }, "$everyRoute")
+        assertTrue(everyRoute.any { it is Route.DayDetail }, "$everyRoute")
         assertEquals(everyRoute.map { it::class }.distinct().size, everyRoute.size, "one sample per subclass")
     }
 
@@ -107,10 +108,12 @@ class SessionLockTest {
                 json.decodeFromJsonElement(Route.serializer(), JsonObject(mapOf("type" to JsonPrimitive(descriptor.serialName)) + fields))
             }
 
+        /** A sample value for [descriptor]; kotlinx-datetime's `LocalDate` is an ISO string (Day detail, Story 6.7). */
         @OptIn(ExperimentalSerializationApi::class)
         fun sample(descriptor: SerialDescriptor): JsonElement =
             when {
                 descriptor.isNullable -> JsonNull
+                descriptor.serialName.startsWith("kotlinx.datetime.LocalDate") -> JsonPrimitive("2027-03-28")
                 descriptor.kind == PrimitiveKind.STRING -> JsonPrimitive("sample")
                 descriptor.kind == PrimitiveKind.BOOLEAN -> JsonPrimitive(false)
                 descriptor.kind is PrimitiveKind -> JsonPrimitive(0)

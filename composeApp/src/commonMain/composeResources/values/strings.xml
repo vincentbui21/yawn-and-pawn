@@ -266,7 +266,6 @@
     <string name="progress_best_streak">Best streak</string>
     <string name="progress_minutes">%1$d min</string>
     <string name="progress_under_minute">Under 1 min</string>
-    <string name="progress_percent">%1$d%</string>
     <string name="progress_money_title">Money paid</string>
     <string name="progress_money_month">This month</string>
     <string name="progress_previous_month">Previous month</string>
@@ -289,6 +288,12 @@
     <string name="progress_insight_title">Insight</string>
     <string name="progress_insight_weekdays">You get up fastest on weekdays.</string>
     <string name="progress_insight_weekends">You get up fastest on weekends.</string>
+    <!-- Story 6.5: tiles with no mornings, nothing paid, loading and its failure (v2 wording pass). -->
+    <string name="progress_no_mornings">No mornings yet</string>
+    <string name="progress_nothing_paid">Nothing paid</string>
+    <string name="progress_loading_a11y">Loading your progress</string>
+    <string name="progress_loading_slow">Still loading your progress.</string>
+    <string name="progress_load_failed">Couldn't load your progress.</string>
 
     <!-- Day detail -->
     <string name="day_detail_before_unlock">Rang before your first unlock</string>

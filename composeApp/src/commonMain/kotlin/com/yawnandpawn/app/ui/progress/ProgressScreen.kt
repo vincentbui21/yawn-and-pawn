@@ -10,9 +10,16 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.semantics.clearAndSetSemantics
+import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import com.yawnandpawn.app.core.billing.Money
 import com.yawnandpawn.app.core.billing.totalsByCurrency
@@ -21,6 +28,7 @@ import com.yawnandpawn.app.ui.components.RowIcon
 import com.yawnandpawn.app.ui.components.TabScreen
 import com.yawnandpawn.app.ui.components.glass
 import com.yawnandpawn.app.ui.format.formatMoney
+import com.yawnandpawn.app.ui.format.formatPercent
 import com.yawnandpawn.app.ui.resources.Res
 import com.yawnandpawn.app.ui.resources.home_streak_day
 import com.yawnandpawn.app.ui.resources.home_streak_days
@@ -32,7 +40,8 @@ import com.yawnandpawn.app.ui.resources.progress_insight_weekends
 import com.yawnandpawn.app.ui.resources.progress_minutes
 import com.yawnandpawn.app.ui.resources.progress_money_month
 import com.yawnandpawn.app.ui.resources.progress_money_title
-import com.yawnandpawn.app.ui.resources.progress_percent
+import com.yawnandpawn.app.ui.resources.progress_no_mornings
+import com.yawnandpawn.app.ui.resources.progress_nothing_paid
 import com.yawnandpawn.app.ui.resources.progress_streak_keep_going
 import com.yawnandpawn.app.ui.resources.progress_tile_on_time
 import com.yawnandpawn.app.ui.resources.progress_tile_snoozes
@@ -45,6 +54,7 @@ import com.yawnandpawn.app.ui.resources.symbol_timer
 import com.yawnandpawn.app.ui.resources.symbol_wb_sunny
 import com.yawnandpawn.app.ui.resources.symbol_wb_twilight
 import com.yawnandpawn.app.ui.theme.PpsTheme
+import com.yawnandpawn.app.ui.theme.TABULAR_FIGURES
 import org.jetbrains.compose.resources.DrawableResource
 import org.jetbrains.compose.resources.stringResource
 
@@ -56,7 +66,11 @@ import org.jetbrains.compose.resources.stringResource
  * FR-PRG-2's chart, 2026-10-01: the ring shows each snoozed day and the "snoozes" tile the count). On entry the cards fade and rise
  * in sequence, the ring sweeps in and the streak counts up; reduced motion shows the final state at once.
  * With nothing logged: the empty ring with its prompt, the calendar and Purchase history. [showPurchaseHistory] false
- * leaves out the Purchase history links (production until that screen is built).
+ * leaves out the Purchase history links.
+ *
+ * Story 6.5: until the first snapshot nothing shows for 300 ms, then the static `skeleton`, then "Still loading your
+ * progress." after 3 s; a failed read shows "Couldn't load your progress." with "Try again" (never the empty state). The
+ * entry animation starts when the data first shows.
  */
 @Composable
 fun ProgressScreen(
@@ -65,48 +79,64 @@ fun ProgressScreen(
     modifier: Modifier = Modifier,
     showPurchaseHistory: Boolean = true,
 ) {
-    val entered = rememberEntered()
     TabScreen(title = null, modifier = modifier) {
-        val stats = state.stats
-        var order = 0
-        HeroRing(
-            ring = state.ring,
-            today = state.today,
-            streak = stats?.currentStreak,
-            selection = state.selection,
-            entered = entered,
-            onIntent = onIntent,
-            modifier = Modifier.entrance(entered, order++),
+        when {
+            state.loadFailed -> LoadFailed(onRetry = { onIntent(ProgressIntent.RetryLoad) })
+            state.loading -> ProgressSkeleton()
+            else -> ProgressContent(state = state, onIntent = onIntent, showPurchaseHistory = showPurchaseHistory)
+        }
+    }
+}
+
+/**
+ * The ring, the tiles, the streak card, the calendar, and Money paid beside Insight, entering in sequence once: back on
+ * Progress from a screen pushed over it, the final state shows at once.
+ */
+@Composable
+private fun ProgressContent(
+    state: ProgressUiState,
+    onIntent: (ProgressIntent) -> Unit,
+    showPurchaseHistory: Boolean,
+) {
+    var enteredBefore by rememberSaveable { mutableStateOf(false) }
+    val entered = rememberEntered() || enteredBefore
+    LaunchedEffect(entered) { if (entered) enteredBefore = true }
+    val stats = state.stats
+    var order = 0
+    HeroRing(
+        ring = state.ring,
+        today = state.today,
+        streak = stats?.currentStreak,
+        selection = state.selection,
+        entered = entered,
+        onIntent = onIntent,
+        modifier = Modifier.entrance(entered, order++),
+    )
+    if (stats != null) {
+        StatTiles(stats, modifier = Modifier.entrance(entered, order++))
+        StreakCard(current = stats.currentStreak, best = stats.bestStreak, modifier = Modifier.entrance(entered, order++))
+    }
+    state.calendar?.let {
+        OutcomeCalendar(month = it, selection = state.selection, onIntent = onIntent, modifier = Modifier.entrance(entered, order++))
+    }
+    if (stats != null) {
+        MoneyAndInsight(
+            paid = state.paidThisMonth,
+            insight = state.insight,
+            onIntent = if (showPurchaseHistory) onIntent else null,
+            modifier = Modifier.entrance(entered, order),
         )
-        if (stats != null) {
-            StatTiles(stats, modifier = Modifier.entrance(entered, order++))
-            StreakCard(current = stats.currentStreak, best = stats.bestStreak, modifier = Modifier.entrance(entered, order++))
-        }
-        state.calendar?.let {
-            OutcomeCalendar(month = it, selection = state.selection, onIntent = onIntent, modifier = Modifier.entrance(entered, order++))
-        }
-        if (stats != null) {
-            MoneyAndInsight(
-                paid = state.paidThisMonth,
-                insight = state.insight,
-                onIntent = if (showPurchaseHistory) onIntent else null,
-                modifier = Modifier.entrance(entered, order),
-            )
-        } else if (showPurchaseHistory) {
-            PpsTextButton(
-                text = stringResource(Res.string.purchase_history_title),
-                onClick = { onIntent(ProgressIntent.PurchaseHistoryClicked) },
-                modifier = Modifier.entrance(entered, order),
-            )
-        }
+    } else if (showPurchaseHistory) {
+        PpsTextButton(
+            text = stringResource(Res.string.purchase_history_title),
+            onClick = { onIntent(ProgressIntent.PurchaseHistoryClicked) },
+            modifier = Modifier.entrance(entered, order),
+        )
     }
 }
 
 /** Values longer than this use the smaller style. */
 private const val LONG_TILE_VALUE = 5
-
-/** A tile with no data yet shows a dash (never an invented number). */
-private const val DASH = "\u2013"
 
 /** Font scale from which the three tiles wrap to 2 + 1 and the side-by-side cards stack. */
 private const val LARGE_FONT_SCALE = 1.5f
@@ -116,7 +146,8 @@ private fun isLargeFont(): Boolean = LocalDensity.current.fontScale >= LARGE_FON
 
 /**
  * Three small `stat-tile`s in one row (2 + 1 at large font scales): an icon (`text-secondary`), the number in `title`
- * (`text`) and a short label in `caption` ("on time", "to get up", "snoozes"). Not tappable.
+ * (`text`) and a short label in `caption` ("on time", "to get up", "snoozes"). Not tappable. A tile with no mornings
+ * behind it says "No mornings yet" (never "0%", "0 min" or a dash).
  */
 @Composable
 private fun StatTiles(
@@ -129,13 +160,7 @@ private fun StatTiles(
         }
     val tiles =
         listOf(
-            Tile(
-                Res.drawable.symbol_wb_sunny,
-                stats.onTime30Days?.let {
-                    stringResource(Res.string.progress_percent, it)
-                },
-                stringResource(Res.string.progress_tile_on_time),
-            ),
+            Tile(Res.drawable.symbol_wb_sunny, stats.onTime30Days?.let(::formatPercent), stringResource(Res.string.progress_tile_on_time)),
             Tile(Res.drawable.symbol_timer, average, stringResource(Res.string.progress_tile_to_get_up)),
             Tile(Res.drawable.symbol_snooze, stats.snoozes30Days.toString(), stringResource(Res.string.progress_tile_snoozes)),
         )
@@ -168,27 +193,29 @@ internal class Tile(
     val label: String,
 )
 
+/** A `stat-tile`: one TalkBack stop read "{label}, {value}" ("on time, 86%"); a `null` value reads "No mornings yet". */
 @Composable
 internal fun StatTile(
     tile: Tile,
     modifier: Modifier = Modifier,
 ) {
     val colors = PpsTheme.colors
+    val value = tile.value ?: stringResource(Res.string.progress_no_mornings)
     Column(
         modifier =
             modifier
                 .glass(PpsTheme.shapes.md)
                 .padding(PpsTheme.spacing.space3)
-                .semantics(mergeDescendants = true) { },
+                .clearAndSetSemantics { contentDescription = "${tile.label}, $value" },
         verticalArrangement = Arrangement.spacedBy(PpsTheme.spacing.space1),
     ) {
         RowIcon(icon = tile.icon, tint = colors.textSecondary)
-        val value = tile.value ?: DASH
+        // A long value (a localized price, "25.000 ₫", or "No mornings yet") steps down to `body` so it stays on one
+        // line in a third of a 360 dp row at 100% (at large font scales it may wrap). Tabular figures, so digits line up.
+        val style = if (tile.value == null || value.length > LONG_TILE_VALUE) PpsTheme.typography.body else PpsTheme.typography.title
         Text(
             text = value,
-            // A long value (a localized price, "25.000 ₫") steps down to `body` so it stays on one line in a third of
-            // a 360 dp row at 100% (at large font scales it may wrap).
-            style = if (value.length > LONG_TILE_VALUE) PpsTheme.typography.body else PpsTheme.typography.title,
+            style = style.copy(fontFeatureSettings = TABULAR_FIGURES),
             color = colors.text,
         )
         // Short labels on one line at 100% on 360 dp (owner notes 2026-10-01); only large font scales wrap.
@@ -288,7 +315,11 @@ private fun MoneyAndInsight(
     }
 }
 
-/** "Money paid" this month, one line per currency; [onIntent] `null` leaves out its Purchase history link. */
+/**
+ * "Money paid" this month, one line per currency (by currency code, each through [formatMoney], in `text`), or "Nothing
+ * paid"; then "This month". One TalkBack stop ("Money paid, €8.98, $1.00, This month"). [onIntent] `null` leaves out its
+ * Purchase history link.
+ */
 @Composable
 private fun MoneyCard(
     paid: List<Money>,
@@ -307,7 +338,11 @@ private fun MoneyCard(
         ) {
             Text(text = stringResource(Res.string.progress_money_title), style = PpsTheme.typography.caption, color = colors.textSecondary)
             // One line per currency (FR-PRG-2), never a sum across currencies (AD-8).
-            totalsByCurrency(paid).forEach { Text(text = formatMoney(it), style = PpsTheme.typography.title, color = colors.text) }
+            val totals = totalsByCurrency(paid)
+            if (totals.isEmpty()) {
+                Text(text = stringResource(Res.string.progress_nothing_paid), style = PpsTheme.typography.body, color = colors.text)
+            }
+            totals.forEach { Text(text = formatMoney(it), style = PpsTheme.typography.title, color = colors.text) }
             Text(text = stringResource(Res.string.progress_money_month), style = PpsTheme.typography.caption, color = colors.textSecondary)
         }
         if (onIntent != null) {

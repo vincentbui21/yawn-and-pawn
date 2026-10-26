@@ -30,6 +30,9 @@ object ProgressRule {
     /** The snoozes tile covers this many local days up to and including today. */
     const val SNOOZE_DAYS = 30
 
+    /** Progress' ring shows this many local days up to and including today (6.5). */
+    const val RING_DAYS = 30
+
     /** The Insight line compares the sessions of this many local days up to and including today. */
     const val INSIGHT_DAYS = 30
 

@@ -1,6 +1,7 @@
 package com.yawnandpawn.app.core.stats
 
 import com.yawnandpawn.app.core.billing.PriceSource
+import com.yawnandpawn.app.core.billing.PurchaseRecordsRead
 import com.yawnandpawn.app.core.billing.RecordStatus
 import com.yawnandpawn.app.core.history.SessionOutcome.Missed
 import com.yawnandpawn.app.core.history.SessionOutcome.OnTime
@@ -296,6 +297,19 @@ class ProgressStatsTest {
         assertEquals(DayOutcome.OnTime, ring.last().outcome)
         assertEquals(28, ring.count { it.outcome == DayOutcome.None })
         assertEquals(emptyList(), daySummaries(history, today..today.day(-1), zone))
+    }
+
+    @Test
+    fun `the snapshot's last mornings are the 30 days ending today, oldest first`() {
+        val history = listOf(aSession(today.day(-30), Missed), aSession(today.day(-29), Snoozed), aSession(today, OnTime))
+        val ring = progressSnapshot(history, PurchaseRecordsRead(emptyList()), today, zone).lastMornings
+
+        assertEquals(ProgressRule.RING_DAYS, ring.size)
+        assertEquals(today.day(-29), ring.first().date)
+        assertEquals(today, ring.last().date)
+        assertEquals(DayOutcome.Snoozed, ring.first().outcome)
+        assertEquals(DayOutcome.OnTime, ring.last().outcome)
+        assertEquals(28, ring.count { it.outcome == DayOutcome.None })
     }
 
     // --- Sessions on a day ---

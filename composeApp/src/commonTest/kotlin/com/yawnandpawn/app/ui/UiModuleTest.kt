@@ -27,6 +27,8 @@ import com.yawnandpawn.app.core.session.SessionState
 import com.yawnandpawn.app.core.sound.SoundLibrary
 import com.yawnandpawn.app.core.sound.SoundPreview
 import com.yawnandpawn.app.core.stats.CheckRegistrations
+import com.yawnandpawn.app.core.stats.DayTicker
+import com.yawnandpawn.app.core.stats.ObserveProgress
 import com.yawnandpawn.app.core.stats.ReRegisterSuggestions
 import com.yawnandpawn.app.core.time.Clock
 import com.yawnandpawn.app.core.time.MonotonicClock
@@ -69,6 +71,7 @@ import com.yawnandpawn.app.ui.home.HomeViewModel
 import com.yawnandpawn.app.ui.links.AppLinks
 import com.yawnandpawn.app.ui.links.ExternalLinks
 import com.yawnandpawn.app.ui.payments.PaymentsViewModel
+import com.yawnandpawn.app.ui.progress.ProgressViewModel
 import com.yawnandpawn.app.ui.purchases.PurchaseHistoryViewModel
 import com.yawnandpawn.app.ui.qr.CameraPermission
 import com.yawnandpawn.app.ui.qr.TestCameraPermission
@@ -152,11 +155,13 @@ class UiModuleTest {
             // Story 5.4: Home's banner evaluates the reliability checklist.
             factory<EvaluateReliability> { anEvaluateReliability(probe = get(), checks = get()) }
             single { aTestNote() }
+            // Story 6.5: Progress over the real Story 6.2 snapshot on the fakes.
+            factory { ObserveProgress(get(), get(), DayTicker(get(), get(), get())) }
         }
 
     @OptIn(ExperimentalCoroutinesApi::class)
     @Test
-    fun `the ui module builds the Home, Purchase history and editor ViewModels from the core ports`() {
+    fun `the ui module builds the Home, Purchase history, Progress and editor ViewModels from the core ports`() {
         Dispatchers.setMain(UnconfinedTestDispatcher())
         try {
             val source = anAlarm(id = "source", time = LocalTime(6, 45), label = "Gym")
@@ -167,6 +172,8 @@ class UiModuleTest {
             assertTrue(home.state.value.isLoading)
             val purchases = koin.get<PurchaseHistoryViewModel>()
             assertTrue(purchases.state.value.loading)
+            val progress = koin.get<ProgressViewModel>()
+            assertTrue(progress.state.value.loading)
             val newEditor = koin.get<AlarmEditorViewModel> { parametersOf(AlarmEditorArgs(alarmId = null)) }
             assertTrue(newEditor.state.value.isNew)
             val editEditor = koin.get<AlarmEditorViewModel> { parametersOf(AlarmEditorArgs(alarmId = "some-id")) }

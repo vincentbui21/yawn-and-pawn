@@ -77,7 +77,8 @@ class Round2TapThroughTest {
             composeRule.onNodeWithText("Snoozed").assertExists()
             // The hero, tiles and timeline agree: two snoozes (B x 1, B x 2), three rings, 22 min from first ring to solved.
             composeRule.onNodeWithText("22 min").assertExists()
-            composeRule.onNodeWithText("3").assertExists()
+            // Story 6.5: a tile is one stop, read "{label}, {value}".
+            composeRule.onNodeWithContentDescription("rings, 3").assertExists()
             composeRule.onNodeWithText("Snoozed 9 min · ${formatMoney(PreviewSamples.price(1))}", useUnmergedTree = true).assertExists()
             composeRule.onNodeWithText("Snoozed 9 min · ${formatMoney(PreviewSamples.price(2))}", useUnmergedTree = true).assertExists()
             composeRule.onNodeWithText(formatMoney(PreviewSamples.price(3)), useUnmergedTree = true).assertExists()

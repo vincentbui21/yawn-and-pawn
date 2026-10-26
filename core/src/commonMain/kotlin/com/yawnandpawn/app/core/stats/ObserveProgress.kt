@@ -18,8 +18,10 @@ import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.merge
 import kotlinx.coroutines.flow.onStart
+import kotlinx.datetime.DateTimeUnit
 import kotlinx.datetime.LocalDate
 import kotlinx.datetime.TimeZone
+import kotlinx.datetime.minus
 import kotlinx.datetime.toLocalDateTime
 import kotlin.coroutines.CoroutineContext
 import kotlin.time.Duration
@@ -74,6 +76,11 @@ data class ProgressSnapshot(
     val paidAllTime: List<Money>,
     /** At least one history row is stored (any outcome): Home shows the hero (6.3), Progress leaves its empty state (6.5). */
     val hasHistory: Boolean,
+    /**
+     * Progress' ring (6.5): one [DaySummary] per local day of the last [ProgressRule.RING_DAYS], oldest first, ending
+     * [today].
+     */
+    val lastMornings: List<DaySummary>,
     /** Stored purchase rows that could not be read; the totals leave them out. */
     val unreadablePurchases: Int,
     /** The inputs, for 6.5's month paging and 6.7's Day detail without a second read. */
@@ -102,6 +109,7 @@ fun progressSnapshot(
         paidThisMonth = moneyPaid(records.records, MoneyPeriod.ThisMonth, today, zone),
         paidAllTime = moneyPaid(records.records, MoneyPeriod.AllTime, today, zone),
         hasHistory = history.isNotEmpty(),
+        lastMornings = daySummaries(history, today.minus(ProgressRule.RING_DAYS - 1, DateTimeUnit.DAY)..today, zone),
         unreadablePurchases = records.unreadable,
         history = history,
         records = records.records,

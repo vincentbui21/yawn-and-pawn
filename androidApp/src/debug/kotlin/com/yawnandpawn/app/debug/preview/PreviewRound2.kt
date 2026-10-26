@@ -105,7 +105,7 @@ object PreviewRound2 {
         listOf(
             progress(
                 "progress_full",
-                "Ring of 30 mornings, tiles, week chart, streak, calendar, money, insight",
+                "Ring of 30 mornings, tiles, streak, calendar, money, insight",
                 s.progress,
                 primary = true,
             ),

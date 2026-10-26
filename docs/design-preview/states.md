@@ -84,10 +84,10 @@ adb shell am start -S -n com.yawnandpawn.app/.debug.preview.PreviewActivity --es
 
 | Id | Screen | State |
 |---|---|---|
-| `tap-progress` | Tap through | Tap through Progress: ring, chart, calendar, day detail, purchase history |
+| `tap-progress` | Tap through | Tap through Progress: ring, calendar, day detail, purchase history |
 | `tap-settings` | Tap through | Tap through Settings: sub-screens, reliability checklist |
 | `tap-you` | Tap through | Tap through You: purchase history, payments, delete dialog |
-| `progress-full` | Progress | Ring of 30 mornings, tiles, week chart, streak, calendar, money, insight |
+| `progress-full` | Progress | Ring of 30 mornings, tiles, streak, calendar, money, insight |
 | `progress-dot-chip` | Progress | A ring dot tapped: its label chip |
 | `progress-calendar-chip` | Progress | A calendar day tapped: its label chip |
 | `progress-empty` | Progress | Empty ring |

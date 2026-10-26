@@ -35,6 +35,9 @@ internal const val SETUP_ROUND = 3
 /** Round 4, Story 5.2 "Bright wake screen": the chosen option C, "Ringing only", and the Settings switch. */
 internal const val BRIGHT_WAKE_ROUND = 4
 
+/** Round 5, Epic 6 progress: the states the owner looks at before the build (two currencies, Day detail Q1, ring Q2). */
+internal const val EPIC_6_ROUND = 5
+
 /** The heading of each round in the menu (and in states.md). */
 internal val ROUND_HEADINGS: Map<Int, String> =
     mapOf(
@@ -42,6 +45,7 @@ internal val ROUND_HEADINGS: Map<Int, String> =
         2 to "Round 2 · Progress and settings",
         SETUP_ROUND to "Round 3 · Setup flows",
         BRIGHT_WAKE_ROUND to "Round 4 · Bright wake screen",
+        EPIC_6_ROUND to "Round 5 · Epic 6 progress",
     )
 
 /** Does [query] match this item: case-insensitive on its state, its screen, its round or its id. */

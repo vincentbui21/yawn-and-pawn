@@ -182,3 +182,16 @@ adb shell am start -S -n com.yawnandpawn.app/.debug.preview.PreviewActivity --es
 | `bright-c-check` | Bright wake screen · Ringing only | Math check (phone's level, simulated) (Sunrise) |
 | `bright-settings-on` | Bright wake screen · Settings | Settings: Bright wake screen on (default) |
 | `bright-settings-off` | Bright wake screen · Settings | Settings: Bright wake screen off |
+
+## Round 5 · Epic 6 progress
+
+| Id | Screen | State |
+|---|---|---|
+| `home-paid-two-currencies` | Alarms (Home) | Paid this week in two currencies |
+| `progress-money-two-currencies` | Progress | Money paid in two currencies, one line each |
+| `progress-streak-over-30` | Progress | Streak over 30: the number and day streak, no / 30 |
+| `day-facts-snoozed` | Day detail | Stored facts only: snoozed twice, paid |
+| `day-facts-fallback` | Day detail | Stored facts only: fallback check, merged alarm |
+| `day-facts-before-unlock` | Day detail | Stored facts only: before first unlock |
+| `day-facts-two-sessions` | Day detail | Stored facts only: two sessions |
+| `day-facts-missed` | Day detail | Stored facts only: snoozed once, then missed |

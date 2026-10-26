@@ -289,8 +289,11 @@ private fun HeroCard(
         }
         Text(
             text =
-                hero.paidThisWeek?.let { stringResource(Res.string.home_paid_week, formatMoney(it)) }
-                    ?: stringResource(Res.string.home_zero_paid),
+                if (hero.paidThisWeek.isEmpty()) {
+                    stringResource(Res.string.home_zero_paid)
+                } else {
+                    stringResource(Res.string.home_paid_week, formatMoney(hero.paidThisWeek))
+                },
             style = PpsTheme.typography.body,
             color = colors.textSecondary,
         )

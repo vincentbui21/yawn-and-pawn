@@ -230,13 +230,13 @@ All strings live in resources (NFR-10). `{price}`, `{nextPrice}`, `{minutes}`, `
 | Home hero, streak label | "days on time" · "day on time" (1) |
 | Home hero, money line | "{paid} paid this week" |
 | Progress, stat tiles | "on time" · "to get up" · "snoozes" (owner notes 2026-10-01); streak card "Current streak" · "Best streak" · "Keep it going." (owner redesign 2026-09-30) |
-| Progress, ring (owner redesign 2026-09-30) | Centre "{streak}" · "/ 30" · "day streak"; a dot reads like a calendar day, plus ", today" for today; label chip "{weekday} {day} · {outcome}" (draft) |
+| Progress, ring (owner redesign 2026-09-30) | Centre "{streak}" · "/ 30" · "day streak" ("/ 30" hidden once the streak passes 30: Epic 6 question Q2 default, design preview round 5, awaiting the owner); a dot reads like a calendar day, plus ", today" for today; label chip "{weekday} {day} · {outcome}" (draft) |
 | Progress, Insight card (owner redesign 2026-09-30) | Title "Insight" · one line from the user's data: "You get up fastest on weekdays." / "You get up fastest on weekends." |
 | Progress, average time | "{minutes} min" · "Under 1 min" |
-| Progress, money | "Money paid" · "This month" (the card shows the month total and links to "Purchase history", owner redesign 2026-09-30) |
+| Progress, money | "Money paid" · "This month" (the card shows the month total, one line per currency, and links to "Purchase history", owner redesign 2026-09-30) |
 | Progress, calendar navigation (TalkBack) | "Previous month" / "Next month" |
 | Progress, calendar day (TalkBack) | "{weekday} {day}, {outcome}" + ", fallback check used" + ", {n} sessions" · empty day "{weekday} {day}, no alarm" |
-| Day detail, timeline (owner redesign 2026-10-01; drafts) | "Alarm rang" · "Rang again" · "Snoozed {minutes} min · {price}" · "I'm up" · "Quiet time ran out" · "Check switched to {check}" · "Fallback check: {check}" · "{time} alarm merged into this session" · "{check} solved first try" / "{check} solved in {n} tries" · "Stopped after 30 minutes" · "Rang before your first unlock" |
+| Day detail, timeline (owner redesign 2026-10-01; drafts) | "Alarm rang" · "Rang again" · "Snoozed {minutes} min · {price}" · "I'm up" · "Quiet time ran out" · "Check switched to {check}" · "Fallback check: {check}" · "{time} alarm merged into this session" · "{check} solved first try" / "{check} solved in {n} tries" · "Stopped after 30 minutes" · "Rang before your first unlock". From stored facts only (Epic 6 question Q1 default, design preview round 5, awaiting the owner): "Snoozed · {price}" (no snooze length) · "{check} solved" (no try count) |
 | Day detail, tiles (owner redesign 2026-10-01) | "rings" · "snoozes" · "paid" · "No charge" (drafts); hero "to get up" |
 | Day detail, alarm changes | "Your {time} alarm was turned off. Logged." · "Your {time} alarm was deleted. Logged." |
 | Weekly summary, channel | "Weekly summary" |

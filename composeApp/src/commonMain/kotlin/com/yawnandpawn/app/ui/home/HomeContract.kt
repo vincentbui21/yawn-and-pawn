@@ -10,8 +10,11 @@ import kotlinx.datetime.LocalTime
 /** The Home top card: the zero-snooze streak and this week's money. */
 data class HomeHero(
     val streakDays: Int,
-    /** Paid this week, or `null` for nothing paid ("Nothing paid this week. Keep it that way."). */
-    val paidThisWeek: Money?,
+    /**
+     * Paid this week, one total per currency (AD-8: never added across currencies; the line joins them with " + ").
+     * Empty for nothing paid ("Nothing paid this week. Keep it that way.").
+     */
+    val paidThisWeek: List<Money> = emptyList(),
 )
 
 /** One `card-alarm`. */

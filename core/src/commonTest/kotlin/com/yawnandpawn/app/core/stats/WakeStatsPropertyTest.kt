@@ -30,6 +30,8 @@ class WakeStatsPropertyTest {
 
             assertTrue(current >= 0, "history $n: current $current")
             assertTrue(best >= current, "history $n: best $best < current $current")
+            val rates = numbers(history, today).take(2).filterIsInstance<Int>()
+            assertTrue(rates.all { it in 0..100 }, "history $n: rates $rates")
 
             val extra = randomSession(random, random.nextInt(-2, DAYS + 2), neutral[random.nextInt(neutral.size)])
             val withExtra = (history + extra).shuffled(random)

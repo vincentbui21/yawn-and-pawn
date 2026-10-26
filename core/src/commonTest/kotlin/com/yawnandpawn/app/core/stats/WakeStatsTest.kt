@@ -13,6 +13,7 @@ import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
 import kotlin.test.assertNull
+import kotlin.time.Duration
 import kotlin.time.Duration.Companion.microseconds
 import kotlin.time.Duration.Companion.milliseconds
 import kotlin.time.Duration.Companion.minutes
@@ -66,6 +67,18 @@ class WakeStatsTest {
 
         assertEquals(5, currentStreak(history, today = monday.day(6), zone))
         assertEquals(5, bestStreak(history, zone))
+    }
+
+    @Test
+    fun `weeks without a counted session keep the streak, skipped or not`() {
+        val history =
+            listOf(aSession(monday), aSession(monday.day(1))) +
+                (2..20).map { aSession(monday.day(it), Skipped) } +
+                aSession(monday.day(40))
+
+        assertEquals(2, currentStreak(history, today = monday.day(39), zone))
+        assertEquals(3, currentStreak(history, today = monday.day(60), zone))
+        assertEquals(3, bestStreak(history, zone))
     }
 
     @Test
@@ -241,6 +254,7 @@ class WakeStatsTest {
                 2.minutes + 29.seconds to 2,
                 2.minutes + 30.seconds to 3,
                 (-5).minutes to 0,
+                Duration.INFINITE to Int.MAX_VALUE,
             )
 
         cases.forEach { (duration, minutes) -> assertEquals(minutes, wholeMinutes(duration), "$duration") }

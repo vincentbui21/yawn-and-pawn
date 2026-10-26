@@ -118,10 +118,10 @@ fun averageTimeToUp(
 
 /**
  * [duration] in whole minutes, rounded half up (2 min 29 s → 2, 2 min 30 s → 3). 0 means "under a minute" for the UI:
- * exactly the durations under 30 s. A negative duration counts as 0.
+ * exactly the durations under 30 s. A negative duration counts as 0; a huge one stops at [Int.MAX_VALUE].
  */
 fun wholeMinutes(duration: Duration): Int {
-    val millis = duration.inWholeMilliseconds.coerceAtLeast(0)
+    val millis = duration.inWholeMilliseconds.coerceIn(0, MAX_MINUTES_MS)
     return ((millis + HALF_MINUTE_MS) / MINUTE_MS).toInt()
 }
 
@@ -144,3 +144,6 @@ private fun window(
 private const val PERCENT = 100
 private const val MINUTE_MS = 60_000L
 private const val HALF_MINUTE_MS = 30_000L
+
+/** The largest millisecond count [wholeMinutes] reads: [Int.MAX_VALUE] minutes, so the rounding cannot overflow. */
+private const val MAX_MINUTES_MS = Int.MAX_VALUE * MINUTE_MS

@@ -63,7 +63,9 @@ class ProgressViewModel(
     fun onIntent(intent: ProgressIntent) {
         when (intent) {
             is ProgressIntent.DaySelected -> selection.value = intent.selection
+
             ProgressIntent.RetryLoad -> loads.update { it + 1 }
+
             // The route opens Day detail and keeps the chip (it is still there after Back); Purchase history is the
             // route's too. The calendar's months page in Story 6.6.
             is ProgressIntent.DayTapped,

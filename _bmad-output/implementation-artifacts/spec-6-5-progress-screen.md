@@ -2,8 +2,8 @@
 title: 'Story 6.5: Progress screen with the 30-morning ring, stat tiles and money'
 type: 'feature'
 created: '2026-10-26'
-status: 'ready-for-dev'
-baseline_commit: '0d85be9e95e8072ac9762db78b628814435f55d7'
+status: 'review'
+baseline_commit: '05e4a9e6'
 route: 'dispatch'
 story_key: '6-5-progress-screen-with-the-30-morning-ring-stat-tiles-and-money'
 old_story_key: '6-5-progress-screen-with-stat-tiles-snoozes-chart-and-money'
@@ -438,16 +438,16 @@ fakes).
 
 ## pps-design Done checklist
 
-- [ ] Only tokens from `DESIGN.md` used (no raw hex, no new radii, no new font sizes).
-- [ ] Light, Dark (and Sunrise where relevant) checked with previews / screenshots.
-- [ ] Every colour pair used is in the `DESIGN.md` contrast table.
-- [ ] Touch targets ≥ 48 dp; wake actions ≥ 64 dp.
-- [ ] Works at 200% font scale and with TalkBack; outcome glyphs present.
-- [ ] Reduced-motion path works.
-- [ ] Copy matches `EXPERIENCE.md > Voice and Tone` (no em dashes, no filler, strings in resources).
-- [ ] Every state row in `EXPERIENCE.md > State Patterns` for this surface is handled.
-- [ ] "I'm up" is the most prominent wake action; snooze is visible, plain and priced. (Not applicable.)
-- [ ] Compose `@Preview`s for each state (light/dark/Sunrise, empty/error) exist; screenshot tests updated (Roborazzi).
+- [x] Only tokens from `DESIGN.md` used (no raw hex, no new radii, no new font sizes). detekt NoRaw* rules pass.
+- [x] Light, Dark (and Sunrise where relevant) checked with previews / screenshots. 27 Roborazzi baselines, checked by eye.
+- [x] Every colour pair used is in the `DESIGN.md` contrast table (`text`, `text-secondary`, `surface-variant` on glass; nothing new).
+- [x] Touch targets ≥ 48 dp (`assertControlsLabelledWithRoles` on the chip state); no wake actions here.
+- [x] Works at 200% font scale and with TalkBack; outcome glyphs present (`ProgressSemanticsTest`).
+- [x] Reduced-motion path works (`ProgressMotion` unchanged; the entry plays once per visit to the tab).
+- [x] Copy matches `EXPERIENCE.md > Voice and Tone` (no em dashes, no filler, strings in resources). `CopyRulesTest` passes; five new strings listed for v2.
+- [x] Every state row in `EXPERIENCE.md > State Patterns` for this surface is handled (empty, Test only, data, loading, slow, failure).
+- [x] "I'm up" is the most prominent wake action; snooze is visible, plain and priced. (Not applicable.)
+- [x] Compose `@Preview`s for each state (light/dark/Sunrise, empty/error) exist; screenshot tests updated (Roborazzi).
 
 ## Verification
 
@@ -491,6 +491,22 @@ Use JDK 17 and `--no-daemon --max-workers=2`, targeted runs only.
 `progress_percent` is deleted (the percent goes through `formatPercent`).
 
 ## Review Triage Log
+
+One combined reviewer (adversarial, edge cases, spec compliance), read only, 2026-10-26: 3 HIGH, 1 MEDIUM, 4 LOW.
+
+| ID | Finding | Decision |
+|---|---|---|
+| H1 | `Round2TapThroughTest` looked up Day detail's tile by its text "3"; the tile is now one stop with a content description | Fixed: it finds "rings, 3" |
+| H2 | The ring-centre semantics test matched "12" twice (centre and streak card) and never checked the count-up | Fixed: matches the centre's description only, and checks it 200 ms into the count-up with the clock paused |
+| H3 | `states.md` not regenerated after the title changes | Fixed: regenerated with `PREVIEW_WRITE_STATES=true` |
+| M1 | Under `WhileSubscribed(5_000)`, back on Progress after more than 5 s away, `onStart` emitted loading again: a blank frame, lost scroll and a replayed entry | Fixed: loading is the initial value and follows "Try again" only; a restart keeps the last screen until the new snapshot. New ViewModel test |
+| L1 | The entry animation replayed on every Back from Purchase history | Fixed: a saveable "entered" flag in `ProgressContent` shows the final state at once on return (`ProgressMotion` unchanged) |
+| L2 | The load failure was not announced | Fixed: the failure text is a polite live region |
+| L3 | The 200% clipping check covered one state | Fixed: empty, Test only, typical and two currencies |
+| L4 | Preview baselines may be stale (tabular figures, "Nothing paid") | Checked by running `PreviewScreenshotTest` in verify mode; re-recorded only what differed (see the hand-off) |
+
+Also changed after the first recording: the Progress screenshots use a 411 x 1500 dp window (2800 dp at 200%) instead of
+891 dp, so Money paid and Insight are in the picture (two currencies would otherwise not show).
 
 ## Coordinator note (2026-10-26): currency separator
 Several currencies are always joined with " + ", using the existing `TOTALS_SEPARATOR` and EXPERIENCE.md "Money, mixed currencies", and sorted by currency code. For example: "€3.27 + $2.18 paid this week". Do not add a " · " variant. If a sorted helper is needed, the first story to land adds `formatPerCurrency` with " + ", and the others reuse it.

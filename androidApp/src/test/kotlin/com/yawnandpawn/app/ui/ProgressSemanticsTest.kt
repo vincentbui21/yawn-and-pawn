@@ -151,11 +151,21 @@ class ProgressSemanticsTest {
                         .onAllNodes(SemanticsMatcher.keyIsDefined(SemanticsActions.GetTextLayoutResult), useUnmergedTree = true)
                         .fetchSemanticsNodes()
                 assertTrue(texts.isNotEmpty())
-                texts.forEach { node ->
-                    val results = mutableListOf<TextLayoutResult>()
-                    node.config[SemanticsActions.GetTextLayoutResult].action?.invoke(results)
-                    results.forEach { layout -> assertTrue(!layout.hasVisualOverflow, "'${layout.layoutInput.text}' is cut off") }
-                }
+                val cut =
+                    texts.flatMap { node ->
+                        val results = mutableListOf<TextLayoutResult>()
+                        node.config[SemanticsActions.GetTextLayoutResult].action?.invoke(results)
+                        // Cut off: taller than its room, or as wide as its room with text left over. A centred one-line
+                        // text (the calendar's day numbers) reports a width overflow while it fits with room to spare.
+                        results
+                            .filter {
+                                it.didOverflowHeight ||
+                                    (it.didOverflowWidth && it.size.width >= it.layoutInput.constraints.maxWidth)
+                            }.map {
+                                "'${it.layoutInput.text}' ${it.size} in ${it.layoutInput.constraints}"
+                            }
+                    }
+                assertEquals(emptyList(), cut, "cut off in ${state.stats}")
             }
         }
 

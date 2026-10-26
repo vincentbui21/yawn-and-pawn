@@ -19,8 +19,8 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.test.TestScope
-import kotlinx.coroutines.test.advanceTimeBy
 import kotlinx.coroutines.test.UnconfinedTestDispatcher
+import kotlinx.coroutines.test.advanceTimeBy
 import kotlinx.coroutines.test.resetMain
 import kotlinx.coroutines.test.runTest
 import kotlinx.coroutines.test.setMain
@@ -98,7 +98,14 @@ class ProgressViewModelTest {
             val viewModel = screen()
 
             assertEquals(ProgressStats(0, 0, onTime30Days = null, averageMinutesToUp = null, snoozes30Days = 0), viewModel.stats())
-            assertEquals(listOf(Outcome.Test, Outcome.Skipped), viewModel.now().ring.takeLast(2).map { it.outcome })
+            assertEquals(
+                listOf(Outcome.Test, Outcome.Skipped),
+                viewModel
+                    .now()
+                    .ring
+                    .takeLast(2)
+                    .map { it.outcome },
+            )
         }
 
     @Test
@@ -198,13 +205,34 @@ class ProgressViewModelTest {
             clock.set(DEFAULT_FAKE_INSTANT + 1.days - 5.hours)
             timeChanges.emit()
 
-            assertEquals(day(1), viewModel.now().ring.last().date)
-            assertEquals(day(-28), viewModel.now().ring.first().date)
+            assertEquals(
+                day(1),
+                viewModel
+                    .now()
+                    .ring
+                    .last()
+                    .date,
+            )
+            assertEquals(
+                day(-28),
+                viewModel
+                    .now()
+                    .ring
+                    .first()
+                    .date,
+            )
             assertNull(viewModel.now().selection)
             // Back to the day before (the clock was set back): the dropped chip does not come back.
             clock.set(DEFAULT_FAKE_INSTANT)
             timeChanges.emit()
-            assertEquals(FixtureToday, viewModel.now().ring.last().date)
+            assertEquals(
+                FixtureToday,
+                viewModel
+                    .now()
+                    .ring
+                    .last()
+                    .date,
+            )
             assertNull(viewModel.now().selection)
         }
 

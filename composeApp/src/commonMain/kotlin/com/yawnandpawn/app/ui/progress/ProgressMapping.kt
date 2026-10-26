@@ -82,9 +82,9 @@ internal fun keptSelection(
     selection: DaySelection?,
     ring: List<RingDay>,
     calendar: CalendarMonth?,
-): DaySelection? {
-    if (selection == null) return null
-    if (selection.inCalendar) return selection.takeIf { calendar != null }
-    val outcome = ring.firstOrNull { it.date == selection.date }?.outcome ?: return null
-    return selection.copy(outcome = outcome)
-}
+): DaySelection? =
+    when {
+        selection == null -> null
+        selection.inCalendar -> selection.takeIf { calendar != null }
+        else -> ring.firstOrNull { it.date == selection.date }?.outcome?.let { selection.copy(outcome = it) }
+    }

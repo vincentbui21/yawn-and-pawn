@@ -65,7 +65,9 @@ internal fun ProgressSkeleton() {
 internal fun LoadFailed(onRetry: () -> Unit) {
     val spacing = PpsTheme.spacing
     GroupCard {
-        Column(modifier = Modifier.fillMaxWidth().padding(start = spacing.cardPadding, end = spacing.cardPadding, top = spacing.cardPadding)) {
+        Column(
+            modifier = Modifier.fillMaxWidth().padding(start = spacing.cardPadding, end = spacing.cardPadding, top = spacing.cardPadding),
+        ) {
             // Announced when loading turns into the failure.
             Text(
                 text = stringResource(Res.string.progress_load_failed),

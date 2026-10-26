@@ -58,7 +58,10 @@ class ProgressMappingTest {
     fun `a ring chip stays with the day's current outcome, and goes when its day has none`() {
         val chip = DaySelection(FixtureToday, Outcome.OnTime, inCalendar = false)
 
-        assertEquals(chip.copy(outcome = Outcome.Snoozed), stateOf(morning(FixtureToday, SessionOutcome.Snoozed), selection = chip).selection)
+        assertEquals(
+            chip.copy(outcome = Outcome.Snoozed),
+            stateOf(morning(FixtureToday, SessionOutcome.Snoozed), selection = chip).selection,
+        )
         assertNull(stateOf(morning(day(-1)), selection = chip).selection)
         assertNull(stateOf(morning(FixtureToday), selection = chip.copy(date = day(-30))).selection)
     }

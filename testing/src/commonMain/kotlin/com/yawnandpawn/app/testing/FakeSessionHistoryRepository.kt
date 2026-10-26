@@ -32,7 +32,7 @@ class FakeSessionHistoryRepository :
     var upsertFailure: DomainError? = null
     var findFailure: DomainError? = null
 
-    /** Set to make [observeLatestMissed] and [observeFallbacks] throw it, like a failing database. */
+    /** Set to make [observeLatestMissed], [observeFallbacks] and [observeAll] throw it, like a failing database. */
     var observeFailure: Throwable? = null
 
     /** The stored rows, in the order their sessions were first written. */
@@ -97,6 +97,13 @@ class FakeSessionHistoryRepository :
         changes.map {
             observeFailure?.let { throw it }
             stored.values.filter { it.fallbackUsed && it.fallbackFrom != null }.sortedByDescending { it.firstRingAt }
+        }
+
+    /** Like the Room query: every row, oldest scheduled time first, then by session id, again after every change. */
+    override fun observeAll(): Flow<List<SessionHistoryRow>> =
+        changes.map {
+            observeFailure?.let { throw it }
+            stored.values.sortedWith(compareBy({ it.scheduledAt }, { it.sessionId }))
         }
 }
 

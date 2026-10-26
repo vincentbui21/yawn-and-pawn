@@ -192,6 +192,9 @@ internal class InMemoryHistory : SessionHistoryRepository {
     // The engine never reads it.
     override fun observeLatestMissed(): Flow<SessionHistoryRow?> = emptyFlow()
 
+    // Never read here.
+    override fun observeAll(): Flow<List<SessionHistoryRow>> = emptyFlow()
+
     /** Merge rows by (session, alarm, scheduled time), insert or ignore like the Room table. */
     val mergeRows = linkedMapOf<Triple<String, String, Instant>, SessionMergeRow>()
     var mergeFailure: DomainError? = null

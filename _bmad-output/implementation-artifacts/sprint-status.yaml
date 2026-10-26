@@ -132,7 +132,7 @@ development_status:
 
   epic-6: in-progress
   6-1-streaks-on-time-rate-and-time-to-up-in-core-stats: review  # Epic 6 auto-run, fast mode
-  6-2-snoozes-per-week-money-per-currency-and-day-outcomes-in-core: backlog
+  6-2-snoozes-per-week-money-per-currency-and-day-outcomes-in-core: review  # Epic 6 auto-run, fast mode
   6-3-streak-and-money-hero-card-on-home: backlog
   6-4-zero-snooze-celebration-on-the-success-screen: backlog
   6-5-progress-screen-with-stat-tiles-snoozes-chart-and-money: backlog

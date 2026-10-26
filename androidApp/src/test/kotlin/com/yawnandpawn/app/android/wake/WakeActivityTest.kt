@@ -486,6 +486,8 @@ private class CountingHistory(
 
     override fun observeLatestMissed(): Flow<SessionHistoryRow?> = inner.observeLatestMissed().also { calls.incrementAndGet() }
 
+    override fun observeAll(): Flow<List<SessionHistoryRow>> = inner.observeAll().also { calls.incrementAndGet() }
+
     override suspend fun recordMerge(merge: SessionMergeRow): Outcome<Unit, DomainError> =
         inner.recordMerge(merge).also { calls.incrementAndGet() }
 

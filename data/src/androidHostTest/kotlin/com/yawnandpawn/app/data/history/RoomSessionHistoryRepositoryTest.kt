@@ -24,6 +24,7 @@ import org.junit.Test
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
 import kotlin.test.assertEquals
+import kotlin.test.assertFailsWith
 import kotlin.test.assertIs
 import kotlin.test.assertNull
 import kotlin.time.Duration.Companion.days
@@ -183,6 +184,37 @@ class RoomSessionHistoryRepositoryTest {
             withContext(Dispatchers.Default) { withTimeout(WAIT) { seen.first { it == listOf("newer", "older", "test") } } }
             repository.upsert(older.copy(sessionId = "newest", firstRingAt = DEFAULT_FAKE_INSTANT + 2.days))
             withContext(Dispatchers.Default) { withTimeout(WAIT) { seen.first { it == listOf("newest", "newer", "older", "test") } } }
+        }
+
+    @Test
+    fun `every row reads in scheduled order, then session id, and an open collection sees an upsert and a delete`() =
+        runTest {
+            val later = aSessionHistoryRow(sessionId = "later").copy(scheduledAt = DEFAULT_FAKE_INSTANT + 1.days)
+            val b = aSessionHistoryRow(sessionId = "b")
+            val a = aSessionHistoryRow(sessionId = "a").copy(outcome = SessionOutcome.Test)
+            val running =
+                aSessionHistoryRow(sessionId = "running").copy(scheduledAt = DEFAULT_FAKE_INSTANT - 1.days, endedAt = null, outcome = null)
+            listOf(later, b, a, running).forEach { repository.upsert(it) }
+            val seen = MutableStateFlow<List<String>?>(null)
+            backgroundScope.launch(Dispatchers.Default) {
+                repository.observeAll().collect { rows -> seen.value = rows.map { it.sessionId } }
+            }
+
+            assertEquals(listOf(running, a, b, later), repository.observeAll().first())
+            withContext(Dispatchers.Default) { withTimeout(WAIT) { seen.first { it == listOf("running", "a", "b", "later") } } }
+            repository.upsert(b.copy(sessionId = "latest", scheduledAt = DEFAULT_FAKE_INSTANT + 2.days))
+            withContext(Dispatchers.Default) { withTimeout(WAIT) { seen.first { it == listOf("running", "a", "b", "later", "latest") } } }
+            repository.deleteAllHistory()
+            withContext(Dispatchers.Default) { withTimeout(WAIT) { seen.first { it == emptyList<String>() } } }
+        }
+
+    @Test
+    fun `an unreadable row is thrown into the flow of every row`() =
+        runTest {
+            repository.upsert(aSessionHistoryRow(sessionId = "fine"))
+            dao.upsertRow(aSessionHistoryRow(sessionId = "bad").toEntity().copy(outcome = "Dozed"))
+
+            assertFailsWith<IllegalArgumentException> { repository.observeAll().first() }
         }
 
     @Test

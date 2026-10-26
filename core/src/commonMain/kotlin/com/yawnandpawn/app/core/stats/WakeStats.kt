@@ -136,7 +136,7 @@ private fun countedDays(
         .map { (day, rows) -> day to rows.all { it.outcome == SessionOutcome.OnTime } }
 
 /** The [days] local dates ending with [today]. */
-private fun window(
+internal fun window(
     today: LocalDate,
     days: Int,
 ): ClosedRange<LocalDate> = today.minus(days - 1, DateTimeUnit.DAY)..today

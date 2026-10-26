@@ -35,6 +35,10 @@ class RoomSessionHistoryRepository(
     // A read only, like observeLatestMissed: an unreadable row throws into the flow and Home catches it.
     override fun observeFallbacks(): Flow<List<SessionHistoryRow>> = dao.observeFallbacks().map { rows -> rows.map { it.toRow() } }
 
+    // A read only, like observeFallbacks (Progress and Home, Epic 6): an unreadable row throws into the flow and the
+    // collector catches it.
+    override fun observeAll(): Flow<List<SessionHistoryRow>> = dao.observeAll().map { rows -> rows.map { it.toRow() } }
+
     // Story 2.9: insert or ignore, so a replayed merge leaves one row. SessionRecorder is the only caller.
     override suspend fun recordMerge(merge: SessionMergeRow): Outcome<Unit, DomainError> = storage { dao.insertMerge(merge.toEntity()) }
 

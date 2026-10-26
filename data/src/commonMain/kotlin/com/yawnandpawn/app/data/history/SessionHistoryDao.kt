@@ -38,6 +38,13 @@ abstract class SessionHistoryDao {
     @Query("SELECT * FROM session_history WHERE fallback_used = 1 AND fallback_from IS NOT NULL ORDER BY first_ring_at DESC")
     abstract fun observeFallbacks(): Flow<List<SessionHistoryEntity>>
 
+    /**
+     * Every row, oldest scheduled time first, then by session id (Progress and Home, Epic 6); emits again after every
+     * change. About one row a day, so three years stay near 1,100 rows.
+     */
+    @Query("SELECT * FROM session_history ORDER BY scheduled_at, session_id")
+    abstract fun observeAll(): Flow<List<SessionHistoryEntity>>
+
     /** Records a merge (Story 2.9); the same (session, alarm, scheduled time) again is ignored, keeping the first. */
     @Insert(onConflict = OnConflictStrategy.IGNORE)
     abstract suspend fun insertMerge(merge: SessionMergeEntity)

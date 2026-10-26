@@ -4,6 +4,7 @@ import com.yawnandpawn.app.core.error.DomainError
 import com.yawnandpawn.app.core.error.Outcome
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.emptyFlow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.test.runTest
 import kotlin.test.Test
@@ -23,6 +24,8 @@ class MissedNotesTest {
                 override suspend fun find(sessionId: String): Outcome<SessionHistoryRow?, DomainError> = error("never read here")
 
                 override fun observeLatestMissed(): Flow<SessionHistoryRow?> = latest
+
+                override fun observeAll(): Flow<List<SessionHistoryRow>> = emptyFlow()
 
                 override suspend fun recordMerge(merge: SessionMergeRow): Outcome<Unit, DomainError> = error("never written here")
 

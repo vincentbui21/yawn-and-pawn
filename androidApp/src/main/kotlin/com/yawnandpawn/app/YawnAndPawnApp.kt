@@ -100,6 +100,8 @@ import com.yawnandpawn.app.core.session.SessionState
 import com.yawnandpawn.app.core.session.SnoozeAvailabilityPolicy
 import com.yawnandpawn.app.core.session.StoredSession
 import com.yawnandpawn.app.core.session.UserLockState
+import com.yawnandpawn.app.core.stats.DayTicker
+import com.yawnandpawn.app.core.stats.ObserveProgress
 import com.yawnandpawn.app.core.stats.ReRegisterSuggestions
 import com.yawnandpawn.app.core.telemetry.Telemetry
 import com.yawnandpawn.app.core.telemetry.TelemetryReporter
@@ -275,6 +277,10 @@ val appModule =
         single { MissedNotes(get(), get()) }
         // Home's re-register banner (Story 3.13): 3 fallbacks for a camera check in 7 days, unless dismissed since.
         single { ReRegisterSuggestions(get(), get(), get(), get()) }
+        // Progress and Home (Epic 6, Story 6.2): the stats snapshot over session history and the purchase records, recomputed
+        // on either table and when the local date or zone changes. A read only; nothing derived is stored (AD-18).
+        factory { DayTicker(get(), get(), get()) }
+        factory { ObserveProgress(get(), get(), get()) }
         // Billing (Story 4.12, billingModule): Play Billing 9.1 is the one Billing, and AndroidDeviceUnlocker the one UnlockPort
         // (Spike S1: the PIN before Play opens), shared by the engine (it reads the keyguard for a Pay) and the coordinator.
         // Story 5.3: a test that rang locked and is completed is stored for the checklist's locked-screen test. The write

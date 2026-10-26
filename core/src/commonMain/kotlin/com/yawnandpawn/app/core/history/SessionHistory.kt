@@ -71,6 +71,12 @@ interface SessionHistoryRepository {
     fun observeLatestMissed(): Flow<SessionHistoryRow?>
 
     /**
+     * Every row, oldest `scheduled_at` first (then session id), again after every change (Progress and Home, Epic 6).
+     * A read only. A storage failure or an unreadable row is thrown into the flow; the collector catches it.
+     */
+    fun observeAll(): Flow<List<SessionHistoryRow>>
+
+    /**
      * Records that the occurrence of [SessionMergeRow.alarmId] at [SessionMergeRow.scheduledAt] joined session
      * [SessionMergeRow.sessionId] (FR-SES-7, Story 2.9). Insert or ignore on those three: recording the same merge twice
      * (a replay after a crash) leaves one row with the first `mergedAt`.

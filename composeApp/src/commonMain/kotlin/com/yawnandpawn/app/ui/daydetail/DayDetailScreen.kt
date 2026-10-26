@@ -455,12 +455,7 @@ private fun eventText(
         }
 
         is MorningEvent.Snoozed -> {
-            val minutes = event.minutes
-            if (minutes == null) {
-                stringResource(Res.string.day_event_snoozed_paid, formatMoney(event.price))
-            } else {
-                stringResource(Res.string.day_event_snoozed, minutes, formatMoney(event.price))
-            }
+            snoozedText(event)
         }
 
         is MorningEvent.ImUp -> {
@@ -484,18 +479,35 @@ private fun eventText(
         }
 
         is MorningEvent.CheckSolved -> {
-            val tries = event.tries
-            when {
-                tries == null -> stringResource(Res.string.day_event_solved, event.check.displayName())
-                tries <= 1 -> stringResource(Res.string.day_event_solved_first, event.check.displayName())
-                else -> stringResource(Res.string.day_event_solved_tries, event.check.displayName(), tries)
-            }
+            solvedText(event)
         }
 
         is MorningEvent.Stopped -> {
             stringResource(Res.string.day_event_stopped)
         }
     }
+
+/** "Snoozed 9 min · $1.00", or "Snoozed · $1.00" when the snooze length is not stored. */
+@Composable
+private fun snoozedText(event: MorningEvent.Snoozed): String {
+    val minutes = event.minutes
+    return if (minutes == null) {
+        stringResource(Res.string.day_event_snoozed_paid, formatMoney(event.price))
+    } else {
+        stringResource(Res.string.day_event_snoozed, minutes, formatMoney(event.price))
+    }
+}
+
+/** "Math solved first try" / "Math solved in 2 tries", or "Math solved" when the try count is not stored. */
+@Composable
+private fun solvedText(event: MorningEvent.CheckSolved): String {
+    val tries = event.tries
+    return when {
+        tries == null -> stringResource(Res.string.day_event_solved, event.check.displayName())
+        tries <= 1 -> stringResource(Res.string.day_event_solved_first, event.check.displayName())
+        else -> stringResource(Res.string.day_event_solved_tries, event.check.displayName(), tries)
+    }
+}
 
 private const val SECONDS_PER_MINUTE = 60
 

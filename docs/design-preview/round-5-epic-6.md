@@ -57,7 +57,7 @@ New strings (drafts, in EXPERIENCE.md with "awaiting the owner"): `day_event_sno
 
 **Question:** the ring centre shows "{streak} / 30 day streak". What does it show once the streak passes 30?
 
-**Default shown:** the streak number and "day streak", with "/ 30" hidden once the streak is over 30 (up to 30 it stays). The sample is a 42-day streak: all 30 dots on time, nothing paid.
+**Default shown:** the streak number and "day streak", with "/ 30" hidden once the streak is over 30 (up to 30 it stays). The sample is a 42-day streak: all 30 dots on time, nothing paid. Its "Money paid" card shows no amount, as the approved round 2 design does today; the "Nothing paid" line for a month with no payments (FR-PRG-2) comes with story 6.5.
 
 **Alternative:** keep "/ 30" and cap the number at 30 (hides the real streak), or show "30+" (loses the number; the streak card below still shows it).
 

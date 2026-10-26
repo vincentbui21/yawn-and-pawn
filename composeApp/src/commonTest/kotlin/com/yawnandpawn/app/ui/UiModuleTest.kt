@@ -67,6 +67,8 @@ import com.yawnandpawn.app.testing.anAppVersion
 import com.yawnandpawn.app.testing.anEvaluateReliability
 import com.yawnandpawn.app.ui.editor.AlarmEditorArgs
 import com.yawnandpawn.app.ui.editor.AlarmEditorViewModel
+import com.yawnandpawn.app.ui.home.HomeHero
+import com.yawnandpawn.app.ui.home.HomeUiState
 import com.yawnandpawn.app.ui.home.HomeViewModel
 import com.yawnandpawn.app.ui.links.AppLinks
 import com.yawnandpawn.app.ui.links.ExternalLinks
@@ -94,6 +96,7 @@ import kotlinx.datetime.LocalTime
 import org.koin.core.parameter.parametersOf
 import org.koin.dsl.koinApplication
 import org.koin.dsl.module
+import kotlin.coroutines.EmptyCoroutineContext
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
@@ -155,8 +158,9 @@ class UiModuleTest {
             // Story 5.4: Home's banner evaluates the reliability checklist.
             factory<EvaluateReliability> { anEvaluateReliability(probe = get(), checks = get()) }
             single { aTestNote() }
-            // Story 6.5: Progress over the real Story 6.2 snapshot on the fakes.
-            factory { ObserveProgress(get(), get(), DayTicker(get(), get(), get())) }
+            // Stories 6.3 and 6.5: the Home hero's stats and Progress over the real Story 6.2 snapshot on the fakes.
+            factory { DayTicker(get(), get(), get()) }
+            factory { ObserveProgress(get(), get(), get(), EmptyCoroutineContext) }
         }
 
     @OptIn(ExperimentalCoroutinesApi::class)
@@ -187,6 +191,10 @@ class UiModuleTest {
             assertEquals(LocalTime(6, 45), state.form.time)
             assertEquals("Gym", state.form.label)
             assertEquals(listOf(source), repository.current)
+            // Story 6.3: the app hands Home its stats, so the hero shows for the stored alarm.
+            var shown: HomeUiState? = null
+            runTest { shown = home.state.first { !it.isLoading } }
+            assertEquals(HomeHero(0), shown?.hero)
         } finally {
             Dispatchers.resetMain()
         }

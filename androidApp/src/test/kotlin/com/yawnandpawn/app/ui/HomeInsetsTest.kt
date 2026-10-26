@@ -105,7 +105,7 @@ class HomeInsetsTest {
         }
 
     /**
-     * Device test round 1, part 2: with no hero (always in Epic 1) the header collapses continuously with the scroll.
+     * Device test round 1, part 2: with no hero (stats not read yet) the header collapses continuously with the scroll.
      * Scrolled about half the header's height, the title is part way between `headline` and `title` size, not snapped.
      */
     @Test

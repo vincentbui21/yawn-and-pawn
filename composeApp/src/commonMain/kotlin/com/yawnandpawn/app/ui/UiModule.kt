@@ -30,14 +30,14 @@ import org.koin.dsl.module
  * (`AlarmRepository`, the alarm use cases, `Clock`, `MonotonicClock`, `TimeZoneProvider`, `TimeChangeSignal`, `Logger`,
  * `SoundLibrary`, `SoundPreview`, `ExternalLinks`, `AppLinks`, `DeviceInfoSource`, `ManufacturerSettings`,
  * `ConfirmMakerGuidance`, `ConsentStore`, `SetAnalyticsConsent`, `EvaluateReliability`, `ReliabilitySettings`,
- * `CameraPermission`, `ScheduleTestAlarm`, `OnboardingRepository`, `ReliabilityRecords`, the onboarding use cases and
- * `OnboardingTestNote`, `ObserveProgress`) are bound by :androidApp and :data.
+ * `CameraPermission`, `ScheduleTestAlarm`, `OnboardingRepository`, `ReliabilityRecords`, the onboarding use cases,
+ * `OnboardingTestNote` and `ObserveProgress`) are bound by :androidApp and :data.
  */
 val uiModule =
     module {
         factory { AlarmActions(get(), get(), get()) }
-        // Story 5.12: Home's note after "Skip for now" on onboarding's test alarm.
-        viewModel { HomeViewModel(get(), get(), get(), get(), get(), get(), get(), get(), testNote = get()) }
+        // Story 5.12: Home's note after "Skip for now" on onboarding's test alarm. Story 6.3: the hero's stats.
+        viewModel { HomeViewModel(get(), get(), get(), get(), get(), get(), get(), get(), testNote = get(), progress = get()) }
         viewModel { PurchaseHistoryViewModel(get(), get(), get(), get(), get()) }
         // Story 6.5: Progress over core's ObserveProgress (Story 6.2, bound by :androidApp).
         viewModel { ProgressViewModel(observeProgress = get(), logger = get()) }

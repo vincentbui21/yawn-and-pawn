@@ -133,9 +133,9 @@ development_status:
   epic-6: in-progress
   6-1-streaks-on-time-rate-and-time-to-up-in-core-stats: done  # merged as PR #81
   6-2-snoozes-per-week-money-per-currency-and-day-outcomes-in-core: done  # merged as PR #83
-  6-3-streak-and-money-hero-card-on-home: backlog
+  6-3-streak-and-money-hero-card-on-home: review  # Epic 6 auto-run, fast mode
   6-4-zero-snooze-celebration-on-the-success-screen: done  # Epic 6 auto-run, fast mode; merged as PR #85
-  6-5-progress-screen-with-the-30-morning-ring-stat-tiles-and-money: review  # Epic 6 auto-run, fast mode
+  6-5-progress-screen-with-the-30-morning-ring-stat-tiles-and-money: done  # Epic 6 auto-run, fast mode; merged as PR #86
   6-6-calendar-of-morning-outcomes: backlog
   6-7-day-detail-for-each-morning: backlog
   6-8-weekly-summary-notification-on-sunday-evening: backlog

@@ -5,6 +5,7 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
@@ -21,6 +22,8 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -34,6 +37,8 @@ import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.semantics.CustomAccessibilityAction
 import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.clearAndSetSemantics
+import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.customActions
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.style.TextAlign
@@ -91,11 +96,12 @@ import com.yawnandpawn.app.ui.theme.PpsTheme
 import org.jetbrains.compose.resources.stringResource
 
 /**
- * Home (the Alarms tab), stateless: header, the reliability `banner-warning`, the fallback re-register info banner, the
- * missed note, `card-hero` (streak and money), the next-alarm countdown and the `card-alarm` list (the nav bar's "+"
- * adds an alarm); or the empty state; or, during a session, only `panel-session-in-progress`. While the alarms are
- * read only the header shows; if they cannot be read, "Couldn't load your alarms." with "Try again" (never the empty
- * state). Long-press on a card (or its TalkBack actions) offers Duplicate and Delete; Delete asks first.
+ * Home (the Alarms tab), stateless: header, `card-hero` (streak and money, Story 6.3), the reliability `banner-warning`,
+ * the fallback re-register info banner, the missed and test notes, the next-alarm countdown and the `card-alarm` list
+ * (the nav bar's "+" adds an alarm); or the empty state (with the hero on top when there is history but no alarm); or,
+ * during a session, only `panel-session-in-progress`. While the alarms are read only the header shows; if they cannot
+ * be read, "Couldn't load your alarms." with "Try again" (never the empty state). Long-press on a card (or its
+ * TalkBack actions) offers Duplicate and Delete; Delete asks first.
  */
 @Composable
 fun HomeScreen(
@@ -180,8 +186,12 @@ private fun HomeList(
                 ),
             verticalArrangement = Arrangement.spacedBy(spacing.space3),
         ) {
-            item(key = "notices") { Notices(state = state, is24Hour = is24Hour, onIntent = onIntent) }
+            // An empty first item anchors the scroll position, so a hero or notice that arrives after the first layout is
+            // inserted below it and shows, instead of above the first visible item, off screen (review fix 1).
+            item(key = TOP_KEY) { }
+            // The hero first, above every notice (Story 6.3); the notices only when one shows, so no empty item adds a gap.
             state.hero?.let { hero -> item(key = HERO_KEY) { HeroCard(hero, modifier = Modifier.collapsingHero(collapse)) } }
+            if (state.hasNotices) item(key = "notices") { Notices(state = state, is24Hour = is24Hour, onIntent = onIntent) }
             state.nextAlarm?.let { countdown -> item(key = "next") { NextAlarm(countdown) } }
             items(state.alarms, key = { it.id }) { alarm ->
                 AlarmCardView(
@@ -216,7 +226,14 @@ private fun NextAlarm(countdown: Countdown) {
     )
 }
 
-/** Banners and the missed note, stacked above the hero. */
+/** The empty first item of the Home list. */
+private const val TOP_KEY = "top"
+
+/** Some banner or note shows. */
+private val HomeUiState.hasNotices: Boolean
+    get() = reliabilityProblem || reregisterCheck != null || missedAlarmAt != null || testSkipped
+
+/** Banners and the notes, stacked under the hero. */
 @Composable
 private fun Notices(
     state: HomeUiState,
@@ -263,40 +280,43 @@ private fun Notices(
     }
 }
 
-/** `card-hero` (glass): streak number in `display` (`accent-text`), "days on time" in `body`, the money line in `text-secondary`. */
+/**
+ * `card-hero` (glass, not tappable): streak number in `display` (`accent-text`), "days on time" in `body`, the money line
+ * in `text-secondary` ("Nothing paid this week. Keep it that way." or "{paid} paid this week", one total per currency
+ * joined by the formatter). TalkBack reads it as one element, "{streak} days on time. {money line}".
+ */
 @Composable
 private fun HeroCard(
     hero: HomeHero,
     modifier: Modifier = Modifier,
 ) {
     val colors = PpsTheme.colors
+    val streak = hero.streakDays.toString()
+    val label = stringResource(if (hero.streakDays == 1) Res.string.home_streak_day else Res.string.home_streak_days)
+    val moneyLine =
+        if (hero.paidThisWeek.isEmpty()) {
+            stringResource(Res.string.home_zero_paid)
+        } else {
+            stringResource(Res.string.home_paid_week, formatMoney(hero.paidThisWeek))
+        }
     Column(
         modifier =
             modifier
                 .fillMaxWidth()
                 .glass(PpsTheme.shapes.md)
                 .padding(PpsTheme.spacing.cardPadding)
-                .semantics(mergeDescendants = true) { },
+                .clearAndSetSemantics { contentDescription = "$streak $label. $moneyLine" },
     ) {
         Row(verticalAlignment = Alignment.Bottom) {
-            Text(text = hero.streakDays.toString(), style = PpsTheme.typography.display, color = colors.accentText)
+            Text(text = streak, style = PpsTheme.typography.display, color = colors.accentText)
             Text(
-                text = stringResource(if (hero.streakDays == 1) Res.string.home_streak_day else Res.string.home_streak_days),
+                text = label,
                 modifier = Modifier.padding(start = PpsTheme.spacing.space2, bottom = PpsTheme.spacing.space1),
                 style = PpsTheme.typography.body,
                 color = colors.text,
             )
         }
-        Text(
-            text =
-                if (hero.paidThisWeek.isEmpty()) {
-                    stringResource(Res.string.home_zero_paid)
-                } else {
-                    stringResource(Res.string.home_paid_week, formatMoney(hero.paidThisWeek))
-                },
-            style = PpsTheme.typography.body,
-            color = colors.textSecondary,
-        )
+        Text(text = moneyLine, style = PpsTheme.typography.body, color = colors.textSecondary)
     }
 }
 
@@ -363,7 +383,10 @@ private fun AlarmCardView(
     }
 }
 
-/** Home empty: "No alarms yet." with `button-filled` "Add your first alarm" (notices still show above it). */
+/**
+ * Home empty: "No alarms yet." with `button-filled` "Add your first alarm"; notices still show above it, and with history
+ * but no alarm the hero above them (Story 6.3; it does not collapse into the header).
+ */
 @Composable
 private fun EmptyHome(
     state: HomeUiState,
@@ -372,31 +395,37 @@ private fun EmptyHome(
     modifier: Modifier = Modifier,
 ) {
     val spacing = PpsTheme.spacing
-    Column(
-        modifier =
-            modifier.fillMaxWidth().padding(
-                start = spacing.screenMargin,
-                end = spacing.screenMargin,
-                bottom = LocalNavBarClearance.current,
-            ),
-    ) {
-        Notices(state = state, is24Hour = is24Hour, onIntent = onIntent)
+    // It scrolls when the hero and the notices leave too little room (200% font scale), so the button never clips
+    // (review fix 4); otherwise the centred block fills the rest of the screen, as before.
+    BoxWithConstraints(modifier = modifier.fillMaxWidth()) {
+        val screenHeight = maxHeight
         Column(
-            modifier = Modifier.weight(1f).fillMaxWidth(),
-            verticalArrangement = Arrangement.Center,
-            horizontalAlignment = Alignment.CenterHorizontally,
+            modifier =
+                Modifier
+                    .fillMaxWidth()
+                    .verticalScroll(rememberScrollState())
+                    .heightIn(min = screenHeight)
+                    .padding(start = spacing.screenMargin, end = spacing.screenMargin, bottom = LocalNavBarClearance.current),
         ) {
-            Text(
-                text = stringResource(Res.string.alarms_empty_title),
-                style = PpsTheme.typography.title,
-                color = PpsTheme.colors.text,
-                textAlign = TextAlign.Center,
-            )
-            PpsFilledButton(
-                text = stringResource(Res.string.alarms_add_first),
-                onClick = { onIntent(HomeIntent.AddAlarm) },
-                modifier = Modifier.padding(top = spacing.space6),
-            )
+            state.hero?.let { hero -> HeroCard(hero, modifier = Modifier.padding(bottom = spacing.space3)) }
+            Notices(state = state, is24Hour = is24Hour, onIntent = onIntent)
+            Column(
+                modifier = Modifier.weight(1f).fillMaxWidth(),
+                verticalArrangement = Arrangement.Center,
+                horizontalAlignment = Alignment.CenterHorizontally,
+            ) {
+                Text(
+                    text = stringResource(Res.string.alarms_empty_title),
+                    style = PpsTheme.typography.title,
+                    color = PpsTheme.colors.text,
+                    textAlign = TextAlign.Center,
+                )
+                PpsFilledButton(
+                    text = stringResource(Res.string.alarms_add_first),
+                    onClick = { onIntent(HomeIntent.AddAlarm) },
+                    modifier = Modifier.padding(top = spacing.space6),
+                )
+            }
         }
     }
 }

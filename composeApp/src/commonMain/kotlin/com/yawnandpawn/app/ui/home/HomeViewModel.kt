@@ -18,6 +18,8 @@ import com.yawnandpawn.app.core.history.MissedNotes
 import com.yawnandpawn.app.core.history.SessionHistoryRow
 import com.yawnandpawn.app.core.onboarding.OnboardingTestNote
 import com.yawnandpawn.app.core.reliability.EvaluateReliability
+import com.yawnandpawn.app.core.stats.ObserveProgress
+import com.yawnandpawn.app.core.stats.ProgressSnapshot
 import com.yawnandpawn.app.core.stats.ReRegisterInputs
 import com.yawnandpawn.app.core.stats.ReRegisterSuggestion
 import com.yawnandpawn.app.core.stats.ReRegisterSuggestions
@@ -42,6 +44,7 @@ import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.catch
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.emptyFlow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.map
@@ -79,6 +82,9 @@ import com.yawnandpawn.app.ui.checks.CheckType as UiCheckType
  * registration arrives (Story 3.10), "Dismiss" stores the dismissal. After "Skip for now" on onboarding's test alarm,
  * [testNote] shows "Ring a test alarm with your phone locked to check it works." until a locked test passes or "Dismiss"
  * is stored (Story 5.12); a failing read is logged and shows no note, a failed dismissal is logged and the note stays.
+ * `card-hero` (Story 6.3) shows [progress]'s current streak and this week's money once Home has an alarm or a history
+ * row; the snapshot is recomputed on either table, a new local date or zone (a time signal) and each resume. While it
+ * loads, or after a failed read (logged, then read again with the missed note's growing pause), there is no hero.
  */
 @Suppress("TooManyFunctions") // One small handler per Home action (toggle, turn-off dialog, delete, banners, snackbars).
 class HomeViewModel(
@@ -97,6 +103,8 @@ class HomeViewModel(
     evaluationContext: CoroutineContext = Dispatchers.Default,
     /** Onboarding's skipped-test note (Story 5.12); the app binds it (`UiModule`), null shows none. */
     private val testNote: OnboardingTestNote? = null,
+    /** The stats behind `card-hero` (Story 6.3, core.stats); the app binds it (`UiModule`), null shows no hero. */
+    private val progress: ObserveProgress? = null,
 ) : ViewModel() {
     /** Bumped by "Try again" to subscribe to the alarms again. */
     private val loads = MutableStateFlow(0)
@@ -162,13 +170,38 @@ class HomeViewModel(
                 true
             }.onStart { emit(ReRegisterInputs()) }
 
-    // The banner is computed with the alarms Home lists and on every tick, as its 7-day window moves with the clock.
+    /**
+     * The stats behind the hero (Story 6.3): null until the first snapshot and after a failed read, which is logged and
+     * read again after the missed note's growing pause. Home's resumes are its refresh, so a date that changed while
+     * Home was away is caught even before the next time signal. Read only while [state] is collected; the last snapshot
+     * is kept while Home is away, so coming back does not hide the hero and show it again (review fix 3).
+     */
+    private val snapshot: StateFlow<ProgressSnapshot?> =
+        (
+            progress?.let { observe ->
+                observe(refresh = resumes)
+                    .map<ProgressSnapshot, ProgressSnapshot?> { it }
+                    .retryWhen { cause, attempt ->
+                        actions.logFailure("load progress", cause)
+                        emit(null)
+                        delay(missedRetryDelay(attempt))
+                        true
+                    }
+            } ?: emptyFlow()
+        ).stateIn(viewModelScope, SharingStarted.WhileSubscribed(), null)
+
+    // The banner is computed with the alarms Home lists and on every tick, as its 7-day window moves with the clock. The
+    // hero is joined outside that combine (5 flows is the largest typed overload), only while Home is shown.
     val state: StateFlow<HomeUiState> =
-        combine(stored, ticks, local, missed, reRegisterInputs) { alarms, _, ui, missedRow, inputs ->
-            val suggestion = reRegister.banner(alarms, inputs, uiTypeOf)
-            shownSuggestion = suggestion
-            render(alarms, ui, missedRow).copy(reregisterCheck = suggestion?.type?.let(uiTypeOf))
-        }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(STOP_TIMEOUT_MILLIS), HomeUiState(isLoading = true))
+        combine(
+            combine(stored, ticks, local, missed, reRegisterInputs) { alarms, _, ui, missedRow, inputs ->
+                val suggestion = reRegister.banner(alarms, inputs, uiTypeOf)
+                shownSuggestion = suggestion
+                render(alarms, ui, missedRow).copy(reregisterCheck = suggestion?.type?.let(uiTypeOf))
+            },
+            snapshot,
+        ) { home, stats -> home.withHero(stats) }
+            .stateIn(viewModelScope, SharingStarted.WhileSubscribed(STOP_TIMEOUT_MILLIS), HomeUiState(isLoading = true))
 
     init {
         testNote?.let { note ->
@@ -499,6 +532,18 @@ private const val MINUTES_PER_HOUR = 60L
 internal fun missedRetryDelay(attempt: Long): Duration {
     val doublings = attempt.coerceIn(0L, MISSED_RETRY_MAX_DOUBLINGS).toInt()
     return (MISSED_RETRY_FIRST * (1 shl doublings)).coerceAtMost(MISSED_RETRY_MAX)
+}
+
+/**
+ * `card-hero` from [stats] (Story 6.3): the current streak and this week's money, once Home has at least one alarm or one
+ * history row. None while the stats or the alarms are loading, or when either could not be read (never a guessed 0).
+ */
+internal fun HomeUiState.withHero(stats: ProgressSnapshot?): HomeUiState {
+    val hero =
+        stats
+            ?.takeIf { !isLoading && !loadFailed && (alarms.isNotEmpty() || it.hasHistory) }
+            ?.let { HomeHero(it.currentStreak, it.paidThisWeek) }
+    return copy(hero = hero)
 }
 
 /**

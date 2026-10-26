@@ -53,7 +53,7 @@ class HeaderCollapse internal constructor(
 }
 
 /**
- * [hasHero]: the list shows `card-hero`, whose scroll drives the title. Without it (always in Epic 1) the title shrinks
+ * [hasHero]: the list shows `card-hero`, whose scroll drives the title. Without it (stats not read yet) the title shrinks
  * over [noHeroDistance] px of scrolling (the header's height), continuously (device test round 1: it used to snap once
  * the first, often empty, item left the screen).
  */

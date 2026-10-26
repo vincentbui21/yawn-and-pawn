@@ -50,7 +50,7 @@ object PreviewCatalog {
         state: HomeUiState,
         primary: Boolean = false,
         hasDialog: Boolean = false,
-        // Opened scrolled to this list item (1 = the hero) plus scrollDp into it: the collapsing header states.
+        // Opened scrolled to this list item (0 = the empty top item, 1 = the hero) plus scrollDp into it: the collapsing header states.
         scrollItem: Int = 0,
         scrollDp: Int = 0,
     ) = PreviewItem(id, 1, "Alarms (Home)", title, primary = primary, hasDialog = hasDialog) { is24 ->

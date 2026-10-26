@@ -2,6 +2,8 @@
 
 The Epic 6 screens are approved in rounds 1 and 2. Three things changed since, or were never shown, and need the owner's look before stories 6.3, 6.5 and 6.7 are built (epic-6-context.md, "Need an owner look before the build", and the open questions Q1 and Q2). Each state below shows the **proposed default**. Approve it, or pick the alternative.
 
+**Owner decision 2026-10-26: all three defaults approved** ("OK with all"): two currencies joined with " + ", one line per currency on Progress; "/ 30" hidden once the streak passes 30; Day detail from stored facts only (option A, no `session_event` table).
+
 Open a state on the phone: debug build, design preview, "Round 5 · Epic 6 progress", or deep-link its id from [states.md](states.md), for example:
 
 ```sh
@@ -51,7 +53,7 @@ The hero and the three tiles stay. Rings = 1 + snoozes; the time to get up runs 
 | `day-facts-two-sessions` | `day-two-sessions` | `day_facts_two_sessions_light.png`, `_dark.png`, `_light_font200.png` |
 | `day-facts-missed` | `day-missed` (snoozed once, then missed) | `day_facts_missed_light.png`, `_dark.png`, `_light_font200.png` |
 
-New strings (drafts, in EXPERIENCE.md with "awaiting the owner"): `day_event_snoozed_paid` "Snoozed · {price}" and `day_event_solved` "{check} solved".
+New strings (in EXPERIENCE.md; owner approved the reduced timeline 2026-10-26): `day_event_snoozed_paid` "Snoozed · {price}" and `day_event_solved` "{check} solved".
 
 ## 3. The ring centre with a streak over 30 (Q2)
 

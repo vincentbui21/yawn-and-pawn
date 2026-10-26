@@ -53,9 +53,9 @@ internal fun dayDetailOf(
 
 /**
  * One session: its alarm time (the local time of `scheduledAt`) with the alarm's current label while it has one (not
- * for a test or skipped session), the outcome, and for a counted session (On time, Snoozed, Missed) the stored tiles (rings 1 + `snoozeCount`), the money
- * paid per currency, the payments Google refunded, the time to get up and the timeline ([morningEventsOf]). Test and
- * skipped sessions get the hero data only. `null` for a session still running (no outcome).
+ * for a test or skipped session), the outcome, and for a counted session (On time, Snoozed, Missed) the stored tiles
+ * (rings 1 + `snoozeCount`), the money paid per currency, the payments Google refunded, the time to get up and the
+ * timeline ([morningEventsOf]). Test and skipped sessions get the hero data only. `null` for a session still running.
  */
 internal fun sessionDetailOf(
     session: SessionOnDay,
@@ -120,7 +120,10 @@ internal fun morningEventsOf(
                     )
                 at to event
             }
-    val merged = merges.map { merge -> merge.mergedAt to MorningEvent.Merged(merge.mergedAt.localTime(zone), merge.scheduledAt.localTime(zone)) }
+    val merged =
+        merges.map { merge ->
+            merge.mergedAt to MorningEvent.Merged(merge.mergedAt.localTime(zone), merge.scheduledAt.localTime(zone))
+        }
     val checks = row.checkTypes.mapNotNull(::checkTypeOfId)
     return buildList {
         add(MorningEvent.Rang(start.localTime(zone), beforeFirstUnlock = row.directBoot))

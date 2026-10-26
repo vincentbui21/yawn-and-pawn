@@ -126,7 +126,12 @@ class DayDetailSemanticsTest {
 
     @Test
     fun `missing facts never read as null or 0 min`() =
-        listOf(DayDetailSamples.missed, DayDetailSamples.test, DayDetailSamples.skipped, DayDetailSamples.fallbackDirectBoot).forEach { state ->
+        listOf(
+            DayDetailSamples.missed,
+            DayDetailSamples.test,
+            DayDetailSamples.skipped,
+            DayDetailSamples.fallbackDirectBoot,
+        ).forEach { state ->
             show(state) {
                 val spoken = composeRule.spokenOrder()
                 assertTrue(spoken.none { it.contains("null") || ZERO_MINUTES.containsMatchIn(it) || it == "0" }, "$spoken")

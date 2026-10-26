@@ -133,7 +133,10 @@ class DayDetailRouteTest {
     )
 
     private fun shown(text: String) =
-        composeRule.onAllNodes(hasText(text, substring = true) or hasContentDescription(text, substring = true)).fetchSemanticsNodes().isNotEmpty()
+        composeRule
+            .onAllNodes(hasText(text, substring = true) or hasContentDescription(text, substring = true))
+            .fetchSemanticsNodes()
+            .isNotEmpty()
 
     private fun waitForText(
         text: String,
@@ -185,7 +188,10 @@ class DayDetailRouteTest {
             waitForText("Snoozed · ${formatMoney(usd)}")
             waitForText("alarm merged into this session")
             waitForText("Math solved")
-            composeRule.onNode(hasText("Not used, refunded automatically by Google", substring = true)).performScrollTo()
+            // One TalkBack stop: the note, then the amount refunded.
+            composeRule
+                .onNode(hasContentDescription("Not used, refunded automatically by Google, ${formatMoney(eur)} refunded"))
+                .performScrollTo()
             composeRule.onNode(hasText("alarm was turned off. Logged.", substring = true)).performScrollTo()
 
             back(scenario)
@@ -233,7 +239,8 @@ class DayDetailRouteTest {
     fun `a second tap on the selected ring dot opens Day detail, and a session replaces it with Alarm in progress`() {
         start()
         onProgress {
-            val dot = composeRule.onNode(hasContentDescription("Wednesday 3, Snoozed", substring = true) and !inCalendar() and !hasText(CHIP))
+            val dot =
+                composeRule.onNode(hasContentDescription("Wednesday 3, Snoozed", substring = true) and !inCalendar() and !hasText(CHIP))
             dot.performTouchInput { click() }
             waitForText(CHIP)
             dot.performTouchInput { click() }

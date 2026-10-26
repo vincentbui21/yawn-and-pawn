@@ -114,16 +114,28 @@ class DayDetailViewModel(
                 val id = session.row.sessionId
                 id to
                     when (val read = history.merges(id)) {
-                        is Outcome.Success -> read.value
-                        is Outcome.Failure -> emptyList<SessionMergeRow>().also { logger.log(LogEvent.OperationFailed.of("load merges", read.error)) }
+                        is Outcome.Success -> {
+                            read.value
+                        }
+
+                        is Outcome.Failure -> {
+                            logger.log(LogEvent.OperationFailed.of("load merges", read.error))
+                            emptyList()
+                        }
                     }
             }
 
     /** Every logged alarm change; a failed read shows no notes. */
     private suspend fun changes(): List<CommitmentEvent> =
         when (val read = commitmentEvents.all()) {
-            is Outcome.Success -> read.value
-            is Outcome.Failure -> emptyList<CommitmentEvent>().also { logger.log(LogEvent.OperationFailed.of("load alarm changes", read.error)) }
+            is Outcome.Success -> {
+                read.value
+            }
+
+            is Outcome.Failure -> {
+                logger.log(LogEvent.OperationFailed.of("load alarm changes", read.error))
+                emptyList()
+            }
         }
 
     private fun logFailure(

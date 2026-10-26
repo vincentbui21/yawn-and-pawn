@@ -3,7 +3,7 @@ title: 'Story 6.7: Day detail for each morning'
 type: 'feature'
 created: '2026-10-26'
 status: 'review'
-baseline_commit: '54d551e9 (6.6 on main 38323732; rebase onto main once 6.6 merges)'
+baseline_commit: '3b18f2eb (main with 6.6 merged, #88)'
 route: 'dispatch'
 story_key: '6-7-day-detail-for-each-morning'
 review_loop_iteration: 0
@@ -527,8 +527,8 @@ Use JDK 17 and `--no-daemon --max-workers=2`, targeted runs only.
 
 ## Spec Change Log
 
-**Built on** 6.6's HEAD (`origin/story/6-6-calendar` 54d551e9, itself on main 38323732 with 6.3), unmerged at build
-time. The 6.2, 6.5 and 6.6 code as built, and the owner-approved round 5 preview (`day-facts-*`), win over the plan
+**Built on** 6.6's HEAD (`origin/story/6-6-calendar` 54d551e9, on main 38323732 with 6.3), rebased onto main 3b18f2eb once
+6.6 merged (#88). The 6.2, 6.5 and 6.6 code as built, and the owner-approved round 5 preview (`day-facts-*`), win over the plan
 above.
 
 **Contract as built.**

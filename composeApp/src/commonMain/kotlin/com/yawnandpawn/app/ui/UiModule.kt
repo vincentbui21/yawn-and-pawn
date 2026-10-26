@@ -12,6 +12,7 @@ import com.yawnandpawn.app.ui.onboarding.TestAlarmSources
 import com.yawnandpawn.app.ui.onboarding.UsageStatsSources
 import com.yawnandpawn.app.ui.payments.PaymentsViewModel
 import com.yawnandpawn.app.ui.payments.ProblemWithChargeViewModel
+import com.yawnandpawn.app.ui.progress.ProgressViewModel
 import com.yawnandpawn.app.ui.purchases.PurchaseHistoryViewModel
 import com.yawnandpawn.app.ui.reliability.ChecklistTestAlarm
 import com.yawnandpawn.app.ui.reliability.ManufacturerGuidanceViewModel
@@ -30,7 +31,7 @@ import org.koin.dsl.module
  * `SoundLibrary`, `SoundPreview`, `ExternalLinks`, `AppLinks`, `DeviceInfoSource`, `ManufacturerSettings`,
  * `ConfirmMakerGuidance`, `ConsentStore`, `SetAnalyticsConsent`, `EvaluateReliability`, `ReliabilitySettings`,
  * `CameraPermission`, `ScheduleTestAlarm`, `OnboardingRepository`, `ReliabilityRecords`, the onboarding use cases and
- * `OnboardingTestNote`) are bound by :androidApp and :data.
+ * `OnboardingTestNote`, `ObserveProgress`) are bound by :androidApp and :data.
  */
 val uiModule =
     module {
@@ -38,6 +39,8 @@ val uiModule =
         // Story 5.12: Home's note after "Skip for now" on onboarding's test alarm.
         viewModel { HomeViewModel(get(), get(), get(), get(), get(), get(), get(), get(), testNote = get()) }
         viewModel { PurchaseHistoryViewModel(get(), get(), get(), get(), get()) }
+        // Story 6.5: Progress over core's ObserveProgress (Story 6.2, bound by :androidApp).
+        viewModel { ProgressViewModel(observeProgress = get(), logger = get()) }
         viewModel {
             SettingsViewModel(
                 globalSettings = get(),

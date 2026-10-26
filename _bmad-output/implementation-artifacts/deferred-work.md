@@ -109,6 +109,7 @@
 - source_spec: `_bmad-output/implementation-artifacts/spec-1-9-alarm-list-on-home-with-the-next-alarm-countdown.md`
   summary: Keep each tab's saved state (scroll, sub-screen) when switching between Progress, Settings and You.
   evidence: The back stack is [Alarms] or [Alarms, Tab]; selecting another tab removes the previous non-root tab, so its saveable state is dropped. Harmless in Epic 1 (those tabs are placeholders); revisit when Epic 5 (Settings) or Epic 6 (Progress) gives them content.
+  status: deferred to v2 by Story 6.5 (see Defaults D1 in spec-6-5-progress-screen.md). Keeping Progress' month and scroll across tab switches needs the tab entries to stay on the back stack, which changes the `selectTab` rules and every nav test. Within the Progress stack (Purchase history, later Day detail, pushed over it) the scroll and chip are kept.
 - source_spec: `_bmad-output/implementation-artifacts/spec-1-9-alarm-list-on-home-with-the-next-alarm-countdown.md`
   summary: Move the AlarmDeleted log into the core delete use case once a second delete path exists.
   evidence: Story 1.9 logs AlarmDeleted in `ui.home.AlarmActions`, shared by Home and the editor. Epic 4's commitment-lock delete confirmation and Story 5.9 "Delete all data" should decide whether they log per alarm; if so, log inside `DeleteAlarm` so no path can skip it.

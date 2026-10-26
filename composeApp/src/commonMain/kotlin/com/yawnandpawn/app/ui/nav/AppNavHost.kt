@@ -10,7 +10,6 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.Saver
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
@@ -23,8 +22,6 @@ import androidx.navigation3.runtime.rememberSaveableStateHolderNavEntryDecorator
 import androidx.navigation3.scene.Scene
 import androidx.navigation3.ui.NavDisplay
 import com.yawnandpawn.app.core.session.SessionLockGuard
-import com.yawnandpawn.app.core.time.Clock
-import com.yawnandpawn.app.core.time.TimeZoneProvider
 import com.yawnandpawn.app.ui.components.subScreenTransition
 import com.yawnandpawn.app.ui.editor.AlarmEditorRoute
 import com.yawnandpawn.app.ui.format.is24HourClock
@@ -33,17 +30,12 @@ import com.yawnandpawn.app.ui.home.HomeRoute
 import com.yawnandpawn.app.ui.home.HomeScreen
 import com.yawnandpawn.app.ui.home.HomeUiState
 import com.yawnandpawn.app.ui.onboarding.OnboardingRoute
-import com.yawnandpawn.app.ui.progress.CalendarMonth
-import com.yawnandpawn.app.ui.progress.ProgressScreen
-import com.yawnandpawn.app.ui.progress.ProgressUiState
 import com.yawnandpawn.app.ui.settings.SettingsRoute
 import com.yawnandpawn.app.ui.settings.WeakeningNote
 import com.yawnandpawn.app.ui.shell.AppShell
 import com.yawnandpawn.app.ui.shell.AppTab
 import com.yawnandpawn.app.ui.theme.PpsTheme
-import kotlinx.datetime.LocalDate
 import kotlinx.datetime.LocalTime
-import kotlinx.datetime.toLocalDateTime
 import org.koin.compose.koinInject
 
 /**
@@ -52,6 +44,7 @@ import org.koin.compose.koinInject
  * under the editor, which slides in and out; switching tabs is instant. Its "+" pushes the editor from any tab. Back on
  * a tab returns to Alarms, Back on Alarms leaves the app (see TabNavigation.kt). Each entry gets its own saveable state
  * (scroll position) and ViewModel store, so an editor's ViewModel is cleared when the editor leaves the back stack.
+ * Progress (Story 6.5, ProgressEntries.kt) pushes Purchase history over itself, so its scroll and chip are kept under it.
  *
  * While a ring, snooze or emergency ring is in progress ([SessionLockGuard.isLocked]) only [Route.SessionInProgress] is
  * shown, from the same composition (Story 2.6): Home's approved session state, whose "Back to alarm" opens the wake
@@ -120,7 +113,7 @@ fun AppNavHost(modifier: Modifier = Modifier) {
                             onOpenReliability = { backStack.openReliability(from = Route.Alarms) },
                         )
                     }
-                    entry<Route.Progress>(metadata = TabMetadata) { ProgressTab() }
+                    entry<Route.Progress>(metadata = TabMetadata) { ProgressEntry(backStack) }
                     entry<Route.Settings>(metadata = TabMetadata) { SettingsTab(backStack) }
                     entry<Route.You>(metadata = TabMetadata) { YouEntry(backStack) }
                     entry<Route.SessionInProgress>(metadata = LockMetadata) { SessionInProgressScreen() }
@@ -171,33 +164,6 @@ private fun AnimatedContentTransitionScope<Scene<NavKey>>.screenTransition(forwa
     val instant = (initialState.isTab() && targetState.isTab()) || initialState.isLock() || targetState.isLock()
     return if (instant) EnterTransition.None togetherWith ExitTransition.None else subScreenTransition(forward)
 }
-
-/**
- * Progress until its stories are built (Epic 6): the empty ring with its prompt and this month's empty calendar (no
- * other months to page to), without the Purchase history link.
- */
-@Composable
-private fun ProgressTab() {
-    val clock = koinInject<Clock>()
-    val zones = koinInject<TimeZoneProvider>()
-    val today = clock.now().toLocalDateTime(zones.current()).date
-    val state = remember(today) { emptyProgress(today) }
-    ProgressScreen(state = state, onIntent = {}, showPurchaseHistory = false)
-}
-
-/** Progress with nothing logged yet on [today]. */
-internal fun emptyProgress(today: LocalDate): ProgressUiState =
-    ProgressUiState(
-        today = today,
-        calendar =
-            CalendarMonth(
-                firstDay = LocalDate(today.year, today.month, 1),
-                days = emptyList(),
-                today = today,
-                hasPrevious = false,
-                hasNext = false,
-            ),
-    )
 
 /**
  * Settings: the Snooze card's base fee and max snoozes (Story 4.5), the defaults and the theme (5.1), and the reliability

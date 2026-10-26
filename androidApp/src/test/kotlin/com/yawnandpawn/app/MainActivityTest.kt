@@ -307,7 +307,8 @@ class MainActivityTest {
         waitForText("No alarms yet.")
         tab("Progress").performClick()
         waitForText("Your first morning shows up here.")
-        composeRule.onNodeWithText("Purchase history").assertDoesNotExist()
+        // Story 6.5: the empty Progress links to Purchase history (built in Story 4.16).
+        composeRule.onNode(hasText("Purchase history") and hasClickAction()).assertExists()
 
         // Story 4.5 built the Snooze card's base fee and max snoozes, Story 5.1 the defaults and Appearance, Story 5.2
         // "Bright wake screen" (on by default, with its caption), Story 5.4 the Reliability checklist row (it leads to the

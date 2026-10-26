@@ -2,10 +2,8 @@ package com.yawnandpawn.app.ui.nav
 
 import androidx.navigation3.runtime.NavKey
 import com.yawnandpawn.app.ui.shell.AppTab
-import kotlinx.datetime.LocalDate
 import kotlin.test.Test
 import kotlin.test.assertEquals
-import kotlin.test.assertNotNull
 import kotlin.test.assertNull
 
 class TabNavigationTest {
@@ -113,6 +111,26 @@ class TabNavigationTest {
         backStack.openPurchaseHistory(from = Route.You)
         backStack.pop()
         assertEquals(listOf<NavKey>(Route.Alarms, Route.You), backStack)
+    }
+
+    @Test
+    fun `Purchase history is pushed over Progress once, tabs and plus wait under it, and Back returns to Progress`() {
+        val backStack = stack(Route.Alarms)
+        backStack.selectTab(AppTab.Progress)
+
+        backStack.openPurchaseHistory(from = Route.Progress)
+        backStack.openPurchaseHistory(from = Route.Progress)
+        backStack.selectTab(AppTab.Settings)
+        backStack.openEditor(alarmId = null)
+        assertEquals(listOf<NavKey>(Route.Alarms, Route.Progress, Route.PurchaseHistory), backStack)
+        assertNull(backStack.topTab())
+
+        backStack.close(Route.PurchaseHistory)
+        assertEquals(listOf<NavKey>(Route.Alarms, Route.Progress), backStack)
+
+        backStack.openPurchaseHistory(from = Route.Progress)
+        backStack.pop()
+        assertEquals(listOf<NavKey>(Route.Alarms, Route.Progress), backStack)
     }
 
     @Test
@@ -317,16 +335,5 @@ class TabNavigationTest {
         val locked = stack(Route.SessionInProgress)
         assertEquals(false, locked.resetToHome())
         assertEquals(listOf<NavKey>(Route.SessionInProgress), locked)
-    }
-
-    @Test
-    fun `production Progress is this month's empty calendar with no other months`() {
-        val state = emptyProgress(LocalDate(2027, 3, 17))
-
-        val month = assertNotNull(state.calendar)
-        assertEquals(LocalDate(2027, 3, 1), month.firstDay)
-        assertEquals(emptyList(), month.days)
-        assertEquals(false, month.hasPrevious || month.hasNext)
-        assertNull(state.stats)
     }
 }

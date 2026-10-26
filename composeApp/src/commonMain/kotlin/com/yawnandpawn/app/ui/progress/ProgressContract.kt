@@ -84,6 +84,10 @@ data class ProgressUiState(
     val insight: Insight? = null,
     /** The ring dot or calendar day tapped once: its label chip shows; a second tap or the chip opens Day detail. */
     val selection: DaySelection? = null,
+    /** No snapshot yet (Story 6.5): nothing for 300 ms, then the `skeleton`, then "Still loading your progress." after 3 s. */
+    val loading: Boolean = false,
+    /** The snapshot could not be read (Story 6.5): "Couldn't load your progress." with "Try again", never the empty state. */
+    val loadFailed: Boolean = false,
 ) {
     val isEmpty: Boolean get() = stats == null
 }
@@ -105,6 +109,9 @@ sealed interface ProgressIntent {
     ) : ProgressIntent
 
     data object PurchaseHistoryClicked : ProgressIntent
+
+    /** "Try again" after a load failure: subscribes to the snapshot again. */
+    data object RetryLoad : ProgressIntent
 }
 
 /** The ring shows this many mornings. */

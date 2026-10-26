@@ -2,11 +2,11 @@
 title: 'Story 6.2: Snoozes over 30 days, money per currency, day outcomes, Insight and ObserveProgress in core.stats'
 type: 'feature'
 created: '2026-10-26'
-status: 'ready-for-dev'
-baseline_commit: 'TBD: main after Story 6.1 is merged (hard edge, epic-6-context.md)'
+status: 'review'
+baseline_commit: '0f97bb06'
 route: 'dispatch'
 story_key: '6-2-snoozes-per-week-money-per-currency-and-day-outcomes-in-core'
-review_loop_iteration: 0
+review_loop_iteration: 1
 context:
   - '{project-root}/_bmad-output/implementation-artifacts/epic-6-context.md'
   - '{project-root}/_bmad-output/implementation-artifacts/spec-6-1-streaks-on-time-rate-and-time-to-up-in-core-stats.md'
@@ -100,7 +100,7 @@ Defaults taken (unattended fast-mode run; the owner can change them):
 ## Tasks & Acceptance
 
 **Execution:**
-- [ ] `core/.../history/SessionHistory.kt`: add to `SessionHistoryRepository`:
+- [x] `core/.../history/SessionHistory.kt`: add to `SessionHistoryRepository`:
   ```kotlin
   /**
    * Every row, oldest `scheduled_at` first (then session id), again after every change (Progress and Home, Epic 6).
@@ -108,10 +108,10 @@ Defaults taken (unattended fast-mode run; the owner can change them):
    */
   fun observeAll(): Flow<List<SessionHistoryRow>>
   ```
-- [ ] `data/.../history/SessionHistoryDao.kt`: `@Query("SELECT * FROM session_history ORDER BY scheduled_at, session_id") abstract fun observeAll(): Flow<List<SessionHistoryEntity>>`. `RoomSessionHistoryRepository.observeAll() = dao.observeAll().map { rows -> rows.map { it.toRow() } }`, with the same "a read only" comment as `observeFallbacks`.
-- [ ] `testing/.../FakeSessionHistoryRepository.kt`: `override fun observeAll() = changes.map { observeFailure?.let { throw it }; stored.values.sortedWith(compareBy({ it.scheduledAt }, { it.sessionId })) }`. Update the KDoc so `observeFailure` covers it too.
-- [ ] The three test-double implementers above: add `observeAll()`. `InMemoryHistory` and `WakeActivityTest`'s double return `emptyFlow()` with the comment "never read here", or a `MutableStateFlow` if a test needs it. `MissedNotesTest`'s object returns `emptyFlow()`.
-- [ ] `core/src/commonMain/kotlin/com/yawnandpawn/app/core/stats/ProgressStats.kt` (new):
+- [x] `data/.../history/SessionHistoryDao.kt`: `@Query("SELECT * FROM session_history ORDER BY scheduled_at, session_id") abstract fun observeAll(): Flow<List<SessionHistoryEntity>>`. `RoomSessionHistoryRepository.observeAll() = dao.observeAll().map { rows -> rows.map { it.toRow() } }`, with the same "a read only" comment as `observeFallbacks`.
+- [x] `testing/.../FakeSessionHistoryRepository.kt`: `override fun observeAll() = changes.map { observeFailure?.let { throw it }; stored.values.sortedWith(compareBy({ it.scheduledAt }, { it.sessionId })) }`. Update the KDoc so `observeFailure` covers it too.
+- [x] The three test-double implementers above: add `observeAll()`. `InMemoryHistory` and `WakeActivityTest`'s double return `emptyFlow()` with the comment "never read here", or a `MutableStateFlow` if a test needs it. `MissedNotesTest`'s object returns `emptyFlow()`.
+- [x] `core/src/commonMain/kotlin/com/yawnandpawn/app/core/stats/ProgressStats.kt` (new):
   ```kotlin
   object ProgressRule {
       const val SNOOZE_DAYS = 30
@@ -151,7 +151,7 @@ Defaults taken (unattended fast-mode run; the owner can change them):
   - `moneyPaid` = `records.filter(::isPaidAmount)`, then the period filter on `purchasedAt.toLocalDateTime(zone).date` (`isoWeekOf(today)`, or the same year and month as `today`, or everything), then `groupBy { currency }`, the sum of `micros` as `Long`, `sortedBy { currency }`.
   - `daySummaries` groups once with `groupBy { sessionDay(it, zone) }` over the rows whose outcome is not null, so a month costs one pass, not one pass per day.
   - `kotlinx.datetime.YearMonth` exists in kotlinx-datetime 0.7+ (the repo uses 0.8.0): use `month.firstDay..month.lastDay`. If the build cannot resolve it, take `(year: Int, month: Month)` and say so in the Spec Change Log.
-- [ ] `core/src/commonMain/kotlin/com/yawnandpawn/app/core/stats/ObserveProgress.kt` (new):
+- [x] `core/src/commonMain/kotlin/com/yawnandpawn/app/core/stats/ObserveProgress.kt` (new):
   ```kotlin
   /** The local date and zone stats are computed for. Equal when the date and the zone id are equal. */
   data class StatsDay(val today: LocalDate, val zoneId: String) { val zone: TimeZone get() = TimeZone.of(zoneId) }
@@ -206,13 +206,13 @@ Defaults taken (unattended fast-mode run; the owner can change them):
   }
   ```
   Keep the constructor parameter names `history`, `records` and `days`. A receiver ending in `Repository`, `Store`, `Dao` or `Recorder` is what `SessionLockGuardScanTest.WRITES` looks at. Only read verbs are called, so it passes either way. It is still clearer.
-- [ ] `androidApp/.../YawnAndPawnApp.kt`: `factory { DayTicker(get(), get(), get()) }` and `factory { ObserveProgress(get(), get(), get()) }`, beside `MissedNotes`.
-- [ ] `core/src/commonTest/.../stats/StatsBuilders.kt`: add defaulted `snoozes: Int = <current rule>` and `fallbackUsed: Boolean = false` to `aSession`, and a new `aRecord(sessionId, price: Money, status = RecordStatus.Consumed, source = PriceSource.Intent, at: LocalDateTime, zone = StatsZone, tokenHash = "t${++n}")` that builds a `PurchaseRecord` (`consumedAt` set only for Consumed and Reused).
-- [ ] `core/src/commonTest/.../stats/ProgressTestDoubles.kt` (new, internal): `MutableHistory : SessionHistoryRepository` (a `MutableStateFlow<List<SessionHistoryRow>>`, with `observeAll`, `upsert` and `find`; the rest returns `emptyFlow()` or `Success`), `MutableRecords : PurchaseRecordRepository` (a `MutableStateFlow<PurchaseRecordsRead>`, with `observeFailure: Throwable?`), `TestClock(var now: Instant) : Clock`, `TestZones(var zone: TimeZone) : TimeZoneProvider`, and `TestTimeSignal : TimeChangeSignal` (a `MutableSharedFlow<Unit>(extraBufferCapacity = 1)` with `tick()`).
-- [ ] `core/src/commonTest/.../stats/ProgressStatsTest.kt` (new): table tests for every pure row of the matrix (snoozes, money, day outcome, month summary, sessions on a day, insight, ISO week).
-- [ ] `core/src/commonTest/.../stats/ObserveProgressTest.kt` (new): flow tests for the ObserveProgress rows, `DayTicker` (same-day tick → no emission; date change; zone change; `refresh`; zone equality by id), a failure in either repository flow propagating, and `computeContext` honoured (pass the `StandardTestDispatcher`).
-- [ ] `core/src/commonTest/.../stats/ProgressPerformanceTest.kt` (new): 3 years of daily sessions (1,096 rows, mixed outcomes, some fallbacks) and 300 records in 2 currencies; warm up 20 runs, then take the **fastest of 10** with `TimeSource.Monotonic.measureTime` (not banned by `NoDirectTimeAccess`) and assert it is under 50 ms.
-- [ ] `data/src/androidHostTest/.../history/RoomSessionHistoryRepositoryTest.kt`: `observeAll` orders by `scheduled_at` then id, emits again after `upsert` and after `deleteAllHistory`, and an unreadable outcome string throws into the flow.
+- [x] `androidApp/.../YawnAndPawnApp.kt`: `factory { DayTicker(get(), get(), get()) }` and `factory { ObserveProgress(get(), get(), get()) }`, beside `MissedNotes`.
+- [x] `core/src/commonTest/.../stats/StatsBuilders.kt`: add defaulted `snoozes: Int = <current rule>` and `fallbackUsed: Boolean = false` to `aSession`, and a new `aRecord(sessionId, price: Money, status = RecordStatus.Consumed, source = PriceSource.Intent, at: LocalDateTime, zone = StatsZone, tokenHash = "t${++n}")` that builds a `PurchaseRecord` (`consumedAt` set only for Consumed and Reused).
+- [x] `core/src/commonTest/.../stats/ProgressTestDoubles.kt` (new, internal): `MutableHistory : SessionHistoryRepository` (a `MutableStateFlow<List<SessionHistoryRow>>`, with `observeAll`, `upsert` and `find`; the rest returns `emptyFlow()` or `Success`), `MutableRecords : PurchaseRecordRepository` (a `MutableStateFlow<PurchaseRecordsRead>`, with `observeFailure: Throwable?`), `TestClock(var now: Instant) : Clock`, `TestZones(var zone: TimeZone) : TimeZoneProvider`, and `TestTimeSignal : TimeChangeSignal` (a `MutableSharedFlow<Unit>(extraBufferCapacity = 1)` with `tick()`).
+- [x] `core/src/commonTest/.../stats/ProgressStatsTest.kt` (new): table tests for every pure row of the matrix (snoozes, money, day outcome, month summary, sessions on a day, insight, ISO week).
+- [x] `core/src/commonTest/.../stats/ObserveProgressTest.kt` (new): flow tests for the ObserveProgress rows, `DayTicker` (same-day tick → no emission; date change; zone change; `refresh`; zone equality by id), a failure in either repository flow propagating, and `computeContext` honoured (pass the `StandardTestDispatcher`).
+- [x] `core/src/commonTest/.../stats/ProgressPerformanceTest.kt` (new): 3 years of daily sessions (1,096 rows, mixed outcomes, some fallbacks) and 300 records in 2 currencies; warm up 20 runs, then take the **fastest of 10** with `TimeSource.Monotonic.measureTime` (not banned by `NoDirectTimeAccess`) and assert it is under 50 ms.
+- [x] `data/src/androidHostTest/.../history/RoomSessionHistoryRepositoryTest.kt`: `observeAll` orders by `scheduled_at` then id, emits again after `upsert` and after `deleteAllHistory`, and an unreadable outcome string throws into the flow.
 
 **Acceptance Criteria:**
 - Given a history, when `snoozesLast30Days(history, today, zone)` runs, then it sums `snoozeCount` over OnTime, Snoozed and Missed rows whose day is in `today − 29 … today`. A session on the 30th day back counts, one on the 31st does not, and no weekly series is built.
@@ -255,6 +255,32 @@ Defaults taken (unattended fast-mode run; the owner can change them):
 
 ## Implementation Notes
 
+- Branched from Story 6.1's branch (88194bb7), then rebased onto main once 6.1 merged as 0f97bb06 (6.1's files are identical in both). Baseline is 0f97bb06.
+- No coordinator note was present at the end of the copied spec; the run followed the task brief and `epic-6-context.md`.
+- 6.1's real names: the thresholds object is `WakeStats` (not `WakeStatsRule`), with `RATE_DAYS_SHORT`, `RATE_DAYS_LONG` and `AVERAGE_DAYS`. `window` was `private` and is now `internal`; nothing else in `WakeStats.kt` changed.
+- Files: `core/.../stats/ProgressStats.kt` (rules, enums, snoozes, Insight, day outcomes, `sessionsOn`), `core/.../stats/MoneyStats.kt` (`isPaidAmount`, `isoWeekOf`, `moneyPaid` and two internal helpers), `core/.../stats/ObserveProgress.kt` (`StatsDay`, `DayTicker`, `ProgressSnapshot`, `progressSnapshot`, `ObserveProgress`); `SessionHistoryRepository.observeAll()` in core, the Room DAO and repository, the `:testing` fake and the test doubles (`InMemoryHistory`, the `MissedNotesTest` object, and `WakeActivityTest`'s `CountingHistory`, which delegates and counts like its other reads); Koin factories in `YawnAndPawnApp.kt`, resolved in `SessionWiringTest`.
+- Tests: `ProgressStatsTest` (32), `ObserveProgressTest` (12), `ProgressPerformanceTest` (1), `ProgressTestDoubles`; new defaulted `snoozes` and `fallbackUsed` on `aSession`, plus `aRecord`, `eur` and `usd` in `StatsBuilders.kt`; 2 new tests in `RoomSessionHistoryRepositoryTest`.
+- `kotlinx.datetime.YearMonth` resolved (kotlinx-datetime 0.8.0), so `monthSummary` takes a `YearMonth` as specified.
+- `computeContext` is shown honoured by recording the dispatcher (the `ContinuationInterceptor` key) that the history flow is collected in; `CoroutineDispatcher.Key` needs an opt-in, so it is not used.
+- Verified: `:core:jvmTest koverVerify` (all core suites pass; `koverVerifyStats` and the other package rules pass); `:data:testAndroidHostTest` for `SessionHistory*`, `SessionLockGuardScanTest`, `PurchaseStateReaderScanTest` and `PurchaseLedgerWriterScanTest` (30 tests, 0 failures); `:testing:compileKotlinJvm`; `spotlessCheck detekt`; `:androidApp:testDebugUnitTest` (`WakeActivityTest`, `SessionWiringTest`) and `:composeApp:testAndroidHostTest` (`UiModuleTest`, `PurchaseHistory*`). The full `qualityGate` was not run locally.
+
 ## Spec Change Log
 
+- `StatsDay.zone` is a property computed once from `zoneId` in the class body (not a getter). It is still not part of equality, and one `StatsDay` gives one `TimeZone` instance, so a re-emission of either table does not produce a snapshot that differs only by a new `TimeZone` object.
+- The money functions (`isPaidAmount`, `isoWeekOf`, `moneyPaid`) live in `MoneyStats.kt`, not `ProgressStats.kt`: one file with all 13 functions fails detekt `TooManyFunctions` (11). `MoneyPeriod` stays in `ProgressStats.kt`, because detekt `MatchingDeclarationName` fails a file whose single class does not match its name. Same package and signatures.
+- The 6.1 thresholds object is `WakeStats` (the real name), not `WakeStatsRule`.
+
 ## Review Triage Log
+
+Pass 1 (one combined reviewer: blind hunter, edge-case hunter, verification gap; fast mode). No HIGH findings.
+
+| # | Severity | Finding | Verdict / route |
+|---|----------|---------|-----------------|
+| 1 | MEDIUM | 8 lines over 140 characters (a KDoc in `ProgressStats.kt`, and tests in `ObserveProgressTest`, `ProgressStatsTest` and `RoomSessionHistoryRepositoryTest`): ktlint and detekt `MaxLineLength` would fail | Patched: wrapped. `spotlessCheck detekt` pass. |
+| 2 | MEDIUM | `ProgressStats.kt` has 13 top-level functions: detekt `TooManyFunctions` (11) would fail | Patched: the money functions moved to `MoneyStats.kt` (see Spec Change Log). |
+| 3 | LOW | The year check of `ThisMonth` is not tested | Patched: the 3-year test asserts that only March 2027 counts for today 2027-03-31 (March 2025 and 2026 hold records too). |
+| 4 | LOW | The 30-day edge of `insight` is not tested directly | Patched: a new test shows day −29 counts and day −30 does not. |
+| 5 | LOW | The first ObserveProgress snapshot is compared only with `progressSnapshot` itself, so a swapped field would pass | Patched: a fixture with streak 1, best 2, 7-day rate 100, 30-day rate 75, average 3.5 min, and money this month but not this week; each field is asserted. |
+| 6 | LOW | "stranded then reused counts once" feeds one record, so it proves no deduplication | Patched: renamed to what it shows. Identity by token hash is the repository's (the Room key). |
+| 7 | LOW | The `sessionId` tie-break in `sessionsOn` is untested | Rejected: it only makes the order stable for equal scheduled times; no rule depends on it. |
+| 8 | LOW | No Koin resolution test for `DayTicker` and `ObserveProgress` | Patched: `SessionWiringTest` resolves both. |

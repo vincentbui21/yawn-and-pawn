@@ -10,17 +10,14 @@ import kotlinx.datetime.DayOfWeek
 import kotlinx.datetime.LocalDate
 import kotlinx.datetime.TimeZone
 import kotlinx.datetime.YearMonth
-import kotlinx.datetime.isoDayNumber
-import kotlinx.datetime.minus
 import kotlinx.datetime.plus
-import kotlinx.datetime.toLocalDateTime
 import kotlin.time.Duration
 import kotlin.time.Duration.Companion.milliseconds
 import kotlin.time.Duration.Companion.minutes
 
 /*
- * Story 6.2: snoozes over 30 days, money paid per currency, each day's outcome and the Insight line (FR-PRG-1, FR-PRG-2,
- * FR-PRG-3). Pure, next to Story 6.1's WakeStats: the history comes from `session_history` (written only by
+ * Story 6.2: snoozes over 30 days, each day's outcome and the Insight line (FR-PRG-1, FR-PRG-2, FR-PRG-3); the money
+ * totals are in MoneyStats.kt. Pure, next to Story 6.1's WakeStats: the history comes from `session_history` (written only by
  * `SessionRecorder`), the purchase records from `PurchaseLedger`, and `today` and the zone from the Story 1.6 ports at the
  * call site (AD-3). Amounts stay per currency and are never converted (AD-8); nothing here is stored (AD-18).
  *
@@ -46,7 +43,7 @@ object ProgressRule {
 /** The Insight line Progress shows (Q3 default rule); `null` from [insight] hides the card. */
 enum class InsightLine { FastestOnWeekdays, FastestOnWeekends }
 
-/** The period of a money total: the ISO week of today, its local calendar month, or everything. */
+/** The period of a money total: the ISO week of today (see moneyPaid in MoneyStats.kt), its local calendar month, or everything. */
 enum class MoneyPeriod { ThisWeek, ThisMonth, AllTime }
 
 /**
@@ -71,7 +68,10 @@ data class DaySummary(
 /** One session of a day for Day detail (6.7). */
 data class SessionOnDay(
     val row: SessionHistoryRow,
-    /** Counted records of this session (Granted, Consumed, Reused), oldest purchase first, estimates included (6.7 shows them without an amount). */
+    /**
+     * Counted records of this session (Granted, Consumed, Reused), oldest purchase first, estimates included (6.7 shows
+     * them without an amount).
+     */
     val purchases: List<PurchaseRecord>,
     /** What this session cost, one total per currency, by code; only records with an amount paid. */
     val paid: List<Money>,
@@ -122,36 +122,6 @@ fun insight(
         weekdayMean < weekendMean -> InsightLine.FastestOnWeekdays
         else -> InsightLine.FastestOnWeekends
     }
-}
-
-/** Status Granted, Consumed or Reused, and the price is what was charged. */
-fun isPaidAmount(record: PurchaseRecord): Boolean = isCountedRecord(record) && record.priceSource.isAmountPaid
-
-/** Monday through Sunday of [date]'s ISO week. */
-fun isoWeekOf(date: LocalDate): ClosedRange<LocalDate> {
-    val monday = date.minus(date.dayOfWeek.isoDayNumber - 1, DateTimeUnit.DAY)
-    return monday..monday.plus(DAYS_IN_WEEK - 1, DateTimeUnit.DAY)
-}
-
-/**
- * The money paid in [period], one total per currency sorted by ISO code, micros summed as `Long` and never converted;
- * empty when nothing was paid. Only [isPaidAmount] records count, so stranded payments and estimated prices never do. A
- * record falls in a week or month by the local date of its `purchasedAt` in [zone].
- */
-fun moneyPaid(
-    records: List<PurchaseRecord>,
-    period: MoneyPeriod,
-    today: LocalDate,
-    zone: TimeZone,
-): List<Money> {
-    val week = isoWeekOf(today)
-    val inPeriod: (LocalDate) -> Boolean =
-        when (period) {
-            MoneyPeriod.ThisWeek -> { date -> date in week }
-            MoneyPeriod.ThisMonth -> { date -> date.year == today.year && date.month == today.month }
-            MoneyPeriod.AllTime -> { _ -> true }
-        }
-    return totalsPerCurrency(records.filter { isPaidAmount(it) && inPeriod(it.purchasedAt.toLocalDateTime(zone).date) })
 }
 
 /** The outcome of [date]: see [DayOutcome]. */
@@ -206,20 +176,6 @@ fun sessionsOn(
     }
 }
 
-/** Granted, Consumed or Reused: a payment that stands (Stranded was refunded by Google). */
-private fun isCountedRecord(record: PurchaseRecord): Boolean =
-    when (record.status) {
-        RecordStatus.Granted, RecordStatus.Consumed, RecordStatus.Reused -> true
-        RecordStatus.Stranded, RecordStatus.Absent -> false
-    }
-
-/** One total per currency of [records]' prices, sorted by ISO code. */
-private fun totalsPerCurrency(records: List<PurchaseRecord>): List<Money> =
-    records
-        .groupBy { it.price.currency }
-        .map { (currency, paid) -> Money(paid.sumOf { it.price.micros }, currency) }
-        .sortedBy { it.currency }
-
 /** The summary of [date] from its finished [rows] (each has an outcome). */
 private fun summaryOf(
     date: LocalDate,
@@ -241,5 +197,3 @@ private fun summaryOf(
 /** Every date of [range] in order; empty when it is empty. */
 private fun datesIn(range: ClosedRange<LocalDate>): List<LocalDate> =
     generateSequence(range.start) { it.plus(1, DateTimeUnit.DAY) }.takeWhile { it <= range.endInclusive }.toList()
-
-private const val DAYS_IN_WEEK = 7

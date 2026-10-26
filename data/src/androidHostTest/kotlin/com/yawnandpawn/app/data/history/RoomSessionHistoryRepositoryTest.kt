@@ -192,10 +192,13 @@ class RoomSessionHistoryRepositoryTest {
             val later = aSessionHistoryRow(sessionId = "later").copy(scheduledAt = DEFAULT_FAKE_INSTANT + 1.days)
             val b = aSessionHistoryRow(sessionId = "b")
             val a = aSessionHistoryRow(sessionId = "a").copy(outcome = SessionOutcome.Test)
-            val running = aSessionHistoryRow(sessionId = "running").copy(scheduledAt = DEFAULT_FAKE_INSTANT - 1.days, endedAt = null, outcome = null)
+            val running =
+                aSessionHistoryRow(sessionId = "running").copy(scheduledAt = DEFAULT_FAKE_INSTANT - 1.days, endedAt = null, outcome = null)
             listOf(later, b, a, running).forEach { repository.upsert(it) }
             val seen = MutableStateFlow<List<String>?>(null)
-            backgroundScope.launch(Dispatchers.Default) { repository.observeAll().collect { rows -> seen.value = rows.map { it.sessionId } } }
+            backgroundScope.launch(Dispatchers.Default) {
+                repository.observeAll().collect { rows -> seen.value = rows.map { it.sessionId } }
+            }
 
             assertEquals(listOf(running, a, b, later), repository.observeAll().first())
             withContext(Dispatchers.Default) { withTimeout(WAIT) { seen.first { it == listOf("running", "a", "b", "later") } } }

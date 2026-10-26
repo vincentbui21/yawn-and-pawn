@@ -24,6 +24,7 @@ import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
 import kotlin.test.assertFalse
+import kotlin.test.assertNull
 import kotlin.test.assertSame
 import kotlin.test.assertTrue
 import kotlin.time.Duration.Companion.minutes
@@ -50,25 +51,35 @@ class ObserveProgressTest {
     @Test
     fun `the first snapshot is the pure snapshot of both tables for today`() =
         runTest {
-            val row = aSession(today, Snoozed, snoozes = 2)
-            history.upsert(row)
-            val record = aRecord(row.sessionId, eur(2_990_000), LocalDateTime(today, LocalTime(6, 40)))
+            // Two good days, a snoozed day (last week), then a good today: streak 1, best 2, 7-day rate 100, 30-day 75.
+            val snoozed = aSession(today.day(-8), Snoozed, snoozes = 2, timeToUp = 7.minutes)
+            val rows = listOf(aSession(today.day(-10)), aSession(today.day(-9)), snoozed, aSession(today, timeToUp = 1.minutes))
+            rows.forEach { history.upsert(it) }
+            val record = aRecord(snoozed.sessionId, eur(2_990_000), LocalDateTime(today.day(-8), LocalTime(6, 40)))
             records.putRecord(record)
             records.unreadable = 1
 
             val seen = collect()
 
-            val expected = progressSnapshot(listOf(row), PurchaseRecordsRead(listOf(record), 1), today, zone)
+            val expected = progressSnapshot(rows, PurchaseRecordsRead(listOf(record), 1), today, zone)
             assertEquals(listOf(expected), seen)
             with(seen.single()) {
-                assertTrue(hasHistory)
+                assertEquals(today, this.today)
+                assertEquals("Europe/Berlin", zone.id)
+                assertEquals(1, currentStreak)
+                assertEquals(2, bestStreak)
+                assertEquals(100, onTimeRate7Days)
+                assertEquals(75, onTimeRate30Days)
+                assertEquals(3.5.minutes, averageTimeToUp)
                 assertEquals(2, snoozesLast30Days)
-                assertEquals(listOf(eur(2_990_000)), paidThisWeek)
+                assertNull(insight)
+                assertEquals(emptyList(), paidThisWeek)
                 assertEquals(listOf(eur(2_990_000)), paidThisMonth)
                 assertEquals(listOf(eur(2_990_000)), paidAllTime)
+                assertTrue(hasHistory)
                 assertEquals(1, unreadablePurchases)
-                assertEquals(0, currentStreak)
-                assertEquals(0, onTimeRate7Days)
+                assertEquals(rows, history)
+                assertEquals(listOf(record), records)
             }
         }
 
@@ -78,7 +89,7 @@ class ObserveProgressTest {
             with(collect().single()) {
                 assertFalse(hasHistory)
                 assertEquals(emptyList(), paidThisWeek)
-                assertEquals(null, insight)
+                assertNull(insight)
                 assertEquals(today, this.today)
             }
         }
@@ -156,12 +167,15 @@ class ObserveProgressTest {
     @Test
     fun `a storage failure in either table reaches the collector`() =
         runTest {
+            val progress = ObserveProgress(history, records, ticker, EmptyCoroutineContext)
             history.observeFailure = IllegalStateException("history")
-            assertEquals("history", assertFailsWith<IllegalStateException> { ObserveProgress(history, records, ticker, EmptyCoroutineContext)().first() }.message)
+            val historyFailure = assertFailsWith<IllegalStateException> { progress().first() }
+            assertEquals("history", historyFailure.message)
 
             history.observeFailure = null
             records.observeFailure = IllegalStateException("records")
-            assertEquals("records", assertFailsWith<IllegalStateException> { ObserveProgress(history, records, ticker, EmptyCoroutineContext)().first() }.message)
+            val recordsFailure = assertFailsWith<IllegalStateException> { progress().first() }
+            assertEquals("records", recordsFailure.message)
         }
 
     @Test

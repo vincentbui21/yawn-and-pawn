@@ -97,7 +97,7 @@ class ProgressStatsTest {
     }
 
     @Test
-    fun `a stranded payment that was reused is one record and counts once`() {
+    fun `a reused payment, once stranded, counts as its one reused record`() {
         val reused = aRecord("s", eur(2_990_000), at(today, 7, 0), status = RecordStatus.Reused, tokenHash = "same")
 
         assertEquals(listOf(eur(2_990_000)), moneyPaid(listOf(reused), MoneyPeriod.ThisWeek, today, zone))
@@ -167,6 +167,8 @@ class ProgressStatsTest {
             }
 
         assertEquals(listOf(eur(36_000_000), usd(18_000_000)), moneyPaid(records, MoneyPeriod.AllTime, today, zone))
+        // March of 2025 and 2026 hold records too: only March 2027 is this month.
+        assertEquals(listOf(eur(1_000_000), usd(500_000)), moneyPaid(records, MoneyPeriod.ThisMonth, today, zone))
         assertEquals(emptyList(), moneyPaid(records, MoneyPeriod.ThisWeek, LocalDate(2030, 1, 1), zone))
     }
 
@@ -324,7 +326,12 @@ class ProgressStatsTest {
 
         assertEquals(
             listOf(
-                SessionOnDay(early, purchases = listOf(estimate, consumed, reused), paid = listOf(eur(3_000_000)), stranded = listOf(stranded)),
+                SessionOnDay(
+                    early,
+                    purchases = listOf(estimate, consumed, reused),
+                    paid = listOf(eur(3_000_000)),
+                    stranded = listOf(stranded),
+                ),
                 SessionOnDay(late, purchases = listOf(lateBuy), paid = listOf(usd(1_000_000)), stranded = emptyList()),
             ),
             sessions,
@@ -386,13 +393,24 @@ class ProgressStatsTest {
 
         assertNull(insight(base + ignored, today, zone))
         // One more timed weekend session is enough: the ignored rows did not count.
-        assertEquals(InsightLine.FastestOnWeekdays, insight(base + ignored + aSession(saturday, Snoozed, timeToUp = 10.minutes), today, zone))
+        val oneMore = aSession(saturday, Snoozed, timeToUp = 10.minutes)
+        assertEquals(InsightLine.FastestOnWeekdays, insight(base + ignored + oneMore, today, zone))
+    }
+
+    @Test
+    fun `the 30th day back counts for insight and the 31st does not`() {
+        val thin = weekdays(2, 180) + weekends(3, 600)
+
+        // Tuesday 2027-03-02 is day -29, Monday 2027-03-01 day -30.
+        assertEquals(InsightLine.FastestOnWeekdays, insight(thin + aSession(today.day(-29), OnTime, timeToUp = 3.minutes), today, zone))
+        assertNull(insight(thin + aSession(today.day(-30), OnTime, timeToUp = 3.minutes), today, zone))
     }
 
     @Test
     fun `insight days follow the given zone`() {
         // Saturday 00:30 in Berlin is still Friday 23:30 in London: a weekday there.
-        val berlin = weekdays(3, 180) + (1..3).map { aSession(LocalDate(2027, 3, 27), OnTime, at = LocalTime(0, 30), timeToUp = 10.minutes) }
+        val earlySaturday = (1..3).map { aSession(LocalDate(2027, 3, 27), OnTime, at = LocalTime(0, 30), timeToUp = 10.minutes) }
+        val berlin = weekdays(3, 180) + earlySaturday
 
         assertEquals(InsightLine.FastestOnWeekdays, insight(berlin, today, zone))
         assertNull(insight(berlin, today, TimeZone.of("Europe/London")))

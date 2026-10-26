@@ -45,6 +45,8 @@ import com.yawnandpawn.app.core.session.SessionReducer
 import com.yawnandpawn.app.core.session.SessionState
 import com.yawnandpawn.app.core.session.SnoozeAvailabilityPolicy
 import com.yawnandpawn.app.core.session.UserLockState
+import com.yawnandpawn.app.core.stats.DayTicker
+import com.yawnandpawn.app.core.stats.ObserveProgress
 import com.yawnandpawn.app.data.dataModule
 import com.yawnandpawn.app.data.history.RoomSessionHistoryRepository
 import com.yawnandpawn.app.data.session.RoomActiveSessionStore
@@ -102,6 +104,9 @@ class SessionWiringTest {
         assertIs<AndroidBilling>(koin.get<Billing>())
         assertSame(koin.get<SessionRecorder>(), koin.get<SessionRecorder>())
         assertIs<RoomSessionHistoryRepository>(koin.get<SessionHistoryRepository>())
+        // Story 6.2: the stats snapshot for Home and Progress resolves over the history, the records and the time ports.
+        assertNotNull(koin.get<ObserveProgress>())
+        assertNotNull(koin.get<DayTicker>())
     }
 
     @Test

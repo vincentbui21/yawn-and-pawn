@@ -152,6 +152,15 @@ fun monthSummary(
 ): List<DaySummary> = daySummaries(history, month.firstDay..month.lastDay, zone)
 
 /**
+ * The day of the oldest finished session in [zone] (the calendar's "Previous month" stops at its month, 6.6); `null` with
+ * no finished session. A running session (no outcome yet) is not a morning.
+ */
+fun firstSessionDay(
+    history: List<SessionHistoryRow>,
+    zone: TimeZone,
+): LocalDate? = history.filter { it.outcome != null }.minByOrNull { it.scheduledAt }?.let { sessionDay(it, zone) }
+
+/**
  * The finished sessions of [date], earliest `scheduledAt` first, each with its counted and stranded purchase records
  * (Day detail, 6.7).
  */

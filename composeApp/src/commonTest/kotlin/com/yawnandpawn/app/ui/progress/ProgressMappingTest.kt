@@ -8,6 +8,7 @@ import com.yawnandpawn.app.core.stats.InsightLine
 import com.yawnandpawn.app.core.stats.progressSnapshot
 import kotlinx.datetime.LocalDate
 import kotlinx.datetime.TimeZone
+import kotlinx.datetime.YearMonth
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertNotNull
@@ -67,9 +68,67 @@ class ProgressMappingTest {
     }
 
     @Test
-    fun `a calendar chip is kept as it is`() {
-        val chip = DaySelection(day(-40), Outcome.Missed, inCalendar = true)
+    fun `a calendar chip stays with the day's current outcome while its day is in the shown month with a session`() {
+        val chip = DaySelection(day(-1), Outcome.OnTime, inCalendar = true)
 
-        assertEquals(chip, stateOf(morning(FixtureToday), selection = chip).selection)
+        assertEquals(chip.copy(outcome = Outcome.Missed), stateOf(morning(day(-1), SessionOutcome.Missed), selection = chip).selection)
+        assertNull(stateOf(morning(day(-2)), selection = chip).selection)
+        // A day of another month is not in the shown calendar.
+        assertNull(stateOf(morning(day(-40)), selection = chip.copy(date = day(-40))).selection)
+    }
+
+    // --- Story 6.6: calendarOf ---
+
+    private fun snapshot(
+        vararg rows: SessionHistoryRow,
+        today: LocalDate = FixtureToday,
+        zone: TimeZone = TimeZone.UTC,
+    ) = progressSnapshot(rows.toList(), PurchaseRecordsRead(emptyList()), today, zone)
+
+    @Test
+    fun `today's pill is only in today's month, and None days are left out`() {
+        val rows = arrayOf(morning(LocalDate(2027, 2, 10), SessionOutcome.Missed), morning(day(-1)))
+
+        val march = calendarOf(snapshot(*rows), shown = null)
+        assertEquals(LocalDate(2027, 3, 1), march.firstDay)
+        assertEquals(FixtureToday, march.today)
+        assertEquals(listOf(CalendarDay(day(-1), Outcome.OnTime)), march.days)
+        assertEquals(march, calendarOf(snapshot(*rows), shown = YearMonth(2027, 3)))
+
+        val february = calendarOf(snapshot(*rows), shown = YearMonth(2027, 2))
+        assertNull(february.today)
+        assertEquals(listOf(CalendarDay(LocalDate(2027, 2, 10), Outcome.Missed)), february.days)
+    }
+
+    @Test
+    fun `Previous stops at the oldest session's month and Next at today's month`() {
+        val rows = arrayOf(morning(LocalDate(2027, 1, 31)), morning(day(-90)).copy(outcome = null))
+
+        assertEquals(true to false, calendarOf(snapshot(*rows), null).let { it.hasPrevious to it.hasNext })
+        assertEquals(true to true, calendarOf(snapshot(*rows), YearMonth(2027, 2)).let { it.hasPrevious to it.hasNext })
+        // A running session is no morning: January is the oldest.
+        assertEquals(false to true, calendarOf(snapshot(*rows), YearMonth(2027, 1)).let { it.hasPrevious to it.hasNext })
+        assertEquals(false to false, calendarOf(snapshot(), null).let { it.hasPrevious to it.hasNext })
+    }
+
+    @Test
+    fun `a month after today's shows today's month, and a day after today shows no marker even with a session`() {
+        // The clock was set back to 3 March after mornings on 10 March and in April.
+        val rows = arrayOf(morning(day(7)), morning(LocalDate(2027, 4, 2)), morning(day(0)))
+
+        val shown = calendarOf(snapshot(*rows), shown = YearMonth(2027, 4))
+        assertEquals(LocalDate(2027, 3, 1), shown.firstDay)
+        assertEquals(false, shown.hasNext)
+        assertEquals(listOf(FixtureToday), shown.days.map { it.date })
+    }
+
+    @Test
+    fun `a month before the oldest session's shows the oldest, and with no history this month`() {
+        val february = calendarOf(snapshot(morning(LocalDate(2027, 2, 10))), shown = YearMonth(2026, 12))
+        assertEquals(LocalDate(2027, 2, 1), february.firstDay)
+        assertEquals(false, february.hasPrevious)
+
+        // All data deleted while January was shown.
+        assertEquals(calendarOf(snapshot(), shown = null), calendarOf(snapshot(), shown = YearMonth(2027, 1)))
     }
 }

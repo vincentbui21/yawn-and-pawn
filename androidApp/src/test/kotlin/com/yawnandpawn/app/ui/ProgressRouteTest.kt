@@ -3,9 +3,12 @@ package com.yawnandpawn.app.ui
 import android.app.Application
 import android.os.Looper
 import androidx.compose.ui.test.assertCountEquals
+import androidx.compose.ui.test.assertIsNotEnabled
 import androidx.compose.ui.test.assertIsSelected
+import androidx.compose.ui.test.hasAnyAncestor
 import androidx.compose.ui.test.hasClickAction
 import androidx.compose.ui.test.hasContentDescription
+import androidx.compose.ui.test.hasTestTag
 import androidx.compose.ui.test.hasText
 import androidx.compose.ui.test.junit4.v2.createEmptyComposeRule
 import androidx.compose.ui.test.performClick
@@ -37,6 +40,7 @@ import com.yawnandpawn.app.testing.FakeTimeZoneProvider
 import com.yawnandpawn.app.testing.aPurchaseRecord
 import com.yawnandpawn.app.testing.aSessionConfig
 import com.yawnandpawn.app.testing.aSessionHistoryRow
+import com.yawnandpawn.app.ui.progress.PROGRESS_CALENDAR_TAG
 import kotlinx.coroutines.runBlocking
 import kotlinx.datetime.TimeZone
 import org.junit.Rule
@@ -54,7 +58,8 @@ import kotlin.time.Duration.Companion.days
  * Story 6.5 in the real app (Koin, Navigation 3, the app shell, the real Story 6.2 snapshot over fake history and
  * purchase records, the clock pinned to Wednesday 2027-03-03 in UTC): a fresh install shows the empty ring and the
  * Purchase history link; the F9 month shows its tiles and money; Purchase history is pushed over Progress with no
- * capsule and Back returns to it; a session replaces it all with "Alarm in progress".
+ * capsule and Back returns to it; a session replaces it all with "Alarm in progress". Story 6.6: the calendar pages
+ * between last month (the oldest) and this month, and a day's first tap shows its chip.
  */
 @RunWith(RobolectricTestRunner::class)
 @GraphicsMode(GraphicsMode.Mode.NATIVE)
@@ -164,6 +169,42 @@ class ProgressRouteTest {
             scenario.onActivity { it.onBackPressedDispatcher.onBackPressed() }
             waitForText("on time, 86%")
             tab("Progress").assertIsSelected()
+        }
+    }
+
+    private fun inCalendar() = hasAnyAncestor(hasTestTag(PROGRESS_CALENDAR_TAG))
+
+    /** The calendar's month button [label]. */
+    private fun monthButton(label: String) = composeRule.onNode(hasContentDescription(label) and inCalendar())
+
+    @Test
+    fun `the calendar pages between last month and this month, and a day's first tap shows its chip`() {
+        runBlocking {
+            history.upsert(morning(0))
+            history.upsert(morning(1, SessionOutcome.Snoozed, snoozes = 1))
+            history.upsert(morning(10))
+        }
+        start()
+        onProgress("snoozes, 1") {
+            composeRule.onNode(hasTestTag(PROGRESS_CALENDAR_TAG)).performScrollTo()
+            waitForText("March 2027")
+            monthButton("Next month").assertIsNotEnabled()
+
+            monthButton("Previous month").performClick()
+            waitForText("February 2027")
+            monthButton("Previous month").assertIsNotEnabled()
+            monthButton("Next month").performClick()
+            waitForText("March 2027")
+            monthButton("Next month").assertIsNotEnabled()
+
+            // The day, not its chip (which TalkBack reads with the same words once it shows).
+            val tuesday = composeRule.onNode(hasContentDescription("Tuesday 2, Snoozed") and inCalendar() and !hasText("Tue 2 · Snoozed"))
+            tuesday.performClick()
+            waitForText("Tue 2 · Snoozed")
+            // The second tap asks for Day detail (Story 6.7 opens it); Progress stays, with the chip.
+            tuesday.performClick()
+            waitForText("Tue 2 · Snoozed")
+            waitForText("March 2027")
         }
     }
 

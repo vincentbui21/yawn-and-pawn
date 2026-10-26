@@ -43,6 +43,7 @@ import com.yawnandpawn.app.ui.format.dayName
 import com.yawnandpawn.app.ui.resources.Res
 import com.yawnandpawn.app.ui.resources.progress_chip
 import com.yawnandpawn.app.ui.resources.progress_day_outcome
+import com.yawnandpawn.app.ui.resources.progress_open_day_a11y
 import com.yawnandpawn.app.ui.resources.symbol_chevron_right
 import com.yawnandpawn.app.ui.theme.PpsTheme
 import org.jetbrains.compose.resources.painterResource
@@ -90,7 +91,7 @@ internal fun Modifier.entrance(
 /**
  * The label chip of a tapped dot or day ("Tue 23 · Snoozed" with a chevron): `inverse-surface` / `inverse-text` like the
  * snackbar, a 48 dp button that opens Day detail. It pops in with a small spring (instant with reduced motion). TalkBack
- * reads "{date}, {outcome}".
+ * reads "{date}, {outcome}" with "open day detail" as its double-tap action.
  */
 @Composable
 internal fun DayChip(
@@ -118,12 +119,13 @@ internal fun DayChip(
                 day.date.day,
                 day.outcome.label(),
             )
+        val openLabel = stringResource(Res.string.progress_open_day_a11y)
         Box(
             modifier =
                 Modifier
                     .fillMaxWidth()
                     .heightIn(min = PpsTheme.spacing.targetMin)
-                    .clickable(role = Role.Button, onClick = { onOpen(day) })
+                    .clickable(role = Role.Button, onClickLabel = openLabel, onClick = { onOpen(day) })
                     .semantics { contentDescription = description },
             contentAlignment = Alignment.Center,
         ) {

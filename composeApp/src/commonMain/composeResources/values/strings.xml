@@ -294,6 +294,9 @@
     <string name="progress_loading_a11y">Loading your progress</string>
     <string name="progress_loading_slow">Still loading your progress.</string>
     <string name="progress_load_failed">Couldn't load your progress.</string>
+    <!-- Story 6.6: TalkBack only, the double-tap hint of the selected calendar day and the chip, and a day after today (v2 wording pass). -->
+    <string name="progress_open_day_a11y">open day detail</string>
+    <string name="progress_day_date">%1$s %2$d</string>
 
     <!-- Day detail -->
     <string name="day_detail_before_unlock">Rang before your first unlock</string>

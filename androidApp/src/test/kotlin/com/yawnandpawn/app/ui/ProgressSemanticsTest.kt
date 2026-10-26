@@ -1,10 +1,8 @@
 package com.yawnandpawn.app.ui
 
-import androidx.compose.ui.semantics.SemanticsActions
 import androidx.compose.ui.semantics.SemanticsNode
 import androidx.compose.ui.semantics.SemanticsProperties
 import androidx.compose.ui.semantics.getOrNull
-import androidx.compose.ui.test.SemanticsMatcher
 import androidx.compose.ui.test.assertCountEquals
 import androidx.compose.ui.test.hasClickAction
 import androidx.compose.ui.test.hasContentDescription
@@ -12,7 +10,6 @@ import androidx.compose.ui.test.hasText
 import androidx.compose.ui.test.junit4.v2.createEmptyComposeRule
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performScrollTo
-import androidx.compose.ui.text.TextLayoutResult
 import com.yawnandpawn.app.StopAppRule
 import com.yawnandpawn.app.core.billing.Money
 import com.yawnandpawn.app.ui.TalkBackRules.assertControlsLabelledWithRoles
@@ -146,26 +143,7 @@ class ProgressSemanticsTest {
     fun `at 200 percent no text is cut off`() =
         listOf(ProgressSamples.empty, ProgressSamples.testOnly, ProgressSamples.typical, ProgressSamples.twoCurrencies).forEach { state ->
             show(state) {
-                val texts =
-                    composeRule
-                        .onAllNodes(SemanticsMatcher.keyIsDefined(SemanticsActions.GetTextLayoutResult), useUnmergedTree = true)
-                        .fetchSemanticsNodes()
-                assertTrue(texts.isNotEmpty())
-                val cut =
-                    texts.flatMap { node ->
-                        val results = mutableListOf<TextLayoutResult>()
-                        node.config[SemanticsActions.GetTextLayoutResult].action?.invoke(results)
-                        // Cut off: taller than its room, or as wide as its room with text left over. A centred one-line
-                        // text (the calendar's day numbers) reports a width overflow while it fits with room to spare.
-                        results
-                            .filter {
-                                it.didOverflowHeight ||
-                                    (it.didOverflowWidth && it.size.width >= it.layoutInput.constraints.maxWidth)
-                            }.map {
-                                "'${it.layoutInput.text}' ${it.size} in ${it.layoutInput.constraints}"
-                            }
-                    }
-                assertEquals(emptyList(), cut, "cut off in ${state.stats}")
+                assertEquals(emptyList(), composeRule.cutOffTexts(), "cut off in ${state.stats}")
             }
         }
 

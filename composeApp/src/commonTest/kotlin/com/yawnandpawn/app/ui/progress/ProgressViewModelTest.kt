@@ -24,7 +24,10 @@ import kotlinx.coroutines.test.advanceTimeBy
 import kotlinx.coroutines.test.resetMain
 import kotlinx.coroutines.test.runTest
 import kotlinx.coroutines.test.setMain
+import kotlinx.datetime.LocalDate
+import kotlinx.datetime.LocalDateTime
 import kotlinx.datetime.TimeZone
+import kotlinx.datetime.toInstant
 import kotlin.test.AfterTest
 import kotlin.test.BeforeTest
 import kotlin.test.Test
@@ -62,7 +65,7 @@ class ProgressViewModelTest {
 
     /** The ViewModel, collected for the test; every state it showed goes into [seen]. */
     private fun TestScope.screen(seen: MutableList<ProgressUiState> = mutableListOf()): ProgressViewModel {
-        val viewModel = ProgressViewModel(observeProgress(), logger)
+        val viewModel = ProgressViewModel(observeProgress(), logger, dispatcher)
         backgroundScope.launch { viewModel.state.collect { seen += it } }
         return viewModel
     }
@@ -84,7 +87,8 @@ class ProgressViewModelTest {
             assertEquals(RING_DAYS, state.ring.size)
             assertTrue(state.ring.all { it.outcome == null })
             assertEquals(FixtureToday, state.ring.last().date)
-            assertEquals(thisMonth(FixtureToday), state.calendar)
+            val march = CalendarMonth(LocalDate(2027, 3, 1), emptyList(), FixtureToday, hasPrevious = false, hasNext = false)
+            assertEquals(march, state.calendar)
             assertEquals(emptyList(), state.paidThisMonth)
             assertNull(state.insight)
         }
@@ -253,7 +257,7 @@ class ProgressViewModelTest {
     fun `back on Progress after more than 5 s away, the last screen stays until the new snapshot, with no loading`() =
         runTest(dispatcher) {
             history.upsert(morning(day(0)))
-            val viewModel = ProgressViewModel(observeProgress(), logger)
+            val viewModel = ProgressViewModel(observeProgress(), logger, dispatcher)
             val first = backgroundScope.launch { viewModel.state.collect { } }
             assertEquals(1, viewModel.stats().currentStreak)
             first.cancel()
@@ -287,4 +291,206 @@ class ProgressViewModelTest {
             assertEquals(1, viewModel.stats().currentStreak)
             assertEquals(1, logger.events.size)
         }
+
+    // --- Story 6.6: the calendar ---
+
+    private fun ProgressViewModel.calendar(): CalendarMonth = assertNotNull(now().calendar)
+
+    @Test
+    fun `the months page between the oldest session's month and this month, and a disabled direction changes nothing`() =
+        runTest(dispatcher) {
+            history.upsert(morning(LocalDate(2027, 1, 15)))
+            history.upsert(morning(LocalDate(2027, 2, 10), SessionOutcome.Snoozed, snoozes = 1))
+            history.upsert(morning(FixtureToday))
+            val viewModel = screen()
+            assertEquals(CalendarEdges(MARCH, FixtureToday, hasPrevious = true, hasNext = false), viewModel.calendar().edges())
+
+            viewModel.onIntent(ProgressIntent.PreviousMonth)
+            assertEquals(CalendarEdges(FEBRUARY, null, hasPrevious = true, hasNext = true), viewModel.calendar().edges())
+            assertEquals(listOf(CalendarDay(LocalDate(2027, 2, 10), Outcome.Snoozed)), viewModel.calendar().days)
+
+            viewModel.onIntent(ProgressIntent.PreviousMonth)
+            val oldest = CalendarEdges(JANUARY, null, hasPrevious = false, hasNext = true)
+            assertEquals(oldest, viewModel.calendar().edges())
+            viewModel.onIntent(ProgressIntent.PreviousMonth)
+            assertEquals(oldest, viewModel.calendar().edges())
+
+            viewModel.onIntent(ProgressIntent.NextMonth)
+            viewModel.onIntent(ProgressIntent.NextMonth)
+            val current = CalendarEdges(MARCH, FixtureToday, hasPrevious = true, hasNext = false)
+            assertEquals(current, viewModel.calendar().edges())
+            viewModel.onIntent(ProgressIntent.NextMonth)
+            assertEquals(current, viewModel.calendar().edges())
+        }
+
+    @Test
+    fun `with no history the calendar is this month with both directions disabled, and neither changes it`() =
+        runTest(dispatcher) {
+            val viewModel = screen()
+            val expected = CalendarMonth(LocalDate(2027, 3, 1), emptyList(), FixtureToday, hasPrevious = false, hasNext = false)
+            assertEquals(expected, viewModel.calendar())
+
+            viewModel.onIntent(ProgressIntent.PreviousMonth)
+            viewModel.onIntent(ProgressIntent.NextMonth)
+
+            assertEquals(expected, viewModel.calendar())
+        }
+
+    @Test
+    fun `a day shows its worst counted outcome with its session count and fallback, and Skipped wins over Test`() =
+        runTest(dispatcher) {
+            history.upsert(morning(day(-2)).copy(fallbackUsed = true))
+            history.upsert(morning(day(-1), SessionOutcome.Snoozed, snoozes = 1, id = "six"))
+            history.upsert(morning(day(-1), SessionOutcome.OnTime, id = "half past six"))
+            history.upsert(morning(FixtureToday, SessionOutcome.Test, millisToUp = null))
+            val viewModel = screen()
+
+            assertEquals(
+                listOf(
+                    CalendarDay(day(-2), Outcome.OnTime, fallbackUsed = true),
+                    CalendarDay(day(-1), Outcome.Snoozed, sessions = 2),
+                    CalendarDay(FixtureToday, Outcome.Test),
+                ),
+                viewModel.calendar().days,
+            )
+
+            history.upsert(morning(FixtureToday, SessionOutcome.Skipped, millisToUp = null))
+            assertEquals(CalendarDay(FixtureToday, Outcome.Skipped, sessions = 2), viewModel.calendar().day(FixtureToday.day))
+        }
+
+    @Test
+    fun `only finished sessions mark a day, so a running one or a day with none leaves no calendar day`() =
+        runTest(dispatcher) {
+            history.upsert(morning(day(-1)))
+            history.upsert(morning(FixtureToday).copy(outcome = null))
+
+            assertEquals(listOf(day(-1)), screen().calendar().days.map { it.date })
+        }
+
+    @Test
+    fun `a month change clears a calendar chip but keeps a ring chip`() =
+        runTest(dispatcher) {
+            history.upsert(morning(LocalDate(2027, 2, 27), SessionOutcome.Missed))
+            history.upsert(morning(day(-1)))
+            val viewModel = screen()
+            val calendarChip = DaySelection(day(-1), Outcome.OnTime, inCalendar = true)
+            viewModel.onIntent(ProgressIntent.DaySelected(calendarChip))
+            assertEquals(calendarChip, viewModel.now().selection)
+
+            viewModel.onIntent(ProgressIntent.PreviousMonth)
+            assertNull(viewModel.now().selection)
+
+            val ringChip = DaySelection(LocalDate(2027, 2, 27), Outcome.Missed, inCalendar = false)
+            viewModel.onIntent(ProgressIntent.DaySelected(ringChip))
+            viewModel.onIntent(ProgressIntent.NextMonth)
+            assertEquals(ringChip, viewModel.now().selection)
+            assertEquals(LocalDate(2027, 3, 1), viewModel.calendar().firstDay)
+        }
+
+    @Test
+    fun `this month follows today into a new month at midnight, a past month stays put`() =
+        runTest(dispatcher) {
+            history.upsert(morning(LocalDate(2027, 2, 10)))
+            val viewModel = screen()
+            clock.set(LocalDateTime(2027, 3, 31, 23, 59).toInstant(TimeZone.UTC))
+            timeChanges.emit()
+            assertEquals(LocalDate(2027, 3, 31), viewModel.calendar().today)
+
+            clock.set(LocalDateTime(2027, 4, 1, 0, 1).toInstant(TimeZone.UTC))
+            timeChanges.emit()
+            assertEquals(CalendarEdges(APRIL, LocalDate(2027, 4, 1), hasPrevious = true, hasNext = false), viewModel.calendar().edges())
+
+            viewModel.onIntent(ProgressIntent.PreviousMonth)
+            viewModel.onIntent(ProgressIntent.PreviousMonth)
+            clock.set(LocalDateTime(2027, 5, 1, 0, 1).toInstant(TimeZone.UTC))
+            timeChanges.emit()
+            assertEquals(CalendarEdges(FEBRUARY, null, hasPrevious = false, hasNext = true), viewModel.calendar().edges())
+        }
+
+    @Test
+    fun `when today moves back into the shown month, the calendar follows today again`() =
+        runTest(dispatcher) {
+            history.upsert(morning(LocalDate(2027, 1, 10)))
+            history.upsert(morning(FixtureToday))
+            val viewModel = screen()
+            viewModel.onIntent(ProgressIntent.PreviousMonth)
+            assertEquals(CalendarEdges(FEBRUARY, null, hasPrevious = true, hasNext = true), viewModel.calendar().edges())
+
+            // The clock is set back into February: it is today's month now, with its pill.
+            clock.set(LocalDateTime(2027, 2, 27, 23, 59).toInstant(TimeZone.UTC))
+            timeChanges.emit()
+            assertEquals(CalendarEdges(FEBRUARY, LocalDate(2027, 2, 27), hasPrevious = true, hasNext = false), viewModel.calendar().edges())
+
+            // So it follows today into March at midnight.
+            clock.set(LocalDateTime(2027, 3, 1, 0, 1).toInstant(TimeZone.UTC))
+            timeChanges.emit()
+            assertEquals(CalendarEdges(MARCH, LocalDate(2027, 3, 1), hasPrevious = true, hasNext = false), viewModel.calendar().edges())
+        }
+
+    @Test
+    fun `a session recorded today marks today's day at once`() =
+        runTest(dispatcher) {
+            history.upsert(morning(day(-1)))
+            val viewModel = screen()
+            assertNull(viewModel.calendar().day(FixtureToday.day))
+
+            history.upsert(morning(FixtureToday, SessionOutcome.Snoozed, snoozes = 1))
+
+            assertEquals(CalendarDay(FixtureToday, Outcome.Snoozed), viewModel.calendar().day(FixtureToday.day))
+        }
+
+    @Test
+    fun `a zone change moves a session to its local day and month`() =
+        runTest(dispatcher) {
+            // 06:30 on 1 March in Ho Chi Minh City is 23:30 on 28 February in UTC.
+            val saigon = TimeZone.of("Asia/Ho_Chi_Minh")
+            zones.set(saigon)
+            history.upsert(morning(day(0)).copy(scheduledAt = LocalDateTime(2027, 3, 1, 6, 30).toInstant(saigon)))
+            val viewModel = screen()
+            assertEquals(listOf(LocalDate(2027, 3, 1)), viewModel.calendar().days.map { it.date })
+            assertFalse(viewModel.calendar().hasPrevious)
+
+            zones.set(TimeZone.UTC)
+            timeChanges.emit()
+
+            assertEquals(emptyList(), viewModel.calendar().days)
+            assertTrue(viewModel.calendar().hasPrevious)
+            viewModel.onIntent(ProgressIntent.PreviousMonth)
+            assertEquals(listOf(LocalDate(2027, 2, 28)), viewModel.calendar().days.map { it.date })
+        }
+
+    @Test
+    fun `a read failure after paging shows the load failure, and Try again keeps the month`() =
+        runTest(dispatcher) {
+            history.upsert(morning(LocalDate(2027, 2, 10)))
+            history.upsert(morning(FixtureToday))
+            val viewModel = screen()
+            viewModel.onIntent(ProgressIntent.PreviousMonth)
+
+            history.observeFailure = IllegalStateException("disk")
+            viewModel.onIntent(ProgressIntent.RetryLoad)
+            assertTrue(viewModel.now().loadFailed)
+            viewModel.onIntent(ProgressIntent.NextMonth)
+
+            history.observeFailure = null
+            viewModel.onIntent(ProgressIntent.RetryLoad)
+            assertEquals(LocalDate(2027, 2, 1), viewModel.calendar().firstDay)
+        }
+
+    /** The parts of a calendar month that paging changes. */
+    private data class CalendarEdges(
+        val firstDay: LocalDate,
+        val today: LocalDate?,
+        val hasPrevious: Boolean,
+        val hasNext: Boolean,
+    )
+
+    private fun CalendarMonth.edges() = CalendarEdges(firstDay, today, hasPrevious, hasNext)
+
+    private companion object {
+        val JANUARY = LocalDate(2027, 1, 1)
+        val FEBRUARY = LocalDate(2027, 2, 1)
+        val MARCH = LocalDate(2027, 3, 1)
+        val APRIL = LocalDate(2027, 4, 1)
+    }
 }

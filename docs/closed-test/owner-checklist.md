@@ -13,15 +13,15 @@ Related files: `docs/closed-test.md` (the tester guide), `feedback-form.md` (the
 ## 0. Before you start
 
 - [ ] **Story 4.18** is done (it is) and **Story 5.13** has been run, or its failures are waived in writing in its story file. The story says the closed test starts only after both.
-- [ ] **Read the "PRIVACY MISMATCH" section below.** Those items are launch blockers. They don't stop the closed test from starting, but the privacy policy and the Data safety form must agree before production. The recommended order is to fix the policy page first, so testers see a correct policy.
+- [ ] **Read the rewritten privacy policy** (`docs/site/privacy.md`, branch `docs/privacy-policy-truthful`) before it is merged: merging it to `main` publishes it. It fixes every item in the "PRIVACY MISMATCH" section below (2026-10-26). The Data safety answers in section 3.6 match it.
 - [ ] **GitHub secrets** (repository > Settings > Secrets and variables > Actions): the five in `docs/ci-release.md`, **plus `GOOGLE_SERVICES_JSON_RELEASE`** (the production Firebase project's `google-services.json`). `docs/ci-release.md` doesn't list that one yet. Without it the release build has no Crashlytics and no usage stats, so tester crashes would be invisible. The release run prints a warning when it is missing.
 - [ ] **Firebase console** (production project):
   - Project settings > Integrations: no Google Ads or AdMob link.
-  - Analytics > Admin > Data settings > Data retention: **2 months** (the privacy policy says 2 months).
+  - Analytics > Admin > Data settings > Data retention: **2 months**, Google's default (the privacy policy says 2 months and "Google's default, which we keep"; never raise it to 14 months without changing the policy first).
   - Analytics > Admin > Data collection: **Google signals off**.
   - Analytics > Admin > Account settings > Data sharing settings: turn **off** "Google products & services" and "Modeling contributions & business insights". This keeps the Data safety answer "not shared" true.
 - [ ] **Pages are live:** open https://vincentbui21.github.io/yawn-and-pawn/privacy/ and https://vincentbui21.github.io/yawn-and-pawn/support/ in a private browser window. Both must open (HTTP 200) and show the current text.
-- [ ] **EU DSA trader status** (Story 8.6). **OWNER DECIDES**, see section 3.16. Do this before you create the closed release, because it decides which countries the closed track can reach.
+- [ ] **EU DSA trader status** (Story 8.6). **Decided 2026-10-26: trader, yes**, see section 3.16. Declare it in Play Console before you create the closed release, because it decides which countries the closed track can reach.
 
 ---
 
@@ -33,31 +33,33 @@ Play won't publish a closed track until the listing and App content are complete
 |---|---|---|
 | 8.1 Store listing text | Name, short and full description from `store-listing-draft.md`, category, contact email, privacy URL | `docs/store/en-US/*.txt`, `StoreListingTest`, the owner's final wording |
 | 8.2 Screenshots, feature graphic, icon | Interim graphics (section 2): icon, feature graphic, 2 to 8 phone screenshots | `captureStoreScreenshots`, `StoreAssetsTest`, the final set |
-| 8.3 Data safety | The whole form, answered from section 3.6 | `docs/store/data-safety.md` with sources and dates; fixing the PRIVACY MISMATCH items |
+| 8.3 Data safety | The whole form, answered from section 3.6 | `docs/store/data-safety.md` with sources and dates; re-checking the policy against the code (the PRIVACY MISMATCH items are fixed) |
 | 8.4 Content rating, target audience, other App content | All of it (sections 3.2 to 3.5, 3.7 to 3.11) | `docs/store/app-content.md` with the IARC id and screenshots |
 | 8.5 Exact alarm, full-screen intent, FGS declarations | The three declarations (3.12 to 3.14), with a demo video | `docs/store/declarations.md`, the full pre-submission policy review |
-| 8.6 EU DSA trader status | The decision, if Play asks for it before a closed release reaches the EU | `docs/decisions/eu-dsa-trader.md`, Q17 (right of withdrawal) |
+| 8.6 EU DSA trader status | The decision (made 2026-10-26: trader, yes) and declaring it in Play Console | `docs/decisions/eu-dsa-trader.md`, Q17 (right of withdrawal) |
 
 ---
 
-## PRIVACY MISMATCH (launch blocker)
+## PRIVACY MISMATCH (fixed 2026-10-26)
 
-Found by comparing `docs/site/privacy.md` with the code on `main` and Google's own documentation for the SDKs in the app (Firebase "Play data disclosure" page and the Google Analytics "Data disclosures" page, read 2026-10-26). None of these is a code bug; each needs the policy, the Data safety form or the code changed before production. The recommended fix for each is a separate pull request to `docs/site/privacy.md`.
+Found by comparing `docs/site/privacy.md` with the code on `main` and Google's own documentation for the SDKs in the app (Firebase "Play data disclosure" page and the Google Analytics "Data disclosures" page, read 2026-10-26). None of these was a code bug. **All seven are fixed in the policy** by the owner-approved rewrite of 2026-10-26 (branch `docs/privacy-policy-truthful`), with no code change. The owner reads the page before that branch is merged, because merging publishes it. Section 3.6 matches the new policy.
 
-1. **Automatic in-app purchase events in usage stats.** With usage stats on, Google Analytics for Firebase logs Google Play in-app purchases by itself (`in_app_purchase`: product id, price, value, currency; and `app_store_refund` on a refund). The app doesn't log them, but the SDK does. The policy says the stats hold "no amounts paid" and lists only three automatic events. Google ignores test and licence-tester purchases, so this won't show in DebugView during the closed test.
-   - Fix (recommended): say in the policy's "Usage stats" section that, with usage stats on, Google Analytics also records each snooze purchase (product, price and currency, never card details) and Google Play refunds. Declare "Purchase history" in Data safety (section 3.6).
-   - **OWNER DECIDES:** a code change that stops it instead. There is no documented manifest switch for this event on Android, so changing the policy is the safer route.
-2. **Other automatic Analytics events are missing from the policy.** With usage stats on, Firebase also logs `user_engagement` (time the app is on screen), `app_update`, `os_update`, `app_clear_data` and, because Crashlytics is in the app, `app_exception` (a crash happened, fatal or not). The policy names only first open, app open (session start) and uninstall.
-   - Fix: list them in plain words ("how long the app is on screen, app and Android updates, clearing the app's data, and that a crash happened").
-3. **Firebase Sessions runs even with usage stats off.** Crashlytics brings the Firebase Sessions SDK (`firebase-sessions` is in `config/dependency-allowlist.txt`). It sends app-session data (when the app comes to the foreground, package, Android version, phone maker and model, network type) to compute crash-free numbers, whatever the usage-stats switch says. The policy describes crash reports only as sent "when the app crashes" plus "its own diagnostic logs".
-   - Fix: add one sentence to "Crash reports": "To count how many people a crash affects, Crashlytics also records when the app is opened, with the phone model and Android version, even if usage stats are off." Declare it in Data safety as "Other app performance data", required.
-4. **Crashlytics breadcrumbs.** With usage stats on, Crashlytics attaches the recent Analytics events (breadcrumbs) to a crash report. The policy says "The app adds no logs or notes of its own to a report", which is true of the app's own code, but a reader would not expect the usage-stats events in a crash report.
-   - Fix: add "With usage stats on, a crash report also lists the usage-stats events from just before the crash."
-5. **"Approximate location ... that Google ... doesn't keep."** Google doesn't keep the IP address, but it does keep the derived country, region and city with the stats. The sentence can be read as "the location isn't kept".
-   - Fix: "an approximate location (country, region and city) that Google works out from the network address. Google doesn't keep the network address itself."
-6. **Features described that this build doesn't have (low).** The policy describes House Hunt photos, motivation recordings, the microphone permission and custom sound files (Epic 7, not built). The merged manifest has no `RECORD_AUDIO`. Over-describing is not a Data safety problem (all of it stays on the phone), but the policy says the app "asks for permission" for the microphone, which this build never does.
-   - Fix (recommended): leave it, with a note in Story 5.7 that it describes Epic 7 ahead of time, or mark those parts "if your version has House Hunt / recordings". **OWNER DECIDES.** Related, not privacy: the reliability checklist strings still mention House Hunt and a Microphone item (`reliability_camera_reason`, `reliability_microphone`); worth a check in Story 5.13 that the Microphone row never shows.
-7. **Data deletion route.** Story 8.3 plans "the support email for Crashlytics/Analytics deletion requests", but the policy's "Deleting your data" section offers no such route. The Data safety deletion answer (section 3.6, question 4) must match the policy, whichever way the owner decides.
+1. **Automatic in-app purchase events in usage stats.** With usage stats on, Google Analytics for Firebase logs Google Play in-app purchases by itself (`in_app_purchase`: product id, price, value, currency; and `app_store_refund` on a refund). The app doesn't log them, but the SDK does. Google ignores test and licence-tester purchases, so this won't show in DebugView during the closed test.
+   - **Fixed:** "Usage stats" now lists "each snooze you buy: the product, its price and currency" and each Google Play refund, and no longer says the stats hold "no amounts paid". "Payments" points to it. Purchase history is declared in section 3.6.
+   - No code change: Google documents no switch that turns off only this event on Android (checked 2026-10-26 on the Analytics "automatically collected events" and Firebase "Measure in-app purchases" pages). The only supported switch is turning Analytics collection off, which the usage-stats choice already does.
+2. **Other automatic Analytics events were missing from the policy** (`user_engagement`, `app_update`, `os_update`, `app_clear_data`, `app_exception`).
+   - **Fixed:** "Usage stats" lists, in plain words, first open, session start, time on screen, app and Android updates, clearing the app's data, removal (`app_remove`), a crash happening, purchases and refunds. `screen_view` is not sent (`google_analytics_automatic_screen_reporting_enabled` is false), and the policy says so. Notification, ad, subscription, in-app messaging and campaign events don't apply (no FCM, ads, subscriptions, In-App Messaging or campaign links in the app).
+3. **Firebase Sessions runs even with usage stats off** (`firebase-sessions` comes with Crashlytics).
+   - **Fixed:** "Crash reports" says Crashlytics records when the app is opened, with the phone's maker and model, the Android version, the package name and the network type, even when usage stats are off. Declared as "Other app performance data", Required.
+4. **Crashlytics breadcrumbs.**
+   - **Fixed:** "With usage stats on, a report also lists the usage stats events from just before the crash."
+5. **"Approximate location ... that Google ... doesn't keep."**
+   - **Fixed:** "Google also works out an approximate location (country, region and city) from the network address and keeps it with the stats. Google doesn't keep the network address itself."
+6. **Features described that this build doesn't have** (House Hunt photos, motivation recordings, the microphone, custom sound files; Epic 7, not built).
+   - **Fixed (owner decision 2026-10-26: remove them):** the policy no longer mentions them. "Camera and microphone" (a heading `checkSitePages` requires) now says the camera is used only for QR/Barcode and that this version never uses or asks for the microphone. Add them back when Epic 7 ships.
+   - **Code follow-up (not done here):** the reliability checklist still has `reliability_camera_reason` ("Needed for your QR/Barcode and House Hunt checks.") and a Microphone item (`reliability_microphone`, `reliability_microphone_reason`, `ChecklistItem.Microphone`). Check in Story 5.13 that the Microphone row never shows, and drop "House Hunt" from the camera reason until Epic 7.
+7. **Data deletion route.**
+   - **Fixed:** "Deleting your data" now says: email the support address to delete crash reports and usage stats already sent; Google deletes the rest by itself (crash reports after 90 days, usage stats linked to an analytics id after 2 months). Section 3.6 question 4 is answered **Yes** to match.
 
 Things that do match (checked): no advertising ID (the `AD_ID`, ad-services and install-referrer permissions are removed in the manifest; ad storage, ad user data and ad personalisation are denied; SSAID collection is off); no user id or user property is ever set (`AnalyticsManifestTest`); three custom events only (`session_outcome`, `snooze_count`, `check_type`, each with one category or number); test alarms send no app events (`SessionTelemetry`); Crashlytics is always on, starts only after the first unlock, and strips the message from every error the app reports; Play Billing gets only the random install id and session id; no location permission even though Play Billing brings `play-services-location` (`docs/decisions/play-billing-dependencies.md`); ML Kit uses the bundled model.
 
@@ -136,16 +138,16 @@ Data safety > **Start** (or Manage). The answers below cover the release build w
 | 1 | Does your app collect or share any of the required user data types? | **Yes** |
 | 2 | Is all of the user data collected by your app encrypted in transit? | **Yes** (Firebase, Play Billing and ML Kit use HTTPS; the app keeps cleartext traffic blocked) |
 | 3 | Which account creation methods does your app support? | **"My app does not allow users to create an account"** |
-| 4 | Do you provide a way for users to request that their data is deleted? | **OWNER DECIDES** (see below) |
+| 4 | Do you provide a way for users to request that their data is deleted? | **Yes** |
 
-**Question 4, OWNER DECIDES.** Recommendation: if the form offers "No, but user data is automatically deleted within 90 days", pick it: crash reports are kept 90 days and Analytics user-level data 2 months (set the retention in section 0). Otherwise answer **Yes** and add one line to the privacy policy's "Deleting your data": "To ask us to delete crash reports or usage stats sent from your phone, email us." (PRIVACY MISMATCH 7). Don't answer Yes without that line.
+**Question 4.** The privacy policy's "Deleting your data" offers it (PRIVACY MISMATCH 7, fixed): an email to the support address deletes crash reports and usage stats already sent, and Google deletes the rest by itself (crash reports after 90 days, Analytics user-level data after 2 months, the retention set in section 0). On the phone, "Delete all data" deletes everything the app keeps. If Play asks for a deletion link, give the privacy policy URL; there is no account to delete.
 
 If the form asks about an independent security review: **No**. About the Families policy: not shown for 18+.
 
 **Step 2, data types.** Tick exactly these:
 
 - Location: **Approximate location**
-- Financial info: **Purchase history** (**OWNER DECIDES** below)
+- Financial info: **Purchase history**
 - App activity: **App interactions**
 - App info and performance: **Crash logs**, **Diagnostics**, **Other app performance data**
 - Device or other IDs: **Device or other IDs**
@@ -156,15 +158,15 @@ Leave everything else unticked: Personal info (name, email, user ids, address, p
 
 | Data type | Collected | Required or optional | Purposes | Where it comes from |
 |---|---|---|---|---|
-| Approximate location | Yes | **Optional** (users can choose) | Analytics | Google Analytics derives country, region and city from the IP address, only with usage stats on |
-| Purchase history | Yes | **OWNER DECIDES**, recommended **Required** | App functionality, Analytics | Analytics' automatic `in_app_purchase` events (usage stats on), and the Play order records the developer sees in Play Console for every snooze |
-| App interactions | Yes | **Optional** | Analytics | The three usage-stats events and Firebase's automatic events, only with usage stats on |
-| Crash logs | Yes | **Required** | App functionality, Analytics | Crashlytics, always on |
-| Diagnostics | Yes | **Required** | App functionality, Analytics | Crashlytics device state (memory, storage, OS); diagnostic logs from Crashlytics, Play Billing and ML Kit |
-| Other app performance data | Yes | **Required** | Analytics | Firebase Sessions (app-open times for crash-free numbers), always on with Crashlytics |
+| Approximate location | Yes | **Optional** (users can choose) | Analytics | Google Analytics derives country, region and city from the IP address and keeps them with the stats (not the IP address), only with usage stats on. Policy: "Usage stats" |
+| Purchase history | Yes | **Required** | App functionality, Analytics | Analytics' automatic `in_app_purchase` and `app_store_refund` events (usage stats on), and the Play order records the developer sees in Play Console for every snooze. Policy: "Usage stats" and "Payments" |
+| App interactions | Yes | **Optional** | Analytics | The three usage-stats events and Firebase's automatic events (first open, session start, time on screen, updates, data cleared, removal, crash happened), only with usage stats on. Policy: "Usage stats" |
+| Crash logs | Yes | **Required** | App functionality, Analytics | Crashlytics, always on; with usage stats on, a report also carries the recent Analytics events (breadcrumbs). Policy: "Crash reports" |
+| Diagnostics | Yes | **Required** | App functionality, Analytics | Crashlytics device state (memory, storage, OS); diagnostic logs from Crashlytics, Play Billing and ML Kit. Policy: "Crash reports", "Payments", "Camera and microphone" |
+| Other app performance data | Yes | **Required** | Analytics | Firebase Sessions, always on with Crashlytics, even with usage stats off: when the app is opened, phone maker and model, Android version, package name, network type. Policy: "Crash reports" |
 | Device or other IDs | Yes | **Required** | App functionality, Analytics | Crashlytics installation id and Firebase installation id (always); Analytics app-instance id (usage stats on) |
 
-**Purchase history, OWNER DECIDES.** Google says payment data collected only by Google Play's billing system needn't be declared, but purchase history the app (or an SDK in it) receives must be. Recommendation: declare it, and mark it **Required**, not optional, because Play gives the developer every snooze order in Play Console whatever the usage-stats switch says. Declaring more than strictly needed is safe; declaring less is not.
+**Purchase history.** Google says payment data collected only by Google Play's billing system needn't be declared, but purchase history the app (or an SDK in it) receives must be. Declared **Required**, not optional, because Play gives the developer every snooze order in Play Console whatever the usage-stats switch says, and the policy now says so ("Payments"). Declaring more than strictly needed is safe; declaring less is not.
 
 **Not declared, with the reason (OWNER DECIDES to confirm):**
 
@@ -247,8 +249,10 @@ The alarm would go silent or ring late, so the user could oversleep. Alarm audio
 
 The app sells in-app products, so under the EU Digital Services Act the developer counts as a trader, and Play shows a trader's address, phone and email to EU users.
 
-- **OWNER DECIDES.** Options: (a) declare trader status now with a business address and phone that are not your home (a registered business address or a mail service that accepts legal mail); or (b) keep the closed track (and later production) out of the EU and EEA until (a) is ready.
-- Recommendation: check Play Console > **Settings > Developer account > Account details** (trader status) first. If Play already blocks EU distribution until it is set, and your 2 friends are in the EU, you need (a) before the test starts. If not, start the closed test with option (b) for EU countries only if none of your testers is in the EU; otherwise do (a) now. Record the choice in `docs/decisions/eu-dsa-trader.md` when Story 8.6 runs.
+- **Decided by the owner on 2026-10-26: trader status = yes, using the owner's home address.** The owner accepts that Play shows that address to EU users. The address is **never written in this repo** (it is public): type it only into Play Console.
+- [ ] Play Console > **Settings > Developer account > Account details** (trader status): declare **trader**, enter the address, phone and email there, and complete Play's verification.
+- With trader status declared, the closed track (and later production) can include EU and EEA countries (section 6).
+- Record the decision (trader, yes, home address used; never the address itself) in `docs/decisions/eu-dsa-trader.md` when Story 8.6 runs.
 
 ---
 
@@ -286,7 +290,7 @@ Licence testing is for the whole developer account, not one app.
 First closed test build. Please read the tester guide we sent you, and keep a second alarm.
 ```
 
-- [ ] **Countries / regions** tab of the closed track: add the countries your testers are in. **OWNER DECIDES** with the DSA decision in 3.16. Testers Community testers come from many countries: ask them which ones, or add all countries the DSA decision allows.
+- [ ] **Countries / regions** tab of the closed track: add the countries your testers are in. **OWNER DECIDES.** Trader status is declared (3.16), so EU and EEA countries are allowed. Testers Community testers come from many countries: ask them which ones, or add all countries.
 - [ ] **Testers** tab: tick your email list (and the Testers Community group if used). **Feedback URL or email address:** the Google Form link from `feedback-form.md` (or the support email until the form exists). This turns on Play's private tester feedback. Save.
 - [ ] **Send for review:** Publishing overview > **Send changes for review**. The first review of a new app can take several days. Play shows errors here if an App content item or declaration is missing; fix it and send again.
 - [ ] When the track is live, copy the **"Join on the web"** opt-in link from the Testers tab (it looks like `https://play.google.com/apps/testing/com.yawnandpawn.app`).
@@ -323,17 +327,17 @@ Record in the Story 5.14 file (create it under `_bmad-output/implementation-arti
 
 | # | Item | Recommendation |
 |---|---|---|
-| 1 | PRIVACY MISMATCH 1: automatic purchase events | Update the privacy policy and declare Purchase history; no code change |
-| 2 | PRIVACY MISMATCH 6: Epic 7 features described ahead of time | Leave, with a note in Story 5.7 (or mark those parts "if your version has ...") |
+| 1 | PRIVACY MISMATCH 1: automatic purchase events | **Decided 2026-10-26:** the policy describes them and Purchase history is declared; no code change |
+| 2 | PRIVACY MISMATCH 6: Epic 7 features described ahead of time | **Decided 2026-10-26:** removed from the policy; add back when Epic 7 ships |
 | 3 | Interim store graphics (2) | Real phone screenshots now; replace in Story 8.2 |
 | 4 | App category (2) | Tools |
 | 5 | Support address (2) | Keep the published address for the closed test; switch to a dedicated one before production |
-| 6 | Data safety: deletion question (3.6) | "Automatically deleted within 90 days" if offered; else Yes plus a policy line |
-| 7 | Data safety: Purchase history required or optional (3.6) | Declare it, Required |
+| 6 | Data safety: deletion question (3.6) | **Decided 2026-10-26:** Yes; the policy offers an email request |
+| 7 | Data safety: Purchase history required or optional (3.6) | **Decided 2026-10-26:** declared, Required |
 | 8 | Data safety: Auto Backup not declared (3.6) | Don't declare; confirm against Google's backup FAQ in Story 8.3 |
 | 9 | Health apps (3.9) | No health features |
 | 10 | FGS demo video (3.14) | Record the full Story 8.5 video now |
-| 11 | EU DSA trader status (3.16) | Check the Console first; declare a non-home business address if any tester is in the EU, otherwise exclude the EU for now |
+| 11 | EU DSA trader status (3.16) | **Decided 2026-10-26:** trader, yes, with the owner's home address (entered only in Play Console, never in the repo) |
 | 12 | Tester list type (4) | Play email list, plus Testers Community's group only if required |
-| 13 | Closed-track countries (6) | The testers' countries, within the DSA decision |
+| 13 | Closed-track countries (6) | The testers' countries; the EU is allowed now that trader status is declared |
 | 14 | Testers who can't be licence testers (8) | Accept, with a written "never pay without a test card" note |

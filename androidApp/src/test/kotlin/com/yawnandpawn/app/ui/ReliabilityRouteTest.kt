@@ -3,6 +3,7 @@ package com.yawnandpawn.app.ui
 import android.app.AlarmManager
 import android.app.Application
 import android.os.Looper
+import androidx.compose.ui.semantics.SemanticsActions
 import androidx.compose.ui.test.hasClickAction
 import androidx.compose.ui.test.hasContentDescription
 import androidx.compose.ui.test.hasText
@@ -11,6 +12,7 @@ import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performScrollTo
+import androidx.compose.ui.test.performSemanticsAction
 import androidx.lifecycle.Lifecycle
 import androidx.test.core.app.ActivityScenario
 import androidx.test.core.app.ApplicationProvider
@@ -110,7 +112,12 @@ class ReliabilityRouteTest {
         ActivityScenario.launch(MainActivity::class.java).use {
             composeRule.onNodeWithContentDescription("Settings").performClick()
             waitForText(banner)
-            composeRule.onNode(hasText("Reliability checklist") and hasClickAction()).performScrollTo().performClick()
+            // Story 6.8: the "Weekly summary" row puts this row under the floating nav capsule at this height, so a touch at
+            // its centre would land on the capsule: the row's own click action is used (as TalkBack would).
+            composeRule
+                .onNode(hasText("Reliability checklist") and hasClickAction())
+                .performScrollTo()
+                .performSemanticsAction(SemanticsActions.OnClick)
 
             waitForRow("Notifications", "OK")
             composeRule.onNode(hasText("Battery") and hasText("Stops Android from pausing your alarm.")).assertExists()

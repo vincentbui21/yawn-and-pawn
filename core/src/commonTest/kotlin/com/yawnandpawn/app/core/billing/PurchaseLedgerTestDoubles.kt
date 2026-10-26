@@ -11,12 +11,14 @@ import com.yawnandpawn.app.core.session.PurchaseToken
 import com.yawnandpawn.app.core.time.Clock
 import com.yawnandpawn.app.core.work.BackgroundJob
 import com.yawnandpawn.app.core.work.BackgroundWork
+import com.yawnandpawn.app.core.work.SchedulePolicy
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.emitAll
 import kotlinx.coroutines.flow.emptyFlow
 import kotlinx.coroutines.flow.flow
+import kotlin.time.Duration
 import kotlin.time.Instant
 
 // Local doubles for the Story 4.10 ledger tests (core cannot depend on :testing, AD-1).
@@ -285,6 +287,13 @@ internal class MemoryWork : BackgroundWork {
         jobs += job
         return Outcome.Success(Unit)
     }
+
+    override fun scheduleWeeklySummary(
+        delay: Duration,
+        policy: SchedulePolicy,
+    ): Outcome<Unit, DomainError> = Outcome.Success(Unit)
+
+    override fun cancelWeeklySummary(): Outcome<Unit, DomainError> = Outcome.Success(Unit)
 }
 
 internal val TOKEN_1 = PurchaseToken("play-token-1-secret")

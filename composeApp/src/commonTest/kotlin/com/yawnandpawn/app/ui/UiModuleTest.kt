@@ -75,6 +75,7 @@ import com.yawnandpawn.app.ui.home.HomeUiState
 import com.yawnandpawn.app.ui.home.HomeViewModel
 import com.yawnandpawn.app.ui.links.AppLinks
 import com.yawnandpawn.app.ui.links.ExternalLinks
+import com.yawnandpawn.app.ui.nav.AppOpenRequests
 import com.yawnandpawn.app.ui.payments.PaymentsViewModel
 import com.yawnandpawn.app.ui.progress.ProgressViewModel
 import com.yawnandpawn.app.ui.purchases.PurchaseHistoryViewModel
@@ -106,6 +107,7 @@ import kotlin.test.assertEquals
 import kotlin.test.assertFalse
 import kotlin.test.assertNotNull
 import kotlin.test.assertNull
+import kotlin.test.assertSame
 import kotlin.test.assertTrue
 
 class UiModuleTest {
@@ -114,6 +116,14 @@ class UiModuleTest {
         val app = koinApplication { modules(uiModule) }
 
         assertNotNull(app.koin)
+        app.close()
+    }
+
+    @Test
+    fun `the tab requests from notifications are one per app (Story 6_8)`() {
+        val app = koinApplication { modules(uiModule) }
+
+        assertSame(app.koin.get<AppOpenRequests>(), app.koin.get<AppOpenRequests>())
         app.close()
     }
 

@@ -1,6 +1,7 @@
 package com.yawnandpawn.app
 
 import android.Manifest
+import android.content.Intent
 import android.content.res.Configuration
 import android.graphics.drawable.ColorDrawable
 import android.os.Bundle
@@ -22,6 +23,8 @@ import com.yawnandpawn.app.core.config.GlobalSettingsRepository
 import com.yawnandpawn.app.core.session.SessionEngine
 import com.yawnandpawn.app.core.session.ThemeMode
 import com.yawnandpawn.app.ui.App
+import com.yawnandpawn.app.ui.nav.AppOpenRequests
+import com.yawnandpawn.app.ui.shell.AppTab
 import com.yawnandpawn.app.ui.theme.colors
 import com.yawnandpawn.app.ui.theme.resolveColorSet
 import com.yawnandpawn.app.ui.theme.toPps
@@ -39,6 +42,10 @@ import org.koin.android.ext.android.inject
  *
  * While it is resumed and the alarm rings (Ringing, Grace, Loud or an emergency ring), it opens the wake screen
  * (Story 2.5): opening the app during a ring brings the user back to the alarm.
+ *
+ * Launched (or brought back) with [EXTRA_OPEN_TAB] = [OPEN_PROGRESS] (the weekly summary notification, Story 6.8), it
+ * asks the navigation to open Progress ([AppOpenRequests]); the extra is then removed, so a recreation never opens it
+ * again. During a session or onboarding the request is dropped.
  */
 class MainActivity : ComponentActivity() {
     private val notificationPermission: AndroidNotificationPermission by inject()
@@ -54,6 +61,8 @@ class MainActivity : ComponentActivity() {
     private val cameraPermission: AndroidCameraPermission by inject()
 
     private val settings: GlobalSettingsRepository by inject()
+
+    private val openRequests: AppOpenRequests by inject()
 
     private val requestNotifications = registerForActivityResult(ActivityResultContracts.RequestPermission()) { }
 
@@ -93,9 +102,26 @@ class MainActivity : ComponentActivity() {
         )
         // During a ring the app hands over to the wake screen (Story 2.5).
         forwardToWakeScreenWhileResumed(this, engine, runtime)
+        // Story 6.8: a fresh launch from the weekly summary opens Progress; a recreation (saved state) or a launch from
+        // Recents (the old intent again) does not.
+        val fromHistory = (intent.flags and Intent.FLAG_ACTIVITY_LAUNCHED_FROM_HISTORY) != 0
+        if (savedInstanceState == null && !fromHistory) openRequestedTab(intent) else intent.removeExtra(EXTRA_OPEN_TAB)
         setContent {
             App()
         }
+    }
+
+    /** Story 6.8: the weekly summary tapped while the app is open (single top). */
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        setIntent(intent)
+        openRequestedTab(intent)
+    }
+
+    /** Asks the navigation for the tab in [EXTRA_OPEN_TAB], if any, and removes the extra so it is handled once. */
+    private fun openRequestedTab(intent: Intent) {
+        if (intent.getStringExtra(EXTRA_OPEN_TAB) == OPEN_PROGRESS) openRequests.open(AppTab.Progress)
+        intent.removeExtra(EXTRA_OPEN_TAB)
     }
 
     /**
@@ -109,5 +135,13 @@ class MainActivity : ComponentActivity() {
         val systemDark = (resources.configuration.uiMode and Configuration.UI_MODE_NIGHT_MASK) == Configuration.UI_MODE_NIGHT_YES
         val colors = resolveColorSet(mode.toPps(), wake = false, systemInDarkTheme = systemDark).colors()
         window.setBackgroundDrawable(ColorDrawable(colors.bg.toArgb()))
+    }
+
+    companion object {
+        /** The tab to open (Story 6.8); [OPEN_PROGRESS] is the only value. */
+        const val EXTRA_OPEN_TAB = "openTab"
+
+        /** [EXTRA_OPEN_TAB]'s value for Progress (the weekly summary notification). */
+        const val OPEN_PROGRESS = "progress"
     }
 }

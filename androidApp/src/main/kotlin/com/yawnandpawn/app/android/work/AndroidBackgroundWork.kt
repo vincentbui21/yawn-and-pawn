@@ -18,10 +18,14 @@ import com.yawnandpawn.app.core.log.LogEvent
 import com.yawnandpawn.app.core.log.Logger
 import com.yawnandpawn.app.core.session.UserLockState
 import com.yawnandpawn.app.core.work.BackgroundJob
+import com.yawnandpawn.app.core.work.BackgroundTaskKind
 import com.yawnandpawn.app.core.work.BackgroundWork
+import com.yawnandpawn.app.core.work.SchedulePolicy
+import com.yawnandpawn.app.core.work.WeeklySummaryJobs
 import java.util.concurrent.ExecutionException
 import java.util.concurrent.TimeUnit
 import kotlin.coroutines.cancellation.CancellationException
+import kotlin.time.Duration
 
 /**
  * [BackgroundWork] over WorkManager 2.11 (AD-17, Story 4.3). Each job is unique work under its name: a one-time job
@@ -33,6 +37,10 @@ import kotlin.coroutines.cancellation.CancellationException
  * starts on the first [workManager] call), and [enqueue] refuses while the user is locked, without touching WorkManager.
  * Handing a job over never waits for it to run; callers still call this off the main thread, as the first call starts
  * WorkManager. WorkManager stores the job asynchronously: a store that fails later is logged ([watch]).
+ *
+ * The weekly summary (Story 6.8) is one-time unique work [WeeklySummaryJobs.NAME] with an initial delay and no network
+ * constraint, handed over with the caller's [SchedulePolicy] (REPLACE, KEEP or APPEND_OR_REPLACE) and cancelled by
+ * name, under the same lock guard and failure boundary as [enqueue].
  */
 class AndroidBackgroundWork(
     private val context: Context,
@@ -40,17 +48,49 @@ class AndroidBackgroundWork(
     private val logger: Logger,
     private val workManager: () -> WorkManager = { WorkManager.getInstance(context) },
 ) : BackgroundWork {
-    // Whatever WorkManager throws (its database, a bad request) is a failure value, never a crash (AD-12).
+    override fun enqueue(job: BackgroundJob): Outcome<Unit, DomainError> = guarded(job.uniqueName) { hand(job) }
+
+    override fun scheduleWeeklySummary(
+        delay: Duration,
+        policy: SchedulePolicy,
+    ): Outcome<Unit, DomainError> =
+        guarded(WeeklySummaryJobs.NAME) {
+            val request =
+                OneTimeWorkRequestBuilder<BackgroundTaskWorker>()
+                    .setInitialDelay(delay.coerceAtLeast(Duration.ZERO).inWholeMilliseconds, TimeUnit.MILLISECONDS)
+                    .setInputData(workDataOf(BackgroundTaskWorker.KEY_TASK to BackgroundTaskKind.WeeklySummary.name))
+                    .setBackoffCriteria(BackoffPolicy.EXPONENTIAL, BACKOFF_SECONDS, TimeUnit.SECONDS)
+                    .addTag(TAG)
+                    .build()
+            val existing =
+                when (policy) {
+                    SchedulePolicy.Replace -> ExistingWorkPolicy.REPLACE
+                    SchedulePolicy.KeepPending -> ExistingWorkPolicy.KEEP
+                    SchedulePolicy.AfterRun -> ExistingWorkPolicy.APPEND_OR_REPLACE
+                }
+            watch(workManager().enqueueUniqueWork(WeeklySummaryJobs.NAME, existing, request).result, WeeklySummaryJobs.NAME)
+        }
+
+    override fun cancelWeeklySummary(): Outcome<Unit, DomainError> =
+        guarded(WeeklySummaryJobs.NAME) { watch(workManager().cancelUniqueWork(WeeklySummaryJobs.NAME).result, WeeklySummaryJobs.NAME) }
+
+    /**
+     * Runs [hand] when the user is unlocked, else fails without touching WorkManager. Whatever WorkManager throws (its
+     * database, a bad request) is a failure value naming [name], never a crash (AD-12).
+     */
     @Suppress("TooGenericExceptionCaught")
-    override fun enqueue(job: BackgroundJob): Outcome<Unit, DomainError> {
-        if (!userLock.isUserUnlocked()) return Outcome.Failure(DomainError.BackgroundWorkFailure("user locked: ${job.uniqueName}"))
+    private fun guarded(
+        name: String,
+        hand: () -> Unit,
+    ): Outcome<Unit, DomainError> {
+        if (!userLock.isUserUnlocked()) return Outcome.Failure(DomainError.BackgroundWorkFailure("user locked: $name"))
         return try {
-            hand(job)
+            hand()
             Outcome.Success(Unit)
         } catch (e: CancellationException) {
             throw e
         } catch (e: Exception) {
-            Outcome.Failure(DomainError.BackgroundWorkFailure("${job.uniqueName}: ${e::class.simpleName}"))
+            Outcome.Failure(DomainError.BackgroundWorkFailure("$name: ${e::class.simpleName}"))
         }
     }
 

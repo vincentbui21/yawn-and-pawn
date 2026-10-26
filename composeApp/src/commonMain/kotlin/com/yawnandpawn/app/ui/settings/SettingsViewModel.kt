@@ -27,6 +27,9 @@ import com.yawnandpawn.app.core.log.LogEvent
 import com.yawnandpawn.app.core.log.Logger
 import com.yawnandpawn.app.core.reliability.EvaluateReliability
 import com.yawnandpawn.app.core.session.GlobalSettings
+import com.yawnandpawn.app.core.summary.SetWeeklySummary
+import com.yawnandpawn.app.core.summary.WeeklySummaryPrefs
+import com.yawnandpawn.app.core.summary.WeeklySummaryStore
 import com.yawnandpawn.app.core.telemetry.AnalyticsConsent
 import com.yawnandpawn.app.core.telemetry.ConsentStore
 import com.yawnandpawn.app.core.telemetry.SetAnalyticsConsent
@@ -47,6 +50,7 @@ import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.catch
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.onStart
 import kotlinx.coroutines.flow.receiveAsFlow
@@ -86,6 +90,12 @@ class DefaultSettingSetters(
         }
 }
 
+/** The "Weekly summary" switch's sources (Story 6.8): the stored switch and the use case that stores it and aligns the work. */
+class WeeklySummarySwitch(
+    val store: WeeklySummaryStore,
+    val set: SetWeeklySummary,
+)
+
 /**
  * Settings: the Snooze card's base fee and max snoozes per session, set through the commitment lock (Story 4.5), and the
  * new-alarm defaults and the theme (Story 5.1) and "Bright wake screen" (Story 5.2), applied at once.
@@ -107,6 +117,11 @@ class DefaultSettingSetters(
  * Usage stats (Story 5.6): the switch shows the stored choice from [consents]; a tap stores it at once through
  * [setAnalyticsConsent] (no Save). A failed write is logged and the switch stays at the stored value; an unreadable
  * choice is logged and shows off.
+ *
+ * Weekly summary (Story 6.8): the switch shows the stored choice from [weeklySummary] (on by default); a tap stores it at
+ * once and aligns the work through its use case. A failed write is logged and the switch stays at the stored value; an
+ * unreadable store is logged and shows on. Without [weeklySummary] (tests of the other rows) it shows on and a tap does
+ * nothing.
  *
  * The reliability banner (Story 5.4) follows the checklist's `alarmBlocking`, evaluated on every start; "Fix" and the
  * "Reliability checklist" row open the checklist through [effects].
@@ -141,6 +156,7 @@ class SettingsViewModel(
     reliability: EvaluateReliability? = null,
     /** Where the banner's evaluation runs (system service calls): off the main thread in the app, the test's in tests. */
     evaluationContext: CoroutineContext = Dispatchers.Default,
+    private val weeklySummary: WeeklySummarySwitch? = null,
 ) : ViewModel() {
     private val local = MutableStateFlow(Local())
     private val saves = Channel<Save>(Channel.UNLIMITED)
@@ -187,10 +203,24 @@ class SettingsViewModel(
                 emit(AnalyticsConsent())
             }.map { it.consent }
 
+    /** The stored weekly summary switch; an unreadable store is logged and reads as on (the default). */
+    private val weekly: Flow<Boolean> =
+        weeklySummary
+            ?.store
+            ?.observe()
+            ?.catch { cause ->
+                logger.logFailure(LOAD_WEEKLY_SUMMARY, cause)
+                emit(WeeklySummaryPrefs())
+            }?.map { it.enabled }
+            ?: flowOf(WeeklySummaryPrefs().enabled)
+
+    /** The two general switches in one flow, so the state stays a five-flow combine. */
+    private val switches: Flow<Pair<Boolean, Boolean>> = combine(consent, weekly, ::Pair)
+
     val state: StateFlow<SettingsUiState?> =
-        combine(stored, priceCatalog.observe(), ticks, local, consent) { saved, prices, _, ui, usageStats ->
+        combine(stored, priceCatalog.observe(), ticks, local, switches) { saved, prices, _, ui, (usageStats, weeklyOn) ->
             forgetEchoed(saved, ui)
-            render(saved, prices, ui).copy(usageStats = usageStats)
+            render(saved, prices, ui).copy(usageStats = usageStats, weeklySummary = weeklyOn)
         }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(STOP_TIMEOUT_MILLIS), null)
 
     /** The save queue, run in order. */
@@ -231,7 +261,9 @@ class SettingsViewModel(
                 defaultOf(intent)?.let { request(it) }
             }
 
-            is SettingsIntent.UsageStatsToggled, SettingsIntent.Started, SettingsIntent.FixSettings, SettingsIntent.ReliabilityClicked -> {
+            is SettingsIntent.UsageStatsToggled, is SettingsIntent.WeeklySummaryToggled, SettingsIntent.Started, SettingsIntent.FixSettings,
+            SettingsIntent.ReliabilityClicked,
+            -> {
                 onGeneralIntent(intent)
             }
 
@@ -243,14 +275,27 @@ class SettingsViewModel(
     }
 
     /**
-     * The usage stats switch (Story 5.6) and the reliability checklist (Story 5.4): a start evaluates the checklist again
-     * (back from it, too); "Fix" and its row open it.
+     * The usage stats switch (Story 5.6), the weekly summary switch (Story 6.8) and the reliability checklist (Story
+     * 5.4): a start evaluates the checklist again (back from it, too); "Fix" and its row open it.
      */
     private fun onGeneralIntent(intent: SettingsIntent) {
         when (intent) {
-            is SettingsIntent.UsageStatsToggled -> setUsageStats(intent.on)
-            SettingsIntent.Started -> banner?.refresh()
-            else -> mutableEffects.trySend(SettingsEffect.OpenReliability)
+            is SettingsIntent.UsageStatsToggled -> {
+                saveSwitch(SAVE_CONSENT) { setAnalyticsConsent(intent.on) }
+            }
+
+            is SettingsIntent.WeeklySummaryToggled -> {
+                val switch = weeklySummary ?: return
+                saveSwitch(SAVE_WEEKLY_SUMMARY) { switch.set(intent.on) }
+            }
+
+            SettingsIntent.Started -> {
+                banner?.refresh()
+            }
+
+            else -> {
+                mutableEffects.trySend(SettingsEffect.OpenReliability)
+            }
         }
     }
 
@@ -277,11 +322,17 @@ class SettingsViewModel(
         }
     }
 
-    /** Stores the usage stats choice at once; the switch follows the store, so a failed write leaves it as stored. */
-    private fun setUsageStats(on: Boolean) {
+    /**
+     * Stores a general switch at once through [save] (usage stats, Story 5.6; weekly summary, Story 6.8); the switch
+     * follows the store, so a failed write is logged as [operation] and leaves it as stored.
+     */
+    private fun saveSwitch(
+        operation: String,
+        save: suspend () -> Outcome<Unit, DomainError>,
+    ) {
         viewModelScope.launch {
-            val result = setAnalyticsConsent(on)
-            if (result is Outcome.Failure) logger.log(LogEvent.OperationFailed.of(SAVE_CONSENT, result.error))
+            val result = save()
+            if (result is Outcome.Failure) logger.log(LogEvent.OperationFailed.of(operation, result.error))
         }
     }
 
@@ -516,6 +567,10 @@ class SettingsViewModel(
         /** The operations logged when the usage stats choice could not be read or saved (Story 5.6). */
         const val LOAD_CONSENT = "load usage stats consent"
         const val SAVE_CONSENT = "save usage stats consent"
+
+        /** The operations logged when the weekly summary switch could not be read or saved (Story 6.8). */
+        const val LOAD_WEEKLY_SUMMARY = "load weekly summary"
+        const val SAVE_WEEKLY_SUMMARY = "save weekly summary"
 
         private const val STOP_TIMEOUT_MILLIS = 5_000L
     }

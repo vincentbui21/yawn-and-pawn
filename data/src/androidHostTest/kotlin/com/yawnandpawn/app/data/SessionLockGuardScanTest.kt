@@ -61,6 +61,8 @@ class SessionLockGuardScanTest {
                 "RememberOnboardingAlarm",
                 // When onboarding's test alarm rings (Story 5.12).
                 "RememberOnboardingTest",
+                // The weekly summary switch (Story 6.8), in core.summary: found as a use case outside the fully scanned packages.
+                "SetWeeklySummary",
             ),
             writers - ALLOWED.keys,
         )

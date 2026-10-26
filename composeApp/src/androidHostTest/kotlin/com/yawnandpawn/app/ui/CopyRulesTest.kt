@@ -41,6 +41,27 @@ class CopyRulesTest {
     }
 
     @Test
+    fun `the weekly summary notification strings are EXPERIENCE's Key strings, with no currency symbol (Story 6_8)`() {
+        val strings =
+            CopyRules
+                .stringFiles(androidRes, onlyStringsFiles = true)
+                .flatMap { CopyRules.read(it) }
+                .associate { it.key to it.text.replace("\\'", "'") }
+
+        assertEquals(
+            mapOf(
+                "notification_channel_weekly_summary" to "Weekly summary",
+                "weekly_summary_nothing_paid" to "%1\$d on-time mornings, nothing paid. Nice.",
+                "weekly_summary_nothing_paid_one" to "1 on-time morning, nothing paid. Nice.",
+                "weekly_summary_paid" to "%1\$d on-time mornings, %2\$s paid this week.",
+                "weekly_summary_paid_one" to "1 on-time morning, %1\$s paid this week.",
+                "weekly_summary_none" to "0 on-time mornings this week. Next week's a fresh start.",
+            ),
+            strings.filterKeys { it == "notification_channel_weekly_summary" || it.startsWith("weekly_summary_") },
+        )
+    }
+
+    @Test
     fun `every manufacturer guidance step has at most 25 words, and the shared Recents step is EXPERIENCE's Xiaomi step 3`() {
         val strings = CopyRules.stringFiles(composeResources).flatMap { CopyRules.read(it) }
         val steps = strings.filter { it.key.startsWith("reliability_") && "_step" in it.key }

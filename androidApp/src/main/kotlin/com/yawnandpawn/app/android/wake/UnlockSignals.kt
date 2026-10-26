@@ -28,6 +28,8 @@ import kotlin.time.Duration.Companion.seconds
  *   launched on [ApplicationScope]; the scheduler enqueues them once per process), outside the AD-2 table, so an unlock
  *   in Grace or Loud (no `UserUnlocked` row) still starts them. Each is marked done only once it succeeded, so a throw is logged and the
  *   next signal tries again;
+ * - launches the weekly summary scheduler's start ([startWeeklySummary], Story 6.8; once per process, it keeps a pending
+ *   run);
  * - calls [replayLedger] every time (Story 4.10: the grant ledger is replayed, so a payment left unsettled by an overnight
  *   restart is settled at the first unlock or when the wake screen opens; it must only launch its work);
  * - dispatches `UserUnlocked` while the session in memory is still marked before the first unlock. Ringing applies the
@@ -47,6 +49,8 @@ class UnlockSignals(
     private val prices: PriceRefreshScheduler,
     private val retry: Duration = RETRY,
     private val replayLedger: () -> Unit = {},
+    /** Story 6.8: launches the weekly summary scheduler's start (once per process); only launches, never awaits. */
+    private val startWeeklySummary: () -> Unit = {},
 ) {
     private var billingStarted = false
 
@@ -104,6 +108,7 @@ class UnlockSignals(
         }
         // WorkManager waits for the unlock (Story 4.3): launched, never awaited, as this runs inside engine effects.
         scope.launch { prices.start() }
+        startWeeklySummaryWork()
         // Application.onCreate starts Firebase too: started (or waiting for the unlock), it is not asked again.
         if (!firebase.started) {
             try {
@@ -115,6 +120,18 @@ class UnlockSignals(
             }
         }
         replayGrantLedger()
+    }
+
+    /** Story 6.8: the callback only launches the weekly summary's start, never awaits it; a throw is logged. */
+    @Suppress("TooGenericExceptionCaught")
+    private fun startWeeklySummaryWork() {
+        try {
+            startWeeklySummary()
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            logger.log(LogEvent.OperationFailed("start weekly summary", e::class.simpleName.orEmpty()))
+        }
     }
 
     /** Story 4.10: the callback only launches the replay, never awaits it; a throw is logged. */

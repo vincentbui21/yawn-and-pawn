@@ -312,14 +312,14 @@ class MainActivityTest {
 
         // Story 4.5 built the Snooze card's base fee and max snoozes, Story 5.1 the defaults and Appearance, Story 5.2
         // "Bright wake screen" (on by default, with its caption), Story 5.4 the Reliability checklist row (it leads to the
-        // checklist); the weekly summary stays hidden.
+        // checklist), Story 6.8 the weekly summary switch (on by default).
         tab("Settings").performClick()
         waitForText("Max snoozes per session")
         composeRule.onNode(hasText("Default snooze length", substring = true) and hasClickAction()).assertExists()
         composeRule
             .onNode(hasText("Bright wake screen") and hasText("Raises screen brightness while the alarm rings.") and isToggleable())
             .assertIsOn()
-        composeRule.onNodeWithText("Weekly summary").assertDoesNotExist()
+        composeRule.onNode(hasText("Weekly summary") and isToggleable()).performScrollTo().assertIsOn()
         composeRule.onNode(hasText("Reliability checklist") and hasClickAction()).assertExists()
 
         // Story 5.8 built the links and 5.9 "Delete all data"; only About stays hidden.

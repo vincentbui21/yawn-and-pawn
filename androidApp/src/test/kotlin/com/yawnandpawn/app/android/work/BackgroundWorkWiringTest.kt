@@ -32,9 +32,11 @@ import com.yawnandpawn.app.core.error.Outcome
 import com.yawnandpawn.app.core.log.LogEvent
 import com.yawnandpawn.app.core.log.Logger
 import com.yawnandpawn.app.core.session.UserLockState
+import com.yawnandpawn.app.core.summary.WeeklySummaryTask
 import com.yawnandpawn.app.core.work.BackgroundTask
 import com.yawnandpawn.app.core.work.BackgroundTaskKind
 import com.yawnandpawn.app.core.work.BackgroundWork
+import com.yawnandpawn.app.core.work.SchedulePolicy
 import com.yawnandpawn.app.core.work.TaskResult
 import com.yawnandpawn.app.restartKoin
 import com.yawnandpawn.app.testing.FakeLogger
@@ -163,6 +165,39 @@ class BackgroundWorkWiringTest {
         val periodic = assertNotNull(infos(PurchaseLedger.CONSUME_RETRY_PERIODIC.uniqueName).singleOrNull())
         assertEquals(TimeUnit.HOURS.toMillis(6), periodic.periodicityInfo?.repeatIntervalMillis)
         assertIs<ConsumeRetryTask>(GlobalContext.get().get<BackgroundTasks>().taskFor(BackgroundTaskKind.ConsumeRetry))
+    }
+
+    @Test
+    fun `the weekly summary (Story 6-8) has its task registered`() {
+        start()
+
+        assertIs<WeeklySummaryTask>(GlobalContext.get().get<BackgroundTasks>().taskFor(BackgroundTaskKind.WeeklySummary))
+    }
+
+    @Test
+    fun `the weekly summary calls never reach WorkManager while the user is locked`() {
+        val work =
+            AndroidBackgroundWork(app, FakeUserLockState(unlocked = false), log) { fail("WorkManager must not start before the unlock") }
+
+        val scheduled = work.scheduleWeeklySummary(24.hours, SchedulePolicy.Replace)
+        val cancelled = work.cancelWeeklySummary()
+
+        assertEquals(Outcome.Failure(DomainError.BackgroundWorkFailure("user locked: weekly-summary")), scheduled)
+        assertEquals(Outcome.Failure(DomainError.BackgroundWorkFailure("user locked: weekly-summary")), cancelled)
+    }
+
+    @Test
+    fun `a WorkManager that throws on a weekly summary call is a failure value`() {
+        val work = AndroidBackgroundWork(app, FakeUserLockState(unlocked = true), log) { throw IllegalStateException("no database") }
+
+        assertEquals(
+            Outcome.Failure(DomainError.BackgroundWorkFailure("weekly-summary: IllegalStateException")),
+            work.scheduleWeeklySummary(24.hours, SchedulePolicy.AfterRun),
+        )
+        assertEquals(
+            Outcome.Failure(DomainError.BackgroundWorkFailure("weekly-summary: IllegalStateException")),
+            work.cancelWeeklySummary(),
+        )
     }
 
     @Test

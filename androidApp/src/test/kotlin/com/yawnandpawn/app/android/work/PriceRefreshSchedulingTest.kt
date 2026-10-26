@@ -18,6 +18,7 @@ import com.yawnandpawn.app.core.error.Outcome
 import com.yawnandpawn.app.core.session.UserLockState
 import com.yawnandpawn.app.core.work.BackgroundJob
 import com.yawnandpawn.app.core.work.BackgroundWork
+import com.yawnandpawn.app.core.work.SchedulePolicy
 import com.yawnandpawn.app.stopApp
 import com.yawnandpawn.app.testAppModule
 import com.yawnandpawn.app.testing.FakeUserLockState
@@ -34,6 +35,7 @@ import java.util.Collections
 import java.util.concurrent.atomic.AtomicInteger
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
+import kotlin.time.Duration
 
 /**
  * Story 4.3 review: the app start schedules the price refresh jobs off the main thread, and a process started before
@@ -55,6 +57,14 @@ class PriceRefreshSchedulingTest {
             onMain += Looper.myLooper() == Looper.getMainLooper()
             return Outcome.Success(Unit)
         }
+
+        // The weekly summary (Story 6.8) is not a price refresh job: accepted and not recorded here.
+        override fun scheduleWeeklySummary(
+            delay: Duration,
+            policy: SchedulePolicy,
+        ): Outcome<Unit, DomainError> = Outcome.Success(Unit)
+
+        override fun cancelWeeklySummary(): Outcome<Unit, DomainError> = Outcome.Success(Unit)
     }
 
     /** An app on an unlocked phone whose background work is [RecordingWork]. */

@@ -38,8 +38,8 @@ import kotlin.test.assertEquals
  * Story 5.1 with TalkBack in mind, at 200 % font on a small phone: the Default snooze length and Default quiet time rows
  * are 56 dp buttons with their values, the "Vibrate during quiet time" switch row, the theme segments, the radio rows
  * and Back are at least 48 dp, the segments and radio rows are selectable with their labels, and the slider exposes its
- * range and its value text. The "Bright wake screen" switch row (Story 5.2) and the usage stats switch (Story 5.6) show;
- * the weekly summary stays hidden.
+ * range and its value text. The "Bright wake screen" switch row (Story 5.2), the usage stats switch (Story 5.6) and the
+ * weekly summary switch (Story 6.8) show.
  */
 @RunWith(RobolectricTestRunner::class)
 @GraphicsMode(GraphicsMode.Mode.NATIVE)
@@ -130,9 +130,24 @@ class DefaultsSettingsSemanticsTest {
     }
 
     @Test
-    fun `weekly summary stays hidden, usage stats shows, and the checklist row is a 48 dp button`() =
+    fun `Weekly summary is a 48 dp switch row, on by default, that applies at once (Story 6_8)`() {
+        val intents = mutableListOf<SettingsIntent>()
+        show(DefaultsSettingsSamples.main, onIntent = { intents += it }) {
+            val switch = composeRule.onNode(hasText("Weekly summary") and isToggleable())
+            // TalkBack reads "Weekly summary, switch, on".
+            switch.performScrollTo().assertHeightIsAtLeast(48.dp).assertIsOn()
+            switch.assert(SemanticsMatcher.expectValue(SemanticsProperties.Role, Role.Switch))
+
+            switch.performClick()
+
+            assertEquals(listOf<SettingsIntent>(SettingsIntent.WeeklySummaryToggled(false)), intents)
+        }
+    }
+
+    @Test
+    fun `weekly summary and usage stats show, and the checklist row is a 48 dp button`() =
         show(DefaultsSettingsSamples.main) {
-            composeRule.onNode(hasText("Weekly summary", substring = true)).assertDoesNotExist()
+            composeRule.onNode(hasText("Weekly summary")).assertExists()
             // Story 5.6.
             composeRule.onNode(hasText("Share anonymous usage stats")).assertExists()
             // Story 5.4: the row opens the checklist.

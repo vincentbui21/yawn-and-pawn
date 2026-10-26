@@ -63,6 +63,11 @@ import org.koin.compose.koinInject
  * [Route.Onboarding] is shown, again from the same composition, with no nav capsule; the stack is replaced right after
  * ([applyOnboarding]) and becomes Home once onboarding is completed. The same neutral screen shows until the stored
  * progress is read, so a first launch never flashes Home.
+ *
+ * A tab asked for from outside ([AppOpenRequests], Story 6.8: the weekly summary opens Progress) is selected once the app
+ * is past those screens, then let go; a screen pushed over a tab closes first ([openRequested]). Under the session lock
+ * or onboarding the stack holds no tab, so the request changes nothing and is dropped; under the editor it is dropped
+ * too, so no draft is lost.
  */
 @Composable
 fun AppNavHost(modifier: Modifier = Modifier) {
@@ -74,6 +79,9 @@ fun AppNavHost(modifier: Modifier = Modifier) {
     // composes the route it held (Home or the editor would start their loads and previews), and a new user never sees
     // Home; the real stack is made to match right after.
     val shown = shownStack(backStack, locked) ?: return RestoringScreen(modifier)
+    // Story 6.8: below shownStack on purpose. Its SideEffect has made the stack the session lock or onboarding before this
+    // effect runs, so a request can never open a tab past either of them.
+    OpenRequestedTab(backStack)
     // The editor's result for Home: its alarm could not be read, so Home shows "Couldn't open this alarm.".
     var openFailed by rememberSaveable { mutableStateOf(false) }
     // The editor's other result (Story 4.6): a weakening change waits under the lock, so Home says until when.

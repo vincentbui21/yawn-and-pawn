@@ -6,6 +6,7 @@ import android.content.Intent
 import android.content.pm.ActivityInfo
 import android.content.pm.PackageManager
 import android.content.pm.ServiceInfo
+import android.os.Looper
 import android.provider.Settings
 import android.view.WindowManager
 import androidx.compose.ui.test.getBoundsInRoot
@@ -42,10 +43,13 @@ import com.yawnandpawn.app.testing.FakeSessionHistoryRepository
 import com.yawnandpawn.app.testing.FakeTimeChangeSignal
 import com.yawnandpawn.app.testing.aSession
 import com.yawnandpawn.app.testing.aSessionConfig
+import com.yawnandpawn.app.testing.aSessionHistoryRow
 import com.yawnandpawn.app.ui.format.formatClockTime
 import com.yawnandpawn.app.ui.format.formatLongDate
+import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.runBlocking
 import kotlinx.datetime.toLocalDateTime
 import org.junit.Rule
 import org.junit.Test
@@ -63,6 +67,7 @@ import kotlin.test.assertIs
 import kotlin.test.assertNotEquals
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
+import kotlin.time.Duration.Companion.days
 import kotlin.time.Duration.Companion.minutes
 import kotlin.time.Instant
 
@@ -197,11 +202,105 @@ class WakeActivityTest {
         ringing(app)
         app.koin.get<ApplicationScope>().awaitChildren()
         val before = listOf(alarms.calls.get(), store.calls.get(), history.calls.get())
+        assertEquals(0, history.allCalls.get(), "no celebration read before the screen exists")
 
         launch(app)
         imUp().assertExists()
 
+        // The celebration's one history read (Story 6.4) is counted on its own: it follows the first frame.
         assertEquals(before, listOf(alarms.calls.get(), store.calls.get(), history.calls.get()), "alarms, store, history calls")
+    }
+
+    /** Story 6.4 (NFR-7): the celebration's history read starts after the first frame, and the screen never waits for it. */
+    @Test
+    fun `the history read starts only after the ringing screen's first frame, once per session`() {
+        val history = FakeSessionHistoryRepository()
+        val gate = CompletableDeferred<Unit>()
+        history.allGate = gate
+        val app = WakeApp(history = history)
+        ringing(app)
+        app.koin.get<ApplicationScope>().awaitChildren()
+        assertEquals(0, history.allCalls, "nothing read while the session starts")
+
+        // The compose clock held: the screen is composed, but no frame has run yet.
+        composeRule.mainClock.autoAdvance = false
+        val controller = buildActivity(WakeActivity::class.java).setup()
+        imUp().assertExists()
+        repeat(IDLE_ROUNDS) { shadowOf(Looper.getMainLooper()).idle() }
+        app.koin.get<ApplicationScope>().awaitChildren()
+        assertEquals(0, history.allCalls, "no read before the first frames")
+
+        composeRule.mainClock.advanceTimeBy(FRAMES)
+        app.awaitUntil("the read starts after the first frame") { history.allCalls == 1 }
+        composeRule.mainClock.autoAdvance = true
+        // The read is still held: the screen is drawn and works without it.
+        imUp().assertExists()
+        assertFalse(gate.isCompleted)
+        gate.complete(Unit)
+        app.koin.get<ApplicationScope>().awaitChildren()
+
+        controller.recreate()
+        imUp().assertExists()
+        composeRule.mainClock.advanceTimeBy(FRAMES)
+        app.koin.get<ApplicationScope>().awaitChildren()
+        assertEquals(1, history.allCalls, "one read per session, also across a recreation")
+    }
+
+    /** Story 6.4: a real zero-snooze morning after 11 good days shows "12", "days in a row" and "Up on time.". */
+    @Test
+    fun `a zero-snooze session after 11 good days shows the streak of 12`() {
+        val scheduled = aSessionConfig().scheduledAt
+        val history = FakeSessionHistoryRepository()
+        runBlocking {
+            (1..11).forEach { day ->
+                history.upsert(aSessionHistoryRow(sessionId = "earlier-$day").copy(scheduledAt = scheduled - day.days))
+            }
+        }
+        val app = WakeApp(history = history, clock = FakeClock(scheduled + 5.minutes))
+        ringing(app)
+        buildActivity(WakeActivity::class.java).setup()
+        imUp().assertExists()
+        app.awaitUntil("the snapshot is read") { composeRule.waitForIdle().let { history.allCalls == 1 } }
+        app.koin.get<ApplicationScope>().awaitChildren()
+
+        imUp().performClick()
+
+        composeRule.awaitSuccess(app, "Up on time.")
+        composeRule.onNodeWithContentDescription("12").assertExists()
+        composeRule.onNodeWithText("days in a row").assertExists()
+    }
+
+    /** Story 6.4: with no snapshot (the read failed), Success shows "You're up. That's what counts." and logs it. */
+    @Test
+    fun `a failed history read shows You're up with no number and is logged`() {
+        val history = FakeSessionHistoryRepository()
+        history.failAll = DomainError.StorageFailure("disk gone")
+        val app = WakeApp(history = history)
+        ringing(app)
+        buildActivity(WakeActivity::class.java).setup()
+        imUp().assertExists()
+        app.awaitUntil("the snapshot read fails") { composeRule.waitForIdle().let { history.allCalls == 1 } }
+        app.koin.get<ApplicationScope>().awaitChildren()
+
+        imUp().performClick()
+
+        composeRule.awaitSuccess(app, "You're up. That's what counts.")
+        composeRule.onNodeWithText("days in a row", substring = true).assertDoesNotExist()
+        composeRule.onNodeWithText("Up on time.").assertDoesNotExist()
+        assertTrue(app.logs().any { it.startsWith("OperationFailed operation=load celebration streak ") }, "logged: ${app.logs()}")
+    }
+
+    @Test
+    fun `a test session never reads history for the celebration`() {
+        val history = FakeSessionHistoryRepository()
+        val app = WakeApp(history = history)
+        ringing(app, testMode = true)
+        buildActivity(WakeActivity::class.java).setup()
+        imUp().assertExists()
+        composeRule.mainClock.advanceTimeBy(FRAMES)
+        app.koin.get<ApplicationScope>().awaitChildren()
+
+        assertEquals(0, history.allCalls)
     }
 
     @Test
@@ -493,4 +592,18 @@ private class CountingHistory(
 
     override suspend fun merges(sessionId: String): Outcome<List<SessionMergeRow>, DomainError> =
         inner.merges(sessionId).also { calls.incrementAndGet() }
+
+    /** Story 6.4's celebration read, counted on its own: it is allowed, but only after the first frame. */
+    val allCalls = AtomicInteger()
+
+    override suspend fun all(): Outcome<List<SessionHistoryRow>, DomainError> {
+        allCalls.incrementAndGet()
+        return inner.all()
+    }
 }
+
+/** Enough compose time for the first frames and the effects after them. */
+private const val FRAMES = 100L
+
+/** Main looper rounds that let anything the screen posts run. */
+private const val IDLE_ROUNDS = 5

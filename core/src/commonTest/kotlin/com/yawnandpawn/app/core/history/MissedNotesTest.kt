@@ -30,6 +30,8 @@ class MissedNotesTest {
                 override suspend fun recordMerge(merge: SessionMergeRow): Outcome<Unit, DomainError> = error("never written here")
 
                 override suspend fun merges(sessionId: String): Outcome<List<SessionMergeRow>, DomainError> = error("never read here")
+
+                override suspend fun all(): Outcome<List<SessionHistoryRow>, DomainError> = error("never read here")
             },
             object : MissedNoteDismissals {
                 override fun dismissed(): Flow<Set<String>> = dismissed

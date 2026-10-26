@@ -1,16 +1,77 @@
 package com.yawnandpawn.app.ui.wake
 
 import com.yawnandpawn.app.core.billing.Money
+import com.yawnandpawn.app.core.stats.SuccessStreak
 import com.yawnandpawn.app.testing.aSession
 import com.yawnandpawn.app.testing.aSessionConfig
 import kotlin.test.Test
 import kotlin.test.assertEquals
 
-/** Stories 3.3 and 4.15: the completed session → basic Success screen mapping. */
+/** Stories 3.3, 4.15 and 6.4: the completed session → Success screen mapping. */
 class SuccessMappingTest {
+    private fun onTime(
+        streak: SuccessStreak,
+        celebrate: Boolean = true,
+    ): SuccessKind = successUiState(aSession().copy(snoozesGranted = 0), streak = streak, celebrate = celebrate).kind
+
     @Test
-    fun `no snooze is Up on time, with no streak before Epic 6`() {
-        assertEquals(SuccessUiState(SuccessKind.OnTime(streakDays = 0)), successUiState(aSession().copy(snoozesGranted = 0)))
+    fun `no snooze and no streak given is Up on time with no number`() {
+        assertEquals(
+            SuccessUiState(SuccessKind.OnTime(streakDays = 0, countFrom = null)),
+            successUiState(aSession().copy(snoozesGranted = 0)),
+        )
+    }
+
+    @Test
+    fun `a streak that grew counts up from the one before, only at the first showing`() {
+        assertEquals(SuccessKind.OnTime(streakDays = 12, countFrom = 11), onTime(SuccessStreak.Known(before = 11, after = 12)))
+        assertEquals(SuccessKind.OnTime(streakDays = 1, countFrom = 0), onTime(SuccessStreak.Known(before = 0, after = 1)))
+        assertEquals(
+            SuccessKind.OnTime(streakDays = 12, countFrom = null),
+            onTime(SuccessStreak.Known(before = 11, after = 12), celebrate = false),
+            "recreated: the final number, still",
+        )
+    }
+
+    @Test
+    fun `a streak that did not grow shows the number with no count-up`() {
+        listOf(true, false).forEach { celebrate ->
+            assertEquals(
+                SuccessKind.OnTime(streakDays = 5, countFrom = null),
+                onTime(SuccessStreak.Known(before = 5, after = 5), celebrate),
+                "celebrate $celebrate",
+            )
+        }
+    }
+
+    @Test
+    fun `no streak after this session, or a read in flight, is Up on time with no number`() {
+        listOf(SuccessStreak.Known(before = 6, after = 0), SuccessStreak.NONE, SuccessStreak.Pending).forEach { streak ->
+            listOf(true, false).forEach { celebrate ->
+                assertEquals(SuccessKind.OnTime(streakDays = 0, countFrom = null), onTime(streak, celebrate), "$streak, $celebrate")
+            }
+        }
+    }
+
+    @Test
+    fun `no snapshot is You're up with no number and no paid line`() {
+        listOf(true, false).forEach { celebrate ->
+            assertEquals(SuccessKind.UpNoStreak, onTime(SuccessStreak.Unknown, celebrate))
+        }
+    }
+
+    @Test
+    fun `the snooze and test paths ignore the streak`() {
+        val streaks = listOf(SuccessStreak.Known(before = 3, after = 4), SuccessStreak.Pending, SuccessStreak.Unknown)
+        val paid = listOf(Money.of(1, "USD"))
+        streaks.forEach { streak ->
+            assertEquals(
+                SuccessKind.AfterSnooze(paid),
+                successUiState(aSession().copy(snoozesGranted = 1, paid = paid), streak = streak).kind,
+                "$streak",
+            )
+            assertEquals(SuccessKind.Test, successUiState(aSession(config = aSessionConfig(testMode = true)), streak = streak).kind)
+        }
     }
 
     @Test
@@ -56,11 +117,11 @@ class SuccessMappingTest {
             "Play no longer lists it (declined, or never charged): no refund to promise",
         )
         assertEquals(
-            SuccessUiState(SuccessKind.OnTime(streakDays = 0), pendingNotUsed = true),
+            SuccessUiState(SuccessKind.OnTime(streakDays = 0, countFrom = null), pendingNotUsed = true),
             successUiState(aSession().copy(paymentPending = true), pendingStillListed = true),
         )
         assertEquals(
-            SuccessUiState(SuccessKind.OnTime(streakDays = 0)),
+            SuccessUiState(SuccessKind.OnTime(streakDays = 0, countFrom = null)),
             successUiState(aSession(), pendingStillListed = true),
             "listed, but the session never saw it pending",
         )

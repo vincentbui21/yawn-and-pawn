@@ -85,6 +85,12 @@ interface SessionHistoryRepository {
 
     /** The merges into [sessionId], oldest first (Day detail, Epic 6). */
     suspend fun merges(sessionId: String): Outcome<List<SessionMergeRow>, DomainError>
+
+    /**
+     * Every row, in no particular order (Epic 6 stats, one read: the Story 6.4 celebration snapshot). A read only; a
+     * storage error is a `StorageFailure`, never thrown.
+     */
+    suspend fun all(): Outcome<List<SessionHistoryRow>, DomainError>
 }
 
 /**

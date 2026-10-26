@@ -17,8 +17,9 @@ import org.robolectric.annotation.Config
 import org.robolectric.annotation.GraphicsMode
 
 /**
- * Story 3.3 screenshots of the basic Success screen as `WakeActivity` shows it (no celebration until Epic 6, no paid
- * line until Epic 4): on time, after a snooze and a test, always Sunrise, at 100% and 200% font scale.
+ * Story 3.3 screenshots of the Success screen as `WakeActivity` shows it: on time, after a snooze and a test, and the
+ * Story 6.4 streak (the count-up's start and calm end, the same day, the first day, no snapshot), always Sunrise, at
+ * 100% and 200% font scale.
  */
 @RunWith(RobolectricTestRunner::class)
 @GraphicsMode(GraphicsMode.Mode.NATIVE)
@@ -58,4 +59,56 @@ class SuccessScreenshotTest {
     @Test
     @Config(fontScale = 2.0f)
     fun `test session at 200 percent`() = success("wake_success_test_sunrise_font200", SuccessSamples.test)
+
+    // --- Story 6.4: the streak ---
+
+    /** The count-up at its start: "11" before it turns to 12, the confetti just leaving the number. */
+    private fun growStart(name: String) =
+        withScreen(PpsThemeMode.Light, content = { SuccessScreen(state = SuccessSamples.streakGrew, onIntent = {}, basic = true) }) {
+            composeRule.mainClock.autoAdvance = false
+            composeRule.waitForIdle()
+            composeRule.mainClock.advanceTimeBy(FRAME)
+            composeRule.onNodeWithText("Done").assertExists()
+            composeRule.onRoot().captureRoboImage("src/test/screenshots/$name.png", roborazziOptions = screenshotOptions)
+        }
+
+    @Test
+    fun `streak grows, count-up start`() = growStart("wake_success_streak_grow_start_sunrise")
+
+    @Test
+    @Config(fontScale = 2.0f)
+    fun `streak grows, count-up start at 200 percent`() = growStart("wake_success_streak_grow_start_sunrise_font200")
+
+    @Test
+    fun `streak grows, calm end`() = success("wake_success_streak_grow_end_sunrise", SuccessSamples.streakGrew)
+
+    @Test
+    @Config(fontScale = 2.0f)
+    fun `streak grows, calm end at 200 percent`() = success("wake_success_streak_grow_end_sunrise_font200", SuccessSamples.streakGrew)
+
+    @Test
+    fun `streak on a day already good`() = success("wake_success_streak_same_day_sunrise", SuccessSamples.streakSameDay)
+
+    @Test
+    @Config(fontScale = 2.0f)
+    fun `streak on a day already good at 200 percent`() =
+        success("wake_success_streak_same_day_sunrise_font200", SuccessSamples.streakSameDay)
+
+    @Test
+    fun `first streak day`() = success("wake_success_streak_first_sunrise", SuccessSamples.streakFirst)
+
+    @Test
+    @Config(fontScale = 2.0f)
+    fun `first streak day at 200 percent`() = success("wake_success_streak_first_sunrise_font200", SuccessSamples.streakFirst)
+
+    @Test
+    fun `snapshot missing`() = success("wake_success_snapshot_missing_sunrise", SuccessSamples.snapshotMissing)
+
+    @Test
+    @Config(fontScale = 2.0f)
+    fun `snapshot missing at 200 percent`() = success("wake_success_snapshot_missing_sunrise_font200", SuccessSamples.snapshotMissing)
+
+    private companion object {
+        const val FRAME = 32L
+    }
 }

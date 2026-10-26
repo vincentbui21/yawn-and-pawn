@@ -6,6 +6,7 @@ import androidx.sqlite.driver.AndroidSQLiteDriver
 import androidx.test.core.app.ApplicationProvider
 import com.yawnandpawn.app.core.error.DomainError
 import com.yawnandpawn.app.core.error.Outcome
+import com.yawnandpawn.app.core.history.SessionHistoryRow
 import com.yawnandpawn.app.core.history.SessionMergeRow
 import com.yawnandpawn.app.core.history.SessionOutcome
 import com.yawnandpawn.app.data.db.AppDatabase
@@ -246,8 +247,40 @@ class RoomSessionHistoryRepositoryTest {
         runTest {
             database.close()
 
-            listOf(repository.upsert(aSessionHistoryRow()), repository.find("s"))
+            listOf(repository.upsert(aSessionHistoryRow()), repository.find("s"), repository.all())
                 .forEach { assertIs<DomainError.StorageFailure>(assertIs<Outcome.Failure<DomainError>>(it).error) }
+        }
+
+    // --- Story 6.4: one read of every row ---
+
+    @Test
+    fun `all of an empty table is an empty list`() =
+        runTest {
+            assertEquals(Outcome.Success(emptyList()), repository.all())
+        }
+
+    @Test
+    fun `all returns every row, running ones too`() =
+        runTest {
+            val rows =
+                listOf(
+                    aSessionHistoryRow(sessionId = "a"),
+                    aSessionHistoryRow(sessionId = "b").copy(outcome = SessionOutcome.Snoozed, snoozeCount = 2),
+                    aSessionHistoryRow(sessionId = "c").copy(endedAt = null, timeToCompleteMs = null, outcome = null),
+                )
+            rows.forEach { repository.upsert(it) }
+
+            val read = assertIs<Outcome.Success<List<SessionHistoryRow>>>(repository.all()).value
+            assertEquals(rows.sortedBy { it.sessionId }, read.sortedBy { it.sessionId })
+        }
+
+    @Test
+    fun `all with an unreadable row is a storage failure`() =
+        runTest {
+            repository.upsert(aSessionHistoryRow(sessionId = "good"))
+            dao.upsertRow(aSessionHistoryRow(sessionId = "bad").toEntity().copy(outcome = "Dozed"))
+
+            assertIs<DomainError.StorageFailure>(assertIs<Outcome.Failure<DomainError>>(repository.all()).error)
         }
 
     private companion object {

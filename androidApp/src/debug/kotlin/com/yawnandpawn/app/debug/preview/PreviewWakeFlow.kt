@@ -175,7 +175,7 @@ class PreviewWakeFlow {
         val kind =
             when {
                 test -> SuccessKind.Test
-                snoozes == 0 -> SuccessKind.OnTime(streakDays = STREAK)
+                snoozes == 0 -> SuccessKind.OnTime(streakDays = STREAK, countFrom = STREAK - 1)
                 else -> SuccessKind.AfterSnooze(paidThisMorning = paid())
             }
         return WakeStep.Success(SuccessUiState(kind))

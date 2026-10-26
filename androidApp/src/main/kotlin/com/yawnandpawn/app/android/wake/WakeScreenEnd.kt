@@ -43,6 +43,9 @@ internal class WakeScreenEnd(
     /** The session whose success haptic has played. */
     private var hapticPlayedFor: String? = null
 
+    /** The session whose celebration (count-up, confetti) has played, or was decided not to (Story 6.4). */
+    private var celebratedFor: String? = null
+
     init {
         activity.savedStateRegistry.consumeRestoredStateForKey(KEY)?.let {
             seen = it.getBoolean(KEY_SEEN)
@@ -50,6 +53,7 @@ internal class WakeScreenEnd(
             successSessionId = it.getString(KEY_SUCCESS)
             successStartedAt = it.getLong(KEY_STARTED)
             hapticPlayedFor = it.getString(KEY_HAPTIC)
+            celebratedFor = it.getString(KEY_CELEBRATED)
         }
         activity.savedStateRegistry.registerSavedStateProvider(KEY) {
             Bundle().apply {
@@ -58,6 +62,7 @@ internal class WakeScreenEnd(
                 putString(KEY_SUCCESS, successSessionId)
                 putLong(KEY_STARTED, successStartedAt)
                 putString(KEY_HAPTIC, hapticPlayedFor)
+                putString(KEY_CELEBRATED, celebratedFor)
             }
         }
         activity.lifecycle.addObserver(this)
@@ -107,6 +112,12 @@ internal class WakeScreenEnd(
     /** True once per session: the caller plays the success haptic for [sessionId] only then. */
     fun claimHaptic(sessionId: String): Boolean = (hapticPlayedFor != sessionId).also { hapticPlayedFor = sessionId }
 
+    /**
+     * True once per session (Story 6.4): only the first Success showing of [sessionId] may play its celebration, so a
+     * recreated or rotated screen shows the final state with no second count-up or confetti.
+     */
+    fun claimCelebration(sessionId: String): Boolean = (celebratedFor != sessionId).also { celebratedFor = sessionId }
+
     override fun onStop(owner: LifecycleOwner) {
         if (successSessionId != null && !activity.isChangingConfigurations) activity.finish()
     }
@@ -122,5 +133,6 @@ internal class WakeScreenEnd(
         const val KEY_SUCCESS = "successSessionId"
         const val KEY_STARTED = "successStartedAt"
         const val KEY_HAPTIC = "hapticPlayedFor"
+        const val KEY_CELEBRATED = "celebratedFor"
     }
 }

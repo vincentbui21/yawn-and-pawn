@@ -6,21 +6,30 @@ import android.os.Bundle
 import android.view.HapticFeedbackConstants
 import android.view.View
 import android.view.ViewGroup
+import android.view.WindowManager
+import androidx.compose.ui.graphics.toPixelMap
+import androidx.compose.ui.test.captureToImage
 import androidx.compose.ui.test.junit4.v2.createEmptyComposeRule
+import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithText
+import androidx.compose.ui.test.onRoot
 import androidx.compose.ui.test.performClick
 import com.yawnandpawn.app.APP_WORK_TIMEOUT_MILLIS
 import com.yawnandpawn.app.StopAppRule
 import com.yawnandpawn.app.android.ApplicationScope
+import com.yawnandpawn.app.awaitChildren
 import com.yawnandpawn.app.buildActivity
 import com.yawnandpawn.app.core.history.SessionOutcome
 import com.yawnandpawn.app.core.session.SessionEvent
 import com.yawnandpawn.app.core.session.SessionState
 import com.yawnandpawn.app.testing.FakeActiveSessionStore
+import com.yawnandpawn.app.testing.FakeClock
 import com.yawnandpawn.app.testing.FakeSessionHistoryRepository
 import com.yawnandpawn.app.testing.aSession
 import com.yawnandpawn.app.testing.aSessionConfig
+import com.yawnandpawn.app.testing.aSessionHistoryRow
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.runBlocking
 import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -36,6 +45,8 @@ import kotlin.test.assertFalse
 import kotlin.test.assertIs
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
+import kotlin.time.Duration.Companion.days
+import kotlin.time.Duration.Companion.minutes
 import kotlin.time.Instant
 
 /** Story 3.3: the wake screen shows the basic Success screen once the session it showed completes. */
@@ -208,6 +219,61 @@ class WakeActivitySuccessTest {
         assertFalse(controller.get().isFinishing, "the new screen shows it")
         composeRule.onNodeWithText(upOnTime).assertExists()
         assertNull(haptics(controller.get()).firstOrNull { it == HapticFeedbackConstants.CONFIRM }, "not played again")
+    }
+
+    /** Story 6.4: the celebration and its haptic play once per session; a recreated screen shows the final state, still. */
+    @Test
+    fun `a recreated Success keeps its streak and does not celebrate again`() {
+        val scheduled = aSessionConfig().scheduledAt
+        val history = FakeSessionHistoryRepository()
+        runBlocking {
+            (1..2).forEach { day ->
+                history.upsert(aSessionHistoryRow(sessionId = "earlier-$day").copy(scheduledAt = scheduled - day.days))
+            }
+        }
+        val app = WakeApp(history = history, clock = FakeClock(scheduled + 5.minutes))
+        ringing(app)
+        app.awaitRinging()
+        val controller = buildActivity(WakeActivity::class.java).setup()
+        composeRule.onNodeWithText("I'm up").assertExists()
+        app.awaitUntil("the snapshot is read") {
+            composeRule.waitForIdle()
+            history.allCalls == 1
+        }
+        app.koin.get<ApplicationScope>().awaitChildren()
+        composeRule.onNodeWithText("I'm up").performClick()
+        composeRule.awaitSuccess(app, upOnTime)
+        composeRule.onNodeWithContentDescription("3").assertExists()
+        assertTrue(HapticFeedbackConstants.CONFIRM in haptics(controller.get()), "the success haptic")
+
+        composeRule.mainClock.autoAdvance = false
+        controller.recreate()
+        composeRule.mainClock.advanceTimeBy(FRAME)
+        val start = composeRule.onRoot().captureToImage().toPixelMap()
+        composeRule.mainClock.advanceTimeBy(ONE_SECOND)
+        val later = composeRule.onRoot().captureToImage().toPixelMap()
+
+        composeRule.onNodeWithContentDescription("3").assertExists()
+        composeRule.onNodeWithText("days in a row").assertExists()
+        val changed = (0 until start.height).sumOf { y -> (0 until start.width).count { x -> start[x, y] != later[x, y] } }
+        assertEquals(0, changed, "no count-up or confetti after the recreation")
+        assertNull(haptics(controller.get()).firstOrNull { it == HapticFeedbackConstants.CONFIRM }, "no second haptic")
+    }
+
+    /** Story 6.4: Success lets the system timeout apply; a new ring keeps the screen on again. */
+    @Test
+    fun `Success clears keep-screen-on, and a new ring sets it again`() {
+        val app = WakeApp()
+        val screen = completed(app).get()
+        composeRule.waitForIdle()
+
+        assertEquals(0, screen.window.attributes.flags and WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON, "cleared on Success")
+
+        ringing(app, sessionId = "session-2")
+        composeRule.waitUntil(timeoutMillis = APP_WORK_TIMEOUT_MILLIS) { !composeRule.successShown(upOnTime) }
+        composeRule.waitForIdle()
+
+        assertTrue(screen.window.attributes.flags and WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON != 0, "set again for the ring")
     }
 
     @Test

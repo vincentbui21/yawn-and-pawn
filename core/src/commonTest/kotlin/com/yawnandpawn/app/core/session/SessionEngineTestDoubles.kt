@@ -209,4 +209,16 @@ internal class InMemoryHistory : SessionHistoryRepository {
 
     override suspend fun merges(sessionId: String): Outcome<List<SessionMergeRow>, DomainError> =
         Outcome.Success(mergeRows.values.filter { it.sessionId == sessionId })
+
+    /** Story 6.4: set to make [all] fail; [allGate], while not completed, holds [all]; [allCalls] counts the calls. */
+    var allFailure: DomainError? = null
+    var allGate: CompletableDeferred<Unit>? = null
+    var allCalls = 0
+
+    override suspend fun all(): Outcome<List<SessionHistoryRow>, DomainError> {
+        allCalls++
+        allGate?.await()
+        allFailure?.let { return Outcome.Failure(it) }
+        return Outcome.Success(rows.values.toList())
+    }
 }

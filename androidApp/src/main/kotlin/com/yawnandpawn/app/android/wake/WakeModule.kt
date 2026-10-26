@@ -22,6 +22,7 @@ import com.yawnandpawn.app.core.billing.ReplayGrantLedger
 import com.yawnandpawn.app.core.crash.CrashReporter
 import com.yawnandpawn.app.core.session.SessionEngine
 import com.yawnandpawn.app.core.sound.SoundPreview
+import com.yawnandpawn.app.core.stats.CelebrationStreaks
 import com.yawnandpawn.app.core.time.Clock
 import com.yawnandpawn.app.core.time.TimeSnapshot
 import kotlinx.coroutines.launch
@@ -33,7 +34,8 @@ import org.koin.dsl.module
  * Koin bindings of the wake runtime (Story 1.14), included by `appModule`: one player, the vibrator, the notification,
  * the service starter and the runtime itself, which `appModule` binds as the engine's `EffectRunner`. The runtime reads
  * the engine's state lazily (the engine depends on it). The crash reporter is Crashlytics when configured (Story 1.19).
- * The player resolves sounds through the sound library (`LibrarySoundResolver`, Story 1.17).
+ * The player resolves sounds through the sound library (`LibrarySoundResolver`, Story 1.17). [CelebrationStreaks] holds
+ * the zero-snooze celebration's history snapshot, read once per session after the wake screen's first frame (Story 6.4).
  *
  * A function, not a shared `val`: each call has its own definitions, so a test can load a fresh runtime over the app's
  * (a Koin module object keeps its single instances).
@@ -109,7 +111,13 @@ fun wakeModule(): Module =
                 koin.get<ApplicationScope>().launch { koin.get<ReplayGrantLedger>()() }
             })
         }
-        includes(confirmSheetModule())
+        includes(confirmSheetModule(), celebrationModule())
+    }
+
+/** Story 6.4, included by [wakeModule]: the zero-snooze celebration's history snapshot ([CelebrationStreaks]). */
+private fun celebrationModule(): Module =
+    module {
+        single { CelebrationStreaks(get(), get(), get(), get()) }
     }
 
 /**

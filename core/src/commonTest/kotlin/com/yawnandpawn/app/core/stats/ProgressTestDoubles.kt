@@ -58,6 +58,8 @@ internal class MutableHistory : SessionHistoryRepository {
     override suspend fun recordMerge(merge: SessionMergeRow): Outcome<Unit, DomainError> = Outcome.Success(Unit)
 
     override suspend fun merges(sessionId: String): Outcome<List<SessionMergeRow>, DomainError> = Outcome.Success(emptyList())
+
+    override suspend fun all(): Outcome<List<SessionHistoryRow>, DomainError> = Outcome.Success(rows.value)
 }
 
 /** Purchase records in memory, keyed by token hash like the Room table; [observeAll] emits after every [putRecord]. */

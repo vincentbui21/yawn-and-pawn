@@ -18,8 +18,6 @@ import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.drawscope.rotate
 import androidx.compose.ui.graphics.graphicsLayer
-import androidx.compose.ui.hapticfeedback.HapticFeedbackType
-import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.unit.dp
@@ -35,7 +33,9 @@ import kotlin.random.Random
 
 /**
  * The on-time celebration (owner decision 2026-09-28), one [progress] from 0 to 1 over 1.5 s, started once when the
- * Success screen opens, with one success haptic. With reduced motion it starts at 1 (the final state, no confetti).
+ * Success screen opens. Without [rememberCelebration]'s `animate` (the streak did not grow, or the celebration already
+ * played for this session, Story 6.4) or with reduced motion it starts at 1: the final state, no count-up, bounce or
+ * confetti. The success haptic is the Success screen's own (one per session for every kind), never the celebration's.
  */
 @Stable
 class Celebration internal constructor(
@@ -46,29 +46,29 @@ class Celebration internal constructor(
 }
 
 @Composable
-internal fun rememberCelebration(): Celebration {
-    val reduced = rememberReducedMotion()
-    val haptics = LocalHapticFeedback.current
-    val celebration = remember { Celebration(Animatable(if (reduced) 1f else 0f)) }
+internal fun rememberCelebration(animate: Boolean): Celebration {
+    val plays = animate && !rememberReducedMotion()
+    val celebration = remember { Celebration(Animatable(if (plays) 0f else 1f)) }
     LaunchedEffect(celebration) {
-        haptics.performHapticFeedback(HapticFeedbackType.Confirm)
-        if (!reduced) celebration.progress.animateTo(1f, tween(CELEBRATION_MILLIS, easing = LinearEasing))
+        if (celebration.running) celebration.progress.animateTo(1f, tween(CELEBRATION_MILLIS, easing = LinearEasing))
     }
     return celebration
 }
 
 /**
  * The streak number and "days in a row" under it (owner decision 2026-09-28: the number is not repeated in a sentence).
- * The number counts up from n−1 to n with a small bounce at 20% of the celebration. TalkBack reads the final number.
+ * While the celebration runs the number counts up from [countFrom] to [streakDays] with a small bounce at 20% of it; a
+ * null [countFrom] shows [streakDays] from the start. TalkBack reads the final number.
  */
 @Composable
 internal fun StreakCount(
     streakDays: Int,
+    countFrom: Int?,
     celebration: Celebration,
 ) {
     val colors = PpsTheme.colors
     Column(horizontalAlignment = Alignment.CenterHorizontally) {
-        val shown = if (celebration.value < COUNT_AT) streakDays - 1 else streakDays
+        val shown = if (countFrom != null && celebration.value < COUNT_AT) countFrom else streakDays
         Text(
             text = shown.toString(),
             modifier =

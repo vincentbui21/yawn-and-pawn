@@ -323,11 +323,14 @@ class WeeklySummaryWorkTest {
         sessions("2027-03-01")
         runAt(berlin("2027-03-07T19:00"))
         awaitUntil("next week's run is enqueued") { infos().any { it.state == WorkInfo.State.ENQUEUED } }
+        assertEquals(1, posted().size)
+        // Cleared, so a second post of the same id would show (the shadow keeps one notification per id).
+        notifications.cancelAll()
 
         // WorkManager runs the chained work early, still inside the week's window: the week is handled already.
         runAt(berlin("2027-03-07T20:00"))
 
-        assertEquals(1, posted().size)
+        assertEquals(emptyList(), posted())
     }
 
     @Test
@@ -373,6 +376,17 @@ class WeeklySummaryWorkTest {
         val replaced = pending()
         assertTrue(replaced.id != first, "REPLACE outside the due window")
         assertEquals(23.hours.inWholeMilliseconds, replaced.initialDelayMillis)
+    }
+
+    @Test
+    fun `a run executed again after its successor was chained never forks the chain`() {
+        // A run whose process died after its last step chained next week, before WorkManager marked it SUCCEEDED, runs
+        // again and reaches its last step a second time.
+        assertEquals(Outcome.Success(Unit), runBlocking { scheduler.afterRun() })
+        assertEquals(Outcome.Success(Unit), runBlocking { scheduler.afterRun() })
+
+        assertEquals(1, pendingCount(), "${infos()}")
+        assertEquals(24.hours.inWholeMilliseconds, pending().initialDelayMillis)
     }
 
     private fun pendingCount(): Int = infos().count { !it.state.isFinished }

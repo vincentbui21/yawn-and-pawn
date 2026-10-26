@@ -11,6 +11,9 @@ import com.yawnandpawn.app.core.work.SchedulePolicy.KeepPending
 import com.yawnandpawn.app.core.work.SchedulePolicy.Replace
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.async
+import kotlinx.coroutines.currentCoroutineContext
+import kotlinx.coroutines.job
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.test.runTest
 import kotlinx.coroutines.yield
 import kotlinx.datetime.TimeZone
@@ -18,6 +21,7 @@ import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
 import kotlin.test.assertIs
+import kotlin.test.assertTrue
 import kotlin.time.Duration
 import kotlin.time.Duration.Companion.hours
 
@@ -199,5 +203,21 @@ class WeeklySummarySchedulerTest {
 
             assertFalse(overlapped, "two syncs ran at once")
             assertEquals(2, work.calls.size)
+        }
+
+    @Test
+    fun `a cancelled run chains nothing`() =
+        runTest {
+            // A sync replaced the running work (and so enqueued its successor) just before its last step.
+            val run =
+                launch {
+                    currentCoroutineContext().job.cancel()
+                    scheduler.afterRun()
+                }
+
+            run.join()
+
+            assertTrue(run.isCancelled)
+            assertEquals(emptyList(), work.calls)
         }
 }

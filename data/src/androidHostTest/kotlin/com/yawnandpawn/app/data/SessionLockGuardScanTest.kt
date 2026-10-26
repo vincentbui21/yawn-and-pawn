@@ -61,8 +61,6 @@ class SessionLockGuardScanTest {
                 "RememberOnboardingAlarm",
                 // When onboarding's test alarm rings (Story 5.12).
                 "RememberOnboardingTest",
-                // The weekly summary switch (Story 6.8), in core.summary: found as a use case outside the fully scanned packages.
-                "SetWeeklySummary",
             ),
             writers - ALLOWED.keys,
         )
@@ -435,6 +433,9 @@ class SessionLockGuardScanTest {
                 // passed and no session rings that occurrence; a running session's config is frozen (AD-16), so it changes
                 // nothing a session uses. It runs on app start, after Recorded and in rescheduleAll, which may be mid-session.
                 "PromotePendingChanges" to "only passed occurrences; session configs are frozen",
+                // The weekly summary switch (Story 6.8 review): its store write is inside whenIdle (SetWeeklySummaryTest refuses
+                // it during a session); only the work alignment runs after the guard, so a ring never waits on WorkManager.
+                "SetWeeklySummary" to "store write guarded; work alignment after the guard",
             )
 
         val DECLARATION =

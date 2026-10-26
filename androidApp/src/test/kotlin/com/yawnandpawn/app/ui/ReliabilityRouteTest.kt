@@ -6,6 +6,7 @@ import android.os.Looper
 import androidx.compose.ui.semantics.SemanticsActions
 import androidx.compose.ui.test.hasClickAction
 import androidx.compose.ui.test.hasContentDescription
+import androidx.compose.ui.test.hasScrollAction
 import androidx.compose.ui.test.hasText
 import androidx.compose.ui.test.junit4.v2.createEmptyComposeRule
 import androidx.compose.ui.test.onNodeWithContentDescription
@@ -112,12 +113,10 @@ class ReliabilityRouteTest {
         ActivityScenario.launch(MainActivity::class.java).use {
             composeRule.onNodeWithContentDescription("Settings").performClick()
             waitForText(banner)
-            // Story 6.8: the "Weekly summary" row puts this row under the floating nav capsule at this height, so a touch at
-            // its centre would land on the capsule: the row's own click action is used (as TalkBack would).
-            composeRule
-                .onNode(hasText("Reliability checklist") and hasClickAction())
-                .performScrollTo()
-                .performSemanticsAction(SemanticsActions.OnClick)
+            // Story 6.8: with the "Weekly summary" row this last row is just inside the screen, under the floating nav
+            // capsule; a user scrolls on, and the list's bottom padding (the capsule's clearance) lifts it clear. A real tap.
+            composeRule.onNode(hasScrollAction()).performSemanticsAction(SemanticsActions.ScrollBy) { scrollBy -> scrollBy(0f, 10_000f) }
+            composeRule.onNode(hasText("Reliability checklist") and hasClickAction()).performScrollTo().performClick()
 
             waitForRow("Notifications", "OK")
             composeRule.onNode(hasText("Battery") and hasText("Stops Android from pausing your alarm.")).assertExists()

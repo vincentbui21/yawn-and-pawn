@@ -82,12 +82,16 @@ class WeeklySummaryTask(
         // moment) must not leave the week stored as handled but never posted.
         withContext(NonCancellable) {
             handled(week)
-            if (summary.shouldSend && notifier.canPost()) {
+            // The switch may have been turned off while the week was summarised: then nothing is posted.
+            if (summary.shouldSend && stillOn() && notifier.canPost()) {
                 val posted = notifier.post(summary)
                 if (posted is Outcome.Failure) log(posted.error)
             }
         }
     }
+
+    /** The switch is still on; a store that cannot be read now does not stop a post the first read allowed. */
+    private suspend fun stillOn(): Boolean = (store.read() as? Outcome.Success)?.value?.enabled != false
 
     private suspend fun handled(week: IsoWeek) {
         val stored = store.setLastHandledWeek(week)

@@ -2,6 +2,7 @@ package com.yawnandpawn.app.core.summary
 
 import com.yawnandpawn.app.core.billing.Money
 import com.yawnandpawn.app.core.error.DomainError
+import com.yawnandpawn.app.core.error.Outcome
 import com.yawnandpawn.app.core.history.SessionOutcome
 import com.yawnandpawn.app.core.log.LogEvent
 import com.yawnandpawn.app.core.stats.IsoWeek
@@ -9,9 +10,13 @@ import com.yawnandpawn.app.core.stats.WeeklySummary
 import com.yawnandpawn.app.core.summary.WorkCall.Schedule
 import com.yawnandpawn.app.core.work.SchedulePolicy.AfterRun
 import com.yawnandpawn.app.core.work.TaskResult
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.test.runTest
+import kotlinx.coroutines.yield
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertTrue
 import kotlin.time.Instant
 
 /** Story 6.8: one weekly summary run posts a due week once, stores it as handled, and chains next week last. */
@@ -187,5 +192,46 @@ class WeeklySummaryTaskTest {
             assertEquals(emptyList(), notifier.posted)
             assertEquals(emptyList(), store.writes)
             assertEquals(listOf(chained()), work.calls)
+        }
+
+    @Test
+    fun `a switch turned off while the week is summarised posts nothing`() =
+        runTest {
+            val turnedOff =
+                object : WeeklySummaryStore by store {
+                    override suspend fun setLastHandledWeek(week: IsoWeek): Outcome<Unit, DomainError> =
+                        store.setLastHandledWeek(week).also { store.state.value = store.state.value.copy(enabled = false) }
+                }
+            val run = WeeklySummaryTask(history, records, turnedOff, notifier, scheduler, clock, zones, logs)
+
+            assertEquals(TaskResult.Done, run.run())
+
+            assertEquals(emptyList(), notifier.posted)
+            assertEquals(week, store.state.value.lastHandledWeek)
+            assertEquals(emptyList(), work.calls, "off: nothing chained")
+        }
+
+    @Test
+    fun `a run cancelled while the week is stored still posts it and stores it, and chains nothing`() =
+        runTest {
+            lateinit var job: Job
+            val cancelledThen =
+                object : WeeklySummaryStore by store {
+                    override suspend fun setLastHandledWeek(week: IsoWeek): Outcome<Unit, DomainError> {
+                        // A sync replaces the running work at this moment.
+                        job.cancel()
+                        yield()
+                        return store.setLastHandledWeek(week)
+                    }
+                }
+            val run = WeeklySummaryTask(history, records, cancelledThen, notifier, scheduler, clock, zones, logs)
+
+            job = launch { run.run() }
+            job.join()
+
+            assertTrue(job.isCancelled)
+            assertEquals(1, notifier.posted.size)
+            assertEquals(week, store.state.value.lastHandledWeek)
+            assertEquals(emptyList(), work.calls, "the run that replaced it chains next week")
         }
 }

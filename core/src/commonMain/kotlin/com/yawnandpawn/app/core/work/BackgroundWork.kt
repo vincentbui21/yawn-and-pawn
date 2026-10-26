@@ -48,7 +48,10 @@ enum class SchedulePolicy {
     /** Keep a pending or running one; enqueue only when there is none (app start, a run due now). WorkManager KEEP. */
     KeepPending,
 
-    /** From inside the running summary: chained after it, so the run is never cancelled by its successor. APPEND_OR_REPLACE. */
+    /**
+     * From inside the running summary: chained after it, so the run is never cancelled by its successor. APPEND_OR_REPLACE,
+     * skipped when a successor is already pending (a run executed again after its process died), so the chain never forks.
+     */
     AfterRun,
 }
 

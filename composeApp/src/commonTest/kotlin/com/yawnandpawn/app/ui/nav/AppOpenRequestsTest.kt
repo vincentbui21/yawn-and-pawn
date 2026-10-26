@@ -55,10 +55,10 @@ class AppOpenRequestsTest {
     }
 
     @Test
-    fun `a screen pushed over a tab closes first, but an open editor keeps the request from changing anything`() {
+    fun `a screen pushed over a tab closes first, but an open editor or charge form keeps the request from changing anything`() {
         listOf(
             listOf<NavKey>(Route.Alarms, Route.Reliability),
-            listOf<NavKey>(Route.Alarms, Route.You, Route.PurchaseHistory, Route.ProblemWithCharge),
+            listOf<NavKey>(Route.Alarms, Route.You, Route.PurchaseHistory),
             listOf<NavKey>(Route.Alarms, Route.You, Route.Payments),
         ).forEach { start ->
             val stack = start.toMutableList()
@@ -67,8 +67,17 @@ class AppOpenRequestsTest {
 
             assertEquals(listOf<NavKey>(Route.Alarms, Route.Progress), stack, "from $start")
         }
-        val editing = mutableListOf<NavKey>(Route.Alarms, Route.AlarmEditor(alarmId = "a"))
-        editing.openRequested(AppTab.Progress)
-        assertEquals(listOf<NavKey>(Route.Alarms, Route.AlarmEditor(alarmId = "a")), editing)
+        listOf(
+            listOf<NavKey>(Route.Alarms, Route.AlarmEditor(alarmId = "a")),
+            // The "Problem with a charge?" form keeps what the user typed.
+            listOf<NavKey>(Route.Alarms, Route.You, Route.PurchaseHistory, Route.ProblemWithCharge),
+            listOf<NavKey>(Route.Alarms, Route.You, Route.Payments, Route.ProblemWithCharge),
+        ).forEach { start ->
+            val stack = start.toMutableList()
+
+            stack.openRequested(AppTab.Progress)
+
+            assertEquals(start, stack)
+        }
     }
 }

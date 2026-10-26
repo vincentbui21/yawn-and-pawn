@@ -11,6 +11,8 @@ import com.yawnandpawn.app.core.time.Clock
 import com.yawnandpawn.app.core.time.TimeZoneProvider
 import com.yawnandpawn.app.core.work.BackgroundWork
 import com.yawnandpawn.app.core.work.SchedulePolicy
+import kotlinx.coroutines.currentCoroutineContext
+import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlin.time.Duration
@@ -58,6 +60,8 @@ class WeeklySummaryScheduler(
     suspend fun afterRun(): Outcome<Unit, DomainError> =
         lock.withLock {
             if (!prefs().enabled) return@withLock Outcome.Success(Unit)
+            // A run cancelled meanwhile (a sync replaced it, and so enqueued its successor) chains nothing.
+            currentCoroutineContext().ensureActive()
             val now = clock.now()
             logged(work.scheduleWeeklySummary(nextWeeklySummaryAt(now, zones.current()) - now, SchedulePolicy.AfterRun))
         }

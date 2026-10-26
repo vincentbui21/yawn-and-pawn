@@ -195,6 +195,28 @@ class UnlockDuringRingTest {
     }
 
     @Test
+    fun `an unlock signal starts the weekly summary scheduler once (Story 6-8)`() {
+        val app = WakeApp(billing = billing)
+        var starts = 0
+        val signals =
+            UnlockSignals(
+                app.engine,
+                billing,
+                app.koin.get(),
+                app.koin.get(),
+                FakeLogger(),
+                app.koin.get(),
+                Duration.ZERO,
+                replayLedger = {},
+                startWeeklySummary = { starts++ },
+            )
+
+        signals.onUnlocked()
+
+        assertEquals(1, starts)
+    }
+
+    @Test
     fun `the app's unlock signal settles a payment left in the grant ledger by an overnight restart (Story 4-10)`() {
         val app = WakeApp(billing = billing)
         val grant = aGrant(token = "left-overnight")

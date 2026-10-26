@@ -9,6 +9,7 @@ import androidx.work.NetworkType
 import androidx.work.OneTimeWorkRequestBuilder
 import androidx.work.Operation
 import androidx.work.PeriodicWorkRequestBuilder
+import androidx.work.WorkInfo
 import androidx.work.WorkManager
 import androidx.work.workDataOf
 import com.google.common.util.concurrent.ListenableFuture
@@ -55,6 +56,8 @@ class AndroidBackgroundWork(
         policy: SchedulePolicy,
     ): Outcome<Unit, DomainError> =
         guarded(WeeklySummaryJobs.NAME) {
+            // A run executed again after its process died already chained its successor: a second one would fork the chain.
+            if (policy == SchedulePolicy.AfterRun && successorPending()) return@guarded
             val request =
                 OneTimeWorkRequestBuilder<BackgroundTaskWorker>()
                     .setInitialDelay(delay.coerceAtLeast(Duration.ZERO).inWholeMilliseconds, TimeUnit.MILLISECONDS)
@@ -73,6 +76,13 @@ class AndroidBackgroundWork(
 
     override fun cancelWeeklySummary(): Outcome<Unit, DomainError> =
         guarded(WeeklySummaryJobs.NAME) { watch(workManager().cancelUniqueWork(WeeklySummaryJobs.NAME).result, WeeklySummaryJobs.NAME) }
+
+    /** A `weekly-summary` work waits to run (ENQUEUED, or BLOCKED behind the running one). */
+    private fun successorPending(): Boolean =
+        workManager()
+            .getWorkInfosForUniqueWork(WeeklySummaryJobs.NAME)
+            .get()
+            .any { it.state == WorkInfo.State.ENQUEUED || it.state == WorkInfo.State.BLOCKED }
 
     /**
      * Runs [hand] when the user is unlocked, else fails without touching WorkManager. Whatever WorkManager throws (its

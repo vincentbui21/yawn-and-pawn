@@ -290,6 +290,8 @@ class SystemEventsReceiverTest {
         val delay = berlin("2027-03-07T19:00") - app.clock.now()
         assertEquals(List(3) { delay to SchedulePolicy.Replace }, work.replaces)
         assertEquals(List(3) { expectedTwoEnabled }, work.armedAtReplace, "the alarms first")
+        // BOOT_COMPLETED is also an unlock signal: it starts the scheduler once (KEEP, the app start path).
+        assertEquals(listOf(delay to SchedulePolicy.KeepPending), work.schedules.filter { it.second == SchedulePolicy.KeepPending })
     }
 
     @Test

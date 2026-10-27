@@ -19,6 +19,8 @@ import com.yawnandpawn.app.data.config.PendingChangeEntity
 import com.yawnandpawn.app.data.history.SessionHistoryDao
 import com.yawnandpawn.app.data.history.SessionHistoryEntity
 import com.yawnandpawn.app.data.history.SessionMergeEntity
+import com.yawnandpawn.app.data.recording.RecordingDao
+import com.yawnandpawn.app.data.recording.RecordingEntity
 import com.yawnandpawn.app.data.reset.AlarmDataDao
 
 /**
@@ -29,7 +31,8 @@ import com.yawnandpawn.app.data.reset.AlarmDataDao
  * ([MIGRATION_5_6]); version 7 (Story 3.9) adds `session_history.fallback_from` ([MIGRATION_6_7]); version 8 (Story 3.10) adds
  * the registered code to `check_config` ([MIGRATION_7_8]); version 9 (Story 4.4) adds `pending_change` and
  * `commitment_event` ([MIGRATION_8_9]); version 10 (Story 4.10) adds `purchase_record`, the purchase history keyed by
- * token hash ([MIGRATION_9_10]). There is no
+ * token hash ([MIGRATION_9_10]); version 11 (Story 7.1) adds `recording`, the user's motivation messages, whose
+ * audio files stay in credential-protected `recordings/` and are never backed up ([MIGRATION_10_11]). There is no
  * destructive migration fallback; restoring a newer file onto an older install is
  * covered by `docs/decisions/db-downgrade.md`.
  */
@@ -43,6 +46,7 @@ import com.yawnandpawn.app.data.reset.AlarmDataDao
         PendingChangeEntity::class,
         CommitmentEventEntity::class,
         PurchaseRecordEntity::class,
+        RecordingEntity::class,
     ],
     version = AppDatabase.SCHEMA_VERSION,
     exportSchema = true,
@@ -63,6 +67,8 @@ abstract class AppDatabase : RoomDatabase() {
 
     abstract fun purchaseRecordDao(): PurchaseRecordDao
 
+    abstract fun recordingDao(): RecordingDao
+
     /** "Delete all data" (Story 5.9): no table of its own, the deletes of the alarm tables in one transaction. */
     abstract fun alarmDataDao(): AlarmDataDao
 
@@ -74,7 +80,7 @@ abstract class AppDatabase : RoomDatabase() {
          * The `app.db` schema this build knows: the `@Database` version, and the limit `PpsBackupAgent` checks a restored
          * file against (Room cannot open a newer one, `docs/decisions/db-downgrade.md`).
          */
-        const val SCHEMA_VERSION = 10
+        const val SCHEMA_VERSION = 11
     }
 }
 

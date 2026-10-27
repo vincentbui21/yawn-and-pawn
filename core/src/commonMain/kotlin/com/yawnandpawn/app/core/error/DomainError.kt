@@ -104,4 +104,25 @@ sealed interface DomainError {
     data class BackgroundWorkFailure(
         val cause: String,
     ) : DomainError
+
+    /**
+     * A recorded take was shorter than 1 s (Story 7.1): it was discarded and nothing was stored. A take is at most 60 s;
+     * the recorder stops by itself there.
+     */
+    data object RecordingTooShort : DomainError
+
+    /**
+     * The microphone cannot record (Story 7.1): the permission is not granted, the phone has no microphone, or something
+     * else holds it (a call, or the app is not in front). Nothing was recorded.
+     */
+    data object MicrophoneUnavailable : DomainError
+
+    /**
+     * The recorder failed while starting, recording or stopping (Story 7.1), or a take was not a valid one; the take was
+     * discarded. [cause] is an error code for logs only (an exception class or a `MediaRecorder` error number), never a
+     * file path or a recording name.
+     */
+    data class RecorderFailure(
+        val cause: String,
+    ) : DomainError
 }

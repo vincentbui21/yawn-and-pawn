@@ -61,6 +61,10 @@ class SessionLockGuardScanTest {
                 "RememberOnboardingAlarm",
                 // When onboarding's test alarm rings (Story 5.12).
                 "RememberOnboardingTest",
+                // The motivation messages (Story 7.1), in core.recording: found as use cases.
+                "SaveRecording",
+                "ReRecord",
+                "DeleteRecording",
             ),
             writers - ALLOWED.keys,
         )

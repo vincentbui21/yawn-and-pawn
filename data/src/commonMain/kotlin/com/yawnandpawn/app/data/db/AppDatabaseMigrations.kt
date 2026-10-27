@@ -171,6 +171,21 @@ val MIGRATION_9_10: Migration =
         }
     }
 
+/**
+ * v10 to v11 (Story 7.1): adds the empty `recording` table, the user's motivation messages (name, length and file name;
+ * the audio itself stays in credential-protected `recordings/`, never backed up). No foreign key: a message is not tied
+ * to an alarm. Every other table is untouched. The SQL matches the exported `11.json`; Room checks it after migrating.
+ */
+val MIGRATION_10_11: Migration =
+    object : Migration(10, 11) {
+        override suspend fun migrate(connection: SQLiteConnection) {
+            connection.execSQL(
+                "CREATE TABLE IF NOT EXISTS `recording` (`id` TEXT NOT NULL, `name` TEXT NOT NULL, " +
+                    "`duration_ms` INTEGER NOT NULL, `file_name` TEXT NOT NULL, `created_at` INTEGER NOT NULL, PRIMARY KEY(`id`))",
+            )
+        }
+    }
+
 /** Every migration of `app.db`, oldest first; `buildAppDatabase` registers them all. */
 val APP_DATABASE_MIGRATIONS: Array<Migration> =
     arrayOf(
@@ -183,4 +198,5 @@ val APP_DATABASE_MIGRATIONS: Array<Migration> =
         MIGRATION_7_8,
         MIGRATION_8_9,
         MIGRATION_9_10,
+        MIGRATION_10_11,
     )

@@ -22,6 +22,11 @@
          app start or on the wake screen. Frames are analysed on the device and never stored. The camera is not required,
          so a phone without one can still install the app and use the other checks. -->
     <uses-permission android:name="android.permission.CAMERA" />
+    <!-- Motivation messages (Story 7.1): the user records short messages in their own voice. Asked only on the first
+         record tap (Story 7.2), never at app start, in onboarding or on the wake screen. Recordings stay on the phone,
+         in credential-protected storage left out of every backup. The microphone is not required, so a phone without
+         one can still install the app and use everything else. -->
+    <uses-permission android:name="android.permission.RECORD_AUDIO" />
     <!-- Snooze is unavailable offline (Story 4.7, AndroidConnectivity reads the default network). -->
     <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
     <!-- Firebase Analytics (Story 5.6, AD-15) merges ad and attribution permissions the app never uses: no advertising
@@ -40,6 +45,9 @@
         tools:node="remove" />
     <uses-feature
         android:name="android.hardware.camera"
+        android:required="false" />
+    <uses-feature
+        android:name="android.hardware.microphone"
         android:required="false" />
 
     <!-- The makers' own background-app screens (Story 5.5, OemIntents): on API 30+ the app sees another app's activity

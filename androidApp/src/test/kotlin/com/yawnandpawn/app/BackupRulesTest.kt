@@ -5,6 +5,7 @@ import androidx.test.core.app.ApplicationProvider
 import com.yawnandpawn.app.android.backup.SkippedRestoreNotice
 import com.yawnandpawn.app.data.db.AppDatabase
 import com.yawnandpawn.app.data.db.RuntimeDatabase
+import com.yawnandpawn.app.data.recording.RecordingFiles
 import com.yawnandpawn.app.data.settings.ConsentDataStore
 import com.yawnandpawn.app.data.settings.InstallIdDataStore
 import com.yawnandpawn.app.data.settings.PriceCacheDataStore
@@ -22,7 +23,8 @@ import kotlin.test.assertTrue
 /**
  * NFR-14, AD-6 and Story 2.12: Auto Backup includes only `app.db` and the settings DataStore, both in device-protected
  * storage. It explicitly excludes the session (`runtime.db` and its journals), the preferences of the wake runtime and
- * of the restore notice, and all credential-protected storage (where media will live), on both API ranges.
+ * of the restore notice, the recordings (Story 7.1), the user's sounds (Story 7.4) and all credential-protected storage
+ * (where media lives), on both API ranges.
  */
 @RunWith(RobolectricTestRunner::class)
 class BackupRulesTest {
@@ -66,6 +68,10 @@ class BackupRulesTest {
             Triple("exclude", "device_file", reliability),
             // The usage stats choice (Story 5.6 review fix 5): per install, so a restored phone starts with stats off.
             Triple("exclude", "device_file", "datastore/${ConsentDataStore.FILE_NAME}"),
+            // The motivation messages' audio (Story 7.1): credential-protected media, never backed up; their rows are in app.db.
+            Triple("exclude", "file", RecordingFiles.FOLDER),
+            // The user's own alarm sounds (Story 7.4's media folder): never backed up either.
+            Triple("exclude", "file", "sounds"),
             Triple("exclude", "root", "."),
             Triple("exclude", "file", "."),
             Triple("exclude", "database", "."),
@@ -111,6 +117,23 @@ class BackupRulesTest {
         assertFalse(app.substringAfter("\"tableName\": \"purchase_record\"").contains("`token` TEXT"), "only the token hash")
         assertTrue(runtime.contains("\"tableName\": \"grant_ledger\""), "the ledger lives in runtime.db")
         assertFalse(includes.any { it.path.startsWith(runtimeDb) }, "runtime.db is never backed up")
+    }
+
+    @Test
+    fun `recordings and sounds are excluded in every section while the recording rows stay in the backed-up app db (Story 7-1)`() {
+        val schema = File("../data/schemas/com.yawnandpawn.app.data.db.AppDatabase/${AppDatabase.SCHEMA_VERSION}.json").readText()
+        val all = backupRules(context, R.xml.data_extraction_rules) + backupRules(context, R.xml.backup_rules)
+
+        listOf(RecordingFiles.FOLDER, "sounds").forEach { media ->
+            assertEquals(
+                setOf("cloud-backup", "device-transfer", "full-backup-content"),
+                all.filter { it.kind == "exclude" && it.domain == "file" && it.path == media }.map { it.section }.toSet(),
+                media,
+            )
+            assertFalse(all.any { it.kind == "include" && it.path.contains(media) }, "$media is never included")
+        }
+        assertTrue(schema.contains("\"tableName\": \"recording\""), "the rows live in app.db")
+        assertTrue(all.any { it.kind == "include" && it.path == appDb }, "app.db is backed up")
     }
 
     @Test

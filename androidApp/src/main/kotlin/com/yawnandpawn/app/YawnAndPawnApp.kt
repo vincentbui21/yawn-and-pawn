@@ -18,6 +18,8 @@ import com.yawnandpawn.app.android.crash.CrashlyticsUnsentReports
 import com.yawnandpawn.app.android.crash.FirebaseStartup
 import com.yawnandpawn.app.android.crash.isFirebaseConfigured
 import com.yawnandpawn.app.android.qr.qrModule
+import com.yawnandpawn.app.android.recording.StartedActivities
+import com.yawnandpawn.app.android.recording.recordingModule
 import com.yawnandpawn.app.android.reliability.reliabilityModule
 import com.yawnandpawn.app.android.screen.AndroidExternalLinks
 import com.yawnandpawn.app.android.screen.AndroidWakeScreenOpener
@@ -136,6 +138,7 @@ val appModule =
             workModule(),
             billingModule(),
             telemetryModule(),
+            recordingModule(),
         )
         single<IdGenerator> { UuidV4IdGenerator() }
         single<Logger> { AndroidLogger() }
@@ -424,6 +427,9 @@ open class YawnAndPawnApp :
     /** The resumed wake screen (Story 4.12), followed for the life of the process; billingModule binds this instance. */
     val resumedWakeScreen: ResumedWakeScreen = ResumedWakeScreen()
 
+    /** The started-activity count (Story 7.1): a take being recorded stops when the app goes to the background. */
+    val startedActivities: StartedActivities = StartedActivities()
+
     /** Bindings loaded after the app's own (they win); only the Robolectric test application adds any. */
     protected open val overrideModules: List<Module> = emptyList()
 
@@ -443,6 +449,7 @@ open class YawnAndPawnApp :
         // Story 4.12: Play's sheet and the PIN prompt open only from the resumed wake screen, followed here (once per process,
         // so a Koin graph a test restarts still sees it).
         registerActivityLifecycleCallbacks(resumedWakeScreen)
+        registerActivityLifecycleCallbacks(startedActivities)
         val scope = koin.get<ApplicationScope>()
         // Story 5.9 review: an unfinished "Delete all data" holds the app and resumes, before anything re-arms alarms (a
         // start with no activity finishes it too); after 3 starts that found it, it gives up and the app runs as usual.

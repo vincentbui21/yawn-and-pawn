@@ -3,11 +3,11 @@ title: Privacy policy
 permalink: /privacy/
 ---
 
-{% comment %} Draft for the owner to review; not legal advice. Rewritten 2026-10-26 to match the code on main (docs/closed-test/owner-checklist.md, PRIVACY MISMATCH 1 to 7). House Hunt photos, recordings, the microphone and custom sounds are not built; add them back here when Epic 7 ships. {% endcomment %}
+{% comment %} Draft for the owner to review; not legal advice. Rewritten 2026-10-26 to match the code on main (docs/closed-test/owner-checklist.md, PRIVACY MISMATCH 1 to 7). Updated 2026-10-27 for Story 7.1: recorded messages and the microphone. House Hunt photos (moved to v2) and custom sounds are not built; add them here when they ship. {% endcomment %}
 
 # Privacy policy
 
-**Effective date:** 26 October 2026
+**Effective date:** 27 October 2026
 
 Yawn & Pawn ("the app") is an alarm clock for Android, published on Google Play by the developer Yawn & Pawn ("we", "us"). This policy explains what the app keeps, what leaves your phone and how to delete it.
 
@@ -24,6 +24,7 @@ The app keeps these on your phone:
 - **Your alarms:** time, repeat days, label, sound (one of your phone's alarm sounds), volume, vibration, snooze length, grace window and the checks you chose. For a QR/Barcode check, the app keeps a one-way fingerprint (a hash) of the code you registered, never the code's text or a picture of it.
 - **Your wake-up history:** when each alarm rang, how many times you snoozed, which checks you did and how each morning ended.
 - **Your settings:** such as your base fee, max snoozes and theme.
+- **Your recorded messages:** short voice messages (up to 1 minute each) that you record yourself to hear when you wake up, with the name and length of each.
 - **Your purchase records:** for each snooze payment, Google's order ID, the product, the price and currency, the time, its status and which alarm and morning it was for. The app also keeps a one-way fingerprint (a hash) of Google's purchase token. The token itself is kept in a separate store on the phone that is never backed up.
 - **Two random ids:** an install id, made when you first use the app, and a session id for each morning. They say nothing about who you are.
 
@@ -33,8 +34,10 @@ The app never asks for your name, email address or contacts, and has no location
 
 Android's Auto Backup copies part of the app's data to your own Google account, so a new or reset phone can get your alarms back. Google stores this copy, and we can't read it. The same rules apply when you move to a new phone with Android's transfer tool.
 
-- **Backed up:** your alarms, wake-up history, settings and purchase records.
-- **Not backed up:** the morning in progress, payments that are not finished yet, Google's purchase tokens, the install id, your usage stats choice and the cached Google Play prices.
+- **Backed up:** your alarms, wake-up history, settings and purchase records, and the name and length of each recorded message.
+- **Not backed up:** your recorded messages themselves (the sound), the morning in progress, payments that are not finished yet, Google's purchase tokens, the install id, your usage stats choice and the cached Google Play prices.
+
+Because the sound of your recorded messages isn't in the backup, a phone restored from it lists your messages as missing, and you can record them again.
 
 Backup follows your phone's settings, and you can turn it off there. The copy stays in your Google account after you uninstall the app; to remove it, delete your phone's backup in Google Drive (under Storage, then Backups) or turn off Google backup in your phone's settings.
 
@@ -78,7 +81,7 @@ To link each payment to the right morning, the app gives Google two random ids: 
 
 ML Kit can send diagnostic logs to Google about how the scanner runs. These never contain camera pictures.
 
-**Microphone.** This version of the app doesn't use the microphone and never asks for it. If a later version adds a feature that uses the microphone or keeps photos, we will update this page first.
+**Microphone.** The app uses the microphone only to record your own messages, and only while you are recording one. It asks for permission the first time you tap record, never when you open the app. A recording stops after 1 minute, or sooner when you leave the app, the screen turns off or a call comes in. Your recordings stay in the app's private storage on your phone. They are never uploaded, never sent to us or to Google, and never included in crash reports or usage stats. They are not in the backup either (see "Backup"). The app doesn't keep photos; if a later version adds a feature that does, we will update this page first.
 
 ## Keeping your data safe
 
@@ -99,9 +102,9 @@ The app is for adults (18 and over) and is not directed at children. Because sno
 
 ## Deleting your data
 
-- **Delete all data:** in the app, open You, then "Delete all data". It deletes everything the app stores on your phone: alarms, history, purchase records and settings. It also turns usage stats off and deletes the analytics data on your phone, deletes crash reports not sent yet, and makes a new install id. If a snooze payment is still being finished with Google Play, the app keeps only what it needs to finish it. "Delete all data" isn't available while an alarm is ringing or snoozed.
+- **Delete all data:** in the app, open You, then "Delete all data". It deletes everything the app stores on your phone: alarms, history, purchase records, settings and your recorded messages. It also turns usage stats off and deletes the analytics data on your phone, deletes crash reports not sent yet, and makes a new install id. If a snooze payment is still being finished with Google Play, the app keeps only what it needs to finish it. "Delete all data" isn't available while an alarm is ringing or snoozed.
 - **Uninstall the app:** this removes all of the app's data from your phone.
-- **The backup copy** in your Google account: "Delete all data" does not remove it. If you restore a phone from that backup before Android makes a new one, your old alarms, history, purchase records and settings come back. To remove it, see "Backup" above.
+- **The backup copy** in your Google account: "Delete all data" does not remove it. If you restore a phone from that backup before Android makes a new one, your old alarms, history, purchase records and settings come back, with the names of your recorded messages (but not their sound). To remove it, see "Backup" above.
 - **Crash reports and usage stats already sent:** email us at <vincentbui2108@gmail.com> and ask us to delete them. They aren't linked to your name or email, so tell us your phone model and roughly when you used the app, and we will delete what we can match to you. Google deletes the rest by itself: crash reports after 90 days, and usage stats linked to an analytics id after 2 months.
 - **Google's own records:** Google Play keeps its own record of your payments (your Google Play order history), under Google's privacy policy.
 

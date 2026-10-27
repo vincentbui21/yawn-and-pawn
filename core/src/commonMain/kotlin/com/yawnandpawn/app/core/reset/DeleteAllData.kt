@@ -61,7 +61,10 @@ interface DeletionMarker {
  * the `reliability` notification-asked flag, `backup_restore`).
  */
 interface LocalDataEraser {
-    /** `app.db`: every alarm, check config, pending change and commitment event (one transaction). */
+    /**
+     * Every recording's audio file (Story 7.1; refused before the first unlock), then in `app.db` every alarm, check
+     * config, pending change, commitment event and recording (one transaction).
+     */
     suspend fun deleteAlarmData(): Outcome<Unit, DomainError>
 
     /**

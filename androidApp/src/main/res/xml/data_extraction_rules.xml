@@ -5,7 +5,8 @@
 
     Backed up, device-protected storage only:
       - app.db: alarms, the request-code mark, session history, and the commitment lock's pending changes and
-        commitment events (Story 4.4);
+        commitment events (Story 4.4), the purchase records (Story 4.10) and the recordings' rows (Story 7.1: name, length
+        and file name, never the audio);
       - datastore/settings.preferences_pb: settings (the base fee and max snoozes, and their pending changes, Story 4.4)
         and the missed-note dismissals.
     Never backed up (excluded explicitly, so a later broader include can never pick them up):
@@ -23,7 +24,11 @@
         so a new phone never shows a locked test it did not ring or settings "turned off" it never had;
       - datastore/usage_stats_consent.preferences_pb: the usage stats choice and whether the user was asked (Story 5.6),
         per install, so a restored or transferred phone starts with usage stats off and asks again;
-      - the whole credential-protected storage (root, file, database, sharedpref), where media will live (Epic 7).
+      - recordings/ in credential-protected files: the motivation messages' audio (Story 7.1). Their rows (name, length,
+        file name) are in the backed-up app.db, so a restored phone lists them as missing; named explicitly so a later
+        broader rule can never pick the audio up;
+      - sounds/ in credential-protected files: the user's own alarm sounds (Story 7.4), excluded the same way;
+      - the whole credential-protected storage (root, file, database, sharedpref), where media lives (Epic 7).
     Because there are includes, anything not included is not backed up either. Lint calls an exclude outside every
     include redundant (FullBackupContent); it is ignored on those elements on purpose.
 -->
@@ -46,6 +51,8 @@
         <exclude domain="device_file" path="datastore/price_cache.preferences_pb" tools:ignore="FullBackupContent" />
         <exclude domain="device_file" path="datastore/reliability.preferences_pb" tools:ignore="FullBackupContent" />
         <exclude domain="device_file" path="datastore/usage_stats_consent.preferences_pb" tools:ignore="FullBackupContent" />
+        <exclude domain="file" path="recordings" tools:ignore="FullBackupContent" />
+        <exclude domain="file" path="sounds" tools:ignore="FullBackupContent" />
         <exclude domain="root" path="." tools:ignore="FullBackupContent" />
         <exclude domain="file" path="." tools:ignore="FullBackupContent" />
         <exclude domain="database" path="." tools:ignore="FullBackupContent" />
@@ -69,6 +76,8 @@
         <exclude domain="device_file" path="datastore/price_cache.preferences_pb" tools:ignore="FullBackupContent" />
         <exclude domain="device_file" path="datastore/reliability.preferences_pb" tools:ignore="FullBackupContent" />
         <exclude domain="device_file" path="datastore/usage_stats_consent.preferences_pb" tools:ignore="FullBackupContent" />
+        <exclude domain="file" path="recordings" tools:ignore="FullBackupContent" />
+        <exclude domain="file" path="sounds" tools:ignore="FullBackupContent" />
         <exclude domain="root" path="." tools:ignore="FullBackupContent" />
         <exclude domain="file" path="." tools:ignore="FullBackupContent" />
         <exclude domain="database" path="." tools:ignore="FullBackupContent" />

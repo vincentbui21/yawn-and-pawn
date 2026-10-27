@@ -18,11 +18,13 @@ import org.koin.compose.koinInject
  * QR registration's state (Story 3.10), UI only: scanning until a code is seen in 3 frames in a row, then "Use this code"
  * or "Scan again". Without the camera permission (or with a camera that cannot start) it shows "Camera isn't
  * available." with "Fix". The code chosen goes to the Check setup draft through [onCodeChosen]; nothing is stored here.
+ * "Make a printable QR" (Story 7.10) calls [onPrintable], which opens the printable QR.
  */
 class QrRegistrationModel(
     private val permission: CameraPermission,
     private val onCodeChosen: (RegisteredCode) -> Unit,
     private val onBack: () -> Unit,
+    private val onPrintable: () -> Unit = {},
 ) {
     var state: QrRegistrationUiState by mutableStateOf(QrRegistrationUiState(cameraUnavailable = !permission.isGranted()))
         private set
@@ -115,8 +117,12 @@ class QrRegistrationModel(
                 permission.openSettings()
             }
 
-            // The printable QR is Epic 7 (FR-PWK-13); its screen exists only in the design preview.
-            QrIntent.PrintableClicked, QrIntent.PrintClicked, QrIntent.ReplaceConfirmed, QrIntent.ReplaceCancelled -> {
+            QrIntent.PrintableClicked -> {
+                onPrintable()
+            }
+
+            // The printable QR's own intents (PrintableQrModel); registration never sends them.
+            QrIntent.PrintClicked, QrIntent.ReplaceConfirmed, QrIntent.ReplaceCancelled -> {
                 Unit
             }
         }
@@ -130,20 +136,25 @@ class QrRegistrationModel(
  *
  * Check setup's "Your code" row (`CheckSetupIntent.ScanCodeClicked`) opens this screen in the editor, and [onCodeChosen]
  * writes the code into the QR/Barcode check of the form (`CheckChip.code`), saved with the alarm. Home's "Re-register"
- * opens it the same way and saves the new code at once.
+ * opens it the same way and saves the new code at once. "Make a printable QR" calls [onPrintable] (Story 7.10).
  */
 @Composable
 fun QrRegistrationRoute(
     onCodeChosen: (RegisteredCode) -> Unit,
     onBack: () -> Unit,
     modifier: Modifier = Modifier,
+    onPrintable: () -> Unit = {},
     resumed: Int = 0,
     scanner: CodeScanner = koinInject(),
     permission: CameraPermission = koinInject(),
 ) {
     val chosen by rememberUpdatedState(onCodeChosen)
     val back by rememberUpdatedState(onBack)
-    val model = remember(permission) { QrRegistrationModel(permission, onCodeChosen = { chosen(it) }, onBack = { back() }) }
+    val printable by rememberUpdatedState(onPrintable)
+    val model =
+        remember(permission) {
+            QrRegistrationModel(permission, onCodeChosen = { chosen(it) }, onBack = { back() }, onPrintable = { printable() })
+        }
     LaunchedEffect(model, resumed) { model.onShown() }
     // One feed while the camera can be used (Story 3.10 review): the torch is read inside it, so a toggle never rebinds.
     val scanning = model.scanning
@@ -156,6 +167,6 @@ fun QrRegistrationRoute(
             }
         }
     CompositionLocalProvider(LocalViewfinderFeed provides feed) {
-        QrRegistrationScreen(state = model.state, onIntent = model::onIntent, modifier = modifier, printable = false)
+        QrRegistrationScreen(state = model.state, onIntent = model::onIntent, modifier = modifier)
     }
 }

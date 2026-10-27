@@ -356,3 +356,7 @@
   summary: Landscape and large-screen layouts are a v2 item.
   evidence: In landscape every screen "looks kinda weird", so the app is portrait only: every activity declares `android:screenOrientation="portrait"` (`PortraitOnlyManifestTest`). Android 16 ignores the lock on large screens (smallest width 600 dp or more), and split screen still gives short or wide windows; those get the phone layout as it is (the short-window Check and accent tests stay).
   status: deferred to v2.
+- source_spec: `_bmad-output/implementation-artifacts/spec-7-10-printable-qr-code-for-the-qr-barcode-check.md`
+  summary: The real print dialog's outcome decides whether a printed QR code is registered; only a phone can check it.
+  evidence: A new code is registered only when the adapter's `onFinish` sees the `PrintJob` as QUEUED, STARTED, BLOCKED or COMPLETED. Every automated test fakes the print service, and the adapter's `onLayout`/`onWrite` callbacks cannot be built in tests (package-private constructors). The page itself (`writeQrPdf`) is decoded with ML Kit on the managed device.
+  status: assigned to Story 7.12. On the phone: (a) Home "Re-register", then "Make a printable QR", then Replace, then cancel the print dialog: the old sheet still stops the alarm; (b) "Save as PDF" completes: the new code is registered and the saved PDF (and a 6 cm print) scans from 30 cm; (c) the print preview shows the code centred with "Scan this to stop your alarm." under it.

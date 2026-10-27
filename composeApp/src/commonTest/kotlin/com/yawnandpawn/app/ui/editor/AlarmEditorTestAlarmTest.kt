@@ -27,6 +27,7 @@ import com.yawnandpawn.app.testing.anAlarm
 import com.yawnandpawn.app.testing.checkConfigsOf
 import com.yawnandpawn.app.ui.checks.CheckType
 import com.yawnandpawn.app.ui.checks.Difficulty
+import com.yawnandpawn.app.ui.checksetup.CheckSetupIntent
 import com.yawnandpawn.app.ui.home.AlarmActions
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.Dispatchers
@@ -221,6 +222,7 @@ class AlarmEditorTestAlarmTest {
             val code = aRegisteredCode()
             viewModel.onIntent(EditorIntent.CheckToggled(CheckType.QrBarcode, selected = true))
             viewModel.onIntent(EditorIntent.CheckSetupClicked(CheckType.QrBarcode))
+            viewModel.onIntent(EditorIntent.CheckSetup(CheckSetupIntent.ScanCodeClicked))
             viewModel.onIntent(EditorIntent.CodeRegistered(code))
             viewModel.onIntent(EditorIntent.CheckToggled(CheckType.Math, selected = false))
 

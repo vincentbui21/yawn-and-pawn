@@ -185,6 +185,8 @@ dependencies {
     implementation(libs.camerax.lifecycle)
     implementation(libs.camerax.view)
     implementation(libs.mlkit.barcode.scanning)
+    // Story 7.10: the printable QR. ZXing core only makes the code (pure Java, no network); the system prints it.
+    implementation(libs.zxing.core)
     // Story 4.3 (AD-17): deferred non-alarm work (the price refresh). Started on demand after the first unlock only;
     // the default initializer is removed from the merged manifest.
     implementation(libs.workmanager.runtime)

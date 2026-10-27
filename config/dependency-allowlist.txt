@@ -350,6 +350,11 @@ org.jetbrains.kotlin:kotlin-bom
 org.jetbrains.kotlinx:atomicfu
 org.jetbrains.kotlinx:atomicfu-jvm
 
+# ZXing core 3.5.3 (Story 7.10, the printable QR for the QR/Barcode check). Reviewed 2026-10-27. Apache-2.0, pure Java
+# with no dependencies: it only turns the printable code's text into QR modules on the phone. It opens no network
+# connection and adds no permission or manifest entry. Scanning stays on ML Kit; printing is the system print service.
+com.google.zxing:core
+
 # WorkManager 2.11.0 (Story 4.3, AD-17: deferred non-alarm work; the first user is the price refresh). Reviewed
 # 2026-10-08, Apache-2.0 (AndroidX): the WorkManager runtime schedules jobs through JobScheduler and AlarmManager and
 # keeps them in its own on-device database (Room 2 over the androidx.sqlite already listed; distinct from the app's

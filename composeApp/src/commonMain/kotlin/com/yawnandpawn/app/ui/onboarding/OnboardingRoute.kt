@@ -37,6 +37,7 @@ import com.yawnandpawn.app.ui.editor.rememberLastNonNull
 import com.yawnandpawn.app.ui.reliability.ManufacturerGuidanceRoute
 import com.yawnandpawn.app.ui.resources.Res
 import com.yawnandpawn.app.ui.resources.check_try_it
+import com.yawnandpawn.app.ui.resources.qr_printable
 import com.yawnandpawn.app.ui.resources.reliability_manufacturer
 import org.jetbrains.compose.resources.stringResource
 import org.koin.compose.viewmodel.koinViewModel
@@ -155,12 +156,16 @@ private fun GuidanceOpening(content: @Composable () -> Unit) {
     CompositionLocalProvider(LocalViewModelStoreOwner provides owner) { content() }
 }
 
-/** The overlay's title, as its own screen shows it: the check's name, "Try it", or QR/Barcode for its registration. */
+/**
+ * The overlay's title, as its own screen shows it: the check's name, "Try it", QR/Barcode for its registration, or "Make
+ * a printable QR".
+ */
 @Composable
 private fun EditorUiState.overlayTitle(): String =
     when (pane) {
         EditorPane.TryIt -> stringResource(Res.string.check_try_it)
         EditorPane.ScanCode -> CheckType.QrBarcode.displayName()
+        EditorPane.PrintableQr -> stringResource(Res.string.qr_printable)
         else -> setupType?.displayName().orEmpty()
     }
 

@@ -4,6 +4,7 @@ import com.yawnandpawn.app.core.alarm.RequestCodes
 import com.yawnandpawn.app.core.alarm.orderedEntries
 import com.yawnandpawn.app.core.checks.CheckEntry
 import com.yawnandpawn.app.core.checks.qr.CodeFormat
+import com.yawnandpawn.app.core.checks.qr.PrintableCode
 import com.yawnandpawn.app.core.checks.qr.RegisteredCode
 import com.yawnandpawn.app.core.session.ScheduleTestAlarm
 import com.yawnandpawn.app.testing.AlarmUseCasesFixture
@@ -178,11 +179,11 @@ class AlarmEditorQrTest {
                     ?.codeSaved,
             )
             assertEquals(
-                false,
+                true,
                 viewModel.state.value
                     .checkSetupState()
                     ?.printable,
-                "the printable QR waits for Epic 7",
+                "Make a printable QR (Story 7.10)",
             )
 
             viewModel.onIntent(EditorIntent.CheckSetup(CheckSetupIntent.ScanCodeClicked))
@@ -227,6 +228,7 @@ class AlarmEditorQrTest {
             val viewModel = viewModel()
             viewModel.onIntent(EditorIntent.CheckToggled(CheckType.QrBarcode, selected = true))
             viewModel.onIntent(EditorIntent.CheckSetupClicked(CheckType.QrBarcode))
+            viewModel.onIntent(EditorIntent.CheckSetup(CheckSetupIntent.ScanCodeClicked))
             viewModel.onIntent(EditorIntent.CodeRegistered(code))
             viewModel.onIntent(EditorIntent.CheckSetup(CheckSetupIntent.TryItClicked))
             assertEquals(EditorPane.TryIt, viewModel.state.value.pane)
@@ -276,6 +278,7 @@ class AlarmEditorQrTest {
             val viewModel = viewModel()
             viewModel.onIntent(EditorIntent.CheckToggled(CheckType.QrBarcode, selected = true))
             viewModel.onIntent(EditorIntent.CheckSetupClicked(CheckType.QrBarcode))
+            viewModel.onIntent(EditorIntent.CheckSetup(CheckSetupIntent.ScanCodeClicked))
             viewModel.onIntent(EditorIntent.CodeRegistered(code))
             viewModel.onIntent(EditorIntent.CheckSetup(CheckSetupIntent.TryItClicked))
 
@@ -287,6 +290,83 @@ class AlarmEditorQrTest {
                         ?.content,
                 ).cameraAvailable,
             )
+        }
+
+    @Test
+    fun `Make a printable QR from Check setup opens the printable QR, Back returns, and a printed code is registered`() =
+        runTest(dispatcher) {
+            val viewModel = viewModel()
+            viewModel.onIntent(EditorIntent.CheckToggled(CheckType.QrBarcode, selected = true))
+            viewModel.onIntent(EditorIntent.CheckSetupClicked(CheckType.QrBarcode))
+
+            viewModel.onIntent(EditorIntent.CheckSetup(CheckSetupIntent.PrintableQrClicked))
+            assertEquals(EditorPane.PrintableQr, viewModel.state.value.pane)
+            viewModel.onIntent(EditorIntent.BackRequested)
+            assertEquals(EditorPane.CheckSetup, viewModel.state.value.pane, "Back returns to Check setup")
+            assertEquals(CheckType.QrBarcode, viewModel.state.value.setupType)
+
+            viewModel.onIntent(EditorIntent.CheckSetup(CheckSetupIntent.PrintableQrClicked))
+            val printed = PrintableCode.registered("pps:00000000-0000-4000-8000-000000000001")
+            viewModel.onIntent(EditorIntent.CodeRegistered(printed))
+
+            assertEquals(EditorPane.CheckSetup, viewModel.state.value.pane, "Code saved")
+            assertEquals(printed, viewModel.qr()?.code)
+            assertEquals(
+                true,
+                viewModel.state.value
+                    .checkSetupState()
+                    ?.codeSaved,
+            )
+            assertTrue(repository.current.isEmpty(), "saved with the alarm, not before")
+        }
+
+    @Test
+    fun `Make a printable QR from QR registration returns there on Back, and slides forward`() =
+        runTest(dispatcher) {
+            val viewModel = viewModel()
+            viewModel.onIntent(EditorIntent.CheckToggled(CheckType.QrBarcode, selected = true))
+            viewModel.onIntent(EditorIntent.CheckSetupClicked(CheckType.QrBarcode))
+            viewModel.onIntent(EditorIntent.CheckSetup(CheckSetupIntent.ScanCodeClicked))
+
+            viewModel.onIntent(EditorIntent.PrintableQrClicked)
+            assertEquals(EditorPane.PrintableQr, viewModel.state.value.pane)
+            assertTrue(EditorPane.PrintableQr.isDeeperThan(EditorPane.ScanCode), "opening it slides forward")
+            assertFalse(EditorPane.ScanCode.isDeeperThan(EditorPane.PrintableQr), "Back slides back")
+            assertTrue(EditorPane.PrintableQr.isDeeperThan(EditorPane.CheckSetup))
+
+            viewModel.onIntent(EditorIntent.BackRequested)
+            assertEquals(EditorPane.ScanCode, viewModel.state.value.pane, "Back returns to QR registration")
+            viewModel.onIntent(EditorIntent.BackRequested)
+            assertEquals(EditorPane.CheckSetup, viewModel.state.value.pane)
+        }
+
+    @Test
+    fun `a code registered after leaving QR registration and the printable QR changes nothing (review)`() =
+        runTest(dispatcher) {
+            val viewModel = viewModel()
+            viewModel.onIntent(EditorIntent.CheckToggled(CheckType.QrBarcode, selected = true))
+            viewModel.onIntent(EditorIntent.CheckSetupClicked(CheckType.QrBarcode))
+            viewModel.onIntent(EditorIntent.CheckSetup(CheckSetupIntent.PrintableQrClicked))
+            viewModel.onIntent(EditorIntent.BackRequested)
+            viewModel.onIntent(EditorIntent.BackRequested)
+            assertEquals(EditorPane.WakeCheck, viewModel.state.value.pane)
+
+            // A print job that finishes late, after the user left the printable QR.
+            viewModel.onIntent(EditorIntent.CodeRegistered(PrintableCode.registered("pps:00000000-0000-4000-8000-000000000003")))
+
+            assertEquals(EditorPane.WakeCheck, viewModel.state.value.pane, "the pane does not jump")
+            assertEquals(null, viewModel.qr()?.code, "no code written")
+        }
+
+    @Test
+    fun `the printable QR opens only from Check setup or QR registration`() =
+        runTest(dispatcher) {
+            val viewModel = viewModel()
+            viewModel.onIntent(EditorIntent.CheckToggled(CheckType.QrBarcode, selected = true))
+
+            viewModel.onIntent(EditorIntent.PrintableQrClicked)
+
+            assertEquals(EditorPane.Main, viewModel.state.value.pane)
         }
 
     /** The alarm "a", stored with Math and QR/Barcode (its code registered 30 days ago), [enabled] or not. */
@@ -352,6 +432,28 @@ class AlarmEditorQrTest {
             assertEquals(clock.now(), storedQr().codeRegisteredAt, "a new code restarts the count")
             assertFalse(repository.current.single().enabled, "still disabled")
             assertEquals(emptyList(), scheduler.calls, "no arming")
+        }
+
+    @Test
+    fun `Re-register through the printable QR stores the printed code at once and closes`() =
+        runTest(dispatcher) {
+            storedWithCode()
+            val viewModel = viewModel(alarmId = "a", scanCode = true)
+            val effects = effectsOf(viewModel)
+            advanceUntilIdle()
+            viewModel.onIntent(EditorIntent.PrintableQrClicked)
+            assertEquals(EditorPane.PrintableQr, viewModel.state.value.pane)
+            viewModel.onIntent(EditorIntent.BackRequested)
+            assertEquals(EditorPane.ScanCode, viewModel.state.value.pane, "Back returns to QR registration first")
+            viewModel.onIntent(EditorIntent.PrintableQrClicked)
+            val printed = PrintableCode.registered("pps:00000000-0000-4000-8000-000000000002")
+
+            viewModel.onIntent(EditorIntent.CodeRegistered(printed))
+            advanceUntilIdle()
+
+            assertEquals(listOf<EditorEffect>(EditorEffect.Close), effects)
+            assertEquals(printed, storedQr().entry.code)
+            assertEquals(clock.now(), storedQr().codeRegisteredAt)
         }
 
     @Test

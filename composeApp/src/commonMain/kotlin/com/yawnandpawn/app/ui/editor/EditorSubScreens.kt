@@ -75,8 +75,8 @@ internal fun EditorSubScreen(
         onBack = { onIntent(EditorIntent.BackRequested) },
     ) {
         when (pane) {
-            // "Try it", QR registration and Recordings are full screens of their own (AlarmEditorScreen), never a sub-screen.
-            EditorPane.Main, EditorPane.TryIt, EditorPane.ScanCode, EditorPane.Recordings -> {
+            // "Try it", QR registration, Recordings and the printable QR are full screens of their own (AlarmEditorScreen).
+            EditorPane.Main, EditorPane.TryIt, EditorPane.ScanCode, EditorPane.Recordings, EditorPane.PrintableQr -> {
                 Unit
             }
 
@@ -124,8 +124,6 @@ internal fun EditorUiState.checkSetupState(): CheckSetupUiState? {
         count = chip.count,
         countRange = range,
         codeSaved = chip.code != null,
-        // The printable QR is Epic 7 (FR-PWK-13): hidden in the app until then.
-        printable = false,
         talkBackOn = full?.talkBackOn == true,
     )
 }
@@ -148,11 +146,25 @@ private class LastValue<T : Any> {
 
 private fun EditorPane.title(): StringResource =
     when (this) {
-        EditorPane.Main, EditorPane.Sound -> Res.string.editor_sound
-        EditorPane.Snooze -> Res.string.editor_snooze
-        EditorPane.WakeCheck, EditorPane.CheckSetup, EditorPane.TryIt, EditorPane.ScanCode -> Res.string.editor_wake_check
-        EditorPane.QuietTime -> Res.string.editor_quiet_time
-        EditorPane.Motivation, EditorPane.Recordings -> Res.string.editor_motivation
+        EditorPane.Main, EditorPane.Sound -> {
+            Res.string.editor_sound
+        }
+
+        EditorPane.Snooze -> {
+            Res.string.editor_snooze
+        }
+
+        EditorPane.WakeCheck, EditorPane.CheckSetup, EditorPane.TryIt, EditorPane.ScanCode, EditorPane.PrintableQr -> {
+            Res.string.editor_wake_check
+        }
+
+        EditorPane.QuietTime -> {
+            Res.string.editor_quiet_time
+        }
+
+        EditorPane.Motivation, EditorPane.Recordings -> {
+            Res.string.editor_motivation
+        }
     }
 
 /**

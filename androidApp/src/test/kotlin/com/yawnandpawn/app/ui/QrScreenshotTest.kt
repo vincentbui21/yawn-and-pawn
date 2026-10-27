@@ -3,15 +3,24 @@ package com.yawnandpawn.app.ui
 import androidx.compose.ui.test.assertHasClickAction
 import androidx.compose.ui.test.assertHeightIsAtLeast
 import androidx.compose.ui.test.assertIsDisplayed
+import androidx.compose.ui.test.assertIsEnabled
+import androidx.compose.ui.test.assertIsNotEnabled
 import androidx.compose.ui.test.assertWidthIsAtLeast
 import androidx.compose.ui.test.hasContentDescription
+import androidx.compose.ui.test.isDialog
 import androidx.compose.ui.test.junit4.v2.createEmptyComposeRule
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.onRoot
 import androidx.compose.ui.unit.dp
+import com.github.takahirom.roborazzi.ExperimentalRoborazziApi
 import com.github.takahirom.roborazzi.captureRoboImage
+import com.github.takahirom.roborazzi.captureScreenRoboImage
 import com.yawnandpawn.app.StopAppRule
+import com.yawnandpawn.app.android.qr.ZxingQrEncoder
 import com.yawnandpawn.app.screenshotOptions
+import com.yawnandpawn.app.testing.FakeLogger
+import com.yawnandpawn.app.ui.qr.PrintableQrScreen
+import com.yawnandpawn.app.ui.qr.PrintableQrUiState
 import com.yawnandpawn.app.ui.qr.QrRegistrationScreen
 import com.yawnandpawn.app.ui.qr.QrRegistrationUiState
 import com.yawnandpawn.app.ui.qr.QrScanStep
@@ -28,12 +37,14 @@ import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
 import org.robolectric.annotation.Config
 import org.robolectric.annotation.GraphicsMode
+import kotlin.test.assertNotNull
 
 /**
  * Story 3.10 screenshots, with the camera preview replaced by the placeholder surface (no feed is provided): the wake QR
  * check (scanning, a different code, camera unavailable) in Sunrise, and QR registration (scanning, a code found, camera
  * unavailable) in Light and Dark, at 100% and 200% font scale. Story 3.11 adds the watchdog's message with the fallback
- * link, and the link after 5 different codes.
+ * link, and the link after 5 different codes. Story 7.10 shows "Make a printable QR" on registration and adds the
+ * printable QR (with a real code) and its replace dialog in Light and Dark, at 100% and 200%.
  */
 @RunWith(RobolectricTestRunner::class)
 @GraphicsMode(GraphicsMode.Mode.NATIVE)
@@ -66,7 +77,12 @@ class QrScreenshotTest {
         mode: PpsThemeMode,
         state: QrRegistrationUiState,
         assertions: () -> Unit = {},
-    ) = withScreen(mode, content = { QrRegistrationScreen(state = state, onIntent = {}, printable = false) }) {
+    ) = withScreen(mode, content = { QrRegistrationScreen(state = state, onIntent = {}) }) {
+        composeRule
+            .onNodeWithText("Make a printable QR")
+            .assertExists()
+            .assertHasClickAction()
+            .assertHeightIsAtLeast(48.dp)
         composeRule.onRoot().captureRoboImage("src/test/screenshots/$name.png", roborazziOptions = screenshotOptions)
         assertions()
     }
@@ -208,4 +224,67 @@ class QrScreenshotTest {
         registration("qr_registration_camera_unavailable_light_font200", PpsThemeMode.Light, none)
         registration("qr_registration_camera_unavailable_dark_font200", PpsThemeMode.Dark, none)
     }
+
+    // Story 7.10: the printable QR with a real code, and the replace dialog (its own window, so the whole screen).
+    private val realCode = assertNotNull(ZxingQrEncoder(FakeLogger()).encode("pps:00000000-0000-4000-8000-000000000001"))
+    private val printableState = PrintableQrUiState(code = realCode)
+    private val replaceState = PrintableQrUiState(codeSaved = true, showReplaceDialog = true, code = realCode)
+
+    @OptIn(ExperimentalRoborazziApi::class)
+    private fun printable(
+        name: String,
+        mode: PpsThemeMode,
+        state: PrintableQrUiState,
+    ) = withScreen(mode, content = { PrintableQrScreen(state = state, onIntent = {}) }) {
+        composeRule.onNode(hasContentDescription("QR code for your alarm")).assertIsDisplayed()
+        composeRule.onNodeWithText("Scan this to stop your alarm.").assertExists()
+        val path = "src/test/screenshots/$name.png"
+        if (state.showReplaceDialog) {
+            composeRule.onNode(isDialog()).assertExists()
+            composeRule.onNodeWithText("Replace your QR code? The old one stops working.").assertExists()
+            composeRule.onNodeWithText("Replace").assertHasClickAction().assertHeightIsAtLeast(48.dp)
+            composeRule.onNodeWithText("Keep it").assertHasClickAction().assertHeightIsAtLeast(48.dp)
+            captureScreenRoboImage(path, roborazziOptions = screenshotOptions)
+        } else {
+            composeRule
+                .onNodeWithText("Print or save as PDF")
+                .assertIsEnabled()
+                .assertHeightIsAtLeast(48.dp)
+            composeRule.onNode(hasContentDescription("Back")).assertHeightIsAtLeast(48.dp).assertWidthIsAtLeast(48.dp)
+            composeRule.onRoot().captureRoboImage(path, roborazziOptions = screenshotOptions)
+        }
+    }
+
+    @Test
+    fun `printable QR, light and dark`() {
+        printable("qr_printable_light", PpsThemeMode.Light, printableState)
+        printable("qr_printable_dark", PpsThemeMode.Dark, printableState)
+    }
+
+    @Test
+    @Config(fontScale = 2.0f)
+    fun `printable QR at 200 percent`() {
+        printable("qr_printable_light_font200", PpsThemeMode.Light, printableState)
+        printable("qr_printable_dark_font200", PpsThemeMode.Dark, printableState)
+    }
+
+    @Test
+    fun `printable QR replacing a saved code, light and dark`() {
+        printable("qr_printable_replace_light", PpsThemeMode.Light, replaceState)
+        printable("qr_printable_replace_dark", PpsThemeMode.Dark, replaceState)
+    }
+
+    @Test
+    @Config(fontScale = 2.0f)
+    fun `printable QR replacing a saved code at 200 percent`() {
+        printable("qr_printable_replace_light_font200", PpsThemeMode.Light, replaceState)
+        printable("qr_printable_replace_dark_font200", PpsThemeMode.Dark, replaceState)
+    }
+
+    @Test
+    fun `printable QR without a code disables Print`() =
+        withScreen(PpsThemeMode.Light, content = { PrintableQrScreen(state = PrintableQrUiState(), onIntent = {}) }) {
+            composeRule.onNodeWithText("Print or save as PDF").assertIsNotEnabled()
+            composeRule.onNode(hasContentDescription("QR code for your alarm")).assertDoesNotExist()
+        }
 }

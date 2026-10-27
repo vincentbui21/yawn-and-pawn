@@ -14,6 +14,7 @@ import com.yawnandpawn.app.core.id.IdGenerator
 import com.yawnandpawn.app.core.id.UuidV4IdGenerator
 import com.yawnandpawn.app.core.log.Logger
 import com.yawnandpawn.app.core.onboarding.OnboardingRepository
+import com.yawnandpawn.app.core.recording.RecordingRepository
 import com.yawnandpawn.app.core.reliability.ReliabilityRecords
 import com.yawnandpawn.app.core.session.ActiveSessionStore
 import com.yawnandpawn.app.core.stats.CheckRegistrations
@@ -28,6 +29,7 @@ import com.yawnandpawn.app.data.alarm.RoomRequestCodeSequence
 import com.yawnandpawn.app.data.db.AppDatabase
 import com.yawnandpawn.app.data.db.RuntimeDatabase
 import com.yawnandpawn.app.data.history.RoomSessionHistoryRepository
+import com.yawnandpawn.app.data.recording.RoomRecordingRepository
 import com.yawnandpawn.app.data.session.RoomActiveSessionStore
 import com.yawnandpawn.app.data.session.RoomPurchaseIntentStore
 import com.yawnandpawn.app.data.settings.ConsentDataStore
@@ -73,6 +75,8 @@ class DataModuleTest {
             assertIs<RoomSessionHistoryRepository>(koin.get<SessionHistoryRepository>())
             assertIs<RoomSessionHistoryRepository>(koin.get<FallbackHistory>())
             assertIs<StoredCheckRegistrations>(koin.get<CheckRegistrations>())
+            // Story 7.1: the recordings over the same app database.
+            assertIs<RoomRecordingRepository>(koin.get<RecordingRepository>())
             assertSame(database, koin.get<AppDatabase>())
         } finally {
             database.close()

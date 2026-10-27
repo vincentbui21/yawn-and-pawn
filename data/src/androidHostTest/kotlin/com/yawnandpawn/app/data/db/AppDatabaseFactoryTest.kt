@@ -23,15 +23,19 @@ import com.yawnandpawn.app.core.config.SettingValue
 import com.yawnandpawn.app.core.error.Outcome
 import com.yawnandpawn.app.core.history.SessionHistoryRow
 import com.yawnandpawn.app.core.history.SessionMergeRow
+import com.yawnandpawn.app.core.recording.RecordedTake
 import com.yawnandpawn.app.data.alarm.RoomAlarmRepository
 import com.yawnandpawn.app.data.alarm.RoomCheckConfigRepository
 import com.yawnandpawn.app.data.alarm.RoomRequestCodeSequence
 import com.yawnandpawn.app.data.billing.RoomPurchaseRecordRepository
 import com.yawnandpawn.app.data.config.RoomPendingChangeRepository
 import com.yawnandpawn.app.data.history.RoomSessionHistoryRepository
+import com.yawnandpawn.app.data.recording.RecordingFiles
+import com.yawnandpawn.app.data.recording.RoomRecordingRepository
 import com.yawnandpawn.app.testing.AlarmUseCasesFixture
 import com.yawnandpawn.app.testing.FakeLogger
 import com.yawnandpawn.app.testing.aPurchaseRecord
+import com.yawnandpawn.app.testing.aRecording
 import com.yawnandpawn.app.testing.aRegisteredCode
 import com.yawnandpawn.app.testing.aSessionHistoryRow
 import com.yawnandpawn.app.testing.anAlarm
@@ -480,16 +484,90 @@ class AppDatabaseFactoryTest {
                 assertEquals(Outcome.Success(Unit), records.putRecord(record))
                 assertEquals(Outcome.Success(listOf(record)), records.all())
             }
-            assertEquals(10, userVersion())
+            assertEquals(AppDatabase.SCHEMA_VERSION, userVersion())
+        }
+
+    @Test
+    fun `the exported version 11 schema adds the recordings with their name, length and file name, and no audio (Story 7-1)`() {
+        assertTrue(schema(11).exists(), "exported schema missing: ${schema(11).absolutePath}")
+        val json = schema(11).readText()
+
+        assertTrue(json.contains("\"version\": 11"), "schema version 11")
+        assertEquals(
+            listOf(
+                "alarm",
+                "request_code_sequence",
+                "session_history",
+                "session_merge",
+                "check_config",
+                "pending_change",
+                "commitment_event",
+                "purchase_record",
+                "recording",
+            ),
+            tableNames(json),
+        )
+        val recordings = json.substringAfter("\"tableName\": \"recording\"")
+        assertTrue(
+            recordings.contains(
+                "(`id` TEXT NOT NULL, `name` TEXT NOT NULL, `duration_ms` INTEGER NOT NULL, `file_name` TEXT NOT NULL, " +
+                    "`created_at` INTEGER NOT NULL, PRIMARY KEY(`id`))",
+            ),
+            "the same SQL as MIGRATION_10_11",
+        )
+        assertFalse(recordings.contains("BLOB"), "no audio in app.db")
+        assertFalse(recordings.contains("REFERENCES"), "a message is not tied to an alarm")
+    }
+
+    @Test
+    fun `migrating a v10 database keeps alarms, history and purchase records and adds empty, working recordings`() =
+        runTest {
+            val alarm = anAlarm(id = "a", requestCode = 1000)
+            val row = aSessionHistoryRow(sessionId = "session-1", alarmId = "a")
+            createDatabase(
+                version = 10,
+                alarms = listOf(alarm),
+                requestCodeMark = 1000,
+                history = listOf(row),
+                sql =
+                    listOf(
+                        "INSERT INTO purchase_record (token_hash, order_id, product_id, session_id, alarm_id, snooze_number, " +
+                            "price_micros, currency, price_source, purchased_at, status, consumed_at, updated_at) VALUES " +
+                            "('hash', 'GPA.1', 'snooze_tier_01', 'session-1', 'a', 1, 990000, 'USD', 'intent', 1, 'consumed', 2, 2)",
+                    ),
+            )
+
+            withDatabase { database ->
+                assertEquals(Outcome.Success(listOf(alarm)), RoomAlarmRepository(database.alarmDao()).listAll())
+                assertEquals(Outcome.Success(row), RoomSessionHistoryRepository(database.sessionHistoryDao()).find("session-1"))
+                assertEquals(1, database.purchaseRecordDao().count())
+                assertEquals(0, database.recordingDao().count())
+
+                val folder = File(context.filesDir, "recordings").apply { mkdirs() }
+                File(folder, "take-t1.m4a.tmp").writeText("audio")
+                val recordings = RoomRecordingRepository(database.recordingDao(), RecordingFiles { folder })
+                val recording = aRecording(id = "r1")
+                assertEquals(Outcome.Success(Unit), recordings.save(recording, RecordedTake("t1", recording.durationMs)))
+                assertEquals(Outcome.Success(recording), recordings.get("r1"))
+            }
+            assertEquals(AppDatabase.SCHEMA_VERSION, userVersion())
+        }
+
+    @Test
+    fun `a new database is created at version 11 with an empty recording table`() =
+        runTest {
+            withDatabase { database -> assertEquals(0, database.recordingDao().count()) }
+
+            assertEquals(11, userVersion())
         }
 
     @Test
     fun `the migrations cover every version step and nothing is destructive`() {
         assertEquals(
-            listOf(1 to 2, 2 to 3, 3 to 4, 4 to 5, 5 to 6, 6 to 7, 7 to 8, 8 to 9, 9 to 10),
+            listOf(1 to 2, 2 to 3, 3 to 4, 4 to 5, 5 to 6, 6 to 7, 7 to 8, 8 to 9, 9 to 10, 10 to 11),
             APP_DATABASE_MIGRATIONS.map { it.startVersion to it.endVersion },
         )
-        assertEquals(10, AppDatabase.SCHEMA_VERSION)
+        assertEquals(11, AppDatabase.SCHEMA_VERSION)
     }
 
     @Test

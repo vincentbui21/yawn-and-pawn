@@ -55,8 +55,9 @@ Found by comparing `docs/site/privacy.md` with the code on `main` and Google's o
    - **Fixed:** "With usage stats on, a report also lists the usage stats events from just before the crash."
 5. **"Approximate location ... that Google ... doesn't keep."**
    - **Fixed:** "Google also works out an approximate location (country, region and city) from the network address and keeps it with the stats. Google doesn't keep the network address itself."
-6. **Features described that this build doesn't have** (House Hunt photos, motivation recordings, the microphone, custom sound files; Epic 7, not built).
+6. **Features described that this build doesn't have** (House Hunt photos, custom sound files; Epic 7, not built; House Hunt moved to v2). Motivation recordings and the microphone are built from Story 7.1 (see the update below).
    - **Fixed (owner decision 2026-10-26: remove them):** the policy no longer mentions them. "Camera and microphone" (a heading `checkSitePages` requires) now says the camera is used only for QR/Barcode and that this version never uses or asks for the microphone. Add them back when Epic 7 ships.
+   - **Updated 2026-10-27 (Story 7.1):** the policy describes recorded messages and the microphone again. Recordings stay on the phone only and are never uploaded; their audio is not backed up, only their names and lengths are, in the backed-up `app.db` (a restored phone lists them as missing). The `RECORD_AUDIO` permission is declared (with the microphone feature optional) and is asked only on the first record tap, from Story 7.2. **OWNER: re-check the Data safety answers in 3.6** (see "Voice recordings" there).
    - **Code follow-up (not done here):** the reliability checklist still has `reliability_camera_reason` ("Needed for your QR/Barcode and House Hunt checks.") and a Microphone item (`reliability_microphone`, `reliability_microphone_reason`, `ChecklistItem.Microphone`). Check in Story 5.13 that the Microphone row never shows, and drop "House Hunt" from the camera reason until Epic 7.
 7. **Data deletion route.**
    - **Fixed:** "Deleting your data" now says: email the support address to delete crash reports and usage stats already sent; Google deletes the rest by itself (crash reports after 90 days, usage stats linked to an analytics id after 2 months). Section 3.6 question 4 is answered **Yes** to match.
@@ -129,7 +130,7 @@ No account or login. Create an alarm on the Alarms tab. In the alarm editor, "Te
 
 ### 3.6 Data safety
 
-Data safety > **Start** (or Manage). The answers below cover the release build with `GOOGLE_SERVICES_JSON_RELEASE` set (Crashlytics and Analytics present). Where Google says "collected", it means sent off the phone; data kept only on the phone (alarms, history, purchase records, the QR fingerprint, settings) is not collected.
+Data safety > **Start** (or Manage). The answers below cover the release build with `GOOGLE_SERVICES_JSON_RELEASE` set (Crashlytics and Analytics present). Where Google says "collected", it means sent off the phone; data kept only on the phone (alarms, history, purchase records, the QR fingerprint, settings, recorded messages) is not collected.
 
 **Step 1, data collection and security**
 
@@ -170,8 +171,9 @@ Leave everything else unticked: Personal info (name, email, user ids, address, p
 
 **Not declared, with the reason (OWNER DECIDES to confirm):**
 
-- **Android Auto Backup** of alarms, history, settings and purchase records goes to the user's own Google account; the developer can't read it. Recommendation: don't declare it as collection. Story 8.3 item 6 asks for Google's current guidance with a citation; check the Data safety help page's backup FAQ before production.
+- **Android Auto Backup** of alarms, history, settings and purchase records (and the names and lengths of recorded messages, never their audio) goes to the user's own Google account; the developer can't read it. Recommendation: don't declare it as collection. Story 8.3 item 6 asks for Google's current guidance with a citation; check the Data safety help page's backup FAQ before production.
 - **Camera frames** for QR/Barcode are read on the phone by the bundled ML Kit model and never sent. On-device only, so not collected.
+- **Voice recordings** (Story 7.1, motivation messages): recorded with the microphone only when the user taps record, kept only in the app's private storage, never uploaded, logged or sent to Crashlytics or Analytics, and the audio is not in Auto Backup (only each message's name and length are, in `app.db`). By Play's definition, data that never leaves the device is not "collected", so the recommendation is to leave Audio > Voice or sound recordings unticked. **OWNER DECIDES:** re-check this answer (Audio > Voice or sound recordings: collected?) against Google's current Data safety help before the next submission.
 - **Install id and session id** given to Play Billing as obfuscated account and profile ids: random, part of the payment that Google Play handles; covered by the purchase history entry.
 
 - [ ] Preview the summary, then **Submit**. Take a screenshot of the listing preview's Data safety section for the Story 5.14 file.

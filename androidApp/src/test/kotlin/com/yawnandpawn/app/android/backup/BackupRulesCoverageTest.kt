@@ -24,6 +24,8 @@ import com.yawnandpawn.app.core.config.SettingValue
 import com.yawnandpawn.app.core.error.Outcome
 import com.yawnandpawn.app.core.history.MissedNoteDismissals
 import com.yawnandpawn.app.core.history.SessionHistoryRepository
+import com.yawnandpawn.app.core.recording.RecordedTake
+import com.yawnandpawn.app.core.recording.RecordingRepository
 import com.yawnandpawn.app.core.reliability.ReliabilityRecords
 import com.yawnandpawn.app.core.session.ScheduleTestAlarm
 import com.yawnandpawn.app.core.session.SessionEvent
@@ -35,6 +37,7 @@ import com.yawnandpawn.app.core.telemetry.AnalyticsConsent
 import com.yawnandpawn.app.core.telemetry.ConsentStore
 import com.yawnandpawn.app.data.db.appDatabaseFile
 import com.yawnandpawn.app.data.db.runtimeDatabaseFile
+import com.yawnandpawn.app.data.recording.RecordingFiles
 import com.yawnandpawn.app.data.settings.ConsentDataStore
 import com.yawnandpawn.app.data.settings.InstallIdDataStore
 import com.yawnandpawn.app.data.settings.PriceCacheDataStore
@@ -42,6 +45,7 @@ import com.yawnandpawn.app.data.settings.ReliabilityDataStore
 import com.yawnandpawn.app.data.settings.SettingsDataStore
 import com.yawnandpawn.app.stopApp
 import com.yawnandpawn.app.testing.aPriceSnapshot
+import com.yawnandpawn.app.testing.aRecording
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.runBlocking
 import kotlinx.datetime.LocalTime
@@ -123,6 +127,12 @@ class BackupRulesCoverageTest {
         assertIs<Outcome.Success<*>>(runBlocking { koin.get<ReliabilityRecords>().lockedTestPassed(dismissedAt) })
         // The usage stats choice (Story 5.6), in its own DataStore, never backed up.
         assertIs<Outcome.Success<*>>(runBlocking { koin.get<ConsentStore>().setConsent(true) })
+        // A recorded message (Story 7.1): its row in app.db, its audio in credential-protected recordings/ (never backed up).
+        val recordingFiles = koin.get<RecordingFiles>()
+        recordingFiles.folder().mkdirs()
+        recordingFiles.takeFile("take-1").writeText("audio")
+        val take = RecordedTake("take-1", 9_000)
+        assertIs<Outcome.Success<*>>(runBlocking { koin.get<RecordingRepository>().save(aRecording(id = "recording-1"), take) })
         // Close the databases and the DataStore, as when the process ends, so their files are final.
         stopApp()
 
@@ -137,6 +147,7 @@ class BackupRulesCoverageTest {
             PriceCacheDataStore.priceCacheFile(app.app),
             ReliabilityDataStore.reliabilityFile(app.app),
             ConsentDataStore.consentFile(app.app),
+            File(app.app.filesDir, "recordings/recording-1.m4a"),
         ).forEach { expected ->
             assertTrue(files.any { it.first == expected.canonicalFile }, "the morning created $expected; found $names")
         }

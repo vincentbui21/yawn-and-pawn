@@ -214,6 +214,9 @@ fun DomainError.diagnostic(): String =
         is DomainError.InvalidFee -> "invalid fee: tier $baseFeeTier, snooze $snoozeNumber"
         is DomainError.ProductDetailsFailed -> "product details failed (${persistence()}): $cause"
         is DomainError.BackgroundWorkFailure -> "background work failure: $cause"
+        DomainError.RecordingTooShort -> "recording too short"
+        DomainError.MicrophoneUnavailable -> "microphone unavailable"
+        is DomainError.RecorderFailure -> "recorder failure: $cause"
     }
 
 /** "transient" or "permanent": kept out of [diagnostic], which lists every error kind. */

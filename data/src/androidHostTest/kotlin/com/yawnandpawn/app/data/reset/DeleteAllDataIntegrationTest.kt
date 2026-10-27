@@ -31,6 +31,7 @@ import com.yawnandpawn.app.core.config.PendingChangeRepository
 import com.yawnandpawn.app.core.config.SettingValue
 import com.yawnandpawn.app.core.config.SettingsSnapshot
 import com.yawnandpawn.app.core.config.SettingsSnapshotCache
+import com.yawnandpawn.app.core.error.DomainError
 import com.yawnandpawn.app.core.error.Outcome
 import com.yawnandpawn.app.core.history.MissedNoteDismissals
 import com.yawnandpawn.app.core.history.SessionHistoryRepository
@@ -38,6 +39,8 @@ import com.yawnandpawn.app.core.history.SessionMergeRow
 import com.yawnandpawn.app.core.id.IdGenerator
 import com.yawnandpawn.app.core.id.UuidV4IdGenerator
 import com.yawnandpawn.app.core.log.Logger
+import com.yawnandpawn.app.core.recording.RecordedTake
+import com.yawnandpawn.app.core.recording.RecordingRepository
 import com.yawnandpawn.app.core.reliability.ChecklistRow
 import com.yawnandpawn.app.core.reliability.ReliabilityRecords
 import com.yawnandpawn.app.core.reliability.StoredReliability
@@ -55,6 +58,9 @@ import com.yawnandpawn.app.core.telemetry.ConsentStore
 import com.yawnandpawn.app.core.time.Clock
 import com.yawnandpawn.app.data.config.DataStoreGlobalSettings
 import com.yawnandpawn.app.data.dataModule
+import com.yawnandpawn.app.data.db.AppDatabase
+import com.yawnandpawn.app.data.db.RuntimeDatabase
+import com.yawnandpawn.app.data.recording.RecordingFiles
 import com.yawnandpawn.app.data.settings.SettingsDataStore
 import com.yawnandpawn.app.testing.FakeAlarmScheduler
 import com.yawnandpawn.app.testing.FakeAnalyticsDataReset
@@ -67,6 +73,7 @@ import com.yawnandpawn.app.testing.aGrant
 import com.yawnandpawn.app.testing.aPriceSnapshot
 import com.yawnandpawn.app.testing.aPurchaseIntent
 import com.yawnandpawn.app.testing.aPurchaseRecord
+import com.yawnandpawn.app.testing.aRecording
 import com.yawnandpawn.app.testing.aSession
 import com.yawnandpawn.app.testing.aSessionHistoryRow
 import com.yawnandpawn.app.testing.anAlarm
@@ -81,6 +88,7 @@ import org.koin.core.Koin
 import org.koin.dsl.koinApplication
 import org.koin.dsl.module
 import org.robolectric.RobolectricTestRunner
+import java.io.File
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
 import kotlin.test.assertIs
@@ -184,6 +192,36 @@ class DeleteAllDataIntegrationTest {
             assertEquals(Outcome.Success(Unit), marker.remove(), "nothing there is not an error")
         }
 
+    @Test
+    fun `before the first unlock the alarm data is not deleted, so the recordings are never orphaned`() =
+        runBlocking {
+            val recordingFiles = koin.get<RecordingFiles>()
+            recordingFiles.folder().mkdirs()
+            recordingFiles.takeFile("take-1").writeText("audio")
+            val recordings = koin.get<RecordingRepository>()
+            assertIs<Outcome.Success<*>>(recordings.save(aRecording(id = "recording-1"), RecordedTake("take-1", 9_000)))
+            val locked = RecordingFiles(isUnlocked = { false }) { recordingFiles.folder() }
+            val eraser =
+                AndroidLocalDataEraser(
+                    alarmData = koin.get<AppDatabase>().alarmDataDao(),
+                    intents = koin.get<RuntimeDatabase>().purchaseIntentDao(),
+                    settings = koin.get(),
+                    settingsCache = koin.get(),
+                    prices = koin.get(),
+                    reliability = koin.get(),
+                    consent = koin.get(),
+                    recordings = locked,
+                )
+
+            assertEquals(
+                Outcome.Failure(DomainError.StorageFailure("credential storage locked")),
+                eraser.deleteAlarmData(),
+                "a failure, so the pending deletion runs again after the unlock",
+            )
+            assertEquals(listOf("recording-1"), recordings.observeAll().first().map { it.id }, "the row is kept")
+            assertTrue(File(recordingFiles.folder(), "recording-1.m4a").isFile, "the audio is kept")
+        }
+
     private fun deleteAllData(): DeleteAllData =
         DeleteAllData(
             lock = AlarmWriteLock(),
@@ -235,6 +273,13 @@ class DeleteAllDataIntegrationTest {
         val history = koin.get<SessionHistoryRepository>()
         assertIs<Outcome.Success<*>>(history.upsert(aSessionHistoryRow(sessionId = SESSION, alarmId = ALARM_1)))
         assertIs<Outcome.Success<*>>(history.recordMerge(SessionMergeRow(SESSION, ALARM_2, NOW, NOW)))
+        // A recorded message (Story 7.1): its row in app.db and its audio file in credential-protected recordings/.
+        val recordingFiles = koin.get<RecordingFiles>()
+        recordingFiles.folder().mkdirs()
+        recordingFiles.takeFile("take-1").writeText("audio")
+        val take = RecordedTake("take-1", 9_000)
+        assertIs<Outcome.Success<*>>(koin.get<RecordingRepository>().save(aRecording(id = "recording-1"), take))
+        assertTrue(File(recordingFiles.folder(), "recording-1.m4a").isFile)
         // Purchase records: settled ones always, owed ones when asked.
         val records = koin.get<PurchaseRecordRepository>()
         val settled =
@@ -324,6 +369,8 @@ class DeleteAllDataIntegrationTest {
         assertEquals(Outcome.Success(emptyList<CheckConfig>()), koin.get<CheckConfigRepository>().forAlarm(ALARM_1))
         assertEquals(Outcome.Success(emptyList<PendingChange>()), koin.get<PendingChangeRepository>().all())
         assertEquals(Outcome.Success(emptyList<CommitmentEvent>()), koin.get<CommitmentEventRepository>().all())
+        assertEquals(emptyList(), koin.get<RecordingRepository>().observeAll().first(), "no recording row (Story 7.1)")
+        assertFalse(koin.get<RecordingFiles>().folder().exists(), "no recording file (Story 7.1)")
         val history = koin.get<SessionHistoryRepository>()
         assertNull(assertIs<Outcome.Success<*>>(history.find(SESSION)).value)
         assertEquals(Outcome.Success(emptyList<SessionMergeRow>()), history.merges(SESSION))

@@ -18,6 +18,7 @@ import com.yawnandpawn.app.core.config.SettingsSnapshotCache
 import com.yawnandpawn.app.core.history.MissedNoteDismissals
 import com.yawnandpawn.app.core.history.SessionHistoryRepository
 import com.yawnandpawn.app.core.onboarding.OnboardingRepository
+import com.yawnandpawn.app.core.recording.RecordingRepository
 import com.yawnandpawn.app.core.reliability.ReliabilityRecords
 import com.yawnandpawn.app.core.reset.DeletionMarker
 import com.yawnandpawn.app.core.reset.LocalDataEraser
@@ -44,6 +45,8 @@ import com.yawnandpawn.app.data.db.RuntimeDatabase
 import com.yawnandpawn.app.data.db.buildAppDatabase
 import com.yawnandpawn.app.data.db.buildRuntimeDatabase
 import com.yawnandpawn.app.data.history.RoomSessionHistoryRepository
+import com.yawnandpawn.app.data.recording.RecordingFiles
+import com.yawnandpawn.app.data.recording.RoomRecordingRepository
 import com.yawnandpawn.app.data.reset.AndroidLocalDataEraser
 import com.yawnandpawn.app.data.reset.FileDeletionMarker
 import com.yawnandpawn.app.data.session.RoomActiveSessionStore
@@ -142,6 +145,11 @@ val dataModule =
         // there) and the purchase records in app.db (backed up, keyed by token hash; written only by PurchaseLedger).
         single<GrantLedgerStore> { RoomGrantLedgerStore(get<RuntimeDatabase>().grantLedgerDao()) }
         single<PurchaseRecordRepository> { RoomPurchaseRecordRepository(get<AppDatabase>().purchaseRecordDao(), get()) }
+        // Story 7.1: the motivation messages, rows in app.db (backed up) and audio in credential-protected filesDir/recordings
+        // (never backed up; read lazily, so nothing touches it before the first unlock).
+        single { RecordingFiles.of(get<Context>()) }
+        single { get<AppDatabase>().recordingDao() }
+        single<RecordingRepository> { RoomRecordingRepository(get(), get()) }
         // The cached Play prices (Story 4.3): their own device-protected DataStore, never backed up; released like the others.
         single { PriceCacheDataStore(get<Context>()) } withOptions { onClose { it?.close() } }
         single<PriceCacheStore> { DataStorePriceCacheStore(get<PriceCacheDataStore>().store, get()) }
@@ -156,6 +164,7 @@ val dataModule =
                 prices = get(),
                 reliability = get(),
                 consent = get(),
+                recordings = get(),
             )
         }
     }

@@ -126,7 +126,7 @@ development_status:
   5-10-onboarding-part-1-mission-alarm-behaviour-disclosure-and-bas: review  # Epic 5 auto-run, fast mode
   5-11-onboarding-part-2-first-alarm-checks-checklist-and-usage-sta: review  # Epic 5 auto-run, fast mode
   5-12-onboarding-test-alarm-on-a-locked-screen: done  # Epic 5 auto-run, fast mode; merged as PR #79
-  5-13-epic-5-device-verification-checklist: backlog
+  5-13-epic-5-device-verification-checklist: in-progress  # sessions 2026-10-26 and 2026-10-27 on Play 0.1.4: bugs fixed (#93 #94 #95) and re-tested; DND 17-18 and Firebase 28-29 left
   5-14-start-the-14-day-closed-test-owner-task: backlog
   epic-5-retrospective: optional
 

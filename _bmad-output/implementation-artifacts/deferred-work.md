@@ -261,7 +261,7 @@
 - source_spec: `_bmad-output/implementation-artifacts/spec-1-11-the-complete-wake-session-state-machine-in-core.md`
   summary: (follow-up of the check-run consistency item) The fallback now has its own seeds, reset failed attempts and a `StartCheckStep` (Story 3.9). The policy input is `FallbackRequest(type, reason)`, open for the image matcher's error.
   evidence: Story 3.9 settles the fallback part; the matcher-error input stays for Story 7.7.
-  status: matcher error assigned to Story 7.7.
+  status: matcher error assigned to Story 7.7; House Hunt (7.7 to 7.9) moved to v2 by owner decision 2026-10-27 (docs/spikes/S3.md), so this stays open for v2.
 - source_spec: `_bmad-output/implementation-artifacts/spec-3-13-suggest-re-registering-after-3-fallbacks-in-7-days.md`
   summary: Home's re-register banner (Story 3.13) is built and tested, but it stays hidden in production until Story 3.10 provides the QR/Barcode type, its stored registration and its registration screen.
   evidence: |

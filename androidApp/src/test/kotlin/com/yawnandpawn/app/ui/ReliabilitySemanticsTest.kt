@@ -137,7 +137,7 @@ class ReliabilitySemanticsTest {
     @Test
     fun `the camera and API 31 exact alarm rows read like the others`() {
         show(ReliabilitySamples.cameraVisible) {
-            row("Camera", "Needed for your QR/Barcode and House Hunt checks.").performScrollTo().assertHeightIsAtLeast(64.dp)
+            row("Camera", "Needed for your QR/Barcode check.").performScrollTo().assertHeightIsAtLeast(64.dp)
             row("Manufacturer settings", "Your phone may stop apps in the background.").assert(hasText("OK"))
         }
         show(ReliabilitySamples.api31Exact) {

@@ -20,7 +20,7 @@ git tag v0.1.0
 git push origin v0.1.0
 ```
 
-`.github/workflows/release.yml` checks that the tag is `vX.Y.Z` (minor and patch 0-99, major at most 20999, not v0.0.0), runs `qualityGate`, builds a signed release AAB with `versionName` X.Y.Z (versionCode X*10000 + Y*100 + Z) and uploads it to the Play **internal** track. The signed AAB and R8 `mapping.txt` are kept as a workflow artifact for 90 days. If any secret below is missing, the upload job is skipped with a notice and the run stays green.
+`.github/workflows/release.yml` checks that the tag is `vX.Y.Z` (minor and patch 0-99, major at most 20999, not v0.0.0), runs `qualityGate`, builds a signed release AAB with `versionName` X.Y.Z (versionCode X*10000 + Y*100 + Z) and uploads it to the Play **internal** track. The signed AAB and R8 `mapping.txt` are kept as a workflow artifact for 90 days. If any of the first five secrets below is missing, the upload job is skipped with a notice and the run stays green.
 
 **The very first upload to a new Play app must be done by hand in Play Console** (Story 1.4). Play only accepts API uploads after the app exists and has one release. If Play rejects the upload with "Only releases with status draft may be created on draft app", change `status: completed` to `status: draft` in `release.yml` until the app has passed its first review.
 
@@ -35,6 +35,7 @@ Add them in GitHub: repository → **Settings** → **Secrets and variables** �
 | `UPLOAD_KEY_ALIAS` | The key alias inside the keystore |
 | `UPLOAD_KEY_PASSWORD` | The key password |
 | `PLAY_SERVICE_ACCOUNT_JSON` | The full JSON of a Google Cloud service account with release access to the app in Play Console |
+| `GOOGLE_SERVICES_JSON_RELEASE` | The full `google-services.json` of the production Firebase project. Optional: without it the release still uploads (with a warning) but has no Crashlytics and no usage stats |
 
 Base64-encode the keystore in PowerShell and paste the result into the secret:
 

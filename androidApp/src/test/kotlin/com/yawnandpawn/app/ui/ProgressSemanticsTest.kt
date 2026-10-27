@@ -113,6 +113,16 @@ class ProgressSemanticsTest {
         }
 
     @Test
+    fun `today on the ring reads its date and today until a morning has finished, never no alarm`() =
+        show(ProgressSamples.empty) {
+            // The ring's dot and the calendar's day: an alarm may still ring today.
+            composeRule.onAllNodes(hasContentDescription("Wednesday 3, today")).assertCountEquals(2)
+            composeRule.onAllNodes(hasContentDescription("Wednesday 3, no alarm, today")).assertCountEquals(0)
+            // A day before today with no session still says so.
+            composeRule.onAllNodes(hasContentDescription("Monday 1, no alarm")).assertCountEquals(2)
+        }
+
+    @Test
     fun `every control is labelled, has a role and is at least 48 dp, the chip and the link included`() =
         show(ProgressSamples.dotChip) {
             composeRule.assertControlsLabelledWithRoles()

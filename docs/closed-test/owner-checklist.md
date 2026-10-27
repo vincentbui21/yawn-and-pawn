@@ -14,7 +14,7 @@ Related files: `docs/closed-test.md` (the tester guide), `feedback-form.md` (the
 
 - [ ] **Story 4.18** is done (it is) and **Story 5.13** has been run, or its failures are waived in writing in its story file. The story says the closed test starts only after both.
 - [ ] **Read the rewritten privacy policy** (`docs/site/privacy.md`, branch `docs/privacy-policy-truthful`) before it is merged: merging it to `main` publishes it. It fixes every item in the "PRIVACY MISMATCH" section below (2026-10-26). The Data safety answers in section 3.6 match it.
-- [ ] **GitHub secrets** (repository > Settings > Secrets and variables > Actions): the five in `docs/ci-release.md`, **plus `GOOGLE_SERVICES_JSON_RELEASE`** (the production Firebase project's `google-services.json`). `docs/ci-release.md` doesn't list that one yet. Without it the release build has no Crashlytics and no usage stats, so tester crashes would be invisible. The release run prints a warning when it is missing.
+- [ ] **GitHub secrets** (repository > Settings > Secrets and variables > Actions): the six in `docs/ci-release.md`, **including `GOOGLE_SERVICES_JSON_RELEASE`** (the production Firebase project's `google-services.json`). Without it the release build has no Crashlytics and no usage stats, so tester crashes would be invisible. The release run prints a warning when it is missing.
 - [ ] **Firebase console** (production project):
   - Project settings > Integrations: no Google Ads or AdMob link.
   - Analytics > Admin > Data settings > Data retention: **2 months**, Google's default (the privacy policy says 2 months and "Google's default, which we keep"; never raise it to 14 months without changing the policy first).

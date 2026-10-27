@@ -383,7 +383,7 @@
     <string name="reliability_manufacturer">Manufacturer settings</string>
     <string name="reliability_manufacturer_reason">Your phone may stop apps in the background.</string>
     <string name="reliability_camera">Camera</string>
-    <string name="reliability_camera_reason">Needed for your QR/Barcode and House Hunt checks.</string>
+    <string name="reliability_camera_reason">Needed for your QR/Barcode check.</string>
     <string name="reliability_microphone">Microphone</string>
     <string name="reliability_microphone_reason">Needed to record messages.</string>
     <string name="reliability_test">Test alarm</string>

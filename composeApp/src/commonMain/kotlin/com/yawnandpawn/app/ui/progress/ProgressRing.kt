@@ -41,6 +41,7 @@ import com.yawnandpawn.app.ui.components.rememberReducedMotion
 import com.yawnandpawn.app.ui.format.DayNameStyle
 import com.yawnandpawn.app.ui.format.dayName
 import com.yawnandpawn.app.ui.resources.Res
+import com.yawnandpawn.app.ui.resources.progress_day_date
 import com.yawnandpawn.app.ui.resources.progress_day_fallback
 import com.yawnandpawn.app.ui.resources.progress_day_no_alarm
 import com.yawnandpawn.app.ui.resources.progress_day_outcome
@@ -209,8 +210,8 @@ private fun ringDayDescription(
     day: RingDay,
     isToday: Boolean,
 ): String {
-    val base = dayDescription(day.date, day.outcome?.let { CalendarDay(day.date, it, day.fallbackUsed) })
-    return if (isToday) "$base, ${stringResource(Res.string.progress_day_today)}" else base
+    val calendarDay = day.outcome?.let { CalendarDay(day.date, it, day.fallbackUsed) }
+    return if (isToday) todayDescription(day.date, calendarDay) else dayDescription(day.date, calendarDay)
 }
 
 /**
@@ -279,6 +280,24 @@ internal fun dayDescription(
             if (day.sessions > 1) stringResource(Res.string.progress_day_sessions, day.sessions) else null,
         )
     return parts.joinToString(", ")
+}
+
+/** "Tuesday 14": a day that has not happened yet, so it claims no outcome and no "no alarm" either. */
+@Composable
+internal fun dayDate(date: LocalDate): String =
+    stringResource(Res.string.progress_day_date, dayName(date.dayOfWeek, DayNameStyle.Full), date.day)
+
+/**
+ * Today: "Tuesday 14, On time, today" once a session has finished; before that only "Tuesday 14, today", as an alarm may
+ * still ring.
+ */
+@Composable
+internal fun todayDescription(
+    date: LocalDate,
+    day: CalendarDay?,
+): String {
+    val base = if (day == null) dayDate(date) else dayDescription(date, day)
+    return "$base, ${stringResource(Res.string.progress_day_today)}"
 }
 
 /** The ring never grows past this (a 360 dp phone's card is 288 dp inside). */

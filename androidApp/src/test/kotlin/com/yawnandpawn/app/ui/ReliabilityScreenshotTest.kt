@@ -42,7 +42,7 @@ class ReliabilityScreenshotTest {
     }
 
     private val revoked = "Alarm may not ring: battery optimization turned back on"
-    private val camera = "Needed for your QR/Barcode and House Hunt checks."
+    private val camera = "Needed for your QR/Barcode check."
     private val exact = "Lets the alarm ring on time."
 
     @Test

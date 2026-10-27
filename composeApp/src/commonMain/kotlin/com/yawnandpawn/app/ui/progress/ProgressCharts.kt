@@ -53,8 +53,6 @@ import com.yawnandpawn.app.ui.format.WeekOrder
 import com.yawnandpawn.app.ui.format.dayName
 import com.yawnandpawn.app.ui.format.formatDate
 import com.yawnandpawn.app.ui.resources.Res
-import com.yawnandpawn.app.ui.resources.progress_day_date
-import com.yawnandpawn.app.ui.resources.progress_day_today
 import com.yawnandpawn.app.ui.resources.progress_next_month
 import com.yawnandpawn.app.ui.resources.progress_open_day_a11y
 import com.yawnandpawn.app.ui.resources.progress_previous_month
@@ -231,8 +229,8 @@ private fun MonthButton(
 /**
  * One `calendar-day`: the date in `caption` (today in an outlined accent pill), a small marker shape below. A day after
  * today shows its date only and is never a button, even with a session (the clock was set back). TalkBack reads "{weekday}
- * {day}, {outcome}" (", today" added on today; only "{weekday} {day}" after today) and, on the selected day, offers
- * "open day detail" as the double-tap action.
+ * {day}, {outcome}" (", today" added on today, with no "no alarm" before its session; only "{weekday} {day}" after
+ * today) and, on the selected day, offers "open day detail" as the double-tap action.
  */
 @Composable
 private fun DayCell(
@@ -249,9 +247,9 @@ private fun DayCell(
     val description =
         when {
             // No outcome and no "no alarm" yet: an alarm may still ring that day.
-            future -> stringResource(Res.string.progress_day_date, dayName(date.dayOfWeek, DayNameStyle.Full), date.day)
+            future -> dayDate(date)
 
-            date == today -> "${dayDescription(date, day)}, ${stringResource(Res.string.progress_day_today)}"
+            date == today -> todayDescription(date, day)
 
             else -> dayDescription(date, day)
         }

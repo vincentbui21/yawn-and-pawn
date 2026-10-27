@@ -197,7 +197,7 @@ class ReliabilityRouteTest {
             waitForText(banner, shown = false)
 
             openChecklistFromSettings()
-            waitForRow("Camera", "Needed for your QR/Barcode and House Hunt checks.")
+            waitForRow("Camera", "Needed for your QR/Barcode check.")
             composeRule.onNode(hasContentDescription("Camera, Fix") and hasClickAction()).assertExists()
         }
     }

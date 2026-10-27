@@ -79,7 +79,7 @@ import kotlin.time.Instant
  *   the step ([OnboardingUiState.manufacturerGuidance]).
  * - **Usage stats (step 7):** "Share" or "No thanks" is stored through [UsageStatsSources.setConsent] (asked, on or off),
  *   then the test alarm opens ([afterUsageStats]); a failed write stays, logged. A user already asked skips the step
- *   (and Back from step 8 goes to step 6 for them).
+ *   going forward; Back from step 8 always shows it again, so the choice can be changed.
  * - **Test alarm (step 8, Story 5.12):** "Ring a test alarm" rings the first alarm as a test in 10 seconds
  *   ([TestAlarmSources.ring], "Test · no charge"); when it rings is stored ([TestAlarmSources.remember]), so the result
  *   survives a cleared screen or process death. The result is derived ([OnboardingTestAlarm.result]) from that time, 5.3's
@@ -218,13 +218,9 @@ class OnboardingViewModel(
                 if (intent.from == step && settled()) next(step)
             }
 
+            // Every step goes back to the one before it; step 8 to step 7, also for a user who just answered it.
             OnboardingIntent.Back -> {
-                when {
-                    // Step 7 is never asked twice (FR-ONB-6): the checklist for a user already asked.
-                    step == OnboardingStep.TestAlarm -> queueBusy(Op.LeaveTest)
-
-                    step > OnboardingStep.Mission -> goTo(OnboardingStep.entries[step.ordinal - 1])
-                }
+                if (step > OnboardingStep.Mission) goTo(OnboardingStep.entries[step.ordinal - 1])
             }
 
             OnboardingIntent.LowerBaseFee -> {
@@ -629,7 +625,7 @@ class OnboardingViewModel(
         }
     }
 
-    /** Step 8's writes: ring the test, finish (after a locked pass or "Skip for now"), or go back. */
+    /** Step 8's writes: ring the test, or finish (after a locked pass or "Skip for now"). */
     private suspend fun runTestOp(op: Op) {
         when (op) {
             Op.RingTest -> {
@@ -638,11 +634,6 @@ class OnboardingViewModel(
 
             is Op.Complete -> {
                 complete(testSkipped = op.testSkipped)
-            }
-
-            // A user already asked about usage stats goes back to the checklist; an unreadable choice asks again.
-            Op.LeaveTest -> {
-                show(if (asked()) OnboardingStep.Reliability else OnboardingStep.Analytics)
             }
 
             else -> {
@@ -832,9 +823,6 @@ class OnboardingViewModel(
         data class Complete(
             val testSkipped: Boolean,
         ) : Op
-
-        /** Back from step 8: step 7, or step 6 for a user already asked about usage stats. */
-        data object LeaveTest : Op
     }
 
     /** The [id]th base fee tier the user asked for. */

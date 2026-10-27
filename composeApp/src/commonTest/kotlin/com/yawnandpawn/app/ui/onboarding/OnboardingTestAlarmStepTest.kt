@@ -26,7 +26,7 @@ import kotlin.time.Instant
 /**
  * Story 5.12: onboarding's step 8 on fakes: "Ring a test alarm" rings the first alarm as a Story 1.18 test through 5.4's
  * `ChecklistTestAlarm`, its ring time is stored, and the result is derived from it and 5.3's locked pass (completed,
- * waiting, not locked); "Skip for now" completes with Home's note; Back skips step 7 for a user already asked; a process
+ * waiting, not locked); "Skip for now" completes with Home's note; Back goes to step 7, also for a user already asked; a process
  * death keeps the derived state; failures stay on the step, logged.
  */
 @OptIn(ExperimentalCoroutinesApi::class)
@@ -296,7 +296,7 @@ class OnboardingTestAlarmStepTest : OnboardingViewModelFixture() {
         }
 
     @Test
-    fun `Back from step 8 goes to step 6 for a user already asked, and to step 7 otherwise`() =
+    fun `Back from step 8 goes to step 7, also for a user who already answered it`() =
         runTest {
             onTestStep()
             consents.setConsent(false)
@@ -304,17 +304,15 @@ class OnboardingTestAlarmStepTest : OnboardingViewModelFixture() {
 
             asked.onIntent(OnboardingIntent.Back)
 
-            assertEquals(OnboardingStep.Reliability, asked.shown.step, "step 7 is never asked twice")
-            assertEquals("Reliability", onboarding.current.step)
+            assertEquals(OnboardingStep.Analytics, asked.shown.step, "the step before step 8, never the checklist")
+            assertEquals("Analytics", onboarding.current.step)
+            assertEquals(OnboardingStep.TestAlarm.ordinal - 1, OnboardingStep.Analytics.ordinal)
 
-            onStep(OnboardingStep.TestAlarm, alarmId = FIRST)
-            consents.observeFailure = IllegalStateException("unreadable")
-            val unreadable = viewModel()
+            // Its choice can be changed: answering again leads back to step 8.
+            settle()
+            asked.onIntent(OnboardingIntent.UsageStatsChosen(share = true))
 
-            unreadable.onIntent(OnboardingIntent.Back)
-
-            assertEquals(OnboardingStep.Analytics, unreadable.shown.step, "an unreadable choice counts as not asked")
-            assertEquals(1, failed(OnboardingViewModel.LOAD_CONSENT).size)
+            assertEquals(OnboardingStep.TestAlarm, asked.shown.step)
         }
 
     @Test

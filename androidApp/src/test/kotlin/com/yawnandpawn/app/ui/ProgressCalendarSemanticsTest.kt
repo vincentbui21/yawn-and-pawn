@@ -48,9 +48,10 @@ import kotlin.test.assertTrue
 /**
  * Story 6.6: what TalkBack reads on the Progress calendar and how its days and month buttons behave. A day reads
  * "{weekday} {day}, {outcome}" with the fallback check and the session count when they apply, or "no alarm", and today
- * adds "today"; a day with a session is a button whose double-tap opens Day detail once it is selected, as the chip's
- * does; a day after today reads its date only and is never a button; the month is a heading; the month buttons are 48 dp
- * and disabled at the limits; at 200% on a 360 dp phone the seven days keep 48 dp and no text is cut off.
+ * adds "today" (with no "no alarm" before its session); a day with a session is a button whose double-tap opens Day
+ * detail once it is selected, as the chip's does; a day after today reads its date only and is never a button; the month
+ * is a heading; the month buttons are 48 dp and disabled at the limits; at 200% on a 360 dp phone the seven days keep
+ * 48 dp and no text is cut off.
  */
 @RunWith(RobolectricTestRunner::class)
 @GraphicsMode(GraphicsMode.Mode.NATIVE)
@@ -130,9 +131,11 @@ class ProgressCalendarSemanticsTest {
             assertTrue(SemanticsActions.OnClick !in dayNode("Wednesday 10").config)
             day("Wednesday 10, Missed").assertDoesNotExist()
             day("Thursday 4").assertExists()
+            day("Thursday 4, no alarm").assertDoesNotExist()
             assertTrue(SemanticsActions.OnClick in dayNode("Monday 1, On time").config)
-            // Today says so, as on the ring.
-            day("Wednesday 3, no alarm, today").assertExists()
+            // Today says so, as on the ring, and claims no "no alarm" before its session either.
+            day("Wednesday 3, today").assertExists()
+            day("Wednesday 3, no alarm, today").assertDoesNotExist()
         }
 
     @Test

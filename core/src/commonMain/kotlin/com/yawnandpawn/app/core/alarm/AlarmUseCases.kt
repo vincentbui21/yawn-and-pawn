@@ -59,6 +59,8 @@ data class AlarmDraft(
     val checkMode: CheckMode = CheckMode.Random,
     /** The motivation message (Story 7.2); never a locked field. */
     val motivation: Motivation = Motivation.None,
+    /** When the message plays (Story 7.5); never a locked field. */
+    val motivationMode: MotivationMode = MotivationMode.AfterImUp,
     /** "Offer to skip 2 h before" (Story 7.11); a locked field. */
     val offerSkip: Boolean = false,
 )
@@ -363,6 +365,7 @@ class SaveAlarm(
         updatedAt = createdAt,
         checkMode = checkMode,
         motivation = motivation,
+        motivationMode = motivationMode,
         offerSkip = offerSkip,
     )
 }

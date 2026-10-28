@@ -1,6 +1,7 @@
 package com.yawnandpawn.app.core.recording
 
 import com.yawnandpawn.app.core.alarm.Motivation
+import com.yawnandpawn.app.core.alarm.MotivationMode
 import com.yawnandpawn.app.core.checks.SeedDeriver
 import com.yawnandpawn.app.core.checks.SeededRandom
 import com.yawnandpawn.app.core.log.LogEvent
@@ -85,9 +86,21 @@ object MotivationResolver {
 
     /**
      * The recording id the completed [session] plays on Success: its frozen [Motivation.Recording], never for a session
-     * that started before the first unlock, and never for a `Random` stored unresolved (before Story 7.3).
+     * that started before the first unlock, never for a `Random` stored unresolved (before Story 7.3), and never when
+     * the message is mixed into the ring instead ([MotivationMode.MixIntoAlarm], Story 7.5).
      */
     fun playableRecordingId(session: SessionData): String? =
+        recordingId(session).takeIf { session.config.motivationMode == MotivationMode.AfterImUp }
+
+    /**
+     * The recording id the rings of [session] mix into the alarm sound (Story 7.5, `mixSchedule`): its frozen
+     * [Motivation.Recording] when the mode is [MotivationMode.MixIntoAlarm], never for a session that started before the
+     * first unlock, nor for `None` or an unresolved `Random`.
+     */
+    fun mixRecordingId(session: SessionData): String? =
+        recordingId(session).takeIf { session.config.motivationMode == MotivationMode.MixIntoAlarm }
+
+    private fun recordingId(session: SessionData): String? =
         (session.config.motivation as? Motivation.Recording)?.id?.takeUnless { session.startedBeforeUnlock }
 
     private fun pick(

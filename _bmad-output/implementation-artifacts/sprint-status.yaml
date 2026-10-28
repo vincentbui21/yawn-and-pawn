@@ -148,7 +148,7 @@ development_status:
   7-2-recordings-screen-and-choosing-a-message-per-alarm: done  # Epic 7 audio lane, fast mode
   7-3-play-my-message-after-i-m-up: done  # Epic 7 audio lane, fast mode
   7-4-use-my-own-audio-file-as-an-alarm-sound: backlog
-  7-5-mix-into-alarm-motivation-playback: backlog
+  7-5-mix-into-alarm-motivation-playback: done  # Epic 7 audio lane, fast mode; app.db v14
   7-6-spike-s3-house-hunt-image-matching: done  # spike written up (docs/spikes/S3.md); House Hunt moved to v2 by owner 2026-10-27
   7-7-house-hunt-check-plugin-and-on-device-matcher: deferred-v2  # owner 2026-10-27: House Hunt moved to v2
   7-8-house-hunt-registration-and-re-take-after-restore: deferred-v2  # owner 2026-10-27: House Hunt moved to v2

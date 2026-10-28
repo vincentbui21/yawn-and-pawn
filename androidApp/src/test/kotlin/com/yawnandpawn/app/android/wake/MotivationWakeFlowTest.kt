@@ -1,11 +1,14 @@
 package com.yawnandpawn.app.android.wake
 
+import android.content.Context
 import android.os.Looper
+import androidx.test.core.app.ApplicationProvider
 import com.yawnandpawn.app.StopAppRule
 import com.yawnandpawn.app.core.alarm.Alarm
 import com.yawnandpawn.app.core.alarm.AlarmFired
 import com.yawnandpawn.app.core.alarm.AlarmRepository
 import com.yawnandpawn.app.core.alarm.Motivation
+import com.yawnandpawn.app.core.alarm.MotivationMode
 import com.yawnandpawn.app.core.error.DomainError
 import com.yawnandpawn.app.core.error.Outcome
 import com.yawnandpawn.app.core.recording.MotivationResolver
@@ -14,6 +17,7 @@ import com.yawnandpawn.app.core.recording.Recording
 import com.yawnandpawn.app.core.recording.RecordingRepository
 import com.yawnandpawn.app.core.session.SessionEvent
 import com.yawnandpawn.app.core.session.SessionState
+import com.yawnandpawn.app.data.recording.RecordingFiles
 import com.yawnandpawn.app.testing.FakeMotivationPlayer
 import com.yawnandpawn.app.testing.FakeRecordingRepository
 import com.yawnandpawn.app.testing.FakeTestAlarmStore
@@ -29,9 +33,15 @@ import org.junit.Test
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
 import org.robolectric.Shadows.shadowOf
+import org.robolectric.shadow.api.Shadow
+import org.robolectric.shadows.ShadowMediaPlayer
+import org.robolectric.shadows.util.DataSource
+import java.io.File
 import java.time.Duration
 import kotlin.test.assertEquals
+import kotlin.test.assertFalse
 import kotlin.test.assertIs
+import kotlin.test.assertTrue
 import kotlin.time.Duration.Companion.days
 import kotlin.time.Instant
 
@@ -127,6 +137,31 @@ class MotivationWakeFlowTest {
         assertEquals(true, app.logs().any { MotivationResolver.OPERATION in it && "timed out" in it }, app.logs().toString())
         complete(app)
         assertEquals(emptyList(), player.played)
+    }
+
+    @Test
+    fun `a Mix alarm whose recording is there mixes it into the ring through the app's own wiring (Story 7-5)`() {
+        val recording = recordings.first()
+        val file = File(File(ApplicationProvider.getApplicationContext<Context>().filesDir, RecordingFiles.FOLDER), recording.fileName)
+        file.parentFile?.mkdirs()
+        file.writeText("audio")
+        val app = WakeApp(recordings = FakeRecordingRepository(recordings), motivationPlayer = player)
+        val alarm =
+            anAlarm(id = "alarm-a", requestCode = 1000)
+                .copy(motivation = Motivation.Recording(recording.id), motivationMode = MotivationMode.MixIntoAlarm)
+        upsert(app, alarm)
+        app.ring(AlarmFired(alarm.id, scheduledAt))
+
+        val session = ringing(app).session
+        assertEquals(MotivationMode.MixIntoAlarm, session.config.motivationMode)
+        val source = DataSource.toDataSource(file.absolutePath)
+
+        fun message() = app.mediaPlayers.map { Shadow.extract<ShadowMediaPlayer>(it) }.firstOrNull { it.dataSource == source }
+        app.awaitUntil("the message is opened and prepared") { message()?.state == ShadowMediaPlayer.State.PREPARED }
+        assertTrue(app.player.isMixing, "the real MixRecordingSource and MediaPlayer factory found and prepared it")
+        assertFalse(app.player.isMixPlaying, "the alarm sound plays the first 30 s")
+        app.player.stop(restoreVolume = true)
+        file.delete()
     }
 
     /** A repository whose list never comes. */

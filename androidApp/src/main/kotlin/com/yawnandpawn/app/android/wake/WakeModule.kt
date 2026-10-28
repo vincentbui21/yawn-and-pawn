@@ -68,32 +68,8 @@ fun wakeModule(): Module =
         // Device test round 1: the receiver waits for the service's start, and the ring start is timed in the log.
         single { WakeServiceStarts() }
         single { WakeTimings(now = { get<Clock>().now() }, logger = get()) }
-        single {
-            // A ring stops the Sound preview (Story 1.17), the Recordings preview (Story 7.2) and the Success message (Story
-            // 7.3); each is looked up then, as it depends on this player.
-            val koin = this
-            AndroidAlarmPlayer(
-                get(),
-                get(),
-                get(),
-                get(),
-                get<WakeScope>(),
-                get(),
-                timings = get(),
-                onRingStart = {
-                    koin.getOrNull<SoundPreview>()?.stop()
-                    // Story 7.2: a Recordings preview never plays over a ring.
-                    koin.getOrNull<RecordingPreview>()?.stop()
-                    // Story 7.3: nor a Success message (a test preempted by a real alarm completes, then this ring starts).
-                    koin.getOrNull<MotivationPlayer>()?.stop()
-                },
-                // Story 2.7: a focus change goes to the call adapter (a call takes focus); it never ducks the ring.
-                focus =
-                    AlarmAudioFocus(androidContext().getSystemService(AudioManager::class.java)) { change ->
-                        koin.getOrNull<CallDetector>()?.onFocusChange(change)
-                    },
-            )
-        }
+        single { alarmPlayer(this) }
+        single { MixRecordingSource(get(), get(), get()) }
         single {
             val koin = this
             WakeRuntime(
@@ -121,6 +97,38 @@ fun wakeModule(): Module =
         // The first unlock after a boot (Story 2.4): UserUnlocked, billing and crash reporting.
         single { unlockSignals(this) }
         includes(confirmSheetModule(), celebrationModule())
+    }
+
+/**
+ * The one alarm player. A ring stops the Sound preview (Story 1.17), the Recordings preview (Story 7.2) and the Success
+ * message (Story 7.3); each is looked up then, as it depends on this player. "Mix into alarm" (Story 7.5) plays the
+ * session's recording between blocks of alarm sound, found by [MixRecordingSource] (looked up when a ring mixes).
+ */
+private fun alarmPlayer(koin: Scope): AndroidAlarmPlayer =
+    with(koin) {
+        AndroidAlarmPlayer(
+            get(),
+            get(),
+            get(),
+            get(),
+            get<WakeScope>(),
+            get(),
+            timings = get(),
+            onRingStart = {
+                getOrNull<SoundPreview>()?.stop()
+                // Story 7.2: a Recordings preview never plays over a ring.
+                getOrNull<RecordingPreview>()?.stop()
+                // Story 7.3: nor a Success message (a test preempted by a real alarm completes, then this ring starts).
+                getOrNull<MotivationPlayer>()?.stop()
+            },
+            // Story 2.7: a focus change goes to the call adapter (a call takes focus); it never ducks the ring.
+            focus =
+                AlarmAudioFocus(androidContext().getSystemService(AudioManager::class.java)) { change ->
+                    getOrNull<CallDetector>()?.onFocusChange(change)
+                },
+            recordingPlaybacks = MediaPlayerRecordingPlaybackFactory(androidContext()),
+            recordingSource = { recordingId -> get<MixRecordingSource>().file(recordingId) },
+        )
     }
 
 /** Plays the completed [session]'s frozen message on Success (Story 7.3), if it has one. */

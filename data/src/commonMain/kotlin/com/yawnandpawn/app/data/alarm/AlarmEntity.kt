@@ -7,8 +7,8 @@ import androidx.room3.PrimaryKey
 
 /**
  * Row of the `alarm` table in `app.db` (schema v1; v5 adds `vibrate_in_grace`, v12 `motivation`, v13 `offer_skip` and
- * `skipped_date`). Kept separate from the core `Alarm` so storage types (bitmask, epoch millis, nanosecond of day) never
- * leak into `:core`; see [toEntity] / [toAlarm].
+ * `skipped_date`, v14 `motivation_mode`). Kept separate from the core `Alarm` so storage types (bitmask, epoch millis,
+ * nanosecond of day) never leak into `:core`; see [toEntity] / [toAlarm].
  */
 @Entity(
     tableName = "alarm",
@@ -65,4 +65,7 @@ data class AlarmEntity(
     /** The skipped occurrence's local date, ISO `YYYY-MM-DD` (schema v13, Story 7.11); null when none is skipped. */
     @ColumnInfo(name = "skipped_date")
     val skippedDate: String? = null,
+    /** When the message plays, the core `MotivationMode` text `after_up` or `mix` (schema v14, Story 7.5). */
+    @ColumnInfo(name = "motivation_mode", defaultValue = "after_up")
+    val motivationMode: String = "after_up",
 )

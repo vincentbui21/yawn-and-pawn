@@ -28,6 +28,7 @@ import com.yawnandpawn.app.ui.editor.EditorUiState
 import com.yawnandpawn.app.ui.editor.FullEditorSections
 import com.yawnandpawn.app.ui.editor.MotivationChoice
 import com.yawnandpawn.app.ui.editor.MotivationRecording
+import com.yawnandpawn.app.ui.editor.MotivationTiming
 import com.yawnandpawn.app.ui.recordings.RecordedMessage
 import com.yawnandpawn.app.ui.recordings.RecorderState
 import com.yawnandpawn.app.ui.recordings.RecordingsIntent
@@ -69,7 +70,6 @@ object RecordingsSamples {
         FullEditorSections(
             rows = setOf(EditorPane.WakeCheck, EditorPane.Motivation),
             recordings = listOf(MotivationRecording("r1", "Message 1"), MotivationRecording("r2", "Message 2")),
-            motivationTimingShown = false,
         )
 
     /** Two messages, Random chosen. */
@@ -92,12 +92,23 @@ object RecordingsSamples {
 
     /** The editor's main screen with "Message 1" chosen. */
     val editorChosen = EditorUiState(full = app.copy(motivation = MotivationChoice.Recording("r1")))
+
+    /** "Message 1" chosen, mixed into the alarm (Story 7.5). */
+    val motivationMix =
+        EditorUiState(
+            pane = EditorPane.Motivation,
+            full = app.copy(motivation = MotivationChoice.Recording("r1"), motivationTiming = MotivationTiming.MixIntoAlarm),
+        )
+
+    /** The editor's main screen with "Message 1" mixed into the alarm (Story 7.5). */
+    val editorMix = motivationMix.copy(pane = EditorPane.Main)
 }
 
 /**
  * Story 7.2 screenshots of Recordings (empty, recording, after a stop, a list with a missing file, the microphone off)
- * and of the editor's Motivation sub-screen (Random chosen, a missing file), in Light, Dark and Light at 200% font
- * scale, plus semantics: targets of at least 48 dp, the 10 s time announcement and the Random rule.
+ * and of the editor's Motivation sub-screen (Random chosen, a missing file, and since Story 7.5 "Mix into alarm" chosen,
+ * each with "When it plays"), in Light, Dark and Light at 200% font scale, plus semantics: targets of at least 48 dp,
+ * the 10 s time announcement, the Random rule and the "When it plays" card shown only with a message.
  */
 @RunWith(RobolectricTestRunner::class)
 @GraphicsMode(GraphicsMode.Mode.NATIVE)
@@ -178,7 +189,8 @@ class RecordingsScreenshotTest {
     fun `Motivation with Random chosen in Light and Dark`() {
         captureEditor("editor_motivation_app_random_light", RecordingsSamples.motivationRandom, PpsThemeMode.Light) {
             composeRule.onNode(hasText("Random") and isRadio()).assertIsSelected()
-            assertEquals(0, composeRule.onAllNodesWithText("When it plays").fetchSemanticsNodes().size, "Story 7.5")
+            composeRule.onNodeWithText("When it plays").assertExists()
+            composeRule.onNode(hasText("After I'm up") and isRadio()).assertIsSelected()
         }
         captureEditor("editor_motivation_app_random_dark", RecordingsSamples.motivationRandom, PpsThemeMode.Dark)
     }
@@ -203,6 +215,47 @@ class RecordingsScreenshotTest {
         captureEditor("editor_motivation_app_missing_light_font200", RecordingsSamples.motivationMissing, PpsThemeMode.Light)
 
     @Test
+    fun `Motivation mixed into the alarm in Light and Dark`() {
+        captureEditor("editor_motivation_app_mix_light", RecordingsSamples.motivationMix, PpsThemeMode.Light) {
+            composeRule.onNode(hasText("Message 1") and isRadio()).assertIsSelected()
+            composeRule.onNode(hasText("Mix into alarm") and isRadio()).assertIsSelected()
+        }
+        captureEditor("editor_motivation_app_mix_dark", RecordingsSamples.motivationMix, PpsThemeMode.Dark)
+    }
+
+    @Test
+    @Config(qualifiers = "+h1800dp", fontScale = 2.0f)
+    fun `Motivation mixed into the alarm in Light at 200 percent`() =
+        captureEditor("editor_motivation_app_mix_light_font200", RecordingsSamples.motivationMix, PpsThemeMode.Light)
+
+    @Test
+    fun `When it plays sends its choice and shows only with a message`() {
+        val intents = mutableListOf<EditorIntent>()
+        withScreen(
+            PpsThemeMode.Light,
+            content = { AlarmEditorScreen(state = RecordingsSamples.motivationMissing, is24Hour = false, onIntent = { intents += it }) },
+        ) {
+            composeRule.onNode(hasText("Mix into alarm") and isRadio()).performClick()
+            assertEquals(listOf<EditorIntent>(EditorIntent.MotivationTimingSelected(MotivationTiming.MixIntoAlarm)), intents)
+        }
+        withScreen(
+            PpsThemeMode.Light,
+            content = { AlarmEditorScreen(state = RecordingsSamples.motivationOne, is24Hour = false, onIntent = {}) },
+        ) {
+            assertEquals(0, composeRule.onAllNodesWithText("When it plays").fetchSemanticsNodes().size, "no message: no card")
+            assertEquals(0, composeRule.onAllNodesWithText("Mix into alarm").fetchSemanticsNodes().size)
+        }
+        withScreen(
+            PpsThemeMode.Light,
+            content = { AlarmEditorScreen(state = RecordingsSamples.editorMix, is24Hour = false, onIntent = {}) },
+        ) {
+            composeRule
+                .onNode(hasText("Message 1 · Mix into alarm", substring = true) and hasClickAction())
+                .assertExists()
+        }
+    }
+
+    @Test
     fun `Random is offered only with two or more messages, and the main row names the chosen message`() {
         withScreen(
             PpsThemeMode.Light,
@@ -218,9 +271,10 @@ class RecordingsScreenshotTest {
         ) {
             composeRule
                 .onNode(
-                    hasText("Motivation", substring = true) and hasText("Message 1", substring = true) and hasClickAction(),
+                    hasText("Motivation", substring = true) and
+                        hasText("Message 1 · After I'm up", substring = true) and
+                        hasClickAction(),
                 ).assertExists()
-            assertEquals(0, composeRule.onAllNodesWithText("After I'm up", substring = true).fetchSemanticsNodes().size)
         }
         // A stored Random with one message left stays offered and selected.
         val oneRandom =
@@ -249,6 +303,16 @@ class RecordingsScreenshotTest {
         withScreen(PpsThemeMode.Light, content = { RecordingsScreen(state = RecordingsSamples.empty, onIntent = {}) }) {
             val record = composeRule.onNodeWithContentDescription("Start recording").fetchSemanticsNode()
             with(composeRule.density) { assertTrue(record.size.width.toDp() >= 72.dp) }
+        }
+        // Story 7.5: the "When it plays" radio rows.
+        withScreen(
+            PpsThemeMode.Light,
+            content = { AlarmEditorScreen(state = RecordingsSamples.motivationMix, is24Hour = false, onIntent = {}) },
+        ) {
+            listOf("After I'm up", "Mix into alarm").forEach { label ->
+                val row = composeRule.onNode(hasText(label) and isRadio()).fetchSemanticsNode()
+                with(composeRule.density) { assertTrue(row.size.height.toDp() >= 48.dp, "$label: ${row.size}") }
+            }
         }
     }
 

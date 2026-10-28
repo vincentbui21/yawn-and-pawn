@@ -1,6 +1,7 @@
 package com.yawnandpawn.app.core.recording
 
 import com.yawnandpawn.app.core.alarm.Motivation
+import com.yawnandpawn.app.core.alarm.MotivationMode
 import com.yawnandpawn.app.core.alarm.RecordingLogger
 import com.yawnandpawn.app.core.error.DomainError
 import com.yawnandpawn.app.core.error.Outcome
@@ -174,6 +175,28 @@ class MotivationResolverTest {
         val unresolved = ringSession(testConfig().copy(motivation = Motivation.Random))
         assertNull(MotivationResolver.playableRecordingId(unresolved), "stored unresolved")
         assertNull(MotivationResolver.playableRecordingId(ringSession(testConfig())))
+    }
+
+    @Test
+    fun `a Mix session mixes its frozen message into the ring and plays nothing on Success`() {
+        val mix = ringSession(testConfig().copy(motivation = Motivation.Recording("a"), motivationMode = MotivationMode.MixIntoAlarm))
+
+        assertEquals("a", MotivationResolver.mixRecordingId(mix))
+        assertNull(MotivationResolver.playableRecordingId(mix), "no Success card, no After I'm up")
+        assertNull(MotivationResolver.mixRecordingId(mix.copy(startedBeforeUnlock = true)), "never before the first unlock")
+        val random = ringSession(testConfig().copy(motivation = Motivation.Random, motivationMode = MotivationMode.MixIntoAlarm))
+        assertNull(MotivationResolver.mixRecordingId(random), "an unresolved Random never mixes")
+        val none = ringSession(testConfig().copy(motivationMode = MotivationMode.MixIntoAlarm))
+        assertNull(MotivationResolver.mixRecordingId(none))
+    }
+
+    @Test
+    fun `an After I'm up session never mixes`() {
+        val after = ringSession(testConfig().copy(motivation = Motivation.Recording("a")))
+
+        assertEquals(MotivationMode.AfterImUp, after.config.motivationMode, "the default")
+        assertNull(MotivationResolver.mixRecordingId(after))
+        assertEquals("a", MotivationResolver.playableRecordingId(after))
     }
 
     /** Lists [recordings] (or [never] emits); counts the reads. */

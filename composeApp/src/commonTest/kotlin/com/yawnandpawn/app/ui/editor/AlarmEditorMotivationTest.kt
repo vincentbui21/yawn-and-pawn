@@ -1,6 +1,7 @@
 package com.yawnandpawn.app.ui.editor
 
 import com.yawnandpawn.app.core.alarm.Motivation
+import com.yawnandpawn.app.core.alarm.MotivationMode
 import com.yawnandpawn.app.core.alarm.RequestCodes
 import com.yawnandpawn.app.core.recording.Recording
 import com.yawnandpawn.app.core.recording.RecordingRepository
@@ -39,7 +40,10 @@ import kotlin.test.assertNotNull
 import kotlin.test.assertTrue
 import kotlin.time.Instant
 
-/** Story 7.2: the editor's Motivation row, its sub-screen and the round trip through Recordings. */
+/**
+ * Story 7.2: the editor's Motivation row, its sub-screen and the round trip through Recordings; Story 7.5: "When it
+ * plays".
+ */
 @OptIn(ExperimentalCoroutinesApi::class)
 class AlarmEditorMotivationTest {
     private val dispatcher = StandardTestDispatcher()
@@ -90,13 +94,14 @@ class AlarmEditorMotivationTest {
         get() = assertNotNull(state.value.full)
 
     @Test
-    fun `the app's editor shows the Motivation row with the recordings and no timing, onboarding's does not`() =
+    fun `the app's editor shows the Motivation row with the recordings and when it plays, onboarding's does not`() =
         runTest(dispatcher) {
             val app = viewModel()
             advanceUntilIdle()
 
             assertTrue(EditorPane.Motivation in app.full.rows)
-            assertFalse(app.full.motivationTimingShown, "When it plays waits for Story 7.5")
+            assertTrue(app.full.motivationTimingShown, "When it plays shows since Story 7.5 (with a message chosen)")
+            assertEquals(MotivationTiming.AfterImUp, app.full.motivationTiming, "After I'm up by default")
             assertEquals(listOf(MotivationRecording("r1", "Message 1"), MotivationRecording("r2", "Message 2")), app.full.recordings)
             assertEquals(MotivationChoice.None, app.full.motivation)
 
@@ -269,5 +274,83 @@ class AlarmEditorMotivationTest {
             assertTrue(EditorPane.Motivation in viewModel.full.rows)
             assertTrue(logger.events.none { "secret" in it.toString() }, "${logger.events}")
             assertTrue(logger.events.any { LOAD_RECORDINGS in it.toString() }, "${logger.events}")
+        }
+
+    @Test
+    fun `Mix into alarm is an unsaved change, saved only on Save, and opens chosen (Story 7-5)`() =
+        runTest(dispatcher) {
+            val viewModel = viewModel()
+            advanceUntilIdle()
+            viewModel.onIntent(EditorIntent.PaneOpened(EditorPane.Motivation))
+            viewModel.onIntent(EditorIntent.MotivationChosen(MotivationChoice.Recording("r1")))
+            viewModel.onIntent(EditorIntent.BackRequested)
+            viewModel.onIntent(EditorIntent.SaveClicked)
+            advanceUntilIdle()
+            val stored = repository.current.single()
+            assertEquals(MotivationMode.AfterImUp, stored.motivationMode, "After I'm up unless changed")
+
+            val editor = viewModel(stored.id)
+            advanceUntilIdle()
+            editor.onIntent(EditorIntent.PaneOpened(EditorPane.Motivation))
+            editor.onIntent(EditorIntent.MotivationTimingSelected(MotivationTiming.MixIntoAlarm))
+            assertEquals(MotivationTiming.MixIntoAlarm, editor.full.motivationTiming)
+            assertEquals(MotivationTiming.MixIntoAlarm, editor.state.value.form.motivationTiming)
+            editor.onIntent(EditorIntent.BackRequested)
+            assertEquals(MotivationMode.AfterImUp, repository.current.single().motivationMode, "nothing is stored before Save")
+            editor.onIntent(EditorIntent.BackRequested)
+            assertTrue(editor.state.value.showDiscardDialog, "a new timing is an unsaved change")
+            editor.onIntent(EditorIntent.KeepEditing)
+
+            editor.onIntent(EditorIntent.SaveClicked)
+            advanceUntilIdle()
+
+            val mixed = repository.current.single()
+            assertEquals(MotivationMode.MixIntoAlarm, mixed.motivationMode)
+            assertEquals(Motivation.Recording("r1"), mixed.motivation)
+            val reopened = viewModel(mixed.id)
+            advanceUntilIdle()
+            assertEquals(MotivationTiming.MixIntoAlarm, reopened.state.value.form.motivationTiming)
+            assertEquals(MotivationTiming.MixIntoAlarm, reopened.full.motivationTiming)
+            reopened.onIntent(EditorIntent.BackRequested)
+            assertFalse(reopened.state.value.showDiscardDialog, "opened as stored: nothing to discard")
+        }
+
+    @Test
+    fun `a test ring plays the message the way it is chosen now, saved or not (Story 7-5)`() =
+        runTest(dispatcher) {
+            val viewModel = viewModel()
+            advanceUntilIdle()
+            viewModel.onIntent(EditorIntent.MotivationChosen(MotivationChoice.Recording("r2")))
+            viewModel.onIntent(EditorIntent.MotivationTimingSelected(MotivationTiming.MixIntoAlarm))
+
+            viewModel.onIntent(EditorIntent.TestAlarmClicked)
+            advanceUntilIdle()
+
+            val pending = assertNotNull(testAlarmStore.pending)
+            assertEquals(Motivation.Recording("r2"), pending.motivation)
+            assertEquals(MotivationMode.MixIntoAlarm, pending.motivationMode)
+        }
+
+    @Test
+    fun `when it plays is kept when the message is deleted, and onboarding's editor ignores it (Story 7-5)`() =
+        runTest(dispatcher) {
+            repository.upsert(
+                anAlarm(id = "a1", time = LocalTime(6, 30))
+                    .copy(motivation = Motivation.Recording("r1"), motivationMode = MotivationMode.MixIntoAlarm),
+            )
+            val viewModel = viewModel("a1")
+            advanceUntilIdle()
+            assertEquals(MotivationTiming.MixIntoAlarm, viewModel.full.motivationTiming)
+
+            recordings.delete("r1")
+            viewModel.onIntent(EditorIntent.RecordingDeleted("r1"))
+            advanceUntilIdle()
+            assertEquals(MotivationChoice.None, viewModel.full.motivation, "the card hides with no message")
+            assertEquals(MotivationTiming.MixIntoAlarm, viewModel.full.motivationTiming, "kept as it is")
+
+            val onboarding = viewModel(recordings = null)
+            advanceUntilIdle()
+            onboarding.onIntent(EditorIntent.MotivationTimingSelected(MotivationTiming.MixIntoAlarm))
+            assertEquals(MotivationTiming.AfterImUp, onboarding.state.value.form.motivationTiming, "no Motivation row, no choice")
         }
 }

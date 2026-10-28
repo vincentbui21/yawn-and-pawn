@@ -546,7 +546,14 @@ class WakeRuntime(
         if (starts) restoredRing = !newRing
         // A ring that starts during a call opens silent and still until the session pauses or the call ends (Story 2.7).
         val inCall = calls.inCall()
-        player.play(effect.soundRef, effect.volumePercent, ring.gradual && !restoredRing, ring.rampStart, paused = inCall)
+        player.play(
+            effect.soundRef,
+            effect.volumePercent,
+            ring.gradual && !restoredRing,
+            ring.rampStart,
+            paused = inCall,
+            mix = mixRequest(),
+        )
         if (inCall) vibrator.stop()
     }
 
@@ -640,6 +647,16 @@ class WakeRuntime(
         val cancelled = outputs.scheduler.cancelSessionSlot()
         if (cancelled is Outcome.Failure) logger.log(LogEvent.OperationFailed.of("cancel session slot", cancelled.error))
         armedSlot = null
+    }
+
+    /**
+     * The recording the ring mixes into its sound (Story 7.5): only for a session whose frozen mode is "Mix into alarm"
+     * with a frozen recording ([MotivationResolver.mixRecordingId]), and never on a Direct Boot ring (its default sound
+     * plays alone).
+     */
+    private fun mixRequest(): MixRequest? {
+        val ringing = (session() as? SessionState.Active)?.session?.takeUnless { it.directBootRing } ?: return null
+        return MotivationResolver.mixRecordingId(ringing)?.let { MixRequest(ringing.sessionId, it) }
     }
 
     private fun configOrNull(): SessionConfig? = (session() as? SessionState.Active)?.session?.config

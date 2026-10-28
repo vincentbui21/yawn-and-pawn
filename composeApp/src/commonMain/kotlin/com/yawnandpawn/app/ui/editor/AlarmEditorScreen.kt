@@ -440,8 +440,8 @@ private fun checkSummary(full: FullEditorSections): String {
 }
 
 /**
- * "None", or the message ("Message 1", "Random") and, where "When it plays" shows (the design preview), when it plays
- * ("Message 1 · After I'm up"). A chosen message that is not in the list (gone) reads "None", which is what plays.
+ * "None", or the message ("Message 1", "Random") and, where "When it plays" shows (the app since Story 7.5, and the design
+ * preview), when it plays ("Message 1 · After I'm up"). A chosen message that is not in the list (gone) reads "None", which is what plays.
  */
 @Composable
 internal fun motivationSummary(full: FullEditorSections): String {

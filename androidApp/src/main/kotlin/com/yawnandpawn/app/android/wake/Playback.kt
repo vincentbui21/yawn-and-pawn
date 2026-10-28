@@ -8,6 +8,7 @@ import android.os.PowerManager
 import android.provider.Settings
 import androidx.annotation.RawRes
 import com.yawnandpawn.app.R
+import java.io.File
 
 /** The audio attributes of every alarm sound and vibration below API 33: the alarm stream, independent of media and ringer. */
 val ALARM_AUDIO_ATTRIBUTES: AudioAttributes =
@@ -183,5 +184,128 @@ private class MediaPlayerPlayback(
     private fun startNow() {
         player.start()
         started = true
+    }
+}
+
+/**
+ * One opened, non-looping motivation recording a "Mix into alarm" ring plays between blocks of alarm sound (Story 7.5):
+ * the seam over `MediaPlayer`, like [Playback]. Calls come from [AndroidAlarmPlayer] only, under its lock.
+ */
+interface RecordingPlayback {
+    /** Its length once prepared, in milliseconds; 0 when unknown (not prepared yet, or the player does not know it). */
+    val durationMs: Long
+
+    /** Plays it from the beginning (once: it does not loop). */
+    fun start()
+
+    fun pause()
+
+    /** The player gain, 0.0 to 1.0, on top of the alarm stream volume. */
+    fun setGain(gain: Float)
+
+    fun release()
+}
+
+/** Opens the recordings a "Mix into alarm" ring plays (Story 7.5). */
+fun interface RecordingPlaybackFactory {
+    /**
+     * Opens [file] to play once on the alarm stream and starts preparing it. Throws when it cannot be opened;
+     * [onPrepared] runs once it is prepared, [onCompleted] each time it played to its end, [onError] (on the main thread)
+     * if it fails later, while preparing or playing. Each may run before `open` returns.
+     */
+    fun open(
+        file: File,
+        onPrepared: () -> Unit,
+        onCompleted: () -> Unit,
+        onError: () -> Unit,
+    ): RecordingPlayback
+}
+
+/**
+ * [RecordingPlaybackFactory] on `MediaPlayer`: [ALARM_AUDIO_ATTRIBUTES] (the ring's alarm-stream volume), no loop, a
+ * partial wake lock while it plays, prepared with `prepareAsync`. A prepare error arrives through the error listener.
+ */
+class MediaPlayerRecordingPlaybackFactory(
+    private val context: Context,
+) : RecordingPlaybackFactory {
+    // As MediaPlayerPlaybackFactory: any exception of an open means this recording cannot play.
+    @Suppress("TooGenericExceptionCaught")
+    override fun open(
+        file: File,
+        onPrepared: () -> Unit,
+        onCompleted: () -> Unit,
+        onError: () -> Unit,
+    ): RecordingPlayback {
+        val player = MediaPlayer()
+        val playback = MediaPlayerRecordingPlayback(player)
+        try {
+            player.setAudioAttributes(ALARM_AUDIO_ATTRIBUTES)
+            player.setWakeMode(context, PowerManager.PARTIAL_WAKE_LOCK)
+            player.setDataSource(file.absolutePath)
+            player.isLooping = false
+            player.setOnPreparedListener { if (playback.onPrepared()) onPrepared() }
+            player.setOnCompletionListener { if (playback.isOpen()) onCompleted() }
+            player.setOnErrorListener { _, _, _ ->
+                onError()
+                true
+            }
+            player.prepareAsync()
+        } catch (e: Exception) {
+            player.release()
+            throw e
+        }
+        return playback
+    }
+}
+
+/** One recording `MediaPlayer` that may still be preparing; its own lock, as [MediaPlayerPlayback]'s. */
+private class MediaPlayerRecordingPlayback(
+    private val player: MediaPlayer,
+) : RecordingPlayback {
+    private var prepared = false
+    private var released = false
+    private var started = false
+    private var gain: Float? = null
+
+    @get:Synchronized
+    override val durationMs: Long
+        get() = if (prepared && !released) player.duration.toLong().coerceAtLeast(0) else 0
+
+    /** Applies the gain asked before it was prepared; false when it was released meanwhile. */
+    @Synchronized
+    fun onPrepared(): Boolean {
+        if (released) return false
+        prepared = true
+        gain?.let { player.setVolume(it, it) }
+        return true
+    }
+
+    @Synchronized
+    fun isOpen(): Boolean = !released
+
+    @Synchronized
+    override fun start() {
+        if (!prepared || released) return
+        player.seekTo(0)
+        player.start()
+        started = true
+    }
+
+    @Synchronized
+    override fun pause() {
+        if (started && !released) player.pause()
+    }
+
+    @Synchronized
+    override fun setGain(gain: Float) {
+        this.gain = gain
+        if (prepared && !released) player.setVolume(gain, gain)
+    }
+
+    @Synchronized
+    override fun release() {
+        if (released) return
+        released = true
+        player.release()
     }
 }

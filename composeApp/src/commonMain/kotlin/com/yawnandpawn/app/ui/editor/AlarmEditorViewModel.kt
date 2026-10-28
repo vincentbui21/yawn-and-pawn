@@ -434,6 +434,11 @@ class AlarmEditorViewModel(
                 editForm { it.copy(motivation = intent.choice) }
             }
 
+            // "When it plays" (Story 7.5): a form field too, saved only on Save.
+            is EditorIntent.MotivationTimingSelected -> {
+                editForm { it.copy(motivationTiming = intent.timing) }
+            }
+
             EditorIntent.RecordMessageClicked -> {
                 _state.update { if (it.isLoading) it else it.copy(pane = EditorPane.Recordings) }
             }
@@ -449,12 +454,12 @@ class AlarmEditorViewModel(
                 editForm { it.afterRecordingDeleted(intent.id) }
             }
 
-            // "When it plays" waits for Story 7.5.
             else -> {
                 Unit
             }
         }
         return intent is EditorIntent.MotivationChosen ||
+            intent is EditorIntent.MotivationTimingSelected ||
             intent == EditorIntent.RecordMessageClicked ||
             intent is EditorIntent.RecordingSaved ||
             intent is EditorIntent.RecordingDeleted
@@ -1049,13 +1054,14 @@ private fun EditorForm.toDraft(alarmId: String?): AlarmDraft =
             },
         checkMode = CoreCheckMode.valueOf(checkMode.name),
         motivation = motivation.toCore(),
+        motivationMode = motivationTiming.toCore(),
         offerSkip = offerSkip,
     )
 
 /**
  * The production editor's full-editor rows (Story 3.5): the Wake-up check, offering [pickable] (the Quiet time row shows
- * in every editor, Story 3.4), with [motivation] the Motivation row (Story 7.2), without "When it plays" (Story 7.5), and
- * the "Offer to skip 2 h before" switch (Story 7.11).
+ * in every editor, Story 3.4), with [motivation] the Motivation row (Story 7.2) and its "When it plays" card (Story 7.5),
+ * and the "Offer to skip 2 h before" switch (Story 7.11).
  */
 private fun wakeCheckOnly(
     pickable: List<CheckType>,
@@ -1066,7 +1072,6 @@ private fun wakeCheckOnly(
         rows = if (motivation) setOf(EditorPane.WakeCheck, EditorPane.Motivation) else setOf(EditorPane.WakeCheck),
         types = pickable,
         talkBackOn = talkBackOn,
-        motivationTimingShown = false,
         showOfferSkip = true,
     )
 
@@ -1136,6 +1141,7 @@ private fun Alarm.toForm(checks: List<CheckConfig>): EditorForm =
         graceSeconds = graceSeconds.coerceIn(Alarm.GRACE_SECONDS_RANGE),
         vibrateInGrace = vibrateInGrace,
         motivation = motivation.toChoice(),
+        motivationTiming = motivationMode.toTiming(),
         offerSkip = offerSkip,
     )
 

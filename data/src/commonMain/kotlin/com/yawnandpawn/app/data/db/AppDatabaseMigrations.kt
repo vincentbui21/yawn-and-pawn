@@ -232,6 +232,17 @@ val MIGRATION_12_13: Migration =
         }
     }
 
+/**
+ * v13 to v14 (Story 7.5): adds `alarm.motivation_mode`, when the message plays (`after_up` or `mix`), `after_up` for every
+ * existing alarm. Every other table and column is untouched. The SQL matches the exported `14.json`.
+ */
+val MIGRATION_13_14: Migration =
+    object : Migration(13, 14) {
+        override suspend fun migrate(connection: SQLiteConnection) {
+            connection.execSQL("ALTER TABLE `alarm` ADD COLUMN `motivation_mode` TEXT NOT NULL DEFAULT 'after_up'")
+        }
+    }
+
 /** Every migration of `app.db`, oldest first; `buildAppDatabase` registers them all. */
 val APP_DATABASE_MIGRATIONS: Array<Migration> =
     arrayOf(
@@ -247,4 +258,5 @@ val APP_DATABASE_MIGRATIONS: Array<Migration> =
         MIGRATION_10_11,
         MIGRATION_11_12,
         MIGRATION_12_13,
+        MIGRATION_13_14,
     )

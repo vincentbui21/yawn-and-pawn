@@ -18,8 +18,8 @@ import org.robolectric.annotation.GraphicsMode
 
 /**
  * Story 3.3 screenshots of the Success screen as `WakeActivity` shows it: on time, after a snooze and a test, and the
- * Story 6.4 streak (the count-up's start and calm end, the same day, the first day, no snapshot), always Sunrise, at
- * 100% and 200% font scale.
+ * Story 6.4 streak (the count-up's start and calm end, the same day, the first day, no snapshot) and the Story 7.3
+ * message card (playing, and played to its end), always Sunrise, at 100% and 200% font scale.
  */
 @RunWith(RobolectricTestRunner::class)
 @GraphicsMode(GraphicsMode.Mode.NATIVE)
@@ -107,6 +107,25 @@ class SuccessScreenshotTest {
     @Test
     @Config(fontScale = 2.0f)
     fun `snapshot missing at 200 percent`() = success("wake_success_snapshot_missing_sunrise_font200", SuccessSamples.snapshotMissing)
+
+    // --- Story 7.3: the message card ---
+
+    @Test
+    fun `streak with the message playing`() = success("wake_success_message_streak_sunrise", SuccessSamples.streakWithMessage)
+
+    @Test
+    @Config(fontScale = 2.0f)
+    fun `streak with the message playing at 200 percent`() =
+        success("wake_success_message_streak_sunrise_font200", SuccessSamples.streakWithMessage)
+
+    @Test
+    fun `after a snooze with the message played to its end`() =
+        success("wake_success_message_after_snooze_sunrise", SuccessSamples.afterSnoozeWithMessage)
+
+    @Test
+    @Config(fontScale = 2.0f)
+    fun `after a snooze with the message played to its end at 200 percent`() =
+        success("wake_success_message_after_snooze_sunrise_font200", SuccessSamples.afterSnoozeWithMessage)
 
     private companion object {
         const val FRAME = 32L

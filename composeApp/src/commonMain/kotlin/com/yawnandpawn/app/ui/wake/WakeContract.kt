@@ -233,6 +233,17 @@ data class SuccessUiState(
     val kind: SuccessKind,
     /** A pending payment was never used: "Your pending payment wasn't used. Google refunds it automatically." */
     val pendingNotUsed: Boolean = false,
+    /** The session's motivation message (Story 7.3): the `motivation-player` card; null shows no card. */
+    val motivation: MotivationPlayerUi? = null,
+)
+
+/**
+ * The `motivation-player` card on Success (Story 7.3): the message [playing] (the button reads "Pause message") or not
+ * ("Play message"; paused, or played to its end), and its [progress] from 0 to 1.
+ */
+data class MotivationPlayerUi(
+    val playing: Boolean,
+    val progress: Float,
 )
 
 data class SnoozedUiState(
@@ -293,4 +304,10 @@ sealed interface WakeIntent {
     data object FallbackPickerClosed : WakeIntent
 
     data object DoneClicked : WakeIntent
+
+    /** The Success message's play / pause button (Story 7.3). */
+    data object MotivationPlayPauseClicked : WakeIntent
+
+    /** The Success message's replay button: from its start (Story 7.3). */
+    data object MotivationReplayClicked : WakeIntent
 }

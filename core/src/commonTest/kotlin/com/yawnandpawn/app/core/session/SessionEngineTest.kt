@@ -1,5 +1,6 @@
 package com.yawnandpawn.app.core.session
 
+import com.yawnandpawn.app.core.alarm.Motivation
 import com.yawnandpawn.app.core.checks.CheckAnswer
 import com.yawnandpawn.app.core.checks.CheckMode
 import com.yawnandpawn.app.core.checks.CheckPlan
@@ -9,6 +10,8 @@ import com.yawnandpawn.app.core.error.Outcome
 import com.yawnandpawn.app.core.history.SessionHistoryRow
 import com.yawnandpawn.app.core.history.SessionOutcome
 import com.yawnandpawn.app.core.log.LogEvent
+import com.yawnandpawn.app.core.recording.MotivationResolver
+import com.yawnandpawn.app.core.recording.Recording
 import com.yawnandpawn.app.core.time.Deadline
 import com.yawnandpawn.app.core.time.TimeSnapshot
 import kotlinx.coroutines.coroutineScope
@@ -185,6 +188,23 @@ class SessionEngineTest {
             val session = engine(effects = RecordingRunner()).restore().session()
 
             assertEquals(time.now.elapsedMillis + 30.minutes.inWholeMilliseconds, session.interactionDeadline?.elapsedMillis)
+        }
+
+    @Test
+    fun `a Random message frozen at the fire is the one a restored session plays (Story 7_3)`() =
+        runTest {
+            val recordings =
+                listOf("a", "b", "c").mapIndexed { day, id ->
+                    Recording(id, "Message $day", 5_000, Recording.fileNameFor(id), SCHEDULED_AT - (day + 1).hours)
+                }
+            val frozen = MotivationResolver.resolve(Motivation.Random, SESSION_ID, recordings, beforeFirstUnlock = false)
+            val config = testConfig().copy(motivation = frozen)
+            engine().dispatch(SessionEvent.AlarmFired(SESSION_ID, config, beforeFirstUnlock = false))
+
+            val session = engine(effects = RecordingRunner()).restore().session()
+
+            assertEquals(assertIs<Motivation.Recording>(frozen), session.config.motivation)
+            assertEquals(frozen.id, MotivationResolver.playableRecordingId(session))
         }
 
     @Test

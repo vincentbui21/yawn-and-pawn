@@ -23,9 +23,11 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.semantics.LiveRegionMode
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.liveRegion
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
@@ -41,15 +43,17 @@ import com.yawnandpawn.app.ui.resources.Res
 import com.yawnandpawn.app.ui.resources.editor_back
 import com.yawnandpawn.app.ui.resources.editor_save
 import com.yawnandpawn.app.ui.resources.home_fix
+import com.yawnandpawn.app.ui.resources.onboarding_save_failed
 import com.yawnandpawn.app.ui.resources.recordings_delete_dialog
+import com.yawnandpawn.app.ui.resources.recordings_delete_failed
 import com.yawnandpawn.app.ui.resources.recordings_delete_named
 import com.yawnandpawn.app.ui.resources.recordings_empty
 import com.yawnandpawn.app.ui.resources.recordings_mic_off
-import com.yawnandpawn.app.ui.resources.recordings_name
 import com.yawnandpawn.app.ui.resources.recordings_pause
 import com.yawnandpawn.app.ui.resources.recordings_play
 import com.yawnandpawn.app.ui.resources.recordings_rerecord
 import com.yawnandpawn.app.ui.resources.recordings_start
+import com.yawnandpawn.app.ui.resources.recordings_start_failed
 import com.yawnandpawn.app.ui.resources.recordings_stop
 import com.yawnandpawn.app.ui.resources.recordings_time
 import com.yawnandpawn.app.ui.resources.recordings_title
@@ -57,6 +61,7 @@ import com.yawnandpawn.app.ui.resources.recordings_too_short
 import com.yawnandpawn.app.ui.resources.recordings_yours
 import com.yawnandpawn.app.ui.resources.settings_delete_confirm
 import com.yawnandpawn.app.ui.resources.settings_delete_keep
+import com.yawnandpawn.app.ui.resources.sound_file_missing
 import com.yawnandpawn.app.ui.resources.symbol_delete
 import com.yawnandpawn.app.ui.resources.symbol_mic
 import com.yawnandpawn.app.ui.resources.symbol_pause
@@ -65,6 +70,7 @@ import com.yawnandpawn.app.ui.resources.symbol_stop
 import com.yawnandpawn.app.ui.theme.PpsTheme
 import com.yawnandpawn.app.ui.theme.TABULAR_FIGURES
 import org.jetbrains.compose.resources.DrawableResource
+import org.jetbrains.compose.resources.StringResource
 import org.jetbrains.compose.resources.painterResource
 import org.jetbrains.compose.resources.stringResource
 
@@ -85,10 +91,15 @@ sealed interface RecorderState {
     ) : RecorderState
 }
 
-/** One saved motivation message, named "Message {number}". */
+/**
+ * One saved motivation message (Story 7.2): its recording [id], its [name] ("Message 1") and length. A [missing] file
+ * shows "File missing. Default sound will play." and cannot be previewed.
+ */
 data class RecordedMessage(
-    val number: Int,
+    val id: String,
+    val name: String,
     val seconds: Int,
+    val missing: Boolean = false,
     /** Playing, [playedSeconds] into it. */
     val playing: Boolean = false,
     val playedSeconds: Int = 0,
@@ -100,15 +111,25 @@ data class RecordingsUiState(
     val recorder: RecorderState = RecorderState.Idle,
     /** Microphone permission denied: "Microphone is off. Turn it on in Settings." with "Fix". */
     val micDenied: Boolean = false,
-    /** The take was too short: the "Too short. Try again." snackbar. */
-    val tooShort: Boolean = false,
-    /** The message whose delete dialog is open. */
-    val deleteDialogFor: Int? = null,
+    /** The snackbar showing: "Too short. Try again." or a failure to start, save or delete (Story 7.2). */
+    val snackbar: RecordingsSnackbar? = null,
+    /** The message (its id) whose delete dialog is open. */
+    val deleteDialogFor: String? = null,
 ) {
     companion object {
         /** The recorder stops by itself at 60 s. */
         const val MAX_SECONDS = 60
     }
+}
+
+/** A Recordings snackbar: a take under 1 s, or a recorder or storage failure (Story 7.2). */
+enum class RecordingsSnackbar(
+    val text: StringResource,
+) {
+    TooShort(Res.string.recordings_too_short),
+    StartFailed(Res.string.recordings_start_failed),
+    SaveFailed(Res.string.onboarding_save_failed),
+    DeleteFailed(Res.string.recordings_delete_failed),
 }
 
 /** Everything the user can do in Recordings. */
@@ -128,11 +149,11 @@ sealed interface RecordingsIntent {
     data object DeleteTakeClicked : RecordingsIntent
 
     data class PlayToggled(
-        val number: Int,
+        val id: String,
     ) : RecordingsIntent
 
     data class DeleteClicked(
-        val number: Int,
+        val id: String,
     ) : RecordingsIntent
 
     data object DeleteConfirmed : RecordingsIntent
@@ -148,7 +169,8 @@ sealed interface RecordingsIntent {
  * level meter; the 72 dp record button, "Start recording" / "Stop recording"); after a take "Play message", "Re-record",
  * "Delete" and `button-filled` "Save"; then "Your messages" with play / pause and delete for each ("Delete this
  * message? Alarms using it will play no message."). Microphone denied: "Microphone is off. Turn it on in Settings."
- * with "Fix"; a take under 1 s: the "Too short. Try again." snackbar.
+ * with "Fix"; a take under 1 s: the "Too short. Try again." snackbar. A message whose file is missing (Story 7.2) says
+ * "File missing. Default sound will play." and cannot be previewed; while recording, TalkBack hears the time every 10 s.
  */
 @Composable
 fun RecordingsScreen(
@@ -170,10 +192,13 @@ fun RecordingsScreen(
                 )
             }
             RecorderCard(state = state, onIntent = onIntent)
-            if (state.messages.isNotEmpty()) MessagesCard(messages = state.messages, onIntent = onIntent)
+            if (state.messages.isNotEmpty()) {
+                // No preview while recording: the speaker would be recorded into the take.
+                MessagesCard(messages = state.messages, playEnabled = state.recorder !is RecorderState.Recording, onIntent = onIntent)
+            }
         }
-        if (state.tooShort) {
-            AppSnackbar(text = stringResource(Res.string.recordings_too_short), modifier = Modifier.align(Alignment.BottomCenter))
+        state.snackbar?.let {
+            AppSnackbar(text = stringResource(it.text), modifier = Modifier.align(Alignment.BottomCenter))
         }
     }
     state.deleteDialogFor?.let {
@@ -217,11 +242,26 @@ private fun RecorderCard(
                     is RecorderState.Recording -> recorder.seconds
                     is RecorderState.Recorded -> recorder.seconds
                 }
+            // TalkBack hears the elapsed time every 10 s while recording (a polite live region that changes only then).
+            val announced =
+                (recorder as? RecorderState.Recording)?.let {
+                    val tens = it.seconds - it.seconds % ANNOUNCE_EVERY_SECONDS
+                    stringResource(Res.string.recordings_time, duration(tens), duration(RecordingsUiState.MAX_SECONDS))
+                }
             Text(
                 text = stringResource(Res.string.recordings_time, duration(seconds), duration(RecordingsUiState.MAX_SECONDS)),
                 style = PpsTheme.typography.display.copy(fontFeatureSettings = TABULAR_FIGURES),
                 color = colors.text,
                 textAlign = TextAlign.Center,
+                modifier =
+                    if (announced != null) {
+                        Modifier.clearAndSetSemantics {
+                            contentDescription = announced
+                            liveRegion = LiveRegionMode.Polite
+                        }
+                    } else {
+                        Modifier
+                    },
             )
             LevelMeter(levels = (recorder as? RecorderState.Recording)?.levels.orEmpty())
             if (recorder is RecorderState.Recorded) {
@@ -297,7 +337,7 @@ private fun LevelMeter(levels: List<Float>) {
         horizontalArrangement = Arrangement.spacedBy(BAR_GAP),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        repeat(BARS) { index ->
+        repeat(LEVEL_BARS) { index ->
             val level = levels.getOrNull(index) ?: 0f
             Box(
                 modifier =
@@ -315,6 +355,7 @@ private fun LevelMeter(levels: List<Float>) {
 @Composable
 private fun MessagesCard(
     messages: List<RecordedMessage>,
+    playEnabled: Boolean,
     onIntent: (RecordingsIntent) -> Unit,
 ) {
     val colors = PpsTheme.colors
@@ -322,7 +363,8 @@ private fun MessagesCard(
     GroupCard(title = stringResource(Res.string.recordings_yours)) {
         messages.forEachIndexed { index, message ->
             if (index > 0) GroupDivider()
-            val name = stringResource(Res.string.recordings_name, message.number)
+            // The stored name ("Message 1", given by SaveRecording), shown as it is.
+            val name = message.name
             Row(
                 modifier = Modifier.fillMaxWidth().heightIn(min = ROW_HEIGHT).padding(start = spacing.cardPadding, end = spacing.space1),
                 verticalAlignment = Alignment.CenterVertically,
@@ -331,35 +373,50 @@ private fun MessagesCard(
                     Text(text = name, style = PpsTheme.typography.body, color = colors.text)
                     Text(
                         text =
-                            if (message.playing) {
-                                stringResource(Res.string.recordings_time, duration(message.playedSeconds), duration(message.seconds))
-                            } else {
-                                duration(message.seconds)
+                            when {
+                                // A restored row without its file (Story 7.1): it cannot play, and an alarm plays no message.
+                                message.missing -> {
+                                    stringResource(Res.string.sound_file_missing)
+                                }
+
+                                message.playing -> {
+                                    stringResource(Res.string.recordings_time, duration(message.playedSeconds), duration(message.seconds))
+                                }
+
+                                else -> {
+                                    duration(message.seconds)
+                                }
                             },
                         style = PpsTheme.typography.caption.copy(fontFeatureSettings = TABULAR_FIGURES),
                         color = colors.textSecondary,
                     )
                 }
-                PlayButton(playing = message.playing, onClick = { onIntent(RecordingsIntent.PlayToggled(message.number)) })
+                PlayButton(
+                    playing = message.playing,
+                    enabled = playEnabled && !message.missing,
+                    onClick = { onIntent(RecordingsIntent.PlayToggled(message.id)) },
+                )
                 IconAction(
                     icon = Res.drawable.symbol_delete,
                     label = stringResource(Res.string.recordings_delete_named, name),
-                    onClick = { onIntent(RecordingsIntent.DeleteClicked(message.number)) },
+                    onClick = { onIntent(RecordingsIntent.DeleteClicked(message.id)) },
                 )
             }
         }
     }
 }
 
-/** 48 dp "Play message" / "Pause message". */
+/** 48 dp "Play message" / "Pause message" (a tap while it plays stops the preview); disabled for a missing file. */
 @Composable
 private fun PlayButton(
     playing: Boolean,
     onClick: () -> Unit,
+    enabled: Boolean = true,
 ) = IconAction(
     icon = if (playing) Res.drawable.symbol_pause else Res.drawable.symbol_play_arrow,
     label = stringResource(if (playing) Res.string.recordings_pause else Res.string.recordings_play),
     onClick = onClick,
+    enabled = enabled,
 )
 
 @Composable
@@ -367,11 +424,18 @@ private fun IconAction(
     icon: DrawableResource,
     label: String,
     onClick: () -> Unit,
+    enabled: Boolean = true,
 ) {
     IconButton(
         onClick = onClick,
+        enabled = enabled,
         modifier = Modifier.size(PpsTheme.spacing.targetMin),
-        colors = IconButtonDefaults.iconButtonColors(contentColor = PpsTheme.colors.text),
+        colors =
+            IconButtonDefaults.iconButtonColors(
+                contentColor = PpsTheme.colors.text,
+                // As the Sound list's disabled preview.
+                disabledContentColor = PpsTheme.colors.textSecondary,
+            ),
     ) {
         Icon(painter = painterResource(icon), contentDescription = label)
     }
@@ -381,7 +445,10 @@ private fun IconAction(
 private fun duration(seconds: Int): String = "${seconds / SECONDS_PER_MINUTE}:${(seconds % SECONDS_PER_MINUTE).toString().padStart(2, '0')}"
 
 private const val SECONDS_PER_MINUTE = 60
-private const val BARS = 24
+private const val ANNOUNCE_EVERY_SECONDS = 10
+
+/** How many bars the level meter draws (the latest input levels, oldest first). */
+internal const val LEVEL_BARS = 24
 private val METER_HEIGHT = 32.dp
 private val BAR_WIDTH = 3.dp
 private val BAR_GAP = 3.dp

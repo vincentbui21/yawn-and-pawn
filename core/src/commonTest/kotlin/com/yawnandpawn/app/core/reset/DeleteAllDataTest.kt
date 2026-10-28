@@ -5,6 +5,7 @@ import com.yawnandpawn.app.core.alarm.AlarmFired
 import com.yawnandpawn.app.core.alarm.AlarmRepository
 import com.yawnandpawn.app.core.alarm.AlarmScheduler
 import com.yawnandpawn.app.core.alarm.AlarmWriteLock
+import com.yawnandpawn.app.core.alarm.Motivation
 import com.yawnandpawn.app.core.alarm.RequestCodes
 import com.yawnandpawn.app.core.billing.LedgerStatus
 import com.yawnandpawn.app.core.billing.LedgerWorld
@@ -740,6 +741,8 @@ class DeleteAllDataTest {
             override suspend fun upsert(alarm: Alarm): Outcome<Unit, DomainError> = error("not used")
 
             override suspend fun delete(id: String): Outcome<Unit, DomainError> = error("not used")
+
+            override suspend fun clearMotivation(motivation: Motivation): Outcome<Unit, DomainError> = error("not used")
         }
 
         /** The session store, whose clear is the Session step. */

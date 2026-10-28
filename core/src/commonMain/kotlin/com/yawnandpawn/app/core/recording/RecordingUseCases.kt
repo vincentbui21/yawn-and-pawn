@@ -1,7 +1,11 @@
 package com.yawnandpawn.app.core.recording
 
+import com.yawnandpawn.app.core.alarm.AlarmRepository
+import com.yawnandpawn.app.core.alarm.AlarmWriteLock
+import com.yawnandpawn.app.core.alarm.Motivation
 import com.yawnandpawn.app.core.error.DomainError
 import com.yawnandpawn.app.core.error.Outcome
+import com.yawnandpawn.app.core.error.flatMap
 import com.yawnandpawn.app.core.error.map
 import com.yawnandpawn.app.core.id.IdGenerator
 import com.yawnandpawn.app.core.log.LogEvent
@@ -14,7 +18,7 @@ import kotlin.time.Instant
 
 /**
  * The automatic name of a new recording (Story 7.1): "Message {n}", n one above the highest "Message k" already stored
- * (gaps are not filled, names the user gave are ignored). A plain constant until Story 7.2 localises the format.
+ * (gaps are not filled, names the user gave are ignored). A plain constant: the screens show the stored name as it is.
  */
 object RecordingNames {
     const val AUTO_NAME_FORMAT = "Message {n}"
@@ -125,16 +129,34 @@ class ReRecord(
 }
 
 /**
- * Deletes the recording [id] and its file (Story 7.1); an unknown id is `NotFound(id)`, during a wake session
- * `SessionActive`. Failures are logged.
+ * Deletes the recording [id] and its file (Story 7.1), then sets every alarm whose motivation is that recording to
+ * `Motivation.None` (Story 7.2: "Alarms using it will play no message."); alarms on `Random` keep it while another
+ * recording remains, and fall back to None with the last one. The recording goes first, so a failed delete leaves every
+ * alarm as it was; a failed alarm write after it leaves a choice that no longer resolves, which plays no message. One
+ * write path, under the [alarmLock] like every alarm write, and refused with `SessionActive` during a wake session
+ * (nothing changes then). An unknown id is `NotFound(id)` and no alarm changes. Failures are logged (their error code
+ * only).
  */
 class DeleteRecording(
     private val repository: RecordingRepository,
+    private val alarmRepository: AlarmRepository,
+    private val alarmLock: AlarmWriteLock,
     private val sessionLock: SessionLockGuard,
     private val logger: Logger,
 ) {
     suspend operator fun invoke(id: String): Outcome<Unit, DomainError> {
-        val result = sessionLock.whenIdle { repository.delete(id) }
+        val result =
+            alarmLock.withLock {
+                sessionLock.whenIdle {
+                    repository
+                        .delete(id)
+                        .flatMap { alarmRepository.clearMotivation(Motivation.Recording(id)) }
+                        .flatMap { currentNames(repository) }
+                        .flatMap { left ->
+                            if (left.isEmpty()) alarmRepository.clearMotivation(Motivation.Random) else Outcome.Success(Unit)
+                        }
+                }
+            }
         if (result is Outcome.Failure) logger.log(LogEvent.OperationFailed.of(OPERATION, result.error))
         return result
     }

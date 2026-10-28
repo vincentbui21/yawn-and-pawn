@@ -20,6 +20,7 @@ import com.yawnandpawn.app.core.billing.PurchaseCoordinator
 import com.yawnandpawn.app.core.billing.PurchaseLedger
 import com.yawnandpawn.app.core.billing.ReplayGrantLedger
 import com.yawnandpawn.app.core.crash.CrashReporter
+import com.yawnandpawn.app.core.recording.RecordingPreview
 import com.yawnandpawn.app.core.session.SessionEngine
 import com.yawnandpawn.app.core.sound.SoundPreview
 import com.yawnandpawn.app.core.stats.CelebrationStreaks
@@ -65,7 +66,8 @@ fun wakeModule(): Module =
         single { WakeServiceStarts() }
         single { WakeTimings(now = { get<Clock>().now() }, logger = get()) }
         single {
-            // A ring stops the Sound preview (Story 1.17); the preview is looked up then, as it depends on this player.
+            // A ring stops the Sound preview (Story 1.17) and the Recordings preview (Story 7.2); each is looked up then, as it
+            // depends on this player.
             val koin = this
             AndroidAlarmPlayer(
                 get(),
@@ -75,7 +77,11 @@ fun wakeModule(): Module =
                 get<WakeScope>(),
                 get(),
                 timings = get(),
-                onRingStart = { koin.getOrNull<SoundPreview>()?.stop() },
+                onRingStart = {
+                    koin.getOrNull<SoundPreview>()?.stop()
+                    // Story 7.2: a Recordings preview never plays over a ring.
+                    koin.getOrNull<RecordingPreview>()?.stop()
+                },
                 // Story 2.7: a focus change goes to the call adapter (a call takes focus); it never ducks the ring.
                 focus =
                     AlarmAudioFocus(androidContext().getSystemService(AudioManager::class.java)) { change ->

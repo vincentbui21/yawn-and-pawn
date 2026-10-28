@@ -6,6 +6,7 @@ import androidx.sqlite.driver.AndroidSQLiteDriver
 import androidx.test.core.app.ApplicationProvider
 import com.yawnandpawn.app.core.alarm.Alarm
 import com.yawnandpawn.app.core.alarm.AlarmDraft
+import com.yawnandpawn.app.core.alarm.Motivation
 import com.yawnandpawn.app.core.error.DomainError
 import com.yawnandpawn.app.core.error.Outcome
 import com.yawnandpawn.app.data.db.AppDatabase
@@ -43,6 +44,20 @@ class RoomAlarmRepositoryTest {
     }
 
     private suspend fun stored(): List<Alarm> = repository.observeAll().first()
+
+    @Test
+    fun `clearing a message sets only the alarms that play it to none, Random and other messages stay (Story 7-2)`() =
+        runTest(timeout = ROOM_IO_TIMEOUT) {
+            val usesIt = anAlarm(id = "a", requestCode = 1000).copy(motivation = Motivation.Recording("r1"))
+            val random = anAlarm(id = "b", time = LocalTime(8, 0), requestCode = 1001).copy(motivation = Motivation.Random)
+            val other = anAlarm(id = "c", time = LocalTime(9, 0), requestCode = 1002).copy(motivation = Motivation.Recording("r2"))
+            listOf(usesIt, random, other).forEach { assertEquals(Outcome.Success(Unit), repository.upsert(it)) }
+
+            assertEquals(Outcome.Success(Unit), repository.clearMotivation(Motivation.Recording("r1")))
+            assertEquals(Outcome.Success(Unit), repository.clearMotivation(Motivation.Recording("gone")), "no alarm uses it")
+
+            assertEquals(listOf(usesIt.copy(motivation = Motivation.None), random, other), stored())
+        }
 
     @Test
     fun `an inserted alarm reads back with every field intact`() =

@@ -32,7 +32,8 @@ import com.yawnandpawn.app.data.reset.AlarmDataDao
  * the registered code to `check_config` ([MIGRATION_7_8]); version 9 (Story 4.4) adds `pending_change` and
  * `commitment_event` ([MIGRATION_8_9]); version 10 (Story 4.10) adds `purchase_record`, the purchase history keyed by
  * token hash ([MIGRATION_9_10]); version 11 (Story 7.1) adds `recording`, the user's motivation messages, whose
- * audio files stay in credential-protected `recordings/` and are never backed up ([MIGRATION_10_11]). There is no
+ * audio files stay in credential-protected `recordings/` and are never backed up ([MIGRATION_10_11]); version 12
+ * (Story 7.2) adds `alarm.motivation`, the message each alarm plays ([MIGRATION_11_12]). There is no
  * destructive migration fallback; restoring a newer file onto an older install is
  * covered by `docs/decisions/db-downgrade.md`.
  */
@@ -80,7 +81,7 @@ abstract class AppDatabase : RoomDatabase() {
          * The `app.db` schema this build knows: the `@Database` version, and the limit `PpsBackupAgent` checks a restored
          * file against (Room cannot open a newer one, `docs/decisions/db-downgrade.md`).
          */
-        const val SCHEMA_VERSION = 11
+        const val SCHEMA_VERSION = 12
     }
 }
 

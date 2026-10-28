@@ -77,4 +77,6 @@ internal class InMemoryRecords : ReliabilityRecords {
     override suspend fun confirmMaker(confirmation: MakerConfirmation): Outcome<Unit, DomainError> = error("not used")
 
     override suspend fun lockedTestPassed(at: Instant): Outcome<Unit, DomainError> = error("not used")
+
+    override suspend fun recordTapped(): Outcome<Unit, DomainError> = error("not used")
 }

@@ -20,4 +20,10 @@ interface AlarmRepository {
 
     /** Removes the alarm with [id], or returns `NotFound(id)` and changes nothing. */
     suspend fun delete(id: String): Outcome<Unit, DomainError>
+
+    /**
+     * Sets every alarm whose motivation is [motivation] to `Motivation.None` (Story 7.2: its recording was deleted), in one
+     * write; nothing else of those alarms changes, and none is re-armed. No such alarm is not an error.
+     */
+    suspend fun clearMotivation(motivation: Motivation): Outcome<Unit, DomainError>
 }

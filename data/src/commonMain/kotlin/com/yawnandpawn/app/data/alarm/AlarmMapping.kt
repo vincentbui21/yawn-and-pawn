@@ -1,6 +1,7 @@
 package com.yawnandpawn.app.data.alarm
 
 import com.yawnandpawn.app.core.alarm.Alarm
+import com.yawnandpawn.app.core.alarm.Motivation
 import com.yawnandpawn.app.core.checks.CheckMode
 import kotlinx.datetime.DayOfWeek
 import kotlinx.datetime.LocalTime
@@ -27,6 +28,7 @@ internal fun Alarm.toEntity(): AlarmEntity =
         createdAt = createdAt.toEpochMilliseconds(),
         updatedAt = updatedAt.toEpochMilliseconds(),
         checkMode = checkMode.name,
+        motivation = motivation.encode(),
     )
 
 internal fun AlarmEntity.toAlarm(): Alarm =
@@ -50,6 +52,8 @@ internal fun AlarmEntity.toAlarm(): Alarm =
         updatedAt = Instant.fromEpochMilliseconds(updatedAt),
         // A mode this build does not know (a newer version's) rings as Random.
         checkMode = CheckMode.entries.firstOrNull { it.name == checkMode } ?: CheckMode.Random,
+        // Unknown text (a newer version's) plays no message.
+        motivation = Motivation.parse(motivation),
     )
 
 internal fun Set<DayOfWeek>.toBitmask(): Int = fold(0) { mask, day -> mask or (1 shl (day.isoDayNumber - 1)) }

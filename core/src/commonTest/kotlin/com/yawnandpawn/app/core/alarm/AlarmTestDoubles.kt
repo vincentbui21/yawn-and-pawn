@@ -87,6 +87,17 @@ internal class InMemoryAlarms : AlarmRepository {
             else -> Outcome.Success(Unit).also { alarms.value -= id }
         }.also { if (it is Outcome.Success) afterWrite() }
     }
+
+    override suspend fun clearMotivation(motivation: Motivation): Outcome<Unit, DomainError> {
+        yield()
+        failure?.let { return Outcome.Failure(it) }
+        alarms.value =
+            alarms.value.mapValues { (_, alarm) ->
+                if (alarm.motivation == motivation) alarm.copy(motivation = Motivation.None) else alarm
+            }
+        afterWrite()
+        return Outcome.Success(Unit)
+    }
 }
 
 /**

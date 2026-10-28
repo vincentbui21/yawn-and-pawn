@@ -554,20 +554,20 @@ class AppDatabaseFactoryTest {
         }
 
     @Test
-    fun `a new database is created at version 11 with an empty recording table`() =
+    fun `a new database is created at version 12 with an empty recording table`() =
         runTest {
             withDatabase { database -> assertEquals(0, database.recordingDao().count()) }
 
-            assertEquals(11, userVersion())
+            assertEquals(12, userVersion())
         }
 
     @Test
     fun `the migrations cover every version step and nothing is destructive`() {
         assertEquals(
-            listOf(1 to 2, 2 to 3, 3 to 4, 4 to 5, 5 to 6, 6 to 7, 7 to 8, 8 to 9, 9 to 10, 10 to 11),
+            listOf(1 to 2, 2 to 3, 3 to 4, 4 to 5, 5 to 6, 6 to 7, 7 to 8, 8 to 9, 9 to 10, 10 to 11, 11 to 12),
             APP_DATABASE_MIGRATIONS.map { it.startVersion to it.endVersion },
         )
-        assertEquals(11, AppDatabase.SCHEMA_VERSION)
+        assertEquals(12, AppDatabase.SCHEMA_VERSION)
     }
 
     @Test

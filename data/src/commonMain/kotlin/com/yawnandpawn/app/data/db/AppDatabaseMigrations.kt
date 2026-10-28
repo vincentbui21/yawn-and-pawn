@@ -186,6 +186,17 @@ val MIGRATION_10_11: Migration =
         }
     }
 
+/**
+ * v11 to v12 (Story 7.2): adds `alarm.motivation`, the message the alarm plays (`none`, `random` or `recording:{id}`), `none`
+ * for every existing alarm. The SQL matches the exported `12.json`.
+ */
+val MIGRATION_11_12: Migration =
+    object : Migration(11, 12) {
+        override suspend fun migrate(connection: SQLiteConnection) {
+            connection.execSQL("ALTER TABLE `alarm` ADD COLUMN `motivation` TEXT NOT NULL DEFAULT 'none'")
+        }
+    }
+
 /** Every migration of `app.db`, oldest first; `buildAppDatabase` registers them all. */
 val APP_DATABASE_MIGRATIONS: Array<Migration> =
     arrayOf(
@@ -199,4 +210,5 @@ val APP_DATABASE_MIGRATIONS: Array<Migration> =
         MIGRATION_8_9,
         MIGRATION_9_10,
         MIGRATION_10_11,
+        MIGRATION_11_12,
     )

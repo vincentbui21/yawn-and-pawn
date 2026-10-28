@@ -3,13 +3,18 @@ package com.yawnandpawn.app.testing
 import com.yawnandpawn.app.core.error.DomainError
 import com.yawnandpawn.app.core.error.Outcome
 import com.yawnandpawn.app.core.recording.AudioRecorder
+import com.yawnandpawn.app.core.recording.PreviewItem
+import com.yawnandpawn.app.core.recording.PreviewPlayback
 import com.yawnandpawn.app.core.recording.RecordedTake
 import com.yawnandpawn.app.core.recording.Recording
+import com.yawnandpawn.app.core.recording.RecordingPreview
 import com.yawnandpawn.app.core.recording.RecordingRepository
 import com.yawnandpawn.app.core.recording.RecordingSession
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.receiveAsFlow
 import kotlin.time.Duration
@@ -165,5 +170,39 @@ class FakeAudioRecorder : AudioRecorder {
             result ?: session?.let { Outcome.Success(RecordedTake(it.takeId, durationMs)) }
                 ?: Outcome.Failure(DomainError.RecorderFailure("not recording"))
         autoStops.trySend(outcome)
+    }
+}
+
+/**
+ * In-memory [RecordingPreview] (Story 7.2): [play] records the item and reports it playing at 0 ms (a missing saved
+ * recording plays nothing, like the adapter); [advance] moves the position, [finish] ends it as the player would.
+ */
+class FakeRecordingPreview : RecordingPreview {
+    private val state = MutableStateFlow<PreviewPlayback?>(null)
+    override val playing: StateFlow<PreviewPlayback?> = state.asStateFlow()
+
+    /** Each item [play] was asked for, in order. */
+    val played = mutableListOf<PreviewItem>()
+    var stops = 0
+        private set
+
+    override fun play(item: PreviewItem) {
+        played += item
+        state.value = if (item is PreviewItem.Saved && item.recording.missing) null else PreviewPlayback(item.key)
+    }
+
+    override fun stop() {
+        stops++
+        state.value = null
+    }
+
+    /** The playing preview is [positionMs] in. */
+    fun advance(positionMs: Long) {
+        state.value = state.value?.copy(positionMs = positionMs)
+    }
+
+    /** The preview ended by itself. */
+    fun finish() {
+        state.value = null
     }
 }

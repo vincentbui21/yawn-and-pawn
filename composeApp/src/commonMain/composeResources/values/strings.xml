@@ -543,4 +543,7 @@
     <string name="recordings_yours">Your messages</string>
     <string name="recordings_delete_named">Delete %1$s</string>
     <string name="recordings_delete_dialog">Delete this message? Alarms using it will play no message.</string>
+    <!-- Story 7.2: a recorder or storage failure; drafts listed for the owner in the 7.2 spec. -->
+    <string name="recordings_start_failed">Couldn't start recording. Try again.</string>
+    <string name="recordings_delete_failed">Couldn't delete this message. Try again.</string>
 </resources>

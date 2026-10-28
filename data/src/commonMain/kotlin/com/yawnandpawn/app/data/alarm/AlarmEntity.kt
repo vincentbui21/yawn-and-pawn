@@ -6,8 +6,8 @@ import androidx.room3.Index
 import androidx.room3.PrimaryKey
 
 /**
- * Row of the `alarm` table in `app.db` (schema v1; v5 adds `vibrate_in_grace`). Kept separate from the core `Alarm` so storage types
- * (bitmask, epoch millis, nanosecond of day) never leak into `:core`; see [toEntity] / [toAlarm].
+ * Row of the `alarm` table in `app.db` (schema v1; v5 adds `vibrate_in_grace`, v12 `motivation`). Kept separate from the
+ * core `Alarm` so storage types (bitmask, epoch millis, nanosecond of day) never leak into `:core`; see [toEntity] / [toAlarm].
  */
 @Entity(
     tableName = "alarm",
@@ -55,4 +55,7 @@ data class AlarmEntity(
     /** The core `CheckMode` name, `Random` or `All` (schema v6, Story 3.5). */
     @ColumnInfo(name = "check_mode", defaultValue = "Random")
     val checkMode: String = "Random",
+    /** The core `Motivation` as text, `none`, `random` or `recording:{id}` (schema v12, Story 7.2). */
+    @ColumnInfo(name = "motivation", defaultValue = "none")
+    val motivation: String = "none",
 )

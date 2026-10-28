@@ -23,6 +23,7 @@ import com.yawnandpawn.app.ui.editor.EditorIntent
 import com.yawnandpawn.app.ui.editor.EditorPane
 import com.yawnandpawn.app.ui.editor.EditorUiState
 import com.yawnandpawn.app.ui.editor.FullEditorSections
+import com.yawnandpawn.app.ui.editor.MotivationRecording
 import com.yawnandpawn.app.ui.editor.RepeatChoice
 import com.yawnandpawn.app.ui.format.Weekdays
 import com.yawnandpawn.app.ui.home.AlarmCard
@@ -108,7 +109,9 @@ internal class TapThroughState(
                     editor = editor.copy(full = editor.full?.let { it.copy(checks = change(it.checks)) })
                 }
             },
-            onMessages = { numbers -> editor = editor.copy(full = editor.full?.copy(recordings = numbers.map { "Message $it" })) },
+            onMessages = { messages ->
+                editor = editor.copy(full = editor.full?.copy(recordings = messages.map { MotivationRecording(it.id, it.name) }))
+            },
             registered = start != FlowStart.Onboarding,
         )
 

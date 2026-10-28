@@ -46,6 +46,8 @@ data class EditorForm(
     /** The checks in the order All mode runs them (Story 3.5); a new alarm starts with Math · Easy · 3. */
     val checks: List<CheckChip> = DEFAULT_CHECKS,
     val checkMode: CheckMode = CheckMode.Random,
+    /** The motivation message the alarm plays (Story 7.2), saved with the alarm; never a locked field. */
+    val motivation: MotivationChoice = MotivationChoice.None,
 ) {
     companion object {
         /** The time a new alarm opens with. */
@@ -80,6 +82,9 @@ enum class EditorPane {
 
     /** QR registration (Story 3.10), opened from Check setup's "Your code" or Home's "Re-register". */
     ScanCode,
+
+    /** Recordings (Story 7.2), opened from the Motivation sub-screen's "Record a message"; Back returns there. */
+    Recordings,
     ;
 
     /** How deep the pane is: Back goes up one level, and the slide runs forward when going deeper. */
@@ -87,7 +92,7 @@ enum class EditorPane {
         get() =
             when (this) {
                 Main -> 0
-                CheckSetup -> 2
+                CheckSetup, Recordings -> 2
                 TryIt, ScanCode -> 3
                 else -> 1
             }
@@ -171,16 +176,26 @@ data class CheckChip(
     val code: RegisteredCode? = null,
 )
 
-/** The motivation message the alarm plays: none, a random one of the recordings, or one named recording. */
+/**
+ * The motivation message the alarm plays: none, a random one of the recordings, or one recording by its id (Story 7.2;
+ * the core `Motivation`).
+ */
 sealed interface MotivationChoice {
     data object None : MotivationChoice
 
     data object Random : MotivationChoice
 
     data class Recording(
-        val name: String,
+        val id: String,
     ) : MotivationChoice
 }
+
+/** One recorded message as the Motivation sub-screen lists it: its [name], and whether its file is [missing]. */
+data class MotivationRecording(
+    val id: String,
+    val name: String,
+    val missing: Boolean = false,
+)
 
 /** When the motivation message plays. */
 enum class MotivationTiming { AfterImUp, MixIntoAlarm }
@@ -204,10 +219,12 @@ data class FullEditorSections(
     val feeLadder: List<LadderPrice>? = null,
     /** Prices never loaded: the ladder is in USD with "Approximate. Your local price shows when you're online.". */
     val pricesApproximate: Boolean = false,
-    /** Names of the recorded motivation messages ("Message 1"). */
-    val recordings: List<String> = emptyList(),
+    /** The recorded motivation messages, oldest first (Story 7.2: the radio rows of the Motivation sub-screen). */
+    val recordings: List<MotivationRecording> = emptyList(),
     val motivation: MotivationChoice = MotivationChoice.None,
     val motivationTiming: MotivationTiming = MotivationTiming.AfterImUp,
+    /** "When it plays" shows: in the design preview; the app hides it until Story 7.5 ("Mix into alarm"). */
+    val motivationTimingShown: Boolean = true,
     /**
      * A weakening change of this alarm waits under the commitment lock (Story 4.6): "Saved. Takes effect after
      * tomorrow's {time} alarm." (or "today's") under the rows card. It shows while a field holds its pending value.
@@ -331,8 +348,18 @@ sealed interface EditorIntent {
         val timing: MotivationTiming,
     ) : EditorIntent
 
-    /** "Record a message": opens Recordings (design-preview round 3). */
+    /** "Record a message": opens Recordings (design-preview round 3; Story 7.2). */
     data object RecordMessageClicked : EditorIntent
+
+    /** Recordings saved a new message [id] (Story 7.2): it is listed; the choice stays the user's. */
+    data class RecordingSaved(
+        val id: String,
+    ) : EditorIntent
+
+    /** Recordings deleted the message [id] (Story 7.2): a choice of it becomes None, as the stored alarms did. */
+    data class RecordingDeleted(
+        val id: String,
+    ) : EditorIntent
 
     /** A selected check's row in the Wake-up check sub-screen: opens its Check setup (design-preview round 3). */
     data class CheckSetupClicked(

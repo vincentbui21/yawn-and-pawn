@@ -13,6 +13,7 @@ import com.yawnandpawn.app.core.history.MissedNotes
 import com.yawnandpawn.app.core.history.SessionHistoryRepository
 import com.yawnandpawn.app.core.log.Logger
 import com.yawnandpawn.app.core.onboarding.OnboardingTestNote
+import com.yawnandpawn.app.core.recording.RecordingRepository
 import com.yawnandpawn.app.core.reliability.ConfirmMakerGuidance
 import com.yawnandpawn.app.core.reliability.DeviceInfo
 import com.yawnandpawn.app.core.reliability.DeviceInfoSource
@@ -54,6 +55,7 @@ import com.yawnandpawn.app.testing.FakePendingChangeRepository
 import com.yawnandpawn.app.testing.FakePriceCatalog
 import com.yawnandpawn.app.testing.FakePurchaseRecordRepository
 import com.yawnandpawn.app.testing.FakeReRegisterDismissals
+import com.yawnandpawn.app.testing.FakeRecordingRepository
 import com.yawnandpawn.app.testing.FakeReliabilityProbe
 import com.yawnandpawn.app.testing.FakeReliabilityRecords
 import com.yawnandpawn.app.testing.FakeReliabilitySettings
@@ -70,12 +72,14 @@ import com.yawnandpawn.app.testing.anEvaluateReliability
 import com.yawnandpawn.app.ui.daydetail.DayDetailViewModel
 import com.yawnandpawn.app.ui.editor.AlarmEditorArgs
 import com.yawnandpawn.app.ui.editor.AlarmEditorViewModel
+import com.yawnandpawn.app.ui.editor.EditorPane
 import com.yawnandpawn.app.ui.home.HomeHero
 import com.yawnandpawn.app.ui.home.HomeUiState
 import com.yawnandpawn.app.ui.home.HomeViewModel
 import com.yawnandpawn.app.ui.links.AppLinks
 import com.yawnandpawn.app.ui.links.ExternalLinks
 import com.yawnandpawn.app.ui.nav.AppOpenRequests
+import com.yawnandpawn.app.ui.onboarding.FirstAlarmEditors
 import com.yawnandpawn.app.ui.payments.PaymentsViewModel
 import com.yawnandpawn.app.ui.progress.ProgressViewModel
 import com.yawnandpawn.app.ui.purchases.PurchaseHistoryViewModel
@@ -150,6 +154,7 @@ class UiModuleTest {
             single<NotificationPermission> { FakeNotificationPermission() }
             single<AccessibilityState> { FakeAccessibilityState() }
             single<CameraPermission> { TestCameraPermission() }
+            single<RecordingRepository> { FakeRecordingRepository() }
             single<PurchaseRecordRepository> { FakePurchaseRecordRepository() }
             single<SessionHistoryRepository> { FakeSessionHistoryRepository() }
             // Story 6.7: Day detail reads the logged alarm changes.
@@ -199,6 +204,20 @@ class UiModuleTest {
             assertTrue(progress.state.value.loading)
             val newEditor = koin.get<AlarmEditorViewModel> { parametersOf(AlarmEditorArgs(alarmId = null)) }
             assertTrue(newEditor.state.value.isNew)
+            // Story 7.2: the app's editor has the Motivation row; onboarding's first alarm (built the same way) does not.
+            assertTrue(
+                EditorPane.Motivation in
+                    newEditor.state.value.full
+                        ?.rows
+                        .orEmpty(),
+            )
+            val onboardingEditor = koin.get<FirstAlarmEditors>().create(null) {}
+            assertFalse(
+                EditorPane.Motivation in
+                    onboardingEditor.state.value.full
+                        ?.rows
+                        .orEmpty(),
+            )
             val editEditor = koin.get<AlarmEditorViewModel> { parametersOf(AlarmEditorArgs(alarmId = "some-id")) }
             assertFalse(editEditor.state.value.isNew)
             // Duplicate (owner decision 2026-10-05): a new alarm prefilled from the stored one, nothing stored.

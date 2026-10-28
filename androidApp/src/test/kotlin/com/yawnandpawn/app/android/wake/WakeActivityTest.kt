@@ -23,6 +23,7 @@ import com.yawnandpawn.app.awaitChildren
 import com.yawnandpawn.app.buildActivity
 import com.yawnandpawn.app.core.alarm.Alarm
 import com.yawnandpawn.app.core.alarm.AlarmRepository
+import com.yawnandpawn.app.core.alarm.Motivation
 import com.yawnandpawn.app.core.error.DomainError
 import com.yawnandpawn.app.core.error.Outcome
 import com.yawnandpawn.app.core.history.SessionHistoryRepository
@@ -554,6 +555,9 @@ private class CountingAlarmRepository(
     override suspend fun upsert(alarm: Alarm): Outcome<Unit, DomainError> = inner.upsert(alarm).also { calls.incrementAndGet() }
 
     override suspend fun delete(id: String): Outcome<Unit, DomainError> = inner.delete(id).also { calls.incrementAndGet() }
+
+    override suspend fun clearMotivation(motivation: Motivation): Outcome<Unit, DomainError> =
+        inner.clearMotivation(motivation).also { calls.incrementAndGet() }
 }
 
 /** An [ActiveSessionStore] that counts every call. */

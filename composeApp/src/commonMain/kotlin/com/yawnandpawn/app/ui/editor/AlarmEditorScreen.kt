@@ -70,6 +70,7 @@ import com.yawnandpawn.app.ui.format.is24HourClock
 import com.yawnandpawn.app.ui.home.DeleteAlarmConfirm
 import com.yawnandpawn.app.ui.qr.CodeScanner
 import com.yawnandpawn.app.ui.qr.QrRegistrationRoute
+import com.yawnandpawn.app.ui.recordings.RecordingsRoute
 import com.yawnandpawn.app.ui.resources.Res
 import com.yawnandpawn.app.ui.resources.editor_after_im_up
 import com.yawnandpawn.app.ui.resources.editor_alarm_name
@@ -424,20 +425,35 @@ private fun checkSummary(full: FullEditorSections): String {
     }
 }
 
-/** "None", or the message and when it plays ("Message 1 · After I'm up"). */
+/**
+ * "None", or the message ("Message 1", "Random") and, where "When it plays" shows (the design preview), when it plays
+ * ("Message 1 · After I'm up"). A chosen message that is not in the list (gone) reads "None", which is what plays.
+ */
 @Composable
 internal fun motivationSummary(full: FullEditorSections): String {
     val message =
         when (val choice = full.motivation) {
-            MotivationChoice.None -> return stringResource(Res.string.editor_message_none)
-            MotivationChoice.Random -> stringResource(Res.string.editor_message_random)
-            is MotivationChoice.Recording -> choice.name
+            MotivationChoice.None -> {
+                null
+            }
+
+            MotivationChoice.Random -> {
+                stringResource(Res.string.editor_message_random)
+            }
+
+            is MotivationChoice.Recording -> {
+                full.recordings.firstOrNull { it.id == choice.id }?.name
+            }
         }
     val timing =
         stringResource(
             if (full.motivationTiming == MotivationTiming.AfterImUp) Res.string.editor_after_im_up else Res.string.editor_mix_into_alarm,
         )
-    return stringResource(Res.string.editor_check_chip, message, timing)
+    return when {
+        message == null -> stringResource(Res.string.editor_message_none)
+        full.motivationTimingShown -> stringResource(Res.string.editor_check_chip, message, timing)
+        else -> message
+    }
 }
 
 /**
@@ -494,6 +510,16 @@ private fun EditorPaneContent(
         EditorPane.ScanCode -> {
             QrRegistrationRoute(
                 onCodeChosen = { onIntent(EditorIntent.CodeRegistered(it)) },
+                onBack = { onIntent(EditorIntent.BackRequested) },
+                resumed = resumed,
+            )
+        }
+
+        // Recordings (Story 7.2): what it saves or deletes comes back as editor intents; its Back returns to Motivation.
+        EditorPane.Recordings -> {
+            RecordingsRoute(
+                onSaved = { onIntent(EditorIntent.RecordingSaved(it)) },
+                onDeleted = { onIntent(EditorIntent.RecordingDeleted(it)) },
                 onBack = { onIntent(EditorIntent.BackRequested) },
                 resumed = resumed,
             )

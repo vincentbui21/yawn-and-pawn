@@ -40,7 +40,8 @@ import com.yawnandpawn.app.core.reliability.ReliabilityStatus
  *   default policy does not reads as blocked;
  * - battery: `PowerManager.isIgnoringBatteryOptimizations`, `ActivityManager.isBackgroundRestricted()` (API 28+) and
  *   the standby bucket `STANDBY_BUCKET_RESTRICTED` (API 30+, `UsageStatsManager.getAppStandbyBucket()`, the app's own);
- * - camera: `checkSelfPermission(CAMERA)`.
+ * - camera: `checkSelfPermission(CAMERA)`;
+ * - microphone: `checkSelfPermission(RECORD_AUDIO)` (Story 7.2; the row shows only after the first record tap).
  *
  * The probe runs when Home starts and resumes, so a Story 5.3 read that throws (a missing service, an OEM's
  * SecurityException) never crashes Home: it is logged and counts as the good value (review fix 12), because a "Fix"
@@ -77,6 +78,10 @@ class AndroidReliabilityProbe(
             cameraGranted =
                 guarded("camera permission", good = true) {
                     context.checkSelfPermission(Manifest.permission.CAMERA) == PackageManager.PERMISSION_GRANTED
+                },
+            microphoneGranted =
+                guarded("microphone permission", good = true) {
+                    context.checkSelfPermission(Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED
                 },
         )
 

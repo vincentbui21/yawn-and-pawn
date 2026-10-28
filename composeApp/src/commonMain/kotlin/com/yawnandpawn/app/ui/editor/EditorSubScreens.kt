@@ -75,8 +75,8 @@ internal fun EditorSubScreen(
         onBack = { onIntent(EditorIntent.BackRequested) },
     ) {
         when (pane) {
-            // "Try it" and QR registration are full screens of their own (AlarmEditorScreen), never a sub-screen.
-            EditorPane.Main, EditorPane.TryIt, EditorPane.ScanCode -> {
+            // "Try it", QR registration and Recordings are full screens of their own (AlarmEditorScreen), never a sub-screen.
+            EditorPane.Main, EditorPane.TryIt, EditorPane.ScanCode, EditorPane.Recordings -> {
                 Unit
             }
 
@@ -152,7 +152,7 @@ private fun EditorPane.title(): StringResource =
         EditorPane.Snooze -> Res.string.editor_snooze
         EditorPane.WakeCheck, EditorPane.CheckSetup, EditorPane.TryIt, EditorPane.ScanCode -> Res.string.editor_wake_check
         EditorPane.QuietTime -> Res.string.editor_quiet_time
-        EditorPane.Motivation -> Res.string.editor_motivation
+        EditorPane.Motivation, EditorPane.Recordings -> Res.string.editor_motivation
     }
 
 /**
@@ -306,13 +306,28 @@ private fun QuietTimePane(
     }
 }
 
-/** Motivation: which message plays (none, random, one recording), "Record a message", and when it plays. */
+/**
+ * Motivation: which message plays (None, Random, each recording, Story 7.2), "Record a message" (opens Recordings), and
+ * (design preview, Story 7.5) when it plays. "Random" is offered with two or more recordings, or while it is the choice;
+ * a recording whose file is missing says "File missing. Default sound will play.".
+ */
 @Composable
 private fun MotivationPane(
     full: FullEditorSections,
     onIntent: (EditorIntent) -> Unit,
 ) {
-    val choices = listOf(MotivationChoice.None, MotivationChoice.Random) + full.recordings.map { MotivationChoice.Recording(it) }
+    val random = full.recordings.size >= MIN_RECORDINGS_FOR_RANDOM || full.motivation == MotivationChoice.Random
+    val missing =
+        full.recordings
+            .filter { it.missing }
+            .map { it.id }
+            .toSet()
+    val names = full.recordings.associate { it.id to it.name }
+    val choices =
+        listOf(MotivationChoice.None) +
+            listOfNotNull(MotivationChoice.Random.takeIf { random }) +
+            full.recordings.map { MotivationChoice.Recording(it.id) }
+    val missingNote = stringResource(Res.string.sound_file_missing)
     GroupCard(title = stringResource(Res.string.editor_message)) {
         choices.forEachIndexed { index, choice ->
             if (index > 0) GroupDivider()
@@ -321,16 +336,17 @@ private fun MotivationPane(
                     when (choice) {
                         MotivationChoice.None -> stringResource(Res.string.editor_message_none)
                         MotivationChoice.Random -> stringResource(Res.string.editor_message_random)
-                        is MotivationChoice.Recording -> choice.name
+                        is MotivationChoice.Recording -> names[choice.id].orEmpty()
                     },
                 selected = full.motivation == choice,
                 onSelect = { onIntent(EditorIntent.MotivationChosen(choice)) },
+                subtitle = missingNote.takeIf { (choice as? MotivationChoice.Recording)?.id in missing },
             )
         }
         GroupDivider()
         NavRow(label = stringResource(Res.string.editor_record_message), onClick = { onIntent(EditorIntent.RecordMessageClicked) })
     }
-    if (full.motivation != MotivationChoice.None) {
+    if (full.motivationTimingShown && full.motivation != MotivationChoice.None) {
         GroupCard(title = stringResource(Res.string.editor_when_it_plays)) {
             MotivationTiming.entries.forEachIndexed { index, timing ->
                 if (index > 0) GroupDivider()
@@ -346,3 +362,6 @@ private fun MotivationPane(
         }
     }
 }
+
+/** "Random" needs at least this many recordings to choose from (Story 7.2). */
+private const val MIN_RECORDINGS_FOR_RANDOM = 2

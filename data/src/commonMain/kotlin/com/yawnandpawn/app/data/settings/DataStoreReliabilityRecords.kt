@@ -3,6 +3,7 @@ package com.yawnandpawn.app.data.settings
 import androidx.datastore.core.DataStore
 import androidx.datastore.preferences.core.MutablePreferences
 import androidx.datastore.preferences.core.Preferences
+import androidx.datastore.preferences.core.booleanPreferencesKey
 import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.longPreferencesKey
 import androidx.datastore.preferences.core.stringPreferencesKey
@@ -24,7 +25,8 @@ import kotlin.time.Instant
  * [ReliabilityRecords] in their own device-protected DataStore (AD-6, Story 5.3; `ReliabilityDataStore`, never backed
  * up, review fix 14): the rows seen OK under
  * [LAST_OK] (row names; a name this version does not know is skipped), when a locked test passed under
- * [LOCKED_TEST_PASSED_AT] (epoch millis) and the maker confirmation under [MAKER] and [FINGERPRINT] (both or none).
+ * [LOCKED_TEST_PASSED_AT] (epoch millis), the maker confirmation under [MAKER] and [FINGERPRINT] (both or none) and the
+ * first record tap under [RECORD_TAPPED] (Story 7.2).
  * Every storage error, a read included, is a `StorageFailure`; `EvaluateReliability` then writes nothing.
  */
 class DataStoreReliabilityRecords(
@@ -46,6 +48,8 @@ class DataStoreReliabilityRecords(
             it[MAKER] = confirmation.maker
             it[FINGERPRINT] = confirmation.fingerprint
         }
+
+    override suspend fun recordTapped(): Outcome<Unit, DomainError> = edit { it[RECORD_TAPPED] = true }
 
     private suspend fun edit(change: (MutablePreferences) -> Unit): Outcome<Unit, DomainError> =
         storage {
@@ -77,6 +81,9 @@ class DataStoreReliabilityRecords(
         /** The build fingerprint of the confirmed guidance. */
         val FINGERPRINT: Preferences.Key<String> = stringPreferencesKey("maker_confirmed_fingerprint")
 
+        /** The user tapped record on the Recordings screen (Story 7.2): the Microphone row shows. */
+        val RECORD_TAPPED: Preferences.Key<Boolean> = booleanPreferencesKey("record_tapped")
+
         private fun stored(preferences: Preferences): StoredReliability {
             val maker = preferences[MAKER]
             val fingerprint = preferences[FINGERPRINT]
@@ -84,6 +91,7 @@ class DataStoreReliabilityRecords(
                 lastOk = preferences[LAST_OK].orEmpty().mapNotNull { name -> ChecklistRow.entries.firstOrNull { it.name == name } }.toSet(),
                 lockedTestPassedAt = preferences[LOCKED_TEST_PASSED_AT]?.let(Instant::fromEpochMilliseconds),
                 makerConfirmation = if (maker != null && fingerprint != null) MakerConfirmation(maker, fingerprint) else null,
+                recordTapped = preferences[RECORD_TAPPED] == true,
             )
         }
     }

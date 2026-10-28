@@ -57,6 +57,8 @@ data class AlarmDraft(
     /** The alarm's checks in the order All mode runs them (Story 3.5). */
     val checks: List<CheckEntry> = CheckConfig.DEFAULT_ENTRIES,
     val checkMode: CheckMode = CheckMode.Random,
+    /** The motivation message (Story 7.2); never a locked field. */
+    val motivation: Motivation = Motivation.None,
 )
 
 /**
@@ -339,6 +341,7 @@ class SaveAlarm(
         createdAt = createdAt,
         updatedAt = createdAt,
         checkMode = checkMode,
+        motivation = motivation,
     )
 }
 

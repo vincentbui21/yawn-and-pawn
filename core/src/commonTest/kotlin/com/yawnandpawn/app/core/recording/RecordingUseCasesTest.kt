@@ -1,5 +1,9 @@
 package com.yawnandpawn.app.core.recording
 
+import com.yawnandpawn.app.core.alarm.Alarm
+import com.yawnandpawn.app.core.alarm.AlarmWriteLock
+import com.yawnandpawn.app.core.alarm.InMemoryAlarms
+import com.yawnandpawn.app.core.alarm.Motivation
 import com.yawnandpawn.app.core.alarm.RecordingLogger
 import com.yawnandpawn.app.core.alarm.SequentialIds
 import com.yawnandpawn.app.core.alarm.TestClock
@@ -15,6 +19,7 @@ import kotlinx.coroutines.flow.emptyFlow
 import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.test.runTest
+import kotlinx.datetime.LocalTime
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertIs
@@ -33,7 +38,14 @@ class RecordingUseCasesTest {
     private val sessionLock = SessionLockGuard(sessionState, MutableStateFlow(true), MutableStateFlow(false))
     private val save = SaveRecording(repository, recorder, ids, clock, sessionLock, logger)
     private val reRecord = ReRecord(repository, recorder, sessionLock, logger)
-    private val delete = DeleteRecording(repository, sessionLock, logger)
+    private val alarms = InMemoryAlarms()
+    private val delete = DeleteRecording(repository, alarms, AlarmWriteLock(), sessionLock, logger)
+
+    private fun alarm(
+        id: String,
+        motivation: Motivation,
+        requestCode: Int,
+    ) = Alarm(id, LocalTime(7, 0), requestCode = requestCode, createdAt = now, updatedAt = now, motivation = motivation)
 
     private fun stored(
         id: String,
@@ -170,9 +182,73 @@ class RecordingUseCasesTest {
         }
 
     @Test
+    fun `deleting a message sets the alarms that play it to no message and leaves Random and other messages alone (Story 7-2)`() =
+        runTest {
+            repository.rows.value = listOf(stored("a", "Message 1"), stored("b", "Message 2"))
+            val usesIt = alarm("1", Motivation.Recording("a"), 1000)
+            val random = alarm("2", Motivation.Random, 1001)
+            val other = alarm("3", Motivation.Recording("b"), 1002)
+            alarms.alarms.value = listOf(usesIt, random, other).associateBy { it.id }
+
+            assertEquals(Outcome.Success(Unit), delete("a"))
+
+            assertEquals(listOf(stored("b", "Message 2")), repository.rows.value)
+            assertEquals(
+                mapOf("1" to usesIt.copy(motivation = Motivation.None), "2" to random, "3" to other),
+                alarms.alarms.value,
+                "only the alarm on the deleted message changes, and only its motivation",
+            )
+        }
+
+    @Test
+    fun `an unknown message or a failing delete changes no alarm`() =
+        runTest {
+            val usesIt = alarm("1", Motivation.Recording("a"), 1000)
+            alarms.alarms.value = mapOf("1" to usesIt)
+
+            assertEquals(Outcome.Failure(DomainError.NotFound("a")), delete("a"))
+            assertEquals(mapOf("1" to usesIt), alarms.alarms.value, "no alarm changes for an unknown id")
+
+            repository.rows.value = listOf(stored("a", "Message 1"))
+            repository.deleteFailure = DomainError.StorageFailure("disk")
+            assertEquals(Outcome.Failure(DomainError.StorageFailure("disk")), delete("a"))
+            assertEquals(listOf(stored("a", "Message 1")), repository.rows.value)
+            assertEquals(mapOf("1" to usesIt), alarms.alarms.value, "the alarm keeps its message while the message stays")
+            assertEquals(LogEvent.OperationFailed.of(DeleteRecording.OPERATION, DomainError.StorageFailure("disk")), logger.events.last())
+        }
+
+    @Test
+    fun `deleting the last message also sets Random alarms to no message`() =
+        runTest {
+            repository.rows.value = listOf(stored("a", "Message 1"), stored("b", "Message 2"))
+            val random = alarm("2", Motivation.Random, 1001)
+            alarms.alarms.value = mapOf("2" to random)
+
+            assertEquals(Outcome.Success(Unit), delete("a"))
+            assertEquals(
+                Motivation.Random,
+                alarms.alarms.value
+                    .getValue("2")
+                    .motivation,
+                "Message 2 is left to pick from",
+            )
+
+            assertEquals(Outcome.Success(Unit), delete("b"))
+            assertEquals(
+                Motivation.None,
+                alarms.alarms.value
+                    .getValue("2")
+                    .motivation,
+                "nothing left to pick from",
+            )
+        }
+
+    @Test
     fun `nothing is saved, re-recorded or deleted while a wake session is in progress`() =
         runTest {
             repository.rows.value = listOf(stored("a", "Morning"))
+            val usesIt = alarm("1", Motivation.Recording("a"), 1000)
+            alarms.alarms.value = mapOf("1" to usesIt)
             sessionState.value = SessionState.Ringing(ringSession())
             val first = RecordedTake("t1", 3_000)
             val second = RecordedTake("t2", 3_000)
@@ -182,6 +258,7 @@ class RecordingUseCasesTest {
             assertEquals(Outcome.Failure(DomainError.SessionActive), delete("a"))
 
             assertEquals(listOf(stored("a", "Morning")), repository.rows.value)
+            assertEquals(mapOf("1" to usesIt), alarms.alarms.value, "no alarm loses its message during a session")
             assertEquals(emptyList(), repository.saves)
             assertEquals(listOf(first, second), recorder.discarded, "a take that is not stored is discarded")
         }
@@ -192,6 +269,7 @@ class RecordingUseCasesTest {
         var saveFailure: DomainError? = null
         var getFailure: DomainError? = null
         var readFails = false
+        var deleteFailure: DomainError? = null
 
         override fun observeAll(): Flow<List<Recording>> =
             if (readFails) flow { throw IllegalStateException("secret/path/name.m4a") } else rows.map { it }
@@ -210,9 +288,9 @@ class RecordingUseCasesTest {
         }
 
         override suspend fun delete(id: String): Outcome<Unit, DomainError> {
-            if (rows.value.none { it.id == id }) return Outcome.Failure(DomainError.NotFound(id))
-            rows.value = rows.value.filterNot { it.id == id }
-            return Outcome.Success(Unit)
+            val failure = deleteFailure ?: DomainError.NotFound(id).takeIf { rows.value.none { it.id == id } }
+            if (failure == null) rows.value = rows.value.filterNot { it.id == id }
+            return failure?.let { Outcome.Failure(it) } ?: Outcome.Success(Unit)
         }
     }
 

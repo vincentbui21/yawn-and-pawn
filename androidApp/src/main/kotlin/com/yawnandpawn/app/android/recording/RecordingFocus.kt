@@ -20,6 +20,8 @@ interface RecordingFocus {
  */
 class AndroidRecordingFocus(
     private val audio: AudioManager,
+    /** `AUDIOFOCUS_GAIN_TRANSIENT_EXCLUSIVE` for a take; the Recordings preview (Story 7.2) asks `AUDIOFOCUS_GAIN_TRANSIENT`. */
+    private val gain: Int = AudioManager.AUDIOFOCUS_GAIN_TRANSIENT_EXCLUSIVE,
 ) : RecordingFocus {
     private var held: AudioFocusRequest? = null
 
@@ -28,7 +30,7 @@ class AndroidRecordingFocus(
         abandon()
         val request =
             AudioFocusRequest
-                .Builder(AudioManager.AUDIOFOCUS_GAIN_TRANSIENT_EXCLUSIVE)
+                .Builder(gain)
                 .setAudioAttributes(ATTRIBUTES)
                 .setOnAudioFocusChangeListener { change -> if (change in ENDING_LOSSES) onLoss() }
                 .build()

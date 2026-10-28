@@ -18,6 +18,7 @@ import com.yawnandpawn.app.ui.househunt.HouseHuntRegistrationUiState
 import com.yawnandpawn.app.ui.onboarding.OnboardingStep
 import com.yawnandpawn.app.ui.onboarding.OnboardingUiState
 import com.yawnandpawn.app.ui.onboarding.TestAlarmStatus
+import com.yawnandpawn.app.ui.qr.PreviewQrMatrix
 import com.yawnandpawn.app.ui.qr.PrintableQrUiState
 import com.yawnandpawn.app.ui.qr.QrRegistrationUiState
 import com.yawnandpawn.app.ui.qr.QrScanStep
@@ -174,9 +175,10 @@ object PreviewSetupSamples {
 
     val qrCameraUnavailable = QrRegistrationUiState(cameraUnavailable = true)
 
-    val printable = PrintableQrUiState()
+    // The design preview's made-up code (Story 7.10: the app draws a real one), so the approved images stay the same.
+    val printable = PrintableQrUiState(code = PreviewQrMatrix)
 
-    val printableReplace = PrintableQrUiState(codeSaved = true, showReplaceDialog = true)
+    val printableReplace = PrintableQrUiState(codeSaved = true, showReplaceDialog = true, code = PreviewQrMatrix)
 
     // House Hunt ----------------------------------------------------------------------------------------------------
 

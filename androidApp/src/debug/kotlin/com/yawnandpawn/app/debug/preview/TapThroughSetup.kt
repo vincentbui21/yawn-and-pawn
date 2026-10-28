@@ -16,6 +16,7 @@ import com.yawnandpawn.app.ui.househunt.HouseHuntError
 import com.yawnandpawn.app.ui.househunt.HouseHuntIntent
 import com.yawnandpawn.app.ui.househunt.HouseHuntRegistrationScreen
 import com.yawnandpawn.app.ui.househunt.HouseHuntRegistrationUiState
+import com.yawnandpawn.app.ui.qr.PreviewQrMatrix
 import com.yawnandpawn.app.ui.qr.PrintableQrScreen
 import com.yawnandpawn.app.ui.qr.PrintableQrUiState
 import com.yawnandpawn.app.ui.qr.QrIntent
@@ -103,8 +104,7 @@ internal class SetupFlowState(
             }
 
             CheckSetupIntent.PrintableQrClicked -> {
-                printable = PrintableQrUiState(codeSaved = qrCodeSaved)
-                push(SetupPushed.PrintableQr)
+                openPrintable()
             }
 
             CheckSetupIntent.PhotosClicked -> {
@@ -153,7 +153,7 @@ internal class SetupFlowState(
     }
 
     private fun openPrintable() {
-        printable = PrintableQrUiState(codeSaved = qrCodeSaved)
+        printable = PrintableQrUiState(codeSaved = qrCodeSaved, code = PreviewQrMatrix)
         push(SetupPushed.PrintableQr)
     }
 

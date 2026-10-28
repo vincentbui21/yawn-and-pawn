@@ -14,6 +14,7 @@ import androidx.lifecycle.DefaultLifecycleObserver
 import androidx.lifecycle.LifecycleOwner
 import com.yawnandpawn.app.android.ApplicationScope
 import com.yawnandpawn.app.android.qr.AndroidCameraPermission
+import com.yawnandpawn.app.android.qr.AndroidQrPrinter
 import com.yawnandpawn.app.android.recording.AndroidMicrophonePermission
 import com.yawnandpawn.app.android.reliability.AndroidNotificationPermission
 import com.yawnandpawn.app.android.screen.forwardToWakeScreenWhileResumed
@@ -40,7 +41,8 @@ import org.koin.android.ext.android.inject
  *
  * While it is started it lends the notification permission (Story 1.19) its launcher for the system dialog, so the
  * editor can ask after the first save; the answer needs no handling (the Home banner reflects it). It lends the camera
- * permission its launcher the same way (Story 3.10), and hands the answer back to the screen that asked.
+ * permission its launcher the same way (Story 3.10), and hands the answer back to the screen that asked. The printable
+ * QR prints through it too (Story 7.10): the print dialog needs an activity.
  *
  * While it is resumed and the alarm rings (Ringing, Grace, Loud or an emergency ring), it opens the wake screen
  * (Story 2.5): opening the app during a ring brings the user back to the alarm.
@@ -67,6 +69,7 @@ class MainActivity : ComponentActivity() {
     private val cameraPermission: AndroidCameraPermission by inject()
 
     private val microphonePermission: AndroidMicrophonePermission by inject()
+    private val qrPrinter: AndroidQrPrinter by inject()
 
     private val settings: GlobalSettingsRepository by inject()
 
@@ -109,6 +112,7 @@ class MainActivity : ComponentActivity() {
                     notificationPermission.attach(launch)
                     cameraPermission.attach(launchCamera)
                     microphonePermission.attach(launchMicrophone)
+                    qrPrinter.attach(this@MainActivity)
                     appScope.launch { replayLedger() }
                 }
 
@@ -119,6 +123,7 @@ class MainActivity : ComponentActivity() {
                     notificationPermission.detach(launch)
                     cameraPermission.detach(launchCamera)
                     microphonePermission.detach(launchMicrophone)
+                    qrPrinter.detach(this@MainActivity)
                 }
             },
         )

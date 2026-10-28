@@ -237,6 +237,12 @@ class OnboardingSetupStepsTest : OnboardingViewModelFixture() {
             assertEquals(OnboardingStep.Checks, viewModel.shown.step)
             assertTrue(alarms.current.isEmpty())
 
+            // Story 7.10: the printable QR shows over step 5 too, and Back returns to Check setup.
+            viewModel.onIntent(OnboardingIntent.CheckSetup(EditorIntent.CheckSetup(CheckSetupIntent.PrintableQrClicked)))
+            assertEquals(EditorPane.PrintableQr, viewModel.shown.checkSetup?.pane)
+            viewModel.onIntent(OnboardingIntent.CheckSetup(EditorIntent.BackRequested))
+            assertEquals(EditorPane.CheckSetup, viewModel.shown.checkSetup?.pane)
+
             viewModel.onIntent(OnboardingIntent.CheckSetup(EditorIntent.CheckSetup(CheckSetupIntent.ScanCodeClicked)))
             assertEquals(EditorPane.ScanCode, viewModel.shown.checkSetup?.pane)
             viewModel.onIntent(OnboardingIntent.CheckSetup(EditorIntent.CodeRegistered(code)))

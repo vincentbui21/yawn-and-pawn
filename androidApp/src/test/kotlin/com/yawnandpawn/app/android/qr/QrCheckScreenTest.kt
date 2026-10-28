@@ -97,7 +97,7 @@ class QrCheckScreenTest {
         ) {
             composeRule.waitForIdle()
             composeRule.onNodeWithText("Scan a code to use this check.").assertExists()
-            composeRule.onNodeWithText("Make a printable QR").assertDoesNotExist()
+            composeRule.onNodeWithText("Make a printable QR").assertExists() // Story 7.10
             assertTrue(scanner.running, "the viewfinder starts at once")
             scanner.frames(2, result)
             composeRule.waitForIdle()

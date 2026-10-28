@@ -4,6 +4,7 @@ import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -67,6 +68,8 @@ data class PrintableQrUiState(
     /** A code is already registered, so printing a new one replaces it (after "Replace your QR code? ..."). */
     val codeSaved: Boolean = false,
     val showReplaceDialog: Boolean = false,
+    /** The new code drawn on the sheet (Story 7.10); null when it could not be made, which disables Print. */
+    val code: QrMatrix? = null,
 )
 
 /** Everything the user can do in QR registration and on the printable QR. */
@@ -95,7 +98,7 @@ sealed interface QrIntent {
  * "QR/Barcode"; the `viewfinder` in a glass card with the square guide and the torch ("Scan a code to use this check."
  * under it) or, once a code is found, the guide's check with "Use this code" (filled) and "Scan again"; then "Make a
  * printable QR". Without a camera: "Camera isn't available." with "Fix", and the printable QR.
- * [printable] shows "Make a printable QR" (FR-PWK-13): the design preview shows it; the app hides it until Epic 7 builds it.
+ * [printable] shows "Make a printable QR" (FR-PWK-13, Story 7.10), which opens the printable QR.
  */
 @Composable
 fun QrRegistrationScreen(
@@ -172,9 +175,6 @@ fun PrintableQrScreen(
 ) {
     val colors = PpsTheme.colors
     val spacing = PpsTheme.spacing
-    val dark = PpsTheme.colorSet == PpsColorSet.Dark
-    val paper = if (dark) colors.inverseSurface else colors.surface
-    val ink = if (dark) colors.inverseText else colors.text
     SubScreen(
         title = stringResource(Res.string.qr_printable),
         backContentDescription = stringResource(Res.string.editor_back),
@@ -187,32 +187,12 @@ fun PrintableQrScreen(
             style = PpsTheme.typography.body,
             color = colors.textSecondary,
         )
-        GroupCard {
-            Column(
-                modifier =
-                    Modifier
-                        .padding(spacing.cardPadding)
-                        .fillMaxWidth()
-                        .clip(PpsTheme.shapes.md)
-                        .background(paper)
-                        .padding(spacing.space6),
-                horizontalAlignment = Alignment.CenterHorizontally,
-                verticalArrangement = Arrangement.spacedBy(spacing.space4),
-            ) {
-                val spoken = stringResource(Res.string.qr_image)
-                FakeQrCode(ink = ink, modifier = Modifier.size(QR_SIZE).semantics { contentDescription = spoken })
-                Text(
-                    text = stringResource(Res.string.qr_pdf_line),
-                    style = PpsTheme.typography.body,
-                    color = ink,
-                    textAlign = TextAlign.Center,
-                )
-            }
-        }
+        GroupCard { PrintableSheet(code = state.code) }
         PpsFilledButton(
             text = stringResource(Res.string.qr_print),
             onClick = { onIntent(QrIntent.PrintClicked) },
             modifier = Modifier.fillMaxWidth(),
+            enabled = state.code != null,
         )
     }
     if (state.showReplaceDialog) {
@@ -228,24 +208,65 @@ fun PrintableQrScreen(
 }
 
 /**
- * A made-up QR code for the design preview (the real one is generated when its story lands): a 25 x 25 module grid with
- * the three finder squares and a fixed pseudo-random pattern, in [ink].
+ * The page as it prints: a light sheet with [code] ("QR code for your alarm" for TalkBack; empty when it could not be
+ * made) and "Scan this to stop your alarm." under it. Dark on light in both themes so the code scans.
  */
 @Composable
-private fun FakeQrCode(
+private fun PrintableSheet(code: QrMatrix?) {
+    val colors = PpsTheme.colors
+    val spacing = PpsTheme.spacing
+    val dark = PpsTheme.colorSet == PpsColorSet.Dark
+    val paper = if (dark) colors.inverseSurface else colors.surface
+    val ink = if (dark) colors.inverseText else colors.text
+    Column(
+        modifier =
+            Modifier
+                .padding(spacing.cardPadding)
+                .fillMaxWidth()
+                .clip(PpsTheme.shapes.md)
+                .background(paper)
+                .padding(spacing.space6),
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.spacedBy(spacing.space4),
+    ) {
+        val spoken = stringResource(Res.string.qr_image)
+        if (code == null) {
+            Spacer(modifier = Modifier.size(QR_SIZE))
+        } else {
+            QrCodeImage(code = code, ink = ink, modifier = Modifier.size(QR_SIZE).semantics { contentDescription = spoken })
+        }
+        Text(
+            text = stringResource(Res.string.qr_pdf_line),
+            style = PpsTheme.typography.body,
+            color = ink,
+            textAlign = TextAlign.Center,
+        )
+    }
+}
+
+/** [code] drawn edge to edge in [ink], one square per dark module (its quiet zone included, so it stays light). */
+@Composable
+private fun QrCodeImage(
+    code: QrMatrix,
     ink: Color,
     modifier: Modifier = Modifier,
 ) {
     Canvas(modifier = modifier) {
-        val cell = size.minDimension / MODULES
+        val cell = size.minDimension / code.size
         val module = Size(cell, cell)
-        for (row in 0 until MODULES) {
-            for (column in 0 until MODULES) {
-                if (isDark(row, column)) drawRect(color = ink, topLeft = Offset(column * cell, row * cell), size = module)
+        for (row in 0 until code.size) {
+            for (column in 0 until code.size) {
+                if (code.isDark(row, column)) drawRect(color = ink, topLeft = Offset(column * cell, row * cell), size = module)
             }
         }
     }
 }
+
+/**
+ * A made-up code for the design preview and screenshots (not scannable): a 25 x 25 module grid with the three finder
+ * squares and a fixed pseudo-random pattern, so the approved preview images stay as they were before Story 7.10.
+ */
+val PreviewQrMatrix: QrMatrix by lazy { QrMatrix.of(MODULES, ::isDark) }
 
 /** Finder squares in three corners (7 x 7 with a ring and a 3 x 3 centre), a fixed hash pattern elsewhere. */
 private fun isDark(

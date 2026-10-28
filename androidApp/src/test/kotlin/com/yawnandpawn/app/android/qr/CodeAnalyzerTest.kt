@@ -288,7 +288,11 @@ class CodeAnalyzerTest {
     fun `no scanner source can write a frame or a code to storage or the log`() {
         // Host tests run in the :androidApp project directory. The scanner's own sources, the common scanner, QR
         // registration and the wake QR check: everything that holds a frame or a raw value.
-        val scanner = File("src/main/kotlin/com/yawnandpawn/app/android/qr").listFiles { file -> file.extension == "kt" }.orEmpty()
+        // Story 7.10: the printable QR's print adapter writes the page to the print service's own file descriptor (its
+        // narrower scan is below), so it is left out of the storage words here.
+        val qrSources = File("src/main/kotlin/com/yawnandpawn/app/android/qr").listFiles { file -> file.extension == "kt" }.orEmpty()
+        val printer = qrSources.single { it.name == "AndroidQrPrinter.kt" }
+        val scanner = qrSources.filter { it != printer }.toTypedArray()
         val common =
             File("../composeApp/src/commonMain/kotlin/com/yawnandpawn/app/ui/qr")
                 .listFiles { file ->
@@ -318,9 +322,16 @@ class CodeAnalyzerTest {
             )
         val found = sources.flatMap { file -> banned.filter { it in file.readText() }.map { "${file.name}: $it" } }
         assertEquals(emptyList(), found)
-        // A log line never holds a raw value (every log call here is one line).
-        val logLines = sources.flatMap { file -> file.readLines().filter { "logger.log(" in it }.map { "${file.name}: ${it.trim()}" } }
+        // The print adapter writes only to the descriptor the print service hands it (the app keeps no file).
+        val printerText = printer.readText()
+        val printerFound = banned.filter { it !in setOf("FileOutputStream", "outputStream") && it in printerText }
+        assertEquals(emptyList(), printerFound)
+        val streams = Regex("FileOutputStream\\([^)]*\\)").findAll(printerText).map { it.value }.toList()
+        assertEquals(listOf("FileOutputStream(destination.fileDescriptor)"), streams)
+        // A log line never holds a raw value or a printable payload (every log call here is one line).
+        val logLines =
+            (sources + printer).flatMap { file -> file.readLines().filter { "logger.log(" in it }.map { "${file.name}: ${it.trim()}" } }
         assertTrue(logLines.size >= 3, "the scanner logs its failures: $logLines")
-        assertEquals(emptyList(), logLines.filter { "rawValue" in it || "rawBytes" in it || "result" in it })
+        assertEquals(emptyList(), logLines.filter { "rawValue" in it || "rawBytes" in it || "result" in it || "payload" in it })
     }
 }

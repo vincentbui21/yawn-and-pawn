@@ -298,8 +298,8 @@ class OnboardingViewModel(
 
             is OnboardingIntent.Checks -> if (checksStep) alarm.send(intent.intent.toEditor())
 
-            // Only while Check setup, "Try it" or QR registration shows: a tap on the overlay sliding out after Back
-            // never reaches the editor's main screen (where a Back would close it).
+            // Only while Check setup, "Try it", QR registration or the printable QR shows: a tap on the overlay sliding out
+            // after Back never reaches the editor's main screen (where a Back would close it).
             is OnboardingIntent.CheckSetup -> if (checksStep && state.value?.checkSetup != null) alarm.send(intent.intent)
 
             else -> Unit
@@ -867,8 +867,8 @@ class OnboardingViewModel(
         /** The last step built: step 8, the test alarm (Story 5.12). */
         val LAST_BUILT: OnboardingStep = OnboardingStep.TestAlarm
 
-        /** The editor panes shown over step 5: Check setup, its "Try it" and QR registration. */
-        private val OVERLAY_PANES = setOf(EditorPane.CheckSetup, EditorPane.TryIt, EditorPane.ScanCode)
+        /** The editor panes shown over step 5: Check setup, its "Try it", QR registration and the printable QR. */
+        private val OVERLAY_PANES = setOf(EditorPane.CheckSetup, EditorPane.TryIt, EditorPane.ScanCode, EditorPane.PrintableQr)
 
         /** Step 8's results that let "Ring a test alarm" ring (none pending, none passed). */
         private val RINGABLE = setOf(OnboardingTestResult.NotRung, OnboardingTestResult.NotLocked)

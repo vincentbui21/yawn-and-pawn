@@ -43,6 +43,7 @@ import androidx.navigationevent.NavigationEventInfo
 import androidx.navigationevent.compose.NavigationBackHandler
 import androidx.navigationevent.compose.rememberNavigationEventState
 import com.yawnandpawn.app.core.alarm.AlarmField
+import com.yawnandpawn.app.ui.checks.CheckType
 import com.yawnandpawn.app.ui.checks.displayName
 import com.yawnandpawn.app.ui.checksetup.CheckPreviewScreen
 import com.yawnandpawn.app.ui.checksetup.CheckPreviewUiState
@@ -69,6 +70,7 @@ import com.yawnandpawn.app.ui.format.formatClockTime
 import com.yawnandpawn.app.ui.format.is24HourClock
 import com.yawnandpawn.app.ui.home.DeleteAlarmConfirm
 import com.yawnandpawn.app.ui.qr.CodeScanner
+import com.yawnandpawn.app.ui.qr.PrintableQrRoute
 import com.yawnandpawn.app.ui.qr.QrRegistrationRoute
 import com.yawnandpawn.app.ui.recordings.RecordingsRoute
 import com.yawnandpawn.app.ui.resources.Res
@@ -218,7 +220,7 @@ fun AlarmEditorScreen(
         } else {
             AnimatedContent(
                 targetState = state.pane,
-                transitionSpec = { subScreenTransition(forward = targetState.depth > initialState.depth) },
+                transitionSpec = { subScreenTransition(forward = targetState.isDeeperThan(initialState)) },
                 label = "editor pane",
             ) { pane ->
                 when (pane) {
@@ -494,7 +496,7 @@ private fun TryItFeed(
     CompositionLocalProvider(LocalViewfinderFeed provides feed) { content() }
 }
 
-/** A pane other than the main screen: "Try it", QR registration, or one of the sub-screens. */
+/** A pane other than the main screen: "Try it", QR registration, the printable QR, or one of the sub-screens. */
 @Composable
 private fun EditorPaneContent(
     pane: EditorPane,
@@ -524,6 +526,16 @@ private fun EditorPaneContent(
                 onCodeChosen = { onIntent(EditorIntent.CodeRegistered(it)) },
                 onBack = { onIntent(EditorIntent.BackRequested) },
                 resumed = resumed,
+                onPrintable = { onIntent(EditorIntent.PrintableQrClicked) },
+            )
+        }
+
+        // The printable QR (Story 7.10): "Print or save as PDF" prints, then registers the code like "Use this code".
+        EditorPane.PrintableQr -> {
+            PrintableQrRoute(
+                codeSaved = state.form.checks.any { it.type == CheckType.QrBarcode && it.code != null },
+                onCodeChosen = { onIntent(EditorIntent.CodeRegistered(it)) },
+                onBack = { onIntent(EditorIntent.BackRequested) },
             )
         }
 

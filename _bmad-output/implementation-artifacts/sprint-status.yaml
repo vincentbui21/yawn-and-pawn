@@ -153,7 +153,7 @@ development_status:
   7-7-house-hunt-check-plugin-and-on-device-matcher: deferred-v2  # owner 2026-10-27: House Hunt moved to v2
   7-8-house-hunt-registration-and-re-take-after-restore: deferred-v2  # owner 2026-10-27: House Hunt moved to v2
   7-9-house-hunt-check-on-the-wake-screen: deferred-v2  # owner 2026-10-27: House Hunt moved to v2
-  7-10-printable-qr-code-for-the-qr-barcode-check: backlog
+  7-10-printable-qr-code-for-the-qr-barcode-check: done  # Epic 7 auto-run, fast mode; print dialog outcome checked on the phone in 7.12
   7-11-skip-the-next-alarm-from-a-pre-alarm-notification: done  # Epic 7 auto-run, fast mode; app.db v13; notification and skip flow checked on the phone in 7.12
   7-12-epic-7-device-verification-checklist: backlog
   epic-7-retrospective: optional

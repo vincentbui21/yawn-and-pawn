@@ -62,7 +62,7 @@ data class CheckSetupUiState(
     val countRange: IntRange = MIN_COUNT..MAX_COUNT,
     /** QR/Barcode: a code is registered. */
     val codeSaved: Boolean = false,
-    /** QR/Barcode: "Make a printable QR" is offered (Epic 7; the app hides it until then, Story 3.10). */
+    /** QR/Barcode: "Make a printable QR" is offered (Story 7.10), also when the camera is unavailable. */
     val printable: Boolean = true,
     /** House Hunt: reference photos taken, 0 to 3. */
     val photoCount: Int = 0,

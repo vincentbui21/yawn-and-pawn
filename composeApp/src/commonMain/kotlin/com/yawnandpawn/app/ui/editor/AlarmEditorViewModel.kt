@@ -158,6 +158,9 @@ class AlarmEditorViewModel(
      */
     private var reRegistering = false
 
+    /** The pane the printable QR returns to on Back (Story 7.10): Check setup or QR registration, whichever opened it. */
+    private var printableFrom = EditorPane.CheckSetup
+
     /** The pending tick of the running preview (Memory's playback). */
     private var trialTicks: Job? = null
 
@@ -470,8 +473,13 @@ class AlarmEditorViewModel(
     /** QR/Barcode (Story 3.10): a registered code, the "Try it" camera and "Fix"; false for any other intent. */
     private fun onCodeIntent(intent: EditorIntent): Boolean {
         when (intent) {
+            // Only from QR registration or the printable QR: a print job that finishes after the user left the printable QR
+            // changes nothing (review).
             is EditorIntent.CodeRegistered -> {
-                if (reRegistering) {
+                val pane = _state.value.pane
+                if (pane != EditorPane.ScanCode && pane != EditorPane.PrintableQr) {
+                    Unit
+                } else if (reRegistering) {
                     storeCode(intent.code)
                 } else {
                     editCheck(CheckType.QrBarcode) { it.copy(code = intent.code) }
@@ -487,11 +495,26 @@ class AlarmEditorViewModel(
                 cameraPermission?.openSettings()
             }
 
+            EditorIntent.PrintableQrClicked -> {
+                openPrintable()
+            }
+
             else -> {
                 return false
             }
         }
         return true
+    }
+
+    /**
+     * "Make a printable QR" (Story 7.10) from Check setup or QR registration: the printable QR, whose Back returns to the
+     * pane that opened it. Its code is registered through [EditorIntent.CodeRegistered], as a scan's.
+     */
+    private fun openPrintable() {
+        val from = _state.value.pane
+        if (from != EditorPane.CheckSetup && from != EditorPane.ScanCode) return
+        printableFrom = from
+        _state.update { it.copy(pane = EditorPane.PrintableQr, setupType = CheckType.QrBarcode) }
     }
 
     /** Ticks or unticks [type]: added last when the picker offers it; any check left clears "Pick at least one check." */
@@ -559,7 +582,12 @@ class AlarmEditorViewModel(
                 cameraPermission?.openSettings()
             }
 
-            // The printable QR and House Hunt photos arrive with Epic 7.
+            // Story 7.10: "Make a printable QR".
+            CheckSetupIntent.PrintableQrClicked -> {
+                if (type == CheckType.QrBarcode) openPrintable()
+            }
+
+            // House Hunt photos are v2 (owner decision 2026-10-27).
             else -> {
                 Unit
             }
@@ -858,6 +886,11 @@ class AlarmEditorViewModel(
 
             current.pane == EditorPane.TryIt -> {
                 closeTryIt()
+            }
+
+            // The printable QR returns to the pane that opened it (Story 7.10).
+            current.pane == EditorPane.PrintableQr -> {
+                _state.update { it.copy(pane = printableFrom) }
             }
 
             // QR registration returns to Check setup; opened from "Re-register", Back leaves the editor unchanged.

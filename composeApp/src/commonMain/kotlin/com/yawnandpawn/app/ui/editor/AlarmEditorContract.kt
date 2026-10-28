@@ -87,6 +87,12 @@ enum class EditorPane {
 
     /** Recordings (Story 7.2), opened from the Motivation sub-screen's "Record a message"; Back returns there. */
     Recordings,
+
+    /**
+     * The printable QR (Story 7.10), opened from Check setup's or QR registration's "Make a printable QR"; Back returns to
+     * the pane it was opened from. It comes after [ScanCode], so opening it from there slides forward ([isDeeperThan]).
+     */
+    PrintableQr,
     ;
 
     /** How deep the pane is: Back goes up one level, and the slide runs forward when going deeper. */
@@ -95,9 +101,12 @@ enum class EditorPane {
             when (this) {
                 Main -> 0
                 CheckSetup, Recordings -> 2
-                TryIt, ScanCode -> 3
+                TryIt, ScanCode, PrintableQr -> 3
                 else -> 1
             }
+
+    /** Going from [other] to this pane slides forward: deeper, or as deep and later (QR registration to the printable QR). */
+    fun isDeeperThan(other: EditorPane): Boolean = depth > other.depth || (depth == other.depth && ordinal > other.ordinal)
 }
 
 /** The repeat quick choices "Once" · "Weekdays" · "Custom"; Custom reveals the day chips. */
@@ -400,6 +409,9 @@ sealed interface EditorIntent {
 
     /** "Fix" on "Camera isn't available.": the app's page in the system settings (Story 3.10). */
     data object FixCamera : EditorIntent
+
+    /** QR registration's "Make a printable QR" (Story 7.10): opens the printable QR, whose Back returns there. */
+    data object PrintableQrClicked : EditorIntent
 
     /** All mode: move a selected check one place up or down in the order the checks run. */
     data class CheckMoved(

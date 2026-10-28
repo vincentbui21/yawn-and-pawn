@@ -11,6 +11,7 @@ import com.yawnandpawn.app.data.settings.InstallIdDataStore
 import com.yawnandpawn.app.data.settings.PriceCacheDataStore
 import com.yawnandpawn.app.data.settings.ReliabilityDataStore
 import com.yawnandpawn.app.data.settings.SettingsDataStore
+import com.yawnandpawn.app.data.sound.SoundFiles
 import org.junit.After
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -70,8 +71,8 @@ class BackupRulesTest {
             Triple("exclude", "device_file", "datastore/${ConsentDataStore.FILE_NAME}"),
             // The motivation messages' audio (Story 7.1): credential-protected media, never backed up; their rows are in app.db.
             Triple("exclude", "file", RecordingFiles.FOLDER),
-            // The user's own alarm sounds (Story 7.4's media folder): never backed up either.
-            Triple("exclude", "file", "sounds"),
+            // The user's own alarm sounds (Story 7.4): credential-protected copies, never backed up; their rows are in app.db.
+            Triple("exclude", "file", SoundFiles.FOLDER),
             Triple("exclude", "root", "."),
             Triple("exclude", "file", "."),
             Triple("exclude", "database", "."),
@@ -124,7 +125,7 @@ class BackupRulesTest {
         val schema = File("../data/schemas/com.yawnandpawn.app.data.db.AppDatabase/${AppDatabase.SCHEMA_VERSION}.json").readText()
         val all = backupRules(context, R.xml.data_extraction_rules) + backupRules(context, R.xml.backup_rules)
 
-        listOf(RecordingFiles.FOLDER, "sounds").forEach { media ->
+        listOf(RecordingFiles.FOLDER, SoundFiles.FOLDER).forEach { media ->
             assertEquals(
                 setOf("cloud-backup", "device-transfer", "full-backup-content"),
                 all.filter { it.kind == "exclude" && it.domain == "file" && it.path == media }.map { it.section }.toSet(),
@@ -134,6 +135,11 @@ class BackupRulesTest {
         }
         assertTrue(schema.contains("\"tableName\": \"recording\""), "the rows live in app.db")
         assertTrue(all.any { it.kind == "include" && it.path == appDb }, "app.db is backed up")
+        // Story 7.4: the imported sounds' rows (name, file name, length; no audio) are backed up with app.db too.
+        val sounds = schema.substringAfter("\"tableName\": \"custom_sound\"", missingDelimiterValue = "")
+        assertTrue(sounds.isNotEmpty(), "the custom_sound rows live in app.db")
+        assertTrue(sounds.substringBefore("\"tableName\"").contains("`display_name` TEXT NOT NULL"), "the name is backed up")
+        assertFalse(sounds.substringBefore("\"tableName\"").contains("BLOB"), "no audio in app.db")
     }
 
     @Test

@@ -20,7 +20,7 @@ import androidx.compose.ui.unit.dp
 import com.yawnandpawn.app.ui.components.GroupCard
 import com.yawnandpawn.app.ui.components.GroupDivider
 import com.yawnandpawn.app.ui.components.ICON_SIZE
-import com.yawnandpawn.app.ui.components.PpsTextButton
+import com.yawnandpawn.app.ui.components.PpsOutlinedButton
 import com.yawnandpawn.app.ui.resources.Res
 import com.yawnandpawn.app.ui.resources.sound_builtin
 import com.yawnandpawn.app.ui.resources.sound_file_missing
@@ -59,7 +59,7 @@ data class SoundPickerUiState(
     val selectedId: String? = null,
     /** The sound whose preview is playing, if any. */
     val previewingId: String? = null,
-    /** The "Your files" section with "Pick a file"; hidden until the user's files arrive (Story 7.4). */
+    /** The "Your files" section with "Pick a file" (Story 7.4); hidden where the user's files are not offered. */
     val showFiles: Boolean = true,
 )
 
@@ -78,7 +78,7 @@ sealed interface SoundPickerIntent {
 /**
  * The Sound picker as sections of the Sound sub-screen, stateless: a `card-group` each for built-in sounds, system
  * ringtones and the user's files ("Built-in" · "System" · "Your files"), every row with its preview button, and
- * "Pick a file" under the files.
+ * "Pick a file" (outlined, Story 7.4) under the files.
  */
 @Composable
 fun SoundList(
@@ -103,10 +103,12 @@ fun SoundList(
                 }
                 if (source == SoundSource.File) {
                     if (options.isNotEmpty()) GroupDivider()
-                    PpsTextButton(
+                    // `button-outlined` (Story 7.4): opens the system document picker for audio files.
+                    PpsOutlinedButton(
                         text = stringResource(Res.string.sound_pick_file),
                         onClick = { onIntent(SoundPickerIntent.PickFileClicked) },
-                        modifier = Modifier.padding(horizontal = PpsTheme.spacing.space2),
+                        modifier =
+                            Modifier.padding(horizontal = PpsTheme.spacing.cardPadding, vertical = PpsTheme.spacing.space3),
                     )
                 }
             }

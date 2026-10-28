@@ -1,6 +1,7 @@
 package com.yawnandpawn.app.android.sound
 
 import android.content.Context
+import android.net.Uri
 import androidx.test.core.app.ApplicationProvider
 import com.yawnandpawn.app.R
 import com.yawnandpawn.app.StopAppRule
@@ -9,6 +10,7 @@ import com.yawnandpawn.app.core.alarm.Alarm
 import com.yawnandpawn.app.core.log.LogEvent
 import com.yawnandpawn.app.core.sound.SoundCatalog
 import com.yawnandpawn.app.core.sound.SoundRef
+import com.yawnandpawn.app.data.sound.SoundFiles
 import com.yawnandpawn.app.testing.FakeLogger
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.test.UnconfinedTestDispatcher
@@ -79,6 +81,39 @@ class SoundLibraryTest {
             ringtones.list = { throw SecurityException("content://media/internal/audio/media/42") }
             assertEquals(emptyList(), library.systemSounds())
             assertEquals(listOf<LogEvent>(LogEvent.OperationFailed("list alarm ringtones", "SecurityException")), logger.events)
+        }
+
+    @Test
+    fun `a user's file resolves to its copy in sounds, and to nothing once the copy is gone (Story 7_4)`() {
+        val folder = File(context.filesDir, SoundFiles.FOLDER).apply { mkdirs() }
+        val copy = File(folder, "sound-1.mp3").apply { writeText("audio") }
+        val resolver = LibrarySoundResolver(findFile = SoundFiles { folder }::find)
+
+        assertEquals(AlarmSound.File(Uri.fromFile(copy).toString()), resolver.resolve("file:sound-1"))
+        assertNull(resolver.resolve("file:sound-2"), "no row or no copy: the player plays the default")
+        assertTrue(copy.delete())
+        assertNull(resolver.resolve("file:sound-1"), "a restored phone has the row but not the copy")
+        assertNull(LibrarySoundResolver(findFile = SoundFiles { error("locked") }::find).resolve("file:sound-1"), "locked")
+        folder.deleteRecursively()
+    }
+
+    @Test
+    fun `a user's file is available while its copy is in sounds (Story 7_4)`() =
+        runTest {
+            val folder = File(context.filesDir, SoundFiles.FOLDER).apply { mkdirs() }
+            File(folder, "sound-1.ogg").writeText("audio")
+            val library =
+                AndroidSoundLibrary(
+                    FakeRingtones(),
+                    logger,
+                    UnconfinedTestDispatcher(testScheduler),
+                    findFile = SoundFiles { folder }::find,
+                )
+
+            assertTrue(library.isAvailable(SoundRef.File("sound-1")))
+            assertFalse(library.isAvailable(SoundRef.File("sound-2")))
+            assertFalse(AndroidSoundLibrary(FakeRingtones(), logger).isAvailable(SoundRef.File("sound-1")), "no folder: never")
+            folder.deleteRecursively()
         }
 
     @Test

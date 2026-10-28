@@ -6,7 +6,8 @@ import androidx.room3.Transaction
 
 /**
  * "Delete all data" (Story 5.9) in `app.db`: the alarms with their check configs, pending changes and commitment events,
- * and the recordings (Story 7.1; their files are deleted by `AndroidLocalDataEraser` before this transaction).
+ * the recordings (Story 7.1) and the imported sounds (Story 7.4; the files of both are deleted by `AndroidLocalDataEraser`
+ * before this transaction).
  * Never `request_code_sequence` (a request code is never handed out twice), `purchase_record` (only `PurchaseLedger`
  * deletes records) or the history tables (only `RoomSessionHistoryRepository` writes them). Only `AndroidLocalDataEraser`
  * uses it.
@@ -28,7 +29,10 @@ abstract class AlarmDataDao {
     @Query("DELETE FROM recording")
     abstract suspend fun deleteRecordings()
 
-    /** Every row of the five tables, in one transaction (children first, though the foreign keys would cascade). */
+    @Query("DELETE FROM custom_sound")
+    abstract suspend fun deleteCustomSounds()
+
+    /** Every row of the six tables, in one transaction (children first, though the foreign keys would cascade). */
     @Transaction
     open suspend fun deleteAllAlarmData() {
         deleteCheckConfigs()
@@ -36,5 +40,6 @@ abstract class AlarmDataDao {
         deleteCommitmentEvents()
         deleteAlarms()
         deleteRecordings()
+        deleteCustomSounds()
     }
 }

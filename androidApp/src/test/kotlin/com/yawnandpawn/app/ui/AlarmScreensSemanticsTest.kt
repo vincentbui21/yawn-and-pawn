@@ -26,19 +26,24 @@ import androidx.compose.ui.test.performTouchInput
 import androidx.compose.ui.unit.dp
 import com.yawnandpawn.app.APP_WORK_TIMEOUT_MILLIS
 import com.yawnandpawn.app.StopAppRule
+import com.yawnandpawn.app.core.alarm.Alarm
 import com.yawnandpawn.app.core.alarm.RequestCodes
 import com.yawnandpawn.app.core.error.DomainError
+import com.yawnandpawn.app.core.error.Outcome
 import com.yawnandpawn.app.core.history.MissedNotes
 import com.yawnandpawn.app.core.session.ScheduleTestAlarm
+import com.yawnandpawn.app.core.sound.ImportResult
 import com.yawnandpawn.app.testing.AlarmUseCasesFixture
 import com.yawnandpawn.app.testing.FakeAlarmRepository
 import com.yawnandpawn.app.testing.FakeAlarmScheduler
 import com.yawnandpawn.app.testing.FakeCheckConfigRepository
 import com.yawnandpawn.app.testing.FakeClock
+import com.yawnandpawn.app.testing.FakeCustomSoundRepository
 import com.yawnandpawn.app.testing.FakeLogger
 import com.yawnandpawn.app.testing.FakeMissedNoteDismissals
 import com.yawnandpawn.app.testing.FakeNotificationPermission
 import com.yawnandpawn.app.testing.FakeSessionHistoryRepository
+import com.yawnandpawn.app.testing.FakeSoundImporter
 import com.yawnandpawn.app.testing.FakeSoundLibrary
 import com.yawnandpawn.app.testing.FakeSoundPreview
 import com.yawnandpawn.app.testing.FakeTestAlarmStore
@@ -51,6 +56,8 @@ import com.yawnandpawn.app.ui.editor.AlarmEditorRoute
 import com.yawnandpawn.app.ui.editor.AlarmEditorScreen
 import com.yawnandpawn.app.ui.editor.AlarmEditorViewModel
 import com.yawnandpawn.app.ui.editor.EditorIntent
+import com.yawnandpawn.app.ui.editor.EditorPane
+import com.yawnandpawn.app.ui.editor.EditorSoundFiles
 import com.yawnandpawn.app.ui.editor.EditorUiState
 import com.yawnandpawn.app.ui.format.DayNameStyle
 import com.yawnandpawn.app.ui.format.WeekOrder
@@ -63,6 +70,7 @@ import com.yawnandpawn.app.ui.home.HomeUiState
 import com.yawnandpawn.app.ui.home.HomeViewModel
 import com.yawnandpawn.app.ui.shell.AppShell
 import com.yawnandpawn.app.ui.shell.AppTab
+import com.yawnandpawn.app.ui.sound.SoundFilePicker
 import com.yawnandpawn.app.ui.theme.PpsThemeMode
 import kotlinx.datetime.LocalTime
 import kotlinx.datetime.TimeZone
@@ -296,6 +304,45 @@ class AlarmScreensSemanticsTest {
             composeRule.onNodeWithText("New alarm").assertExists()
             assertFalse(closed)
             assertTrue(repository.current.isEmpty())
+        }
+    }
+
+    @Test
+    fun `a picked file that is too big shows its snackbar in the Sound sub-screen, and the choice stays (Story 7_4)`() {
+        val repository = FakeAlarmRepository()
+        val importer = FakeSoundImporter(Outcome.Success(ImportResult.TooBig))
+        val picker =
+            object : SoundFilePicker {
+                override suspend fun pick(): String = "content://picked/1"
+            }
+        val viewModel =
+            AlarmEditorViewModel(
+                alarmId = null,
+                repository = repository,
+                checkConfigs = FakeCheckConfigRepository(repository),
+                saveAlarm = AlarmUseCasesFixture(repository = repository).save,
+                clock = FakeClock(),
+                timeZoneProvider = FakeTimeZoneProvider(),
+                actions = actions(repository),
+                soundLibrary = FakeSoundLibrary(),
+                soundPreview = FakeSoundPreview(),
+                notificationPermission = FakeNotificationPermission(),
+                testAlarm = ScheduleTestAlarm(FakeAlarmScheduler(), FakeTestAlarmStore(), FakeClock(), FakeLogger()),
+                soundFiles = EditorSoundFiles(FakeCustomSoundRepository(), picker, importer),
+            )
+        viewModel.onIntent(EditorIntent.PaneOpened(EditorPane.Sound))
+        withScreen(
+            PpsThemeMode.Light,
+            content = { AlarmEditorRoute(alarmId = null, onClose = {}, onOpenFailed = {}, onOpenCopy = {}, viewModel = viewModel) },
+        ) {
+            composeRule.onNode(hasText("Pick a file") and hasClickAction()).performScrollTo().performClick()
+
+            composeRule.waitUntil(timeoutMillis = APP_WORK_TIMEOUT_MILLIS) {
+                composeRule.onAllNodes(hasText("This file is too big. Pick one under 20 MB.")).fetchSemanticsNodes().isNotEmpty()
+            }
+            assertEquals(0, composeRule.onAllNodes(hasText("This file can't be played. Pick another.")).fetchSemanticsNodes().size)
+            assertEquals(listOf("content://picked/1"), importer.imported)
+            assertEquals(Alarm.DEFAULT_SOUND_REF, viewModel.state.value.form.soundRef)
         }
     }
 

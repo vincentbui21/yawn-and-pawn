@@ -4,6 +4,7 @@ import com.yawnandpawn.app.ui.daydetail.DayDetailViewModel
 import com.yawnandpawn.app.ui.editor.AlarmEditorArgs
 import com.yawnandpawn.app.ui.editor.AlarmEditorViewModel
 import com.yawnandpawn.app.ui.editor.EditorFeeSources
+import com.yawnandpawn.app.ui.editor.EditorSoundFiles
 import com.yawnandpawn.app.ui.home.AlarmActions
 import com.yawnandpawn.app.ui.home.HomeViewModel
 import com.yawnandpawn.app.ui.nav.AppOpenRequests
@@ -36,8 +37,9 @@ import org.koin.dsl.module
  * (`AlarmRepository`, the alarm use cases, `Clock`, `MonotonicClock`, `TimeZoneProvider`, `TimeChangeSignal`, `Logger`,
  * `SoundLibrary`, `SoundPreview`, `ExternalLinks`, `AppLinks`, `DeviceInfoSource`, `ManufacturerSettings`,
  * `ConfirmMakerGuidance`, `ConsentStore`, `SetAnalyticsConsent`, `EvaluateReliability`, `ReliabilitySettings`,
- * `CameraPermission`, `RecordingRepository`, `ScheduleTestAlarm`, `OnboardingRepository`, `ReliabilityRecords`, the onboarding use cases,
- * `OnboardingTestNote`, `ObserveProgress`, `WeeklySummaryStore`, `SetWeeklySummary`, `SkipNextAlarm` and `UndoSkip`)
+ * `CameraPermission`, `RecordingRepository`, `CustomSoundRepository`, `SoundFilePicker`, `SoundImporter`,
+ * `ScheduleTestAlarm`, `OnboardingRepository`, `ReliabilityRecords`, the onboarding use cases, `OnboardingTestNote`,
+ * `ObserveProgress`, `WeeklySummaryStore`, `SetWeeklySummary`, `SkipNextAlarm` and `UndoSkip`)
  * are bound by :androidApp and :data.
  */
 val uiModule =
@@ -146,4 +148,6 @@ private fun Scope.alarmEditor(
         onSaved = onSaved,
         // Story 7.2: the Motivation row and Recordings in the app's editor only, never in onboarding's first alarm.
         recordings = if (onSaved == null) get() else null,
+        // Story 7.4: "Your files" and "Pick a file" in the app's editor only; onboarding's first alarm shows no snackbars.
+        soundFiles = if (onSaved == null) EditorSoundFiles(sounds = get(), picker = get(), importer = get()) else null,
     )

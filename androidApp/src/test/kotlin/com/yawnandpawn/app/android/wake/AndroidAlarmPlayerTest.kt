@@ -15,6 +15,7 @@ import com.yawnandpawn.app.awaitChildren
 import com.yawnandpawn.app.core.alarm.Alarm
 import com.yawnandpawn.app.core.log.LogEvent
 import com.yawnandpawn.app.core.log.WakeStage
+import com.yawnandpawn.app.data.sound.SoundFiles
 import com.yawnandpawn.app.testing.FakeLogger
 import com.yawnandpawn.app.testing.FakeMonotonicClock
 import kotlinx.coroutines.CoroutineScope
@@ -29,6 +30,7 @@ import org.robolectric.Shadows.shadowOf
 import org.robolectric.shadow.api.Shadow
 import org.robolectric.shadows.ShadowMediaPlayer
 import org.robolectric.shadows.util.DataSource
+import java.io.File
 import java.io.IOException
 import kotlin.math.roundToInt
 import kotlin.test.assertEquals
@@ -489,6 +491,86 @@ class AndroidAlarmPlayerTest {
         assertEquals(AlarmSound.Default, player.sound)
         assertTrue(created.last().shadow().isReallyPlaying)
         player.stop(restoreVolume = true)
+    }
+
+    /** The real player over the sound library, finding the user's files in [folder] (Story 7.4). */
+    private fun filePlayer(folder: File) =
+        AndroidAlarmPlayer(
+            MediaPlayerPlaybackFactory(context),
+            LibrarySoundResolver(findFile = SoundFiles { folder }::find),
+            volume,
+            clock,
+            CoroutineScope(dispatcher),
+            logger,
+        )
+
+    private fun soundsFolder(): File = File(context.filesDir, SoundFiles.FOLDER).apply { mkdirs() }
+
+    @Test
+    fun `a user's file rings its copy in sounds, looping on the alarm usage (Story 7_4)`() {
+        val created = recordMediaPlayers()
+        val folder = soundsFolder()
+        val copy = File(folder, "sound-1.mp3").apply { writeText("audio") }
+        val player = filePlayer(folder)
+
+        player.play("file:sound-1", volumePercent = 80, gradual = true, rampStartPercent = 20)
+        prepared()
+
+        assertEquals(AlarmSound.File(Uri.fromFile(copy).toString()), player.sound)
+        val ring = created.single()
+        assertEquals(Uri.fromFile(copy), ring.shadow().sourceUri)
+        assertTrue(ring.shadow().isReallyPlaying)
+        assertTrue(ring.isLooping)
+        assertEquals(AudioAttributes.USAGE_ALARM, ring.shadow().audioAttributes.usage)
+        assertEquals(emptyList(), logger.events)
+        player.stop(restoreVolume = true)
+        folder.deleteRecursively()
+    }
+
+    @Test
+    fun `a user's file whose copy is gone rings the default in the same ring, logged without the file (Story 7_4)`() {
+        val created = recordMediaPlayers()
+        val player = filePlayer(soundsFolder())
+
+        player.play("file:sound-1", volumePercent = 80, gradual = false, rampStartPercent = 20)
+        prepared()
+
+        assertEquals(AlarmSound.Default, player.sound)
+        assertTrue(created.single().shadow().isReallyPlaying, "never silent")
+        assertEquals(listOf<LogEvent>(LogEvent.SoundFellBack("unknown sound reference")), logger.events)
+        assertTrue(logger.events.none { "sound-1" in it.toString() || "sounds" in it.toString() }, "no id or path in the log")
+        player.stop(restoreVolume = true)
+    }
+
+    @Test
+    fun `a user's file that fails mid-ring or at prepare switches to the default (Story 7_4)`() {
+        val created = recordMediaPlayers()
+        val folder = soundsFolder()
+        File(folder, "sound-1.mp3").writeText("not really audio")
+        val player = filePlayer(folder)
+
+        player.play("file:sound-1", volumePercent = 80, gradual = false, rampStartPercent = 20)
+        prepared()
+        assertTrue(player.sound is AlarmSound.File)
+        created.single().shadow().invokeErrorListener(MediaPlayer.MEDIA_ERROR_SERVER_DIED, 0)
+        prepared()
+
+        assertEquals(AlarmSound.Default, player.sound)
+        assertTrue(created.last().shadow().isReallyPlaying)
+        player.stop(restoreVolume = true)
+
+        player.play("file:sound-1", volumePercent = 70, gradual = false, rampStartPercent = 20)
+        created.last().shadow().invokeErrorListener(MediaPlayer.MEDIA_ERROR_UNKNOWN, MediaPlayer.MEDIA_ERROR_MALFORMED)
+        prepared()
+
+        assertEquals(AlarmSound.Default, player.sound)
+        assertTrue(created.last().shadow().isReallyPlaying)
+        assertEquals(
+            List<LogEvent>(2) { LogEvent.SoundFellBack("the sound failed while ringing") },
+            logger.events,
+        )
+        player.stop(restoreVolume = true)
+        folder.deleteRecursively()
     }
 
     @Test

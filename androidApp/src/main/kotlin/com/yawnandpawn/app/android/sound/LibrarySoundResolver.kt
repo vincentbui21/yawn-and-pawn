@@ -1,10 +1,12 @@
 package com.yawnandpawn.app.android.sound
 
+import android.net.Uri
 import com.yawnandpawn.app.R
 import com.yawnandpawn.app.android.wake.AlarmSound
 import com.yawnandpawn.app.android.wake.SoundResolver
 import com.yawnandpawn.app.core.sound.SoundCatalog
 import com.yawnandpawn.app.core.sound.SoundRef
+import java.io.File
 
 /**
  * The bundled alarm sounds by `SoundCatalog` resource name (`res/raw/alarm_<id>.ogg`). A test keeps it, the catalog and
@@ -28,11 +30,14 @@ val BUILT_IN_SOUND_FILES: Map<String, Int> =
 
 /**
  * The sound library's [SoundResolver] (Story 1.17): `builtin:default` is [AlarmSound.Default], another catalog sound its
- * raw resource, a phone ringtone its content URI. Anything else (an unknown reference, a built-in this version does not
- * have) resolves to null, and the player plays the default.
+ * raw resource, a phone ringtone its content URI, and a user's file (Story 7.4) its copy in `sounds/`, found by id in
+ * the folder through [findFile] (no database at ring time; `SoundFiles.find`, which never throws). Anything else (an
+ * unknown reference, a built-in this version does not have, a file whose copy is gone or cannot be read before the first
+ * unlock) resolves to null, and the player plays the default and logs it without the reference.
  */
 class LibrarySoundResolver(
     private val files: Map<String, Int> = BUILT_IN_SOUND_FILES,
+    private val findFile: (String) -> File? = { null },
 ) : SoundResolver {
     override fun resolve(soundRef: String): AlarmSound? =
         when (val ref = SoundRef.parse(soundRef)) {
@@ -44,6 +49,10 @@ class LibrarySoundResolver(
 
             is SoundRef.System -> {
                 AlarmSound.File(ref.uri)
+            }
+
+            is SoundRef.File -> {
+                findFile(ref.id)?.let { AlarmSound.File(Uri.fromFile(it).toString()) }
             }
 
             null -> {

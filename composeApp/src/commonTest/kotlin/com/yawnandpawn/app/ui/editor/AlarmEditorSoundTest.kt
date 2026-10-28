@@ -107,7 +107,7 @@ class AlarmEditorSoundTest {
             assertEquals(Alarm.DEFAULT_SOUND_REF, picker.selectedId)
             assertEquals(BUILT_IN_SOUND_NAMES.getValue("default"), sound.nameRes, "the Sound row reads Sunrise")
             assertFalse(sound.missing)
-            assertFalse(picker.showFiles, "Your files arrives in Story 7.4")
+            assertFalse(picker.showFiles, "Your files is hidden without the user's files (Story 7.4 passes them in the app)")
             assertEquals(
                 SoundCatalog.sounds.map { it.ref.encode() },
                 picker.options.filter { it.source == SoundSource.BuiltIn }.map { it.id },

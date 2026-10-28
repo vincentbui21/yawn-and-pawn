@@ -30,6 +30,7 @@ import com.yawnandpawn.app.core.reliability.ReliabilityRecords
 import com.yawnandpawn.app.core.session.ScheduleTestAlarm
 import com.yawnandpawn.app.core.session.SessionEvent
 import com.yawnandpawn.app.core.session.SessionState
+import com.yawnandpawn.app.core.sound.CustomSoundRepository
 import com.yawnandpawn.app.core.stats.CheckKey
 import com.yawnandpawn.app.core.stats.ReRegisterDismissals
 import com.yawnandpawn.app.core.stats.ReRegisterSuggestions
@@ -43,7 +44,9 @@ import com.yawnandpawn.app.data.settings.InstallIdDataStore
 import com.yawnandpawn.app.data.settings.PriceCacheDataStore
 import com.yawnandpawn.app.data.settings.ReliabilityDataStore
 import com.yawnandpawn.app.data.settings.SettingsDataStore
+import com.yawnandpawn.app.data.sound.SoundFiles
 import com.yawnandpawn.app.stopApp
+import com.yawnandpawn.app.testing.aCustomSound
 import com.yawnandpawn.app.testing.aPriceSnapshot
 import com.yawnandpawn.app.testing.aRecording
 import kotlinx.coroutines.flow.first
@@ -52,6 +55,7 @@ import kotlinx.datetime.LocalTime
 import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
+import org.koin.core.Koin
 import org.robolectric.RobolectricTestRunner
 import java.io.File
 import kotlin.test.assertEquals
@@ -127,12 +131,7 @@ class BackupRulesCoverageTest {
         assertIs<Outcome.Success<*>>(runBlocking { koin.get<ReliabilityRecords>().lockedTestPassed(dismissedAt) })
         // The usage stats choice (Story 5.6), in its own DataStore, never backed up.
         assertIs<Outcome.Success<*>>(runBlocking { koin.get<ConsentStore>().setConsent(true) })
-        // A recorded message (Story 7.1): its row in app.db, its audio in credential-protected recordings/ (never backed up).
-        val recordingFiles = koin.get<RecordingFiles>()
-        recordingFiles.folder().mkdirs()
-        recordingFiles.takeFile("take-1").writeText("audio")
-        val take = RecordedTake("take-1", 9_000)
-        assertIs<Outcome.Success<*>>(runBlocking { koin.get<RecordingRepository>().save(aRecording(id = "recording-1"), take) })
+        storeMedia(koin)
         // Close the databases and the DataStore, as when the process ends, so their files are final.
         stopApp()
 
@@ -148,6 +147,7 @@ class BackupRulesCoverageTest {
             ReliabilityDataStore.reliabilityFile(app.app),
             ConsentDataStore.consentFile(app.app),
             File(app.app.filesDir, "recordings/recording-1.m4a"),
+            File(app.app.filesDir, "sounds/sound-1.mp3"),
         ).forEach { expected ->
             assertTrue(files.any { it.first == expected.canonicalFile }, "the morning created $expected; found $names")
         }
@@ -287,5 +287,21 @@ class BackupRulesCoverageTest {
             val (fileDomain, path) = name.split("/", limit = 2).let { it[0] to it[1] }
             return fileDomain == domain && (this.path == "." || path == this.path || path.startsWith(this.path + "/"))
         }
+    }
+
+    /**
+     * A recorded message (Story 7.1) and an imported sound (Story 7.4): each a row in app.db, and its audio in
+     * credential-protected recordings/ or sounds/ (never backed up).
+     */
+    private fun storeMedia(koin: Koin) {
+        val recordingFiles = koin.get<RecordingFiles>()
+        recordingFiles.folder().mkdirs()
+        recordingFiles.takeFile("take-1").writeText("audio")
+        val take = RecordedTake("take-1", 9_000)
+        assertIs<Outcome.Success<*>>(runBlocking { koin.get<RecordingRepository>().save(aRecording(id = "recording-1"), take) })
+        val soundFiles = koin.get<SoundFiles>()
+        soundFiles.folder().mkdirs()
+        File(soundFiles.folder(), "sound-1.mp3").writeText("audio")
+        assertIs<Outcome.Success<*>>(runBlocking { koin.get<CustomSoundRepository>().add(aCustomSound(id = "sound-1")) })
     }
 }

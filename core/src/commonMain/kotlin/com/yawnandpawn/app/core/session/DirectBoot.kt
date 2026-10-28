@@ -31,7 +31,8 @@ interface UserLockState {
  * What a ring may use before the first unlock (FR-ALM-11, AD-15). Pure. With [beforeFirstUnlock] false the config comes
  * back unchanged. Before the first unlock:
  * - a sound that is not a built-in one ([SoundRef.BuiltIn]) becomes the default built-in sound: a system ringtone needs
- *   the media provider, which is not available before the first unlock;
+ *   the media provider, and a user's file (Story 7.4) credential-protected storage, neither available before the first
+ *   unlock;
  * - every check entry whose type is not `directBootSafe` becomes [DIRECT_BOOT_CHECK].
  *
  * The frozen `SessionConfig` is never rewritten: the ring's sound and its first check plan are derived from it, so the

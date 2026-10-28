@@ -110,6 +110,8 @@ import com.yawnandpawn.app.ui.resources.repeat_custom
 import com.yawnandpawn.app.ui.resources.repeat_once
 import com.yawnandpawn.app.ui.resources.repeat_weekdays
 import com.yawnandpawn.app.ui.resources.sound_file_missing
+import com.yawnandpawn.app.ui.resources.sound_file_not_playable
+import com.yawnandpawn.app.ui.resources.sound_file_too_big
 import com.yawnandpawn.app.ui.settings.WeakeningNote
 import com.yawnandpawn.app.ui.settings.WeakeningNoteInline
 import com.yawnandpawn.app.ui.theme.PpsTheme
@@ -146,6 +148,8 @@ fun AlarmEditorRoute(
     val snackbarHostState = remember { SnackbarHostState() }
     val saveFailed = stringResource(Res.string.editor_save_failed)
     val testScheduled = stringResource(Res.string.editor_test_scheduled)
+    val fileNotPlayable = stringResource(Res.string.sound_file_not_playable)
+    val fileTooBig = stringResource(Res.string.sound_file_too_big)
     LaunchedEffect(viewModel) {
         viewModel.effects.collect { effect ->
             when (effect) {
@@ -174,6 +178,15 @@ fun AlarmEditorRoute(
 
                 EditorEffect.ShowTestScheduled -> {
                     launch { snackbarHostState.showSnackbar(testScheduled) }
+                }
+
+                // Story 7.4: "Pick a file" refused the picked file; nothing was kept and the choice stays.
+                EditorEffect.ShowSoundFileNotPlayable -> {
+                    launch { snackbarHostState.showSnackbar(fileNotPlayable) }
+                }
+
+                EditorEffect.ShowSoundFileTooBig -> {
+                    launch { snackbarHostState.showSnackbar(fileTooBig) }
                 }
             }
         }

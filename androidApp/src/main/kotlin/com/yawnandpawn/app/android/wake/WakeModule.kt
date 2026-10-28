@@ -30,6 +30,7 @@ import com.yawnandpawn.app.core.stats.CelebrationStreaks
 import com.yawnandpawn.app.core.summary.WeeklySummaryScheduler
 import com.yawnandpawn.app.core.time.Clock
 import com.yawnandpawn.app.core.time.TimeSnapshot
+import com.yawnandpawn.app.data.sound.SoundFiles
 import kotlinx.coroutines.launch
 import org.koin.android.ext.koin.androidContext
 import org.koin.core.module.Module
@@ -60,7 +61,8 @@ fun wakeModule(): Module =
         single { CallDetector(get(), get(), get(), get<WakeScope>(), get(), get()) }
         single { WakeScope(get()) }
         single<PlaybackFactory> { MediaPlayerPlaybackFactory(androidContext()) }
-        single<SoundResolver> { LibrarySoundResolver() }
+        // Story 7.4: a user's file rings its copy in sounds/, looked up in the folder (never before the first unlock).
+        single<SoundResolver> { LibrarySoundResolver(findFile = get<SoundFiles>()::find) }
         single { AlarmVolume(androidContext(), get()) }
         single { AlarmVibrator(androidContext()) }
         single { WakeNotifier(androidContext(), get(), get()) }

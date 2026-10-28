@@ -22,6 +22,8 @@ import com.yawnandpawn.app.data.history.SessionMergeEntity
 import com.yawnandpawn.app.data.recording.RecordingDao
 import com.yawnandpawn.app.data.recording.RecordingEntity
 import com.yawnandpawn.app.data.reset.AlarmDataDao
+import com.yawnandpawn.app.data.sound.CustomSoundDao
+import com.yawnandpawn.app.data.sound.CustomSoundEntity
 
 /**
  * `app.db` (AD-6): user data that is backed up. Version 1 held only `alarm`; version 2 (Story 1.10) adds
@@ -35,9 +37,10 @@ import com.yawnandpawn.app.data.reset.AlarmDataDao
  * audio files stay in credential-protected `recordings/` and are never backed up ([MIGRATION_10_11]); version 12
  * (Story 7.2) adds `alarm.motivation`, the message each alarm plays ([MIGRATION_11_12]); version 13 (Story 7.11) adds
  * `alarm.offer_skip` and `alarm.skipped_date` and makes `session_history.first_ring_at` nullable for skipped occurrences
- * ([MIGRATION_12_13]); version 14 (Story 7.5) adds `alarm.motivation_mode`, when the message plays ([MIGRATION_13_14]).
- * There is no
- * destructive migration fallback; restoring a newer file onto an older install is
+ * ([MIGRATION_12_13]); version 14 (Story 7.5) adds `alarm.motivation_mode`, when the message plays ([MIGRATION_13_14]);
+ * version 15 (Story 7.4) adds `custom_sound`, the user's imported alarm sounds, whose copies stay in credential-protected
+ * `sounds/` and are never backed up ([MIGRATION_14_15]). There is no destructive migration fallback; restoring a newer
+ * file onto an older install is
  * covered by `docs/decisions/db-downgrade.md`.
  */
 @Database(
@@ -51,6 +54,7 @@ import com.yawnandpawn.app.data.reset.AlarmDataDao
         CommitmentEventEntity::class,
         PurchaseRecordEntity::class,
         RecordingEntity::class,
+        CustomSoundEntity::class,
     ],
     version = AppDatabase.SCHEMA_VERSION,
     exportSchema = true,
@@ -73,6 +77,8 @@ abstract class AppDatabase : RoomDatabase() {
 
     abstract fun recordingDao(): RecordingDao
 
+    abstract fun customSoundDao(): CustomSoundDao
+
     /** "Delete all data" (Story 5.9): no table of its own, the deletes of the alarm tables in one transaction. */
     abstract fun alarmDataDao(): AlarmDataDao
 
@@ -84,7 +90,7 @@ abstract class AppDatabase : RoomDatabase() {
          * The `app.db` schema this build knows: the `@Database` version, and the limit `PpsBackupAgent` checks a restored
          * file against (Room cannot open a newer one, `docs/decisions/db-downgrade.md`).
          */
-        const val SCHEMA_VERSION = 14
+        const val SCHEMA_VERSION = 15
     }
 }
 

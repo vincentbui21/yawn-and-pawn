@@ -11,8 +11,9 @@ interface SoundLibrary {
     suspend fun systemSounds(): List<SoundRef.System>
 
     /**
-     * Whether [ref] can be played now: a catalog sound always, a system ringtone while its file opens, anything else
-     * never. A sound that is not available shows "File missing. Default sound will play." and rings as the default.
+     * Whether [ref] can be played now: a catalog sound always, a system ringtone while its file opens, a user's file
+     * (Story 7.4) while its copy is in `sounds/`, anything else never. A sound that is not available shows "File
+     * missing. Default sound will play." and rings as the default.
      */
     suspend fun isAvailable(ref: SoundRef): Boolean
 }

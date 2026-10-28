@@ -4,12 +4,18 @@ import com.yawnandpawn.app.core.alarm.rampGain
 import com.yawnandpawn.app.core.log.LogEvent
 import com.yawnandpawn.app.core.log.Logger
 import com.yawnandpawn.app.core.log.WakeStage
+import com.yawnandpawn.app.core.recording.MIX_SOUND_BLOCK
+import com.yawnandpawn.app.core.recording.MixSource
+import com.yawnandpawn.app.core.recording.Recording
+import com.yawnandpawn.app.core.recording.mixSchedule
 import com.yawnandpawn.app.core.time.MonotonicClock
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
+import java.io.File
 import kotlin.time.Duration.Companion.milliseconds
 import kotlin.time.Duration.Companion.seconds
 
@@ -35,6 +41,16 @@ import kotlin.time.Duration.Companion.seconds
  *   an unknown sound reference plays the default. Each fallback is logged without the sound reference or its URI.
  *   Sounds prepare asynchronously (`MediaPlayerPlaybackFactory`); a prepare error, or a sound not prepared within 5 s
  *   (a stalled content provider), falls back like a playback error. A new ring stops the Sound preview ([onRingStart]).
+ * - **Mix into alarm (Story 7.5):** a ring with a [MixRequest] alternates the alarm sound with the session's recording
+ *   per the pure `mixSchedule`: 30 s of alarm sound (ramping as above), then the recording once, repeating. The alarm
+ *   sound never stops: its gain goes to 0 while the recording plays, so the never-silent ladder, focus and wake lock stay
+ *   in charge and switching back is instant. The recording is found off the caller's thread ([recordingSource] on
+ *   [scope]) and opened once ([recordingPlaybacks], `USAGE_ALARM`, full gain on the ring's alarm-stream volume). The
+ *   ramp loop checks the schedule every 250 ms from the mix anchor: the ring's start, and again after the recording,
+ *   after grace ([unmuteTo]) and after a call ([resume]). Grace and calls silence both and pause the recording. A missing
+ *   recording, an open or prepare error, a prepare not done within 5 s or an error while playing leaves the alarm sound
+ *   alone at full gain for the rest of that session, also on its later rings (the session is remembered); logged by
+ *   error code only.
  *
  * Every call is idempotent for the same request and thread-safe (one lock; `MediaPlayer` errors arrive on the main
  * thread). [scope] runs the ramp updates. (Many small functions: one verb per session effect plus the locked helpers
@@ -57,13 +73,43 @@ class AndroidAlarmPlayer(
     private val onRingStart: () -> Unit = {},
     /** The ring's audio focus (Story 2.7): requested when a ring opens, given back when it is released. */
     private val focus: AlarmAudioFocus? = null,
+    /** Opens the recording of a "Mix into alarm" ring (Story 7.5). */
+    private val recordingPlaybacks: RecordingPlaybackFactory? = null,
+    /**
+     * The readable file of a recording id, or null when its row or file is missing or cannot be read (storage locked).
+     * Runs on [scope], never under the player's lock; it must not call back into the player.
+     */
+    private val recordingSource: suspend (recordingId: String) -> File? = { null },
 ) {
-    /** What the session asked for; a different request starts the ring over. [rampStart] is null when there is no ramp. */
+    /**
+     * What the session asked for; a different request starts the ring over. [rampStart] is null when there is no ramp,
+     * [mix] when the ring does not mix a recording in.
+     */
     private data class Request(
         val soundRef: String,
         val volumePercent: Int,
         val rampStart: Double?,
+        val mix: MixRequest? = null,
     )
+
+    /** The recording a ring mixes in (Story 7.5); callbacks of a released one are told apart by identity. */
+    private class Mixing(
+        val request: MixRequest,
+    ) {
+        var playback: RecordingPlayback? = null
+        var prepared = false
+
+        /** Its length, known once it is prepared and open; 0 before. */
+        var durationMs = 0L
+
+        /** The recording plays now (the alarm sound is at gain 0). */
+        var playing = false
+
+        /** Where [mixSchedule] counts from (monotonic). */
+        var anchor = 0L
+        var loadJob: Job? = null
+        var watchdog: Job? = null
+    }
 
     /** One open of [sound]: callbacks of an older open (released since) are told apart by identity. */
     private class Opening(
@@ -85,6 +131,10 @@ class AndroidAlarmPlayer(
     private var rampJob: Job? = null
     private var retryJob: Job? = null
     private var prepareWatchdog: Job? = null
+    private var mixing: Mixing? = null
+
+    /** The session whose recording failed (Story 7.5): its later rings play the alarm sound alone. */
+    private var failedMixSession: String? = null
 
     @Volatile
     private var ringOn = false
@@ -114,6 +164,14 @@ class AndroidAlarmPlayer(
     val isRinging: Boolean
         get() = ringOn
 
+    /** The ring's recording plays now ("Mix into alarm", Story 7.5): the alarm sound is held at gain 0 meanwhile. */
+    val isMixPlaying: Boolean
+        get() = synchronized(lock) { mixing?.playing == true }
+
+    /** The ring mixes a recording in: one is loading, prepared or playing (false once it failed, Story 7.5). */
+    val isMixing: Boolean
+        get() = synchronized(lock) { mixing != null }
+
     /** The open sound has prepared (so it plays unless paused or muted); false while preparing or with nothing open. */
     val isPrepared: Boolean
         get() = synchronized(lock) { playback != null && opening?.prepared == true }
@@ -122,7 +180,8 @@ class AndroidAlarmPlayer(
      * Plays [soundRef] at [volumePercent] of the alarm stream, ramping from [rampStartPercent] of it when [gradual], and
      * unmuted. The same request again only unmutes and resumes; another one starts the ring over. With [paused] (a call
      * is in progress, Story 2.7) the ring opens but stays silent: it never starts, so not one frame is audible, and the
-     * same request again keeps it paused.
+     * same request again keeps it paused. With [mix] ("Mix into alarm", Story 7.5) the ring alternates the sound with
+     * that recording.
      */
     fun play(
         soundRef: String,
@@ -130,13 +189,16 @@ class AndroidAlarmPlayer(
         gradual: Boolean,
         rampStartPercent: Int,
         paused: Boolean = false,
+        mix: MixRequest? = null,
     ) = synchronized(lock) {
-        val wanted = Request(soundRef, volumePercent, if (gradual) rampStartPercent / PERCENT else null)
+        val wanted = Request(soundRef, volumePercent, if (gradual) rampStartPercent / PERCENT else null, mix)
+        val wasMuted = isMuted
         isMuted = false
         if (playback != null && wanted == request) {
             when {
                 paused && !isPaused -> pauseLocked()
                 !paused && isPaused -> resumeLocked()
+                wasMuted -> restartMixLocked()
             }
             applyGainLocked()
         } else {
@@ -153,19 +215,28 @@ class AndroidAlarmPlayer(
         startRingLocked(Request(EMERGENCY_REF, volumePercent, null), AlarmSound.Default, paused)
     }
 
-    /** After a crash in the wake flow (AD-12): the open sound becomes the default, keeping mute, pause and gain. */
+    /**
+     * After a crash in the wake flow (AD-12): the open sound becomes the default, keeping mute, pause and gain. A mixed-in
+     * recording is released (Story 7.5): the default plays alone.
+     */
     fun switchToDefault() =
         synchronized(lock) {
-            if (request == null || (sound == AlarmSound.Default && playback != null)) return@synchronized
+            if (request == null) return@synchronized
+            if (mixing != null) {
+                releaseMixLocked()
+                applyGainLocked()
+            }
+            if (sound == AlarmSound.Default && playback != null) return@synchronized
             closeLocked()
             opens = 0
             openLocked(AlarmSound.Default)
         }
 
-    /** The grace window: silent, still open. */
+    /** The grace window: silent, still open; a recording that plays pauses (Story 7.5). */
     fun mute() =
         synchronized(lock) {
             isMuted = true
+            stopMixPhaseLocked()
             applyGainLocked()
         }
 
@@ -178,6 +249,7 @@ class AndroidAlarmPlayer(
             if (request != null) volume.setForRing(volumePercent)
             isMuted = false
             rampDone = true
+            restartMixLocked()
             applyGainLocked()
         }
 
@@ -210,8 +282,15 @@ class AndroidAlarmPlayer(
      */
     fun restoreVolumeIfSilent() = synchronized(lock) { if (request == null) volume.restore() }
 
-    /** One ramp step: the gain for the time since the ring started. The ramp loop calls it; tests may too. */
-    fun updateGain() = synchronized(lock) { applyGainLocked() }
+    /**
+     * One ramp step: the gain for the time since the ring started, and the mix schedule's source (Story 7.5). The ramp
+     * loop calls it; tests may too.
+     */
+    fun updateGain() =
+        synchronized(lock) {
+            applyGainLocked()
+            mixStepLocked()
+        }
 
     private fun startRingLocked(
         wanted: Request,
@@ -229,7 +308,8 @@ class AndroidAlarmPlayer(
         rampStartedAt = monotonicClock.elapsedMillis()
         rampDone = wanted.rampStart == null
         openLocked(first)
-        if (!rampDone) startRampLoop()
+        startMixLocked(wanted.mix)
+        if (!rampDone || mixing != null) startRampLoop()
     }
 
     private fun resolve(soundRef: String): AlarmSound =
@@ -340,6 +420,7 @@ class AndroidAlarmPlayer(
 
     private fun pauseLocked() {
         isPaused = true
+        stopMixPhaseLocked()
         playback?.pause()
     }
 
@@ -351,6 +432,7 @@ class AndroidAlarmPlayer(
         isPaused = false
         focus?.request()
         rampDone = true
+        restartMixLocked()
         applyGainLocked()
         playback?.start()
         if (opening?.prepared == true) timings.stage(WakeStage.SoundStarted)
@@ -361,10 +443,15 @@ class AndroidAlarmPlayer(
         val target =
             when {
                 isMuted -> 0f
+
+                // The recording plays (Story 7.5): the alarm sound loops on silently, so switching back has no gap.
+                mixing?.playing == true -> 0f
+
                 rampStart == null || rampDone -> 1f
+
                 else -> rampGain((monotonicClock.elapsedMillis() - rampStartedAt).milliseconds, rampStart).toFloat()
             }
-        if (!isMuted && target >= 1f) rampDone = true
+        if (!isMuted && mixing?.playing != true && target >= 1f) rampDone = true
         gain = target
         playback?.setGain(target)
     }
@@ -373,11 +460,212 @@ class AndroidAlarmPlayer(
         rampJob?.cancel()
         rampJob =
             scope.launch {
-                while (isActive && !synchronized(lock) { rampDone }) {
+                // The loop also drives the mix schedule for as long as the ring mixes a recording in (Story 7.5).
+                while (isActive && synchronized(lock) { !rampDone || mixing != null }) {
                     delay(RAMP_STEP)
                     updateGain()
                 }
             }
+    }
+
+    /**
+     * Starts mixing [mix]'s recording into the ring that starts now (Story 7.5), unless there is none, no factory, or its
+     * session's recording already failed. The file is found on [scope] (never under the lock or on the caller's thread);
+     * a recording not prepared within [PREPARE_TIMEOUT] of the ring's start fails.
+     */
+    private fun startMixLocked(mix: MixRequest?) {
+        if (mix == null || recordingPlaybacks == null || mix.sessionId == failedMixSession) return
+        val started = Mixing(mix).apply { anchor = monotonicClock.elapsedMillis() }
+        mixing = started
+        started.loadJob =
+            scope.launch {
+                val file = findRecording(mix.recordingId)
+                synchronized(lock) { if (mixing === started) openMixLocked(started, file) }
+            }
+        started.watchdog =
+            scope.launch {
+                delay(PREPARE_TIMEOUT)
+                synchronized(lock) {
+                    if (mixing === started && !started.prepared) failMixLocked("the message did not prepare in time")
+                }
+            }
+    }
+
+    // Whatever the source throws means "no recording": the alarm sound plays alone.
+    @Suppress("TooGenericExceptionCaught")
+    private suspend fun findRecording(recordingId: String): File? =
+        try {
+            recordingSource(recordingId)
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            logger.log(LogEvent.OperationFailed(MIX_OPERATION, e::class.simpleName.orEmpty()))
+            null
+        }
+
+    /** Opens the found [file] of [started] (null: missing), once; its prepare ends the watchdog. */
+    @Suppress("TooGenericExceptionCaught")
+    private fun openMixLocked(
+        started: Mixing,
+        file: File?,
+    ) {
+        val factory = recordingPlaybacks
+        if (file == null || factory == null) {
+            failMixLocked("the message is missing")
+            return
+        }
+        try {
+            val opened =
+                factory.open(
+                    file,
+                    onPrepared = { onMixPrepared(started) },
+                    onCompleted = { onMixCompleted(started) },
+                    onError = { onMixError(started) },
+                )
+            if (mixing !== started) {
+                // It failed while opening (an error reported before open returned).
+                opened.release()
+                return
+            }
+            started.playback = opened
+            if (started.prepared) mixReadyLocked(started)
+        } catch (e: Exception) {
+            failMixLocked("could not open the message: ${e::class.simpleName}")
+        }
+    }
+
+    private fun onMixPrepared(started: Mixing) =
+        synchronized(lock) {
+            if (mixing !== started) return@synchronized
+            started.prepared = true
+            if (started.playback != null) mixReadyLocked(started)
+        }
+
+    /** [started] is prepared and open: its length is known (a recording without one fails), the watchdog ends. */
+    private fun mixReadyLocked(started: Mixing) {
+        val length = started.playback?.durationMs ?: 0L
+        if (length <= 0L) {
+            failMixLocked("the message has no length")
+            return
+        }
+        // A wrong header never holds the alarm sound at gain 0 for longer than the longest recording.
+        started.durationMs = length.coerceAtMost(Recording.MAX_DURATION_MS)
+        started.watchdog?.cancel()
+        started.watchdog = null
+        if (recordingCall(started) { it.setGain(FULL_GAIN) }) mixStepLocked()
+    }
+
+    /** The recording played to its end: the alarm sound is back at full gain and the schedule counts from now. */
+    private fun onMixCompleted(started: Mixing) =
+        synchronized(lock) {
+            if (mixing !== started || !started.playing) return@synchronized
+            started.playing = false
+            started.anchor = monotonicClock.elapsedMillis()
+            applyGainLocked()
+        }
+
+    private fun onMixError(started: Mixing) =
+        synchronized(lock) {
+            if (mixing === started) failMixLocked("the message failed while playing")
+        }
+
+    /**
+     * What the mix schedule wants now: the recording (it starts from 0 and the alarm sound goes to gain 0) or the alarm
+     * sound (back at full gain, the anchor restarts). Nothing while muted, paused or before the recording is ready. The
+     * recording's own completion ends its slot ([onMixCompleted]); the schedule's slot is [MIX_SLACK] longer than the
+     * recording, so start latency never cuts its end, and only a completion that never comes is ended by the schedule.
+     */
+    private fun mixStepLocked() {
+        val current = mixing ?: return
+        if (request == null || isMuted || isPaused) return
+        val now = monotonicClock.elapsedMillis()
+        val length = if (current.playback != null && current.prepared) current.durationMs else 0L
+        val slot = if (length > 0) length + MIX_SLACK.inWholeMilliseconds else 0L
+        val wanted = mixSchedule((now - current.anchor).milliseconds, recordingDuration = slot.milliseconds)
+        when {
+            wanted == MixSource.Recording && !current.playing && length > 0 -> startRecordingLocked(current, now)
+            wanted == MixSource.Alarm && current.playing -> backToAlarmLocked(current, now)
+        }
+    }
+
+    /** The recording starts from 0 (only once its start succeeded), and the alarm sound goes to gain 0. */
+    private fun startRecordingLocked(
+        current: Mixing,
+        now: Long,
+    ) {
+        if (recordingCall(current) { it.setGain(FULL_GAIN) } && recordingCall(current) { it.start() }) {
+            current.playing = true
+            // Counted from the start of the recording's slot, so a recording that became ready late still plays whole.
+            current.anchor = now - MIX_SOUND_BLOCK.inWholeMilliseconds
+            applyGainLocked()
+        }
+    }
+
+    /** The recording's slot is over without a completion report: it pauses, and the alarm sound is back at full gain. */
+    private fun backToAlarmLocked(
+        current: Mixing,
+        now: Long,
+    ) {
+        current.playing = false
+        if (recordingCall(current) { it.pause() }) {
+            current.anchor = now
+            applyGainLocked()
+        }
+    }
+
+    /** Grace or a call: a recording that plays pauses; the alarm sound's gain is the caller's. */
+    private fun stopMixPhaseLocked() {
+        val current = mixing ?: return
+        if (current.playing) {
+            current.playing = false
+            recordingCall(current) { it.pause() }
+        }
+    }
+
+    /**
+     * Runs [call] on [current]'s recording; false when it threw (a `MediaPlayer` already in its Error state throws before
+     * its error report arrives), and the mix then fails: the alarm sound plays alone at full gain.
+     */
+    @Suppress("TooGenericExceptionCaught")
+    private inline fun recordingCall(
+        current: Mixing,
+        call: (RecordingPlayback) -> Unit,
+    ): Boolean =
+        try {
+            current.playback?.let(call)
+            true
+        } catch (e: Exception) {
+            if (mixing === current) failMixLocked("the message failed: ${e::class.simpleName}")
+            false
+        }
+
+    /** Grace ended or a call is over: the alarm sound comes first again, the schedule counts from now. */
+    private fun restartMixLocked() {
+        val current = mixing ?: return
+        stopMixPhaseLocked()
+        current.anchor = monotonicClock.elapsedMillis()
+    }
+
+    /**
+     * The recording failed (FR-SND-5): released at once, the alarm sound back at full gain, and the session's later rings
+     * play the alarm sound alone. Logged by error code only.
+     */
+    private fun failMixLocked(reason: String) {
+        val failed = mixing ?: return
+        logger.log(LogEvent.OperationFailed(MIX_OPERATION, reason))
+        failedMixSession = failed.request.sessionId
+        releaseMixLocked()
+        applyGainLocked()
+    }
+
+    private fun releaseMixLocked() {
+        val current = mixing ?: return
+        mixing = null
+        current.loadJob?.cancel()
+        current.watchdog?.cancel()
+        current.playing = false
+        current.playback?.release()
+        current.playback = null
     }
 
     /** Ends the ring's sound; the audio focus is the caller's ([stop] gives it back). */
@@ -386,6 +674,7 @@ class AndroidAlarmPlayer(
         rampJob = null
         retryJob?.cancel()
         retryJob = null
+        releaseMixLocked()
         closeLocked()
         request = null
         ringOn = false
@@ -401,6 +690,11 @@ class AndroidAlarmPlayer(
         val HEALTHY_PLAY = 10.seconds
         val PREPARE_TIMEOUT = 5.seconds
         const val PERCENT = 100.0
+        const val FULL_GAIN = 1f
+
+        /** How much longer than the recording its slot lasts before the schedule ends it without a completion report. */
+        val MIX_SLACK = 1.seconds
+        const val MIX_OPERATION = "mix motivation"
         const val MAX_OPENS_PER_RING = 6
         const val EMERGENCY_REF = "emergency:default"
 

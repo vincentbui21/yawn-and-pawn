@@ -34,4 +34,18 @@ class MotivationTest {
         assertEquals(Motivation.None, AlarmDraft(time = LocalTime(7, 0)).motivation)
         assertFalse(alarm.hasSameSettingsAs(alarm.copy(motivation = Motivation.Random)))
     }
+
+    @Test
+    fun `when it plays keeps a stable text, unknown text reads as after the check, and it makes a different alarm (Story 7-5)`() {
+        MotivationMode.entries.forEach { assertEquals(it, MotivationMode.parse(it.text)) }
+        assertEquals("after_up", MotivationMode.AfterImUp.text)
+        assertEquals("mix", MotivationMode.MixIntoAlarm.text)
+        listOf(null, "", "Mix", "later").forEach { assertEquals(MotivationMode.AfterImUp, MotivationMode.parse(it), "$it") }
+        val at = Instant.parse("2027-01-01T00:00:00Z")
+        val alarm = Alarm("a", LocalTime(7, 0), requestCode = 1000, createdAt = at, updatedAt = at)
+
+        assertEquals(MotivationMode.AfterImUp, alarm.motivationMode)
+        assertEquals(MotivationMode.AfterImUp, AlarmDraft(time = LocalTime(7, 0)).motivationMode)
+        assertFalse(alarm.hasSameSettingsAs(alarm.copy(motivationMode = MotivationMode.MixIntoAlarm)))
+    }
 }

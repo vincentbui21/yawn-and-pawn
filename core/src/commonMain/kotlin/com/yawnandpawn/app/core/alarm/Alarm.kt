@@ -42,6 +42,8 @@ data class Alarm(
     val checkMode: CheckMode = CheckMode.Random,
     /** The motivation message (Story 7.2): none, random or one recording; never a locked field. */
     val motivation: Motivation = Motivation.None,
+    /** When the message plays (Story 7.5): after the check or mixed into the ring; never a locked field. */
+    val motivationMode: MotivationMode = MotivationMode.AfterImUp,
     val offerSkip: Boolean = false,
     val skippedDate: LocalDate? = null,
 ) {
@@ -104,11 +106,11 @@ val AlarmListOrder: Comparator<Alarm> =
 
 /**
  * True when [other] rings exactly like this alarm: every setting the user chooses is equal (time, repeat days, label,
- * sound, volume, gradual volume, vibration, snooze length, quiet time and its vibration, check mode, motivation, "Offer to
- * skip"). The id, request code, on/off state, timestamps, a skipped date and the ramp start (fixed, not a user setting) do
- * not count. The checks themselves are
- * stored apart, so `SaveAlarm` compares them too. Saving a new alarm identical to a stored one switches that one on
- * instead of storing a second (owner decision 2026-10-05, like Samsung Clock).
+ * sound, volume, gradual volume, vibration, snooze length, quiet time and its vibration, check mode, motivation and when
+ * it plays, "Offer to skip"). The id, request code, on/off state, timestamps, a skipped date and the ramp start (fixed, not
+ * a user setting) do not count. The checks themselves are stored apart, so `SaveAlarm` compares them too. Saving a new
+ * alarm identical to a stored one switches that one on instead of storing a second (owner decision 2026-10-05, like
+ * Samsung Clock).
  */
 fun Alarm.hasSameSettingsAs(other: Alarm): Boolean =
     time == other.time &&
@@ -123,4 +125,5 @@ fun Alarm.hasSameSettingsAs(other: Alarm): Boolean =
         vibrateInGrace == other.vibrateInGrace &&
         checkMode == other.checkMode &&
         motivation == other.motivation &&
+        motivationMode == other.motivationMode &&
         offerSkip == other.offerSkip

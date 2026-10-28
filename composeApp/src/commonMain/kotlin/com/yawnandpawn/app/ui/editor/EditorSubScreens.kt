@@ -320,7 +320,7 @@ private fun QuietTimePane(
 
 /**
  * Motivation: which message plays (None, Random, each recording, Story 7.2), "Record a message" (opens Recordings), and
- * (design preview, Story 7.5) when it plays. "Random" is offered with two or more recordings, or while it is the choice;
+ * when it plays (Story 7.5; shown only with a message chosen). "Random" is offered with two or more recordings, or while it is the choice;
  * a recording whose file is missing says "File missing. Default sound will play.".
  */
 @Composable

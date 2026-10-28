@@ -1,6 +1,7 @@
 package com.yawnandpawn.app.ui.editor
 
 import com.yawnandpawn.app.core.alarm.Motivation
+import com.yawnandpawn.app.core.alarm.MotivationMode
 import com.yawnandpawn.app.core.recording.Recording
 import com.yawnandpawn.app.core.recording.RecordingRepository
 import kotlinx.coroutines.CoroutineScope
@@ -13,7 +14,8 @@ import kotlinx.coroutines.launch
 /**
  * The editor's Motivation row (Story 7.2), owned by `AlarmEditorViewModel`: keeps [state]'s list of recorded messages in
  * step with [recordings] (the Motivation sub-screen's radio rows; a list that cannot be read is logged through [onReadFailed]
- * and shows none). The choice itself is in the form (`EditorForm.motivation`), saved only on Save; each list read
+ * and shows none). The choice itself is in the form (`EditorForm.motivation`, and when it plays,
+ * `EditorForm.motivationTiming`, Story 7.5), saved only on Save; each list read
  * successfully goes to [onLoaded] with its ids, so the editor can drop a choice that no longer exists.
  */
 internal class EditorMotivation(
@@ -63,8 +65,23 @@ internal fun Motivation.toChoice(): MotivationChoice =
         is Motivation.Recording -> MotivationChoice.Recording(id)
     }
 
-/** The Motivation row and sub-screen show the form's choice. */
-internal fun EditorUiState.withMotivation(): EditorUiState = copy(full = full?.copy(motivation = form.motivation))
+/** When the chosen message plays, as the alarm stores it (Story 7.5). */
+internal fun MotivationTiming.toCore(): MotivationMode =
+    when (this) {
+        MotivationTiming.AfterImUp -> MotivationMode.AfterImUp
+        MotivationTiming.MixIntoAlarm -> MotivationMode.MixIntoAlarm
+    }
+
+/** The stored mode as the form shows it (Story 7.5). */
+internal fun MotivationMode.toTiming(): MotivationTiming =
+    when (this) {
+        MotivationMode.AfterImUp -> MotivationTiming.AfterImUp
+        MotivationMode.MixIntoAlarm -> MotivationTiming.MixIntoAlarm
+    }
+
+/** The Motivation row and sub-screen show the form's choice and when it plays. */
+internal fun EditorUiState.withMotivation(): EditorUiState =
+    copy(full = full?.copy(motivation = form.motivation, motivationTiming = form.motivationTiming))
 
 /**
  * The form with a chosen message that is not among [ids] (the messages read from storage; null before a successful

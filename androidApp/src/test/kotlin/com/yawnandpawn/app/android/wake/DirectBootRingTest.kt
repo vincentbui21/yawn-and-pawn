@@ -21,6 +21,7 @@ import com.yawnandpawn.app.buildService
 import com.yawnandpawn.app.core.alarm.AlarmRepository
 import com.yawnandpawn.app.core.alarm.AlarmScheduler
 import com.yawnandpawn.app.core.alarm.Motivation
+import com.yawnandpawn.app.core.alarm.MotivationMode
 import com.yawnandpawn.app.core.alarm.RequestCodes
 import com.yawnandpawn.app.core.crash.CrashReporter
 import com.yawnandpawn.app.core.error.Outcome
@@ -245,6 +246,35 @@ class DirectBootRingTest {
             SnoozeAvailability.Unavailable(UnavailableReason.BeforeFirstUnlock),
             app.koin.get<SnoozeAvailabilityPolicy>().availability(restored),
         )
+    }
+
+    @Test
+    fun `a Mix session stored before the reboot and restored while locked plays the default sound alone (Story 7-5)`() {
+        lockUser()
+        val app = WakeApp()
+        val config = aSessionConfig().copy(motivation = Motivation.Recording("r1"), motivationMode = MotivationMode.MixIntoAlarm)
+        val stored = SessionState.Ringing(aSession(config = config))
+        assertEquals(Outcome.Success(Unit), runBlocking { app.koin.get<ActiveSessionStore>().commit(stored) })
+
+        app.app.sendBroadcast(Intent(Intent.ACTION_LOCKED_BOOT_COMPLETED).setPackage(app.app.packageName))
+        idle()
+        val slot =
+            assertNotNull(
+                shadowOf(app.app.getSystemService(AlarmManager::class.java)).scheduledAlarms.singleOrNull {
+                    shadowOf(it.operation).requestCode == RequestCodes.SESSION_SLOT
+                },
+            )
+        app.app.sendBroadcast(Intent(shadowOf(slot.operation).savedIntent))
+        idle()
+        app.startService(assertNotNull(shadowOf(app.app).nextStartedService))
+        app.awaitRinging()
+        idle()
+
+        val restored = assertIs<SessionState.Ringing>(app.engine.state.value).session
+        assertTrue(restored.directBootRing)
+        assertEquals(Motivation.Recording("r1"), restored.config.motivation, "the frozen config is kept")
+        assertEquals(AlarmSound.Default, app.player.sound)
+        assertFalse(app.player.isMixing, "a Direct Boot ring never mixes")
     }
 
     @Test

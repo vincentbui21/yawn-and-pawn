@@ -48,6 +48,8 @@ data class EditorForm(
     val checkMode: CheckMode = CheckMode.Random,
     /** The motivation message the alarm plays (Story 7.2), saved with the alarm; never a locked field. */
     val motivation: MotivationChoice = MotivationChoice.None,
+    /** "When it plays" (Story 7.5), saved with the alarm; kept when the message is None, never a locked field. */
+    val motivationTiming: MotivationTiming = MotivationTiming.AfterImUp,
     /** "Offer to skip 2 h before" (Story 7.11): off for a new alarm; turning it on is under the commitment lock. */
     val offerSkip: Boolean = false,
 ) {
@@ -234,7 +236,7 @@ data class FullEditorSections(
     val recordings: List<MotivationRecording> = emptyList(),
     val motivation: MotivationChoice = MotivationChoice.None,
     val motivationTiming: MotivationTiming = MotivationTiming.AfterImUp,
-    /** "When it plays" shows: in the design preview; the app hides it until Story 7.5 ("Mix into alarm"). */
+    /** "When it plays" shows (with a message chosen): in the design preview and, since Story 7.5, in the app. */
     val motivationTimingShown: Boolean = true,
     /**
      * A weakening change of this alarm waits under the commitment lock (Story 4.6): "Saved. Takes effect after

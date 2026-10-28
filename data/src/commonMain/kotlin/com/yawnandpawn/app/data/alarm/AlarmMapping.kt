@@ -2,6 +2,7 @@ package com.yawnandpawn.app.data.alarm
 
 import com.yawnandpawn.app.core.alarm.Alarm
 import com.yawnandpawn.app.core.alarm.Motivation
+import com.yawnandpawn.app.core.alarm.MotivationMode
 import com.yawnandpawn.app.core.checks.CheckMode
 import kotlinx.datetime.DayOfWeek
 import kotlinx.datetime.LocalDate
@@ -32,6 +33,7 @@ internal fun Alarm.toEntity(): AlarmEntity =
         motivation = motivation.encode(),
         offerSkip = offerSkip,
         skippedDate = skippedDate?.toString(),
+        motivationMode = motivationMode.text,
     )
 
 internal fun AlarmEntity.toAlarm(): Alarm =
@@ -60,6 +62,8 @@ internal fun AlarmEntity.toAlarm(): Alarm =
         offerSkip = offerSkip,
         // A date this build cannot read skips nothing: the alarm rings.
         skippedDate = skippedDate?.let { runCatching { LocalDate.parse(it) }.getOrNull() },
+        // Unknown text (a newer version's) plays the message after the check.
+        motivationMode = MotivationMode.parse(motivationMode),
     )
 
 internal fun Set<DayOfWeek>.toBitmask(): Int = fold(0) { mask, day -> mask or (1 shl (day.isoDayNumber - 1)) }

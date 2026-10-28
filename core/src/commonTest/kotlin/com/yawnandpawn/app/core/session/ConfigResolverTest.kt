@@ -4,6 +4,7 @@ import com.yawnandpawn.app.core.alarm.Alarm
 import com.yawnandpawn.app.core.alarm.AlarmDraft
 import com.yawnandpawn.app.core.alarm.CheckConfig
 import com.yawnandpawn.app.core.alarm.Motivation
+import com.yawnandpawn.app.core.alarm.MotivationMode
 import com.yawnandpawn.app.core.checks.CheckEntry
 import com.yawnandpawn.app.core.checks.CheckMode
 import com.yawnandpawn.app.core.checks.CheckPlan
@@ -242,6 +243,42 @@ class ConfigResolverTest {
         assertEquals(config, SessionJson.json.decodeFromString(SessionConfig.serializer(), encoded))
         val old = encoded.replace(",\"motivation\":\"recording:r\"", "")
         assertEquals(config.copy(motivation = Motivation.None), SessionJson.json.decodeFromString(SessionConfig.serializer(), old))
+    }
+
+    @Test
+    fun `when the message plays is frozen into the config, real or test (Story 7-5)`() {
+        val mix = alarm.copy(motivation = Motivation.Recording("r"), motivationMode = MotivationMode.MixIntoAlarm)
+
+        fun real(
+            alarm: Alarm,
+            testMode: Boolean = false,
+        ) = ConfigResolver.resolve(alarm, NO_CHECKS, GlobalSettings(), testMode, SCHEDULED_AT).motivationMode
+
+        assertEquals(MotivationMode.AfterImUp, real(alarm))
+        assertEquals(MotivationMode.MixIntoAlarm, real(mix))
+        assertEquals(MotivationMode.MixIntoAlarm, real(mix, testMode = true))
+        val draft =
+            AlarmDraft(time = LocalTime(7, 0), motivation = Motivation.Recording("r"), motivationMode = MotivationMode.MixIntoAlarm)
+        assertEquals(MotivationMode.MixIntoAlarm, ConfigResolver.resolveTest(draft, GlobalSettings(), SCHEDULED_AT).motivationMode)
+        val after = draft.copy(motivationMode = MotivationMode.AfterImUp)
+        assertEquals(MotivationMode.AfterImUp, ConfigResolver.resolveTest(after, GlobalSettings(), SCHEDULED_AT).motivationMode)
+    }
+
+    @Test
+    fun `a config stored before Story 7-5 decodes as After I'm up, unknown text too, and Mix survives a round trip`() {
+        val mix = alarm.copy(motivation = Motivation.Recording("r"), motivationMode = MotivationMode.MixIntoAlarm)
+        val config = ConfigResolver.resolve(mix, NO_CHECKS, GlobalSettings(), false, SCHEDULED_AT)
+        val encoded = SessionJson.encodeConfig(config)
+
+        assertTrue("\"motivationMode\":\"mix\"" in encoded, encoded)
+        assertEquals(config, SessionJson.json.decodeFromString(SessionConfig.serializer(), encoded))
+        val old = encoded.replace(",\"motivationMode\":\"mix\"", "")
+        assertEquals(
+            config.copy(motivationMode = MotivationMode.AfterImUp),
+            SessionJson.json.decodeFromString(SessionConfig.serializer(), old),
+        )
+        val unknown = encoded.replace("\"motivationMode\":\"mix\"", "\"motivationMode\":\"later\"")
+        assertEquals(MotivationMode.AfterImUp, SessionJson.json.decodeFromString(SessionConfig.serializer(), unknown).motivationMode)
     }
 }
 

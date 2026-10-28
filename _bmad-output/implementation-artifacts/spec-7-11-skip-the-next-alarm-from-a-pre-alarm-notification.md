@@ -2,7 +2,7 @@
 title: 'Story 7.11: Skip the next alarm from a pre-alarm notification'
 type: 'feature'
 created: '2026-10-28'
-status: 'in-review'
+status: 'done'
 baseline_revision: 'c3fcc6180672c126ba87344695b880588545d949'
 review_loop_iteration: 1
 followup_review_recommended: false
@@ -53,6 +53,27 @@ deferred:
       WakeAlarmFiredHandlerTest builds the handler without preAlarms; OfferSkipLockTest builds PromotePendingChanges itself. The re-arm sync and setTimeoutAfter cover the visible effect.
     location: >-
       androidApp/src/main/kotlin/com/yawnandpawn/app/android/wake/WakeAlarmFiredHandler.kt
+    severity: low
+  - summary: >-
+      UndoSkip's put-back of already removed rows on a later failure has no test.
+    evidence: |-
+      Both history fakes fail every delete, so the failure happens at the first row; a fake failing on the Nth delete is needed.
+    location: >-
+      core/src/commonMain/kotlin/com/yawnandpawn/app/core/alarm/SkipNextAlarm.kt
+    severity: low
+  - summary: >-
+      The staleSkips argument of SaveAlarm and SetAlarmEnabled is optional, so losing its Koin wiring would pass every test.
+    evidence: |-
+      AlarmWiringTest only resolves the use cases; behaviour tests build them through AlarmUseCasesFixture.
+    location: >-
+      androidApp/src/main/kotlin/com/yawnandpawn/app/YawnAndPawnApp.kt
+    severity: low
+  - summary: >-
+      The weekly summary tap's request code 1015 can equal an alarm's request code (pre-existing, Story 6.8).
+    evidence: |-
+      AndroidAlarmScheduler's show intent uses the alarm request code on the same activity; filterEquals ignores extras, so the Progress extra can be replaced.
+    location: >-
+      androidApp/src/main/kotlin/com/yawnandpawn/app/android/summary/AndroidWeeklySummaryNotifier.kt
     severity: low
 ---
 
@@ -267,6 +288,32 @@ deferred:
   - `[low]` `[reject]` (intent H) Undo deletes a wider row set — Only this alarm's Skipped rows still to come or on the skipped date; with stale rows now removed, that is the skip's row.
   - `[low]` `[reject]` (intent 7) After a zone change the row keeps the old zone's instant — The logged date is still the skipped morning; rare.
 
+### 2026-10-28 — Review pass (after the bad_spec loopback)
+- verdicts: 22 findings — high 0, medium 1, low 19, false 2, maybe-false 0 (duplicates across layers grouped per row)
+- findings:
+  - `[medium]` `[patch]` (blind 1, edge 1, verification 1) An identical new alarm switching on a skipped one-time alarm (`SaveAlarm.switchOn`) skipped `DiscardStaleSkips` — `switchOn` now runs it; Home test "a new alarm identical to a skipped one-time alarm switches it on, and its Skipped row goes".
+  - `[low]` `[patch]` (blind 2, edge 3) An edit that removes the skipped weekday keeps the skip and its row — `storeEdit` keeps `skippedDate` only while its weekday is still in the repeat days, so the stale-row cleanup runs; Home test added.
+  - `[low]` `[reject]` (blind 3) No feedback when a confirmed Skip turns out to be NothingToSkip — The dialog closes and the card shows the true state; the intent asks for no message there.
+  - `[low]` `[reject]` (blind 4) Nullable `expected` defaults keep an unguarded path — Only tests and the preview omit it; the app path always passes it.
+  - `[low]` `[patch]` (blind 5, verification 2) `DiscardStaleSkips` keep rules unpinned — Home test "a skipped daily alarm switched off and on keeps its skip and its row".
+  - `[low]` `[defer]` (blind 6, verification 3) `UndoSkip` multi-row rollback untested — Needs a fake that fails on the Nth delete; only reachable after an earlier cleanup failure.
+  - `[low]` `[patch]` (blind 7, intent b) Test name claims the pending-lock case it does not drive — Renamed: the lock keeps the stored value off, which is what the test stores.
+  - `[low]` `[reject]` (blind 8) Notifier `DaysHours` text and the negative request code have no test — The branch is unreachable within the 2 h lead; the code is a constant.
+  - `[low]` `[reject]` (blind 9) `AppDatabaseSkipTest` copies the v12 helpers — Test-only duplication, split for detekt LargeClass; acceptable.
+  - `[low]` `[patch]` (blind 10) Home KDoc still says only "when it is on" — Now names "Offer to skip".
+  - `[low]` `[patch]` (blind 11) `askSkip` uses `nextRing(rule, null, ...)` instead of `nextOccurrence` — Uses `nextOccurrence`, the value `SkipNextAlarm` compares with.
+  - `[low]` `[patch]` (blind 12) `DiscardStaleSkips.after` parameter `after` shadows the function — Renamed to `stored`; `history.all()` cost rejected (one read per re-enable or skip-changing edit).
+  - `[low]` `[reject]` (blind 13) No preview of the resting skipped card — The Roborazzi baselines `home_ring_skipped_*` show it.
+  - `[low]` `[reject]` (blind 14) Delete test lives in HomeSkipTest — Cosmetic.
+  - `[low]` `[patch]` (edge 2) Expected occurrence passed while the following one is skipped returns AlreadySkipped ("Skipped. No charge.") — The expected check now comes first: NothingToSkip.
+  - `[low]` `[reject]` (edge 4) A zone change then off/on can drop a row whose date shifted — Only when the shift crosses midnight; rare.
+  - `[low]` `[patch]` (edge 5) A cancelled save could stop the stale-row loop midway — `withContext(NonCancellable)` around the cleanup in `storeEdit` and `switchOn`.
+  - `[low]` `[defer]` (verification 4) `staleSkips` is optional, so dropping its Koin wiring passes every test — Making it required touches every test construction; an `AlarmWiringTest` round trip can pin it later.
+  - `[low]` `[defer]` (verification other) Weekly summary tap request code 1015 can equal an alarm request code — Pre-existing (Story 6.8), not this story's.
+  - `[false]` `[reject]` (intent a) The occurrence is captured at dialog open, not from the notification — The notification times out at the ring (`setTimeoutAfter`), so a tap after the ring is not reachable in practice.
+  - `[false]` `[reject]` (intent c) An edit keeping the date but changing the time leaves the row — The row's date still matches the skipped date, so that morning is still skipped and logged correctly.
+  - `[low]` `[defer]` (intent f, g) Delete and open-to-dialog are checked on fakes and the navigation helper, not on WorkManager or a skip intent — Covered by `PreAlarmWorkTest` and `SkipRequestOpenTest` for the main paths; the rest is phone check 7.12.
+
 ## Verification
 
 **Commands:**
@@ -303,6 +350,34 @@ deferred:
 - `REQUEST_OPEN_APP` is negative, so it never equals an alarm request code (the system alarm's show intent opens the same activity).
 - KEEP: everything else as built (storage, `nextRing`, the pre-alarm job and notifier, the skip and undo flows, copy, screens and baselines, the v13 migration).
 
+
+**Review pass 2 (2026-10-28).** Patches only: `SaveAlarm.switchOn` also runs `DiscardStaleSkips`; an edit drops the skip when its weekday leaves the repeat days; the stale-row cleanup runs non-cancellable; the expected-occurrence check comes before AlreadySkipped.
+
 **Owner review list (not previewed):** the editor switch, the skip dialog, the card caption with "Don't skip", and the notification ("{time} alarm" title is the epic's text; the body "Rings in {h} h {min} min" / "Rings in {min} min" reuses the Home countdown strings).
 
 **Verified locally:** `:core:jvmTest` (alarm, config, session, stats, history, summary, billing), `:data:testAndroidHostTest` (AppDatabaseFactory, SessionHistory, Alarm, scan tests), `:composeApp:testAndroidHostTest` (all), `:androidApp:testDebugUnitTest` (targeted: work, pre-alarm, skip, Home, editor, wiring, backup, wake, MainActivity; Home and editor baselines verify unchanged), `spotlessApply`, `detekt`. `qualityGate` is left to CI.
+
+## Auto Run Result
+
+Status: done
+
+**Summary.** Story 7.11 resumed after the overnight stop: the WIP was committed, rebased onto 7.1 (#101) and 7.2 (#102), and the `app.db` migration renumbered to v12 to v13 (7.2 took v12). The feature as specced: an "Offer to skip 2 h before" switch (locked when turned on), a WorkManager pre-alarm job posting "{time} alarm / Rings in ..." with "Skip this one", a confirm dialog over Home, a guarded `SkipNextAlarm` that stores the skipped local date (or turns a one-time alarm off) and logs one Skipped row, "Next ring skipped" with "Don't skip" on Home's card, and the notification removed when the alarm rings.
+
+**Files changed (beyond the WIP):**
+- `data/.../db/AppDatabase.kt`, `AppDatabaseMigrations.kt`, `schemas/.../13.json` — `MIGRATION_12_13`, `SCHEMA_VERSION = 13`.
+- `data/.../db/AppDatabaseSkipTest.kt` — the 7.11 schema and migration tests, split from `AppDatabaseFactoryTest`.
+- `core/.../alarm/SkipNextAlarm.kt` — live "Offer to skip" and asked-about-occurrence guards, all-or-nothing undo, `DiscardStaleSkips`.
+- `core/.../alarm/AlarmUseCases.kt` — stale-row cleanup after `SaveAlarm` (edit and switch-on) and `SetAlarmEnabled`; an edit drops a skip whose weekday left the repeat days.
+- `composeApp/.../home/*` — `SkipDialog.occurrence`, `askSkip` requires "Offer to skip".
+- `composeApp/.../editor/AlarmEditorViewModel.kt` — merged with 7.2's Motivation row; switch intents split out (detekt).
+- `androidApp/.../prealarm/AndroidPreAlarmNotifier.kt` — negative tap request code, exact long-duration text.
+- `androidApp/.../YawnAndPawnApp.kt` — `DiscardStaleSkips` wiring.
+- Tests: `HomeSkipTest` (+9), `SkipNextAlarmTest` (+2), `AppOpenRequestsTest` (return values), `AlarmEditorLockTest`, `SkipRequestOpenTest`.
+
+**Review.** Two passes. Pass 1: 41 findings; 3 medium patched (skip guards), 1 bad_spec root cause (stale Skipped rows) fixed by a spec amendment, 13 low patched, 6 deferred, the rest rejected with reasons in the triage log. Pass 2 (on the fixes): 22 findings; 1 medium and 8 low patched, 4 deferred, 9 rejected.
+
+**Follow-up review recommended: false.** Pass 1 patched two medium entries, but pass 2 reviewed exactly those fixes and found only the sibling switch-on path (patched, tested). No unverified risk remains that a further pass would target.
+
+**Verification.** Local, one Gradle build at a time: `:core:jvmTest` (all, then alarm package after fixes), `:data:testAndroidHostTest` (AppDatabase*, SessionHistory*, Alarm*), `:composeApp:testAndroidHostTest` (all), `:androidApp:testDebugUnitTest` (full run: 2490 tests, 1 failure in `SessionKillRecoveryTest`, which passed on a targeted re-run: a load flake; then targeted pre-alarm, skip, screenshot, wiring, kill-recovery), `spotlessApply`, `detekt` on every module. `qualityGate` runs in CI.
+
+**Residual risks.** Device behaviour (WorkManager timing, the notification, the action opening the dialog, Doze) is for the 7.12 phone checks. The deferred items above.

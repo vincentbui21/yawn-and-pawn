@@ -198,11 +198,13 @@ class SaveAlarm(
         draft: AlarmDraft,
         now: Instant,
     ): Outcome<AlarmSaved, DomainError> {
-        // Story 7.11: a skip stays with an edit of a repeating alarm (the Skipped row logs it); a one-time alarm has none.
+        // Story 7.11: a skip stays with an edit of a repeating alarm that still rings that weekday (the Skipped row logs
+        // it); a one-time alarm has none, and a skipped weekday taken out of the repeat days drops it (and its row).
+        val keptSkip = stored.skippedDate?.takeIf { it.dayOfWeek in draft.repeatDays }
         val edited =
             draft
                 .toAlarm(stored.id, stored.requestCode, stored.createdAt)
-                .copy(updatedAt = now, skippedDate = stored.skippedDate.takeUnless { draft.repeatDays.isEmpty() })
+                .copy(updatedAt = now, skippedDate = keptSkip)
         (validate(edited) ?: validateChecks(draft.checks))?.let { return Outcome.Failure(DomainError.InvalidAlarm(it)) }
         return checkConfigRepository.forAlarm(stored.id).flatMap { rows ->
             pendingRepository.forAlarm(stored.id).flatMap { own ->
@@ -240,7 +242,7 @@ class SaveAlarm(
                     .flatMap { clearApplied(offerSkip, mine) }
                     .flatMap { storeWithChecks(checkConfigRepository, row, plan.entries, now) }
                     .onSuccess(scheduling::sync)
-                    .onSuccess { staleSkips?.after(stored, it, now) }
+                    .onSuccess { withContext(NonCancellable) { staleSkips?.after(stored, it, now) } }
                     .flatMap { alarm ->
                         listOf(grace, checks, offerSkip)
                             .fold<LockDecision, Outcome<Unit, DomainError>>(Outcome.Success(Unit)) { done, decision ->
@@ -331,7 +333,11 @@ class SaveAlarm(
         now: Instant,
     ): Outcome<Alarm, DomainError> {
         val on = alarm.copy(enabled = true, updatedAt = now)
-        return repository.upsert(on).map { on }.onSuccess(scheduling::sync)
+        return repository
+            .upsert(on)
+            .map { on }
+            .onSuccess(scheduling::sync)
+            .onSuccess { withContext(NonCancellable) { staleSkips?.after(alarm, it, now) } }
     }
 
     private fun AlarmDraft.toAlarm(

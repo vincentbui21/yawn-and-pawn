@@ -301,6 +301,48 @@ class HomeSkipTest {
         }
 
     @Test
+    fun `a new alarm identical to a skipped one-time alarm switches it on, and its Skipped row goes`() =
+        runTest(dispatcher) {
+            repository.upsert(repository.current.single().copy(repeatDays = emptySet()))
+            home()
+            fixture.skip(ID)
+            val stored = repository.current.single()
+
+            assertTrue(fixture.save(AlarmDraft(time = stored.time, offerSkip = true)) is Outcome.Success)
+
+            assertTrue(repository.current.single().enabled)
+            assertTrue(history.rows.isEmpty())
+        }
+
+    @Test
+    fun `a skipped daily alarm switched off and on keeps its skip and its row`() =
+        runTest(dispatcher) {
+            home()
+            fixture.skip(ID)
+
+            fixture.setEnabled(ID, enabled = false)
+            fixture.setEnabled(ID, enabled = true)
+
+            assertEquals(LocalDate(2027, 3, 9), repository.current.single().skippedDate)
+            assertEquals(TUESDAY_7, history.rows.single().scheduledAt)
+        }
+
+    @Test
+    fun `an edit that takes the skipped weekday out of the repeat days drops the skip and its row`() =
+        runTest(dispatcher) {
+            home()
+            fixture.skip(ID)
+            val stored = repository.current.single()
+
+            fixture.save(
+                AlarmDraft(id = ID, time = stored.time, repeatDays = DayOfWeek.entries.toSet() - DayOfWeek.TUESDAY, offerSkip = true),
+            )
+
+            assertNull(repository.current.single().skippedDate)
+            assertTrue(history.rows.isEmpty())
+        }
+
+    @Test
     fun `deleting an alarm cancels its pre-alarm job and notification`() =
         runTest(dispatcher) {
             home()

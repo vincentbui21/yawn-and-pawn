@@ -10,6 +10,7 @@ import com.yawnandpawn.app.core.alarm.CheckConfigRepository
 import com.yawnandpawn.app.core.alarm.SkipResult
 import com.yawnandpawn.app.core.alarm.durationUntil
 import com.yawnandpawn.app.core.alarm.isNextOccurrenceSkipped
+import com.yawnandpawn.app.core.alarm.nextOccurrence
 import com.yawnandpawn.app.core.alarm.nextRing
 import com.yawnandpawn.app.core.alarm.orderedEntries
 import com.yawnandpawn.app.core.config.LockWindow
@@ -313,8 +314,8 @@ class HomeViewModel(
     }
 
     /**
-     * Asks "Skip your {time} alarm? This is logged." for the alarm [id] when it is on; an alarm the cards do not hold yet
-     * is read from the store first. One that is off, gone or unreadable is left as it is (nothing to skip).
+     * Asks "Skip your {time} alarm? This is logged." for the alarm [id] when it is on with "Offer to skip" on; an alarm
+     * the cards do not hold yet is read from the store first. One that is off, gone or unreadable is left as it is.
      */
     private fun requestSkip(id: String) {
         val known = listed.firstOrNull { it.id == id }
@@ -337,7 +338,8 @@ class HomeViewModel(
     /** Only for an alarm that is on with "Offer to skip" on; the dialog keeps the occurrence it asks about. */
     private fun askSkip(alarm: Alarm) {
         if (!alarm.enabled || !alarm.offerSkip) return
-        val occurrence = nextRing(alarm.toRule(), null, clock.now(), timeZoneProvider.current())
+        // The raw next occurrence: the one `SkipNextAlarm` compares with, a skipped one included (it then answers AlreadySkipped).
+        val occurrence = nextOccurrence(alarm.toRule(), clock.now(), timeZoneProvider.current())
         local.update { it.copy(skipDialog = SkipDialog(alarm.id, alarm.time, occurrence)) }
     }
 

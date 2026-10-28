@@ -247,7 +247,7 @@ class SkipNextAlarmTest {
         }
 
     @Test
-    fun `an alarm whose Offer to skip is off, or still waits under the lock, is not skipped`() =
+    fun `an alarm whose stored Offer to skip is off (also while turning it on waits under the lock) is not skipped`() =
         runTest {
             val f = SkipFixture(monday)
             f.store(daily(offerSkip = false))

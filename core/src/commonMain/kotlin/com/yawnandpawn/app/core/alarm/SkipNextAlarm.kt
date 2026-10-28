@@ -79,12 +79,12 @@ class SkipNextAlarm(
                                 Outcome.Success(SkipResult.NothingToSkip)
                             }
 
-                            stored.skippedDate == date -> {
-                                Outcome.Success(SkipResult.AlreadySkipped)
-                            }
-
                             expected != null && expected != occurrence -> {
                                 Outcome.Success(SkipResult.NothingToSkip)
+                            }
+
+                            stored.skippedDate == date -> {
+                                Outcome.Success(SkipResult.AlreadySkipped)
                             }
 
                             else -> {
@@ -210,7 +210,8 @@ class UndoSkip(
 
 /**
  * Story 7.11 review fix: removes the Skipped rows an alarm's stored state no longer skips, so a morning that will ring is
- * never logged as Skipped. Runs after [SaveAlarm] or [SetAlarmEnabled] stored [after] (from [before]), only when the
+ * never logged as Skipped. Runs after [SaveAlarm] (an edit, or an identical new alarm switching a stored one on) or
+ * [SetAlarmEnabled] stored `stored` (from [before]), only when the
  * alarm is on and either was off (a skipped one-time alarm switched back on) or its skipped date changed (an edit to
  * one-time drops it). A row goes when it is still to come and its local date (this zone) is not [Alarm.skippedDate].
  * Rows of an alarm that stays off are its log and stay. Best effort: the alarm is already stored, so a failure is logged.
@@ -223,19 +224,19 @@ class DiscardStaleSkips(
 ) {
     suspend fun after(
         before: Alarm,
-        after: Alarm,
+        stored: Alarm,
         now: Instant,
     ) {
-        if (!after.enabled || (before.enabled && before.skippedDate == after.skippedDate)) return
+        if (!stored.enabled || (before.enabled && before.skippedDate == stored.skippedDate)) return
         val zone = zones.current()
         val rows =
             when (val all = history.all()) {
                 is Outcome.Success -> {
                     all.value.filter {
-                        it.alarmId == after.id &&
+                        it.alarmId == stored.id &&
                             it.outcome == SessionOutcome.Skipped &&
                             it.scheduledAt > now &&
-                            it.scheduledAt.toLocalDateTime(zone).date != after.skippedDate
+                            it.scheduledAt.toLocalDateTime(zone).date != stored.skippedDate
                     }
                 }
 

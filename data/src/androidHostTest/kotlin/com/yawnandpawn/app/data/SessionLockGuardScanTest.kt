@@ -65,6 +65,9 @@ class SessionLockGuardScanTest {
                 "SaveRecording",
                 "ReRecord",
                 "DeleteRecording",
+                // Skip the next alarm and its undo (Story 7.11), in core.alarm.
+                "SkipNextAlarm",
+                "UndoSkip",
             ),
             writers - ALLOWED.keys,
         )

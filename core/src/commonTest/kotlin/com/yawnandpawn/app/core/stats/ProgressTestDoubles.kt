@@ -45,6 +45,11 @@ internal class MutableHistory : SessionHistoryRepository {
     override suspend fun find(sessionId: String): Outcome<SessionHistoryRow?, DomainError> =
         Outcome.Success(rows.value.firstOrNull { it.sessionId == sessionId })
 
+    override suspend fun deleteSkipped(
+        alarmId: String,
+        scheduledAt: Instant,
+    ): Outcome<Unit, DomainError> = Outcome.Success(Unit)
+
     override fun observeAll(): Flow<List<SessionHistoryRow>> =
         rows
             .onStart { collectedIn = currentCoroutineContext() }

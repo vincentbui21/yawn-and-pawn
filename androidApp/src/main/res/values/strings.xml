@@ -15,4 +15,12 @@
     <string name="weekly_summary_paid">%1$d on-time mornings, %2$s paid this week.</string>
     <string name="weekly_summary_paid_one">1 on-time morning, %1$s paid this week.</string>
     <string name="weekly_summary_none">0 on-time mornings this week. Next week\'s a fresh start.</string>
+    <!-- The pre-alarm notification (Story 7.11), verbatim from EXPERIENCE.md > Key strings ("Skip next alarm"); the text
+         uses the Home countdown wording. %1$s is the alarm time for the phone's 12/24-hour setting; "{time} alarm" as the
+         title is the epic's text (EXPERIENCE.md Key strings has none), listed for the owner. -->
+    <string name="notification_channel_upcoming_alarms">Upcoming alarms</string>
+    <string name="pre_alarm_title">%1$s alarm</string>
+    <string name="pre_alarm_rings_in_hours">Rings in %1$d h %2$d min</string>
+    <string name="pre_alarm_rings_in_minutes">Rings in %1$d min</string>
+    <string name="pre_alarm_skip_action">Skip this one</string>
 </resources>

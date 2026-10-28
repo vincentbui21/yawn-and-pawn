@@ -1,7 +1,11 @@
 package com.yawnandpawn.app.android.work
 
 import com.yawnandpawn.app.android.ApplicationScope
+import com.yawnandpawn.app.android.prealarm.AndroidPreAlarmNotifier
 import com.yawnandpawn.app.android.summary.AndroidWeeklySummaryNotifier
+import com.yawnandpawn.app.core.alarm.PreAlarmNotifier
+import com.yawnandpawn.app.core.alarm.PreAlarmScheduler
+import com.yawnandpawn.app.core.alarm.PreAlarmTask
 import com.yawnandpawn.app.core.billing.CachedPriceCatalog
 import com.yawnandpawn.app.core.billing.ConsumeRetryTask
 import com.yawnandpawn.app.core.billing.PriceCatalog
@@ -23,7 +27,8 @@ import org.koin.dsl.module
  * [BackgroundWork], the task of each job, the cached Play prices over the price cache store (`dataModule`), the
  * scheduler of the refresh jobs and the refresh at session start (once online, Story 4.7). Play's product details come
  * from the Play Billing adapter (`billingModule()`, Story 4.12). The weekly summary (Story 6.8): its run, the scheduler
- * that keeps its work aligned, the notifier and the Settings switch's use case.
+ * that keeps its work aligned, the notifier and the Settings switch's use case. The pre-alarm notification (Story 7.11):
+ * its keyed run, the scheduler `AlarmScheduling` keeps it in step through, and the notifier.
  *
  * A function, like `wakeModule()`: each call has its own definitions.
  */
@@ -39,6 +44,7 @@ fun workModule(): Module =
                     BackgroundTaskKind.ConsumeRetry to ConsumeRetryTask(get()),
                     BackgroundTaskKind.WeeklySummary to WeeklySummaryTask(get(), get(), get(), get(), get(), get(), get(), get()),
                 ),
+                keyed = mapOf(BackgroundTaskKind.PreAlarm to PreAlarmTask(get(), get(), get(), get(), get())),
             )
         }
         single<PriceCatalog> { CachedPriceCatalog(get(), get(), get(), get()) }
@@ -47,4 +53,6 @@ fun workModule(): Module =
         single { WeeklySummaryScheduler(get(), get(), get(), get(), get(), get()) }
         single<WeeklySummaryNotifier> { AndroidWeeklySummaryNotifier(androidContext(), get(), get()) }
         factory { SetWeeklySummary(get(), get(), get()) }
+        single<PreAlarmNotifier> { AndroidPreAlarmNotifier(androidContext()) }
+        single { PreAlarmScheduler(get(), get(), get(), get(), get(), get()) }
     }

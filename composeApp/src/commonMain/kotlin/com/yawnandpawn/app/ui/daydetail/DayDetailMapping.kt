@@ -103,7 +103,8 @@ internal fun morningEventsOf(
     merges: List<SessionMergeRow>,
     zone: TimeZone,
 ): List<MorningEvent> {
-    val start = row.firstRingAt
+    // Only a Skipped row has no first ring, and it has no timeline; the scheduled time stands in for safety.
+    val start = row.firstRingAt ?: row.scheduledAt
     val end = row.endedAt ?: (start + UNENDED_SPAN)
     val snoozes =
         paidRecords

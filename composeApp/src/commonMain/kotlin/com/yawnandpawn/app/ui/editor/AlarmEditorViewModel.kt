@@ -11,7 +11,7 @@ import com.yawnandpawn.app.core.alarm.CheckConfig
 import com.yawnandpawn.app.core.alarm.CheckConfigRepository
 import com.yawnandpawn.app.core.alarm.ReRegisterCode
 import com.yawnandpawn.app.core.alarm.SaveAlarm
-import com.yawnandpawn.app.core.alarm.nextOccurrence
+import com.yawnandpawn.app.core.alarm.nextRing
 import com.yawnandpawn.app.core.alarm.orderedEntries
 import com.yawnandpawn.app.core.billing.PriceCatalogSnapshot
 import com.yawnandpawn.app.core.checks.AccessibilityState
@@ -67,6 +67,7 @@ import kotlinx.coroutines.flow.receiveAsFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import kotlinx.datetime.LocalDate
 import kotlinx.datetime.TimeZone
 import kotlinx.datetime.toLocalDateTime
 import kotlin.random.Random
@@ -99,7 +100,8 @@ data class AlarmEditorArgs(
  * (Story 1.18) rings the form as it is now, unsaved changes included, as a test 10 s later through [testAlarm], then
  * shows its snackbar. The Wake-up check row (Story 3.5) edits the alarm's checks ([checkConfigs]) in the form: tick a
  * check, its setup (difficulty and count within the type's range), Random / All and the order; with none, Save shows
- * "Pick at least one check." and stores nothing.
+ * "Pick at least one check." and stores nothing. "Offer to skip 2 h before" (Story 7.11) is a switch in card 1, saved
+ * through the commitment lock like the quiet time, and the header's "Rings in" passes over a skipped next ring.
  */
 @Suppress("TooManyFunctions", "LargeClass") // One small handler per editor action; at the size limit before Story 5.1.
 class AlarmEditorViewModel(
@@ -240,7 +242,7 @@ class AlarmEditorViewModel(
             }
 
             else -> {
-                _state.update { it.withRings(it.form, clock.now(), timeZoneProvider.current()) }
+                _state.update { it.withRings(it.form, clock.now(), timeZoneProvider.current(), skippedDate()) }
                 sounds.opened()
             }
         }
@@ -258,7 +260,7 @@ class AlarmEditorViewModel(
             it
                 .copy(isLoading = false, form = form)
                 .shown()
-                .withRings(form, clock.now(), timeZoneProvider.current())
+                .withRings(form, clock.now(), timeZoneProvider.current(), skippedDate())
                 .withChecks()
                 .withMotivation()
                 .withLock()
@@ -356,6 +358,11 @@ class AlarmEditorViewModel(
 
             is EditorIntent.VibrateInGraceToggled -> {
                 editForm { it.copy(vibrateInGrace = intent.enabled) }
+            }
+
+            // Story 7.11: saved through the commitment lock (turning it on within 8 h waits for the next ring).
+            is EditorIntent.OfferSkipToggled -> {
+                editForm { it.copy(offerSkip = intent.enabled) }
             }
 
             else -> {
@@ -685,7 +692,7 @@ class AlarmEditorViewModel(
             val fieldError = current.fieldError?.takeUnless { it != AlarmField.Label && form != current.form }
             current
                 .copy(form = form, fieldError = fieldError)
-                .withRings(form, clock.now(), timeZoneProvider.current())
+                .withRings(form, clock.now(), timeZoneProvider.current(), skippedDate())
                 .withChecks()
                 .withMotivation()
                 .withLock()
@@ -716,6 +723,9 @@ class AlarmEditorViewModel(
         id: String,
         asCopy: Boolean,
     ): Outcome<List<PendingChange>, DomainError> = pendingChanges?.takeUnless { asCopy }?.forAlarm(id) ?: Outcome.Success(emptyList())
+
+    /** The edited alarm's skipped date (Story 7.11): its "Rings in" passes over that ring. None for a new alarm or a copy. */
+    private fun skippedDate(): LocalDate? = stored?.takeIf { alarmId != null }?.skippedDate
 
     /** The fee ladder and the lock notes for the form as it is now ([lockSections], Story 4.6). */
     private fun EditorUiState.withLock(): EditorUiState {
@@ -996,11 +1006,13 @@ private fun EditorForm.toDraft(alarmId: String?): AlarmDraft =
             },
         checkMode = CoreCheckMode.valueOf(checkMode.name),
         motivation = motivation.toCore(),
+        offerSkip = offerSkip,
     )
 
 /**
  * The production editor's full-editor rows (Story 3.5): the Wake-up check, offering [pickable] (the Quiet time row shows
- * in every editor, Story 3.4), and with [motivation] the Motivation row (Story 7.2), without "When it plays" (Story 7.5).
+ * in every editor, Story 3.4), with [motivation] the Motivation row (Story 7.2), without "When it plays" (Story 7.5), and
+ * the "Offer to skip 2 h before" switch (Story 7.11).
  */
 private fun wakeCheckOnly(
     pickable: List<CheckType>,
@@ -1012,6 +1024,7 @@ private fun wakeCheckOnly(
         types = pickable,
         talkBackOn = talkBackOn,
         motivationTimingShown = false,
+        showOfferSkip = true,
     )
 
 /** The Wake-up check row and sub-screen show the form's checks and mode, and whether QR/Barcode has its code. */
@@ -1043,13 +1056,17 @@ private fun List<CheckChip>.moved(
     return toMutableList().apply { add(to, removeAt(from)) }
 }
 
-/** "Rings in ..." and, for a one-time alarm whose time has passed today, when it rings tomorrow (shifted in a DST gap). */
+/**
+ * "Rings in ..." and, for a one-time alarm whose time has passed today, when it rings tomorrow (shifted in a DST gap). A
+ * repeating alarm's ring on [skippedDate] is passed over (Story 7.11, as `SaveAlarm` keeps the skip for a repeating edit).
+ */
 private fun EditorUiState.withRings(
     form: EditorForm,
     now: Instant,
     zone: TimeZone,
+    skippedDate: LocalDate?,
 ): EditorUiState {
-    val next = nextOccurrence(AlarmRule(form.time, form.repeatDays), now, zone)
+    val next = nextRing(AlarmRule(form.time, form.repeatDays), skippedDate.takeIf { form.repeatDays.isNotEmpty() }, now, zone)
     val ring = next.toLocalDateTime(zone)
     val tomorrow = form.repeatDays.isEmpty() && ring.date != now.toLocalDateTime(zone).date
     return copy(ringsIn = countdownOf(next - now), ringsTomorrowAt = if (tomorrow) ring.time else null)
@@ -1076,6 +1093,7 @@ private fun Alarm.toForm(checks: List<CheckConfig>): EditorForm =
         graceSeconds = graceSeconds.coerceIn(Alarm.GRACE_SECONDS_RANGE),
         vibrateInGrace = vibrateInGrace,
         motivation = motivation.toChoice(),
+        offerSkip = offerSkip,
     )
 
 /**

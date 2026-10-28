@@ -36,6 +36,7 @@ import com.yawnandpawn.app.core.summary.WeeklySummaryTask
 import com.yawnandpawn.app.core.work.BackgroundTask
 import com.yawnandpawn.app.core.work.BackgroundTaskKind
 import com.yawnandpawn.app.core.work.BackgroundWork
+import com.yawnandpawn.app.core.work.KeyedBackgroundTask
 import com.yawnandpawn.app.core.work.SchedulePolicy
 import com.yawnandpawn.app.core.work.TaskResult
 import com.yawnandpawn.app.restartKoin
@@ -172,6 +173,56 @@ class BackgroundWorkWiringTest {
         start()
 
         assertIs<WeeklySummaryTask>(GlobalContext.get().get<BackgroundTasks>().taskFor(BackgroundTaskKind.WeeklySummary))
+    }
+
+    @Test
+    fun `the pre-alarm job (Story 7-11) runs its keyed task with the alarm id, and a job without one fails`() {
+        val keys = mutableListOf<String>()
+        start(
+            module {
+                single {
+                    BackgroundTasks(
+                        emptyMap(),
+                        keyed = mapOf(BackgroundTaskKind.PreAlarm to KeyedBackgroundTask { key -> TaskResult.Done.also { keys += key } }),
+                    )
+                }
+            },
+        )
+
+        val run =
+            runBlocking {
+                TestListenableWorkerBuilder<BackgroundTaskWorker>(app)
+                    .setInputData(
+                        workDataOf(
+                            BackgroundTaskWorker.KEY_TASK to BackgroundTaskKind.PreAlarm.name,
+                            BackgroundTaskWorker.KEY_ALARM_ID to "alarm-1",
+                        ),
+                    ).build()
+                    .doWork()
+            }
+
+        assertEquals(ListenableWorker.Result.success(), run)
+        assertEquals(listOf("alarm-1"), keys)
+        assertEquals(ListenableWorker.Result.failure(), runWorker(BackgroundTaskKind.PreAlarm.name))
+    }
+
+    @Test
+    fun `the app registers the pre-alarm task`() {
+        start()
+
+        assertNotNull(GlobalContext.get().get<BackgroundTasks>().taskFor(BackgroundTaskKind.PreAlarm, "alarm-1"))
+    }
+
+    @Test
+    fun `the pre-alarm calls never reach WorkManager while the user is locked`() {
+        val work =
+            AndroidBackgroundWork(app, FakeUserLockState(unlocked = false), log) { fail("WorkManager must not start before the unlock") }
+
+        assertEquals(
+            Outcome.Failure(DomainError.BackgroundWorkFailure("user locked: pre-alarm-a")),
+            work.schedulePreAlarm("a", 1.hours),
+        )
+        assertEquals(Outcome.Failure(DomainError.BackgroundWorkFailure("user locked: pre-alarm-a")), work.cancelPreAlarm("a"))
     }
 
     @Test

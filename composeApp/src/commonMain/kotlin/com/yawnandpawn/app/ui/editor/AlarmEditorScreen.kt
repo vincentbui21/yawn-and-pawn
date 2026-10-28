@@ -90,6 +90,7 @@ import com.yawnandpawn.app.ui.resources.editor_mode_random
 import com.yawnandpawn.app.ui.resources.editor_motivation
 import com.yawnandpawn.app.ui.resources.editor_new_title
 import com.yawnandpawn.app.ui.resources.editor_no_check
+import com.yawnandpawn.app.ui.resources.editor_offer_skip
 import com.yawnandpawn.app.ui.resources.editor_quiet_time
 import com.yawnandpawn.app.ui.resources.editor_repeat
 import com.yawnandpawn.app.ui.resources.editor_rings_tomorrow
@@ -331,7 +332,10 @@ private fun RepeatCard(
     onToggleDay = { onIntent(EditorIntent.DayToggled(it)) },
 )
 
-/** Card 1: alarm name (inline field), Sound (value, opens the Sound sub-screen) and Vibration. */
+/**
+ * Card 1: alarm name (inline field), Sound (value, opens the Sound sub-screen), Vibration and, in the app's editor,
+ * "Offer to skip 2 h before" (Story 7.11; its lock note is the cards' "Saved. Takes effect after ..." note).
+ */
 @Composable
 private fun NameSoundCard(
     state: EditorUiState,
@@ -362,6 +366,14 @@ private fun NameSoundCard(
                 checked = form.vibration,
                 onCheckedChange = { onIntent(EditorIntent.VibrationToggled(it)) },
             )
+            if (state.full?.showOfferSkip == true) {
+                GroupDivider()
+                SwitchRow(
+                    label = stringResource(Res.string.editor_offer_skip),
+                    checked = form.offerSkip,
+                    onCheckedChange = { onIntent(EditorIntent.OfferSkipToggled(it)) },
+                )
+            }
         }
         if (sound?.missing == true) NoteInline(text = stringResource(Res.string.sound_file_missing))
     }

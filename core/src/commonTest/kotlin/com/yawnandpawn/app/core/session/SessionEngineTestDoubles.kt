@@ -193,6 +193,11 @@ internal class InMemoryHistory : SessionHistoryRepository {
     override fun observeLatestMissed(): Flow<SessionHistoryRow?> = emptyFlow()
 
     // Never read here.
+    override suspend fun deleteSkipped(
+        alarmId: String,
+        scheduledAt: Instant,
+    ): Outcome<Unit, DomainError> = Outcome.Success(Unit)
+
     override fun observeAll(): Flow<List<SessionHistoryRow>> = emptyFlow()
 
     /** Merge rows by (session, alarm, scheduled time), insert or ignore like the Room table. */

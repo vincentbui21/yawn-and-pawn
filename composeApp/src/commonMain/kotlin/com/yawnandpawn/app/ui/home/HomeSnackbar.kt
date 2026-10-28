@@ -6,14 +6,15 @@ import com.yawnandpawn.app.ui.components.AppSnackbar
 import com.yawnandpawn.app.ui.resources.Res
 import com.yawnandpawn.app.ui.resources.editor_save_failed
 import com.yawnandpawn.app.ui.resources.home_open_failed
+import com.yawnandpawn.app.ui.resources.skip_done
 import com.yawnandpawn.app.ui.settings.weakeningNoteText
 import org.jetbrains.compose.resources.stringResource
 
 /**
  * Home's `snackbar`, one at a time: "Couldn't open this alarm.", "Couldn't save the alarm. Try again." (a switch
  * or Delete that could not be stored, owner decision 2026-10-02), or after the editor saved a weakening change under the
- * commitment lock "Saved. Takes effect after tomorrow's {time} alarm." (or "today's", {time} per [is24Hour]; Story 4.6).
- * Nothing when none is showing.
+ * commitment lock "Saved. Takes effect after tomorrow's {time} alarm." (or "today's", {time} per [is24Hour]; Story 4.6),
+ * or after a skip "Skipped. No charge." (Story 7.11). Nothing when none is showing.
  */
 @Composable
 internal fun HomeSnackbar(
@@ -25,6 +26,7 @@ internal fun HomeSnackbar(
         when {
             state.openFailed -> stringResource(Res.string.home_open_failed)
             state.saveFailed -> stringResource(Res.string.editor_save_failed)
+            state.skippedNoCharge -> stringResource(Res.string.skip_done)
             else -> state.savedUnderLock?.let { weakeningNoteText(it, is24Hour) } ?: return
         }
     AppSnackbar(text = text, modifier = modifier)

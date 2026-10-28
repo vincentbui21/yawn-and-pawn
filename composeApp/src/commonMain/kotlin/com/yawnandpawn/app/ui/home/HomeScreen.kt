@@ -68,9 +68,11 @@ import com.yawnandpawn.app.ui.format.formatMoney
 import com.yawnandpawn.app.ui.format.repeatSummary
 import com.yawnandpawn.app.ui.resources.Res
 import com.yawnandpawn.app.ui.resources.alarm_card_options
+import com.yawnandpawn.app.ui.resources.alarm_card_skipped
 import com.yawnandpawn.app.ui.resources.alarm_card_summary
 import com.yawnandpawn.app.ui.resources.alarm_card_switch
 import com.yawnandpawn.app.ui.resources.alarm_delete
+import com.yawnandpawn.app.ui.resources.alarm_dont_skip
 import com.yawnandpawn.app.ui.resources.alarm_duplicate
 import com.yawnandpawn.app.ui.resources.alarms_add_alarm
 import com.yawnandpawn.app.ui.resources.alarms_add_first
@@ -92,6 +94,9 @@ import com.yawnandpawn.app.ui.resources.home_streak_days
 import com.yawnandpawn.app.ui.resources.home_test_skipped
 import com.yawnandpawn.app.ui.resources.home_try_again
 import com.yawnandpawn.app.ui.resources.home_zero_paid
+import com.yawnandpawn.app.ui.resources.skip_confirm
+import com.yawnandpawn.app.ui.resources.skip_keep
+import com.yawnandpawn.app.ui.resources.skip_title
 import com.yawnandpawn.app.ui.theme.PpsTheme
 import org.jetbrains.compose.resources.stringResource
 
@@ -101,7 +106,9 @@ import org.jetbrains.compose.resources.stringResource
  * (the nav bar's "+" adds an alarm); or the empty state (with the hero on top when there is history but no alarm); or,
  * during a session, only `panel-session-in-progress`. While the alarms are read only the header shows; if they cannot
  * be read, "Couldn't load your alarms." with "Try again" (never the empty state). Long-press on a card (or its
- * TalkBack actions) offers Duplicate and Delete; Delete asks first.
+ * TalkBack actions) offers Duplicate and Delete; Delete asks first. Story 7.11: a card whose next ring is skipped says
+ * "Next ring skipped" and offers "Don't skip" too, and "Skip this one" on a pre-alarm notification asks "Skip your {time}
+ * alarm? This is logged." ("Keep it" is the default dismiss).
  */
 @Composable
 fun HomeScreen(
@@ -134,6 +141,15 @@ fun HomeScreen(
         )
     }
     state.disableDialog?.let { dialog -> DisableDialog(dialog = dialog, is24Hour = is24Hour, onIntent = onIntent) }
+    state.skipDialog?.let { dialog ->
+        ConfirmDialog(
+            title = stringResource(Res.string.skip_title, formatClockTime(dialog.time, is24Hour)),
+            confirmText = stringResource(Res.string.skip_confirm),
+            safeText = stringResource(Res.string.skip_keep),
+            onConfirm = { onIntent(HomeIntent.SkipConfirmed) },
+            onSafe = { onIntent(HomeIntent.SkipCancelled) },
+        )
+    }
     state.deleteDialog?.let { dialog ->
         DeleteAlarmConfirm(
             time = dialog.time,
@@ -324,7 +340,7 @@ private fun HeroCard(
  * `card-alarm`: glass, `rounded.md`; time in `title`, repeat days and label in `caption`, check icons (20 dp,
  * `text-secondary`) and the enable `switch` on the right. The card is one button (tap edits; long-press opens the menu
  * with Duplicate and Delete, which TalkBack also offers as the card's actions); the switch is its own control
- * ("7:30 AM alarm").
+ * ("7:30 AM alarm"). A skipped next ring (Story 7.11) adds "Don't skip" first, in the menu and as a TalkBack action.
  */
 @Composable
 private fun AlarmCardView(
@@ -338,8 +354,16 @@ private fun AlarmCardView(
     var menuOpen by remember { mutableStateOf(false) }
     val duplicateLabel = stringResource(Res.string.alarm_duplicate)
     val deleteLabel = stringResource(Res.string.alarm_delete)
+    val dontSkipLabel = stringResource(Res.string.alarm_dont_skip)
     val onDuplicate = { onIntent(HomeIntent.DuplicateClicked(alarm.id)) }
     val onDelete = { onIntent(HomeIntent.DeleteClicked(alarm.id)) }
+    val onDontSkip = { onIntent(HomeIntent.DontSkipClicked(alarm.id)) }
+    val actions =
+        listOfNotNull(
+            (dontSkipLabel to onDontSkip).takeIf { alarm.skipped },
+            duplicateLabel to onDuplicate,
+            deleteLabel to onDelete,
+        )
     Row(
         modifier =
             modifier
@@ -357,7 +381,7 @@ private fun AlarmCardView(
                         onLongClickLabel = stringResource(Res.string.alarm_card_options),
                         onLongClick = { menuOpen = true },
                         onClick = { onIntent(HomeIntent.EditAlarm(alarm.id)) },
-                    ).semantics { customActions = cardActions(duplicateLabel, deleteLabel, onDuplicate, onDelete) }
+                    ).semantics { customActions = cardActions(actions) }
                     .padding(spacing.cardPadding),
             verticalArrangement = Arrangement.spacedBy(spacing.space1),
         ) {
@@ -371,14 +395,12 @@ private fun AlarmCardView(
         )
         // Anchored to the card; it adds nothing to the layout (a child of the Row, which has no spacing between children).
         PpsMenu(expanded = menuOpen, onDismiss = { menuOpen = false }) {
-            PpsMenuItem(label = duplicateLabel, onClick = {
-                menuOpen = false
-                onDuplicate()
-            })
-            PpsMenuItem(label = deleteLabel, onClick = {
-                menuOpen = false
-                onDelete()
-            })
+            actions.forEach { (label, action) ->
+                PpsMenuItem(label = label, onClick = {
+                    menuOpen = false
+                    action()
+                })
+            }
         }
     }
 }
@@ -499,7 +521,10 @@ private fun DisableDialog(
 
 private const val HOURS_PER_DAY = 24
 
-/** The card's time in `title`, the repeat summary and label in `caption`, and its check icons. */
+/**
+ * The card's time in `title`, the repeat summary and label in `caption` ("Next ring skipped" in its place while the next
+ * ring is skipped, Story 7.11), and its check icons.
+ */
 @Composable
 private fun CardTexts(
     alarm: AlarmCard,
@@ -508,8 +533,9 @@ private fun CardTexts(
     val colors = PpsTheme.colors
     Text(text = time, style = PpsTheme.typography.title, color = if (alarm.enabled) colors.text else colors.textSecondary)
     val repeat = repeatSummary(alarm.repeatDays)
+    val summary = alarm.label?.let { stringResource(Res.string.alarm_card_summary, repeat, it) } ?: repeat
     Text(
-        text = alarm.label?.let { stringResource(Res.string.alarm_card_summary, repeat, it) } ?: repeat,
+        text = if (alarm.skipped) stringResource(Res.string.alarm_card_skipped) else summary,
         style = PpsTheme.typography.caption,
         color = colors.textSecondary,
     )
@@ -520,20 +546,11 @@ private fun CardTexts(
     }
 }
 
-/** Duplicate and Delete as TalkBack actions of the card, so they need no long-press. */
-private fun cardActions(
-    duplicateLabel: String,
-    deleteLabel: String,
-    onDuplicate: () -> Unit,
-    onDelete: () -> Unit,
-): List<CustomAccessibilityAction> =
-    listOf(
-        CustomAccessibilityAction(duplicateLabel) {
-            onDuplicate()
+/** The menu's actions ("Don't skip", Duplicate, Delete) as TalkBack actions of the card, so they need no long-press. */
+private fun cardActions(actions: List<Pair<String, () -> Unit>>): List<CustomAccessibilityAction> =
+    actions.map { (label, action) ->
+        CustomAccessibilityAction(label) {
+            action()
             true
-        },
-        CustomAccessibilityAction(deleteLabel) {
-            onDelete()
-            true
-        },
-    )
+        }
+    }

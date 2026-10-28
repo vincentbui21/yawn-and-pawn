@@ -62,6 +62,43 @@ class CopyRulesTest {
     }
 
     @Test
+    fun `the skip next alarm strings are EXPERIENCE's Key strings (Story 7_11)`() {
+        val compose = CopyRules.stringFiles(composeResources).flatMap { CopyRules.read(it) }.associate { it.key to it.text }
+        val android =
+            CopyRules
+                .stringFiles(androidRes, onlyStringsFiles = true)
+                .flatMap { CopyRules.read(it) }
+                .associate { it.key to it.text }
+
+        assertEquals(
+            mapOf(
+                "editor_offer_skip" to "Offer to skip 2 h before",
+                "skip_title" to "Skip your %1\$s alarm? This is logged.",
+                "skip_confirm" to "Skip",
+                "skip_keep" to "Keep it",
+                "skip_done" to "Skipped. No charge.",
+                "alarm_card_skipped" to "Next ring skipped",
+                "alarm_dont_skip" to "Don't skip",
+            ),
+            compose.filterKeys {
+                it == "editor_offer_skip" || it.startsWith("skip_") || it == "alarm_card_skipped" ||
+                    it == "alarm_dont_skip"
+            },
+        )
+        // The notification text is the Home countdown's wording; "{time} alarm" is the epic's title (listed for the owner).
+        assertEquals(
+            mapOf(
+                "notification_channel_upcoming_alarms" to "Upcoming alarms",
+                "pre_alarm_title" to "%1\$s alarm",
+                "pre_alarm_rings_in_hours" to compose.getValue("home_rings_in_hours"),
+                "pre_alarm_rings_in_minutes" to compose.getValue("home_rings_in_minutes"),
+                "pre_alarm_skip_action" to "Skip this one",
+            ),
+            android.filterKeys { it == "notification_channel_upcoming_alarms" || it.startsWith("pre_alarm_") },
+        )
+    }
+
+    @Test
     fun `every manufacturer guidance step has at most 25 words, and the shared Recents step is EXPERIENCE's Xiaomi step 3`() {
         val strings = CopyRules.stringFiles(composeResources).flatMap { CopyRules.read(it) }
         val steps = strings.filter { it.key.startsWith("reliability_") && "_step" in it.key }

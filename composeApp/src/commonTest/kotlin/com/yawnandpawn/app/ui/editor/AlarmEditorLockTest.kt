@@ -406,7 +406,8 @@ class AlarmEditorLockTest {
     @Test
     fun `the header's Rings in passes over a skipped next ring`() =
         runTest(dispatcher) {
-            storeAlarm()
+            assertTrue(alarms.save(draft.copy(offerSkip = true)) is Outcome.Success)
+            clock.set(lateEvening)
             assertTrue(alarms.skip(id) is Outcome.Success)
 
             // 23:40 Monday: Tuesday's 07:30 is skipped, so Wednesday's is in 31 h 50 min.

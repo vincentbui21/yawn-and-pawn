@@ -7,6 +7,7 @@ import com.yawnandpawn.app.core.alarm.AlarmScheduling
 import com.yawnandpawn.app.core.alarm.AlarmWriteLock
 import com.yawnandpawn.app.core.alarm.CheckConfigRepository
 import com.yawnandpawn.app.core.alarm.DeleteAlarm
+import com.yawnandpawn.app.core.alarm.DiscardStaleSkips
 import com.yawnandpawn.app.core.alarm.DuplicateAlarm
 import com.yawnandpawn.app.core.alarm.PreAlarmScheduler
 import com.yawnandpawn.app.core.alarm.ReRegisterCode
@@ -199,6 +200,8 @@ class AlarmUseCasesFixture(
     val preAlarms = PreAlarmScheduler(work, preAlarmNotifier, clock, timeZoneProvider, FakeUserLockState(unlocked = true), logger)
     val scheduling = AlarmScheduling(repository, scheduler, clock, timeZoneProvider, lock, logger, preAlarms = preAlarms)
     val sessionLock = SessionLockGuard(sessionState, restored = MutableStateFlow(true), emergency = MutableStateFlow(false))
+    val recorder = SessionRecorder(history)
+    val staleSkips = DiscardStaleSkips(history, recorder, timeZoneProvider, logger)
     val save =
         SaveAlarm(
             repository,
@@ -212,12 +215,12 @@ class AlarmUseCasesFixture(
             pendingChanges,
             timeZoneProvider,
             onboarding,
+            staleSkips,
         )
-    val setEnabled = SetAlarmEnabled(repository, clock, lock, scheduling, sessionLock, commitments, logger)
+    val setEnabled = SetAlarmEnabled(repository, clock, lock, scheduling, sessionLock, commitments, logger, staleSkips)
     val delete = DeleteAlarm(repository, lock, scheduling, sessionLock, checkConfigs, clock, commitments, logger)
     val duplicate = DuplicateAlarm(repository, ids, clock, lock, requestCodes, scheduling, sessionLock, checkConfigs)
     val reRegisterCode = ReRegisterCode(repository, clock, lock, sessionLock, checkConfigs)
-    val recorder = SessionRecorder(history)
     val skip = SkipNextAlarm(repository, recorder, sessionIds, clock, timeZoneProvider, lock, scheduling, sessionLock, logger)
     val undoSkip = UndoSkip(repository, history, recorder, clock, timeZoneProvider, lock, scheduling, sessionLock, logger)
 }

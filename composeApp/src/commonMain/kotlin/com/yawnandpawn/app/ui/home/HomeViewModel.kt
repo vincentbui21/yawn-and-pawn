@@ -289,7 +289,7 @@ class HomeViewModel(
             HomeIntent.SkipConfirmed -> {
                 local.value.skipDialog?.let { dialog ->
                     local.update { it.copy(skipDialog = null) }
-                    skip(dialog.alarmId)
+                    skip(dialog.alarmId, dialog.occurrence)
                 }
             }
 
@@ -334,14 +334,23 @@ class HomeViewModel(
         }
     }
 
+    /** Only for an alarm that is on with "Offer to skip" on; the dialog keeps the occurrence it asks about. */
     private fun askSkip(alarm: Alarm) {
-        if (alarm.enabled) local.update { it.copy(skipDialog = SkipDialog(alarm.id, alarm.time)) }
+        if (!alarm.enabled || !alarm.offerSkip) return
+        val occurrence = nextRing(alarm.toRule(), null, clock.now(), timeZoneProvider.current())
+        local.update { it.copy(skipDialog = SkipDialog(alarm.id, alarm.time, occurrence)) }
     }
 
-    /** "Skip": the next ring of [id] is skipped and logged; "Skipped. No charge." once it is (or already was). */
-    private fun skip(id: String) {
+    /**
+     * "Skip": the next ring of [id] is skipped and logged; "Skipped. No charge." once it is (or already was). Once
+     * [occurrence] has passed, nothing is skipped (the following ring is not the one the user was asked about).
+     */
+    private fun skip(
+        id: String,
+        occurrence: Instant?,
+    ) {
         viewModelScope.launch {
-            val result = actions.skipNext(id)
+            val result = actions.skipNext(id, occurrence)
             if (result is Outcome.Success && result.value != SkipResult.NothingToSkip) showMessage(HomeMessage.Skipped)
         }
     }

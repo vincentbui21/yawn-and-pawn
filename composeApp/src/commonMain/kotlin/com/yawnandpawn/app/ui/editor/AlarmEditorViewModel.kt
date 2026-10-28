@@ -343,17 +343,26 @@ class AlarmEditorViewModel(
                 sounds.onIntent(intent.intent, ::editForm)
             }
 
+            // Story 3.4: the Quiet time sub-screen.
+            is EditorIntent.GraceChanged -> {
+                editForm { it.copy(graceSeconds = intent.seconds.coerceIn(Alarm.GRACE_SECONDS_RANGE)) }
+            }
+
+            else -> {
+                if (!onSwitchIntent(intent) && !onCheckIntent(intent) && !onMotivationIntent(intent)) onMenuIntent(intent)
+            }
+        }
+    }
+
+    /** The form's switches (gradual volume, vibration, vibration in quiet time, "Offer to skip"); false for any other intent. */
+    private fun onSwitchIntent(intent: EditorIntent): Boolean {
+        when (intent) {
             is EditorIntent.GradualVolumeToggled -> {
                 editForm { it.copy(gradualVolume = intent.enabled) }
             }
 
             is EditorIntent.VibrationToggled -> {
                 editForm { it.copy(vibration = intent.enabled) }
-            }
-
-            // Story 3.4: the Quiet time sub-screen.
-            is EditorIntent.GraceChanged -> {
-                editForm { it.copy(graceSeconds = intent.seconds.coerceIn(Alarm.GRACE_SECONDS_RANGE)) }
             }
 
             is EditorIntent.VibrateInGraceToggled -> {
@@ -366,9 +375,10 @@ class AlarmEditorViewModel(
             }
 
             else -> {
-                if (!onCheckIntent(intent) && !onMotivationIntent(intent)) onMenuIntent(intent)
+                return false
             }
         }
+        return true
     }
 
     /**

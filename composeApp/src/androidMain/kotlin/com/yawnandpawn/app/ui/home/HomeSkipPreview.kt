@@ -39,7 +39,7 @@ private fun SkippedLightPreview() = SkipPreview(PpsThemeMode.Light, skipped.copy
 
 @Preview(name = "Home next ring skipped · Dark")
 @Composable
-private fun SkippedDarkPreview() = SkipPreview(PpsThemeMode.Dark, skipped)
+private fun SkippedDarkPreview() = SkipPreview(PpsThemeMode.Dark, skipped.copy(skippedNoCharge = true))
 
 @Preview(name = "Home skip dialog · Light")
 @Composable

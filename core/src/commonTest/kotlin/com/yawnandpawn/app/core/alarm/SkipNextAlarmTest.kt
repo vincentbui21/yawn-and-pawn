@@ -245,4 +245,30 @@ class SkipNextAlarmTest {
             assertEquals(tuesday, f.stored("a").skippedDate)
             assertEquals(tuesday7, f.rows().single().scheduledAt)
         }
+
+    @Test
+    fun `an alarm whose Offer to skip is off, or still waits under the lock, is not skipped`() =
+        runTest {
+            val f = SkipFixture(monday)
+            f.store(daily(offerSkip = false))
+
+            assertEquals(Outcome.Success(SkipResult.NothingToSkip), f.skip("a"))
+
+            assertNull(f.stored("a").skippedDate)
+            assertTrue(f.rows().isEmpty())
+        }
+
+    @Test
+    fun `a skip of an occurrence that is no longer the next one skips nothing`() =
+        runTest {
+            val f = SkipFixture(monday)
+            f.store(daily())
+
+            assertEquals(Outcome.Success(SkipResult.NothingToSkip), f.skip("a", wednesday7))
+            assertNull(f.stored("a").skippedDate)
+            assertTrue(f.rows().isEmpty())
+
+            assertEquals(Outcome.Success(SkipResult.Skipped), f.skip("a", tuesday7))
+            assertEquals(tuesday, f.stored("a").skippedDate)
+        }
 }

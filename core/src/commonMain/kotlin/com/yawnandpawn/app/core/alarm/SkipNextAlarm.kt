@@ -26,7 +26,10 @@ enum class SkipResult {
     /** That occurrence was skipped already: nothing changed and no second row was written. */
     AlreadySkipped,
 
-    /** The alarm is off (a skipped one-time alarm is off too): nothing to skip. */
+    /**
+     * Nothing to skip: the alarm is off (a skipped one-time alarm is off too), its "Offer to skip" is off (or still waits
+     * under the commitment lock), or its next occurrence is no longer the one the user was asked about.
+     */
     NothingToSkip,
 }
 
@@ -42,6 +45,9 @@ enum class SkipResult {
  *   failure of that is logged), so nothing is half-applied. Then the system alarm and the pre-alarm job follow
  *   ([AlarmScheduling.sync]).
  * - Idempotent: an occurrence already skipped is [SkipResult.AlreadySkipped], with no second row.
+ * - Only for an alarm whose live "Offer to skip" is on (review fix: turning it on is a locked, weakening change, so a
+ *   skip must never get around a change still waiting). With [expected] (the occurrence the dialog asked about), a skip
+ *   confirmed after that occurrence passed skips nothing rather than the following one.
  * - Inside [SessionLockGuard.whenIdle] (`SessionActive` during a session: nothing is skipped) and the alarm write lock;
  *   it runs to its end once started, like the other alarm writes.
  */
@@ -56,7 +62,10 @@ class SkipNextAlarm(
     private val sessionLock: SessionLockGuard,
     private val logger: Logger,
 ) {
-    suspend operator fun invoke(alarmId: String): Outcome<SkipResult, DomainError> =
+    suspend operator fun invoke(
+        alarmId: String,
+        expected: Instant? = null,
+    ): Outcome<SkipResult, DomainError> =
         lock.withLock {
             sessionLock.whenIdle {
                 withContext(NonCancellable) {
@@ -66,12 +75,16 @@ class SkipNextAlarm(
                         val occurrence = nextOccurrence(stored.toRule(), now, zone)
                         val date = occurrence.toLocalDateTime(zone).date
                         when {
-                            !stored.enabled -> {
+                            !stored.enabled || !stored.offerSkip -> {
                                 Outcome.Success(SkipResult.NothingToSkip)
                             }
 
                             stored.skippedDate == date -> {
                                 Outcome.Success(SkipResult.AlreadySkipped)
+                            }
+
+                            expected != null && expected != occurrence -> {
+                                Outcome.Success(SkipResult.NothingToSkip)
                             }
 
                             else -> {
@@ -170,10 +183,17 @@ class UndoSkip(
             outcome == SessionOutcome.Skipped &&
             (scheduledAt > now || scheduledAt.toLocalDateTime(zones.current()).date == alarm.skippedDate)
 
-    private suspend fun discardAll(rows: List<SessionHistoryRow>): Outcome<Unit, DomainError> =
-        rows.fold<SessionHistoryRow, Outcome<Unit, DomainError>>(Outcome.Success(Unit)) { done, row ->
-            done.flatMap { recorder.discardSkip(row.alarmId, row.scheduledAt) }
+    /** Removes [rows]; when one removal fails, the rows already removed are put back (review fix), so nothing is half-done. */
+    private suspend fun discardAll(rows: List<SessionHistoryRow>): Outcome<Unit, DomainError> {
+        rows.forEachIndexed { index, row ->
+            val removed = recorder.discardSkip(row.alarmId, row.scheduledAt)
+            if (removed is Outcome.Failure) {
+                restoreAll(rows.take(index))
+                return removed
+            }
         }
+        return Outcome.Success(Unit)
+    }
 
     /** Writes [rows] back after the alarm could not be stored; a failure is logged. */
     private suspend fun restoreAll(rows: List<SessionHistoryRow>) {
@@ -185,5 +205,52 @@ class UndoSkip(
 
     private companion object {
         const val RESTORE_ROW = "restore skipped row after a failed undo"
+    }
+}
+
+/**
+ * Story 7.11 review fix: removes the Skipped rows an alarm's stored state no longer skips, so a morning that will ring is
+ * never logged as Skipped. Runs after [SaveAlarm] or [SetAlarmEnabled] stored [after] (from [before]), only when the
+ * alarm is on and either was off (a skipped one-time alarm switched back on) or its skipped date changed (an edit to
+ * one-time drops it). A row goes when it is still to come and its local date (this zone) is not [Alarm.skippedDate].
+ * Rows of an alarm that stays off are its log and stay. Best effort: the alarm is already stored, so a failure is logged.
+ */
+class DiscardStaleSkips(
+    private val history: SessionHistoryRepository,
+    private val recorder: SessionRecorder,
+    private val zones: TimeZoneProvider,
+    private val logger: Logger,
+) {
+    suspend fun after(
+        before: Alarm,
+        after: Alarm,
+        now: Instant,
+    ) {
+        if (!after.enabled || (before.enabled && before.skippedDate == after.skippedDate)) return
+        val zone = zones.current()
+        val rows =
+            when (val all = history.all()) {
+                is Outcome.Success -> {
+                    all.value.filter {
+                        it.alarmId == after.id &&
+                            it.outcome == SessionOutcome.Skipped &&
+                            it.scheduledAt > now &&
+                            it.scheduledAt.toLocalDateTime(zone).date != after.skippedDate
+                    }
+                }
+
+                is Outcome.Failure -> {
+                    logger.log(LogEvent.OperationFailed.of(STALE_ROWS, all.error))
+                    return
+                }
+            }
+        rows.forEach { row ->
+            val removed = recorder.discardSkip(row.alarmId, row.scheduledAt)
+            if (removed is Outcome.Failure) logger.log(LogEvent.OperationFailed.of(STALE_ROWS, removed.error))
+        }
+    }
+
+    private companion object {
+        const val STALE_ROWS = "remove skipped rows the alarm no longer skips"
     }
 }

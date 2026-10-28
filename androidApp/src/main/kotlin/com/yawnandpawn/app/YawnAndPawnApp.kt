@@ -36,6 +36,7 @@ import com.yawnandpawn.app.core.alarm.AlarmScheduler
 import com.yawnandpawn.app.core.alarm.AlarmScheduling
 import com.yawnandpawn.app.core.alarm.AlarmWriteLock
 import com.yawnandpawn.app.core.alarm.DeleteAlarm
+import com.yawnandpawn.app.core.alarm.DiscardStaleSkips
 import com.yawnandpawn.app.core.alarm.ReRegisterCode
 import com.yawnandpawn.app.core.alarm.RearmOnFire
 import com.yawnandpawn.app.core.alarm.SaveAlarm
@@ -217,7 +218,8 @@ val appModule =
         // The session slot armed from runtime.db without the engine (Story 2.1): after system events and refused starts.
         single { SessionSlotRearm(get(), get(), get(), get(), get(), get()) }
         // Story 5.10: no alarm is saved before the disclosure is accepted (OnboardingRepository from dataModule).
-        factory { SaveAlarm(get(), get(), get(), get(), get(), get(), get(), get(), get(), get(), get()) }
+        factory { SaveAlarm(get(), get(), get(), get(), get(), get(), get(), get(), get(), get(), get(), staleSkips = get()) }
+        factory { DiscardStaleSkips(get(), get(), get(), get()) }
         // Onboarding (Story 5.10): the consent, the step and completion, each inside the session lock.
         factory { AcceptDisclosure(get(), get(), get()) }
         factory { SaveOnboardingStep(get(), get()) }
@@ -227,7 +229,7 @@ val appModule =
         // Story 5.12: when step 8's test rings, and Home's note after "Skip for now".
         factory { RememberOnboardingTest(get(), get()) }
         factory { OnboardingTestNote(get(), get(), get()) }
-        factory { SetAlarmEnabled(get(), get(), get(), get(), get(), get(), get()) }
+        factory { SetAlarmEnabled(get(), get(), get(), get(), get(), get(), get(), staleSkips = get()) }
         // Story 3.10: Home's "Re-register" stores a new code alone.
         factory { ReRegisterCode(get(), get(), get(), get(), get()) }
         factory { DeleteAlarm(get(), get(), get(), get(), get(), get(), get(), get()) }

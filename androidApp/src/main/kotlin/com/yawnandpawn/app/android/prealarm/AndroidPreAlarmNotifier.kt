@@ -83,9 +83,13 @@ class AndroidPreAlarmNotifier(
                 context.getString(R.string.pre_alarm_rings_in_hours, countdown.hours, countdown.minutes)
             }
 
-            // Never within the 2 h lead; the hours and minutes are still exact.
+            // Never within the 2 h lead; the whole hours and the minutes left, from the duration itself.
             is Countdown.DaysHours -> {
-                context.getString(R.string.pre_alarm_rings_in_hours, countdown.days * HOURS_PER_DAY + countdown.hours, 0)
+                context.getString(
+                    R.string.pre_alarm_rings_in_hours,
+                    ringsIn.inWholeHours.toInt(),
+                    (ringsIn.inWholeMinutes % MINUTES_PER_HOUR).toInt(),
+                )
             }
         }
 
@@ -146,13 +150,16 @@ class AndroidPreAlarmNotifier(
         /** Added to the alarm's request code (1000 and up) for its notification id and its action's request code. */
         const val NOTIFICATION_ID_BASE = 100_000
 
-        /** The request code of the tap's PendingIntent (one for every alarm: it carries nothing). */
-        const val REQUEST_OPEN_APP = 1_018
+        /**
+         * The request code of the tap's PendingIntent (one for every alarm: it carries nothing). Negative, so it never
+         * equals an alarm's request code (1000 and up), under which the system alarm's show intent opens the same activity.
+         */
+        const val REQUEST_OPEN_APP = -1_018
 
         /** The notification id of the alarm with [requestCode]. */
         fun notificationIdOf(requestCode: Int): Int = NOTIFICATION_ID_BASE + requestCode
 
-        private const val HOURS_PER_DAY = 24
+        private const val MINUTES_PER_HOUR = 60
         private const val POST = "post pre-alarm"
         private const val CANCEL = "remove pre-alarm notification"
     }

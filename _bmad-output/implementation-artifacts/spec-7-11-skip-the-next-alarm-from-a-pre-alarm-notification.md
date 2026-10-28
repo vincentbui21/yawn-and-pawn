@@ -2,16 +2,58 @@
 title: 'Story 7.11: Skip the next alarm from a pre-alarm notification'
 type: 'feature'
 created: '2026-10-28'
-status: 'review'
-baseline_revision: 'bb13190a3b006d30ae75fdebcde73f6819075abe'
-review_loop_iteration: 0
+status: 'in-review'
+baseline_revision: 'c3fcc6180672c126ba87344695b880588545d949'
+review_loop_iteration: 1
 followup_review_recommended: false
 context:
   - '{project-root}/_bmad-output/implementation-artifacts/epic-7-context.md'
   - '{project-root}/.claude/skills/pps-design/SKILL.md'
   - '{project-root}/_bmad-output/implementation-artifacts/spec-6-8-weekly-summary.md'
 warnings: ['oversized']
-deferred: []
+deferred:
+  - summary: >-
+      The pre-alarm notification text is fixed at post time and can go stale.
+    evidence: |-
+      AndroidPreAlarmNotifier posts "Rings in 1 h 59 min" with setShowWhen(false) and never updates it; a chronometer or the absolute time would be a copy or design change for the owner.
+    location: >-
+      androidApp/src/main/kotlin/com/yawnandpawn/app/android/prealarm/AndroidPreAlarmNotifier.kt
+    severity: low
+  - summary: >-
+      A blocked "Upcoming alarms" channel drops the post silently.
+    evidence: |-
+      canPost() checks app notifications and POST_NOTIFICATIONS, not the channel importance; same pattern as the weekly summary notifier.
+    location: >-
+      androidApp/src/main/kotlin/com/yawnandpawn/app/android/prealarm/AndroidPreAlarmNotifier.kt
+    severity: low
+  - summary: >-
+      "Delete all data" does not cancel pre-alarm jobs or remove a posted pre-alarm notification.
+    evidence: |-
+      DeleteAllData cancels system alarms on AlarmScheduler only; the notification times out at the ring and the job is a NotFound no-op.
+    location: >-
+      core/src/commonMain/kotlin/com/yawnandpawn/app/core/reset/DeleteAllData.kt
+    severity: low
+  - summary: >-
+      A re-sync inside the 2 h window (app start, a save) re-posts a notification the user dismissed.
+    evidence: |-
+      PreAlarmScheduler.sync enqueues with delay 0 and REPLACE; nothing remembers that the occurrence was already posted.
+    location: >-
+      core/src/commonMain/kotlin/com/yawnandpawn/app/core/alarm/PreAlarm.kt
+    severity: low
+  - summary: >-
+      The commitment lock window and its note still use nextOccurrence, so a locked change waits for a skipped ring.
+    evidence: |-
+      LockWindow.of uses nextOccurrence; the intent routes only scheduling, the Home countdown and the editor header through nextRing. The change is promoted at the next rescheduleAll (app start, boot, time change).
+    location: >-
+      core/src/commonMain/kotlin/com/yawnandpawn/app/core/config/LockWindow.kt
+    severity: medium
+  - summary: >-
+      No test pins the wake fire handler's pre-alarm cancel or the app wiring of preAlarms into PromotePendingChanges.
+    evidence: |-
+      WakeAlarmFiredHandlerTest builds the handler without preAlarms; OfferSkipLockTest builds PromotePendingChanges itself. The re-arm sync and setTimeoutAfter cover the visible effect.
+    location: >-
+      androidApp/src/main/kotlin/com/yawnandpawn/app/android/wake/WakeAlarmFiredHandler.kt
+    severity: low
 ---
 
 <intent-contract>
@@ -128,7 +170,7 @@ deferred: []
   - The repository gains `deleteSkipped(alarmId, scheduledAt)`.
   - `SessionHistoryRow.firstRingAt` becomes nullable; update its readers.
 - **Data:**
-  - Entity fields, mapping, DAO delete, `MIGRATION_10_11` (with the history table rebuild), `SCHEMA_VERSION = 11`, schema `11.json`.
+  - Entity fields, mapping, DAO delete, `MIGRATION_12_13` (with the history table rebuild), `SCHEMA_VERSION = 13`, schema `13.json` (renumbered: 7.1 took v11, 7.2 took v12).
   - Migration and schema tests; the writer-scan update.
 - **androidApp:**
   - The adapter methods with unique work `pre-alarm-{alarmId}`, and a worker input for the alarm id.
@@ -178,6 +220,53 @@ deferred: []
 - [x] "I'm up" prominence (not applicable)
 - [x] Previews and screenshot tests updated (`HomeSkipPreview.kt`, `AlarmEditorPreview.kt`; 9 new baselines)
 
+## Review Triage Log
+
+### 2026-10-28 — Review pass
+- verdicts: 41 findings — high 0, medium 9, low 26, false 6, maybe-false 0
+- findings:
+  - `[medium]` `[patch]` (blind 1) Skip recomputes the occurrence at confirm, so a stale dialog skips the following ring — `SkipDialog.occurrence` + `SkipNextAlarm(alarmId, expected)`; Home test "Skip confirmed after the asked-about ring has passed skips nothing" and a core test.
+  - `[medium]` `[patch]` (blind 2) Skip ignores "Offer to skip", bypassing the lock via the exported activity — `!stored.offerSkip -> NothingToSkip`, and `askSkip` checks it; core and Home tests added.
+  - `[medium]` `[bad_spec]` (blind 3) Skipped rows orphaned on re-enabling a one-time alarm or an edit to one-time — Spec amended (change log, review pass 1): `DiscardStaleSkips` after `SaveAlarm`/`SetAlarmEnabled`; two Home tests. A repeat-day change keeps a row on the skipped date (harmless); a delete keeps the row as log.
+  - `[low]` `[reject]` (blind 4) A failed skip shows no feedback — The intent's matrix says "error logged, no snackbar".
+  - `[low]` `[patch]` (blind 5) UndoSkip multi-row partial failure — `discardAll` puts back the rows already removed.
+  - `[low]` `[defer]` (blind 6) Notification text goes stale — The intent fixes this copy; a chronometer is a design change for the owner.
+  - `[low]` `[patch]` (blind 7) KDoc says schema v11 — Now v13 in `AlarmEntity` and `SessionHistoryEntity`.
+  - `[low]` `[defer]` (blind 8) No test for the fire handler's pre-alarm cancel — The re-arm sync and `setTimeoutAfter` cover the visible effect.
+  - `[low]` `[patch]` (blind 9) `textOf` DaysHours branch drops minutes — Whole hours and minutes now come from the duration.
+  - `[low]` `[patch]` (blind 10) Light and Dark previews show different states — Dark now shows the snackbar too.
+  - `[low]` `[reject]` (blind 11) The editor never says the next ring is skipped — The intent only routes the header through `nextRing`; Home carries the caption and the undo.
+  - `[low]` `[defer]` (blind 12) A blocked "Upcoming alarms" channel drops posts silently — Same pattern as the weekly summary notifier.
+  - `[low]` `[defer]` (edge 1) "Delete all data" leaves pre-alarm jobs and notifications — The notification times out at the ring; the job is a NotFound no-op.
+  - `[low]` `[defer]` (edge 2) A re-sync inside the 2 h window re-posts a dismissed notification — Needs a remembered posted occurrence.
+  - `[medium]` `[bad_spec]` (edge 3) A one-time skip then re-enable keeps the row — Same root cause as blind 3, fixed there.
+  - `[medium]` `[bad_spec]` (edge 4) An edit no longer reaching the skipped date leaves an orphan row — Same root cause as blind 3 (to one-time fixed; a repeat-day change keeps a row on the skipped date).
+  - `[medium]` `[patch]` (edge 5) A skip without live offerSkip bypasses the lock — Same as blind 2.
+  - `[low]` `[reject]` (edge 6) A failed re-arm after a skip still rings — The never-silent direction; scheduler failures are logged and rare.
+  - `[medium]` `[defer]` (edge 7) `LockWindow` uses `nextOccurrence`, so a lock waits for a skipped ring — The intent lists only scheduling, the countdown and the header for `nextRing`; the stricter path, promoted at `rescheduleAll`.
+  - `[low]` `[reject]` (edge 8) Home left open past the skipped ring keeps a stale caption — Refreshed on the next tick or resume; rare.
+  - `[low]` `[patch]` (edge 9) `REQUEST_OPEN_APP` 1018 can equal an alarm request code — Now -1018.
+  - `[low]` `[patch]` (edge 10) UndoSkip half-applied on a later failure — Same as blind 5.
+  - `[medium]` `[bad_spec]` (edge 11) A one-time skip cannot be undone — Same root cause as blind 3: switching it back on now removes the row.
+  - `[false]` `[reject]` (edge 12) `PreAlarmNotifier` signature differs from the spec — The Spec Change Log records `post(alarm, ringsIn)` / `cancel(requestCode)`.
+  - `[false]` `[reject]` (edge 13) `recordSkip` signature differs from the spec — Recorded in the Spec Change Log.
+  - `[low]` `[patch]` (verification 1) DeleteAlarm's pre-alarm cancel untested — Home test "deleting an alarm cancels its pre-alarm job and notification".
+  - `[low]` `[defer]` (verification 2) "Delete all data" pre-alarm cleanup — Same as edge 1.
+  - `[low]` `[patch]` (verification 3) `openRequested` Boolean never asserted — `AppOpenRequestsTest` asserts true and false.
+  - `[low]` `[defer]` (verification 4) App wiring of `preAlarms` into `PromotePendingChanges` untested — One-argument wiring; the core logic is tested.
+  - `[low]` `[defer]` (verification 5) Fire handler cancel untested — Same as blind 8.
+  - `[low]` `[patch]` (verification 6) A failed "Don't skip" showing "Couldn't save" untested — Home test added.
+  - `[low]` `[patch]` (verification other) KDoc v11 — Same as blind 7.
+  - `[false]` `[reject]` (intent A) Which occurrence a skip takes — Resolved by the blind 1 patch (the dialog's occurrence).
+  - `[false]` `[reject]` (intent B) One-time undo — Resolved with blind 3.
+  - `[low]` `[reject]` (intent C) Notification removed at the fire when the session is that alarm's — The occurrence is ringing, so nothing is left to skip.
+  - `[low]` `[reject]` (intent D) Request dropped with the editor or the charge form open — Documented in the Spec Change Log; the notification stays.
+  - `[false]` `[reject]` (intent E) Under-an-hour wording — The intent says "using the Home countdown wording".
+  - `[false]` `[reject]` (intent F) Late worker reading — The matrix rows pass.
+  - `[medium]` `[defer]` (intent G) Lock window over a skipped occurrence — Same as edge 7.
+  - `[low]` `[reject]` (intent H) Undo deletes a wider row set — Only this alarm's Skipped rows still to come or on the skipped date; with stale rows now removed, that is the skip's row.
+  - `[low]` `[reject]` (intent 7) After a zone change the row keeps the old zone's instant — The logged date is still the skipped morning; rare.
+
 ## Verification
 
 **Commands:**
@@ -191,6 +280,8 @@ deferred: []
 
 **As built (Story 7.11, base bb13190a).** `app.db` took v11 (no other Epic 7 schema story had merged).
 
+**Rebased onto c3fcc618 (7.1 #101, 7.2 #102).** Story 7.1 took v11 (`recording`) and Story 7.2 took v12 (`alarm.motivation`), so this story's migration is `MIGRATION_12_13`, `SCHEMA_VERSION = 13`, exported `13.json`; the migration test starts from a v12 file and checks `motivation` is kept. `Alarm`, `AlarmDraft`, the entity, mapping, `hasSameSettingsAs` and the editor form carry both `motivation` and `offerSkip`; the production editor shows the Motivation row and the "Offer to skip" switch. The spec's baseline moved to c3fcc618.
+
 | Spec | As built | Why |
 |---|---|---|
 | `PreAlarmNotifier.post(alarmId, time, ringsIn)`, `cancel(alarmId)` | `post(alarm, ringsIn)`, `cancel(requestCode)` | The notification id and the action's PendingIntent request code are `100_000 + requestCode` (Design Notes); the alarm carries id, time and code. |
@@ -203,6 +294,14 @@ deferred: []
 | — | The editor switch shows only where `FullEditorSections.showOfferSkip` (the app's editor) | The round 2 and 3 design-preview baselines stay unchanged. |
 | — | An edit keeps the skip of a repeating alarm (dropped when it becomes one-time); Duplicate never copies it; `hasSameSettingsAs` includes "Offer to skip" | Defaults taken. |
 | — | The tap on the notification body opens the app (no skip); `setTimeoutAfter` removes it at the ring | Defaults taken; only the action skips. |
+
+
+**Review pass 1 amendments (2026-10-28).** Triggered by the review findings on orphan Skipped rows and on a skip that bypassed the lock. Amended, outside the intent contract:
+- `SkipNextAlarm` skips only an alarm whose live "Offer to skip" is on (a pending turn-on under the lock skips nothing), and takes the occurrence the dialog asked about (`SkipDialog.occurrence`): confirmed after it passed, nothing is skipped. Known-bad state avoided: a skip of tomorrow's ring from a stale dialog, and a free skip of an alarm whose "Offer to skip" still waits under the commitment lock (any app can start the exported `MainActivity` with the skip extra).
+- New `DiscardStaleSkips` (through `SessionRecorder`, the only history writer) runs after `SaveAlarm` and `SetAlarmEnabled`: once the alarm is on and was off, or its skipped date changed, its Skipped rows still to come whose local date is not the skipped date are removed. Design Notes' "its Skipped row stays as the log" now holds only while the one-time alarm stays off. Known-bad state avoided: a morning that rings logged as Skipped in Progress.
+- `UndoSkip` puts back rows it already removed when a later removal fails (all-or-nothing).
+- `REQUEST_OPEN_APP` is negative, so it never equals an alarm request code (the system alarm's show intent opens the same activity).
+- KEEP: everything else as built (storage, `nextRing`, the pre-alarm job and notifier, the skip and undo flows, copy, screens and baselines, the v13 migration).
 
 **Owner review list (not previewed):** the editor switch, the skip dialog, the card caption with "Don't skip", and the notification ("{time} alarm" title is the epic's text; the body "Rings in {h} h {min} min" / "Rings in {min} min" reuses the Home countdown strings).
 

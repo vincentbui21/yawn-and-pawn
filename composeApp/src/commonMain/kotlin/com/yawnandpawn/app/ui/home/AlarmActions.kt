@@ -10,6 +10,7 @@ import com.yawnandpawn.app.core.error.DomainError
 import com.yawnandpawn.app.core.error.Outcome
 import com.yawnandpawn.app.core.log.LogEvent
 import com.yawnandpawn.app.core.log.Logger
+import kotlin.time.Instant
 
 /**
  * What Home's cards and the editor's overflow menu do to a stored alarm, with the logging both need: every failure
@@ -37,8 +38,11 @@ class AlarmActions(
     suspend fun delete(id: String): Outcome<Unit, DomainError> = deleteAlarm(id).alsoLogFailure("delete alarm")
 
     /** Skips the next occurrence of the alarm [id] (Story 7.11); nothing to skip without the use case. */
-    suspend fun skipNext(id: String): Outcome<SkipResult, DomainError> =
-        (skipNext?.invoke(id) ?: Outcome.Success(SkipResult.NothingToSkip)).alsoLogFailure("skip alarm")
+    suspend fun skipNext(
+        id: String,
+        expected: Instant? = null,
+    ): Outcome<SkipResult, DomainError> =
+        (skipNext?.invoke(id, expected) ?: Outcome.Success(SkipResult.NothingToSkip)).alsoLogFailure("skip alarm")
 
     /** Undoes the skip of the alarm [id] (Story 7.11); true when one was undone. */
     suspend fun undoSkip(id: String): Outcome<Boolean, DomainError> =

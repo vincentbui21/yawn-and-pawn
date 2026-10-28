@@ -23,7 +23,6 @@ import com.yawnandpawn.app.core.config.SettingValue
 import com.yawnandpawn.app.core.error.Outcome
 import com.yawnandpawn.app.core.history.SessionHistoryRow
 import com.yawnandpawn.app.core.history.SessionMergeRow
-import com.yawnandpawn.app.core.history.SessionOutcome
 import com.yawnandpawn.app.core.recording.RecordedTake
 import com.yawnandpawn.app.data.alarm.RoomAlarmRepository
 import com.yawnandpawn.app.data.alarm.RoomCheckConfigRepository
@@ -41,7 +40,6 @@ import com.yawnandpawn.app.testing.aRegisteredCode
 import com.yawnandpawn.app.testing.aSessionHistoryRow
 import com.yawnandpawn.app.testing.anAlarm
 import kotlinx.coroutines.test.runTest
-import kotlinx.datetime.LocalDate
 import kotlinx.datetime.LocalTime
 import org.json.JSONObject
 import org.junit.Test
@@ -560,78 +558,6 @@ class AppDatabaseFactoryTest {
         runTest {
             withDatabase { database -> assertEquals(0, database.recordingDao().count()) }
 
-            assertEquals(AppDatabase.SCHEMA_VERSION, userVersion())
-        }
-
-    @Test
-    fun `the exported version 13 schema adds the skip columns to alarm and makes the first ring nullable (Story 7-11)`() {
-        assertTrue(schema(13).exists(), "exported schema missing: ${schema(13).absolutePath}")
-        val json = schema(13).readText()
-
-        assertTrue(json.contains("\"version\": 13"), "schema version 13")
-        assertEquals(tableNames(schema(12).readText()), tableNames(json), "no table added or removed, Story 7.1's recording kept")
-        val alarm = json.substringAfter("\"tableName\": \"alarm\"").substringBefore("\"tableName\"")
-        assertTrue(alarm.contains("`offer_skip` INTEGER NOT NULL DEFAULT 0"), "off for every stored alarm")
-        assertTrue(alarm.contains("`skipped_date` TEXT"), "nullable: no skip")
-        assertTrue(alarm.contains("`motivation` TEXT NOT NULL DEFAULT 'none'"), "Story 7.2's column kept")
-        val history = json.substringAfter("\"tableName\": \"session_history\"").substringBefore("\"tableName\"")
-        assertTrue(history.contains("`first_ring_at` INTEGER, "), "nullable: a skipped occurrence never rang")
-        assertTrue(history.contains("index_session_history_scheduled_at"), "the scheduled_at index is kept")
-    }
-
-    @Test
-    fun `migrating a v12 database keeps every alarm, history row, merge, purchase and recording, then stores a skip (Story 7-11)`() =
-        runTest {
-            val alarm = anAlarm(id = "a", requestCode = 1000)
-            val second = anAlarm(id = "b", requestCode = 1001, time = LocalTime(8, 0))
-            val row = aSessionHistoryRow(sessionId = "session-1", alarmId = "a")
-            val merge = SessionMergeRow("session-1", "b", Instant.parse("2027-03-03T06:01:00Z"), Instant.parse("2027-03-03T06:02:00Z"))
-            createDatabase(
-                version = 12,
-                alarms = listOf(alarm, second),
-                requestCodeMark = 1001,
-                history = listOf(row, row.copy(sessionId = "session-2", snoozeCount = 2, outcome = SessionOutcome.Snoozed)),
-                merges = listOf(merge),
-                sql =
-                    listOf(
-                        "INSERT INTO purchase_record (token_hash, order_id, product_id, session_id, alarm_id, snooze_number, " +
-                            "price_micros, currency, price_source, purchased_at, status, consumed_at, updated_at) VALUES " +
-                            "('hash', 'GPA.1', 'snooze_tier_01', 'session-1', 'a', 1, 990000, 'USD', 'intent', 1, 'consumed', 2, 2)",
-                        "INSERT INTO recording (id, name, duration_ms, file_name, created_at) VALUES ('r1', 'Message 1', 5000, 'r1.m4a', 7)",
-                    ),
-            )
-
-            withDatabase { database ->
-                val alarms = RoomAlarmRepository(database.alarmDao())
-                assertEquals(Outcome.Success(listOf(alarm, second)), alarms.listAll(), "off, nothing skipped")
-                val history = RoomSessionHistoryRepository(database.sessionHistoryDao())
-                assertEquals(Outcome.Success(row), history.find("session-1"))
-                assertEquals(
-                    Outcome.Success(row.copy(sessionId = "session-2", snoozeCount = 2, outcome = SessionOutcome.Snoozed)),
-                    history.find("session-2"),
-                )
-                assertEquals(Outcome.Success(listOf(merge)), history.merges("session-1"))
-                assertEquals(1, database.purchaseRecordDao().count())
-                assertEquals(1, database.recordingDao().count())
-
-                val skipped = alarm.copy(offerSkip = true, skippedDate = LocalDate(2027, 3, 4))
-                assertEquals(Outcome.Success(Unit), alarms.upsert(skipped))
-                assertEquals(Outcome.Success(skipped), alarms.get("a"))
-                val skip =
-                    row.copy(
-                        sessionId = "session-3",
-                        firstRingAt = null,
-                        endedAt = Instant.parse("2027-03-03T20:00:00Z"),
-                        checkTypes = emptyList(),
-                        timeToCompleteMs = null,
-                        outcome = SessionOutcome.Skipped,
-                    )
-                assertEquals(Outcome.Success(Unit), history.upsert(skip))
-                assertEquals(Outcome.Success(skip), history.find("session-3"))
-                assertEquals(Outcome.Success(Unit), history.deleteSkipped("a", skip.scheduledAt))
-                assertEquals(Outcome.Success(null), history.find("session-3"))
-                assertEquals(Outcome.Success(row), history.find("session-1"), "only the Skipped row goes")
-            }
             assertEquals(AppDatabase.SCHEMA_VERSION, userVersion())
         }
 

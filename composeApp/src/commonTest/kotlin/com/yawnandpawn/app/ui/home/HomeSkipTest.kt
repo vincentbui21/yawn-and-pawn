@@ -1,7 +1,10 @@
 package com.yawnandpawn.app.ui.home
 
+import com.yawnandpawn.app.core.alarm.AlarmDraft
 import com.yawnandpawn.app.core.alarm.AlarmWriteLock
+import com.yawnandpawn.app.core.alarm.SkipResult
 import com.yawnandpawn.app.core.error.DomainError
+import com.yawnandpawn.app.core.error.Outcome
 import com.yawnandpawn.app.core.history.MissedNotes
 import com.yawnandpawn.app.core.history.SessionOutcome
 import com.yawnandpawn.app.core.log.LogEvent
@@ -18,6 +21,7 @@ import com.yawnandpawn.app.testing.FakeRequestCodeSequence
 import com.yawnandpawn.app.testing.FakeSessionHistoryRepository
 import com.yawnandpawn.app.testing.FakeTimeChangeSignal
 import com.yawnandpawn.app.testing.FakeTimeZoneProvider
+import com.yawnandpawn.app.testing.PreAlarmCall
 import com.yawnandpawn.app.testing.SchedulerCall
 import com.yawnandpawn.app.testing.aSession
 import com.yawnandpawn.app.testing.anAlarm
@@ -64,7 +68,11 @@ class HomeSkipTest {
     private val history = FakeSessionHistoryRepository()
     private val sessionState = MutableStateFlow<SessionState>(SessionState.Idle)
     private val repository =
-        FakeAlarmRepository(listOf(anAlarm(id = ID, time = LocalTime(7, 0), repeatDays = DayOfWeek.entries.toSet(), requestCode = 1001)))
+        FakeAlarmRepository(
+            listOf(
+                anAlarm(id = ID, time = LocalTime(7, 0), repeatDays = DayOfWeek.entries.toSet(), requestCode = 1001).copy(offerSkip = true),
+            ),
+        )
     private lateinit var fixture: AlarmUseCasesFixture
 
     @BeforeTest
@@ -117,7 +125,7 @@ class HomeSkipTest {
 
             viewModel.onIntent(HomeIntent.SkipRequested(ID))
 
-            assertEquals(SkipDialog(ID, LocalTime(7, 0)), viewModel.state.value.skipDialog)
+            assertEquals(SkipDialog(ID, LocalTime(7, 0), TUESDAY_7), viewModel.state.value.skipDialog)
             assertNull(repository.current.single().skippedDate)
             assertTrue(history.rows.isEmpty())
         }
@@ -217,7 +225,97 @@ class HomeSkipTest {
             assertTrue(history.rows.isEmpty())
         }
 
+    @Test
+    fun `an alarm whose Offer to skip is off is not offered a skip, and a skip of it changes nothing`() =
+        runTest(dispatcher) {
+            repository.upsert(repository.current.single().copy(offerSkip = false))
+            val viewModel = home()
+
+            viewModel.onIntent(HomeIntent.SkipRequested(ID))
+
+            assertNull(viewModel.state.value.skipDialog)
+            assertEquals(Outcome.Success(SkipResult.NothingToSkip), fixture.skip(ID))
+            assertNull(repository.current.single().skippedDate)
+            assertTrue(history.rows.isEmpty())
+        }
+
+    @Test
+    fun `Skip confirmed after the asked-about ring has passed skips nothing`() =
+        runTest(dispatcher) {
+            val viewModel = home()
+            viewModel.onIntent(HomeIntent.SkipRequested(ID))
+            clock.set(Instant.parse("2027-03-09T07:30:00Z"))
+
+            viewModel.onIntent(HomeIntent.SkipConfirmed)
+
+            assertNull(viewModel.state.value.skipDialog)
+            assertNull(repository.current.single().skippedDate)
+            assertTrue(history.rows.isEmpty())
+            assertFalse(viewModel.state.value.skippedNoCharge)
+        }
+
+    @Test
+    fun `a Don't skip that cannot be stored says Couldn't save and keeps the skip`() =
+        runTest(dispatcher) {
+            val viewModel = home()
+            viewModel.onIntent(HomeIntent.SkipRequested(ID))
+            viewModel.onIntent(HomeIntent.SkipConfirmed)
+            history.deleteSkippedFailure = DomainError.StorageFailure("disk")
+
+            viewModel.onIntent(HomeIntent.DontSkipClicked(ID))
+
+            assertTrue(viewModel.state.value.saveFailed)
+            assertEquals(LocalDate(2027, 3, 9), repository.current.single().skippedDate)
+            assertEquals(1, history.rows.size)
+        }
+
+    @Test
+    fun `a skipped one-time alarm switched back on rings that morning, so its Skipped row goes`() =
+        runTest(dispatcher) {
+            repository.upsert(repository.current.single().copy(repeatDays = emptySet()))
+            home()
+            assertEquals(Outcome.Success(SkipResult.Skipped), fixture.skip(ID))
+            assertFalse(repository.current.single().enabled)
+            assertEquals(1, history.rows.size)
+
+            assertTrue(fixture.setEnabled(ID, enabled = true) is Outcome.Success)
+
+            assertTrue(history.rows.isEmpty())
+        }
+
+    @Test
+    fun `an edit that makes a skipped alarm one-time drops the skip and its row`() =
+        runTest(dispatcher) {
+            home()
+            fixture.skip(ID)
+            val stored = repository.current.single()
+
+            val saved =
+                fixture.save(
+                    AlarmDraft(id = ID, time = stored.time, repeatDays = emptySet(), offerSkip = true),
+                )
+
+            assertTrue(saved is Outcome.Success)
+            assertNull(repository.current.single().skippedDate)
+            assertTrue(history.rows.isEmpty())
+        }
+
+    @Test
+    fun `deleting an alarm cancels its pre-alarm job and notification`() =
+        runTest(dispatcher) {
+            home()
+            clock.set(Instant.parse("2027-03-09T06:00:00Z"))
+            fixture.scheduling.sync(repository.current.single())
+            assertTrue(fixture.preAlarmNotifier.posted.isEmpty(), "posting is the worker's job")
+
+            assertEquals(Outcome.Success(Unit), fixture.delete(ID))
+
+            assertEquals(PreAlarmCall.Cancel(ID), fixture.work.preAlarmCalls.last())
+            assertEquals(listOf(1001), fixture.preAlarmNotifier.cancels.takeLast(1))
+        }
+
     private companion object {
         const val ID = "alarm-1"
+        val TUESDAY_7: Instant = Instant.parse("2027-03-09T07:00:00Z")
     }
 }

@@ -6,6 +6,7 @@ import com.yawnandpawn.app.ui.format.Countdown
 import com.yawnandpawn.app.ui.settings.WeakeningNote
 import kotlinx.datetime.DayOfWeek
 import kotlinx.datetime.LocalTime
+import kotlin.time.Instant
 
 /** The Home top card: the zero-snooze streak and this week's money. */
 data class HomeHero(
@@ -32,10 +33,14 @@ data class AlarmCard(
     val skipped: Boolean = false,
 )
 
-/** "Skip your {time} alarm? This is logged." for the alarm [alarmId] at [time] (Story 7.11, "Skip this one" tapped). */
+/**
+ * "Skip your {time} alarm? This is logged." for the alarm [alarmId] at [time] (Story 7.11, "Skip this one" tapped).
+ * [occurrence] is the occurrence asked about: "Skip" confirmed once it has passed skips nothing (review fix).
+ */
 data class SkipDialog(
     val alarmId: String,
     val time: LocalTime,
+    val occurrence: Instant? = null,
 )
 
 /**

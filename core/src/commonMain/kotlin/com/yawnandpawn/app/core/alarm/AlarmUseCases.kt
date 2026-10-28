@@ -122,6 +122,8 @@ class SaveAlarm(
     private val pendingRepository: PendingChangeRepository,
     private val timeZoneProvider: TimeZoneProvider,
     private val onboarding: OnboardingRepository,
+    /** Story 7.11 review fix: drops Skipped rows an edit no longer skips (null where no skip exists, as in older tests). */
+    private val staleSkips: DiscardStaleSkips? = null,
 ) {
     /** [save], returning the stored alarm (its locked fields hold their effective values). */
     suspend operator fun invoke(draft: AlarmDraft): Outcome<Alarm, DomainError> = save(draft).map { it.alarm }
@@ -238,6 +240,7 @@ class SaveAlarm(
                     .flatMap { clearApplied(offerSkip, mine) }
                     .flatMap { storeWithChecks(checkConfigRepository, row, plan.entries, now) }
                     .onSuccess(scheduling::sync)
+                    .onSuccess { staleSkips?.after(stored, it, now) }
                     .flatMap { alarm ->
                         listOf(grace, checks, offerSkip)
                             .fold<LockDecision, Outcome<Unit, DomainError>>(Outcome.Success(Unit)) { done, decision ->
@@ -376,6 +379,8 @@ class SetAlarmEnabled(
     private val sessionLock: SessionLockGuard,
     private val commitments: CommitmentLog,
     private val logger: Logger,
+    /** Story 7.11 review fix: a skipped one-time alarm switched back on drops its Skipped row (it rings that morning). */
+    private val staleSkips: DiscardStaleSkips? = null,
 ) {
     suspend operator fun invoke(
         id: String,
@@ -391,6 +396,7 @@ class SetAlarmEnabled(
                             .upsert(changed)
                             .map { changed }
                             .onSuccess(scheduling::sync)
+                            .onSuccess { staleSkips?.after(stored, it, now) }
                             .onSuccess { if (!enabled) recordCommitment(commitments, logger, stored, CommitmentAction.Disabled, now) }
                     }
                 }

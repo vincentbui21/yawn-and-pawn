@@ -1,6 +1,7 @@
 package com.yawnandpawn.app.ui.wake
 
 import com.yawnandpawn.app.core.billing.Money
+import com.yawnandpawn.app.core.recording.MotivationPlayback
 import com.yawnandpawn.app.core.session.SessionData
 import com.yawnandpawn.app.core.stats.SuccessStreak
 
@@ -17,13 +18,16 @@ import com.yawnandpawn.app.core.stats.SuccessStreak
  * "Your pending payment wasn't used. Google refunds it automatically." shows only when the session ended with a pending
  * payment and [pendingStillListed]: Play's latest list (the coordinator's recovery query) still holds a pending purchase
  * for this session, so there is something for Google to refund (Story 4.15 review). Never in a test, which cannot pay.
- * Pure.
+ *
+ * The `motivation-player` card (Story 7.3) shows while the [motivation] player holds this session's message (playing,
+ * paused or played to its end); none for another session's or when nothing plays. Pure.
  */
 fun successUiState(
     session: SessionData,
     pendingStillListed: Boolean = false,
     streak: SuccessStreak = SuccessStreak.NONE,
     celebrate: Boolean = true,
+    motivation: MotivationPlayback? = null,
 ): SuccessUiState =
     SuccessUiState(
         kind =
@@ -33,6 +37,7 @@ fun successUiState(
                 else -> SuccessKind.AfterSnooze(paidThisMorning = knownPaid(session))
             },
         pendingNotUsed = session.paymentPending && pendingStillListed && !session.config.testMode,
+        motivation = motivationPlayerUi(session, motivation),
     )
 
 private fun onTime(
@@ -54,6 +59,18 @@ private fun onTime(
                 countFrom = streak.before.takeIf { streak.after > 0 && streak.grew && celebrate },
             )
         }
+    }
+
+/** The card of [playback] when it is [session]'s message: progress from 0 to 1 (0 while the length is unknown). */
+private fun motivationPlayerUi(
+    session: SessionData,
+    playback: MotivationPlayback?,
+): MotivationPlayerUi? =
+    playback?.takeIf { it.sessionId == session.sessionId }?.let {
+        MotivationPlayerUi(
+            playing = it.playing,
+            progress = if (it.durationMs > 0) (it.positionMs.toFloat() / it.durationMs).coerceIn(0f, 1f) else 0f,
+        )
     }
 
 /**

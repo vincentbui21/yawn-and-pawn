@@ -16,6 +16,7 @@ import androidx.compose.ui.test.SemanticsMatcher
 import androidx.compose.ui.test.assert
 import androidx.compose.ui.test.captureToImage
 import androidx.compose.ui.test.getBoundsInRoot
+import androidx.compose.ui.test.hasClickAction
 import androidx.compose.ui.test.isHeading
 import androidx.compose.ui.test.junit4.v2.createEmptyComposeRule
 import androidx.compose.ui.test.onNodeWithContentDescription
@@ -25,6 +26,7 @@ import androidx.compose.ui.test.performClick
 import androidx.compose.ui.unit.dp
 import androidx.test.core.app.ApplicationProvider
 import com.yawnandpawn.app.StopAppRule
+import com.yawnandpawn.app.core.recording.MotivationPlayback
 import com.yawnandpawn.app.core.stats.SuccessStreak
 import com.yawnandpawn.app.testing.aSession
 import com.yawnandpawn.app.testing.aSessionConfig
@@ -60,6 +62,21 @@ object SuccessSamples {
 
     /** Story 6.4: no snapshot: "You're up. That's what counts." with no number. */
     val snapshotMissing: SuccessUiState = successUiState(aSession(), streak = SuccessStreak.Unknown)
+
+    /** Story 7.3: a zero-snooze streak with its message playing, a third in. */
+    val streakWithMessage: SuccessUiState =
+        successUiState(
+            aSession(),
+            streak = SuccessStreak.Known(before = 12, after = 12),
+            motivation = MotivationPlayback(aSession().sessionId, playing = true, positionMs = 3_000, durationMs = 9_000),
+        )
+
+    /** Story 7.3: after a snooze, the message played to its end (the card stays, full, with "Play message"). */
+    val afterSnoozeWithMessage: SuccessUiState =
+        successUiState(
+            aSession().copy(snoozesGranted = 2),
+            motivation = MotivationPlayback(aSession().sessionId, playing = false, positionMs = 9_000, durationMs = 9_000),
+        )
 
     /** Each sample with its headline (no streak number among them). */
     val all: List<Pair<SuccessUiState, String>> =
@@ -284,6 +301,48 @@ class SuccessScreenTest {
             composeRule.onNodeWithText("in a row", substring = true).assertDoesNotExist()
             composeRule.onNodeWithText("paid this morning", substring = true).assertDoesNotExist()
             composeRule.onNodeWithText("Up on time.").assertDoesNotExist()
+        }
+
+    // --- Story 7.3: the message card ---
+
+    @Test
+    fun `the message card reads Pause message, the progress, then Replay message, between the streak and Done`() =
+        success(SuccessSamples.streakWithMessage) {
+            composeRule.waitForIdle()
+            assertEquals(
+                listOf("Up on time.", "12", "days in a row", "Pause message", "Replay message", "Done"),
+                composeRule.talkBackOrder(),
+            )
+            val bar = composeRule.onNode(SemanticsMatcher.keyIsDefined(SemanticsProperties.ProgressBarRangeInfo)).fetchSemanticsNode()
+            assertEquals(1f / 3, bar.config[SemanticsProperties.ProgressBarRangeInfo].current, 0.001f)
+            val card = composeRule.onNodeWithContentDescription("Replay message").getBoundsInRoot()
+            assertTrue(card.top > composeRule.onNodeWithText("Up on time.").getBoundsInRoot().bottom, "under the headline card")
+            assertTrue(card.bottom < done().getBoundsInRoot().top, "above Done")
+        }
+
+    @Test
+    fun `played to its end the card offers Play message, and each button sends its intent`() =
+        success(SuccessSamples.afterSnoozeWithMessage) {
+            composeRule.onNodeWithContentDescription("Pause message").assertDoesNotExist()
+            composeRule.onNodeWithContentDescription("Play message").performClick()
+            composeRule.onNodeWithContentDescription("Replay message").performClick()
+            assertEquals(listOf(WakeIntent.MotivationPlayPauseClicked, WakeIntent.MotivationReplayClicked), intents)
+        }
+
+    @Test
+    @Config(qualifiers = "w360dp-h640dp-xxhdpi", fontScale = 2.0f)
+    fun `with the card every target is at least 48 dp and Done stays in the thumb zone, at 200 percent on a small phone`() =
+        listOf(SuccessSamples.streakWithMessage, SuccessSamples.afterSnoozeWithMessage).forEach { state ->
+            success(state) {
+                val density = composeRule.density
+                val targets = composeRule.onAllNodes(hasClickAction()).fetchSemanticsNodes()
+                assertEquals(3, targets.size, "play / pause, replay and Done")
+                targets.forEach { node ->
+                    val size = with(density) { node.size.width.toDp() to node.size.height.toDp() }
+                    assertTrue(size.first >= 48.dp && size.second >= 48.dp, "$size: ${node.config}")
+                }
+                assertDoneInThumbZone()
+            }
         }
 
     @Test

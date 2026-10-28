@@ -1,6 +1,7 @@
 package com.yawnandpawn.app.ui.wake
 
 import com.yawnandpawn.app.core.billing.Money
+import com.yawnandpawn.app.core.recording.MotivationPlayback
 import com.yawnandpawn.app.core.stats.SuccessStreak
 import com.yawnandpawn.app.testing.aSession
 import com.yawnandpawn.app.testing.aSessionConfig
@@ -138,5 +139,29 @@ class SuccessMappingTest {
 
             assertEquals(SuccessUiState(SuccessKind.Test), successUiState(session), "$snoozes snoozes")
         }
+    }
+
+    @Test
+    fun `the message card shows the playback of this session only, with its progress (Story 7-3)`() {
+        val session = aSession()
+
+        fun card(playback: MotivationPlayback) = successUiState(session, motivation = playback).motivation
+
+        assertEquals(null, successUiState(session).motivation, "nothing plays: no card")
+        assertEquals(
+            MotivationPlayerUi(playing = true, progress = 0.25f),
+            card(MotivationPlayback(session.sessionId, true, positionMs = 2_000, durationMs = 8_000)),
+        )
+        assertEquals(
+            MotivationPlayerUi(playing = false, progress = 1f),
+            card(MotivationPlayback(session.sessionId, false, positionMs = 9_000, durationMs = 8_000)),
+            "played to its end: full, and play starts it over",
+        )
+        assertEquals(
+            MotivationPlayerUi(playing = true, progress = 0f),
+            card(MotivationPlayback(session.sessionId, true)),
+            "length not known yet",
+        )
+        assertEquals(null, card(MotivationPlayback("another-session", true)))
     }
 }

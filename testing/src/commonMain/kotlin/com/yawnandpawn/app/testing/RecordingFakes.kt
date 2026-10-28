@@ -3,6 +3,8 @@ package com.yawnandpawn.app.testing
 import com.yawnandpawn.app.core.error.DomainError
 import com.yawnandpawn.app.core.error.Outcome
 import com.yawnandpawn.app.core.recording.AudioRecorder
+import com.yawnandpawn.app.core.recording.MotivationPlayback
+import com.yawnandpawn.app.core.recording.MotivationPlayer
 import com.yawnandpawn.app.core.recording.PreviewItem
 import com.yawnandpawn.app.core.recording.PreviewPlayback
 import com.yawnandpawn.app.core.recording.RecordedTake
@@ -204,5 +206,75 @@ class FakeRecordingPreview : RecordingPreview {
     /** The preview ended by itself. */
     fun finish() {
         state.value = null
+    }
+}
+
+/**
+ * In-memory [MotivationPlayer] (Story 7.3): [play] records the request and reports the message playing at 0 ms of
+ * [durationMs] (or nothing, when [playable] is false, like the adapter for a missing file); [advance] moves it, [finish]
+ * plays it to its end, [fail] clears it as an error would. [pause], [resume], [replay] and [stop] are counted.
+ */
+class FakeMotivationPlayer(
+    var durationMs: Long = 9_000,
+) : MotivationPlayer {
+    private val playback = MutableStateFlow<MotivationPlayback?>(null)
+    override val state: StateFlow<MotivationPlayback?> = playback.asStateFlow()
+
+    /** Each `(sessionId, recordingId)` [play] was asked for, in order. */
+    val played = mutableListOf<Pair<String, String>>()
+
+    /** False: [play] plays nothing (a missing row or file). */
+    var playable = true
+    var pauses = 0
+        private set
+    var resumes = 0
+        private set
+    var replays = 0
+        private set
+    var stops = 0
+        private set
+
+    override fun play(
+        sessionId: String,
+        recordingId: String,
+    ) {
+        played += sessionId to recordingId
+        playback.value = if (playable) MotivationPlayback(sessionId, playing = true, durationMs = durationMs) else null
+    }
+
+    override fun pause() {
+        pauses++
+        playback.value = playback.value?.copy(playing = false)
+    }
+
+    override fun resume() {
+        resumes++
+        playback.value =
+            playback.value?.let { if (it.positionMs >= it.durationMs) it.copy(playing = true, positionMs = 0) else it.copy(playing = true) }
+    }
+
+    override fun replay() {
+        replays++
+        playback.value = playback.value?.copy(playing = true, positionMs = 0)
+    }
+
+    override fun stop() {
+        stops++
+        playback.value = null
+    }
+
+    /** The message is [positionMs] in. */
+    fun advance(positionMs: Long) {
+        playback.value = playback.value?.copy(positionMs = positionMs)
+    }
+
+    /** The message played to its end. */
+    fun finish() {
+        playback.value = playback.value?.let { it.copy(playing = false, positionMs = it.durationMs) }
+    }
+
+    /** The message failed while playing. */
+    fun fail() {
+        playback.value = null
     }
 }

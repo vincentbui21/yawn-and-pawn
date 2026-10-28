@@ -4,7 +4,8 @@ package com.yawnandpawn.app.core.checks
  * The only source of check seeds (AD-9, FR-PWK-1). A seed is a pure function of where the puzzle sits in the session,
  * so a restored session derives the same puzzles and nothing in `:core` draws random numbers.
  *
- * Keys of [seed]'s `entryIndex`: entry `i` of a ring's plan is `i`, and the Random pick of the plan is [PICK]. A fallback
+ * Keys of [seed]'s `entryIndex`: entry `i` of a ring's plan is `i`, the Random pick of the plan is [PICK], and the
+ * session's Random motivation message (Story 7.3) is [MOTIVATION]. A fallback
  * plan uses the same keys with `fallback` true, a separate hashed field, so its seeds never repeat the plan's whatever
  * the plan's size. `attempt` is 0 for the first puzzle of an entry in a ring, and the entry's failed-attempt count for a
  * puzzle started over (`CheckResult.WrongRestart`).
@@ -12,6 +13,12 @@ package com.yawnandpawn.app.core.checks
 object SeedDeriver {
     /** The `entryIndex` key of the seed that picks the entry of a Random plan. */
     const val PICK = -1
+
+    /**
+     * The `entryIndex` key of the seed that picks a session's Random motivation message (Story 7.3), with ring 0 and
+     * attempt 0: no check entry ever uses it, so the pick never repeats a check's seed.
+     */
+    const val MOTIVATION = -2
 
     /**
      * The seed of [entryIndex] in ring [ringIndex] of session [sessionId], for [attempt], in the [fallback] plan

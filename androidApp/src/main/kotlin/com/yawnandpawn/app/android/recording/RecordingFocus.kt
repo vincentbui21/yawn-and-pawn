@@ -22,6 +22,8 @@ class AndroidRecordingFocus(
     private val audio: AudioManager,
     /** `AUDIOFOCUS_GAIN_TRANSIENT_EXCLUSIVE` for a take; the Recordings preview (Story 7.2) asks `AUDIOFOCUS_GAIN_TRANSIENT`. */
     private val gain: Int = AudioManager.AUDIOFOCUS_GAIN_TRANSIENT_EXCLUSIVE,
+    /** Media speech for a take and a preview; the alarm stream's for the Success message (Story 7.3). */
+    private val attributes: AudioAttributes = SPEECH,
 ) : RecordingFocus {
     private var held: AudioFocusRequest? = null
 
@@ -31,7 +33,7 @@ class AndroidRecordingFocus(
         val request =
             AudioFocusRequest
                 .Builder(gain)
-                .setAudioAttributes(ATTRIBUTES)
+                .setAudioAttributes(attributes)
                 .setOnAudioFocusChangeListener { change -> if (change in ENDING_LOSSES) onLoss() }
                 .build()
         val granted = audio.requestAudioFocus(request) == AudioManager.AUDIOFOCUS_REQUEST_GRANTED
@@ -48,7 +50,7 @@ class AndroidRecordingFocus(
     private companion object {
         val ENDING_LOSSES = setOf(AudioManager.AUDIOFOCUS_LOSS, AudioManager.AUDIOFOCUS_LOSS_TRANSIENT)
 
-        val ATTRIBUTES: AudioAttributes =
+        val SPEECH: AudioAttributes =
             AudioAttributes
                 .Builder()
                 .setUsage(AudioAttributes.USAGE_MEDIA)

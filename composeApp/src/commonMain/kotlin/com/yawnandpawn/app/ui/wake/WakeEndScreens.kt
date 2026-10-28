@@ -3,14 +3,21 @@ package com.yawnandpawn.app.ui.wake
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
+import androidx.compose.material3.IconButtonDefaults
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -22,10 +29,12 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.semantics.LiveRegionMode
+import androidx.compose.ui.semantics.ProgressBarRangeInfo
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.isTraversalGroup
 import androidx.compose.ui.semantics.liveRegion
+import androidx.compose.ui.semantics.progressBarRangeInfo
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.traversalIndex
 import androidx.compose.ui.text.style.TextAlign
@@ -41,6 +50,9 @@ import com.yawnandpawn.app.ui.format.formatMoney
 import com.yawnandpawn.app.ui.resources.Res
 import com.yawnandpawn.app.ui.resources.fallback_picker_close
 import com.yawnandpawn.app.ui.resources.fallback_picker_title
+import com.yawnandpawn.app.ui.resources.recordings_pause
+import com.yawnandpawn.app.ui.resources.recordings_play
+import com.yawnandpawn.app.ui.resources.recordings_replay
 import com.yawnandpawn.app.ui.resources.snoozed_next_ring
 import com.yawnandpawn.app.ui.resources.success_after_snooze
 import com.yawnandpawn.app.ui.resources.success_done
@@ -48,7 +60,12 @@ import com.yawnandpawn.app.ui.resources.success_paid_this_morning
 import com.yawnandpawn.app.ui.resources.success_pending_not_used
 import com.yawnandpawn.app.ui.resources.success_test
 import com.yawnandpawn.app.ui.resources.success_zero_snooze_first
+import com.yawnandpawn.app.ui.resources.symbol_pause
+import com.yawnandpawn.app.ui.resources.symbol_play_arrow
+import com.yawnandpawn.app.ui.resources.symbol_replay
 import com.yawnandpawn.app.ui.theme.PpsTheme
+import org.jetbrains.compose.resources.DrawableResource
+import org.jetbrains.compose.resources.painterResource
 import org.jetbrains.compose.resources.stringResource
 
 /**
@@ -133,7 +150,7 @@ fun SuccessScreen(
         Column(modifier = Modifier.fillMaxSize().wakeContentPadding()) {
             Column(
                 modifier = Modifier.fillMaxWidth().weight(1f).verticalScroll(rememberScrollState()),
-                verticalArrangement = Arrangement.Center,
+                verticalArrangement = Arrangement.spacedBy(spacing.space4, Alignment.CenterVertically),
             ) {
                 // On a glass card: the streak number in accent-text passes on glass (5.11), not on the sunrise gradient.
                 // TalkBack: the headline first (traversal index -1 in this group), then the streak, then "Done".
@@ -175,9 +192,75 @@ fun SuccessScreen(
                     }
                     if (state.pendingNotUsed) NoteInline(text = stringResource(Res.string.success_pending_not_used))
                 }
+                // Story 7.3: the message "After I'm up", between the headline card and "Done", while it is this session's.
+                state.motivation?.let { MotivationPlayerCard(it, onIntent) }
             }
             WakePrimaryButton(text = stringResource(Res.string.success_done), onClick = { onIntent(WakeIntent.DoneClicked) }, hero = basic)
         }
+    }
+}
+
+/**
+ * `motivation-player` (Story 7.3): a `surface-sunrise` card (`rounded.md`) with a 48 dp play / pause button, the
+ * progress bar in accent over the `outline-subtle` track (accent on surface 3.37:1, as the countdown ring) and a 48 dp
+ * replay button, both icons in `text-sunrise`. TalkBack reads "Play message" or "Pause message", the progress, then
+ * "Replay message".
+ */
+@Composable
+internal fun MotivationPlayerCard(
+    state: MotivationPlayerUi,
+    onIntent: (WakeIntent) -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    val colors = PpsTheme.colors
+    val spacing = PpsTheme.spacing
+    Row(
+        modifier =
+            modifier
+                .fillMaxWidth()
+                .clip(PpsTheme.shapes.md)
+                .background(colors.surface)
+                .padding(horizontal = spacing.space2, vertical = spacing.space2),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(spacing.space2),
+    ) {
+        PlayerButton(
+            icon = if (state.playing) Res.drawable.symbol_pause else Res.drawable.symbol_play_arrow,
+            label = stringResource(if (state.playing) Res.string.recordings_pause else Res.string.recordings_play),
+            onClick = { onIntent(WakeIntent.MotivationPlayPauseClicked) },
+        )
+        val progress = state.progress.coerceIn(0f, 1f)
+        Box(
+            modifier =
+                Modifier
+                    .weight(1f)
+                    .height(spacing.space1)
+                    .clip(PpsTheme.shapes.full)
+                    .background(colors.outlineSubtle)
+                    .semantics { progressBarRangeInfo = ProgressBarRangeInfo(progress, 0f..1f) },
+        ) {
+            Box(modifier = Modifier.fillMaxWidth(progress).fillMaxHeight().background(colors.accent))
+        }
+        PlayerButton(
+            icon = Res.drawable.symbol_replay,
+            label = stringResource(Res.string.recordings_replay),
+            onClick = { onIntent(WakeIntent.MotivationReplayClicked) },
+        )
+    }
+}
+
+@Composable
+private fun PlayerButton(
+    icon: DrawableResource,
+    label: String,
+    onClick: () -> Unit,
+) {
+    IconButton(
+        onClick = onClick,
+        modifier = Modifier.size(PpsTheme.spacing.targetMin),
+        colors = IconButtonDefaults.iconButtonColors(contentColor = PpsTheme.colors.text),
+    ) {
+        Icon(painter = painterResource(icon), contentDescription = label)
     }
 }
 

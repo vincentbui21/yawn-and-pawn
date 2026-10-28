@@ -20,7 +20,10 @@ import com.yawnandpawn.app.core.billing.PurchaseCoordinator
 import com.yawnandpawn.app.core.billing.PurchaseLedger
 import com.yawnandpawn.app.core.billing.ReplayGrantLedger
 import com.yawnandpawn.app.core.crash.CrashReporter
+import com.yawnandpawn.app.core.recording.MotivationPlayer
+import com.yawnandpawn.app.core.recording.MotivationResolver
 import com.yawnandpawn.app.core.recording.RecordingPreview
+import com.yawnandpawn.app.core.session.SessionData
 import com.yawnandpawn.app.core.session.SessionEngine
 import com.yawnandpawn.app.core.sound.SoundPreview
 import com.yawnandpawn.app.core.stats.CelebrationStreaks
@@ -66,8 +69,8 @@ fun wakeModule(): Module =
         single { WakeServiceStarts() }
         single { WakeTimings(now = { get<Clock>().now() }, logger = get()) }
         single {
-            // A ring stops the Sound preview (Story 1.17) and the Recordings preview (Story 7.2); each is looked up then, as it
-            // depends on this player.
+            // A ring stops the Sound preview (Story 1.17), the Recordings preview (Story 7.2) and the Success message (Story
+            // 7.3); each is looked up then, as it depends on this player.
             val koin = this
             AndroidAlarmPlayer(
                 get(),
@@ -81,6 +84,8 @@ fun wakeModule(): Module =
                     koin.getOrNull<SoundPreview>()?.stop()
                     // Story 7.2: a Recordings preview never plays over a ring.
                     koin.getOrNull<RecordingPreview>()?.stop()
+                    // Story 7.3: nor a Success message (a test preempted by a real alarm completes, then this ring starts).
+                    koin.getOrNull<MotivationPlayer>()?.stop()
                 },
                 // Story 2.7: a focus change goes to the call adapter (a call takes focus); it never ducks the ring.
                 focus =
@@ -109,12 +114,22 @@ fun wakeModule(): Module =
                 // Story 4.11: the billing orchestration (looked up then: it depends on the engine, which depends on this).
                 onLaunchBilling = { effect -> koin.get<PurchaseCoordinator>().onLaunchBilling(effect) },
                 onKeyguardDismiss = { effect -> koin.get<PurchaseCoordinator>().onKeyguardDismiss(effect) },
+                // Story 7.3: the completed session's message on Success (looked up then: it depends on the player above).
+                onPlayMotivation = { session -> playMotivation(koin, session) },
             )
         }
         // The first unlock after a boot (Story 2.4): UserUnlocked, billing and crash reporting.
         single { unlockSignals(this) }
         includes(confirmSheetModule(), celebrationModule())
     }
+
+/** Plays the completed [session]'s frozen message on Success (Story 7.3), if it has one. */
+private fun playMotivation(
+    koin: Scope,
+    session: SessionData,
+) {
+    MotivationResolver.playableRecordingId(session)?.let { koin.get<MotivationPlayer>().play(session.sessionId, it) }
+}
 
 /**
  * The unlock signals (Story 2.4). Every signal replays the grant ledger (Story 4.10; looked up then: the ledger is in

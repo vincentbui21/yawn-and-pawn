@@ -39,6 +39,8 @@ import com.yawnandpawn.app.core.error.Outcome
 import com.yawnandpawn.app.core.log.LogEvent
 import com.yawnandpawn.app.core.log.Logger
 import com.yawnandpawn.app.core.log.WakeStage
+import com.yawnandpawn.app.core.recording.MotivationPlayer
+import com.yawnandpawn.app.core.recording.Recording
 import com.yawnandpawn.app.core.session.SessionData
 import com.yawnandpawn.app.core.session.SessionEngine
 import com.yawnandpawn.app.core.session.SessionEvent
@@ -80,14 +82,17 @@ import com.yawnandpawn.app.ui.wake.snoozedUiState
 import com.yawnandpawn.app.ui.wake.successUiState
 import kotlinx.coroutines.CoroutineStart
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
+import kotlinx.coroutines.withTimeoutOrNull
 import kotlinx.coroutines.yield
 import kotlinx.datetime.TimeZone
 import org.koin.android.ext.android.get
 import org.koin.android.ext.android.inject
 import kotlin.time.Duration
+import kotlin.time.Duration.Companion.milliseconds
 import kotlin.time.Duration.Companion.seconds
 import kotlin.time.Instant
 
@@ -143,6 +148,10 @@ import kotlin.time.Instant
  * first drawn frame of a real session's screen, on [ApplicationScope] and never awaited (NFR-7), and Success reads the
  * result synchronously, so no screen ever waits for it. Success clears `FLAG_KEEP_SCREEN_ON`; a new ring sets it again.
  *
+ * The message "After I'm up" (Story 7.3) is started by the runtime when the session completes ([MotivationPlayer]);
+ * Success shows its card while the player holds that session's message, and "Done", leaving or the 60 s close stop it.
+ * The 60 s close waits while the message plays, so it never cuts it.
+ *
  * While it is visible (`onStart` to `onStop`) the ringing notification is the quiet on-screen one, so no heads-up covers
  * the countdown; left while the alarm rings, it heads up again as the way back (Epic 3 device check, bug 2).
  *
@@ -166,6 +175,9 @@ class WakeActivity : ComponentActivity() {
 
     /** The history snapshot behind the zero-snooze celebration (Story 6.4), read after the first frame. */
     private val celebrations: CelebrationStreaks by inject()
+
+    /** The message "After I'm up" (Story 7.3): the runtime starts it at Completed, Success shows and controls it. */
+    private val motivation: MotivationPlayer by inject()
 
     /** The wall clock the Ringing screen's clock shows (Epic 4 device follow-up 1): the app's, so tests control it. */
     private val clock: Clock by inject()
@@ -243,6 +255,9 @@ class WakeActivity : ComponentActivity() {
         )
         // Story 5.2: Home, Recents, the screen off or finish: back to the phone's own brightness.
         brightness.onStop()
+        // Story 7.3: leaving Success (it closes then, WakeScreenEnd) stops its message at once; a recreate is not leaving.
+        // A message started at Completed before Success showed stops too.
+        if (!isChangingConfigurations && (end.successSessionId != null || motivation.state.value != null)) motivation.stop()
         super.onStop()
     }
 
@@ -399,9 +414,13 @@ class WakeActivity : ComponentActivity() {
      */
     @Composable
     private fun SuccessShown(success: SessionData) {
+        // Story 7.3: the message the runtime started at Completed; the card shows only this session's.
+        val playback by motivation.state.collectAsState()
+        // The screen stays on only while this session's message plays (a timeout would turn it off and stop the message).
+        val messagePlaying = playback?.takeIf { it.sessionId == success.sessionId }?.playing == true
         SideEffect {
             brightness.show(full = false)
-            keepScreenOn(false)
+            keepScreenOn(messagePlaying)
         }
         // Story 4.15 review: the pending note only while Play's latest list still holds this session's pending payment.
         val pendingSessions by purchases.pendingSessions.collectAsState()
@@ -415,14 +434,21 @@ class WakeActivity : ComponentActivity() {
                         pendingStillListed = success.sessionId in pendingSessions,
                         streak = streak,
                         celebrate = celebrate,
+                        motivation = playback,
                     ),
                 onIntent = ::onIntent,
                 basic = true,
                 claimHaptic = { end.claimHaptic(success.sessionId) },
             )
-            // Counted from when Success started, so a recreated screen still closes 60 s after it first showed.
+            // Counted from when Success started, so a recreated screen still closes 60 s after it first showed. A message
+            // still playing then is never cut: the screen closes once it stops (Story 7.3), at most [MESSAGE_WAIT] later (a
+            // stuck player never holds the screen), and the close stops a paused one.
             LaunchedEffect(Unit) {
                 delay(end.successRemaining(SUCCESS_TIMEOUT))
+                withTimeoutOrNull(MESSAGE_WAIT) {
+                    motivation.state.first { it == null || it.sessionId != success.sessionId || !it.playing }
+                }
+                motivation.stop()
                 finish()
             }
         }
@@ -501,13 +527,28 @@ class WakeActivity : ComponentActivity() {
         }
     }
 
+    /** Play / pause or replay on the Success message's card (Story 7.3). */
+    private fun onMotivation(intent: WakeIntent) {
+        when {
+            intent == WakeIntent.MotivationReplayClicked -> motivation.replay()
+            motivation.state.value?.playing == true -> motivation.pause()
+            else -> motivation.resume()
+        }
+    }
+
     private fun onIntent(intent: WakeIntent) {
         // Any tap ends a payment message once it has shown for 10 s (Story 4.14); the tap's action goes on at once.
         sheet.onTap()
         when {
-            // "Done" on Success: the session is already over, so it only closes the screen.
+            // "Done" on Success: the session is already over, so it only stops its message (Story 7.3) and closes the screen.
             intent == WakeIntent.DoneClicked -> {
+                motivation.stop()
                 finish()
+            }
+
+            // Story 7.3: the Success message's controls.
+            intent in MOTIVATION_INTENTS -> {
+                onMotivation(intent)
             }
 
             WakeCheck.isKey(intent) -> {
@@ -634,6 +675,12 @@ class WakeActivity : ComponentActivity() {
     companion object {
         /** How often a placeholder answer whose dispatch failed is sent again. */
         val PLACEHOLDER_RETRY: Duration = 2.seconds
+
+        /** The controls of the Success message's card (Story 7.3). */
+        private val MOTIVATION_INTENTS: Set<WakeIntent> = setOf(WakeIntent.MotivationPlayPauseClicked, WakeIntent.MotivationReplayClicked)
+
+        /** The 60 s close waits at most this long for a playing message: the longest recording, and a margin (Story 7.3). */
+        val MESSAGE_WAIT: Duration = Recording.MAX_DURATION_MS.milliseconds + 5.seconds
 
         /** Success closes by itself after this long without "Done" (owner-approved default 2026-09-26). */
         val SUCCESS_TIMEOUT: Duration = 60.seconds

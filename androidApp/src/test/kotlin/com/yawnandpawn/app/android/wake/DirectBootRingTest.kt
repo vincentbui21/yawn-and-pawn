@@ -20,6 +20,7 @@ import com.yawnandpawn.app.awaitChildren
 import com.yawnandpawn.app.buildService
 import com.yawnandpawn.app.core.alarm.AlarmRepository
 import com.yawnandpawn.app.core.alarm.AlarmScheduler
+import com.yawnandpawn.app.core.alarm.Motivation
 import com.yawnandpawn.app.core.alarm.RequestCodes
 import com.yawnandpawn.app.core.crash.CrashReporter
 import com.yawnandpawn.app.core.error.Outcome
@@ -170,7 +171,8 @@ class DirectBootRingTest {
             }.koin
         val firebase = koin.get<FirebaseStartup>().also { it.start() }
         // The alarm the user saved (a system ringtone, which needs the media provider) is in the device-protected app.db.
-        val alarm = anAlarm(id = "alarm-a", requestCode = 1000).copy(soundRef = systemSound)
+        // Story 7.3: with a Random message, which before the first unlock is frozen as no message, reading nothing.
+        val alarm = anAlarm(id = "alarm-a", requestCode = 1000).copy(soundRef = systemSound, motivation = Motivation.Random)
         assertEquals(Outcome.Success(Unit), runBlocking { koin.get<AlarmRepository>().upsert(alarm) })
 
         app.sendBroadcast(Intent(Intent.ACTION_LOCKED_BOOT_COMPLETED).setPackage(app.packageName))
@@ -200,6 +202,7 @@ class DirectBootRingTest {
         assertTrue(ringing.session.beforeFirstUnlock)
         assertEquals(systemSound, ringing.session.config.soundRef, "the frozen config keeps the chosen sound")
         assertEquals(AlarmSound.Default, player.sound, "the system ringtone becomes the default built-in sound before the unlock")
+        assertEquals(Motivation.None, ringing.session.config.motivation, "no message for a session that starts locked (Story 7.3)")
         assertTrue(
             shadowOf(app.getSystemService(NotificationManager::class.java)).allNotifications.isNotEmpty(),
             "the ringing notification",

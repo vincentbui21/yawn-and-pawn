@@ -28,6 +28,8 @@ import com.yawnandpawn.app.core.error.Outcome
 import com.yawnandpawn.app.core.history.SessionHistoryRepository
 import com.yawnandpawn.app.core.history.SessionMergeRow
 import com.yawnandpawn.app.core.net.Connectivity
+import com.yawnandpawn.app.core.recording.MotivationPlayer
+import com.yawnandpawn.app.core.recording.RecordingRepository
 import com.yawnandpawn.app.core.session.ActiveSessionStore
 import com.yawnandpawn.app.core.session.Billing
 import com.yawnandpawn.app.core.session.FallbackPolicy
@@ -65,7 +67,8 @@ import kotlin.time.Duration
  * [billing], the alarms' [checkConfigs], the fallback policy, the camera scanner or the screen reader
  * ([accessibility], Story 3.12), the global settings ([globalSettings], Story 4.4), Play's product details
  * ([productDetails], Story 4.3), the connection ([connectivity], Story 4.7; online by default) or the Analytics facade
- * and the Firebase configuration ([analytics], [firebase], Story 5.6). The alarm receiver
+ * and the Firebase configuration ([analytics], [firebase], Story 5.6), the recordings and the Success message player
+ * ([recordings], [motivationPlayer], Story 7.3). The alarm receiver
  * waits [serviceStartWait] for the wake service (none by default: the tests start it themselves, as the system would).
  * The real `MediaPlayer` adapter plays over Robolectric's media shadow (every source opens). The service's coroutines
  * run on the main looper: [awaitUntil] idles it (and the Room threads) until a condition holds. Tear down with
@@ -104,6 +107,9 @@ internal class WakeApp(
     firebase: FirebaseConfiguration? = null,
     // Epic 4 device follow-ups: the time-change signal the wake screen's clock follows.
     timeChanges: TimeChangeSignal? = null,
+    // Story 7.3: the recordings a Random message is picked from, and the Success message player.
+    recordings: RecordingRepository? = null,
+    motivationPlayer: MotivationPlayer? = null,
 ) {
     val app: YawnAndPawnApp = ApplicationProvider.getApplicationContext()
     val crashReporter = FakeCrashReporter()
@@ -148,6 +154,8 @@ internal class WakeApp(
                 analytics?.let { replaced -> single<AnalyticsSink> { replaced } }
                 firebase?.let { replaced -> single { replaced } }
                 timeChanges?.let { replaced -> single<TimeChangeSignal> { replaced } }
+                recordings?.let { replaced -> single<RecordingRepository> { replaced } }
+                motivationPlayer?.let { replaced -> single<MotivationPlayer> { replaced } }
                 single { WakeServiceStarts(serviceStartWait) }
             },
         )

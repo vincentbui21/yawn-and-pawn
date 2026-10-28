@@ -9,10 +9,12 @@ import com.yawnandpawn.app.core.error.Outcome
 import com.yawnandpawn.app.core.log.LogEvent
 import com.yawnandpawn.app.core.log.Logger
 import com.yawnandpawn.app.core.log.WakeStage
+import com.yawnandpawn.app.core.recording.MotivationResolver
 import com.yawnandpawn.app.core.session.EffectRunner
 import com.yawnandpawn.app.core.session.EntryEffect
 import com.yawnandpawn.app.core.session.PurchaseToken
 import com.yawnandpawn.app.core.session.SessionConfig
+import com.yawnandpawn.app.core.session.SessionData
 import com.yawnandpawn.app.core.session.SessionEffect
 import com.yawnandpawn.app.core.session.SessionReducer
 import com.yawnandpawn.app.core.session.SessionState
@@ -56,8 +58,8 @@ data class EmergencyRing(
  *
  * - Entry effects are idempotent: the same effect again changes nothing (same sound and volume, same slot, same
  *   notification). A sound effect also stops the vibration when the state no longer wants it.
- * - Effects whose adapters arrive in later stories (checks UI, billing, motivation, purchase messages) are logged by
- *   type name only.
+ * - Effects whose adapters arrive in later stories (checks UI, purchase messages) are logged by type name only;
+ *   `PlayMotivation` starts the Success message ([onPlayMotivation], Story 7.3) and is logged too.
  * - It never awaits `SessionEngine.dispatch` from inside [run] or [apply] (the engine's Mutex is held there and is not
  *   reentrant). Any event the runtime produces is launched on `ApplicationScope`, outside the effect; in Story 1.14 it
  *   produces none, and [WakeService] dispatches `ProcessRestored` after a crash.
@@ -98,6 +100,12 @@ class WakeRuntime(
      */
     private val onLaunchBilling: (SessionEffect.LaunchBilling) -> Unit = {},
     private val onKeyguardDismiss: (SessionEffect.RequestKeyguardDismiss) -> Unit = {},
+    /**
+     * A session completed with a message to play (Story 7.3, `PlayMotivation`): the completed session, only when it has a
+     * frozen recording and did not start before the first unlock ([MotivationResolver.playableRecordingId]). It must only
+     * start the player (it runs inside the engine's Mutex).
+     */
+    private val onPlayMotivation: (SessionData) -> Unit = {},
 ) : EffectRunner {
     private val player = outputs.player
     private val vibrator = outputs.vibrator
@@ -185,8 +193,21 @@ class WakeRuntime(
 
             is SessionEffect.LogIgnored -> logger.log(LogEvent.SessionEventIgnored(effect.eventType, effect.sessionId))
 
+            SessionEffect.PlayMotivation -> playMotivation()
+
             else -> if (!runSound(effect)) logger.log(LogEvent.SessionEffectLogged(typeName(effect), entry = false))
         }
+    }
+
+    /**
+     * The check was passed (Story 7.3): the completed session's frozen message plays, if it has one and did not start
+     * before the first unlock; a `Random` stored unresolved (before Story 7.3) plays nothing. Only Completed emits the
+     * effect (never Missed or a paid snooze), and [session] is that Completed state here. Still logged by type name.
+     */
+    private fun playMotivation() {
+        val completed = (session() as? SessionState.Completed)?.session
+        completed?.takeIf { MotivationResolver.playableRecordingId(it) != null }?.let(onPlayMotivation)
+        logger.log(LogEvent.SessionEffectLogged(typeName(SessionEffect.PlayMotivation), entry = false))
     }
 
     /**

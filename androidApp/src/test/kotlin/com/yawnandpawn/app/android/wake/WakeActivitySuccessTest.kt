@@ -10,6 +10,7 @@ import android.view.WindowManager
 import androidx.compose.ui.graphics.toPixelMap
 import androidx.compose.ui.test.captureToImage
 import androidx.compose.ui.test.junit4.v2.createEmptyComposeRule
+import androidx.compose.ui.test.onAllNodesWithContentDescription
 import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.onRoot
@@ -19,11 +20,13 @@ import com.yawnandpawn.app.StopAppRule
 import com.yawnandpawn.app.android.ApplicationScope
 import com.yawnandpawn.app.awaitChildren
 import com.yawnandpawn.app.buildActivity
+import com.yawnandpawn.app.core.alarm.Motivation
 import com.yawnandpawn.app.core.history.SessionOutcome
 import com.yawnandpawn.app.core.session.SessionEvent
 import com.yawnandpawn.app.core.session.SessionState
 import com.yawnandpawn.app.testing.FakeActiveSessionStore
 import com.yawnandpawn.app.testing.FakeClock
+import com.yawnandpawn.app.testing.FakeMotivationPlayer
 import com.yawnandpawn.app.testing.FakeSessionHistoryRepository
 import com.yawnandpawn.app.testing.aSession
 import com.yawnandpawn.app.testing.aSessionConfig
@@ -67,8 +70,10 @@ class WakeActivitySuccessTest {
         app: WakeApp,
         sessionId: String = "session-1",
         testMode: Boolean = false,
+        motivation: Motivation = Motivation.None,
     ) {
-        app.dispatch(SessionEvent.AlarmFired(sessionId, aSessionConfig(testMode = testMode), beforeFirstUnlock = false))
+        val config = aSessionConfig(testMode = testMode).copy(motivation = motivation)
+        app.dispatch(SessionEvent.AlarmFired(sessionId, config, beforeFirstUnlock = false))
         assertIs<SessionState.Ringing>(app.engine.state.value)
     }
 
@@ -77,8 +82,9 @@ class WakeActivitySuccessTest {
         app: WakeApp,
         headline: String = upOnTime,
         testMode: Boolean = false,
+        motivation: Motivation = Motivation.None,
     ): ActivityController<WakeActivity> {
-        ringing(app, testMode = testMode)
+        ringing(app, testMode = testMode, motivation = motivation)
         app.awaitRinging()
         val controller = buildActivity(WakeActivity::class.java).setup()
         composeRule.onNodeWithText("I'm up").performClick()
@@ -427,6 +433,195 @@ class WakeActivitySuccessTest {
         composeRule.waitUntil(timeoutMillis = APP_WORK_TIMEOUT_MILLIS) { screen.isFinishing }
         assertNull(app.engine.ended.value)
         assertFalse(composeRule.successShown(upOnTime))
+    }
+
+    // --- Story 7.3: the message "After I'm up" ---
+
+    private val message = Motivation.Recording("r1")
+
+    private fun card(label: String) = composeRule.onNodeWithContentDescription(label)
+
+    private fun cardShown(): Boolean =
+        listOf("Play message", "Pause message", "Replay message").any {
+            composeRule.onAllNodesWithContentDescription(it).fetchSemanticsNodes(atLeastOneRootRequired = false).isNotEmpty()
+        }
+
+    @Test
+    fun `a completed session with a message plays it once and Success shows its card, with pause, play and replay`() {
+        val player = FakeMotivationPlayer()
+        val app = WakeApp(motivationPlayer = player)
+
+        completed(app, motivation = message)
+
+        assertEquals(listOf("session-1" to "r1"), player.played)
+        card("Pause message").assertExists()
+        card("Replay message").assertExists()
+        card("Pause message").performClick()
+        composeRule.waitForIdle()
+        assertEquals(1, player.pauses)
+        card("Play message").performClick()
+        composeRule.waitForIdle()
+        assertEquals(1, player.resumes)
+        card("Replay message").performClick()
+        assertEquals(1, player.replays)
+        player.finish()
+        composeRule.waitForIdle()
+        card("Play message").assertExists()
+    }
+
+    @Test
+    fun `a test session plays its message too`() {
+        val player = FakeMotivationPlayer()
+
+        completed(WakeApp(motivationPlayer = player), headline = "Test finished. Your alarm works.", testMode = true, motivation = message)
+
+        assertEquals(listOf("session-1" to "r1"), player.played)
+        card("Pause message").assertExists()
+    }
+
+    @Test
+    fun `without a message, or when it cannot play or fails, Success shows no card`() {
+        val player = FakeMotivationPlayer()
+        val app = WakeApp(motivationPlayer = player)
+        completed(app)
+        assertTrue(player.played.isEmpty())
+        assertFalse(cardShown())
+
+        player.playable = false
+        ringing(app, sessionId = "session-2", motivation = message)
+        composeRule.onNodeWithText("I'm up").performClick()
+        composeRule.awaitScreen(app, "Success of session-2") { successOf(app, "session-2") }
+        assertEquals("session-2" to "r1", player.played.last())
+        assertFalse(cardShown(), "a missing file: no card")
+
+        player.playable = true
+        ringing(app, sessionId = "session-3", motivation = message)
+        composeRule.onNodeWithText("I'm up").performClick()
+        composeRule.awaitScreen(app, "Success of session-3") { successOf(app, "session-3") }
+        card("Pause message").assertExists()
+        player.fail()
+        composeRule.waitForIdle()
+        assertFalse(cardShown(), "an error while it plays hides the card")
+        composeRule.onNodeWithText(upOnTime).assertExists()
+    }
+
+    private fun successOf(
+        app: WakeApp,
+        sessionId: String,
+    ): Boolean =
+        app.engine.state.value == SessionState.Idle &&
+            (app.engine.ended.value as? SessionState.Completed)?.session?.sessionId == sessionId &&
+            composeRule.successShown(upOnTime)
+
+    @Test
+    fun `Done stops the message at once and closes the screen`() {
+        val player = FakeMotivationPlayer()
+        val screen = completed(WakeApp(motivationPlayer = player), motivation = message).get()
+        // The ring's start stopped any message already (the ring-start hook).
+        val before = player.stops
+
+        composeRule.onNodeWithText("Done").performClick()
+
+        assertEquals(before + 1, player.stops)
+        assertNull(player.state.value)
+        composeRule.waitUntil(timeoutMillis = APP_WORK_TIMEOUT_MILLIS) { screen.isFinishing }
+    }
+
+    @Test
+    fun `leaving Success with Home stops the message at once, a recreation does not`() {
+        val player = FakeMotivationPlayer()
+        val controller = completed(WakeApp(motivationPlayer = player), motivation = message)
+        val before = player.stops
+
+        controller.recreate()
+        composeRule.waitForIdle()
+        assertEquals(before, player.stops, "a recreation is not leaving")
+        card("Pause message").assertExists()
+
+        controller.pause().stop()
+
+        assertEquals(before + 1, player.stops)
+        assertTrue(controller.get().isFinishing)
+    }
+
+    @Test
+    fun `a session that started before the first unlock plays nothing on Success, also after the unlock`() {
+        val player = FakeMotivationPlayer()
+        // Rang locked (history: direct_boot) and is finished after the unlock, with a message in its config.
+        val locked = aSession(sessionId = "session-locked", config = aSessionConfig().copy(motivation = message))
+        val store = FakeActiveSessionStore(SessionState.Loud(locked.copy(startedBeforeUnlock = true)))
+        val app = WakeApp(store = store, motivationPlayer = player)
+        val restore = app.koin.get<ApplicationScope>().launch { app.engine.restore() }
+        app.awaitUntil("the session is restored") { restore.isCompleted }
+
+        buildActivity(WakeActivity::class.java).setup()
+
+        composeRule.awaitSuccess(app, upOnTime)
+        assertTrue(player.played.isEmpty())
+        assertFalse(cardShown())
+    }
+
+    @Test
+    fun `the 60 second close never cuts a playing message, it closes once the message stops`() {
+        val player = FakeMotivationPlayer()
+        val screen = completed(WakeApp(motivationPlayer = player), motivation = message).get()
+        val before = player.stops
+        composeRule.mainClock.autoAdvance = false
+
+        composeRule.mainClock.advanceTimeBy(WakeActivity.SUCCESS_TIMEOUT.inWholeMilliseconds + ONE_SECOND)
+        assertFalse(screen.isFinishing, "the message still plays")
+        assertEquals(before, player.stops)
+
+        player.finish()
+        composeRule.mainClock.advanceTimeBy(FRAME)
+        assertTrue(screen.isFinishing, "closed once it stopped")
+        assertEquals(before + 1, player.stops)
+    }
+
+    @Test
+    fun `the screen stays on while the message plays, and the system timeout applies again once it pauses or ends`() {
+        val player = FakeMotivationPlayer()
+        val screen = completed(WakeApp(motivationPlayer = player), motivation = message).get()
+        composeRule.waitForIdle()
+        assertTrue(screen.window.attributes.flags and KEEP_SCREEN_ON != 0, "on while it plays")
+
+        player.pause()
+        composeRule.waitForIdle()
+        assertEquals(0, screen.window.attributes.flags and KEEP_SCREEN_ON, "paused")
+
+        player.resume()
+        composeRule.waitForIdle()
+        assertTrue(screen.window.attributes.flags and KEEP_SCREEN_ON != 0, "on again")
+        player.finish()
+        composeRule.waitForIdle()
+        assertEquals(0, screen.window.attributes.flags and KEEP_SCREEN_ON, "ended")
+    }
+
+    @Test
+    fun `a message stuck playing never holds the screen, it closes after the longest message's wait`() {
+        val player = FakeMotivationPlayer()
+        val screen = completed(WakeApp(motivationPlayer = player), motivation = message).get()
+        composeRule.mainClock.autoAdvance = false
+
+        composeRule.mainClock.advanceTimeBy(WakeActivity.SUCCESS_TIMEOUT.inWholeMilliseconds + ONE_SECOND)
+        assertFalse(screen.isFinishing)
+        composeRule.mainClock.advanceTimeBy(WakeActivity.MESSAGE_WAIT.inWholeMilliseconds)
+
+        assertTrue(screen.isFinishing, "closed although the player still says playing")
+        assertNull(player.state.value, "and stopped")
+    }
+
+    @Test
+    fun `the 60 second close stops a paused message`() {
+        val player = FakeMotivationPlayer()
+        val screen = completed(WakeApp(motivationPlayer = player), motivation = message).get()
+        player.pause()
+        composeRule.mainClock.autoAdvance = false
+
+        composeRule.mainClock.advanceTimeBy(WakeActivity.SUCCESS_TIMEOUT.inWholeMilliseconds + FRAME)
+
+        assertTrue(screen.isFinishing)
+        assertNull(player.state.value)
     }
 
     /** The last haptic each view of [activity] performed (Robolectric records the last one per view). */

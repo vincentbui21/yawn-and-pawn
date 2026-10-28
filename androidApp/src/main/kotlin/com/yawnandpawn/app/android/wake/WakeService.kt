@@ -22,6 +22,7 @@ import com.yawnandpawn.app.core.alarm.orderedEntries
 import com.yawnandpawn.app.core.billing.SessionStartPriceRefresh
 import com.yawnandpawn.app.core.checks.AccessibilityState
 import com.yawnandpawn.app.core.checks.CheckAnswer
+import com.yawnandpawn.app.core.checks.CheckEntry
 import com.yawnandpawn.app.core.checks.Puzzle
 import com.yawnandpawn.app.core.config.GlobalSettingsRepository
 import com.yawnandpawn.app.core.config.PromotePendingChanges
@@ -36,8 +37,11 @@ import com.yawnandpawn.app.core.log.LogEvent
 import com.yawnandpawn.app.core.log.Logger
 import com.yawnandpawn.app.core.log.WakeStage
 import com.yawnandpawn.app.core.log.diagnostic
+import com.yawnandpawn.app.core.recording.MotivationResolver
+import com.yawnandpawn.app.core.recording.RecordingRepository
 import com.yawnandpawn.app.core.session.CheckRun
 import com.yawnandpawn.app.core.session.ConfigResolver
+import com.yawnandpawn.app.core.session.SessionConfig
 import com.yawnandpawn.app.core.session.SessionData
 import com.yawnandpawn.app.core.session.SessionEngine
 import com.yawnandpawn.app.core.session.SessionEvent
@@ -60,6 +64,7 @@ import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.async
 import kotlinx.coroutines.cancel
+import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
@@ -143,6 +148,9 @@ class WakeService :
     private val unlockSignals: UnlockSignals by inject()
     private val calls: CallDetector by inject()
     private val prices: SessionStartPriceRefresh by inject()
+
+    /** The recordings a Random motivation is picked from at the fire (Story 7.3). */
+    private val recordings: RecordingRepository by inject()
 
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate + CoroutineExceptionHandler { _, e -> onCrash(e) })
     private val commands = Mutex()
@@ -442,25 +450,13 @@ class WakeService :
                     emptyList()
                 }
             }
-        // TalkBack on at the fire: the session's Memory Sequence uses the numbered variant, frozen for its snooze re-rings too (Story 3.8).
-        val accessible = accessibility.isScreenReaderOn()
-        // The commitment lock (Story 4.4): the global settings and pending changes from one snapshot, the alarm's pending
-        // changes beside it, within 500 ms; the last-known settings when the store is slow or broken (review fix 11).
-        val fire = fireSettings.read(alarm.id)
-        val config =
-            ConfigResolver.resolve(
-                alarm,
-                checks,
-                fire.settings,
-                testMode = false,
-                scheduledAt = fired.scheduledAt,
-                accessible = accessible,
-                pendingChanges = fire.pendingChanges,
-            )
         val locked = !userLock.isUserUnlocked()
+        // Story 7.3: the session id first, as the motivation is frozen from it.
+        val sessionId = ids.newId()
+        val config = fireConfig(alarm, checks, fired.scheduledAt, sessionId, locked)
         val event =
             SessionEvent.AlarmFired(
-                sessionId = ids.newId(),
+                sessionId = sessionId,
                 config = config,
                 beforeFirstUnlock = locked,
             )
@@ -487,6 +483,38 @@ class WakeService :
             }
         }
     }
+
+    /**
+     * The frozen config of the session [sessionId] ringing [alarm] at [scheduledAt]. The commitment lock (Story 4.4): the
+     * global settings and pending changes from one snapshot, the alarm's pending changes beside it, within 500 ms; the
+     * last-known settings when the store is slow or broken (review fix 11). Beside that read, not after it (NFR-1), the
+     * motivation is frozen (Story 7.3): Random picked from the session seed, None before the first unlock ([locked]); the
+     * recordings are read for Random only, within 500 ms, and never stop the ring.
+     */
+    private suspend fun fireConfig(
+        alarm: Alarm,
+        checks: List<CheckEntry>,
+        scheduledAt: Instant,
+        sessionId: String,
+        locked: Boolean,
+    ): SessionConfig =
+        coroutineScope {
+            val motivation = async { MotivationResolver.freeze(alarm.motivation, sessionId, locked, recordings, logger) }
+            // TalkBack on at the fire: the session's Memory Sequence uses the numbered variant, frozen for its snooze re-rings
+            // too (Story 3.8).
+            val accessible = accessibility.isScreenReaderOn()
+            val fire = fireSettings.read(alarm.id)
+            ConfigResolver
+                .resolve(
+                    alarm,
+                    checks,
+                    fire.settings,
+                    testMode = false,
+                    scheduledAt = scheduledAt,
+                    accessible = accessible,
+                    pendingChanges = fire.pendingChanges,
+                ).copy(motivation = motivation.await())
+        }
 
     private fun alarmUnreadable(
         fired: AlarmFired,
@@ -520,11 +548,14 @@ class WakeService :
         // Story 5.2: "Bright wake screen" as the settings are now, from the last-known snapshot (synchronous, never the
         // store, never a throw); without one, the value stored with the test config when "Test alarm" was tapped.
         val bright = runCatching { globalSettings.lastKnown() }.getOrNull()?.settings?.brightWakeScreen ?: pending.brightWakeScreen
+        // Story 7.3: a test plays its message too, resolved as a real ring's (the session id first).
+        val sessionId = ids.newId()
+        val config = MotivationResolver.freeze(pending.copy(brightWakeScreen = bright), sessionId, locked, recordings, logger)
         val event =
             SessionEvent.TestAlarmFired(
-                sessionId = ids.newId(),
+                sessionId = sessionId,
                 // The editor's checks (Epic 3 device check, bug 1); TalkBack's numbered Memory Sequence is chosen now, as for a real ring.
-                config = ConfigResolver.withAccessibleChecks(pending.copy(brightWakeScreen = bright), accessibility.isScreenReaderOn()),
+                config = ConfigResolver.withAccessibleChecks(config, accessibility.isScreenReaderOn()),
                 beforeFirstUnlock = locked,
             )
         val started = sessionLock.startingSession { engine.dispatch(event) }

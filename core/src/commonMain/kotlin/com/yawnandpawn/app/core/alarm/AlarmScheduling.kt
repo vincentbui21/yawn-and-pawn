@@ -24,6 +24,10 @@ import kotlin.time.Instant
  *
  * [sync] and [cancel] must run while the caller holds [lock] (the alarm use cases call them inside it, right after
  * their repository write succeeded); [rescheduleAll] takes the lock itself.
+ *
+ * Story 7.11: an alarm is armed at its [nextRing] (its next occurrence, unless that one is skipped), and each system alarm
+ * change also re-syncs the alarm's pre-alarm job ([preAlarms]: save, switch, delete, [rescheduleAll] and the re-arm after
+ * a ring all come through here).
  */
 class AlarmScheduling(
     private val repository: AlarmRepository,
@@ -39,15 +43,24 @@ class AlarmScheduling(
      * a background start (boot, a time change) never re-arms the alarms being deleted. None in tests and the fallback.
      */
     private val deletionPending: StateFlow<Boolean>? = null,
+    /** The pre-alarm jobs (Story 7.11), kept in step with each alarm; none in tests and the backup fallback. */
+    private val preAlarms: PreAlarmScheduler? = null,
 ) {
     /** Arms [alarm] at its next occurrence after now when it is enabled, cancels its code when it is not. */
     fun sync(alarm: Alarm) {
         syncAfter(alarm, clock.now())
     }
 
-    /** Cancels the system alarm under [requestCode] (an alarm that was just deleted). */
-    fun cancel(requestCode: Int) {
+    /**
+     * Cancels the system alarm under [requestCode] (an alarm that was just deleted), and the pre-alarm job and notification
+     * of [alarmId] when given (Story 7.11).
+     */
+    fun cancel(
+        requestCode: Int,
+        alarmId: String? = null,
+    ) {
         scheduler.cancel(requestCode).logFailure(OPERATION_CANCEL)
+        alarmId?.let { preAlarms?.cancel(it, requestCode) }
     }
 
     /**
@@ -103,28 +116,32 @@ class AlarmScheduling(
     }
 
     /**
-     * Like [sync], but the next occurrence strictly after [after] instead of now (a repeating alarm that just fired
-     * re-arms after its own scheduled time, so a fire a little early never re-arms the same occurrence).
-     * True when the scheduler call succeeded.
+     * Like [sync], but the next ring strictly after [after] instead of now (a repeating alarm that just fired re-arms
+     * after its own scheduled time, so a fire a little early never re-arms the same occurrence). The pre-alarm job follows
+     * (Story 7.11). True when the scheduler call succeeded.
      */
     internal fun syncAfter(
         alarm: Alarm,
         after: Instant,
-    ): Boolean =
-        if (alarm.enabled) {
-            val trigger = nextOccurrence(alarm.toRule(), after, timeZoneProvider.current())
-            scheduler.schedule(alarm.id, alarm.requestCode, trigger.toEpochMilliseconds()).logFailure(OPERATION_SCHEDULE)
-        } else {
-            scheduler.cancel(alarm.requestCode).logFailure(OPERATION_CANCEL)
-        }
+    ): Boolean {
+        val synced =
+            if (alarm.enabled) {
+                val trigger = nextRing(alarm, after, timeZoneProvider.current())
+                scheduler.schedule(alarm.id, alarm.requestCode, trigger.toEpochMilliseconds()).logFailure(OPERATION_SCHEDULE)
+            } else {
+                scheduler.cancel(alarm.requestCode).logFailure(OPERATION_CANCEL)
+            }
+        preAlarms?.sync(alarm, after)
+        return synced
+    }
 
     private fun Alarm.isPassedOneTime(
         now: Instant,
         zone: TimeZone,
     ): Boolean = enabled && toRule().isOneTime && intendedOccurrence(zone) <= now
 
-    /** The occurrence this alarm was armed for when it was last saved or switched on. */
-    private fun Alarm.intendedOccurrence(zone: TimeZone): Instant = nextOccurrence(toRule(), updatedAt, zone)
+    /** The ring this alarm was armed for when it was last saved or switched on. */
+    private fun Alarm.intendedOccurrence(zone: TimeZone): Instant = nextRing(this, updatedAt, zone)
 
     /** Stores [alarm] disabled (a failed write is logged) and returns the disabled alarm, so its code is cancelled. */
     private suspend fun disablePassed(

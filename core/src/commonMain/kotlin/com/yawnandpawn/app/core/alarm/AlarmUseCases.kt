@@ -59,6 +59,8 @@ data class AlarmDraft(
     val checkMode: CheckMode = CheckMode.Random,
     /** The motivation message (Story 7.2); never a locked field. */
     val motivation: Motivation = Motivation.None,
+    /** "Offer to skip 2 h before" (Story 7.11); a locked field. */
+    val offerSkip: Boolean = false,
 )
 
 /**
@@ -96,7 +98,8 @@ class AlarmWriteLock {
  * and stored with it in one transaction ([CheckConfigRepository.saveWithAlarm]); an identical alarm has the same checks
  * in the same order too.
  *
- * **Commitment lock (Story 4.4, AD-16):** an edit's locked fields (grace window and checks) go through
+ * **Commitment lock (Story 4.4, AD-16):** an edit's locked fields (grace window, checks and, since Story 7.11, "Offer to
+ * skip") go through
  * [CommitmentRules.decide]. The alarm is locked by its stored next occurrence (when the stored alarm is on) and by its
  * new one (when the draft is on), whichever are inside the window; a weakening change waits for the latest of them. The
  * other fields are stored at once, the weakened ones keep their effective values in the row and are stored as
@@ -119,6 +122,8 @@ class SaveAlarm(
     private val pendingRepository: PendingChangeRepository,
     private val timeZoneProvider: TimeZoneProvider,
     private val onboarding: OnboardingRepository,
+    /** Story 7.11 review fix: drops Skipped rows an edit no longer skips (null where no skip exists, as in older tests). */
+    private val staleSkips: DiscardStaleSkips? = null,
 ) {
     /** [save], returning the stored alarm (its locked fields hold their effective values). */
     suspend operator fun invoke(draft: AlarmDraft): Outcome<Alarm, DomainError> = save(draft).map { it.alarm }
@@ -193,7 +198,13 @@ class SaveAlarm(
         draft: AlarmDraft,
         now: Instant,
     ): Outcome<AlarmSaved, DomainError> {
-        val edited = draft.toAlarm(stored.id, stored.requestCode, stored.createdAt).copy(updatedAt = now)
+        // Story 7.11: a skip stays with an edit of a repeating alarm that still rings that weekday (the Skipped row logs
+        // it); a one-time alarm has none, and a skipped weekday taken out of the repeat days drops it (and its row).
+        val keptSkip = stored.skippedDate?.takeIf { it.dayOfWeek in draft.repeatDays }
+        val edited =
+            draft
+                .toAlarm(stored.id, stored.requestCode, stored.createdAt)
+                .copy(updatedAt = now, skippedDate = keptSkip)
         (validate(edited) ?: validateChecks(draft.checks))?.let { return Outcome.Failure(DomainError.InvalidAlarm(it)) }
         return checkConfigRepository.forAlarm(stored.id).flatMap { rows ->
             pendingRepository.forAlarm(stored.id).flatMap { own ->
@@ -201,27 +212,25 @@ class SaveAlarm(
                 val window = LockWindow.latestOf(listOfNotNull(LockWindow.of(stored, now, zone), LockWindow.of(edited, now, zone)))
                 val mine = own.associateBy { it.field }
                 val liveEntries = rows.orderedEntries().ifEmpty { CheckConfig.DEFAULT_ENTRIES }
-                val grace =
-                    CommitmentRules.decide(
-                        stored.id,
-                        SettingValue.GraceSeconds(stored.graceSeconds),
-                        mine[LockedField.GraceSeconds],
-                        SettingValue.GraceSeconds(edited.graceSeconds),
-                        window,
-                        now,
-                    )
+                val decide = { live: SettingValue, new: SettingValue ->
+                    CommitmentRules.decide(stored.id, live, mine[live.field], new, window, now)
+                }
+                val grace = decide(SettingValue.GraceSeconds(stored.graceSeconds), SettingValue.GraceSeconds(edited.graceSeconds))
                 val checks =
-                    CommitmentRules.decide(
-                        stored.id,
+                    decide(
                         SettingValue.Checks(CheckPlan(stored.checkMode, liveEntries)),
-                        mine[LockedField.Checks],
                         SettingValue.Checks(CheckPlan(edited.checkMode, draft.checks)),
-                        window,
-                        now,
                     )
+                // Story 7.11: "Offer to skip" on weakens, off strengthens.
+                val offerSkip = decide(SettingValue.OfferSkip(stored.offerSkip), SettingValue.OfferSkip(edited.offerSkip))
                 // A code registered in this edit is never held back (a new sticker is not a weaker plan).
                 val plan = (checks.live as SettingValue.Checks).plan.withCodesFrom(draft.checks)
-                val row = edited.copy(graceSeconds = (grace.live as SettingValue.GraceSeconds).seconds, checkMode = plan.mode)
+                val row =
+                    edited.copy(
+                        graceSeconds = (grace.live as SettingValue.GraceSeconds).seconds,
+                        checkMode = plan.mode,
+                        offerSkip = (offerSkip.live as SettingValue.OfferSkip).on,
+                    )
                 // Review fix 3: a change applied now drops its pending change before the row is written, so a failure between
                 // never leaves a weaker pending value to undo it later; a deferred change is put after the row. The row is
                 // armed as soon as it is stored: a failed pending write must never leave the alarm armed at its old time.
@@ -230,10 +239,18 @@ class SaveAlarm(
                 moveGlobalWaits(stored.id, edited, now, zone)
                     .flatMap { clearApplied(grace, mine) }
                     .flatMap { clearApplied(checks, mine) }
+                    .flatMap { clearApplied(offerSkip, mine) }
                     .flatMap { storeWithChecks(checkConfigRepository, row, plan.entries, now) }
                     .onSuccess(scheduling::sync)
-                    .flatMap { alarm -> putDeferred(grace, mine).flatMap { putDeferred(checks, mine) }.map { alarm } }
-                    .map { alarm -> AlarmSaved(alarm, LockWindow.latestOf(listOf(grace, checks).mapNotNull { it.pendingUntil() })) }
+                    .onSuccess { withContext(NonCancellable) { staleSkips?.after(stored, it, now) } }
+                    .flatMap { alarm ->
+                        listOf(grace, checks, offerSkip)
+                            .fold<LockDecision, Outcome<Unit, DomainError>>(Outcome.Success(Unit)) { done, decision ->
+                                done.flatMap { putDeferred(decision, mine) }
+                            }.map { alarm }
+                    }.map { alarm ->
+                        AlarmSaved(alarm, LockWindow.latestOf(listOf(grace, checks, offerSkip).mapNotNull { it.pendingUntil() }))
+                    }
             }
         }
     }
@@ -316,7 +333,11 @@ class SaveAlarm(
         now: Instant,
     ): Outcome<Alarm, DomainError> {
         val on = alarm.copy(enabled = true, updatedAt = now)
-        return repository.upsert(on).map { on }.onSuccess(scheduling::sync)
+        return repository
+            .upsert(on)
+            .map { on }
+            .onSuccess(scheduling::sync)
+            .onSuccess { withContext(NonCancellable) { staleSkips?.after(alarm, it, now) } }
     }
 
     private fun AlarmDraft.toAlarm(
@@ -342,6 +363,7 @@ class SaveAlarm(
         updatedAt = createdAt,
         checkMode = checkMode,
         motivation = motivation,
+        offerSkip = offerSkip,
     )
 }
 
@@ -363,6 +385,8 @@ class SetAlarmEnabled(
     private val sessionLock: SessionLockGuard,
     private val commitments: CommitmentLog,
     private val logger: Logger,
+    /** Story 7.11 review fix: a skipped one-time alarm switched back on drops its Skipped row (it rings that morning). */
+    private val staleSkips: DiscardStaleSkips? = null,
 ) {
     suspend operator fun invoke(
         id: String,
@@ -378,6 +402,7 @@ class SetAlarmEnabled(
                             .upsert(changed)
                             .map { changed }
                             .onSuccess(scheduling::sync)
+                            .onSuccess { staleSkips?.after(stored, it, now) }
                             .onSuccess { if (!enabled) recordCommitment(commitments, logger, stored, CommitmentAction.Disabled, now) }
                     }
                 }
@@ -409,7 +434,7 @@ class DeleteAlarm(
                 withContext(NonCancellable) {
                     repository.get(id).flatMap { stored ->
                         checkConfigRepository.deleteWithAlarm(id).onSuccess {
-                            scheduling.cancel(stored.requestCode)
+                            scheduling.cancel(stored.requestCode, stored.id)
                             val now = clock.nowMillis()
                             logger.log(LogEvent.AlarmDeleted(id, now))
                             recordCommitment(commitments, logger, stored, CommitmentAction.Deleted, now)
@@ -445,7 +470,14 @@ class DuplicateAlarm(
                         checkConfigRepository.forAlarm(id).flatMap { configs ->
                             requestCodes.next().flatMap { code ->
                                 val now = clock.nowMillis()
-                                val copy = stored.copy(id = idGenerator.newId(), requestCode = code, createdAt = now, updatedAt = now)
+                                val copy =
+                                    stored.copy(
+                                        id = idGenerator.newId(),
+                                        requestCode = code,
+                                        createdAt = now,
+                                        updatedAt = now,
+                                        skippedDate = null,
+                                    )
                                 // An alarm stored without rows rings the default checks, so its copy gets them.
                                 val checks = configs.orderedEntries().ifEmpty { CheckConfig.DEFAULT_ENTRIES }
                                 storeWithChecks(checkConfigRepository, copy, checks, now)

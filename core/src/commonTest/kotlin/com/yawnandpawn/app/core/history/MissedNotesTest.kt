@@ -25,6 +25,11 @@ class MissedNotesTest {
 
                 override fun observeLatestMissed(): Flow<SessionHistoryRow?> = latest
 
+                override suspend fun deleteSkipped(
+                    alarmId: String,
+                    scheduledAt: Instant,
+                ): Outcome<Unit, DomainError> = error("never written here")
+
                 override fun observeAll(): Flow<List<SessionHistoryRow>> = emptyFlow()
 
                 override suspend fun recordMerge(merge: SessionMergeRow): Outcome<Unit, DomainError> = error("never written here")

@@ -96,14 +96,14 @@ class SaveGlobalSetting(
         when (value) {
             is SettingValue.BaseFeeTier -> settingsRepository.setBaseFeeTier(value.tier)
             is SettingValue.MaxSnoozes -> settingsRepository.setMaxSnoozes(value.count)
-            is SettingValue.GraceSeconds, is SettingValue.Checks -> Outcome.Success(Unit)
+            is SettingValue.GraceSeconds, is SettingValue.Checks, is SettingValue.OfferSkip -> Outcome.Success(Unit)
         }
 
     private fun invalidField(value: SettingValue): SettingField? =
         when (value) {
             is SettingValue.BaseFeeTier -> SettingField.BaseFee.takeUnless { value.tier in BASE_FEE_TIERS }
             is SettingValue.MaxSnoozes -> SettingField.MaxSnoozes.takeUnless { value.count in MAX_SNOOZES }
-            is SettingValue.GraceSeconds, is SettingValue.Checks -> null
+            is SettingValue.GraceSeconds, is SettingValue.Checks, is SettingValue.OfferSkip -> null
         }
 
     companion object {

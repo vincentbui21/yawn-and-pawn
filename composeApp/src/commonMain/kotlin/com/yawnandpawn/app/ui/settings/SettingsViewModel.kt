@@ -384,7 +384,7 @@ class SettingsViewModel(
                     when (value) {
                         is SettingValue.BaseFeeTier -> setBaseFee(value.tier)
                         is SettingValue.MaxSnoozes -> setMaxSnoozes(value.count)
-                        is SettingValue.GraceSeconds, is SettingValue.Checks -> return
+                        is SettingValue.GraceSeconds, is SettingValue.Checks, is SettingValue.OfferSkip -> return
                     }
                 if (result is Outcome.Failure) logger.log(LogEvent.OperationFailed.of(SAVE_SETTING, result.error))
                 local.update { it.settled(value, saved = result is Outcome.Success) }
@@ -522,7 +522,7 @@ class SettingsViewModel(
             when (value) {
                 is SettingValue.BaseFeeTier -> copy(fee = fee.settled(value.tier, saved))
                 is SettingValue.MaxSnoozes -> copy(max = max.settled(value.count, saved))
-                is SettingValue.GraceSeconds, is SettingValue.Checks -> this
+                is SettingValue.GraceSeconds, is SettingValue.Checks, is SettingValue.OfferSkip -> this
             }
 
         /** [request]'s save is over: as for [settled], with a newer request of its field told apart by its id. */

@@ -294,6 +294,13 @@ internal class MemoryWork : BackgroundWork {
     ): Outcome<Unit, DomainError> = Outcome.Success(Unit)
 
     override fun cancelWeeklySummary(): Outcome<Unit, DomainError> = Outcome.Success(Unit)
+
+    override fun schedulePreAlarm(
+        alarmId: String,
+        delay: Duration,
+    ): Outcome<Unit, DomainError> = Outcome.Success(Unit)
+
+    override fun cancelPreAlarm(alarmId: String): Outcome<Unit, DomainError> = Outcome.Success(Unit)
 }
 
 internal val TOKEN_1 = PurchaseToken("play-token-1-secret")

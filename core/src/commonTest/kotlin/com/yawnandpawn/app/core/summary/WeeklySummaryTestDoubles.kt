@@ -70,6 +70,13 @@ internal class WeeklyWork : BackgroundWork {
 
     override fun cancelWeeklySummary(): Outcome<Unit, DomainError> = record(WorkCall.Cancel)
 
+    override fun schedulePreAlarm(
+        alarmId: String,
+        delay: Duration,
+    ): Outcome<Unit, DomainError> = Outcome.Success(Unit)
+
+    override fun cancelPreAlarm(alarmId: String): Outcome<Unit, DomainError> = Outcome.Success(Unit)
+
     private fun record(call: WorkCall): Outcome<Unit, DomainError> {
         during()
         failure?.let { return Outcome.Failure(it) }
@@ -169,6 +176,11 @@ internal class History(
     override suspend fun find(sessionId: String): Outcome<SessionHistoryRow?, DomainError> = error("a read only")
 
     override fun observeLatestMissed(): Flow<SessionHistoryRow?> = emptyFlow()
+
+    override suspend fun deleteSkipped(
+        alarmId: String,
+        scheduledAt: Instant,
+    ): Outcome<Unit, DomainError> = Outcome.Success(Unit)
 
     override fun observeAll(): Flow<List<SessionHistoryRow>> = emptyFlow()
 

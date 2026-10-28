@@ -9,7 +9,8 @@ import kotlin.test.assertTrue
  * AD-18: session history has one writer. Scans the shipped sources (main source sets, plus the debug build's) of
  * `:core`, `:data`, `:androidApp` and `:composeApp`: only `RoomSessionHistoryRepository` may use the session history
  * DAO's write methods (also the deletes of "Delete all data", Story 5.9), and only `SessionRecorder` may call
- * `SessionHistoryRepository.upsert` or `recordMerge` (the merge log, Story 2.9). Files are exempt by their path from the
+ * `SessionHistoryRepository.upsert`, `recordMerge` (the merge log, Story 2.9) or `deleteSkipped` ("Don't skip", Story
+ * 7.11). Files are exempt by their path from the
  * repository root, never by bare file name. A text scan: an upsert counts when its receiver is a name
  * declared as (or fetched as) a `SessionHistoryRepository` in that file, or it is a `SessionHistoryRepository::upsert`
  * reference.
@@ -37,14 +38,16 @@ class SessionHistoryWriterScanTest {
     @Test
     fun `the scan sees every module and the real writers, so it cannot pass by finding nothing`() {
         MODULES.forEach { module -> assertTrue(sources.any { it.path.startsWith("$module/src/") }, "no sources scanned in $module") }
-        // "Delete all data" (Story 5.9) adds the two deletes, used only by the Room repository (in one transaction).
-        assertEquals(setOf("upsertRow", "insertMerge", "deleteAllRows", "deleteAllMerges"), daoWrites)
+        // "Delete all data" (Story 5.9) adds the two deletes, used only by the Room repository (in one transaction);
+        // "Don't skip" (Story 7.11) the delete of one Skipped row.
+        assertEquals(setOf("upsertRow", "insertMerge", "deleteSkippedRow", "deleteAllRows", "deleteAllMerges"), daoWrites)
         // Without their exemptions, the two real writers are exactly what the scan reports.
         assertEquals(
             listOf(
                 "$RECORDER_PATH calls SessionHistoryRepository.upsert",
                 "$REPOSITORY_PATH calls upsertRow",
                 "$REPOSITORY_PATH calls insertMerge",
+                "$REPOSITORY_PATH calls deleteSkippedRow",
             ),
             offenders(listOf(source(RECORDER_PATH), source(REPOSITORY_PATH)), daoWrites, exempt = emptySet()),
         )
@@ -65,6 +68,8 @@ class SessionHistoryWriterScanTest {
                 ),
                 // Story 2.9: the merge log has the same single writer.
                 Source("core/h/Merges.kt", "suspend fun m(history: SessionHistoryRepository) = history.recordMerge(merge)"),
+                // Story 7.11: so has the delete of a Skipped row.
+                Source("core/j/Undo.kt", "suspend fun u(history: SessionHistoryRepository) = history.deleteSkipped(id, at)"),
                 Source("data/i/MergeDao.kt", "suspend fun n(dao: SessionHistoryDao) = dao.insertMerge(entity)"),
                 // Not a history write: an alarm upsert in a file that also names a history row.
                 Source("core/g/Alarms.kt", "suspend fun k(alarms: AlarmRepository, row: SessionHistoryRow) = alarms.upsert(alarm)"),
@@ -79,6 +84,7 @@ class SessionHistoryWriterScanTest {
                 "data/e/Dao.kt calls upsertRow",
                 "core/f/SessionRecorder.kt calls SessionHistoryRepository.upsert",
                 "core/h/Merges.kt calls SessionHistoryRepository.upsert",
+                "core/j/Undo.kt calls SessionHistoryRepository.upsert",
                 "data/i/MergeDao.kt calls insertMerge",
             ),
             offenders(rogue, setOf("upsertRow", "insertMerge")),
@@ -134,8 +140,8 @@ class SessionHistoryWriterScanTest {
         /** Upserts that need no declared name: a fetched instance or a function reference. */
         val DIRECT_UPSERT = Regex("""<$REPOSITORY>\(\)\s*\??\.\s*$WRITES\b|\b$REPOSITORY::$WRITES\b""")
 
-        /** The repository writes: the history row (Story 1.13) and the merge log (Story 2.9). */
-        const val WRITES = "(?:upsert|recordMerge)"
+        /** The repository writes: the history row (Story 1.13), the merge log (Story 2.9) and a Skipped row's delete (7.11). */
+        const val WRITES = "(?:upsert|recordMerge|deleteSkipped)"
 
         /** Main source sets, and the debug build's, ship; test source sets do not. */
         fun isShipped(sourceSet: String): Boolean = sourceSet == "main" || sourceSet == "debug" || sourceSet.endsWith("Main")

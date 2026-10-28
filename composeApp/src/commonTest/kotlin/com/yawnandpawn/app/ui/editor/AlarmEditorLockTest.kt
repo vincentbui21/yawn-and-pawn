@@ -33,6 +33,7 @@ import com.yawnandpawn.app.testing.aPriceSnapshot
 import com.yawnandpawn.app.ui.checks.CheckType
 import com.yawnandpawn.app.ui.checks.Difficulty
 import com.yawnandpawn.app.ui.checksetup.CheckSetupIntent
+import com.yawnandpawn.app.ui.format.Countdown
 import com.yawnandpawn.app.ui.home.AlarmActions
 import com.yawnandpawn.app.ui.settings.WeakeningNote
 import com.yawnandpawn.app.ui.settings.weakeningNoteOf
@@ -334,6 +335,86 @@ class AlarmEditorLockTest {
         }
 
     // Fee ladder ---------------------------------------------------------------------------------------------------
+
+    // Offer to skip 2 h before (Story 7.11) -------------------------------------------------------------------------
+
+    @Test
+    fun `the app's editor shows the Offer to skip switch, off for a new alarm`() =
+        runTest(dispatcher) {
+            val viewModel = viewModel(alarmId = null)
+
+            assertTrue(
+                viewModel.state.value.full!!
+                    .showOfferSkip,
+            )
+            assertFalse(viewModel.state.value.form.offerSkip)
+        }
+
+    @Test
+    fun `turning Offer to skip on within 8 h saves it pending, with the note, and closes with the note for Home`() =
+        runTest(dispatcher) {
+            storeAlarm()
+            val viewModel = viewModel()
+            val effects = effectsOf(viewModel)
+
+            viewModel.onIntent(EditorIntent.OfferSkipToggled(true))
+            viewModel.onIntent(EditorIntent.SaveClicked)
+
+            assertEquals(listOf(PendingChange(id, SettingValue.OfferSkip(true), Occurrence(id, sevenThirty))), pending.current)
+            assertFalse((alarms.repository.get(id) as Outcome.Success).value.offerSkip, "the row keeps the live value")
+            assertEquals(listOf<EditorEffect>(EditorEffect.CloseSavedUnderLock(WeakeningNote(LocalTime(7, 30)))), effects)
+        }
+
+    @Test
+    fun `a pending Offer to skip opens switched on with the note under the cards`() =
+        runTest(dispatcher) {
+            storeAlarm()
+            pending.put(PendingChange(id, SettingValue.OfferSkip(true), Occurrence(id, sevenThirty)))
+            val viewModel = viewModel()
+
+            assertTrue(viewModel.state.value.form.offerSkip)
+            assertEquals(
+                WeakeningNote(LocalTime(7, 30), today = false),
+                viewModel.state.value.full
+                    ?.weakeningNote,
+            )
+
+            viewModel.onIntent(EditorIntent.OfferSkipToggled(false))
+            assertNull(
+                viewModel.state.value.full
+                    ?.weakeningNote,
+            )
+        }
+
+    @Test
+    fun `turning Offer to skip off applies at once`() =
+        runTest(dispatcher) {
+            assertTrue(alarms.save(draft.copy(offerSkip = true)) is Outcome.Success)
+            clock.set(lateEvening)
+            val viewModel = viewModel()
+            val effects = effectsOf(viewModel)
+            assertTrue(viewModel.state.value.form.offerSkip)
+
+            viewModel.onIntent(EditorIntent.OfferSkipToggled(false))
+            viewModel.onIntent(EditorIntent.SaveClicked)
+
+            assertFalse((alarms.repository.get(id) as Outcome.Success).value.offerSkip)
+            assertTrue(pending.current.isEmpty())
+            assertEquals(listOf<EditorEffect>(EditorEffect.Close), effects)
+        }
+
+    @Test
+    fun `the header's Rings in passes over a skipped next ring`() =
+        runTest(dispatcher) {
+            assertTrue(alarms.save(draft.copy(offerSkip = true)) is Outcome.Success)
+            clock.set(lateEvening)
+            assertTrue(alarms.skip(id) is Outcome.Success)
+
+            // 23:40 Monday: Tuesday's 07:30 is skipped, so Wednesday's is in 31 h 50 min.
+            assertEquals(Countdown.DaysHours(1, 7), viewModel().state.value.ringsIn)
+            // A duplicate is a new alarm: no skip.
+            assertEquals(Countdown.HoursMinutes(7, 50), viewModel(alarmId = null, copyOf = id).state.value.ringsIn)
+        }
 
     @Test
     fun `the Snooze sub-screen shows the fee ladder in Play's prices`() =

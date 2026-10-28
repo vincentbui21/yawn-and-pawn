@@ -144,7 +144,9 @@ class FakePriceCatalog(
 
 /**
  * [BackgroundWork] that keeps every enqueued job in [enqueued]; set [failure] to refuse them. The weekly summary calls
- * (Story 6.8) are kept apart, in [weeklySchedules] and [weeklyCancels]; set [failWeekly] to refuse those.
+ * (Story 6.8) are kept apart, in [weeklySchedules] and [weeklyCancels]; set [failWeekly] to refuse those. The pre-alarm
+ * jobs (Story 7.11) are kept apart too: [preAlarms] holds each alarm's pending delay (a schedule replaces it, a cancel
+ * removes it), [preAlarmCalls] every call in order; set [failPreAlarm] to refuse them.
  */
 class FakeBackgroundWork : BackgroundWork {
     private val recorded = mutableListOf<BackgroundJob>()
@@ -188,4 +190,47 @@ class FakeBackgroundWork : BackgroundWork {
         cancels.update { it + 1 }
         return Outcome.Success(Unit)
     }
+
+    private val pendingPreAlarms = MutableStateFlow<Map<String, Duration>>(emptyMap())
+    private val preAlarmLog = MutableStateFlow<List<PreAlarmCall>>(emptyList())
+
+    /** Set to refuse the pre-alarm calls (Story 7.11), as the adapter does before the first unlock. */
+    var failPreAlarm: DomainError? = null
+
+    /** The pending pre-alarm job of each alarm id, with its delay (REPLACE: the latest schedule wins). */
+    val preAlarms: Map<String, Duration>
+        get() = pendingPreAlarms.value
+
+    /** Every pre-alarm call, oldest first. */
+    val preAlarmCalls: List<PreAlarmCall>
+        get() = preAlarmLog.value
+
+    override fun schedulePreAlarm(
+        alarmId: String,
+        delay: Duration,
+    ): Outcome<Unit, DomainError> {
+        failPreAlarm?.let { return Outcome.Failure(it) }
+        pendingPreAlarms.update { it + (alarmId to delay.coerceAtLeast(Duration.ZERO)) }
+        preAlarmLog.update { it + PreAlarmCall.Schedule(alarmId, delay) }
+        return Outcome.Success(Unit)
+    }
+
+    override fun cancelPreAlarm(alarmId: String): Outcome<Unit, DomainError> {
+        failPreAlarm?.let { return Outcome.Failure(it) }
+        pendingPreAlarms.update { it - alarmId }
+        preAlarmLog.update { it + PreAlarmCall.Cancel(alarmId) }
+        return Outcome.Success(Unit)
+    }
+}
+
+/** One pre-alarm call on [FakeBackgroundWork] (Story 7.11). */
+sealed interface PreAlarmCall {
+    data class Schedule(
+        val alarmId: String,
+        val delay: Duration,
+    ) : PreAlarmCall
+
+    data class Cancel(
+        val alarmId: String,
+    ) : PreAlarmCall
 }

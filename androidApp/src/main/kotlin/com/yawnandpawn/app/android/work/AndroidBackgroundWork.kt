@@ -21,6 +21,7 @@ import com.yawnandpawn.app.core.session.UserLockState
 import com.yawnandpawn.app.core.work.BackgroundJob
 import com.yawnandpawn.app.core.work.BackgroundTaskKind
 import com.yawnandpawn.app.core.work.BackgroundWork
+import com.yawnandpawn.app.core.work.PreAlarmJobs
 import com.yawnandpawn.app.core.work.SchedulePolicy
 import com.yawnandpawn.app.core.work.WeeklySummaryJobs
 import java.util.concurrent.ExecutionException
@@ -42,6 +43,10 @@ import kotlin.time.Duration
  * The weekly summary (Story 6.8) is one-time unique work [WeeklySummaryJobs.NAME] with an initial delay and no network
  * constraint, handed over with the caller's [SchedulePolicy] (REPLACE, KEEP or APPEND_OR_REPLACE) and cancelled by
  * name, under the same lock guard and failure boundary as [enqueue].
+ *
+ * Each alarm's pre-alarm notification (Story 7.11) is one-time unique work [PreAlarmJobs.nameOf] (`pre-alarm-{alarmId}`)
+ * with the alarm id as input ([BackgroundTaskWorker.KEY_ALARM_ID]), an initial delay, no network constraint and
+ * REPLACE, cancelled by name, under the same guards.
  */
 class AndroidBackgroundWork(
     private val context: Context,
@@ -76,6 +81,30 @@ class AndroidBackgroundWork(
 
     override fun cancelWeeklySummary(): Outcome<Unit, DomainError> =
         guarded(WeeklySummaryJobs.NAME) { watch(workManager().cancelUniqueWork(WeeklySummaryJobs.NAME).result, WeeklySummaryJobs.NAME) }
+
+    override fun schedulePreAlarm(
+        alarmId: String,
+        delay: Duration,
+    ): Outcome<Unit, DomainError> =
+        guarded(PreAlarmJobs.nameOf(alarmId)) {
+            val request =
+                OneTimeWorkRequestBuilder<BackgroundTaskWorker>()
+                    .setInitialDelay(delay.coerceAtLeast(Duration.ZERO).inWholeMilliseconds, TimeUnit.MILLISECONDS)
+                    .setInputData(
+                        workDataOf(
+                            BackgroundTaskWorker.KEY_TASK to BackgroundTaskKind.PreAlarm.name,
+                            BackgroundTaskWorker.KEY_ALARM_ID to alarmId,
+                        ),
+                    ).addTag(TAG)
+                    .build()
+            val name = PreAlarmJobs.nameOf(alarmId)
+            watch(workManager().enqueueUniqueWork(name, ExistingWorkPolicy.REPLACE, request).result, name)
+        }
+
+    override fun cancelPreAlarm(alarmId: String): Outcome<Unit, DomainError> {
+        val name = PreAlarmJobs.nameOf(alarmId)
+        return guarded(name) { watch(workManager().cancelUniqueWork(name).result, name) }
+    }
 
     /** A `weekly-summary` work waits to run (ENQUEUED, or BLOCKED behind the running one). */
     private fun successorPending(): Boolean =

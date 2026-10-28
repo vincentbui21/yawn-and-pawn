@@ -7,6 +7,7 @@ import com.yawnandpawn.app.ui.editor.EditorFeeSources
 import com.yawnandpawn.app.ui.home.AlarmActions
 import com.yawnandpawn.app.ui.home.HomeViewModel
 import com.yawnandpawn.app.ui.nav.AppOpenRequests
+import com.yawnandpawn.app.ui.nav.SkipRequests
 import com.yawnandpawn.app.ui.onboarding.ChecklistScreens
 import com.yawnandpawn.app.ui.onboarding.FirstAlarmEditors
 import com.yawnandpawn.app.ui.onboarding.FirstAlarmSources
@@ -36,13 +37,16 @@ import org.koin.dsl.module
  * `SoundLibrary`, `SoundPreview`, `ExternalLinks`, `AppLinks`, `DeviceInfoSource`, `ManufacturerSettings`,
  * `ConfirmMakerGuidance`, `ConsentStore`, `SetAnalyticsConsent`, `EvaluateReliability`, `ReliabilitySettings`,
  * `CameraPermission`, `RecordingRepository`, `ScheduleTestAlarm`, `OnboardingRepository`, `ReliabilityRecords`, the onboarding use cases,
- * `OnboardingTestNote`, `ObserveProgress`, `WeeklySummaryStore` and `SetWeeklySummary`) are bound by :androidApp and :data.
+ * `OnboardingTestNote`, `ObserveProgress`, `WeeklySummaryStore`, `SetWeeklySummary`, `SkipNextAlarm` and `UndoSkip`)
+ * are bound by :androidApp and :data.
  */
 val uiModule =
     module {
         // Story 6.8: the tab a notification asks the app to open (the weekly summary opens Progress), one per app.
         single { AppOpenRequests() }
-        factory { AlarmActions(get(), get(), get()) }
+        // Story 7.11: the alarm a pre-alarm notification's "Skip this one" asks to skip, one per app.
+        single { SkipRequests() }
+        factory { AlarmActions(get(), get(), get(), skipNext = get(), undoSkip = get()) }
         // Story 5.12: Home's note after "Skip for now" on onboarding's test alarm. Story 6.3: the hero's stats.
         viewModel { HomeViewModel(get(), get(), get(), get(), get(), get(), get(), get(), testNote = get(), progress = get()) }
         viewModel { PurchaseHistoryViewModel(get(), get(), get(), get(), get()) }

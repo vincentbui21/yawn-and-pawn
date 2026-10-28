@@ -12,9 +12,10 @@ import kotlin.time.Instant
 /**
  * The only writer of session history (AD-18): one row per session id, upserted, so a repeated write is safe.
  * `SessionEngine` drives it: [recordStart] for the one-shot `RecordSessionStart`, [recordEnd] for the entry effect
- * `HistoryWriteRequested` of Completed and Missed, [recordMerge] for `RecordMergedOccurrence` (Story 2.9). Nothing else
- * calls [SessionHistoryRepository.upsert] or [SessionHistoryRepository.recordMerge] (a writer scan
- * test enforces it). Failures come back as values; the engine logs them and retries the end write later.
+ * `HistoryWriteRequested` of Completed and Missed, [recordMerge] for `RecordMergedOccurrence` (Story 2.9). The skip use
+ * cases (Story 7.11) drive [recordSkip] and [discardSkip]. Nothing else calls [SessionHistoryRepository.upsert],
+ * [SessionHistoryRepository.recordMerge] or [SessionHistoryRepository.deleteSkipped] (a writer scan test enforces it).
+ * Failures come back as values; the engine logs them and retries the end write later.
  */
 class SessionRecorder(
     private val repository: SessionHistoryRepository,
@@ -99,6 +100,39 @@ class SessionRecorder(
                 ),
             )
         }
+
+    /**
+     * The [SessionOutcome.Skipped] row of a skipped occurrence (Story 7.11): session [sessionId] of the alarm [alarmId],
+     * [scheduledAt] the occurrence, no first ring, [skippedAt] as its end, and no snooze, check or fallback data. It
+     * never counts toward rates or streaks (`isCounted`).
+     */
+    suspend fun recordSkip(
+        sessionId: String,
+        alarmId: String,
+        scheduledAt: Instant,
+        skippedAt: Instant,
+    ): Outcome<Unit, DomainError> =
+        repository.upsert(
+            SessionHistoryRow(
+                sessionId = sessionId,
+                alarmId = alarmId,
+                scheduledAt = scheduledAt,
+                firstRingAt = null,
+                endedAt = skippedAt,
+                snoozeCount = 0,
+                checkTypes = emptyList(),
+                timeToCompleteMs = null,
+                fallbackUsed = false,
+                directBoot = false,
+                outcome = SessionOutcome.Skipped,
+            ),
+        )
+
+    /** Removes the Skipped row of the alarm [alarmId]'s occurrence at [scheduledAt] ("Don't skip", Story 7.11). */
+    suspend fun discardSkip(
+        alarmId: String,
+        scheduledAt: Instant,
+    ): Outcome<Unit, DomainError> = repository.deleteSkipped(alarmId, scheduledAt)
 
     private fun rowOf(
         session: SessionData,

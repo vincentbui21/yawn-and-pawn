@@ -91,6 +91,21 @@ class FakeSessionHistoryRepository :
         return Outcome.Success(mergeRows.values.filter { it.sessionId == sessionId })
     }
 
+    /** Set to make [deleteSkipped] fail (Story 7.11; nothing changes). */
+    var deleteSkippedFailure: DomainError? = null
+
+    /** Like the Room query: removes the Skipped rows of [alarmId] at exactly [scheduledAt]. */
+    override suspend fun deleteSkipped(
+        alarmId: String,
+        scheduledAt: Instant,
+    ): Outcome<Unit, DomainError> {
+        deleteSkippedFailure?.let { return Outcome.Failure(it) }
+        val gone = stored.values.filter { it.alarmId == alarmId && it.scheduledAt == scheduledAt && it.outcome == SessionOutcome.Skipped }
+        gone.forEach { stored.remove(it.sessionId) }
+        if (gone.isNotEmpty()) changes.update { it + 1 }
+        return Outcome.Success(Unit)
+    }
+
     /** Set to make [all] fail (Story 6.4). */
     var failAll: DomainError? = null
 
@@ -122,7 +137,7 @@ class FakeSessionHistoryRepository :
     override fun observeFallbacks(): Flow<List<SessionHistoryRow>> =
         changes.map {
             observeFailure?.let { throw it }
-            stored.values.filter { it.fallbackUsed && it.fallbackFrom != null }.sortedByDescending { it.firstRingAt }
+            stored.values.filter { it.fallbackUsed && it.fallbackFrom != null }.sortedByDescending { it.firstRingAt ?: it.scheduledAt }
         }
 
     /** Like the Room query: every row, oldest scheduled time first, then by session id, again after every change. */

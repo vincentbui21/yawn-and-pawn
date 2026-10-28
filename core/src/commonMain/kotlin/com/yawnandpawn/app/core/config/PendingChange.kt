@@ -13,9 +13,10 @@ import kotlin.time.Duration.Companion.minutes
 import kotlin.time.Instant
 
 /**
- * The settings the commitment lock covers (PRD §6.2 lists only fee, checks, grace and snoozes): [BaseFee] and
- * [MaxSnoozes] are global, [GraceSeconds] and [Checks] belong to an alarm. Snooze length, sound, volume, label and repeat
- * days are never locked. The names are stored (`pending_change.field`), so they never change.
+ * The settings the commitment lock covers (PRD §6.2 lists fee, checks, grace and snoozes; Epic 7 adds "Offer to skip"):
+ * [BaseFee] and [MaxSnoozes] are global, [GraceSeconds], [Checks] and [OfferSkip] belong to an alarm. Snooze length,
+ * sound, volume, label and repeat days are never locked. The names are stored (`pending_change.field`), so they never
+ * change.
  */
 enum class LockedField(
     val global: Boolean,
@@ -24,6 +25,9 @@ enum class LockedField(
     MaxSnoozes(global = true),
     GraceSeconds(global = false),
     Checks(global = false),
+
+    /** "Offer to skip 2 h before" (Story 7.11): turning it on weakens. */
+    OfferSkip(global = false),
 }
 
 /** A value of one [LockedField], stored as JSON ([PendingChangeJson]); the serial names never change. */
@@ -65,6 +69,15 @@ sealed interface SettingValue {
         val plan: CheckPlan,
     ) : SettingValue {
         override val field: LockedField get() = LockedField.Checks
+    }
+
+    /** An alarm's "Offer to skip 2 h before" (Story 7.11). */
+    @Serializable
+    @SerialName("OfferSkip")
+    data class OfferSkip(
+        val on: Boolean,
+    ) : SettingValue {
+        override val field: LockedField get() = LockedField.OfferSkip
     }
 }
 

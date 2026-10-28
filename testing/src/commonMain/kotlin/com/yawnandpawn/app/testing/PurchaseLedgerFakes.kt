@@ -170,6 +170,13 @@ class RecordingBackgroundWork : BackgroundWork {
         cancels.update { it + 1 }
         return Outcome.Success(Unit)
     }
+
+    override fun schedulePreAlarm(
+        alarmId: String,
+        delay: Duration,
+    ): Outcome<Unit, DomainError> = Outcome.Success(Unit)
+
+    override fun cancelPreAlarm(alarmId: String): Outcome<Unit, DomainError> = Outcome.Success(Unit)
 }
 
 /** A grant ledger row: snooze 1 of [sessionId] for [productId], granted at [createdAt]. */

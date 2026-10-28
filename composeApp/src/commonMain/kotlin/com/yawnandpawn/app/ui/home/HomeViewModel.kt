@@ -7,8 +7,11 @@ import com.yawnandpawn.app.core.alarm.AlarmListOrder
 import com.yawnandpawn.app.core.alarm.AlarmWithChecks
 import com.yawnandpawn.app.core.alarm.CheckConfig
 import com.yawnandpawn.app.core.alarm.CheckConfigRepository
+import com.yawnandpawn.app.core.alarm.SkipResult
 import com.yawnandpawn.app.core.alarm.durationUntil
+import com.yawnandpawn.app.core.alarm.isNextOccurrenceSkipped
 import com.yawnandpawn.app.core.alarm.nextOccurrence
+import com.yawnandpawn.app.core.alarm.nextRing
 import com.yawnandpawn.app.core.alarm.orderedEntries
 import com.yawnandpawn.app.core.config.LockWindow
 import com.yawnandpawn.app.core.error.DomainError
@@ -55,6 +58,7 @@ import kotlinx.coroutines.flow.retryWhen
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import kotlinx.datetime.TimeZone
 import kotlinx.datetime.toLocalDateTime
 import kotlin.coroutines.CoroutineContext
 import kotlin.time.Duration
@@ -85,6 +89,12 @@ import com.yawnandpawn.app.ui.checks.CheckType as UiCheckType
  * `card-hero` (Story 6.3) shows [progress]'s current streak and this week's money once Home has an alarm or a history
  * row; the snapshot is recomputed on either table, a new local date or zone (a time signal) and each resume. While it
  * loads, or after a failed read (logged, then read again with the missed note's growing pause), there is no hero.
+ *
+ * Story 7.11: the countdown targets each alarm's next ring (`nextRing`: a skipped occurrence is passed over), and a card
+ * whose next occurrence is skipped says "Next ring skipped" with "Don't skip" (which undoes the skip). A pre-alarm
+ * notification's "Skip this one" arrives as [HomeIntent.SkipRequested]: "Skip your {time} alarm? This is logged." for an
+ * enabled alarm, then "Skip" skips it and shows "Skipped. No charge."; a skip that cannot be stored is logged, with no
+ * snackbar.
  */
 @Suppress("TooManyFunctions") // One small handler per Home action (toggle, turn-off dialog, delete, banners, snackbars).
 class HomeViewModel(
@@ -245,7 +255,7 @@ class HomeViewModel(
 
             HomeIntent.RetryLoad -> {
                 // A dialog left open when the list failed must not come back by itself.
-                local.update { it.copy(deleteDialog = null, disableDialog = null) }
+                local.update { it.copy(deleteDialog = null, disableDialog = null, skipDialog = null) }
                 loads.update { it + 1 }
             }
 
@@ -266,6 +276,84 @@ class HomeViewModel(
             else -> {
                 if (!onLockIntent(intent)) onReliabilityIntent(intent)
             }
+        }
+    }
+
+    /** "Skip this one" and "Don't skip" (Story 7.11); false for any other intent. */
+    private fun onSkipIntent(intent: HomeIntent): Boolean {
+        when (intent) {
+            is HomeIntent.SkipRequested -> {
+                requestSkip(intent.id)
+            }
+
+            // Cleared first, so a second tap on "Skip" cannot skip twice.
+            HomeIntent.SkipConfirmed -> {
+                local.value.skipDialog?.let { dialog ->
+                    local.update { it.copy(skipDialog = null) }
+                    skip(dialog.alarmId, dialog.occurrence)
+                }
+            }
+
+            // "Keep it", Back or a tap outside: nothing is skipped.
+            HomeIntent.SkipCancelled -> {
+                local.update { it.copy(skipDialog = null) }
+            }
+
+            is HomeIntent.DontSkipClicked -> {
+                viewModelScope.launch {
+                    val result = actions.undoSkip(intent.id)
+                    if (result is Outcome.Failure && result.error.isSaveFailure()) showMessage(HomeMessage.SaveFailed)
+                }
+            }
+
+            else -> {
+                return false
+            }
+        }
+        return true
+    }
+
+    /**
+     * Asks "Skip your {time} alarm? This is logged." for the alarm [id] when it is on with "Offer to skip" on; an alarm
+     * the cards do not hold yet is read from the store first. One that is off, gone or unreadable is left as it is.
+     */
+    private fun requestSkip(id: String) {
+        val known = listed.firstOrNull { it.id == id }
+        if (known != null) {
+            askSkip(known)
+            return
+        }
+        viewModelScope.launch {
+            checkConfigs
+                .observeAlarmsWithChecks()
+                .map<List<AlarmWithChecks>, Alarm?> { all -> all.firstOrNull { it.alarm.id == id }?.alarm }
+                .catch { cause ->
+                    actions.logFailure("load alarm to skip", cause)
+                    emit(null)
+                }.first()
+                ?.let(::askSkip)
+        }
+    }
+
+    /** Only for an alarm that is on with "Offer to skip" on; the dialog keeps the occurrence it asks about. */
+    private fun askSkip(alarm: Alarm) {
+        if (!alarm.enabled || !alarm.offerSkip) return
+        // The raw next occurrence: the one `SkipNextAlarm` compares with, a skipped one included (it then answers AlreadySkipped).
+        val occurrence = nextOccurrence(alarm.toRule(), clock.now(), timeZoneProvider.current())
+        local.update { it.copy(skipDialog = SkipDialog(alarm.id, alarm.time, occurrence)) }
+    }
+
+    /**
+     * "Skip": the next ring of [id] is skipped and logged; "Skipped. No charge." once it is (or already was). Once
+     * [occurrence] has passed, nothing is skipped (the following ring is not the one the user was asked about).
+     */
+    private fun skip(
+        id: String,
+        occurrence: Instant?,
+    ) {
+        viewModelScope.launch {
+            val result = actions.skipNext(id, occurrence)
+            if (result is Outcome.Success && result.value != SkipResult.NothingToSkip) showMessage(HomeMessage.Skipped)
         }
     }
 
@@ -297,8 +385,9 @@ class HomeViewModel(
                 showMessage(HomeMessage.SavedUnderLock(intent.note))
             }
 
+            // Story 7.11: "Skip this one" and "Don't skip".
             else -> {
-                return false
+                return onSkipIntent(intent)
             }
         }
         return true
@@ -461,6 +550,7 @@ class HomeViewModel(
                     loadFailed = true,
                     openFailed = ui.message == HomeMessage.OpenFailed,
                     saveFailed = ui.message == HomeMessage.SaveFailed,
+                    skippedNoCharge = ui.message == HomeMessage.Skipped,
                     savedUnderLock = (ui.message as? HomeMessage.SavedUnderLock)?.note,
                     missedAlarmAt = missedAlarmAt,
                     missedSessionId = missedSessionId,
@@ -473,14 +563,18 @@ class HomeViewModel(
                 val sorted = stored.alarms.sortedWith(compareBy(AlarmListOrder) { it.alarm })
                 val alarms = sorted.map { it.alarm }
                 listed = alarms
-                val cards = sorted.map { it.alarm.toCard(ui.toggles[it.alarm.id], it.checks) }
+                val now = clock.now()
+                val zone = timeZoneProvider.current()
+                val cards = sorted.map { it.alarm.toCard(ui.toggles[it.alarm.id], it.checks, now, zone) }
                 HomeUiState(
                     nextAlarm = nextAlarm(alarms.filterIndexed { index, _ -> cards[index].enabled }),
                     alarms = cards,
                     deleteDialog = ui.deleteDialog?.takeIf { dialog -> cards.any { it.id == dialog.alarmId } },
                     disableDialog = ui.disableDialog?.takeIf { dialog -> cards.any { it.id == dialog.alarmId } },
+                    skipDialog = ui.skipDialog?.takeIf { dialog -> cards.any { it.id == dialog.alarmId && it.enabled } },
                     openFailed = ui.message == HomeMessage.OpenFailed,
                     saveFailed = ui.message == HomeMessage.SaveFailed,
+                    skippedNoCharge = ui.message == HomeMessage.Skipped,
                     savedUnderLock = (ui.message as? HomeMessage.SavedUnderLock)?.note,
                     missedAlarmAt = missedAlarmAt,
                     missedSessionId = missedSessionId,
@@ -491,12 +585,15 @@ class HomeViewModel(
         }
     }
 
-    /** The countdown to the soonest of [enabled], as the scheduler computes it; `null` when none is enabled. */
+    /**
+     * The countdown to the soonest ring of [enabled], as the scheduler computes it (a skipped occurrence is passed over,
+     * Story 7.11); `null` when none is enabled.
+     */
     private fun nextAlarm(enabled: List<Alarm>): Countdown? {
         val now = clock.now()
         val zone = timeZoneProvider.current()
         return enabled
-            .minOfOrNull { nextOccurrence(it.toRule(), now, zone) }
+            .minOfOrNull { nextRing(it, now, zone) }
             ?.let { countdownOf(durationUntil(it, now)) }
     }
 
@@ -588,6 +685,9 @@ private sealed interface HomeMessage {
     data class SavedUnderLock(
         val note: WeakeningNote,
     ) : HomeMessage
+
+    /** The next ring was skipped (Story 7.11): "Skipped. No charge.". */
+    data object Skipped : HomeMessage
 }
 
 /** Home state that is not in the store. */
@@ -596,6 +696,8 @@ private data class LocalState(
     val deleteDialog: DeleteAlarmDialog? = null,
     /** "Turn off your {time} alarm? ..." for an alarm switched off inside its lock window (Story 4.6). */
     val disableDialog: DisableUnderLock? = null,
+    /** "Skip your {time} alarm? This is logged." after a pre-alarm notification's "Skip this one" (Story 7.11). */
+    val skipDialog: SkipDialog? = null,
     /** The snackbar showing, if any. */
     val message: HomeMessage? = null,
     /** The last checklist evaluation found a blocking row that is not OK (Story 5.4); false until the first one ends. */
@@ -607,14 +709,25 @@ private data class LocalState(
 /**
  * The card of this alarm, with its [checks]' icons in order (Story 3.5; a check the app cannot show has no icon). An
  * alarm without check rows rings the default checks, so its card shows theirs (review fix: the same default as the
- * editor, Save, Duplicate and the ring).
+ * editor, Save, Duplicate and the ring). It is "skipped" while it shows on and its next occurrence after [now] (in
+ * [zone]) is the skipped one (Story 7.11).
  */
 private fun Alarm.toCard(
     pending: PendingToggle?,
     checks: List<CheckConfig>,
+    now: Instant,
+    zone: TimeZone,
 ): AlarmCard {
     val confirmed = pending?.confirmedAt
     val shown = if (pending == null || (confirmed != null && updatedAt >= confirmed)) enabled else pending.enabled
     val icons = checks.orderedEntries().ifEmpty { CheckConfig.DEFAULT_ENTRIES }.mapNotNull { it.type.toUi() }
-    return AlarmCard(id = id, time = time, repeatDays = repeatDays, label = label, checks = icons, enabled = shown)
+    return AlarmCard(
+        id = id,
+        time = time,
+        repeatDays = repeatDays,
+        label = label,
+        checks = icons,
+        enabled = shown,
+        skipped = shown && isNextOccurrenceSkipped(now, zone),
+    )
 }

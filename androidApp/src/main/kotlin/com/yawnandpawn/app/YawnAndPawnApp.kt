@@ -36,10 +36,13 @@ import com.yawnandpawn.app.core.alarm.AlarmScheduler
 import com.yawnandpawn.app.core.alarm.AlarmScheduling
 import com.yawnandpawn.app.core.alarm.AlarmWriteLock
 import com.yawnandpawn.app.core.alarm.DeleteAlarm
+import com.yawnandpawn.app.core.alarm.DiscardStaleSkips
 import com.yawnandpawn.app.core.alarm.ReRegisterCode
 import com.yawnandpawn.app.core.alarm.RearmOnFire
 import com.yawnandpawn.app.core.alarm.SaveAlarm
 import com.yawnandpawn.app.core.alarm.SetAlarmEnabled
+import com.yawnandpawn.app.core.alarm.SkipNextAlarm
+import com.yawnandpawn.app.core.alarm.UndoSkip
 import com.yawnandpawn.app.core.billing.FeeLadder
 import com.yawnandpawn.app.core.billing.LiveSnoozeAvailability
 import com.yawnandpawn.app.core.billing.MoneyFormatter
@@ -164,6 +167,8 @@ val appModule =
                 get(),
                 promotion = get<PromotePendingChanges>(),
                 deletionPending = get<PendingDeletion>().pending,
+                // Story 7.11: each alarm's pre-alarm job follows its system alarm.
+                preAlarms = get(),
             )
         }
         // The commitment lock (Story 4.4): promotion skips the occurrence the session in progress rings, read lazily (the
@@ -171,7 +176,7 @@ val appModule =
         // Before the engine is restored (a cold start), the stored session in runtime.db is read instead (review fix 9).
         single {
             val scope = this
-            PromotePendingChanges(get(), get(), get(), get(), get(), get(), get()) {
+            PromotePendingChanges(get(), get(), get(), get(), get(), get(), get(), preAlarms = get()) {
                 val engine = scope.get<SessionEngine>()
                 PromotePendingChanges.occurrenceOf(engine.state.value) ?: if (engine.restored.value) {
                     null
@@ -198,12 +203,23 @@ val appModule =
         factory { CommitmentLog(get(), get(), get()) }
         single { RearmOnFire(get(), get(), get(), get(), get()) }
         single<AlarmFiredHandler> {
-            WakeAlarmFiredHandler(get(), get<RearmOnFire>(), get(), get(), starts = get(), timings = get(), rearm = get())
+            WakeAlarmFiredHandler(
+                get(),
+                get<RearmOnFire>(),
+                get(),
+                get(),
+                starts = get(),
+                timings = get(),
+                rearm = get(),
+                // Story 7.11: the ringing occurrence's "Skip this one" notification goes.
+                preAlarms = get(),
+            )
         }
         // The session slot armed from runtime.db without the engine (Story 2.1): after system events and refused starts.
         single { SessionSlotRearm(get(), get(), get(), get(), get(), get()) }
         // Story 5.10: no alarm is saved before the disclosure is accepted (OnboardingRepository from dataModule).
-        factory { SaveAlarm(get(), get(), get(), get(), get(), get(), get(), get(), get(), get(), get()) }
+        factory { SaveAlarm(get(), get(), get(), get(), get(), get(), get(), get(), get(), get(), get(), staleSkips = get()) }
+        factory { DiscardStaleSkips(get(), get(), get(), get()) }
         // Onboarding (Story 5.10): the consent, the step and completion, each inside the session lock.
         factory { AcceptDisclosure(get(), get(), get()) }
         factory { SaveOnboardingStep(get(), get()) }
@@ -213,10 +229,13 @@ val appModule =
         // Story 5.12: when step 8's test rings, and Home's note after "Skip for now".
         factory { RememberOnboardingTest(get(), get()) }
         factory { OnboardingTestNote(get(), get(), get()) }
-        factory { SetAlarmEnabled(get(), get(), get(), get(), get(), get(), get()) }
+        factory { SetAlarmEnabled(get(), get(), get(), get(), get(), get(), get(), staleSkips = get()) }
         // Story 3.10: Home's "Re-register" stores a new code alone.
         factory { ReRegisterCode(get(), get(), get(), get(), get()) }
         factory { DeleteAlarm(get(), get(), get(), get(), get(), get(), get(), get()) }
+        // Story 7.11: "Skip this one" and Home's "Don't skip"; the Skipped row goes through SessionRecorder.
+        factory { SkipNextAlarm(get(), get(), get(), get(), get(), get(), get(), get(), get()) }
+        factory { UndoSkip(get(), get(), get(), get(), get(), get(), get(), get(), get()) }
         // "Test alarm" (Story 1.18): the editor's values ring as a test 10 s later, through the test request code.
         factory { ScheduleTestAlarm(get(), get(), get(), get()) }
         // The wake session (Story 1.12): the Epic 1 policies, the one engine over runtime.db (ActiveSessionStore from

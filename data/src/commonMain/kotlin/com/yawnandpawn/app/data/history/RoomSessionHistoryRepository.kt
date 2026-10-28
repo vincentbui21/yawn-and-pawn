@@ -11,10 +11,11 @@ import com.yawnandpawn.app.core.stats.FallbackHistory
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
 import kotlin.coroutines.cancellation.CancellationException
+import kotlin.time.Instant
 
 /**
  * [SessionHistoryRepository] over `session_history` in `app.db`. The only user of [SessionHistoryDao]'s writes; core's
- * `SessionRecorder` is its only caller of [upsert] (AD-18). Storage exceptions become `StorageFailure`. Also Home's
+ * `SessionRecorder` is its only caller of [upsert] and [deleteSkipped] (AD-18). Storage exceptions become `StorageFailure`. Also Home's
  * [FallbackHistory] (Story 3.13), a read only, and the history part of "Delete all data" ([SessionHistoryEraser], Story
  * 5.9), so the history keeps one adapter that writes it.
  */
@@ -47,6 +48,12 @@ class RoomSessionHistoryRepository(
 
     override suspend fun merges(sessionId: String): Outcome<List<SessionMergeRow>, DomainError> =
         storage { dao.mergesOf(sessionId).map { it.toRow() } }
+
+    // Story 7.11 ("Don't skip"): SessionRecorder is the only caller.
+    override suspend fun deleteSkipped(
+        alarmId: String,
+        scheduledAt: Instant,
+    ): Outcome<Unit, DomainError> = storage { dao.deleteSkippedRow(alarmId, scheduledAt.toEpochMilliseconds()) }
 
     // Story 6.4: a read only; an unreadable row is a StorageFailure, like find.
     override suspend fun all(): Outcome<List<SessionHistoryRow>, DomainError> = storage { dao.allRows().map { it.toRow() } }

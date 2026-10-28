@@ -7,7 +7,7 @@ import androidx.room3.PrimaryKey
 
 /**
  * One row of `session_history` in `app.db` (schema v3, Story 1.13): one wake session, keyed by its id (AD-18). Instants
- * are epoch millis. [checkTypes] is the comma-separated list of stable check type names (empty for none), [outcome]
+ * are epoch millis; [firstRingAt] is null only for a skipped occurrence (schema v13, Story 7.11). [checkTypes] is the comma-separated list of stable check type names (empty for none), [outcome]
  * the stable outcome name (null while the session runs). No paid amounts: those come from purchase records keyed by
  * the session id (AD-7, AD-8). No foreign key to `alarm`: history outlives a deleted alarm. Indexed by [scheduledAt],
  * which Progress (Epic 6) queries by date.
@@ -22,7 +22,7 @@ data class SessionHistoryEntity(
     @ColumnInfo(name = "scheduled_at")
     val scheduledAt: Long,
     @ColumnInfo(name = "first_ring_at")
-    val firstRingAt: Long,
+    val firstRingAt: Long?,
     @ColumnInfo(name = "ended_at")
     val endedAt: Long?,
     @ColumnInfo(name = "snooze_count")

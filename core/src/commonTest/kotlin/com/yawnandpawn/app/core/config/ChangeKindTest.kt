@@ -34,6 +34,13 @@ class ChangeKindTest {
     }
 
     @Test
+    fun `turning Offer to skip on weakens and turning it off strengthens (Story 7-11)`() {
+        assertEquals(weakening, classify(SettingValue.OfferSkip(false), SettingValue.OfferSkip(true)))
+        assertEquals(strengthening, classify(SettingValue.OfferSkip(true), SettingValue.OfferSkip(false)))
+        assertEquals(same, classify(SettingValue.OfferSkip(true), SettingValue.OfferSkip(true)))
+    }
+
+    @Test
     fun `values of two different fields are never compared`() {
         assertFailsWith<IllegalArgumentException> { classify(SettingValue.BaseFeeTier(1), SettingValue.MaxSnoozes(1)) }
     }

@@ -37,12 +37,14 @@ class AppOpenRequests {
 /**
  * Shows the requested [tab] (Story 6.8): a screen pushed over a tab (the checklist, Purchase history, Payments, ...) is
  * closed first, then [selectTab]. Nothing changes under the session lock or onboarding (no tab in the stack), nor while
- * the editor or the "Problem with a charge?" form is open, so what the user typed is never lost.
+ * the editor or the "Problem with a charge?" form is open, so what the user typed is never lost. True when [tab] is
+ * shown now (Story 7.11: the skip dialog only shows then).
  */
-fun MutableList<NavKey>.openRequested(tab: AppTab) {
-    if (none { (it as? Route)?.tab != null } || any { it is Route.AlarmEditor || it == Route.ProblemWithCharge }) return
+fun MutableList<NavKey>.openRequested(tab: AppTab): Boolean {
+    if (none { (it as? Route)?.tab != null } || any { it is Route.AlarmEditor || it == Route.ProblemWithCharge }) return false
     while (size > 1 && (lastOrNull() as? Route)?.tab == null) removeAt(lastIndex)
     selectTab(tab)
+    return true
 }
 
 /**

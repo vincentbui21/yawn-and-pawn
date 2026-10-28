@@ -197,6 +197,41 @@ val MIGRATION_11_12: Migration =
         }
     }
 
+/**
+ * v12 to v13 (Story 7.11, skip the next alarm): adds `alarm.offer_skip` (off for every stored alarm) and the nullable
+ * `alarm.skipped_date`, and makes `session_history.first_ring_at` nullable (a skipped occurrence never rang). SQLite
+ * cannot drop a NOT NULL, so `session_history` is rebuilt: a new table with the v13 SQL, every row copied, the old table
+ * dropped, the new one renamed and its `scheduled_at` index created again. Every other table and column (Story 7.1's
+ * `recording`, Story 7.2's `alarm.motivation`) is untouched. The SQL matches the exported `13.json`; Room checks it after
+ * migrating.
+ */
+val MIGRATION_12_13: Migration =
+    object : Migration(12, 13) {
+        override suspend fun migrate(connection: SQLiteConnection) {
+            connection.execSQL("ALTER TABLE `alarm` ADD COLUMN `offer_skip` INTEGER NOT NULL DEFAULT 0")
+            connection.execSQL("ALTER TABLE `alarm` ADD COLUMN `skipped_date` TEXT")
+            connection.execSQL(
+                "CREATE TABLE IF NOT EXISTS `session_history_new` (`session_id` TEXT NOT NULL, `alarm_id` TEXT NOT NULL, " +
+                    "`scheduled_at` INTEGER NOT NULL, `first_ring_at` INTEGER, `ended_at` INTEGER, " +
+                    "`snooze_count` INTEGER NOT NULL, `check_types` TEXT NOT NULL, `time_to_complete_ms` INTEGER, " +
+                    "`fallback_used` INTEGER NOT NULL, `direct_boot` INTEGER NOT NULL, `outcome` TEXT, `fallback_from` TEXT, " +
+                    "PRIMARY KEY(`session_id`))",
+            )
+            connection.execSQL(
+                "INSERT INTO `session_history_new` (`session_id`, `alarm_id`, `scheduled_at`, `first_ring_at`, `ended_at`, " +
+                    "`snooze_count`, `check_types`, `time_to_complete_ms`, `fallback_used`, `direct_boot`, `outcome`, " +
+                    "`fallback_from`) SELECT `session_id`, `alarm_id`, `scheduled_at`, `first_ring_at`, `ended_at`, " +
+                    "`snooze_count`, `check_types`, `time_to_complete_ms`, `fallback_used`, `direct_boot`, `outcome`, " +
+                    "`fallback_from` FROM `session_history`",
+            )
+            connection.execSQL("DROP TABLE `session_history`")
+            connection.execSQL("ALTER TABLE `session_history_new` RENAME TO `session_history`")
+            connection.execSQL(
+                "CREATE INDEX IF NOT EXISTS `index_session_history_scheduled_at` ON `session_history` (`scheduled_at`)",
+            )
+        }
+    }
+
 /** Every migration of `app.db`, oldest first; `buildAppDatabase` registers them all. */
 val APP_DATABASE_MIGRATIONS: Array<Migration> =
     arrayOf(
@@ -211,4 +246,5 @@ val APP_DATABASE_MIGRATIONS: Array<Migration> =
         MIGRATION_9_10,
         MIGRATION_10_11,
         MIGRATION_11_12,
+        MIGRATION_12_13,
     )

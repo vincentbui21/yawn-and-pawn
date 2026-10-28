@@ -4,7 +4,9 @@ import androidx.navigation3.runtime.NavKey
 import com.yawnandpawn.app.ui.shell.AppTab
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertFalse
 import kotlin.test.assertNull
+import kotlin.test.assertTrue
 
 /**
  * Story 6.8: the weekly summary notification asks the app to open Progress. The navigation selects the tab when a tab is
@@ -33,7 +35,7 @@ class AppOpenRequestsTest {
         ).forEach { start ->
             val stack = start.toMutableList()
 
-            stack.openRequested(AppTab.Progress)
+            assertTrue(stack.openRequested(AppTab.Progress), "shown from $start")
 
             assertEquals(listOf<NavKey>(Route.Alarms, Route.Progress), stack, "from $start")
         }
@@ -48,7 +50,8 @@ class AppOpenRequestsTest {
         ).forEach { start ->
             val stack = start.toMutableList()
 
-            stack.openRequested(AppTab.Progress)
+            // Story 7.11: false, so a skip request taken here is dropped, never shown later.
+            assertFalse(stack.openRequested(AppTab.Progress), "not shown from $start")
 
             assertEquals(start, stack)
         }
@@ -63,7 +66,7 @@ class AppOpenRequestsTest {
         ).forEach { start ->
             val stack = start.toMutableList()
 
-            stack.openRequested(AppTab.Progress)
+            assertTrue(stack.openRequested(AppTab.Progress), "shown from $start")
 
             assertEquals(listOf<NavKey>(Route.Alarms, Route.Progress), stack, "from $start")
         }
@@ -75,7 +78,8 @@ class AppOpenRequestsTest {
         ).forEach { start ->
             val stack = start.toMutableList()
 
-            stack.openRequested(AppTab.Progress)
+            // Story 7.11: false, so a skip request taken here is dropped, never shown later.
+            assertFalse(stack.openRequested(AppTab.Progress), "not shown from $start")
 
             assertEquals(start, stack)
         }

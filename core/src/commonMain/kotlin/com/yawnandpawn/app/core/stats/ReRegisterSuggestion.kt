@@ -73,11 +73,9 @@ fun reRegisterSuggestion(
                         row.fallbackUsed &&
                         row.fallbackFrom == check.type.id &&
                         row.outcome != SessionOutcome.Test &&
-                        row.firstRingAt > since &&
-                        row.firstRingAt >= windowStart &&
-                        row.firstRingAt <= now
+                        row.firstRingAt.let { rang -> rang != null && rang > since && rang >= windowStart && rang <= now }
                 }
-            counted.maxOfOrNull { it.firstRingAt }?.takeIf { counted.size >= ReRegisterRule.FALLBACKS }?.let { newest ->
+            counted.mapNotNull { it.firstRingAt }.maxOrNull()?.takeIf { counted.size >= ReRegisterRule.FALLBACKS }?.let { newest ->
                 ReRegisterSuggestion(check.alarmId, check.type, counted.size, newest)
             }
         }.maxByOrNull { it.newestFallbackAt }

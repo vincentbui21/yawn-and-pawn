@@ -57,6 +57,13 @@ abstract class SessionHistoryDao {
     @Query("SELECT * FROM session_merge WHERE session_id = :sessionId ORDER BY merged_at, scheduled_at, alarm_id")
     abstract suspend fun mergesOf(sessionId: String): List<SessionMergeEntity>
 
+    /** "Don't skip" (Story 7.11): the Skipped row of [alarmId]'s occurrence at [scheduledAt], if any. */
+    @Query("DELETE FROM session_history WHERE alarm_id = :alarmId AND scheduled_at = :scheduledAt AND outcome = 'Skipped'")
+    abstract suspend fun deleteSkippedRow(
+        alarmId: String,
+        scheduledAt: Long,
+    )
+
     @Query("DELETE FROM session_history")
     abstract suspend fun deleteAllRows()
 

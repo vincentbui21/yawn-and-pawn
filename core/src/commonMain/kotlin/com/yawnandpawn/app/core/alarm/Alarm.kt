@@ -2,6 +2,7 @@ package com.yawnandpawn.app.core.alarm
 
 import com.yawnandpawn.app.core.checks.CheckMode
 import kotlinx.datetime.DayOfWeek
+import kotlinx.datetime.LocalDate
 import kotlinx.datetime.LocalTime
 import kotlin.time.Instant
 
@@ -15,6 +16,10 @@ import kotlin.time.Instant
  * @property label optional, at most [Alarm.MAX_LABEL_LENGTH] characters.
  * @property requestCode stable, unique PendingIntent request code (AD-4), see [RequestCodes].
  * @property checkMode how a ring uses the alarm's checks (FR-PWK-2): one picked at random, or all in order.
+ * @property offerSkip "Offer to skip 2 h before" (Story 7.11, FR-ALM-10): the pre-alarm notification with "Skip this
+ *   one". Off by default; turning it on is a weakening change under the commitment lock (`LockedField.OfferSkip`).
+ * @property skippedDate the local date (in the zone of the time of the skip) whose occurrence is skipped (Story 7.11), or
+ *   null. A past date never matches a later occurrence, so it is never cleared after its day ([nextRing]).
  */
 data class Alarm(
     val id: String,
@@ -37,6 +42,8 @@ data class Alarm(
     val checkMode: CheckMode = CheckMode.Random,
     /** The motivation message (Story 7.2): none, random or one recording; never a locked field. */
     val motivation: Motivation = Motivation.None,
+    val offerSkip: Boolean = false,
+    val skippedDate: LocalDate? = null,
 ) {
     /** When this alarm rings, for [nextOccurrence] (Story 1.6). */
     fun toRule(): AlarmRule = AlarmRule(time, repeatDays)
@@ -97,8 +104,9 @@ val AlarmListOrder: Comparator<Alarm> =
 
 /**
  * True when [other] rings exactly like this alarm: every setting the user chooses is equal (time, repeat days, label,
- * sound, volume, gradual volume, vibration, snooze length, quiet time and its vibration, check mode, motivation). The id,
- * request code, on/off state, timestamps and the ramp start (fixed, not a user setting) do not count. The checks themselves are
+ * sound, volume, gradual volume, vibration, snooze length, quiet time and its vibration, check mode, motivation, "Offer to
+ * skip"). The id, request code, on/off state, timestamps, a skipped date and the ramp start (fixed, not a user setting) do
+ * not count. The checks themselves are
  * stored apart, so `SaveAlarm` compares them too. Saving a new alarm identical to a stored one switches that one on
  * instead of storing a second (owner decision 2026-10-05, like Samsung Clock).
  */
@@ -114,4 +122,5 @@ fun Alarm.hasSameSettingsAs(other: Alarm): Boolean =
         graceSeconds == other.graceSeconds &&
         vibrateInGrace == other.vibrateInGrace &&
         checkMode == other.checkMode &&
-        motivation == other.motivation
+        motivation == other.motivation &&
+        offerSkip == other.offerSkip

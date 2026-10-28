@@ -21,7 +21,9 @@ enum class ChangeKind {
  * Classifies a change of one [LockedField] from the current effective value [old] to [new] (Story 4.4 rules):
  * - a lower base fee, more max snoozes and a longer grace window are [ChangeKind.Weakening]; the opposite directions are
  *   [ChangeKind.Strengthening]; an equal value is [ChangeKind.NoChange];
- * - checks: see [classifyChecks].
+ * - checks: see [classifyChecks];
+ * - "Offer to skip" (Story 7.11): off to on is [ChangeKind.Weakening] (a morning can be skipped), on to off
+ *   [ChangeKind.Strengthening].
  *
  * [old] and [new] must be values of the same field.
  */
@@ -35,6 +37,7 @@ fun classify(
         is SettingValue.MaxSnoozes -> lowerIsStronger(old.count, (new as SettingValue.MaxSnoozes).count)
         is SettingValue.GraceSeconds -> lowerIsStronger(old.seconds, (new as SettingValue.GraceSeconds).seconds)
         is SettingValue.Checks -> classifyChecks(old.plan, (new as SettingValue.Checks).plan)
+        is SettingValue.OfferSkip -> lowerIsStronger(old.on.toInt(), (new as SettingValue.OfferSkip).on.toInt())
     }
 }
 
@@ -80,6 +83,8 @@ private fun higherIsStronger(
         new < old -> ChangeKind.Weakening
         else -> ChangeKind.NoChange
     }
+
+private fun Boolean.toInt(): Int = if (this) 1 else 0
 
 private fun lowerIsStronger(
     old: Int,

@@ -6,6 +6,7 @@ import com.yawnandpawn.app.ui.format.Countdown
 import com.yawnandpawn.app.ui.settings.WeakeningNote
 import kotlinx.datetime.DayOfWeek
 import kotlinx.datetime.LocalTime
+import kotlin.time.Instant
 
 /** The Home top card: the zero-snooze streak and this week's money. */
 data class HomeHero(
@@ -25,6 +26,21 @@ data class AlarmCard(
     val label: String?,
     val checks: List<CheckType>,
     val enabled: Boolean,
+    /**
+     * Its next occurrence is skipped (Story 7.11): "Next ring skipped" replaces the summary line, and the menu and TalkBack
+     * offer "Don't skip".
+     */
+    val skipped: Boolean = false,
+)
+
+/**
+ * "Skip your {time} alarm? This is logged." for the alarm [alarmId] at [time] (Story 7.11, "Skip this one" tapped).
+ * [occurrence] is the occurrence asked about: "Skip" confirmed once it has passed skips nothing (review fix).
+ */
+data class SkipDialog(
+    val alarmId: String,
+    val time: LocalTime,
+    val occurrence: Instant? = null,
 )
 
 /**
@@ -83,6 +99,10 @@ data class HomeUiState(
      * tomorrow's {time} alarm." (or "today's").
      */
     val savedUnderLock: WeakeningNote? = null,
+    /** "Skip this one" was tapped on a pre-alarm notification (Story 7.11): `dialog-confirm` "Skip" / "Keep it". */
+    val skipDialog: SkipDialog? = null,
+    /** The next ring was skipped (Story 7.11): the snackbar "Skipped. No charge.". */
+    val skippedNoCharge: Boolean = false,
 )
 
 /** Everything the user can do on Home. */
@@ -140,6 +160,22 @@ sealed interface HomeIntent {
 
     /** "Keep it", Back or a tap outside the delete dialog. */
     data object DeleteCancelled : HomeIntent
+
+    /** A pre-alarm notification's "Skip this one" for the alarm [id] (a navigation request): asks first (Story 7.11). */
+    data class SkipRequested(
+        val id: String,
+    ) : HomeIntent
+
+    /** "Skip" in the skip dialog: the next ring is skipped and logged, free. */
+    data object SkipConfirmed : HomeIntent
+
+    /** "Keep it", Back or a tap outside the skip dialog: nothing is skipped. */
+    data object SkipCancelled : HomeIntent
+
+    /** "Don't skip" in a skipped card's menu (or its TalkBack action): the skipped ring rings again (Story 7.11). */
+    data class DontSkipClicked(
+        val id: String,
+    ) : HomeIntent
 
     /** "Try again" after the alarms could not be read. */
     data object RetryLoad : HomeIntent

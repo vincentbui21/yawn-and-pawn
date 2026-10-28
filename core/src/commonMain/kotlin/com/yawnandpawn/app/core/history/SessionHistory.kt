@@ -16,7 +16,7 @@ enum class SessionOutcome {
     /** Nobody interacted for 30 minutes (FR-ALM-9). */
     Missed,
 
-    /** The occurrence was skipped ahead of time (Epic 7); nothing in Epic 1 produces it. */
+    /** The occurrence was skipped ahead of time ("Skip this one", Story 7.11); `SessionRecorder.recordSkip` writes it. */
     Skipped,
 
     /** A test alarm (FR-ALM-12), whatever its ending. */
@@ -28,8 +28,9 @@ enum class SessionOutcome {
  * [sessionId]. Paid amounts are not here; they come from purchase records keyed by [sessionId] (AD-7, AD-8).
  *
  * @property scheduledAt the occurrence the session rang for.
- * @property firstRingAt when the session's first ring started (wall time).
- * @property endedAt when the session ended (wall time); null while it runs.
+ * @property firstRingAt when the session's first ring started (wall time); null for a [SessionOutcome.Skipped] occurrence,
+ *   which never rang (Story 7.11).
+ * @property endedAt when the session ended (wall time; for a skipped occurrence, when it was skipped); null while it runs.
  * @property snoozeCount paid snoozes granted.
  * @property checkTypes the stable type names of the check steps (`CheckType.id`), in order.
  * @property timeToCompleteMs from the first ring to the end, for a completed session; null otherwise.
@@ -42,7 +43,7 @@ data class SessionHistoryRow(
     val sessionId: String,
     val alarmId: String,
     val scheduledAt: Instant,
-    val firstRingAt: Instant,
+    val firstRingAt: Instant?,
     val endedAt: Instant?,
     val snoozeCount: Int,
     val checkTypes: List<String>,
@@ -91,6 +92,15 @@ interface SessionHistoryRepository {
      * storage error is a `StorageFailure`, never thrown.
      */
     suspend fun all(): Outcome<List<SessionHistoryRow>, DomainError>
+
+    /**
+     * Deletes the [SessionOutcome.Skipped] row of the alarm [alarmId] for the occurrence at [scheduledAt] ("Don't skip",
+     * Story 7.11); no such row is a success. A write: only `SessionRecorder` calls it.
+     */
+    suspend fun deleteSkipped(
+        alarmId: String,
+        scheduledAt: Instant,
+    ): Outcome<Unit, DomainError>
 }
 
 /**

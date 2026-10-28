@@ -25,6 +25,7 @@ import com.yawnandpawn.app.core.session.SessionEngine
 import com.yawnandpawn.app.core.session.ThemeMode
 import com.yawnandpawn.app.ui.App
 import com.yawnandpawn.app.ui.nav.AppOpenRequests
+import com.yawnandpawn.app.ui.nav.SkipRequests
 import com.yawnandpawn.app.ui.shell.AppTab
 import com.yawnandpawn.app.ui.theme.colors
 import com.yawnandpawn.app.ui.theme.resolveColorSet
@@ -47,6 +48,10 @@ import org.koin.android.ext.android.inject
  * Launched (or brought back) with [EXTRA_OPEN_TAB] = [OPEN_PROGRESS] (the weekly summary notification, Story 6.8), it
  * asks the navigation to open Progress ([AppOpenRequests]); the extra is then removed, so a recreation never opens it
  * again. During a session or onboarding the request is dropped.
+ *
+ * Launched (or brought back) with [EXTRA_SKIP_ALARM] (a pre-alarm notification's "Skip this one", Story 7.11), it hands
+ * the alarm id to [SkipRequests], and the app asks "Skip your {time} alarm? This is logged." over Home; nothing is skipped
+ * before "Skip". The extra is removed the same way, and dropped during a session or onboarding.
  */
 class MainActivity : ComponentActivity() {
     private val notificationPermission: AndroidNotificationPermission by inject()
@@ -66,6 +71,8 @@ class MainActivity : ComponentActivity() {
     private val settings: GlobalSettingsRepository by inject()
 
     private val openRequests: AppOpenRequests by inject()
+
+    private val skipRequests: SkipRequests by inject()
 
     private val requestNotifications = registerForActivityResult(ActivityResultContracts.RequestPermission()) { }
 
@@ -120,7 +127,12 @@ class MainActivity : ComponentActivity() {
         // Story 6.8: a fresh launch from the weekly summary opens Progress; a recreation (saved state) or a launch from
         // Recents (the old intent again) does not.
         val fromHistory = (intent.flags and Intent.FLAG_ACTIVITY_LAUNCHED_FROM_HISTORY) != 0
-        if (savedInstanceState == null && !fromHistory) openRequestedTab(intent) else intent.removeExtra(EXTRA_OPEN_TAB)
+        if (savedInstanceState == null && !fromHistory) {
+            openRequestedTab(intent)
+        } else {
+            intent.removeExtra(EXTRA_OPEN_TAB)
+            intent.removeExtra(EXTRA_SKIP_ALARM)
+        }
         setContent {
             App()
         }
@@ -133,10 +145,15 @@ class MainActivity : ComponentActivity() {
         openRequestedTab(intent)
     }
 
-    /** Asks the navigation for the tab in [EXTRA_OPEN_TAB], if any, and removes the extra so it is handled once. */
+    /**
+     * Asks the navigation for the tab in [EXTRA_OPEN_TAB], or the skip of the alarm in [EXTRA_SKIP_ALARM] (Story 7.11), if
+     * any, and removes the extras so each is handled once.
+     */
     private fun openRequestedTab(intent: Intent) {
         if (intent.getStringExtra(EXTRA_OPEN_TAB) == OPEN_PROGRESS) openRequests.open(AppTab.Progress)
+        intent.getStringExtra(EXTRA_SKIP_ALARM)?.let(skipRequests::request)
         intent.removeExtra(EXTRA_OPEN_TAB)
+        intent.removeExtra(EXTRA_SKIP_ALARM)
     }
 
     /**
@@ -158,5 +175,8 @@ class MainActivity : ComponentActivity() {
 
         /** [EXTRA_OPEN_TAB]'s value for Progress (the weekly summary notification). */
         const val OPEN_PROGRESS = "progress"
+
+        /** The alarm id whose "Skip this one" was tapped on its pre-alarm notification (Story 7.11). */
+        const val EXTRA_SKIP_ALARM = "skipAlarm"
     }
 }

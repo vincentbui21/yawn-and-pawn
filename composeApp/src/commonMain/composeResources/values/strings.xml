@@ -105,6 +105,16 @@
     <string name="delete_alarm_confirm">Delete</string>
     <string name="delete_alarm_keep">Keep it</string>
 
+    <!-- Skip next alarm (Story 7.11), verbatim from EXPERIENCE.md Key strings: the editor switch, the dialog, the snackbar
+         and the alarm card's caption and menu action. -->
+    <string name="editor_offer_skip">Offer to skip 2 h before</string>
+    <string name="skip_title">Skip your %1$s alarm? This is logged.</string>
+    <string name="skip_confirm">Skip</string>
+    <string name="skip_keep">Keep it</string>
+    <string name="skip_done">Skipped. No charge.</string>
+    <string name="alarm_card_skipped">Next ring skipped</string>
+    <string name="alarm_dont_skip">Don't skip</string>
+
     <!-- Checks -->
     <string name="check_math">Math</string>
     <string name="check_word">Word Unscramble</string>

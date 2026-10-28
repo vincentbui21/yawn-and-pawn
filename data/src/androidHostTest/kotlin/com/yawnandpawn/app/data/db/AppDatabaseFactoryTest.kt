@@ -554,20 +554,20 @@ class AppDatabaseFactoryTest {
         }
 
     @Test
-    fun `a new database is created at version 12 with an empty recording table`() =
+    fun `a new database is created at the current version with an empty recording table`() =
         runTest {
             withDatabase { database -> assertEquals(0, database.recordingDao().count()) }
 
-            assertEquals(12, userVersion())
+            assertEquals(AppDatabase.SCHEMA_VERSION, userVersion())
         }
 
     @Test
     fun `the migrations cover every version step and nothing is destructive`() {
         assertEquals(
-            listOf(1 to 2, 2 to 3, 3 to 4, 4 to 5, 5 to 6, 6 to 7, 7 to 8, 8 to 9, 9 to 10, 10 to 11, 11 to 12),
+            listOf(1 to 2, 2 to 3, 3 to 4, 4 to 5, 5 to 6, 6 to 7, 7 to 8, 8 to 9, 9 to 10, 10 to 11, 11 to 12, 12 to 13),
             APP_DATABASE_MIGRATIONS.map { it.startVersion to it.endVersion },
         )
-        assertEquals(12, AppDatabase.SCHEMA_VERSION)
+        assertEquals(13, AppDatabase.SCHEMA_VERSION)
     }
 
     @Test
@@ -707,7 +707,7 @@ class AppDatabaseFactoryTest {
     private fun SessionHistoryRow.toVersion3Insert(): String =
         "INSERT INTO session_history (session_id, alarm_id, scheduled_at, first_ring_at, ended_at, snooze_count, check_types, " +
             "time_to_complete_ms, fallback_used, direct_boot, outcome) VALUES ('$sessionId', '$alarmId', " +
-            "${scheduledAt.toEpochMilliseconds()}, ${firstRingAt.toEpochMilliseconds()}, ${endedAt?.toEpochMilliseconds()}, " +
+            "${scheduledAt.toEpochMilliseconds()}, ${firstRingAt?.toEpochMilliseconds()}, ${endedAt?.toEpochMilliseconds()}, " +
             "$snoozeCount, '${checkTypes.joinToString(",")}', $timeToCompleteMs, ${if (fallbackUsed) 1 else 0}, " +
             "${if (directBoot) 1 else 0}, ${outcome?.let { "'${it.name}'" } ?: "NULL"})"
 

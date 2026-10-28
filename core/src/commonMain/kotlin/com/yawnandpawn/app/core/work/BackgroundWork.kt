@@ -6,8 +6,8 @@ import kotlin.time.Duration
 
 /**
  * What a background job runs (AD-17). The adapter stores the name with the job and looks up the [BackgroundTask]
- * registered for it when the job runs: the price refresh (Story 4.3), the consume retry (Story 4.10) and the weekly
- * summary (Story 6.8).
+ * registered for it when the job runs: the price refresh (Story 4.3), the consume retry (Story 4.10), the weekly
+ * summary (Story 6.8) and the pre-alarm notification (Story 7.11).
  */
 enum class BackgroundTaskKind {
     /** Refresh the cached Play prices (Story 4.3). */
@@ -18,6 +18,9 @@ enum class BackgroundTaskKind {
 
     /** Post the Sunday-evening weekly summary and chain next week's run (Story 6.8, [WeeklySummaryJobs]). */
     WeeklySummary,
+
+    /** Post one alarm's "Skip this one" notification 2 h before its next ring (Story 7.11, [PreAlarmJobs]; keyed by the alarm id). */
+    PreAlarm,
 }
 
 /**
@@ -38,6 +41,12 @@ data class BackgroundJob(
 /** The weekly summary's one-time unique work (Story 6.8). */
 object WeeklySummaryJobs {
     const val NAME = "weekly-summary"
+}
+
+/** The pre-alarm notification's one-time unique work per alarm (Story 7.11). */
+object PreAlarmJobs {
+    /** The unique work name of the alarm [alarmId]'s pre-alarm job: `pre-alarm-{alarmId}`. */
+    fun nameOf(alarmId: String): String = "pre-alarm-$alarmId"
 }
 
 /** How [BackgroundWork.scheduleWeeklySummary] hands the job over when a `weekly-summary` work already exists. */
@@ -74,6 +83,19 @@ interface BackgroundWork {
 
     /** Cancels the unique work [WeeklySummaryJobs.NAME] (Story 6.8); nothing pending is not an error. */
     fun cancelWeeklySummary(): Outcome<Unit, DomainError>
+
+    /**
+     * The pre-alarm notification of the alarm [alarmId] (Story 7.11): one-time unique work [PreAlarmJobs.nameOf] running
+     * [BackgroundTaskKind.PreAlarm] with the alarm id after [delay] (a negative one counts as none), no network needed,
+     * replacing a pending one (REPLACE). Never an `AlarmScheduler` alarm.
+     */
+    fun schedulePreAlarm(
+        alarmId: String,
+        delay: Duration,
+    ): Outcome<Unit, DomainError>
+
+    /** Cancels the unique work [PreAlarmJobs.nameOf] of [alarmId] (Story 7.11); nothing pending is not an error. */
+    fun cancelPreAlarm(alarmId: String): Outcome<Unit, DomainError>
 }
 
 /** How a [BackgroundTask] run ended. */
@@ -91,4 +113,9 @@ enum class TaskResult {
 /** The work behind one [BackgroundTaskKind]. Runs off the main thread, outside any session. */
 fun interface BackgroundTask {
     suspend fun run(): TaskResult
+}
+
+/** The work behind a [BackgroundTaskKind] whose jobs carry a key (Story 7.11: the pre-alarm job's alarm id). */
+fun interface KeyedBackgroundTask {
+    suspend fun run(key: String): TaskResult
 }

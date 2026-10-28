@@ -62,8 +62,9 @@ interface DeletionMarker {
  */
 interface LocalDataEraser {
     /**
-     * Every recording's audio file (Story 7.1; refused before the first unlock), then in `app.db` every alarm, check
-     * config, pending change, commitment event and recording (one transaction).
+     * Every recording's audio file (Story 7.1) and every imported sound in `sounds/` (Story 7.4; both refused before the
+     * first unlock), then in `app.db` every alarm, check config, pending change, commitment event, recording and
+     * `custom_sound` row (one transaction).
      */
     suspend fun deleteAlarmData(): Outcome<Unit, DomainError>
 

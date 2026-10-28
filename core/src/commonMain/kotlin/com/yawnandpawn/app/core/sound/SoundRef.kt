@@ -7,7 +7,9 @@ package com.yawnandpawn.app.core.sound
  * - [System]: `system:<title>|<uri>`, one of the phone's alarm ringtones. The title is kept so a ringtone that
  *   disappears can still be named ("File missing. Default sound will play."); `%` and `|` in it are percent-escaped.
  *
- * Story 7.4 adds the user's files. Any other text parses to null: the alarm then plays the default sound.
+ * - [File]: `file:<id>`, a sound file the user imported (Story 7.4), copied into the app as `sounds/<id>.<ext>`.
+ *
+ * Any other text parses to null: the alarm then plays the default sound.
  */
 sealed interface SoundRef {
     fun encode(): String
@@ -25,9 +27,17 @@ sealed interface SoundRef {
         override fun encode(): String = "$SYSTEM_PREFIX${escape(title)}$TITLE_END$uri"
     }
 
+    /** A sound file the user imported (Story 7.4): the `custom_sound` row [id] and its copy `sounds/<id>.<ext>`. */
+    data class File(
+        val id: String,
+    ) : SoundRef {
+        override fun encode(): String = "$FILE_PREFIX$id"
+    }
+
     companion object {
         private const val BUILT_IN_PREFIX = "builtin:"
         private const val SYSTEM_PREFIX = "system:"
+        private const val FILE_PREFIX = "file:"
         private const val TITLE_END = '|'
 
         /** The reference stored as [text], or null when it is not one this version knows. */
@@ -42,6 +52,10 @@ sealed interface SoundRef {
                     val end = body.indexOf(TITLE_END)
                     val uri = if (end < 0) "" else body.substring(end + 1)
                     if (uri.isBlank()) null else System(uri = uri, title = unescape(body.substring(0, end)))
+                }
+
+                text.startsWith(FILE_PREFIX) -> {
+                    text.removePrefix(FILE_PREFIX).takeIf { it.isNotBlank() }?.let(::File)
                 }
 
                 else -> {

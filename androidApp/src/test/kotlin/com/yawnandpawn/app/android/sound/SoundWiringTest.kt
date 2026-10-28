@@ -2,15 +2,21 @@ package com.yawnandpawn.app.android.sound
 
 import android.media.AudioManager
 import android.media.MediaPlayer
+import android.net.Uri
 import android.os.Looper
 import androidx.test.core.app.ApplicationProvider
 import com.yawnandpawn.app.StopAppRule
 import com.yawnandpawn.app.YawnAndPawnApp
+import com.yawnandpawn.app.android.wake.AlarmSound
 import com.yawnandpawn.app.android.wake.AndroidAlarmPlayer
+import com.yawnandpawn.app.android.wake.SoundResolver
 import com.yawnandpawn.app.core.alarm.Alarm
+import com.yawnandpawn.app.core.sound.SoundLibrary
 import com.yawnandpawn.app.core.sound.SoundPreview
 import com.yawnandpawn.app.core.sound.SoundRef
+import com.yawnandpawn.app.data.sound.SoundFiles
 import com.yawnandpawn.app.restartKoin
+import kotlinx.coroutines.runBlocking
 import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -19,6 +25,7 @@ import org.robolectric.RobolectricTestRunner
 import org.robolectric.Shadows.shadowOf
 import org.robolectric.shadow.api.Shadow
 import org.robolectric.shadows.ShadowMediaPlayer
+import java.io.File
 import kotlin.test.assertEquals
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
@@ -72,5 +79,17 @@ class SoundWiringTest {
         assertEquals(max, alarmVolume(), "the stream volume is unchanged")
         player.stop(restoreVolume = true)
         assertEquals(2, alarmVolume(), "the ring's end restores the volume the preview saved")
+    }
+
+    @Test
+    fun `the app's graph finds a user's file in sounds for the ring and the library (Story 7_4)`() {
+        restartKoin(app)
+        val koin = GlobalContext.get()
+        val folder = koin.get<SoundFiles>().folder().apply { mkdirs() }
+        val copy = File(folder, "sound-1.mp3").apply { writeText("audio") }
+
+        assertEquals(AlarmSound.File(Uri.fromFile(copy).toString()), koin.get<SoundResolver>().resolve("file:sound-1"))
+        assertTrue(runBlocking { koin.get<SoundLibrary>().isAvailable(SoundRef.File("sound-1")) })
+        folder.deleteRecursively()
     }
 }

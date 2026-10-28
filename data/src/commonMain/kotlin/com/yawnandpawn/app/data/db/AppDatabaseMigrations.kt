@@ -243,6 +243,22 @@ val MIGRATION_13_14: Migration =
         }
     }
 
+/**
+ * v14 to v15 (Story 7.4): adds the empty `custom_sound` table, the user's imported alarm sounds (name, file name and
+ * length; the audio itself is a copy in credential-protected `sounds/`, never backed up). No foreign key: a sound is
+ * chosen by an alarm's `sound_ref` (`file:{id}`), not tied to one. Every other table is untouched. The SQL matches the
+ * exported `15.json`; Room checks it after migrating.
+ */
+val MIGRATION_14_15: Migration =
+    object : Migration(14, 15) {
+        override suspend fun migrate(connection: SQLiteConnection) {
+            connection.execSQL(
+                "CREATE TABLE IF NOT EXISTS `custom_sound` (`id` TEXT NOT NULL, `display_name` TEXT NOT NULL, " +
+                    "`file_name` TEXT NOT NULL, `duration_ms` INTEGER NOT NULL, `created_at` INTEGER NOT NULL, PRIMARY KEY(`id`))",
+            )
+        }
+    }
+
 /** Every migration of `app.db`, oldest first; `buildAppDatabase` registers them all. */
 val APP_DATABASE_MIGRATIONS: Array<Migration> =
     arrayOf(
@@ -259,4 +275,5 @@ val APP_DATABASE_MIGRATIONS: Array<Migration> =
         MIGRATION_11_12,
         MIGRATION_12_13,
         MIGRATION_13_14,
+        MIGRATION_14_15,
     )

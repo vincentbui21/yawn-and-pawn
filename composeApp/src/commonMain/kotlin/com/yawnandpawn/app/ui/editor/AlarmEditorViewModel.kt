@@ -95,7 +95,8 @@ data class AlarmEditorArgs(
  * `nextOccurrence` from [clock] and [timeZoneProvider] (never the system clock). A stored alarm that cannot be read
  * closes the editor with [EditorEffect.OpenFailed] (Home shows "Couldn't open this alarm."); an alarm that was read
  * gets the overflow menu (Story 1.9): Duplicate and Delete through [actions]. The Sound sub-screen (Story 1.17) lists
- * the built-in sounds and the phone's alarm ringtones ([soundLibrary]) and previews one at a time ([soundPreview]); the
+ * the built-in sounds, the phone's alarm ringtones ([soundLibrary]) and (Story 7.4) the user's own files ([soundFiles],
+ * "Pick a file" imports one) and previews one at a time ([soundPreview]); the
  * preview stops on leaving the sub-screen, on [EditorIntent.Backgrounded] and when the editor closes. "Test alarm"
  * (Story 1.18) rings the form as it is now, unsaved changes included, as a test 10 s later through [testAlarm], then
  * shows its snackbar. The Wake-up check row (Story 3.5) edits the alarm's checks ([checkConfigs]) in the form: tick a
@@ -151,6 +152,11 @@ class AlarmEditorViewModel(
      * saved with the alarm) and Recordings. Null hides both: onboarding's first alarm, and tests that never meet them.
      */
     private val recordings: RecordingRepository? = null,
+    /**
+     * The user's own sound files (Story 7.4): with them the Sound sub-screen shows "Your files" and "Pick a file". Null
+     * hides the section (tests that never meet it).
+     */
+    private val soundFiles: EditorSoundFiles? = null,
 ) : ViewModel() {
     /**
      * The editor opened on QR registration for "Re-register" (only when the alarm has a QR/Barcode check): "Use this
@@ -191,7 +197,8 @@ class AlarmEditorViewModel(
     private var stored: Alarm? = null
 
     /** The Sound row, the Sound sub-screen's list and its preview (Story 1.17). */
-    private val sounds = EditorSounds(soundLibrary, soundPreview, viewModelScope, _state)
+    private val sounds =
+        EditorSounds(soundLibrary, soundPreview, viewModelScope, _state, files = soundFiles, effects = { _effects.trySend(it) })
 
     /** A "Test alarm" is being armed (Story 1.18). */
     private var testInFlight = false

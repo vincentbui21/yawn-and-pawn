@@ -156,6 +156,9 @@
     <string name="sound_play_preview">Play preview</string>
     <string name="sound_stop_preview">Stop preview</string>
     <string name="sound_file_missing">File missing. Default sound will play.</string>
+    <!-- Story 7.4: "Pick a file" refused the picked file (snackbars). -->
+    <string name="sound_file_not_playable">This file can't be played. Pick another.</string>
+    <string name="sound_file_too_big">This file is too big. Pick one under 20 MB.</string>
     <!-- Built-in sound names (Story 1.17, SoundCatalog order; drafts in docs/design-preview/copy-to-approve.md). -->
     <string name="sound_name_default">Sunrise</string>
     <string name="sound_name_classic">Classic</string>

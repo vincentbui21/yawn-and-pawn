@@ -11,6 +11,7 @@ import com.yawnandpawn.app.core.sound.SoundRef
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
+import java.io.File
 
 /** Reads the phone's alarm ringtones and opens sound URIs: the platform half of [AndroidSoundLibrary], a seam for tests. */
 interface RingtoneSource {
@@ -43,7 +44,8 @@ class PlatformRingtoneSource(
 }
 
 /**
- * The Android [SoundLibrary] (Story 1.17): the phone's alarm ringtones through `RingtoneManager`, read on [io]. A
+ * The Android [SoundLibrary] (Story 1.17): the phone's alarm ringtones through `RingtoneManager`, read on [io], and
+ * (Story 7.4) whether a user's file still has its copy. A
  * ringtone list that cannot be read is empty and logged; a ringtone that cannot be opened is not available. Nothing
  * logged names a sound or its URI.
  */
@@ -51,6 +53,8 @@ class AndroidSoundLibrary(
     private val ringtones: RingtoneSource,
     private val logger: Logger,
     private val io: CoroutineDispatcher = Dispatchers.IO,
+    /** The copy of a user's file by id (Story 7.4, `SoundFiles.find`, which never throws); none without it. */
+    private val findFile: (String) -> File? = { null },
 ) : SoundLibrary {
     // RingtoneManager and the content resolver report a missing provider, a revoked grant or a broken file with several
     // runtime exception types; any of them means "no ringtones" or "not available".
@@ -82,6 +86,11 @@ class AndroidSoundLibrary(
                         false
                     }
                 }
+            }
+
+            // A user's file is there while its copy is in sounds/ (a restored phone has the row but not the copy).
+            is SoundRef.File -> {
+                withContext(io) { findFile(ref.id) != null }
             }
         }
 }

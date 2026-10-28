@@ -1,11 +1,17 @@
 package com.yawnandpawn.app.ui
 
+import androidx.compose.material3.SnackbarDuration
+import androidx.compose.material3.SnackbarHostState
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.remember
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.SemanticsActions
 import androidx.compose.ui.semantics.SemanticsProperties
 import androidx.compose.ui.test.SemanticsMatcher
+import androidx.compose.ui.test.assertHeightIsAtLeast
 import androidx.compose.ui.test.assertIsNotEnabled
 import androidx.compose.ui.test.assertIsSelected
+import androidx.compose.ui.test.hasClickAction
 import androidx.compose.ui.test.hasText
 import androidx.compose.ui.test.junit4.v2.createEmptyComposeRule
 import androidx.compose.ui.test.onAllNodesWithContentDescription
@@ -13,17 +19,21 @@ import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.onRoot
+import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performSemanticsAction
+import androidx.compose.ui.unit.dp
 import com.github.takahirom.roborazzi.captureRoboImage
 import com.yawnandpawn.app.StopAppRule
 import com.yawnandpawn.app.core.alarm.Alarm
 import com.yawnandpawn.app.core.sound.SoundRef
 import com.yawnandpawn.app.screenshotOptions
+import com.yawnandpawn.app.testing.aCustomSound
 import com.yawnandpawn.app.ui.editor.AlarmEditorScreen
 import com.yawnandpawn.app.ui.editor.EditorIntent
 import com.yawnandpawn.app.ui.editor.EditorPane
 import com.yawnandpawn.app.ui.editor.EditorUiState
 import com.yawnandpawn.app.ui.editor.editorSound
+import com.yawnandpawn.app.ui.sound.SoundPickerIntent
 import com.yawnandpawn.app.ui.theme.PpsThemeMode
 import org.junit.Rule
 import org.junit.Test
@@ -34,7 +44,7 @@ import org.robolectric.annotation.GraphicsMode
 import kotlin.test.assertEquals
 import kotlin.test.assertTrue
 
-/** The Sound sub-screen states of Story 1.17, built with the editor's real section builder. */
+/** The Sound sub-screen states of Stories 1.17 and 7.4, built with the editor's real section builder. */
 object SoundSamples {
     private val system =
         listOf(
@@ -62,6 +72,27 @@ object SoundSamples {
 
     /** The editor's main screen with Chimes chosen. */
     val chimesOnEditor = EditorUiState(sound = editorSound("builtin:chimes", system, missing = false, previewing = null))
+
+    /** Story 7.4: "Your files" with an imported sound chosen, and one whose copy is gone (a restored phone). */
+    val files =
+        EditorUiState(
+            pane = EditorPane.Sound,
+            sound =
+                editorSound(
+                    "file:rain",
+                    system,
+                    missing = false,
+                    previewing = null,
+                    files = listOf(aCustomSound(id = "rain", displayName = "Rain"), aCustomSound(id = "song", missing = true)),
+                ),
+        )
+
+    /** Story 7.4: the Sound sub-screen with "Your files" empty, under a refused file's snackbar. */
+    val filesEmpty =
+        EditorUiState(
+            pane = EditorPane.Sound,
+            sound = editorSound(Alarm.DEFAULT_SOUND_REF, system, missing = false, previewing = null, files = emptyList()),
+        )
 }
 
 /**
@@ -95,7 +126,7 @@ class SoundPickerScreenshotTest {
             assertTrue(composeRule.onAllNodesWithText("Built-in").fetchSemanticsNodes().isNotEmpty(), "the Built-in section")
             assertTrue(composeRule.onAllNodesWithText("System").fetchSemanticsNodes().isNotEmpty(), "the System section")
             composeRule.onNode(hasText("Sunrise") and isRadio()).assertIsSelected()
-            assertEquals(0, composeRule.onAllNodesWithText("Your files").fetchSemanticsNodes().size, "Story 7.4")
+            assertEquals(0, composeRule.onAllNodesWithText("Your files").fetchSemanticsNodes().size, "hidden without the user's files")
             assertEquals(14, composeRule.onAllNodesWithContentDescription("Play preview").fetchSemanticsNodes().size)
         }
 
@@ -181,5 +212,80 @@ class SoundPickerScreenshotTest {
         }
     }
 
+    @Test
+    fun `your files with a chosen file and a missing one in Light`() =
+        capture("sound_files_light", SoundSamples.files, PpsThemeMode.Light) {
+            composeRule.onAllNodesWithText("Your files")[0].assertExists()
+            composeRule.onNode(hasText("Rain") and isRadio()).assertIsSelected()
+            assertEquals(
+                1,
+                composeRule.onAllNodesWithText("Your file", useUnmergedTree = true).fetchSemanticsNodes().size,
+                "Rain's caption",
+            )
+            // The missing file's caption replaces "Your file", and its preview is off.
+            composeRule.onNode(hasText("Morning song") and isRadio()).assertExists()
+            assertEquals(
+                1,
+                composeRule.onAllNodesWithText("File missing. Default sound will play.", useUnmergedTree = true).fetchSemanticsNodes().size,
+            )
+            val previews = composeRule.onAllNodesWithContentDescription("Play preview")
+            assertEquals(16, previews.fetchSemanticsNodes().size, "12 built-in, 2 system, 2 files")
+            previews[15].assertIsNotEnabled()
+            composeRule.onNode(hasText("Pick a file") and hasClickAction()).assertHeightIsAtLeast(48.dp)
+        }
+
+    @Test
+    fun `your files with a chosen file and a missing one in Dark`() = capture("sound_files_dark", SoundSamples.files, PpsThemeMode.Dark)
+
+    @Test
+    @Config(qualifiers = "+h3600dp", fontScale = 2.0f)
+    fun `your files with a chosen file and a missing one in Light at 200 percent`() =
+        capture("sound_files_light_font200", SoundSamples.files, PpsThemeMode.Light)
+
+    /** Story 7.4: a refused file's snackbar over the Sound sub-screen, "Your files" still empty. */
+    private fun fileErrorSnackbar(
+        name: String,
+        mode: PpsThemeMode,
+    ) = withScreen(
+        mode,
+        content = {
+            val snackbar = remember { SnackbarHostState() }
+            LaunchedEffect(Unit) { snackbar.showSnackbar(FILE_NOT_PLAYABLE, duration = SnackbarDuration.Indefinite) }
+            AlarmEditorScreen(state = SoundSamples.filesEmpty, is24Hour = false, onIntent = {}, snackbarHostState = snackbar)
+        },
+    ) {
+        composeRule.onNodeWithText(FILE_NOT_PLAYABLE).assertExists()
+        composeRule.onNode(hasText("Pick a file") and hasClickAction()).assertExists()
+        composeRule.onRoot().captureRoboImage("src/test/screenshots/$name.png", roborazziOptions = screenshotOptions)
+    }
+
+    @Test
+    fun `file error snackbar in Light`() = fileErrorSnackbar("sound_file_error_light", PpsThemeMode.Light)
+
+    @Test
+    fun `file error snackbar in Dark`() = fileErrorSnackbar("sound_file_error_dark", PpsThemeMode.Dark)
+
+    @Test
+    @Config(qualifiers = "+h3600dp", fontScale = 2.0f)
+    fun `file error snackbar in Light at 200 percent`() = fileErrorSnackbar("sound_file_error_light_font200", PpsThemeMode.Light)
+
+    @Test
+    fun `Pick a file sends its intent`() {
+        val sent = mutableListOf<EditorIntent>()
+        withScreen(
+            PpsThemeMode.Light,
+            content = { AlarmEditorScreen(state = SoundSamples.filesEmpty, is24Hour = false, onIntent = { sent += it }) },
+        ) {
+            composeRule.onNode(hasText("Pick a file") and hasClickAction()).performClick()
+
+            assertEquals(listOf<EditorIntent>(EditorIntent.Sound(SoundPickerIntent.PickFileClicked)), sent)
+        }
+    }
+
     private fun isRadio(): SemanticsMatcher = SemanticsMatcher.expectValue(SemanticsProperties.Role, Role.RadioButton)
+
+    private companion object {
+        /** EXPERIENCE.md, verbatim. */
+        const val FILE_NOT_PLAYABLE = "This file can't be played. Pick another."
+    }
 }

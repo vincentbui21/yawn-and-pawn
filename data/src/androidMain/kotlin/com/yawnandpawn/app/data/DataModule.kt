@@ -25,6 +25,7 @@ import com.yawnandpawn.app.core.reset.LocalDataEraser
 import com.yawnandpawn.app.core.reset.SessionHistoryEraser
 import com.yawnandpawn.app.core.session.ActiveSessionStore
 import com.yawnandpawn.app.core.session.TestAlarmStore
+import com.yawnandpawn.app.core.sound.CustomSoundRepository
 import com.yawnandpawn.app.core.stats.CheckRegistrations
 import com.yawnandpawn.app.core.stats.FallbackHistory
 import com.yawnandpawn.app.core.stats.ReRegisterDismissals
@@ -65,6 +66,8 @@ import com.yawnandpawn.app.data.settings.InstallIdDataStore
 import com.yawnandpawn.app.data.settings.PriceCacheDataStore
 import com.yawnandpawn.app.data.settings.ReliabilityDataStore
 import com.yawnandpawn.app.data.settings.SettingsDataStore
+import com.yawnandpawn.app.data.sound.RoomCustomSoundRepository
+import com.yawnandpawn.app.data.sound.SoundFiles
 import org.koin.core.module.dsl.onClose
 import org.koin.core.module.dsl.withOptions
 import org.koin.dsl.module
@@ -150,6 +153,11 @@ val dataModule =
         single { RecordingFiles.of(get<Context>()) }
         single { get<AppDatabase>().recordingDao() }
         single<RecordingRepository> { RoomRecordingRepository(get(), get()) }
+        // Story 7.4: the user's imported sounds, rows in app.db (backed up) and copies in credential-protected
+        // filesDir/sounds (never backed up; read lazily, so nothing touches it before the first unlock).
+        single { SoundFiles.of(get<Context>()) }
+        single { get<AppDatabase>().customSoundDao() }
+        single<CustomSoundRepository> { RoomCustomSoundRepository(get(), get()) }
         // The cached Play prices (Story 4.3): their own device-protected DataStore, never backed up; released like the others.
         single { PriceCacheDataStore(get<Context>()) } withOptions { onClose { it?.close() } }
         single<PriceCacheStore> { DataStorePriceCacheStore(get<PriceCacheDataStore>().store, get()) }
@@ -165,6 +173,7 @@ val dataModule =
                 reliability = get(),
                 consent = get(),
                 recordings = get(),
+                sounds = get(),
             )
         }
     }

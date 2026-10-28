@@ -30,8 +30,17 @@ class SoundRefTest {
     }
 
     @Test
+    fun `a user's file is file colon id and parses back (Story 7_4)`() {
+        val ref = SoundRef.File("0f8fad5b-d9cb-469f-a165-70867728950e")
+
+        assertEquals("file:0f8fad5b-d9cb-469f-a165-70867728950e", ref.encode())
+        assertEquals(ref, SoundRef.parse(ref.encode()))
+        assertEquals(SoundRef.File("x"), SoundRef.parse("file:x"))
+    }
+
+    @Test
     fun `unknown or incomplete references parse to nothing`() {
-        listOf("", "builtin:", "builtin:  ", "system:", "system:Argon", "system:Argon|", "file:x", "default").forEach {
+        listOf("", "builtin:", "builtin:  ", "system:", "system:Argon", "system:Argon|", "file:", "file: ", "default").forEach {
             assertNull(SoundRef.parse(it), "'$it'")
         }
     }

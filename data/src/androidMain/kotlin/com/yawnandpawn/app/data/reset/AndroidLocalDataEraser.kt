@@ -11,14 +11,15 @@ import com.yawnandpawn.app.data.settings.ConsentDataStore
 import com.yawnandpawn.app.data.settings.PriceCacheDataStore
 import com.yawnandpawn.app.data.settings.ReliabilityDataStore
 import com.yawnandpawn.app.data.settings.SettingsDataStore
+import com.yawnandpawn.app.data.sound.SoundFiles
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import kotlin.coroutines.cancellation.CancellationException
 
 /**
- * [LocalDataEraser] over the app's own files (Story 5.9): the `recordings/` folder with every audio file (Story 7.1;
- * a `StorageFailure` before the first unlock) and then the alarm tables of `app.db` ([AlarmDataDao], with the
- * `recording` rows), the purchase
+ * [LocalDataEraser] over the app's own files (Story 5.9): the `recordings/` folder with every audio file (Story 7.1)
+ * and the `sounds/` folder with every imported sound (Story 7.4; each a `StorageFailure` before the first unlock) and
+ * then the alarm tables of `app.db` ([AlarmDataDao], with the `recording` and `custom_sound` rows), the purchase
  * intents of `runtime.db`, the whole settings DataStore (`clear()`, so every key, also the ones later stories add), the
  * settings fallback preferences (theme and defaults too, once Story 5.1 caches them), the price cache and the
  * reliability checklist's records (`datastore/reliability.preferences_pb`, Story 5.3: the locked test, the rows seen OK
@@ -36,12 +37,16 @@ class AndroidLocalDataEraser(
     private val reliability: ReliabilityDataStore,
     private val consent: ConsentDataStore,
     private val recordings: RecordingFiles,
+    private val sounds: SoundFiles,
 ) : LocalDataEraser {
     override suspend fun deleteAlarmData(): Outcome<Unit, DomainError> =
         storage {
             // The audio first: before the first unlock it cannot be seen, so this fails (and the deletion retries later)
             // before any row goes; rows deleted first would leave the files with nothing pointing at them.
-            withContext(Dispatchers.IO) { recordings.deleteAll() }
+            withContext(Dispatchers.IO) {
+                recordings.deleteAll()
+                sounds.deleteAll()
+            }
             alarmData.deleteAllAlarmData()
         }
 

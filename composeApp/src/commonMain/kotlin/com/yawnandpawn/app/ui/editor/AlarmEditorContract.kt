@@ -457,6 +457,12 @@ sealed interface EditorEffect {
     /** A test ring is armed: show "Lock your phone. We'll ring in 10 seconds." (Story 1.18). */
     data object ShowTestScheduled : EditorEffect
 
+    /** A picked file was refused (Story 7.4): show "This file can't be played. Pick another." */
+    data object ShowSoundFileNotPlayable : EditorEffect
+
+    /** A picked file is over 20 MB (Story 7.4): show "This file is too big. Pick one under 20 MB." */
+    data object ShowSoundFileTooBig : EditorEffect
+
     /** The alarm could not be read: leave the editor, and Home shows "Couldn't open this alarm.". */
     data object OpenFailed : EditorEffect
 

@@ -278,6 +278,33 @@ class DirectBootRingTest {
     }
 
     @Test
+    fun `a session with the user's own file restored while locked rings the default sound (Story 7_4)`() {
+        lockUser()
+        val app = WakeApp()
+        val userFile = "file:0f8fad5b-d9cb-469f-a165-70867728950e"
+        val stored = SessionState.Ringing(aSession(config = aSessionConfig().copy(soundRef = userFile)))
+        assertEquals(Outcome.Success(Unit), runBlocking { app.koin.get<ActiveSessionStore>().commit(stored) })
+
+        app.app.sendBroadcast(Intent(Intent.ACTION_LOCKED_BOOT_COMPLETED).setPackage(app.app.packageName))
+        idle()
+        val slot =
+            assertNotNull(
+                shadowOf(app.app.getSystemService(AlarmManager::class.java)).scheduledAlarms.singleOrNull {
+                    shadowOf(it.operation).requestCode == RequestCodes.SESSION_SLOT
+                },
+            )
+        app.app.sendBroadcast(Intent(shadowOf(slot.operation).savedIntent))
+        idle()
+        app.startService(assertNotNull(shadowOf(app.app).nextStartedService))
+        app.awaitRinging()
+
+        val restored = assertIs<SessionState.Ringing>(app.engine.state.value).session
+        assertTrue(restored.beforeFirstUnlock)
+        assertEquals(userFile, restored.config.soundRef, "the frozen config keeps the chosen file")
+        assertEquals(AlarmSound.Default, app.player.sound, "the copy in credential-protected sounds/ is never read while locked")
+    }
+
+    @Test
     fun `BOOT_COMPLETED after the unlock repeats the locked boot's scheduling exactly`() {
         lockUser()
         val scheduler = FakeAlarmScheduler()

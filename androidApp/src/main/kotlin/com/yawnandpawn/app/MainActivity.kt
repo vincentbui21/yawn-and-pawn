@@ -18,6 +18,7 @@ import com.yawnandpawn.app.android.qr.AndroidQrPrinter
 import com.yawnandpawn.app.android.recording.AndroidMicrophonePermission
 import com.yawnandpawn.app.android.reliability.AndroidNotificationPermission
 import com.yawnandpawn.app.android.screen.forwardToWakeScreenWhileResumed
+import com.yawnandpawn.app.android.sound.AndroidSoundFilePicker
 import com.yawnandpawn.app.android.wake.WakeRuntime
 import com.yawnandpawn.app.core.billing.PurchaseCoordinator
 import com.yawnandpawn.app.core.billing.ReplayGrantLedger
@@ -41,8 +42,10 @@ import org.koin.android.ext.android.inject
  *
  * While it is started it lends the notification permission (Story 1.19) its launcher for the system dialog, so the
  * editor can ask after the first save; the answer needs no handling (the Home banner reflects it). It lends the camera
- * permission its launcher the same way (Story 3.10), and hands the answer back to the screen that asked. The printable
- * QR prints through it too (Story 7.10): the print dialog needs an activity.
+ * permission its launcher the same way (Story 3.10), and hands the answer back to the screen that asked; the same for
+ * the microphone (Story 7.2) and the document picker of "Pick a file" (Story 7.4, which stops this activity while it is
+ * open: the pick keeps waiting and its answer arrives when the activity starts again). The printable QR prints through
+ * it too (Story 7.10): the print dialog needs an activity.
  *
  * While it is resumed and the alarm rings (Ringing, Grace, Loud or an emergency ring), it opens the wake screen
  * (Story 2.5): opening the app during a ring brings the user back to the alarm.
@@ -71,6 +74,8 @@ class MainActivity : ComponentActivity() {
     private val microphonePermission: AndroidMicrophonePermission by inject()
     private val qrPrinter: AndroidQrPrinter by inject()
 
+    private val soundFilePicker: AndroidSoundFilePicker by inject()
+
     private val settings: GlobalSettingsRepository by inject()
 
     private val openRequests: AppOpenRequests by inject()
@@ -95,6 +100,10 @@ class MainActivity : ComponentActivity() {
             )
         }
 
+    // Story 7.4: the system document picker for "Pick a file" (audio only, no storage permission); null when cancelled.
+    private val openSoundFile =
+        registerForActivityResult(ActivityResultContracts.OpenDocument()) { uri -> soundFilePicker.onResult(uri?.toString()) }
+
     override fun onCreate(savedInstanceState: Bundle?) {
         enableEdgeToEdge()
         super.onCreate(savedInstanceState)
@@ -106,6 +115,7 @@ class MainActivity : ComponentActivity() {
         val launch = { requestNotifications.launch(Manifest.permission.POST_NOTIFICATIONS) }
         val launchCamera = { requestCamera.launch(Manifest.permission.CAMERA) }
         val launchMicrophone = { requestMicrophone.launch(Manifest.permission.RECORD_AUDIO) }
+        val launchSoundPicker = { openSoundFile.launch(AUDIO_FILES) }
         lifecycle.addObserver(
             object : DefaultLifecycleObserver {
                 override fun onStart(owner: LifecycleOwner) {
@@ -113,6 +123,7 @@ class MainActivity : ComponentActivity() {
                     cameraPermission.attach(launchCamera)
                     microphonePermission.attach(launchMicrophone)
                     qrPrinter.attach(this@MainActivity)
+                    soundFilePicker.attach(launchSoundPicker)
                     appScope.launch { replayLedger() }
                 }
 
@@ -124,6 +135,7 @@ class MainActivity : ComponentActivity() {
                     cameraPermission.detach(launchCamera)
                     microphonePermission.detach(launchMicrophone)
                     qrPrinter.detach(this@MainActivity)
+                    soundFilePicker.detach(launchSoundPicker)
                 }
             },
         )
@@ -183,5 +195,8 @@ class MainActivity : ComponentActivity() {
 
         /** The alarm id whose "Skip this one" was tapped on its pre-alarm notification (Story 7.11). */
         const val EXTRA_SKIP_ALARM = "skipAlarm"
+
+        /** The document picker's filter for "Pick a file" (Story 7.4); some providers report Ogg audio as `application/ogg`. */
+        val AUDIO_FILES = arrayOf("audio/*", "application/ogg")
     }
 }

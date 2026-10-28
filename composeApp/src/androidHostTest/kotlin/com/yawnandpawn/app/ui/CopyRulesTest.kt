@@ -99,6 +99,23 @@ class CopyRulesTest {
     }
 
     @Test
+    fun `the sound picker's user file strings are EXPERIENCE's Key strings (Story 7_4)`() {
+        val compose = CopyRules.stringFiles(composeResources).flatMap { CopyRules.read(it) }.associate { it.key to it.text }
+
+        assertEquals(
+            mapOf(
+                "sound_your_files" to "Your files",
+                "sound_your_file" to "Your file",
+                "sound_pick_file" to "Pick a file",
+                "sound_file_missing" to "File missing. Default sound will play.",
+                "sound_file_not_playable" to "This file can't be played. Pick another.",
+                "sound_file_too_big" to "This file is too big. Pick one under 20 MB.",
+            ),
+            compose.filterKeys { it.startsWith("sound_your_") || it.startsWith("sound_file_") || it == "sound_pick_file" },
+        )
+    }
+
+    @Test
     fun `every manufacturer guidance step has at most 25 words, and the shared Recents step is EXPERIENCE's Xiaomi step 3`() {
         val strings = CopyRules.stringFiles(composeResources).flatMap { CopyRules.read(it) }
         val steps = strings.filter { it.key.startsWith("reliability_") && "_step" in it.key }

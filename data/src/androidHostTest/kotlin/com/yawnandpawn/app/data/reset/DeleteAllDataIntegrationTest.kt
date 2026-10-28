@@ -53,6 +53,7 @@ import com.yawnandpawn.app.core.session.SessionLockGuard
 import com.yawnandpawn.app.core.session.SessionState
 import com.yawnandpawn.app.core.session.StoredSession
 import com.yawnandpawn.app.core.session.ThemeMode
+import com.yawnandpawn.app.core.sound.CustomSoundRepository
 import com.yawnandpawn.app.core.telemetry.AnalyticsConsent
 import com.yawnandpawn.app.core.telemetry.ConsentStore
 import com.yawnandpawn.app.core.time.Clock
@@ -62,6 +63,7 @@ import com.yawnandpawn.app.data.db.AppDatabase
 import com.yawnandpawn.app.data.db.RuntimeDatabase
 import com.yawnandpawn.app.data.recording.RecordingFiles
 import com.yawnandpawn.app.data.settings.SettingsDataStore
+import com.yawnandpawn.app.data.sound.SoundFiles
 import com.yawnandpawn.app.testing.FakeAlarmScheduler
 import com.yawnandpawn.app.testing.FakeAnalyticsDataReset
 import com.yawnandpawn.app.testing.FakeBackgroundWork
@@ -69,6 +71,7 @@ import com.yawnandpawn.app.testing.FakeBilling
 import com.yawnandpawn.app.testing.FakeClock
 import com.yawnandpawn.app.testing.FakeLogger
 import com.yawnandpawn.app.testing.FakeUnsentCrashReports
+import com.yawnandpawn.app.testing.aCustomSound
 import com.yawnandpawn.app.testing.aGrant
 import com.yawnandpawn.app.testing.aPriceSnapshot
 import com.yawnandpawn.app.testing.aPurchaseIntent
@@ -193,7 +196,7 @@ class DeleteAllDataIntegrationTest {
         }
 
     @Test
-    fun `before the first unlock the alarm data is not deleted, so the recordings are never orphaned`() =
+    fun `before the first unlock the alarm data is not deleted, so the recordings and sounds are never orphaned`() =
         runBlocking {
             val recordingFiles = koin.get<RecordingFiles>()
             recordingFiles.folder().mkdirs()
@@ -201,6 +204,13 @@ class DeleteAllDataIntegrationTest {
             val recordings = koin.get<RecordingRepository>()
             assertIs<Outcome.Success<*>>(recordings.save(aRecording(id = "recording-1"), RecordedTake("take-1", 9_000)))
             val locked = RecordingFiles(isUnlocked = { false }) { recordingFiles.folder() }
+            // Story 7.4: the sounds folder is locked too (the recordings fail first, before either folder is touched).
+            val soundFiles = koin.get<SoundFiles>()
+            soundFiles.folder().mkdirs()
+            File(soundFiles.folder(), "sound-1.mp3").writeText("audio")
+            val sounds = koin.get<CustomSoundRepository>()
+            assertIs<Outcome.Success<*>>(sounds.add(aCustomSound(id = "sound-1")))
+            val lockedSounds = SoundFiles(isUnlocked = { false }) { soundFiles.folder() }
             val eraser =
                 AndroidLocalDataEraser(
                     alarmData = koin.get<AppDatabase>().alarmDataDao(),
@@ -211,6 +221,7 @@ class DeleteAllDataIntegrationTest {
                     reliability = koin.get(),
                     consent = koin.get(),
                     recordings = locked,
+                    sounds = lockedSounds,
                 )
 
             assertEquals(
@@ -220,6 +231,8 @@ class DeleteAllDataIntegrationTest {
             )
             assertEquals(listOf("recording-1"), recordings.observeAll().first().map { it.id }, "the row is kept")
             assertTrue(File(recordingFiles.folder(), "recording-1.m4a").isFile, "the audio is kept")
+            assertEquals(listOf("sound-1"), sounds.observeAll().first().map { it.id }, "the sound row is kept")
+            assertTrue(File(soundFiles.folder(), "sound-1.mp3").isFile, "the sound file is kept")
         }
 
     private fun deleteAllData(): DeleteAllData =
@@ -280,6 +293,11 @@ class DeleteAllDataIntegrationTest {
         val take = RecordedTake("take-1", 9_000)
         assertIs<Outcome.Success<*>>(koin.get<RecordingRepository>().save(aRecording(id = "recording-1"), take))
         assertTrue(File(recordingFiles.folder(), "recording-1.m4a").isFile)
+        // An imported sound (Story 7.4): its row in app.db and its copy in credential-protected sounds/.
+        val soundFiles = koin.get<SoundFiles>()
+        soundFiles.folder().mkdirs()
+        File(soundFiles.folder(), "sound-1.mp3").writeText("audio")
+        assertIs<Outcome.Success<*>>(koin.get<CustomSoundRepository>().add(aCustomSound(id = "sound-1")))
         // Purchase records: settled ones always, owed ones when asked.
         val records = koin.get<PurchaseRecordRepository>()
         val settled =
@@ -371,6 +389,8 @@ class DeleteAllDataIntegrationTest {
         assertEquals(Outcome.Success(emptyList<CommitmentEvent>()), koin.get<CommitmentEventRepository>().all())
         assertEquals(emptyList(), koin.get<RecordingRepository>().observeAll().first(), "no recording row (Story 7.1)")
         assertFalse(koin.get<RecordingFiles>().folder().exists(), "no recording file (Story 7.1)")
+        assertEquals(emptyList(), koin.get<CustomSoundRepository>().observeAll().first(), "no imported sound row (Story 7.4)")
+        assertFalse(koin.get<SoundFiles>().folder().exists(), "no imported sound file (Story 7.4)")
         val history = koin.get<SessionHistoryRepository>()
         assertNull(assertIs<Outcome.Success<*>>(history.find(SESSION)).value)
         assertEquals(Outcome.Success(emptyList<SessionMergeRow>()), history.merges(SESSION))

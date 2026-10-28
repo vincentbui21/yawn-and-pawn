@@ -26,6 +26,8 @@ import com.yawnandpawn.app.core.reliability.ReliabilitySettings
 import com.yawnandpawn.app.core.session.ScheduleTestAlarm
 import com.yawnandpawn.app.core.session.SessionLockGuard
 import com.yawnandpawn.app.core.session.SessionState
+import com.yawnandpawn.app.core.sound.CustomSoundRepository
+import com.yawnandpawn.app.core.sound.SoundImporter
 import com.yawnandpawn.app.core.sound.SoundLibrary
 import com.yawnandpawn.app.core.sound.SoundPreview
 import com.yawnandpawn.app.core.stats.CheckRegistrations
@@ -43,6 +45,7 @@ import com.yawnandpawn.app.testing.FakeAlarmScheduler
 import com.yawnandpawn.app.testing.FakeCheckConfigRepository
 import com.yawnandpawn.app.testing.FakeClock
 import com.yawnandpawn.app.testing.FakeCommitmentEventRepository
+import com.yawnandpawn.app.testing.FakeCustomSoundRepository
 import com.yawnandpawn.app.testing.FakeGlobalSettingsRepository
 import com.yawnandpawn.app.testing.FakeLogger
 import com.yawnandpawn.app.testing.FakeManufacturerSettings
@@ -60,6 +63,7 @@ import com.yawnandpawn.app.testing.FakeReliabilityProbe
 import com.yawnandpawn.app.testing.FakeReliabilityRecords
 import com.yawnandpawn.app.testing.FakeReliabilitySettings
 import com.yawnandpawn.app.testing.FakeSessionHistoryRepository
+import com.yawnandpawn.app.testing.FakeSoundImporter
 import com.yawnandpawn.app.testing.FakeSoundLibrary
 import com.yawnandpawn.app.testing.FakeSoundPreview
 import com.yawnandpawn.app.testing.FakeTestAlarmStore
@@ -89,6 +93,7 @@ import com.yawnandpawn.app.ui.qr.TestCameraPermission
 import com.yawnandpawn.app.ui.reliability.ChecklistItem
 import com.yawnandpawn.app.ui.reliability.ManufacturerGuidanceViewModel
 import com.yawnandpawn.app.ui.reliability.ReliabilityViewModel
+import com.yawnandpawn.app.ui.sound.SoundFilePicker
 import com.yawnandpawn.app.ui.you.YouUiState
 import com.yawnandpawn.app.ui.you.YouViewModel
 import kotlinx.coroutines.Dispatchers
@@ -158,6 +163,13 @@ class UiModuleTest {
             single<AccessibilityState> { FakeAccessibilityState() }
             single<CameraPermission> { TestCameraPermission() }
             single<RecordingRepository> { FakeRecordingRepository() }
+            single<CustomSoundRepository> { FakeCustomSoundRepository() }
+            single<SoundFilePicker> {
+                object : SoundFilePicker {
+                    override suspend fun pick(): String? = null
+                }
+            }
+            single<SoundImporter> { FakeSoundImporter() }
             single<PurchaseRecordRepository> { FakePurchaseRecordRepository() }
             single<SessionHistoryRepository> { FakeSessionHistoryRepository() }
             // Story 6.7: Day detail reads the logged alarm changes.
@@ -224,6 +236,8 @@ class UiModuleTest {
                         ?.rows
                         .orEmpty(),
             )
+            // Story 7.4: "Your files" in the app's editor only, not in onboarding's first alarm (it shows no snackbars).
+            assertEquals(listOf(true, false), listOf(newEditor.showsFiles, onboardingEditor.showsFiles))
             val editEditor = koin.get<AlarmEditorViewModel> { parametersOf(AlarmEditorArgs(alarmId = "some-id")) }
             assertFalse(editEditor.state.value.isNew)
             // Duplicate (owner decision 2026-10-05): a new alarm prefilled from the stored one, nothing stored.
@@ -362,4 +376,11 @@ class UiModuleTest {
     fun `ui tests can use builders from the testing module`() {
         assertEquals("0.1.0", anAppVersion().versionName)
     }
+
+    /** Whether the editor's Sound sub-screen shows "Your files" (Story 7.4); null before its sound section. */
+    private val AlarmEditorViewModel.showsFiles: Boolean?
+        get() =
+            state.value.sound
+                ?.picker
+                ?.showFiles
 }

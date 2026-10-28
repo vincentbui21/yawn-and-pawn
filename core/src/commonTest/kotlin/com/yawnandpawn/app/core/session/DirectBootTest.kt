@@ -37,6 +37,7 @@ class DirectBootTest {
     }
 
     private val systemSound = "system:Morning|content://media/internal/audio/media/7"
+    private val userFile = "file:0f8fad5b-d9cb-469f-a165-70867728950e"
     private val lock = Lock(unlocked = false)
     private val time = EngineTime()
     private val store = InMemorySessionStore()
@@ -68,6 +69,26 @@ class DirectBootTest {
         assertEquals(Alarm.DEFAULT_SOUND_REF, DirectBootSubstitution.apply(config, beforeFirstUnlock = true).soundRef)
         assertEquals(Alarm.DEFAULT_SOUND_REF, DirectBootSubstitution.apply(config.copy(soundRef = "garbage"), true).soundRef)
     }
+
+    @Test
+    fun `before the first unlock the user's own file becomes the default built-in sound, and unlocked it stays (Story 7_4)`() {
+        val config = testConfig().copy(soundRef = userFile)
+
+        assertEquals(Alarm.DEFAULT_SOUND_REF, DirectBootSubstitution.apply(config, beforeFirstUnlock = true).soundRef)
+        assertSame(config, DirectBootSubstitution.apply(config, beforeFirstUnlock = false))
+    }
+
+    @Test
+    fun `an alarm with the user's own file that fires while locked rings the default sound, its config frozen as it was`() =
+        runTest {
+            val config = testConfig().copy(soundRef = userFile)
+
+            val session = engine().dispatch(alarmFired(config)).session()
+
+            assertTrue(session.beforeFirstUnlock)
+            assertEquals(config, session.config, "the frozen config keeps the chosen file")
+            assertEquals(EntryEffect.SoundAt(Alarm.DEFAULT_SOUND_REF, config.volumePercent), runner.entry.first())
+        }
 
     @Test
     fun `a chosen built-in sound and the safe placeholder check stay, and unlocked the config comes back unchanged`() {

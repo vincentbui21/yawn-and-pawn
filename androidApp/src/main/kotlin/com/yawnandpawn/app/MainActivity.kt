@@ -14,8 +14,8 @@ import androidx.lifecycle.DefaultLifecycleObserver
 import androidx.lifecycle.LifecycleOwner
 import com.yawnandpawn.app.android.ApplicationScope
 import com.yawnandpawn.app.android.qr.AndroidCameraPermission
-import com.yawnandpawn.app.android.recording.AndroidMicrophonePermission
 import com.yawnandpawn.app.android.qr.AndroidQrPrinter
+import com.yawnandpawn.app.android.recording.AndroidMicrophonePermission
 import com.yawnandpawn.app.android.reliability.AndroidNotificationPermission
 import com.yawnandpawn.app.android.screen.forwardToWakeScreenWhileResumed
 import com.yawnandpawn.app.android.wake.WakeRuntime

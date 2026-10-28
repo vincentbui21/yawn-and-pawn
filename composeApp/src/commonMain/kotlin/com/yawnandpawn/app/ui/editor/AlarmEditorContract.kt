@@ -87,6 +87,7 @@ enum class EditorPane {
 
     /** Recordings (Story 7.2), opened from the Motivation sub-screen's "Record a message"; Back returns there. */
     Recordings,
+
     /**
      * The printable QR (Story 7.10), opened from Check setup's or QR registration's "Make a printable QR"; Back returns to
      * the pane it was opened from. It comes after [ScanCode], so opening it from there slides forward ([isDeeperThan]).

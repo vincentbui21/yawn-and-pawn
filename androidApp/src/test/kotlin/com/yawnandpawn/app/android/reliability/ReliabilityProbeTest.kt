@@ -79,7 +79,7 @@ class ReliabilityProbeTest {
         notifications.setNotificationPolicyAccessGranted(false)
         dnd(NotificationManager.INTERRUPTION_FILTER_ALL, alarmsAllowed = true)
         battery(ignoring = true, restricted = false, bucket = UsageStatsManager.STANDBY_BUCKET_ACTIVE)
-        shadowOf(context as Application).grantPermissions(Manifest.permission.CAMERA)
+        shadowOf(context as Application).grantPermissions(Manifest.permission.CAMERA, Manifest.permission.RECORD_AUDIO)
     }
 
     private fun dnd(
@@ -104,14 +104,17 @@ class ReliabilityProbeTest {
         }
     }
 
-    /** Every Story 5.3 setting is off: total silence, battery optimised and restricted, camera denied. */
+    /** Every Story 5.3 setting is off: total silence, battery optimised and restricted, camera and microphone denied. */
     private fun allNewOff() {
         dnd(NotificationManager.INTERRUPTION_FILTER_NONE, alarmsAllowed = false)
         battery(ignoring = false, restricted = true, bucket = UsageStatsManager.STANDBY_BUCKET_RESTRICTED)
-        shadowOf(context as Application).denyPermissions(Manifest.permission.CAMERA)
+        shadowOf(context as Application).denyPermissions(Manifest.permission.CAMERA, Manifest.permission.RECORD_AUDIO)
     }
 
-    /** The Story 5.3 values of [status]: DND, battery exempt, background restricted, bucket restricted, camera. */
+    /**
+     * The Story 5.3 values of [status]: DND, battery exempt, background restricted, bucket restricted, camera, and (Story
+     * 7.2) the microphone.
+     */
     private fun newValues(status: ReliabilityStatus): List<Boolean> =
         listOf(
             status.dndAllowsAlarms,
@@ -119,6 +122,7 @@ class ReliabilityProbeTest {
             status.backgroundRestricted,
             status.standbyBucketRestricted,
             status.cameraGranted,
+            status.microphoneGranted,
         )
 
     private val good = newValues(ReliabilityStatus.ALL_OK)
@@ -243,7 +247,7 @@ class ReliabilityProbeTest {
         dnd(NotificationManager.INTERRUPTION_FILTER_PRIORITY, alarmsAllowed = false)
         battery(ignoring = false, restricted = true, bucket = UsageStatsManager.STANDBY_BUCKET_RESTRICTED)
         shadowOf(context as Application).denyPermissions(Manifest.permission.CAMERA)
-        assertEquals(listOf(true, false, false, false, false), newValues(probe.check()))
+        assertEquals(listOf(true, false, false, false, false, true), newValues(probe.check()))
 
         dnd(NotificationManager.INTERRUPTION_FILTER_NONE, alarmsAllowed = true)
         assertEquals(false, probe.check().dndAllowsAlarms)
@@ -265,7 +269,7 @@ class ReliabilityProbeTest {
         assertEquals(true, probe.check().dndAllowsAlarms)
 
         allNewOff()
-        assertEquals(listOf(false, false, true, false, false), newValues(probe.check()))
+        assertEquals(listOf(false, false, true, false, false, false), newValues(probe.check()))
     }
 
     @Test
@@ -312,7 +316,7 @@ class ReliabilityProbeTest {
         allNewOff()
 
         val status = probe.check()
-        assertEquals(listOf(false, false, true, true, false), newValues(status))
+        assertEquals(listOf(false, false, true, true, false, false), newValues(status))
         assertEquals(false, status.batteryOk)
         val storyOneNineteen = listOf(status.notificationsAllowed, status.fullScreenIntentAllowed, status.exactAlarmsAllowed)
         assertEquals(listOf(true, true, true), storyOneNineteen, "the Story 1.19 items do not change")
@@ -385,8 +389,14 @@ class ReliabilityProbeTest {
 
         assertEquals(ReliabilityStatus.ALL_OK, broken.check())
         assertEquals(
-            listOf("Do Not Disturb", "battery optimisation", "background restriction", "standby bucket", "camera permission")
-                .map { LogEvent.OperationFailed("read $it", "SecurityException") },
+            listOf(
+                "Do Not Disturb",
+                "battery optimisation",
+                "background restriction",
+                "standby bucket",
+                "camera permission",
+                "microphone permission",
+            ).map { LogEvent.OperationFailed("read $it", "SecurityException") },
             logger.events,
         )
     }
@@ -407,7 +417,11 @@ class ReliabilityProbeTest {
             }
 
         override fun checkSelfPermission(permission: String): Int =
-            if (permission == Manifest.permission.CAMERA) throw SecurityException("broken") else super.checkSelfPermission(permission)
+            if (permission in setOf(Manifest.permission.CAMERA, Manifest.permission.RECORD_AUDIO)) {
+                throw SecurityException("broken")
+            } else {
+                super.checkSelfPermission(permission)
+            }
 
         private fun fromDndRead(): Boolean = Throwable().stackTrace.any { it.methodName == "dndAllowsAlarms" }
     }

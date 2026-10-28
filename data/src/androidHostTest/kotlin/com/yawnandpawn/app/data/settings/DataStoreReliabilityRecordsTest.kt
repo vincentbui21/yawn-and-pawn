@@ -50,12 +50,15 @@ class DataStoreReliabilityRecordsTest {
             assertEquals(Outcome.Success(Unit), records.saveLastOk(setOf(ChecklistRow.Battery, ChecklistRow.DoNotDisturb)))
             assertEquals(Outcome.Success(Unit), records.lockedTestPassed(passedAt))
             assertEquals(Outcome.Success(Unit), records.confirmMaker(maker))
+            assertEquals(Outcome.Success(Unit), records.recordTapped())
             dataStore.close()
 
             dataStore = ReliabilityDataStore(context)
 
             assertEquals(
-                Outcome.Success(StoredReliability(setOf(ChecklistRow.Battery, ChecklistRow.DoNotDisturb), passedAt, maker)),
+                Outcome.Success(
+                    StoredReliability(setOf(ChecklistRow.Battery, ChecklistRow.DoNotDisturb), passedAt, maker, recordTapped = true),
+                ),
                 DataStoreReliabilityRecords(dataStore.store).read(),
             )
         }

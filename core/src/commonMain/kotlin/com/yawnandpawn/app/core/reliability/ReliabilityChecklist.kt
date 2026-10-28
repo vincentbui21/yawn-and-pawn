@@ -27,7 +27,7 @@ enum class ChecklistRow {
     /** Shown only while an enabled alarm has a camera check. */
     Camera,
 
-    /** Hidden until recording checks exist (Epic 7). */
+    /** Shown only once the user has tapped record (Story 7.2), with the microphone permission's status. */
     Microphone,
     LockedScreenTest,
 }
@@ -87,11 +87,13 @@ data class MakerConfirmation(
  * @property lastOk the rows seen OK (or Revoked since) by [ReliabilityChecklist.lastOkAfter]: a failing row in it is Revoked.
  * @property lockedTestPassedAt when a test alarm that rang with the phone locked was completed; null before that.
  * @property makerConfirmation the last confirmed maker guidance.
+ * @property recordTapped the user tapped record on the Recordings screen at least once (Story 7.2): the Microphone row shows.
  */
 data class StoredReliability(
     val lastOk: Set<ChecklistRow> = emptySet(),
     val lockedTestPassedAt: Instant? = null,
     val makerConfirmation: MakerConfirmation? = null,
+    val recordTapped: Boolean = false,
 )
 
 /**
@@ -120,6 +122,9 @@ interface ReliabilityRecords : LockedTestRecorder {
 
     /** The user confirmed the maker guidance (Story 5.5). */
     suspend fun confirmMaker(confirmation: MakerConfirmation): Outcome<Unit, DomainError>
+
+    /** The user tapped record (Story 7.2): from now on the checklist shows the Microphone row. */
+    suspend fun recordTapped(): Outcome<Unit, DomainError>
 }
 
 /** The reliability checklist's rules (Epic 5, Story 5.3). Pure. */
@@ -160,7 +165,7 @@ object ReliabilityChecklist {
                     ChecklistRow.Battery -> status.batteryOk
                     ChecklistRow.Manufacturer -> confirmed.takeIf { device.makerCovered }
                     ChecklistRow.Camera -> status.cameraGranted.takeIf { cameraUsed }
-                    ChecklistRow.Microphone -> null
+                    ChecklistRow.Microphone -> status.microphoneGranted.takeIf { stored.recordTapped }
                     ChecklistRow.LockedScreenTest -> stored.lockedTestPassedAt != null
                 }
             ChecklistEntry(row, statusOf(row, ok, stored.lastOk))

@@ -116,6 +116,8 @@ class FakeReliabilityRecords(
     override suspend fun confirmMaker(confirmation: MakerConfirmation): Outcome<Unit, DomainError> =
         write { it.copy(makerConfirmation = confirmation) }
 
+    override suspend fun recordTapped(): Outcome<Unit, DomainError> = write { it.copy(recordTapped = true) }
+
     private fun write(change: (StoredReliability) -> StoredReliability): Outcome<Unit, DomainError> {
         writeFailure?.let { return Outcome.Failure(it) }
         stored = change(stored)

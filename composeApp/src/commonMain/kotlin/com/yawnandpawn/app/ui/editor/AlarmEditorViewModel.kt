@@ -25,6 +25,7 @@ import com.yawnandpawn.app.core.error.Outcome
 import com.yawnandpawn.app.core.error.errorOrNull
 import com.yawnandpawn.app.core.error.flatMap
 import com.yawnandpawn.app.core.error.map
+import com.yawnandpawn.app.core.recording.RecordingRepository
 import com.yawnandpawn.app.core.reliability.NotificationPermission
 import com.yawnandpawn.app.core.session.GlobalSettings
 import com.yawnandpawn.app.core.session.ScheduleTestAlarm
@@ -143,6 +144,11 @@ class AlarmEditorViewModel(
      * first alarm moves on to the checklist and remembers the id). Null for the app's editor.
      */
     private val onSaved: ((String) -> Unit)? = null,
+    /**
+     * The recorded motivation messages (Story 7.2): with them the app's editor shows the Motivation row (its message is
+     * saved with the alarm) and Recordings. Null hides both: onboarding's first alarm, and tests that never meet them.
+     */
+    private val recordings: RecordingRepository? = null,
 ) : ViewModel() {
     /**
      * The editor opened on QR registration for "Re-register" (only when the alarm has a QR/Barcode check): "Use this
@@ -161,8 +167,9 @@ class AlarmEditorViewModel(
             EditorUiState(
                 isNew = alarmId == null,
                 isLoading = alarmId != null || copyOf != null || newAlarmDefaults != null,
-                full = wakeCheckOnly(pickable, talkBackOn = accessibility.isScreenReaderOn()),
-            ).withChecks(),
+                full = wakeCheckOnly(pickable, talkBackOn = accessibility.isScreenReaderOn(), motivation = recordings != null),
+            ).withChecks()
+                .withMotivation(),
         )
     val state: StateFlow<EditorUiState> = _state.asStateFlow()
 
@@ -193,6 +200,25 @@ class AlarmEditorViewModel(
     /** The latest fee ladder inputs (Story 4.6); null until read, or without [fees]. */
     private var feeInputs: FeeInputs? = null
 
+    /** The ids of the recorded messages last read (Story 7.2); null until a read succeeds. */
+    private var recordingIds: Set<String>? = null
+
+    /**
+     * The Motivation row's recorded messages (Story 7.2); null without [recordings]. Last of the properties: a list read
+     * at once edits the form, which needs every other property set.
+     */
+    private val motivation =
+        recordings?.let { source ->
+            EditorMotivation(
+                source,
+                viewModelScope,
+                _state,
+                // The exception class only: never a recording name or path in a log (Story 7.1).
+                onReadFailed = { cause -> actions.logFailure(LOAD_RECORDINGS, DomainError.StorageFailure("${cause::class.simpleName}")) },
+                onLoaded = ::recordingsRead,
+            )
+        }
+
     init {
         // A preview never outlives the editor.
         addCloseable { sounds.stopPreview() }
@@ -220,11 +246,13 @@ class AlarmEditorViewModel(
         }
     }
 
-    /** Shows the opened [form] (a stored alarm, a duplicate, or a new alarm with the defaults) as the form it starts from. */
+    /** Shows the [opened] form (a stored alarm, a duplicate, or a new alarm with the defaults) as the form it starts from. */
     private fun open(
-        form: EditorForm,
+        opened: EditorForm,
         shown: EditorUiState.() -> EditorUiState = { this },
     ) {
+        // A message deleted elsewhere is no choice (Story 7.2), and dropping it is no unsaved change.
+        val form = opened.withoutGone(recordingIds)
         initialForm = form
         _state.update {
             it
@@ -232,6 +260,7 @@ class AlarmEditorViewModel(
                 .shown()
                 .withRings(form, clock.now(), timeZoneProvider.current())
                 .withChecks()
+                .withMotivation()
                 .withLock()
         }
         sounds.opened()
@@ -330,7 +359,7 @@ class AlarmEditorViewModel(
             }
 
             else -> {
-                if (!onCheckIntent(intent)) onMenuIntent(intent)
+                if (!onCheckIntent(intent) && !onMotivationIntent(intent)) onMenuIntent(intent)
             }
         }
     }
@@ -371,6 +400,54 @@ class AlarmEditorViewModel(
             }
         }
         return true
+    }
+
+    /**
+     * The Motivation sub-screen and Recordings (Story 7.2); false for any other intent, and in an editor without the
+     * Motivation row. The choice is a form field (an unsaved change until Save), picked by the user only; a deleted message
+     * that was chosen becomes None.
+     */
+    private fun onMotivationIntent(intent: EditorIntent): Boolean {
+        if (motivation == null) return false
+        when (intent) {
+            is EditorIntent.MotivationChosen -> {
+                editForm { it.copy(motivation = intent.choice) }
+            }
+
+            EditorIntent.RecordMessageClicked -> {
+                _state.update { if (it.isLoading) it else it.copy(pane = EditorPane.Recordings) }
+            }
+
+            // The new message is listed; the user picks it here (it is never chosen for them).
+            is EditorIntent.RecordingSaved -> {
+                Unit
+            }
+
+            is EditorIntent.RecordingDeleted -> {
+                // DeleteRecording set the stored alarm to None too, so that alone is no unsaved change.
+                initialForm = initialForm.afterRecordingDeleted(intent.id)
+                editForm { it.afterRecordingDeleted(intent.id) }
+            }
+
+            // "When it plays" waits for Story 7.5.
+            else -> {
+                Unit
+            }
+        }
+        return intent is EditorIntent.MotivationChosen ||
+            intent == EditorIntent.RecordMessageClicked ||
+            intent is EditorIntent.RecordingSaved ||
+            intent is EditorIntent.RecordingDeleted
+    }
+
+    /**
+     * The recorded messages were read ([ids]): a chosen message that is not among them (deleted elsewhere) becomes None in
+     * the form as opened and as edited, so it is no unsaved change and Save never stores its id again.
+     */
+    private fun recordingsRead(ids: Set<String>) {
+        recordingIds = ids
+        initialForm = initialForm.withoutGone(ids)
+        editForm { it.withoutGone(ids) }
     }
 
     /** QR/Barcode (Story 3.10): a registered code, the "Try it" camera and "Fix"; false for any other intent. */
@@ -610,6 +687,7 @@ class AlarmEditorViewModel(
                 .copy(form = form, fieldError = fieldError)
                 .withRings(form, clock.now(), timeZoneProvider.current())
                 .withChecks()
+                .withMotivation()
                 .withLock()
         }
     }
@@ -767,6 +845,11 @@ class AlarmEditorViewModel(
                 if (reRegistering) close() else _state.update { it.copy(pane = EditorPane.CheckSetup) }
             }
 
+            // Recordings returns to the Motivation sub-screen it was opened from (Story 7.2).
+            current.pane == EditorPane.Recordings -> {
+                _state.update { it.copy(pane = EditorPane.Motivation) }
+            }
+
             current.pane == EditorPane.CheckSetup -> {
                 // Check setup returns to the Wake-up check sub-screen it was opened from.
                 _state.update { it.copy(pane = EditorPane.WakeCheck, setupType = null) }
@@ -912,16 +995,24 @@ private fun EditorForm.toDraft(alarmId: String?): AlarmDraft =
                 chip.type.core?.let { CheckEntry(it, chip.difficulty.toCore(), chip.count, code = chip.code) }
             },
         checkMode = CoreCheckMode.valueOf(checkMode.name),
+        motivation = motivation.toCore(),
     )
 
 /**
- * The production editor's full-editor rows (Story 3.5): only the Wake-up check, offering [pickable] (the Quiet time row
- * shows in every editor, Story 3.4); motivation and the fee ladder wait for their stories.
+ * The production editor's full-editor rows (Story 3.5): the Wake-up check, offering [pickable] (the Quiet time row shows
+ * in every editor, Story 3.4), and with [motivation] the Motivation row (Story 7.2), without "When it plays" (Story 7.5).
  */
 private fun wakeCheckOnly(
     pickable: List<CheckType>,
     talkBackOn: Boolean,
-): FullEditorSections = FullEditorSections(rows = setOf(EditorPane.WakeCheck), types = pickable, talkBackOn = talkBackOn)
+    motivation: Boolean,
+): FullEditorSections =
+    FullEditorSections(
+        rows = if (motivation) setOf(EditorPane.WakeCheck, EditorPane.Motivation) else setOf(EditorPane.WakeCheck),
+        types = pickable,
+        talkBackOn = talkBackOn,
+        motivationTimingShown = false,
+    )
 
 /** The Wake-up check row and sub-screen show the form's checks and mode, and whether QR/Barcode has its code. */
 private fun EditorUiState.withChecks(): EditorUiState =
@@ -984,6 +1075,7 @@ private fun Alarm.toForm(checks: List<CheckConfig>): EditorForm =
         soundRef = soundRef.ifBlank { Alarm.DEFAULT_SOUND_REF },
         graceSeconds = graceSeconds.coerceIn(Alarm.GRACE_SECONDS_RANGE),
         vibrateInGrace = vibrateInGrace,
+        motivation = motivation.toChoice(),
     )
 
 /**

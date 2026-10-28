@@ -8,6 +8,7 @@ import com.yawnandpawn.app.ui.home.AlarmActions
 import com.yawnandpawn.app.ui.home.HomeViewModel
 import com.yawnandpawn.app.ui.nav.AppOpenRequests
 import com.yawnandpawn.app.ui.onboarding.ChecklistScreens
+import com.yawnandpawn.app.ui.onboarding.FirstAlarmEditors
 import com.yawnandpawn.app.ui.onboarding.FirstAlarmSources
 import com.yawnandpawn.app.ui.onboarding.OnboardingViewModel
 import com.yawnandpawn.app.ui.onboarding.TestAlarmSources
@@ -34,7 +35,7 @@ import org.koin.dsl.module
  * (`AlarmRepository`, the alarm use cases, `Clock`, `MonotonicClock`, `TimeZoneProvider`, `TimeChangeSignal`, `Logger`,
  * `SoundLibrary`, `SoundPreview`, `ExternalLinks`, `AppLinks`, `DeviceInfoSource`, `ManufacturerSettings`,
  * `ConfirmMakerGuidance`, `ConsentStore`, `SetAnalyticsConsent`, `EvaluateReliability`, `ReliabilitySettings`,
- * `CameraPermission`, `ScheduleTestAlarm`, `OnboardingRepository`, `ReliabilityRecords`, the onboarding use cases,
+ * `CameraPermission`, `RecordingRepository`, `ScheduleTestAlarm`, `OnboardingRepository`, `ReliabilityRecords`, the onboarding use cases,
  * `OnboardingTestNote`, `ObserveProgress`, `WeeklySummaryStore` and `SetWeeklySummary`) are bound by :androidApp and :data.
  */
 val uiModule =
@@ -92,7 +93,7 @@ val uiModule =
                 // Story 5.11: steps 4 and 5 are the editor's form, built exactly like the app's editor.
                 firstAlarm =
                     FirstAlarmSources(
-                        editors = { alarmId, onSaved -> alarmEditor(AlarmEditorArgs(alarmId), onSaved) },
+                        editors = get(),
                         remember = get(),
                         alarms = get(),
                     ),
@@ -106,6 +107,8 @@ val uiModule =
             )
         }
         viewModel { params -> alarmEditor(params.get<AlarmEditorArgs>()) }
+        // Onboarding's first alarm (Story 5.11): the app's editor with onSaved, so without the Motivation row (Story 7.2).
+        factory { FirstAlarmEditors { alarmId, onSaved -> alarmEditor(AlarmEditorArgs(alarmId), onSaved) } }
     }
 
 /**
@@ -137,4 +140,6 @@ private fun Scope.alarmEditor(
         fees = EditorFeeSources(globalSettings = get(), priceCatalog = get(), moneyFormatter = get()),
         newAlarmDefaults = get(),
         onSaved = onSaved,
+        // Story 7.2: the Motivation row and Recordings in the app's editor only, never in onboarding's first alarm.
+        recordings = if (onSaved == null) get() else null,
     )

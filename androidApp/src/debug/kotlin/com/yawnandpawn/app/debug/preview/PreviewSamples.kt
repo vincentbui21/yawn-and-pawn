@@ -12,6 +12,7 @@ import com.yawnandpawn.app.ui.editor.EditorUiState
 import com.yawnandpawn.app.ui.editor.FullEditorSections
 import com.yawnandpawn.app.ui.editor.LadderPrice
 import com.yawnandpawn.app.ui.editor.MotivationChoice
+import com.yawnandpawn.app.ui.editor.MotivationRecording
 import com.yawnandpawn.app.ui.editor.MotivationTiming
 import com.yawnandpawn.app.ui.format.Countdown
 import com.yawnandpawn.app.ui.home.AlarmCard
@@ -113,7 +114,7 @@ object PreviewSamples {
 
     // Sound list (the editor's Sound sub-screen) ---------------------------------------------------------------------
 
-    private val recordings = listOf("Message 1", "Message 2")
+    private val recordings = listOf(MotivationRecording("m1", "Message 1"), MotivationRecording("m2", "Message 2"))
 
     val soundList =
         SoundPickerUiState(
@@ -161,7 +162,7 @@ object PreviewSamples {
             ringsIn = Countdown.HoursMinutes(7, 12),
             full =
                 fullSections.copy(
-                    motivation = MotivationChoice.Recording("Message 1"),
+                    motivation = MotivationChoice.Recording("m1"),
                     motivationTiming = MotivationTiming.AfterImUp,
                     recordings = recordings,
                 ),

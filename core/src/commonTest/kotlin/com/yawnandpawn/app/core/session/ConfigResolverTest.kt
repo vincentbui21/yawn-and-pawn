@@ -3,6 +3,7 @@ package com.yawnandpawn.app.core.session
 import com.yawnandpawn.app.core.alarm.Alarm
 import com.yawnandpawn.app.core.alarm.AlarmDraft
 import com.yawnandpawn.app.core.alarm.CheckConfig
+import com.yawnandpawn.app.core.alarm.Motivation
 import com.yawnandpawn.app.core.checks.CheckEntry
 import com.yawnandpawn.app.core.checks.CheckMode
 import com.yawnandpawn.app.core.checks.CheckPlan
@@ -14,6 +15,7 @@ import com.yawnandpawn.app.core.time.Deadline
 import kotlinx.datetime.LocalTime
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertTrue
 import kotlin.time.Duration.Companion.seconds
 import kotlin.time.Instant
 
@@ -205,6 +207,41 @@ class ConfigResolverTest {
         assertEquals(false, ConfigResolver.resolve(alarm, NO_CHECKS, off, false, SCHEDULED_AT).brightWakeScreen)
         assertEquals(true, ConfigResolver.resolveTest(draft, GlobalSettings(), SCHEDULED_AT).brightWakeScreen)
         assertEquals(false, ConfigResolver.resolveTest(draft, off, SCHEDULED_AT).brightWakeScreen)
+    }
+
+    @Test
+    fun `the motivation message is frozen into the config, real or test, and Random stays unresolved (Story 7-2)`() {
+        val message = Motivation.Recording("recording-1")
+
+        assertEquals(Motivation.None, ConfigResolver.resolve(alarm, NO_CHECKS, GlobalSettings(), false, SCHEDULED_AT).motivation)
+        assertEquals(
+            message,
+            ConfigResolver.resolve(alarm.copy(motivation = message), NO_CHECKS, GlobalSettings(), false, SCHEDULED_AT).motivation,
+        )
+        assertEquals(
+            Motivation.Random,
+            ConfigResolver.resolve(alarm.copy(motivation = Motivation.Random), NO_CHECKS, GlobalSettings(), true, SCHEDULED_AT).motivation,
+        )
+        val draft = AlarmDraft(time = LocalTime(7, 0), motivation = message)
+        assertEquals(message, ConfigResolver.resolveTest(draft, GlobalSettings(), SCHEDULED_AT).motivation)
+    }
+
+    @Test
+    fun `a config stored before Story 7-2 decodes with no message, and a stored message survives a round trip`() {
+        val config =
+            ConfigResolver.resolve(
+                alarm.copy(motivation = Motivation.Recording("r")),
+                NO_CHECKS,
+                GlobalSettings(),
+                false,
+                SCHEDULED_AT,
+            )
+        val encoded = SessionJson.encodeConfig(config)
+
+        assertTrue("\"motivation\":\"recording:r\"" in encoded, encoded)
+        assertEquals(config, SessionJson.json.decodeFromString(SessionConfig.serializer(), encoded))
+        val old = encoded.replace(",\"motivation\":\"recording:r\"", "")
+        assertEquals(config.copy(motivation = Motivation.None), SessionJson.json.decodeFromString(SessionConfig.serializer(), old))
     }
 }
 

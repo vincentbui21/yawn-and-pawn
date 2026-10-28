@@ -41,4 +41,8 @@ abstract class AlarmDao {
     /** Rows deleted (0 when the id is unknown). */
     @Query("DELETE FROM alarm WHERE id = :id")
     abstract suspend fun delete(id: String): Int
+
+    /** Sets the motivation of every alarm on [motivation] (an encoded `Motivation`) to `none` (Story 7.2); rows changed. */
+    @Query("UPDATE alarm SET motivation = 'none' WHERE motivation = :motivation")
+    abstract suspend fun clearMotivation(motivation: String): Int
 }

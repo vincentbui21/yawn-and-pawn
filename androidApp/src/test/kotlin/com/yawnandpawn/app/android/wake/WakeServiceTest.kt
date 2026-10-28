@@ -20,6 +20,7 @@ import com.yawnandpawn.app.core.alarm.AlarmFired
 import com.yawnandpawn.app.core.alarm.AlarmRepository
 import com.yawnandpawn.app.core.alarm.AlarmScheduler
 import com.yawnandpawn.app.core.alarm.CheckConfigRepository
+import com.yawnandpawn.app.core.alarm.Motivation
 import com.yawnandpawn.app.core.alarm.RequestCodes
 import com.yawnandpawn.app.core.checks.CheckEntry
 import com.yawnandpawn.app.core.checks.CheckMode
@@ -836,4 +837,7 @@ private object ExplodingAlarmRepository : AlarmRepository {
     override suspend fun upsert(alarm: Alarm): Outcome<Unit, DomainError> = throw IllegalStateException("database exploded")
 
     override suspend fun delete(id: String): Outcome<Unit, DomainError> = throw IllegalStateException("database exploded")
+
+    override suspend fun clearMotivation(motivation: Motivation): Outcome<Unit, DomainError> =
+        throw IllegalStateException("database exploded")
 }

@@ -14,6 +14,7 @@ import androidx.lifecycle.DefaultLifecycleObserver
 import androidx.lifecycle.LifecycleOwner
 import com.yawnandpawn.app.android.ApplicationScope
 import com.yawnandpawn.app.android.qr.AndroidCameraPermission
+import com.yawnandpawn.app.android.recording.AndroidMicrophonePermission
 import com.yawnandpawn.app.android.reliability.AndroidNotificationPermission
 import com.yawnandpawn.app.android.screen.forwardToWakeScreenWhileResumed
 import com.yawnandpawn.app.android.wake.WakeRuntime
@@ -60,6 +61,8 @@ class MainActivity : ComponentActivity() {
 
     private val cameraPermission: AndroidCameraPermission by inject()
 
+    private val microphonePermission: AndroidMicrophonePermission by inject()
+
     private val settings: GlobalSettingsRepository by inject()
 
     private val openRequests: AppOpenRequests by inject()
@@ -73,6 +76,15 @@ class MainActivity : ComponentActivity() {
             cameraPermission.onResult(granted, blocked = !granted && !shouldShowRequestPermissionRationale(Manifest.permission.CAMERA))
         }
 
+    // Story 7.2: the microphone dialog, asked only by the first record tap on the Recordings screen.
+    private val requestMicrophone =
+        registerForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
+            microphonePermission.onResult(
+                granted,
+                blocked = !granted && !shouldShowRequestPermissionRationale(Manifest.permission.RECORD_AUDIO),
+            )
+        }
+
     override fun onCreate(savedInstanceState: Bundle?) {
         enableEdgeToEdge()
         super.onCreate(savedInstanceState)
@@ -83,11 +95,13 @@ class MainActivity : ComponentActivity() {
         // This activity's own launcher: a stopping old instance detaches only its own, never a newer one's.
         val launch = { requestNotifications.launch(Manifest.permission.POST_NOTIFICATIONS) }
         val launchCamera = { requestCamera.launch(Manifest.permission.CAMERA) }
+        val launchMicrophone = { requestMicrophone.launch(Manifest.permission.RECORD_AUDIO) }
         lifecycle.addObserver(
             object : DefaultLifecycleObserver {
                 override fun onStart(owner: LifecycleOwner) {
                     notificationPermission.attach(launch)
                     cameraPermission.attach(launchCamera)
+                    microphonePermission.attach(launchMicrophone)
                     appScope.launch { replayLedger() }
                 }
 
@@ -97,6 +111,7 @@ class MainActivity : ComponentActivity() {
                 override fun onStop(owner: LifecycleOwner) {
                     notificationPermission.detach(launch)
                     cameraPermission.detach(launchCamera)
+                    microphonePermission.detach(launchMicrophone)
                 }
             },
         )

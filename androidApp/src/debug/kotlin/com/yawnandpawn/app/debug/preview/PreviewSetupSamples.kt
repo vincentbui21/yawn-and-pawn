@@ -23,6 +23,7 @@ import com.yawnandpawn.app.ui.qr.QrRegistrationUiState
 import com.yawnandpawn.app.ui.qr.QrScanStep
 import com.yawnandpawn.app.ui.recordings.RecordedMessage
 import com.yawnandpawn.app.ui.recordings.RecorderState
+import com.yawnandpawn.app.ui.recordings.RecordingsSnackbar
 import com.yawnandpawn.app.ui.recordings.RecordingsUiState
 import com.yawnandpawn.app.ui.reliability.ChecklistItem
 import com.yawnandpawn.app.ui.reliability.ChecklistRow
@@ -209,19 +210,23 @@ object PreviewSetupSamples {
         RecordingsUiState(
             messages =
                 listOf(
-                    RecordedMessage(number = 1, seconds = 9, playing = true, playedSeconds = 4),
-                    RecordedMessage(number = 2, seconds = 14),
+                    RecordedMessage(id = "m1", name = "Message 1", seconds = 9, playing = true, playedSeconds = 4),
+                    RecordedMessage(id = "m2", name = "Message 2", seconds = 14),
                 ),
         )
 
     val recordingsMicDenied = RecordingsUiState(micDenied = true)
 
-    val recordingsTooShort = RecordingsUiState(tooShort = true)
+    val recordingsTooShort = RecordingsUiState(snackbar = RecordingsSnackbar.TooShort)
 
     val recordingsDeleteDialog =
         RecordingsUiState(
-            messages = listOf(RecordedMessage(number = 1, seconds = 9), RecordedMessage(number = 2, seconds = 14)),
-            deleteDialogFor = 2,
+            messages =
+                listOf(
+                    RecordedMessage(id = "m1", name = "Message 1", seconds = 9),
+                    RecordedMessage(id = "m2", name = "Message 2", seconds = 14),
+                ),
+            deleteDialogFor = "m2",
         )
 
     /** The saved messages of [recordingsList], not playing: what Recordings opens with in the tap-through. */

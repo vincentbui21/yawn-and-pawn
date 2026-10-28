@@ -3,6 +3,7 @@ package com.yawnandpawn.app.testing
 import com.yawnandpawn.app.core.alarm.Alarm
 import com.yawnandpawn.app.core.alarm.AlarmListOrder
 import com.yawnandpawn.app.core.alarm.AlarmRepository
+import com.yawnandpawn.app.core.alarm.Motivation
 import com.yawnandpawn.app.core.alarm.RequestCodes
 import com.yawnandpawn.app.core.error.DomainError
 import com.yawnandpawn.app.core.error.Outcome
@@ -82,6 +83,15 @@ class FakeAlarmRepository(
                 Outcome.Success(Unit)
             }
         }
+    }
+
+    override suspend fun clearMotivation(motivation: Motivation): Outcome<Unit, DomainError> {
+        failure?.let { return Outcome.Failure(it) }
+        alarms.value =
+            alarms.value.mapValues { (_, alarm) ->
+                if (alarm.motivation == motivation) alarm.copy(motivation = Motivation.None) else alarm
+            }
+        return Outcome.Success(Unit)
     }
 }
 

@@ -2,6 +2,7 @@ package com.yawnandpawn.app.core.session
 
 import com.yawnandpawn.app.core.alarm.Alarm
 import com.yawnandpawn.app.core.alarm.AlarmDraft
+import com.yawnandpawn.app.core.alarm.Motivation
 import com.yawnandpawn.app.core.checks.CheckEntry
 import com.yawnandpawn.app.core.checks.CheckPlan
 import com.yawnandpawn.app.core.checks.CheckType
@@ -30,6 +31,8 @@ import kotlin.time.Instant
  * real ring; the default lets rows and pending test rings stored before Story 5.3 decode.
  * @property brightWakeScreen "Bright wake screen" frozen at the fire (Story 5.2): while the Ringing screen shows, the wake
  * window is at full brightness. The default lets rows and pending test rings stored before Story 5.2 decode.
+ * @property motivation the alarm's motivation message frozen at the fire (Story 7.2), `Random` still unresolved (Story
+ * 7.3 picks one from the session seed). The default lets rows and pending test rings stored before Story 7.2 decode.
  */
 @Serializable
 data class SessionConfig(
@@ -50,6 +53,7 @@ data class SessionConfig(
     val checkPlan: CheckPlan,
     val testStartedLocked: Boolean = false,
     val brightWakeScreen: Boolean = true,
+    val motivation: Motivation = Motivation.None,
 )
 
 /**
@@ -151,6 +155,7 @@ object ConfigResolver {
                     )
                 },
             brightWakeScreen = globalSettings.brightWakeScreen,
+            motivation = alarm.motivation,
         )
 
     /**
@@ -197,6 +202,8 @@ object ConfigResolver {
                 },
             // The value when "Test alarm" is tapped; the fire takes the last-known snapshot's (Story 5.2, WakeService).
             brightWakeScreen = globalSettings.brightWakeScreen,
+            // The form's message (Story 7.2), unsaved changes included: a test ring plays what the alarm would.
+            motivation = draft.motivation,
         )
 
     /**

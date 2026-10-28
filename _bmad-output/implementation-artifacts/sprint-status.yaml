@@ -145,7 +145,7 @@ development_status:
 
   epic-7: in-progress
   7-1-record-and-store-motivation-messages: done  # Epic 7 audio lane, fast mode
-  7-2-recordings-screen-and-choosing-a-message-per-alarm: backlog
+  7-2-recordings-screen-and-choosing-a-message-per-alarm: done  # Epic 7 audio lane, fast mode
   7-3-play-my-message-after-i-m-up: backlog
   7-4-use-my-own-audio-file-as-an-alarm-sound: backlog
   7-5-mix-into-alarm-motivation-playback: backlog

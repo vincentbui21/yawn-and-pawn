@@ -12,6 +12,8 @@ package com.yawnandpawn.app.core.reliability
  * @property backgroundRestricted the user restricted the app's background work (API 28+).
  * @property standbyBucketRestricted the app sits in the restricted standby bucket (API 30+).
  * @property cameraGranted the camera permission is granted (the Camera row shows only for an alarm with a camera check).
+ * @property microphoneGranted the microphone permission is granted (the Microphone row shows only after a record tap, Story
+ * 7.2).
  */
 data class ReliabilityStatus(
     val notificationsAllowed: Boolean,
@@ -22,6 +24,7 @@ data class ReliabilityStatus(
     val backgroundRestricted: Boolean = false,
     val standbyBucketRestricted: Boolean = false,
     val cameraGranted: Boolean = true,
+    val microphoneGranted: Boolean = true,
 ) {
     /** The checklist's Battery row: exempt from optimisation, not background restricted, not in the restricted bucket. */
     val batteryOk: Boolean

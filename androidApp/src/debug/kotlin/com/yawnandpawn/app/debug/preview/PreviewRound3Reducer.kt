@@ -163,8 +163,9 @@ internal fun reduceRecordings(
         }
 
         RecordingsIntent.SaveTakeClicked -> {
-            val number = (state.messages.maxOfOrNull { it.number } ?: 0) + 1
-            state.copy(messages = state.messages + RecordedMessage(number, TAKE_SECONDS), recorder = RecorderState.Idle)
+            val number = (state.messages.mapNotNull { it.id.removePrefix("m").toIntOrNull() }.maxOrNull() ?: 0) + 1
+            val message = RecordedMessage(id = "m$number", name = "Message $number", seconds = TAKE_SECONDS)
+            state.copy(messages = state.messages + message, recorder = RecorderState.Idle)
         }
 
         RecordingsIntent.DeleteTakeClicked -> {
@@ -186,18 +187,18 @@ private fun reduceSavedMessages(
             state.copy(
                 messages =
                     state.messages.map {
-                        val playing = it.number == intent.number && !it.playing
+                        val playing = it.id == intent.id && !it.playing
                         it.copy(playing = playing, playedSeconds = if (playing) PLAYED_SECONDS else 0)
                     },
             )
         }
 
         is RecordingsIntent.DeleteClicked -> {
-            state.copy(deleteDialogFor = intent.number)
+            state.copy(deleteDialogFor = intent.id)
         }
 
         RecordingsIntent.DeleteConfirmed -> {
-            state.copy(messages = state.messages.filterNot { it.number == state.deleteDialogFor }, deleteDialogFor = null)
+            state.copy(messages = state.messages.filterNot { it.id == state.deleteDialogFor }, deleteDialogFor = null)
         }
 
         RecordingsIntent.DeleteCancelled -> {

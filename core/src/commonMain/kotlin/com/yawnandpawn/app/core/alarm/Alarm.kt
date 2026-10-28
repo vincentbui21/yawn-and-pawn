@@ -6,9 +6,9 @@ import kotlinx.datetime.LocalTime
 import kotlin.time.Instant
 
 /**
- * A stored alarm (FR-ALM-1, FR-ALM-2). Its checks are stored apart as [CheckConfig] rows (Story 3.5); pending changes
- * and motivation arrive with their own tables in later epics. Ranges are enforced by the alarm use cases ([validate]),
- * not by this class.
+ * A stored alarm (FR-ALM-1, FR-ALM-2). Its checks are stored apart as [CheckConfig] rows (Story 3.5) and pending changes
+ * in their own table (Story 4.4); the motivation message is a field since Story 7.2. Ranges are enforced by the alarm
+ * use cases ([validate]), not by this class.
  *
  * @property id UUID v4 string.
  * @property repeatDays empty means one-time.
@@ -35,6 +35,8 @@ data class Alarm(
     val createdAt: Instant,
     val updatedAt: Instant,
     val checkMode: CheckMode = CheckMode.Random,
+    /** The motivation message (Story 7.2): none, random or one recording; never a locked field. */
+    val motivation: Motivation = Motivation.None,
 ) {
     /** When this alarm rings, for [nextOccurrence] (Story 1.6). */
     fun toRule(): AlarmRule = AlarmRule(time, repeatDays)
@@ -95,8 +97,8 @@ val AlarmListOrder: Comparator<Alarm> =
 
 /**
  * True when [other] rings exactly like this alarm: every setting the user chooses is equal (time, repeat days, label,
- * sound, volume, gradual volume, vibration, snooze length, quiet time and its vibration, check mode). The id, request
- * code, on/off state, timestamps and the ramp start (fixed, not a user setting) do not count. The checks themselves are
+ * sound, volume, gradual volume, vibration, snooze length, quiet time and its vibration, check mode, motivation). The id,
+ * request code, on/off state, timestamps and the ramp start (fixed, not a user setting) do not count. The checks themselves are
  * stored apart, so `SaveAlarm` compares them too. Saving a new alarm identical to a stored one switches that one on
  * instead of storing a second (owner decision 2026-10-05, like Samsung Clock).
  */
@@ -111,4 +113,5 @@ fun Alarm.hasSameSettingsAs(other: Alarm): Boolean =
         snoozeLengthMinutes == other.snoozeLengthMinutes &&
         graceSeconds == other.graceSeconds &&
         vibrateInGrace == other.vibrateInGrace &&
-        checkMode == other.checkMode
+        checkMode == other.checkMode &&
+        motivation == other.motivation

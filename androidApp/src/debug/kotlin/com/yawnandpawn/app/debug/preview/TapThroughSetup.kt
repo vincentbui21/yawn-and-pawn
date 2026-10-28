@@ -22,6 +22,7 @@ import com.yawnandpawn.app.ui.qr.QrIntent
 import com.yawnandpawn.app.ui.qr.QrRegistrationScreen
 import com.yawnandpawn.app.ui.qr.QrRegistrationUiState
 import com.yawnandpawn.app.ui.qr.QrScanStep
+import com.yawnandpawn.app.ui.recordings.RecordedMessage
 import com.yawnandpawn.app.ui.recordings.RecordingsIntent
 import com.yawnandpawn.app.ui.recordings.RecordingsScreen
 import com.yawnandpawn.app.ui.wake.CheckContent
@@ -48,14 +49,14 @@ internal sealed interface SetupPushed : Pushed {
 /**
  * The setup flows of the tap-through (design preview round 3), fake state only: Check setup with "Try it", QR
  * registration and the printable QR, House Hunt registration, and Recordings. [updateChips] changes the selected checks
- * of whoever opened Check setup (the editor or onboarding); [onMessages] hands the saved message numbers back to the
+ * of whoever opened Check setup (the editor or onboarding); [onMessages] hands the saved messages back to the
  * editor's Motivation list. What the camera checks have registered ([qrCodeSaved], [houseHuntPhotos]) is shared.
  */
 internal class SetupFlowState(
     private val push: (Pushed) -> Unit,
     private val pop: () -> Unit,
     private val updateChips: ((List<CheckChip>) -> List<CheckChip>) -> Unit,
-    private val onMessages: (List<Int>) -> Unit,
+    private val onMessages: (List<RecordedMessage>) -> Unit,
     registered: Boolean,
 ) {
     var checkSetup by mutableStateOf(PreviewSetupSamples.setupMath)
@@ -189,7 +190,7 @@ internal class SetupFlowState(
 
     fun onRecordings(intent: RecordingsIntent) {
         if (intent == RecordingsIntent.Back) {
-            onMessages(recordings.messages.map { it.number })
+            onMessages(recordings.messages)
             pop()
         } else {
             recordings = reduceRecordings(recordings, intent)

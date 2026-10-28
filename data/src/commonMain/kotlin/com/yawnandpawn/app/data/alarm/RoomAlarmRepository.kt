@@ -2,9 +2,11 @@ package com.yawnandpawn.app.data.alarm
 
 import com.yawnandpawn.app.core.alarm.Alarm
 import com.yawnandpawn.app.core.alarm.AlarmRepository
+import com.yawnandpawn.app.core.alarm.Motivation
 import com.yawnandpawn.app.core.error.DomainError
 import com.yawnandpawn.app.core.error.Outcome
 import com.yawnandpawn.app.core.error.flatMap
+import com.yawnandpawn.app.core.error.map
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
 import kotlin.coroutines.cancellation.CancellationException
@@ -29,6 +31,9 @@ class RoomAlarmRepository(
         storage { dao.delete(id) }.flatMap { deleted ->
             if (deleted == 0) Outcome.Failure(DomainError.NotFound(id)) else Outcome.Success(Unit)
         }
+
+    override suspend fun clearMotivation(motivation: Motivation): Outcome<Unit, DomainError> =
+        storage { dao.clearMotivation(motivation.encode()) }.map { }
 
     // Room and the SQLite driver throw platform exceptions (constraint, I/O, corruption); map them all at this
     // boundary so core never sees an exception for a storage failure. Cancellation must still propagate.

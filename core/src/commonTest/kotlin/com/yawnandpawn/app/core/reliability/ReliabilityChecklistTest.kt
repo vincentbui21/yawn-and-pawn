@@ -39,6 +39,7 @@ class ReliabilityChecklistTest {
             backgroundRestricted = true,
             standbyBucketRestricted = true,
             cameraGranted = false,
+            microphoneGranted = false,
         )
 
     private fun alarm(
@@ -175,12 +176,25 @@ class ReliabilityChecklistTest {
     }
 
     @Test
-    fun `microphone is always hidden and the locked test is OK once a pass is stored`() {
+    fun `microphone is hidden until record was tapped and the locked test is OK once a pass is stored`() {
         val passed = none.copy(lockedTestPassedAt = at)
         val rows = ReliabilityChecklist.evaluate(allFailing, emptyList(), api34, passed)
 
         assertEquals(RowStatus.Hidden, rows.statusOf(ChecklistRow.Microphone))
         assertEquals(RowStatus.Ok, rows.statusOf(ChecklistRow.LockedScreenTest))
+    }
+
+    @Test
+    fun `after the first record tap the microphone row shows the permission and never blocks an alarm (Story 7-2)`() {
+        val tapped = none.copy(recordTapped = true)
+        val denied = ReliabilityChecklist.evaluate(allFailing, emptyList(), api34, tapped)
+
+        assertEquals(RowStatus.NeedsFix, denied.statusOf(ChecklistRow.Microphone))
+        assertEquals(
+            RowStatus.Ok,
+            ReliabilityChecklist.evaluate(ReliabilityStatus.ALL_OK, emptyList(), api34, tapped).statusOf(ChecklistRow.Microphone),
+        )
+        assertFalse(ChecklistRow.Microphone in ReliabilityChecklist.BLOCKING_ROWS)
     }
 
     @Test
@@ -377,6 +391,8 @@ class ReliabilityChecklistTest {
         override suspend fun confirmMaker(confirmation: MakerConfirmation): Outcome<Unit, DomainError> = Outcome.Success(Unit)
 
         override suspend fun lockedTestPassed(at: Instant): Outcome<Unit, DomainError> = Outcome.Success(Unit)
+
+        override suspend fun recordTapped(): Outcome<Unit, DomainError> = Outcome.Success(Unit)
 
         override fun observe(): Flow<StoredReliability> = flowOf(stored)
     }

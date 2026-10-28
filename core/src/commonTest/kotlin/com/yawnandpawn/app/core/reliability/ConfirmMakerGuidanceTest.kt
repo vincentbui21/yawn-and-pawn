@@ -105,6 +105,8 @@ class ConfirmMakerGuidanceTest {
 
         override suspend fun lockedTestPassed(at: Instant): Outcome<Unit, DomainError> = Outcome.Success(Unit)
 
+        override suspend fun recordTapped(): Outcome<Unit, DomainError> = Outcome.Success(Unit)
+
         override fun observe(): Flow<StoredReliability> = flowOf(stored)
     }
 

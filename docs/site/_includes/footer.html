@@ -1,0 +1,14 @@
+<footer class="site-footer"{% if page.url == "/" %} id="support"{% endif %}>
+<div class="footer-inner">
+<div class="footer-about">
+<span class="footer-name">Yawn &amp; Pawn</span>
+<span class="footer-contact">Questions or a problem with a charge? <a href="mailto:{{ site.support_email }}">{{ site.support_email }}</a></span>
+</div>
+<nav class="footer-links" aria-label="Legal">
+<a href="{{ "/privacy/" | relative_url }}"{% if page.url == "/privacy/" %} aria-current="page"{% endif %}>Privacy policy</a>
+<a href="{{ "/terms/" | relative_url }}"{% if page.url == "/terms/" %} aria-current="page"{% endif %}>Terms</a>
+<a href="{{ "/payments/" | relative_url }}"{% if page.url == "/payments/" %} aria-current="page"{% endif %}>Payments &amp; refunds</a>
+<a href="{{ "/support/" | relative_url }}"{% if page.url == "/support/" %} aria-current="page"{% endif %}>Support</a>
+</nav>
+</div>
+</footer>

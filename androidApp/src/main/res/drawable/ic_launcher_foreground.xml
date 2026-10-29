@@ -1,0 +1,33 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Launcher icon, foreground layer: the "Sunrise clock" (owner decision 2026-10-29), in the same 512 x 512 space as
+     ic_launcher_background. Two bells, the clock face as a sun cut flat at the horizon, and the hands. Everything lies
+     within 155 units of the centre, inside the 33 dp safe circle (156 units), so no launcher mask clips it. -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:aapt="http://schemas.android.com/aapt"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="512"
+    android:viewportHeight="512">
+    <path
+        android:pathData="M146,214L182,178M366,214L330,178"
+        android:strokeWidth="24"
+        android:strokeColor="#FFF5A04E"
+        android:strokeLineCap="round" />
+    <path android:pathData="M154.4,372A118,118 0,1 1,357.6 372Z">
+        <aapt:attr name="android:fillColor">
+            <gradient
+                android:endColor="#FFF5A04E"
+                android:endX="0"
+                android:endY="430"
+                android:startColor="#FFFFE3B8"
+                android:startX="0"
+                android:startY="194"
+                android:type="linear" />
+        </aapt:attr>
+    </path>
+    <path
+        android:pathData="M256,312V244M256,312L302,338"
+        android:strokeWidth="20"
+        android:strokeColor="#FFA8520A"
+        android:strokeLineCap="round" />
+</vector>

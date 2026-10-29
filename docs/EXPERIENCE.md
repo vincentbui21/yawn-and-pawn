@@ -595,7 +595,7 @@ Failure: microphone denied → "Microphone is off. Turn it on in Settings." with
 
 ## Open Questions
 
-- **D1** App name and icon concept (PRD Q8).
+- **D1** App name and icon concept (PRD Q8). Icon decided (owner 2026-10-29): "Sunrise clock", a clock rising over the horizon like the sun on a night-to-dawn sky; it is both the launcher icon and the Play Store icon.
 - **D2** Should "Bright wake screen" also flash the torch on the first ring? Off by default if added; weigh photosensitivity.
 - **D3** Onboarding illustration style: none (type-only, current plan) or simple line illustrations?
 - **D4** Fallback check count and difficulty per option; spines assume Math is always offered.

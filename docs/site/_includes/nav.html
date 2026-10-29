@@ -1,0 +1,13 @@
+{%- if page.url == "/" %}{% assign home = "" %}{% else %}{% assign home = "/" | relative_url %}{% endif -%}
+<nav class="site-nav" aria-label="Main">
+<a class="brand" href="{% if page.url == "/" %}#top{% else %}{{ "/" | relative_url }}{% endif %}">
+{% include logo.svg %}
+<span>Yawn &amp; Pawn</span>
+</a>
+<div class="nav-links">
+<a href="{{ home }}#how">How it works</a>
+<a href="{{ home }}#prices">Snooze prices</a>
+<a href="{{ home }}#faq">Questions</a>
+<a href="{% if page.url == "/" %}#support{% else %}{{ "/support/" | relative_url }}{% endif %}"{% if page.url == "/support/" %} aria-current="page"{% endif %}>Support</a>
+</div>
+</nav>

@@ -1,0 +1,21 @@
+<!doctype html>
+<html lang="en">
+<head>
+{% include head.html %}
+</head>
+<body class="page-home">
+<a class="skip-link" href="#main">Skip to content</a>
+{%- comment %} index.md holds the whole page; its "hero-end" marker splits the hero (inside the header, as in the
+approved design) from the sections (inside main). {% endcomment %}
+{%- assign parts = content | split: "<!-- hero-end -->" %}
+<header class="site-header site-header--hero">
+<div class="hero-sky" aria-hidden="true"></div>
+{% include nav.html %}
+{{ parts[0] }}
+</header>
+<main id="main" tabindex="-1">
+{{ parts[1] }}
+</main>
+{% include footer.html %}
+</body>
+</html>

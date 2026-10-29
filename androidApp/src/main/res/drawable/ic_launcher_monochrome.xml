@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Launcher icon, monochrome layer (Android 13 themed icons): the foreground's bells and horizon-cut sun as one
+     silhouette, with the hands cut out (the second subpath is the outline of both round-capped hands, evenOdd).
+     The launcher tints it; only the alpha counts. -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="512"
+    android:viewportHeight="512">
+    <path
+        android:pathData="M146,214L182,178M366,214L330,178"
+        android:strokeWidth="24"
+        android:strokeColor="#FFFFFFFF"
+        android:strokeLineCap="round" />
+    <path
+        android:fillColor="#FFFFFFFF"
+        android:fillType="evenOdd"
+        android:pathData="M154.4,372A118,118 0,1 1,357.6 372ZM246,244A10,10 0,0 1,266 244L266,306.17L306.92,329.29A10,10 0,0 1,297.08 346.71L251.08,320.71A10,10 0,0 1,246 312Z" />
+</vector>

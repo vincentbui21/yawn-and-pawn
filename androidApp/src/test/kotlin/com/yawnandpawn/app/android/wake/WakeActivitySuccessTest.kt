@@ -150,8 +150,19 @@ class WakeActivitySuccessTest {
 
     @Test
     fun `Success closes by itself after 60 seconds without a tap`() {
-        val screen = completed(WakeApp()).get()
+        val app = WakeApp()
+        ringing(app)
+        app.awaitRinging()
+        val screen = buildActivity(WakeActivity::class.java).setup().get()
+        composeRule.onNodeWithText("I'm up").assertExists()
+        // Frame by frame until Success shows: an idle wait would run the clock through its 1.5 s confetti (owner decision
+        // 2026-10-29), which counts towards the 60 s.
         composeRule.mainClock.autoAdvance = false
+        composeRule.onNodeWithText("I'm up").performClick()
+        app.awaitUntil("Success shows") {
+            composeRule.mainClock.advanceTimeByFrame()
+            app.engine.state.value == SessionState.Idle && composeRule.successShown(upOnTime)
+        }
 
         composeRule.mainClock.advanceTimeBy(WakeActivity.SUCCESS_TIMEOUT.inWholeMilliseconds - ONE_SECOND)
         assertFalse(screen.isFinishing, "59 s: still shown")
@@ -228,9 +239,12 @@ class WakeActivitySuccessTest {
         assertNull(haptics(controller.get()).firstOrNull { it == HapticFeedbackConstants.CONFIRM }, "not played again")
     }
 
-    /** Story 6.4: the celebration and its haptic play once per session; a recreated screen shows the final state, still. */
+    /**
+     * Story 6.4: the count-up and the haptic play once per session; owner decision 2026-10-29: a recreated screen plays
+     * the confetti again (the number at once, no count-up: `claimCelebration`, see SuccessMappingTest).
+     */
     @Test
-    fun `a recreated Success keeps its streak and does not celebrate again`() {
+    fun `a recreated Success keeps its streak and plays the confetti again, with no second haptic`() {
         val scheduled = aSessionConfig().scheduledAt
         val history = FakeSessionHistoryRepository()
         runBlocking {
@@ -263,7 +277,7 @@ class WakeActivitySuccessTest {
         composeRule.onNodeWithContentDescription("3").assertExists()
         composeRule.onNodeWithText("days in a row").assertExists()
         val changed = (0 until start.height).sumOf { y -> (0 until start.width).count { x -> start[x, y] != later[x, y] } }
-        assertEquals(0, changed, "no count-up or confetti after the recreation")
+        assertTrue(changed > 0, "the confetti plays again after the recreation")
         assertNull(haptics(controller.get()).firstOrNull { it == HapticFeedbackConstants.CONFIRM }, "no second haptic")
         assertEquals(
             0,

@@ -54,7 +54,7 @@ object SuccessSamples {
     /** Story 6.4: the streak grew from 11 to 12, first showing: the count-up and the confetti. */
     val streakGrew: SuccessUiState = successUiState(aSession(), streak = SuccessStreak.Known(before = 11, after = 12))
 
-    /** Story 6.4: a second on-time session on a day already good: the number, still. */
+    /** Story 6.4: a second on-time session on a day already good: the number at once, still, under the confetti. */
     val streakSameDay: SuccessUiState = successUiState(aSession(), streak = SuccessStreak.Known(before = 12, after = 12))
 
     /** Story 6.4: the first on-time morning ever: "1", "day in a row". */
@@ -90,7 +90,8 @@ object SuccessSamples {
 
 /**
  * Story 3.3 layout, accessibility and behaviour of the basic Success screen on a phone-sized window: the 72 dp "Done"
- * in the thumb zone at 100% and 200%, TalkBack order, no paid line, no motion, and one success haptic.
+ * in the thumb zone at 100% and 200%, TalkBack order, no paid line, the confetti on every on-time Success and no motion
+ * otherwise (owner decision 2026-10-29), and one success haptic.
  */
 @RunWith(RobolectricTestRunner::class)
 @GraphicsMode(GraphicsMode.Mode.NATIVE)
@@ -173,18 +174,27 @@ class SuccessScreenTest {
         }
 
     @Test
-    fun `nothing moves, the screen at 32 ms and at 1 s is the same picture`() =
-        success(SuccessSamples.onTime) {
-            composeRule.mainClock.autoAdvance = false
-            composeRule.mainClock.advanceTimeBy(FRAME)
-            val start = composeRule.onRoot().captureToImage().toPixelMap()
-            composeRule.mainClock.advanceTimeBy(ONE_SECOND)
-            val later = composeRule.onRoot().captureToImage().toPixelMap()
-
-            assertEquals(start.width * start.height, later.width * later.height)
-            val changed = (0 until start.height).sumOf { y -> (0 until start.width).count { x -> start[x, y] != later[x, y] } }
-            assertEquals(0, changed, "pixels changed between the two moments")
+    fun `after a snooze and in a test nothing moves, the screen at 32 ms and at 1 s is the same picture`() =
+        listOf(SuccessSamples.afterSnooze, SuccessSamples.test).forEach { state ->
+            success(state) {
+                assertEquals(0, pixelsChanged(FRAME, ONE_SECOND), "pixels changed between the two moments for $state")
+                resumeClock()
+            }
         }
+
+    /** Owner decision 2026-10-29: every on-time Success has the confetti, with or without a number, then is calm by 3 s. */
+    @Test
+    fun `every on-time Success plays the confetti, also with no number or no snapshot, and is calm within 3 s`() =
+        listOf(SuccessSamples.onTime, SuccessSamples.streakSameDay, SuccessSamples.streakFirst, SuccessSamples.snapshotMissing)
+            .forEach { state ->
+                haptics.played.clear()
+                success(state) {
+                    assertTrue(pixelsChanged(FRAME, MID_BURST) > 0, "the confetti moves for $state")
+                    assertEquals(0, pixelsChanged(CELEBRATION_END - FRAME - MID_BURST, ONE_SECOND), "calm after 2 s for $state")
+                    assertEquals(listOf(HapticFeedbackType.Confirm), haptics.played, "one haptic for $state")
+                    resumeClock()
+                }
+            }
 
     @Test
     fun `the success haptic plays once for each variant`() =
@@ -238,20 +248,6 @@ class SuccessScreenTest {
         }
 
     @Test
-    fun `a streak that did not grow is the same picture at 32 ms and at 1 s, with the haptic`() =
-        success(SuccessSamples.streakSameDay) {
-            composeRule.mainClock.autoAdvance = false
-            composeRule.mainClock.advanceTimeBy(FRAME)
-            val start = composeRule.onRoot().captureToImage().toPixelMap()
-            composeRule.mainClock.advanceTimeBy(ONE_SECOND)
-            val later = composeRule.onRoot().captureToImage().toPixelMap()
-
-            val changed = (0 until start.height).sumOf { y -> (0 until start.width).count { x -> start[x, y] != later[x, y] } }
-            assertEquals(0, changed, "pixels changed between the two moments")
-            assertEquals(listOf(HapticFeedbackType.Confirm), haptics.played)
-        }
-
-    @Test
     fun `a streak that grew plays one haptic for the whole celebration`() =
         success(SuccessSamples.streakGrew) {
             composeRule.mainClock.autoAdvance = false
@@ -278,16 +274,17 @@ class SuccessScreenTest {
         Settings.Global.putFloat(resolver, Settings.Global.ANIMATOR_DURATION_SCALE, 0f)
         try {
             success(SuccessSamples.streakGrew) {
-                composeRule.mainClock.autoAdvance = false
-                composeRule.mainClock.advanceTimeBy(FRAME)
-                val start = composeRule.onRoot().captureToImage().toPixelMap()
-                composeRule.mainClock.advanceTimeBy(CELEBRATION_END)
-                val later = composeRule.onRoot().captureToImage().toPixelMap()
-
-                val changed = (0 until start.height).sumOf { y -> (0 until start.width).count { x -> start[x, y] != later[x, y] } }
-                assertEquals(0, changed, "no count-up, bounce or confetti with reduced motion")
+                assertEquals(0, pixelsChanged(FRAME, CELEBRATION_END), "no count-up, bounce or confetti with reduced motion")
                 composeRule.onNodeWithContentDescription("12").assertExists()
                 assertEquals(listOf(HapticFeedbackType.Confirm), haptics.played)
+                resumeClock()
+            }
+            // No confetti for the other on-time kinds either.
+            listOf(SuccessSamples.onTime, SuccessSamples.streakSameDay, SuccessSamples.snapshotMissing).forEach { state ->
+                success(state) {
+                    assertEquals(0, pixelsChanged(FRAME, CELEBRATION_END), "no confetti with reduced motion for $state")
+                    resumeClock()
+                }
             }
         } finally {
             Settings.Global.putFloat(resolver, Settings.Global.ANIMATOR_DURATION_SCALE, 1f)
@@ -352,9 +349,33 @@ class SuccessScreenTest {
             assertEquals(listOf<WakeIntent>(WakeIntent.DoneClicked), intents)
         }
 
+    /**
+     * How many pixels differ between [first] ms from now and [then] ms after that, on a paused clock (call [resumeClock]
+     * before the next screen of a list).
+     */
+    private fun pixelsChanged(
+        first: Long,
+        then: Long,
+    ): Int {
+        composeRule.mainClock.autoAdvance = false
+        composeRule.mainClock.advanceTimeBy(first)
+        val start = composeRule.onRoot().captureToImage().toPixelMap()
+        composeRule.mainClock.advanceTimeBy(then)
+        val later = composeRule.onRoot().captureToImage().toPixelMap()
+        assertEquals(start.width * start.height, later.width * later.height)
+        return (0 until start.height).sumOf { y -> (0 until start.width).count { x -> start[x, y] != later[x, y] } }
+    }
+
+    private fun resumeClock() {
+        composeRule.mainClock.autoAdvance = true
+    }
+
     private companion object {
         const val FRAME = 32L
         const val ONE_SECOND = 1_000L
+
+        /** Mid-way through the 1.5 s confetti. */
+        const val MID_BURST = 500L
 
         /** After the 1.5 s celebration. */
         const val CELEBRATION_END = 2_000L

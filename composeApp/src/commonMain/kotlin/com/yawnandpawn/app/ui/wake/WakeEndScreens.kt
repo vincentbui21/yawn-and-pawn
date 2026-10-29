@@ -122,11 +122,12 @@ fun FallbackPickerScreen(
 
 /**
  * Success, always Sunrise: zero snooze shows the streak number (`display`), "days in a row" and "Up on time." (owner
- * decisions 2026-09-28; Story 6.4); when the streak grew ([SuccessKind.OnTime.countFrom]) the number counts up with a
- * 1.5 s confetti celebration. With no streak known, "You're up. That's what counts." After a snooze "You're up. That's
- * what counts." with the amount paid, a test "Test finished. Your alarm works.", then "Done" (thumb zone). One success
- * haptic for every kind, when [claimHaptic] allows it (the caller plays it once per session). TalkBack reads the
- * headline first, then the streak, then "Done".
+ * decisions 2026-09-28; Story 6.4) with a 1.5 s confetti celebration every time it shows (owner decision 2026-10-29:
+ * every on-time Success has the confetti, also with no number and when shown again); when the streak grew
+ * ([SuccessKind.OnTime.countFrom]) the number also counts up. With no streak known, "You're up. That's what counts.",
+ * still with the confetti. After a snooze "You're up. That's what counts." with the amount paid, a test "Test finished.
+ * Your alarm works.", no confetti, then "Done" (thumb zone). One success haptic for every kind, when [claimHaptic]
+ * allows it (the caller plays it once per session). TalkBack reads the headline first, then the streak, then "Done".
  *
  * [basic] is the production "Done" (Story 3.3): a 72 dp `button-wake-primary`; without it, the round 1 preview's 64 dp.
  */
@@ -138,11 +139,10 @@ fun SuccessScreen(
     basic: Boolean = false,
     claimHaptic: () -> Boolean = { true },
 ) {
-    // A streak only: the celebration, which runs (count-up, confetti) only when the streak grew; after a snooze or a
-    // test, or with no streak, none.
+    // Up on time (zero snoozes, not a test): the confetti every time, the count-up only with a countFrom (owner decision
+    // 2026-10-29). After a snooze or a test, none.
     val kind = state.kind
-    val celebration =
-        if (kind is SuccessKind.OnTime && kind.streakDays > 0) rememberCelebration(animate = kind.countFrom != null) else null
+    val celebration = if (kind is SuccessKind.OnTime || kind == SuccessKind.UpNoStreak) rememberCelebration() else null
     SuccessHaptic(claimHaptic)
     WakeSurface(modifier = modifier, overlay = { celebration?.let { Confetti(it) } }) {
         val colors = PpsTheme.colors
@@ -167,7 +167,7 @@ fun SuccessScreen(
                     when (kind) {
                         is SuccessKind.OnTime -> {
                             // Owner decision 2026-09-28: the number, "days in a row" under it, then "Up on time."
-                            celebration?.let { StreakCount(kind.streakDays, kind.countFrom, it) }
+                            if (kind.streakDays > 0 && celebration != null) StreakCount(kind.streakDays, kind.countFrom, celebration)
                             Headline(stringResource(Res.string.success_zero_snooze_first))
                         }
 

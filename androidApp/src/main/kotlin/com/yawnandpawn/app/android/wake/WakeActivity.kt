@@ -410,7 +410,8 @@ class WakeActivity : ComponentActivity() {
      * first showed, also when the screen was recreated meanwhile.
      *
      * A zero-snooze real session shows its streak (Story 6.4): decided once per session from the snapshot read after the
-     * ring's first frame ([CelebrationStreaks]), and celebrated (count-up, confetti) only at its first showing.
+     * ring's first frame ([CelebrationStreaks]), and counted up only at its first showing; the confetti plays at every
+     * on-time showing (owner decision 2026-10-29).
      */
     @Composable
     private fun SuccessShown(success: SessionData) {

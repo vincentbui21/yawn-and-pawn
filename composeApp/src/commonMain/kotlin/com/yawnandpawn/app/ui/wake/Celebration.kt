@@ -32,10 +32,11 @@ import kotlin.math.sin
 import kotlin.random.Random
 
 /**
- * The on-time celebration (owner decision 2026-09-28), one [progress] from 0 to 1 over 1.5 s, started once when the
- * Success screen opens. Without [rememberCelebration]'s `animate` (the streak did not grow, or the celebration already
- * played for this session, Story 6.4) or with reduced motion it starts at 1: the final state, no count-up, bounce or
- * confetti. The success haptic is the Success screen's own (one per session for every kind), never the celebration's.
+ * The on-time celebration (owner decisions 2026-09-28 and 2026-10-29), one [progress] from 0 to 1 over 1.5 s, started
+ * each time an on-time Success screen opens: every zero-snooze Success gets the confetti, also when the streak did not
+ * grow, there is no streak and when the same session's Success shows again. The count-up is [StreakCount]'s, only with
+ * a `countFrom`. With reduced motion it starts at 1: the final state, no count-up, bounce or confetti. The success
+ * haptic is the Success screen's own (one per session for every kind), never the celebration's.
  */
 @Stable
 class Celebration internal constructor(
@@ -46,8 +47,8 @@ class Celebration internal constructor(
 }
 
 @Composable
-internal fun rememberCelebration(animate: Boolean): Celebration {
-    val plays = animate && !rememberReducedMotion()
+internal fun rememberCelebration(): Celebration {
+    val plays = !rememberReducedMotion()
     val celebration = remember { Celebration(Animatable(if (plays) 0f else 1f)) }
     LaunchedEffect(celebration) {
         if (celebration.running) celebration.progress.animateTo(1f, tween(CELEBRATION_MILLIS, easing = LinearEasing))
@@ -58,7 +59,7 @@ internal fun rememberCelebration(animate: Boolean): Celebration {
 /**
  * The streak number and "days in a row" under it (owner decision 2026-09-28: the number is not repeated in a sentence).
  * While the celebration runs the number counts up from [countFrom] to [streakDays] with a small bounce at 20% of it; a
- * null [countFrom] shows [streakDays] from the start. TalkBack reads the final number.
+ * null [countFrom] shows [streakDays] from the start, still (the confetti still plays). TalkBack reads the final number.
  */
 @Composable
 internal fun StreakCount(
@@ -74,7 +75,8 @@ internal fun StreakCount(
             modifier =
                 Modifier
                     .graphicsLayer {
-                        val bounce = ((celebration.value - COUNT_AT) / BOUNCE_LENGTH).coerceIn(0f, 1f)
+                        // The bounce goes with the count-up's step only: a number shown from the start stays still.
+                        val bounce = if (countFrom == null) 0f else ((celebration.value - COUNT_AT) / BOUNCE_LENGTH).coerceIn(0f, 1f)
                         val scale = 1f + BOUNCE_HEIGHT * sin(PI * bounce).toFloat()
                         scaleX = scale
                         scaleY = scale
@@ -91,8 +93,9 @@ internal fun StreakCount(
 }
 
 /**
- * A 1.5 s confetti burst from behind the streak number in brand and Sunrise colours (accent, accent-text, success,
- * sunrise-gradient-top): decorative only, drawn while the celebration runs, then gone. Hidden from TalkBack.
+ * A 1.5 s confetti burst from behind the streak number (or the headline when there is none) in brand and Sunrise colours
+ * (accent, accent-text, success, sunrise-gradient-top): decorative only, drawn while the celebration runs, then gone.
+ * Hidden from TalkBack.
  */
 @Composable
 internal fun Confetti(

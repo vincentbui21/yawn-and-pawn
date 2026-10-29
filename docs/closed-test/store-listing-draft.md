@@ -42,8 +42,8 @@ THE CHECKS
 • Math: solve a few quick sums.
 • Word Unscramble: unscramble a few words.
 • Memory Sequence: repeat a pattern of tiles.
-• QR/Barcode: scan a code you placed away from your bed.
-While you work on it, the sound goes quiet for a short grace window.
+• QR/Barcode: scan a code you placed away from your bed, or print one from the app.
+While you work on it, the sound pauses for a short quiet time.
 
 YOU STAY IN CONTROL
 • Choose your base fee from ten price tiers, and how often you can pay per morning, from 1 to 5. After that, only the check is left.
@@ -56,11 +56,16 @@ It keeps ringing until you finish your check or pay. Your phone stays usable: ca
 MADE TO RING
 A reliability checklist walks you through notifications, full-screen display, exact timing, Do Not Disturb, battery settings and your phone maker's background settings. A test alarm on the lock screen shows it works on your phone, and never charges you.
 
+MAKE IT YOURS
+• Record a short message to yourself. Hear it once you are up, or mixed into the ringing.
+• Wake up to your own song or sound file. If the file goes missing, a built-in sound plays instead.
+• Need a day off? An optional reminder before the alarm lets you skip just that morning, for free.
+
 SEE YOUR PROGRESS
 Your streak of on-time mornings, on-time rate, a calendar of each morning and the money you paid.
 
 PRIVACY
-No account and no ads. Your alarms, history and purchase records stay on your phone. Crash reports are sent so we can fix failures. Anonymous usage stats are sent only if you say yes.
+No account and no ads. Your alarms, history, recordings and purchase records stay on your phone. Crash reports are sent so we can fix failures. Anonymous usage stats are sent only if you say yes.
 
 FOR ADULTS
 Yawn & Pawn is for adults (18+). We recommend turning on purchase authentication in Google Play, so every purchase needs your fingerprint or password.
@@ -70,11 +75,11 @@ Yawn & Pawn is for adults (18+). We recommend turning on purchase authentication
 
 | Field | Value |
 |---|---|
-| App category | **OWNER DECIDES:** Tools (recommended: an alarm clock is a utility, and Story 8.1 allows Tools or Lifestyle) |
 | Tags | Pick the closest offered, such as "Alarm clock" |
-| Contact email | The support address on the support page (already public) |
-| Website | https://vincentbui21.github.io/yawn-and-pawn/ |
-| Privacy policy | https://vincentbui21.github.io/yawn-and-pawn/privacy/ |
+| App category | Tools (owner decision 2026-10-27) |
+| Contact email | support@yawnandpawn.com (once the domain and forwarding are set up; until then the address on the support page) |
+| Website | https://yawnandpawn.com/ (until the domain is connected: https://vincentbui21.github.io/yawn-and-pawn/) |
+| Privacy policy | https://yawnandpawn.com/privacy/ (until then: https://vincentbui21.github.io/yawn-and-pawn/privacy/) |
 
 ## Honesty notes (why each claim is safe)
 
@@ -85,7 +90,8 @@ Yawn & Pawn is for adults (18+). We recommend turning on purchase authentication
 - **Free and offline:** checks run on the phone; terms "What the app does" and the payments page.
 - **Phone stays usable, other ways to stop it, 30 minutes:** the payments page "How the alarm behaves" and the terms, word for word in meaning (FR-ONB-5 disclosure).
 - **Refunded automatically:** terms "Unused payments".
-- **Checks listed:** only the four checks a user can pick in this build. House Hunt, motivation recordings and custom sounds (Epic 7) are not built and are not mentioned.
+- **Checks listed:** only the four checks a user can pick in this build. House Hunt moved to v2 (owner 2026-10-27) and is not mentioned.
+- **Make it yours (Epic 7, built 2026-10-28):** recordings play after "I'm up" (Story 7.3) or mixed into the ring (7.5); own sound file with a built-in fallback (7.4); printable QR (7.10); the skip reminder is optional and skipping is free (7.11, FR-ALM-10). Recordings stay on the phone (privacy policy, 7.1).
 - **Progress:** Stories 6.3 to 6.7 are on `main`. The Sunday weekly summary (Story 6.8) is not built, so it is not mentioned.
 - **Privacy paragraph:** matches the privacy policy's short version. It does not say "nothing leaves your phone", because crash reports always do.
 - **No reliability promise:** the text says the checklist and test alarm help, never that the alarm always rings (terms "No guarantee that an alarm rings").
@@ -96,6 +102,6 @@ Counted with a script when this draft was written; re-check after any edit.
 
 - App name: 11 characters (limit 30).
 - Short description: both options are under the 80 limit (counts above).
-- Full description: about 2,450 characters (limit 4,000).
+- Full description: about 2,790 characters (limit 4,000; recounted 2026-10-29 after adding Epic 7).
 - No content word is used more than 5 times. Word forms were counted together ("snooze", "snoozes"; "alarm", "alarms"; "payment", "payments").
 - No em dash, emoji, currency symbol, price, percentage, "x times" claim or superlative.

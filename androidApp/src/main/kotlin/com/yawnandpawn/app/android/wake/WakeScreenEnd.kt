@@ -123,8 +123,9 @@ internal class WakeScreenEnd(
     fun claimHaptic(sessionId: String): Boolean = (hapticPlayedFor != sessionId).also { hapticPlayedFor = sessionId }
 
     /**
-     * True once per session (Story 6.4): only the first Success showing of [sessionId] may play its celebration, so a
-     * recreated or rotated screen shows the final state with no second count-up or confetti.
+     * True once per session (Story 6.4): only the first Success showing of [sessionId] may count up, so a recreated or
+     * rotated screen shows the final number with no second count-up. The confetti plays at every showing (owner decision
+     * 2026-10-29).
      */
     fun claimCelebration(sessionId: String): Boolean = (celebratedFor != sessionId).also { celebratedFor = sessionId }
 

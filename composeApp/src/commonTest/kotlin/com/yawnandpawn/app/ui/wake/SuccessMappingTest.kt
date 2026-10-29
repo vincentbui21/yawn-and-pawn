@@ -30,7 +30,7 @@ class SuccessMappingTest {
         assertEquals(
             SuccessKind.OnTime(streakDays = 12, countFrom = null),
             onTime(SuccessStreak.Known(before = 11, after = 12), celebrate = false),
-            "recreated: the final number, still",
+            "recreated: the final number, no count-up (the screen still plays the confetti)",
         )
     }
 

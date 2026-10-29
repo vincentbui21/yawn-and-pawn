@@ -8,9 +8,9 @@ import com.yawnandpawn.app.core.stats.SuccessStreak
 /**
  * The Success screen for a completed [session] (Story 3.3): "Test finished. Your alarm works." for a test session, after
  * a snooze "You're up. That's what counts." with what the snoozes cost ([knownPaid], Story 4.15), and with no snooze
- * the zero-snooze [streak] (Story 6.4):
+ * the zero-snooze [streak] (Story 6.4), every one of them with the confetti (owner decision 2026-10-29):
  * - [SuccessStreak.Known] with a streak: the number, "days in a row" and "Up on time.", counting up from the streak
- *   before only when it grew and [celebrate] (the first showing for this session);
+ *   before only when it grew and [celebrate] (the first showing for this session); otherwise the number, still;
  * - [SuccessStreak.Known] with no streak (an earlier paid or missed session today) or [SuccessStreak.Pending]: "Up on
  *   time." only;
  * - [SuccessStreak.Unknown]: "You're up. That's what counts." with no number.

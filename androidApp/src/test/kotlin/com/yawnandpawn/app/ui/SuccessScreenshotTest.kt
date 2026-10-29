@@ -18,8 +18,9 @@ import org.robolectric.annotation.GraphicsMode
 
 /**
  * Story 3.3 screenshots of the Success screen as `WakeActivity` shows it: on time, after a snooze and a test, and the
- * Story 6.4 streak (the count-up's start and calm end, the same day, the first day, no snapshot) and the Story 7.3
- * message card (playing, and played to its end), always Sunrise, at 100% and 200% font scale.
+ * Story 6.4 streak (the count-up's start and calm end, the same day, the first day, no snapshot), the confetti on every
+ * on-time Success (owner decision 2026-10-29) and the Story 7.3 message card (playing, and played to its end), always
+ * Sunrise, at 100% and 200% font scale.
  */
 @RunWith(RobolectricTestRunner::class)
 @GraphicsMode(GraphicsMode.Mode.NATIVE)
@@ -108,6 +109,29 @@ class SuccessScreenshotTest {
     @Config(fontScale = 2.0f)
     fun `snapshot missing at 200 percent`() = success("wake_success_snapshot_missing_sunrise_font200", SuccessSamples.snapshotMissing)
 
+    // --- Owner decision 2026-10-29: the confetti on every on-time Success, also with no count-up ---
+
+    /** Mid-way through the confetti of [state]: no count-up, so the number (when there is one) is already the final one. */
+    private fun burst(
+        name: String,
+        state: SuccessUiState,
+    ) = withScreen(PpsThemeMode.Light, content = { SuccessScreen(state = state, onIntent = {}, basic = true) }) {
+        composeRule.mainClock.autoAdvance = false
+        composeRule.waitForIdle()
+        composeRule.mainClock.advanceTimeBy(MID_BURST)
+        composeRule.onNodeWithText("Done").assertExists()
+        composeRule.onRoot().captureRoboImage("src/test/screenshots/$name.png", roborazziOptions = screenshotOptions)
+    }
+
+    @Test
+    fun `streak on a day already good, confetti`() = burst("wake_success_streak_same_day_confetti_sunrise", SuccessSamples.streakSameDay)
+
+    @Test
+    fun `up on time with no number, confetti`() = burst("wake_success_on_time_confetti_sunrise", SuccessSamples.onTime)
+
+    @Test
+    fun `snapshot missing, confetti`() = burst("wake_success_snapshot_missing_confetti_sunrise", SuccessSamples.snapshotMissing)
+
     // --- Story 7.3: the message card ---
 
     @Test
@@ -129,5 +153,6 @@ class SuccessScreenshotTest {
 
     private companion object {
         const val FRAME = 32L
+        const val MID_BURST = 500L
     }
 }

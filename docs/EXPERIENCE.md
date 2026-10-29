@@ -371,7 +371,7 @@ Behavioural rules. Visual specs for every row live in `DESIGN.md > Components` u
 | Restored after crash, kill or reboot | Wake screens | Same step as before (ringing, check progress, snoozed); snooze count and paid amount kept (FR-SES-1/2). No "restored" message. |
 | Overlapping alarm | Wake screens | Merged silently; noted in Day detail "{time} alarm merged into this session" (FR-SES-7). |
 | Missed (30 min, no interaction) | Wake screens | Alarm stops, session logged Missed (FR-ALM-9); Home shows the missed note next open. |
-| Success, zero snooze | Success | Celebration once (owner decision 2026-09-28): the number counts up from n−1 to n with a small bounce, a 1.5 s confetti burst, one success haptic; motivation playback if set, at the phone's own brightness (Bright wake screen covers only the ringing screen). Reduced motion: the final state at once, no confetti (the haptic stays). |
+| Success, zero snooze | Success | Confetti on every on-time Success (owner decision 2026-10-29): every zero-snooze, non-test Success plays the 1.5 s confetti burst each time it shows, also when the streak did not grow, with no streak ("Up on time." alone), with no snapshot ("You're up. That's what counts.") and when the same session's Success shows again (rotation, restore). Only the first showing of a grown streak also counts up from n−1 to n with a small bounce (owner decision 2026-09-28); otherwise the number shows at once, still. One success haptic per session; motivation playback if set, at the phone's own brightness (Bright wake screen covers only the ringing screen). Reduced motion: the final state at once, no confetti (the haptic stays). |
 | Success, after snooze | Success | "You're up. That's what counts." plus "{paid} paid this morning" in `{colors.text-secondary-sunrise}`. No animation. |
 | Snoozed | Snoozed | "Snoozed. Next ring at {time}." for 3 s, then screen off. |
 
@@ -427,7 +427,7 @@ Behavioural rules. Visual specs for every row live in `DESIGN.md > Components` u
 | Standard transition | 250 ms, Material emphasized easing |
 | Countdown ring | Linear, exact to the second |
 | Memory tiles | 350 ms highlight, 150 ms gap |
-| Success (zero-snooze) | One 1.5 s celebration, linear: at 20% the number steps from n−1 to n and bounces (scale up to 1.2 and back over 25%); seeded confetti bursts from behind the number, falls and fades out from 70%; one success haptic at the start. Then calm. Compose drawing only, no GIF, no library. |
+| Success (zero-snooze) | One 1.5 s celebration, linear, each time an on-time Success shows (owner decision 2026-10-29): seeded confetti bursts from behind the number (or the headline), falls and fades out from 70%; when the streak grew, at its first showing, at 20% the number steps from n−1 to n and bounces (scale up to 1.2 and back over 25%); one success haptic per session, at the start. Then calm. Compose drawing only, no GIF, no library. |
 | Wrong answer | 200 ms horizontal shake + error haptic |
 | Screens and sub-screens (owner decision 2026-09-27) | Slide in from the end and out the other way, 250 ms emphasized; the outgoing screen moves a quarter width |
 | "Custom" repeat | Day chips expand and collapse |

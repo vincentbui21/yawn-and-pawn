@@ -72,4 +72,4 @@ If we change these terms, we update this page and its effective date. Every chan
 
 ## Contact
 
-Questions about these terms: <vincentbui2108@gmail.com>. More help is on the [support page]({{ "/support/" | relative_url }}).
+Questions about these terms: <support@yawnandpawn.com>. More help is on the [support page]({{ "/support/" | relative_url }}).

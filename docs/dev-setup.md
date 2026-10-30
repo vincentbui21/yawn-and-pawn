@@ -78,7 +78,7 @@ Git is the only thing the two computers share, so these rules stop them overwrit
 ## 5. Accounts still to create
 
 - **Google Play Console developer account** (personal, USD 25 one-time, identity verification can take a few days): Story 1.4. Start early.
-- **Support email:** placeholder `vincentbui2108@gmail.com` for now; change it later in `config/app-links.properties` (one line).
+- **Support email:** `support@yawnandpawn.com` since 2026-10-30 (Cloudflare Email Routing forwards it); it lives in `config/app-links.properties` (one line).
 
 ## 6. Automatic build loop: bmad-loop (after stories 1.1–1.3)
 

@@ -20,7 +20,7 @@ Related files: `docs/closed-test.md` (the tester guide), `feedback-form.md` (the
   - Analytics > Admin > Data settings > Data retention: **2 months**, Google's default (the privacy policy says 2 months and "Google's default, which we keep"; never raise it to 14 months without changing the policy first).
   - Analytics > Admin > Data collection: **Google signals off**.
   - Analytics > Admin > Account settings > Data sharing settings: turn **off** "Google products & services" and "Modeling contributions & business insights". This keeps the Data safety answer "not shared" true.
-- [ ] **Pages are live:** open https://vincentbui21.github.io/yawn-and-pawn/privacy/ and https://vincentbui21.github.io/yawn-and-pawn/support/ in a private browser window. Both must open (HTTP 200) and show the current text.
+- [ ] **Pages are live:** open https://yawnandpawn.com/privacy/ and https://yawnandpawn.com/support/ in a private browser window. Both must open (HTTP 200) and show the current text.
 - [ ] **EU DSA trader status** (Story 8.6). **Decided 2026-10-26: trader, yes**, see section 3.16. Declare it in Play Console before you create the closed release, because it decides which countries the closed track can reach.
 
 ---
@@ -73,10 +73,10 @@ Play Console > Yawn & Pawn > **Grow users > Store presence > Store listings > Ma
 
 - [ ] **App name, short description, full description:** paste from `store-listing-draft.md`.
 - [ ] **App icon** (512 × 512 PNG), **feature graphic** (1024 × 500), **at least 2 phone screenshots.** **OWNER DECIDES:** Story 8.2's generated set isn't built. Recommendation: take interim screenshots on your phone now (Home, the ringing screen from a test alarm, the snooze confirm sheet, a check, Progress), with no personal names in alarm labels and a clean status bar. Replace them in Story 8.2. For the feature graphic, a plain Sunrise-colour background with the app name is enough for a closed test.
-- [ ] **Store settings** (Store presence > Store settings): App category **OWNER DECIDES**, recommended **Tools**; contact email: the support address from the support page; website: https://vincentbui21.github.io/yawn-and-pawn/
+- [ ] **Store settings** (Store presence > Store settings): App category **OWNER DECIDES**, recommended **Tools**; contact email: support@yawnandpawn.com; website: https://yawnandpawn.com/
 - [ ] **Save.** The page must show no errors.
 
-**OWNER DECIDES, support address:** the support address is a personal Gmail address, already published on the site (`config/app-links.properties` notes a dedicated address is an owner action before launch). Recommendation: keep it for the closed test; switch to a dedicated address before production (it changes `config/app-links.properties` and the site pages together).
+**Support address, decided 2026-10-30:** support@yawnandpawn.com, a dedicated address on the owner's domain (Cloudflare Email Routing forwards it). The app (`config/app-links.properties`) and the site pages show it.
 
 ---
 
@@ -86,7 +86,7 @@ Play Console > Yawn & Pawn > **Policy and programs > App content** (older menus:
 
 ### 3.1 Privacy policy
 
-- [ ] URL: `https://vincentbui21.github.io/yawn-and-pawn/privacy/`. Save.
+- [ ] URL: `https://yawnandpawn.com/privacy/`. Save.
 
 ### 3.2 App access
 
@@ -334,7 +334,7 @@ Record in the Story 5.14 file (create it under `_bmad-output/implementation-arti
 | 2 | PRIVACY MISMATCH 6: Epic 7 features described ahead of time | **Decided 2026-10-26:** removed from the policy; add back when Epic 7 ships |
 | 3 | Interim store graphics (2) | Real phone screenshots now; replace in Story 8.2 |
 | 4 | App category (2) | Tools |
-| 5 | Support address (2) | Keep the published address for the closed test; switch to a dedicated one before production |
+| 5 | Support address (2) | **Decided 2026-10-30:** support@yawnandpawn.com on the owner's domain |
 | 6 | Data safety: deletion question (3.6) | **Decided 2026-10-26:** Yes; the policy offers an email request |
 | 7 | Data safety: Purchase history required or optional (3.6) | **Decided 2026-10-26:** declared, Required |
 | 8 | Data safety: Auto Backup not declared (3.6) | Don't declare; confirm against Google's backup FAQ in Story 8.3 |

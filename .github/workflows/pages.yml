@@ -7,7 +7,8 @@
 # sets PAGES_LIVE only after those are merged and the pages are re-read. Until then only the check runs.
 #
 # Owner action, once: Settings > Pages > Build and deployment > Source: "GitHub Actions", then PAGES_LIVE=true.
-# The site is https://vincentbui21.github.io/yawn-and-pawn/.
+# The site is https://yawnandpawn.com/ (custom domain since 2026-10-30: Settings > Pages > Custom domain, with
+# "Enforce HTTPS"; the DNS is at Cloudflare).
 name: Pages
 
 on:

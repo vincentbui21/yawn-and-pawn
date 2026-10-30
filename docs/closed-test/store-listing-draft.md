@@ -77,9 +77,9 @@ Yawn & Pawn is for adults (18+). We recommend turning on purchase authentication
 |---|---|
 | Tags | Pick the closest offered, such as "Alarm clock" |
 | App category | Tools (owner decision 2026-10-27) |
-| Contact email | support@yawnandpawn.com (once the domain and forwarding are set up; until then the address on the support page) |
-| Website | https://yawnandpawn.com/ (until the domain is connected: https://vincentbui21.github.io/yawn-and-pawn/) |
-| Privacy policy | https://yawnandpawn.com/privacy/ (until then: https://vincentbui21.github.io/yawn-and-pawn/privacy/) |
+| Contact email | support@yawnandpawn.com |
+| Website | https://yawnandpawn.com/ |
+| Privacy policy | https://yawnandpawn.com/privacy/ |
 
 ## Honesty notes (why each claim is safe)
 

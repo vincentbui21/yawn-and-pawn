@@ -141,7 +141,7 @@ class AndroidQrPrinter(
 }
 
 /**
- * Writes the printable QR's one-page PDF to [out] (Story 7.10): [matrix] 6 cm square in the middle of the paper in
+ * Writes the printable QR's one-page PDF to [out] (Story 7.10): [matrix] 14 cm square in the middle of the paper in
  * [attributes] (its size, resolution and the printer's margins), [line] under it ([QrPageLayout], [drawQrPage]). Only
  * [QrPrintAdapter] writes it, to the print service's own descriptor; the device test writes it to a temporary file.
  */
@@ -168,7 +168,7 @@ internal fun writeQrPdf(
     }
 }
 
-/** One page: [matrix] 6 cm square in the middle of the paper the user picked, [line] under it ([writeQrPdf]). */
+/** One page: [matrix] 14 cm square in the middle of the paper the user picked, [line] under it ([writeQrPdf]). */
 internal class QrPrintAdapter(
     private val context: Context,
     private val matrix: QrMatrix,

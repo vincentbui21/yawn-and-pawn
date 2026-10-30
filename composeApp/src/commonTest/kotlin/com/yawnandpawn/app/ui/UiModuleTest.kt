@@ -73,6 +73,9 @@ import com.yawnandpawn.app.testing.aDeleteAllData
 import com.yawnandpawn.app.testing.anAlarm
 import com.yawnandpawn.app.testing.anAppVersion
 import com.yawnandpawn.app.testing.anEvaluateReliability
+import com.yawnandpawn.app.ui.about.AboutUiState
+import com.yawnandpawn.app.ui.about.AboutViewModel
+import com.yawnandpawn.app.ui.about.AppInfo
 import com.yawnandpawn.app.ui.daydetail.DayDetailViewModel
 import com.yawnandpawn.app.ui.editor.AlarmEditorArgs
 import com.yawnandpawn.app.ui.editor.AlarmEditorViewModel
@@ -280,7 +283,7 @@ class UiModuleTest {
 
     @OptIn(ExperimentalCoroutinesApi::class)
     @Test
-    fun `the ui module builds the You and Payments ViewModels from the links, clock and price ports`() {
+    fun `the ui module builds the You, About and Payments ViewModels from the links, clock and price ports`() {
         val ports =
             module {
                 single<MonotonicClock> { FakeMonotonicClock() }
@@ -316,8 +319,10 @@ class UiModuleTest {
                         privacyUrl = "https://example.com/privacy/",
                         termsUrl = "https://example.com/terms/",
                         supportUrl = "https://example.com/support/",
+                        websiteUrl = "https://example.com/",
                     )
                 }
+                single { AppInfo(versionName = "0.1.7") }
             }
         val app = koinApplication { modules(ports, uiModule) }
         Dispatchers.setMain(UnconfinedTestDispatcher())
@@ -325,6 +330,8 @@ class UiModuleTest {
             val you = app.koin.get<YouViewModel>()
 
             assertEquals(YouUiState(appVersion = ""), you.state.value)
+            val about = app.koin.get<AboutViewModel>()
+            assertEquals(AboutUiState(version = "0.1.7", website = "example.com", supportEmail = "help@example.com"), about.state.value)
             assertNull(
                 app.koin
                     .get<PaymentsViewModel>()

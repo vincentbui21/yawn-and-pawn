@@ -55,9 +55,10 @@ Bottom navigation (owner decision 2026-10-01, feedback item 26): a floating glas
 | Day detail | Progress ring or calendar chip | One session: rings, snoozes, paid, checks, fallback, outcome. Owner redesign 2026-10-01 (feedback item 25): a one-line title with the short weekday, day and month ("Wed, Sep 23" in the phone's locale); per session a `day-hero` (outcome glyph and label, "{time} · {label}", the key figure large: "{minutes} min" "to get up", or "Stopped after 30 minutes" for missed), three small tiles like Progress ("rings" · "snoozes" · "paid", money neutral, "No charge" when nothing was paid) and a `morning-timeline` of the events in order (rang, snoozed with price, rang again, "I'm up", quiet time ran out, check switched before the first unlock, fallback check, merged alarm, check solved first try or in n tries, stopped after 30 minutes). Two sessions each get their own hero, tiles and timeline. Test and skipped days show the hero only. Logged alarm changes follow as notes. |
 | Purchase history | You › Money, Progress link | Every charge with date, alarm, snooze number, localized price (FR-PRG-4), in month cards, newest first (owner decision 2026-10-08, design preview). Each month title shows that month's total, one amount per currency ("{amount1} + {amount2}"), counting only used payments whose amount is known; a row whose amount is not known shows no price (Story 4.16). |
 | ~~Export CSV~~ | Removed | Owner decision 2026-10-01 (feedback item 23): no CSV export in the app, against PRD FR-PRG-6 (Could). The export story is to be removed via correct-course when its epic comes up. |
-| Settings | Nav | Grouped cards, rows open sub-screens (owner decision 2026-09-27; design preview round 2 layout 2026-09-30). Title "Settings" pinned top-left. Card "Snooze": "Base fee" ›, "Max snoozes per session" ›, "Default snooze length" ›; card "Wake": "Default quiet time" ›, "Vibrate during quiet time" (switch), "Bright wake screen" (switch with its caption); card "Appearance": System / Light / Dark `segmented-control`; a card with "Weekly summary" and "Share anonymous usage stats" (switches); a card with "Reliability checklist" ›. App behaviour only: payments, privacy, "Delete all data", support, terms and about moved to You (owner decision 2026-10-01). Sub-screens: **Base fee** (`stepper`, fee ladder preview, lock note, approximate-price note), **Max snoozes per session** (`stepper` 1 to 5), **Default snooze length** (5 / 9 / 10 / 15 min), **Default quiet time** (15 to 30 s slider). |
+| Settings | Nav | Grouped cards, rows open sub-screens (owner decision 2026-09-27; design preview round 2 layout 2026-09-30). Title "Settings" pinned top-left. Card "Snooze": "Base fee" ›, "Max snoozes per session" ›, "Default snooze length" ›; card "Wake": "Default quiet time" ›, "Vibrate during quiet time" (switch), "Bright wake screen" (switch with its caption); card "Appearance": System / Light / Dark `segmented-control`; a card with "Weekly summary" and "Share usage stats" (switches); a card with "Make sure alarms ring" › and "About" › (0.1.7 polish, owner decision 2026-10-30). App behaviour only: payments, privacy, "Delete all data", support and terms moved to You (owner decision 2026-10-01). Sub-screens: **Base fee** (`stepper`, fee ladder preview, lock note, approximate-price note), **Max snoozes per session** (`stepper` 1 to 5), **Default snooze length** (5 / 9 / 10 / 15 min), **Default quiet time** (15 to 30 s slider). |
 | You | Nav | A personal page with no sign-in (owner decision 2026-10-01; no account or backend, NFR-4), grouped cards: "Money" (Purchase history ›, "How payments & refunds work" ›), "Privacy and your data" ("Privacy policy" ›, "Delete all data" in `error`, opens its dialog), "Help" ("Support" ›, "Terms" ›, "About" with "Version {version}"). The label can later become "Account" with a one-word change. |
-| Reliability checklist | Settings, onboarding step 5, `banner-warning` | Permission and device-setting status with fixes (FR-ONB-2/3). All rows in one `card-group`; "Fix" on "Manufacturer settings" opens its numbered steps as a sub-screen ("Open settings", "I've done this"). |
+| Reliability checklist | Settings ("Make sure alarms ring", also its title), onboarding step 5, `banner-warning` | Permission and device-setting status with fixes (FR-ONB-2/3). All rows in one `card-group`; "Fix" on "Manufacturer settings" opens its numbered steps as a sub-screen ("Open settings", "I've done this"). "Fix" on "Battery" opens this app's App info page, where its Battery settings live (0.1.7 polish: never the list of all apps; the app does not ask for the battery optimisation exemption). |
+| About | Settings | Pushed over Settings from its "About" row, with a back arrow (0.1.7 polish, owner decision 2026-10-30): the app icon, "Yawn & Pawn", "Version {version}", then one card of rows that leave the app (trailing "open in new" icon): "Website" (yawnandpawn.com), "Contact support" (the support address, opens an email; with no email app the "No email app found. Write to:" note with "Copy address"), "Privacy policy", "Terms". No browser: "No browser found." snackbar. |
 | Payments & refunds | You | Plain explanation of fees, pending payments and Google refunds (FR-SET-3). Its links push "Problem with a charge?" and Purchase history over it (Story 5.8). |
 | Ringing | Alarm fires (full-screen intent), `notification-ringing` tap | Time, "I'm up", "Snooze · {price}". |
 | Snooze confirm | `button-snooze` tap | Price, next price, nudge, confirm. Includes the unlock step and "already paid" state. |
@@ -125,8 +126,8 @@ All strings live in resources (NFR-10). `{price}`, `{nextPrice}`, `{minutes}`, `
 | Session in progress | "Alarm in progress" · "Back to alarm" |
 | Editor, weakening under lock | "Saved. Takes effect after tomorrow's {time} alarm." |
 | Editor, no check | "Pick at least one check." |
-| Disable under lock (dialog) | "Turn off your {time} alarm? It rings in {hours} h. This is logged." · "Turn off" / "Keep it on" |
-| Delete alarm (dialog) | "Delete your {time} alarm? This is logged." · "Delete" / "Keep it" |
+| Disable under lock (dialog) | "Turn off the {time} alarm?" · "It rings in {hours} hours." ("It rings in 1 hour.") · "Turn off" / "Keep it on" (0.1.7 polish; still logged) |
+| Delete alarm (dialog) | "Delete the {time} alarm?" · "Delete" / "Keep it" (0.1.7 polish; still logged) |
 | Ringing, primary | "I'm up" |
 | Ringing, snooze | "Snooze · {price}" |
 | Ringing, session line | "Snooze {n} of {max} · {paid} paid this morning" |
@@ -207,13 +208,15 @@ All strings live in resources (NFR-10). `{price}`, `{nextPrice}`, `{minutes}`, `
 | Settings, Wake section | "Wake" · "Default quiet time" · "Bright wake screen" (owner decision 2026-09-27, was "Default grace window") |
 | Settings, bright wake screen caption | "Raises screen brightness while the alarm rings." |
 | Settings, Appearance section | "Appearance" · "System" / "Light" / "Dark" |
-| Settings, usage stats | "Share anonymous usage stats" |
+| Settings, usage stats | "Share usage stats" (0.1.7 polish; onboarding's question stays "Share anonymous usage stats?") |
 | Settings, weekly summary switch | "Weekly summary" |
-| Settings, rows | "Reliability checklist" · "How payments & refunds work" · "Privacy policy" · "Terms" · "Support" · "Delete all data" |
+| Settings, rows | "Make sure alarms ring" · "About" · "How payments & refunds work" · "Privacy policy" · "Terms" · "Support" · "Delete all data" |
 | Settings, purchase authentication tip (also onboarding) | "Turn on purchase authentication in Google Play so every snooze needs your fingerprint or password." |
 | Settings, delete all data (dialog) | "Delete all data?" · "Alarms, history, purchase records and settings are removed from this phone. This can't be undone." · "Delete" / "Keep it" |
 | Links, no handler (snackbar) | "No browser found." |
-| Disable under lock (dialog), under 1 h | "Turn off your {time} alarm? It rings in {minutes} min. This is logged." · "Turn off" / "Keep it on" |
+| Disable under lock (dialog), under 1 h | "Turn off the {time} alarm?" · "It rings in {minutes} minutes." ("It rings in 1 minute.") · "Turn off" / "Keep it on" |
+| About | "About" · "Version {version}" · "Website" · "Contact support" · "Privacy policy" · "Terms" |
+| Alarm editor and onboarding step 4, time card | "Rings today at {time}." · "Rings tomorrow at {time}." · "Rings on {weekday} at {time}." · a week or more ahead "Rings next {weekday} at {time}." |
 | Onboarding, base fee | "Continue" |
 | Onboarding, first alarm headline | "When should it ring?" |
 | Onboarding, checks headline | "How will you prove you're up?" |
@@ -306,7 +309,7 @@ Behavioural rules. Visual specs for every row live in `DESIGN.md > Components` u
 | `number-pad-key` | Math | Light haptic per tap. Backspace, then "Check". Wrong answer: shake, error haptic, field cleared, announcement "Not quite. Try again." |
 | `memory-tile` | Memory Sequence | Sequence plays, then input. Wrong tap restarts the round with a new sequence (FR-PWK-4). Input disabled while playing. |
 | `letter-tile` | Word Unscramble | Tap moves a letter to the next empty slot; tap a slot to return it. "Shuffle" and "Clear" actions. |
-| `text-field` | Answer field, labels | Math answer is read-only; filled only from `number-pad-key`. Labels use the system keyboard. |
+| `text-field` | Answer field, labels | Math answer is read-only; filled only from `number-pad-key`. Labels use the system keyboard. The editor's "Alarm name" is a Material outlined field: its label sits inside while empty and unfocused and on the top border once focused or filled (0.1.7 polish). |
 | `viewfinder` | House Hunt, QR, registration | Starts on screen open. If permission is denied or the camera fails to start (CameraX error or no frame within 5 s, FR-PWK-11), shows "Camera isn't available. Pick a fallback check." with `fallback-link` immediately. |
 | `shutter` | House Hunt | Captures and matches on device. Result: "Matched" (success) or "Doesn't match yet. Try the same angle." Each non-match counts as a failed attempt. |
 | `fallback-link` | Check footer | Appears **immediately** if camera permission is denied, the camera is unavailable or fails to start; otherwise after **5 failed attempts** on a camera check. Once per session. Opens the Fallback check picker. |
@@ -347,7 +350,7 @@ Behavioural rules. Visual specs for every row live in `DESIGN.md > Components` u
 | `sound-row` | Sound picker | Tap selects; play button previews at alarm volume, stops on leaving. Missing custom file shows "File missing. Default sound will play." |
 | `recorder` | Recordings | Tap to record (mic permission asked on first use), tap to stop, auto-stop at 60 s. Then Play, Re-record, Save, Delete. |
 | `motivation-player` | Success | Plays automatically when set to "After I'm up". Pause / replay. "Done" stops playback and closes. |
-| `dialog-confirm` | Disable/delete under lock, delete alarm, delete all data, discard changes | Two actions; the safe action is the default dismiss. Logged actions say "This is logged." |
+| `dialog-confirm` | Disable/delete under lock, delete alarm, delete all data, discard changes, skip next alarm | Two actions; the safe action is the default dismiss. A short question as the title, any detail in the body (0.1.7 polish). The skip dialog still says "This is logged."; turn off and delete are logged without saying so. |
 | `snackbar` | App and wake screens | App: 4 s, optional action. **Wake screens: no action, stays at least 10 s or until the next tap**, announced politely by TalkBack. |
 | `notification-ringing` | During a session | Ongoing, alarm category, full-screen intent. Tap anywhere returns to the wake screen. The sound never stops from the notification. |
 | `notification-summary` | Weekly (default on, FR-PRG-5) | Sunday evening. Tap opens Progress. Toggle in Settings > Notifications. |
@@ -411,6 +414,7 @@ Behavioural rules. Visual specs for every row live in `DESIGN.md > Components` u
 | Weakening under lock | Alarm editor, Settings | `note-inline` "Saved. Takes effect after tomorrow's {time} alarm." |
 | No check selected | Alarm editor | Save blocked, inline error "Pick at least one check." under the Wake-up check row (value "None") and in its sub-screen. |
 | One-time alarm time already passed today | Alarm editor | Schedules the next day; `note-inline` "Rings tomorrow at {time}." |
+| Any alarm time | Alarm editor, onboarding step 4 | The time card always says when it next rings, so the layout never jumps (0.1.7 polish): `note-inline` "Rings today at {time}." · "Rings tomorrow at {time}." · "Rings on {weekday} at {time}." · "Rings next {weekday} at {time}." (a week or more ahead) |
 | Custom sound missing | Sound picker, editor | "File missing. Default sound will play." (FR-SND-5). |
 | No recordings / mic denied | Recordings | "Record a message for your morning self." / "Microphone is off. Turn it on in Settings." with "Fix". |
 | Empty | Progress | "Your first morning shows up here." |
@@ -558,7 +562,7 @@ Failure: with the camera working, after 5 failed scans the link appears. A secon
 1. Linh opens Settings and lowers the base fee from $3 to $1.
 2. `note-inline`: "Saved. Takes effect after tomorrow's 7:30 alarm."
 3. She goes to Home and toggles the 7:30 alarm off.
-4. `dialog-confirm`: "Turn off your 7:30 alarm? It rings in 8 h. This is logged." She picks "Keep it on".
+4. `dialog-confirm`: "Turn off the 7:30 alarm?" with "It rings in 8 hours." She picks "Keep it on".
 5. **Climax:** the plan made by her daytime self holds; nothing blocked her, but nothing let her quietly weaken it.
 
 Failure: she confirms "Turn off" → alarm off, entry logged in Day detail history; raising the fee or making checks harder always applies immediately.

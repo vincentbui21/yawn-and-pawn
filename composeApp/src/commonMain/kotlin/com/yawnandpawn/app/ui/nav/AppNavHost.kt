@@ -184,11 +184,16 @@ private fun AnimatedContentTransitionScope<Scene<NavKey>>.screenTransition(forwa
 
 /**
  * Settings: the Snooze card's base fee and max snoozes (Story 4.5), the defaults and the theme (5.1), and the reliability
- * checklist row and banner, which push the checklist over Settings on [backStack] (5.4); Epic 5 adds the other rows.
+ * checklist row and banner, which push the checklist over Settings on [backStack] (5.4); Epic 5 adds the other rows; the
+ * "About" row pushes About over Settings (0.1.7 polish).
  */
 @Composable
 private fun SettingsTab(backStack: MutableList<NavKey>) {
-    SettingsRoute(is24Hour = is24HourClock(), onOpenReliability = { backStack.openReliability(from = Route.Settings) })
+    SettingsRoute(
+        is24Hour = is24HourClock(),
+        onOpenReliability = { backStack.openReliability(from = Route.Settings) },
+        onOpenAbout = { backStack.openAbout() },
+    )
 }
 
 /**

@@ -118,6 +118,12 @@ typography:
     fontSize: 16sp
     lineHeight: 24sp
     fontWeight: 400
+  dialog-body:
+    fontFamily: Geist
+    fontSize: 15sp
+    lineHeight: 22sp
+    fontWeight: 400
+    note: 'Body of every app dialog (dialog-confirm), in text-secondary under a title-style heading (0.1.7 polish).'
   label:
     fontFamily: Geist
     fontSize: 14sp
@@ -233,11 +239,15 @@ components:
     rounded: '{rounded.sm}'
     size: '{spacing.target-min}'
   text-field:
-    backgroundColor: '{colors.surface-variant}'
+    backgroundColor: transparent
     borderColor: '{colors.outline}'
+    focusedBorderColor: '{colors.accent}'
+    labelColor: '{colors.text-secondary}'
+    focusedLabelColor: '{colors.accent-text}'
     errorColor: '{colors.error}'
     textColor: '{colors.text}'
     rounded: '{rounded.sm}'
+    note: 'Sits on a glass card. The label rests inside the empty, unfocused field (body) and floats onto the top border when focused or filled (caption).'
   viewfinder:
     frameColor: '{colors.surface-sunrise}'
     rounded: '{rounded.md}'
@@ -442,6 +452,9 @@ components:
   dialog-confirm:
     backgroundColor: '{colors.surface}'
     textColor: '{colors.text}'
+    titleTypography: '{typography.title}'
+    bodyTypography: '{typography.dialog-body}'
+    bodyColor: '{colors.text-secondary}'
     rounded: '{rounded.lg}'
   snackbar:
     backgroundColor: '{colors.inverse-surface}'
@@ -649,7 +662,7 @@ Computed with a WCAG relative-luminance script (2026-09-26; glass and gradient r
 
 - **Typeface: Geist** (SIL Open Font License), bundled. Fallback: system sans. Not the default Roboto/Inter look.
 - **Tabular figures** (`fontFeatureSettings = "tnum"`) for clocks, countdowns, prices and stats so digits do not jump. Verify Geist `tnum` support in E0; if missing, use Geist Mono for `clock-xl` only.
-- **Ramp:** `clock-xl` 88/92 w300 (ringing time) · `display` 48/52 w500 (streak, price in the confirm sheet, alarm time in the editor, countdown seconds) · `headline` 28/34 w600 (screen titles) · `title` 20/26 w600 (card titles, list alarm times) · `button-wake` 20/24 w500 (wake-screen action labels only) · `body` 16/24 w400 · `label` 14/20 w500 (buttons, chips) · `caption` 12/16 w400 (meta).
+- **Ramp:** `clock-xl` 88/92 w300 (ringing time) · `display` 48/52 w500 (streak, price in the confirm sheet, alarm time in the editor, countdown seconds) · `headline` 28/34 w600 (screen titles) · `title` 20/26 w600 (card titles, list alarm times) · `button-wake` 20/24 w500 (wake-screen action labels only) · `body` 16/24 w400 · `dialog-body` 15/22 w400 (dialog bodies only, 0.1.7 polish) · `label` 14/20 w500 (buttons, chips) · `caption` 12/16 w400 (meta).
 - Sentence case everywhere. No all-caps labels except the day chips (M T W T F S S).
 - Font scaling up to 200% reflows, never clips. **Exception:** `clock-xl` scales to at most 1.3× (114 sp) so wake actions stay in the thumb zone, and stays on one line: where the full time ("6:15 AM") does not fit the width (360 dp phones at large font scales) it shrinks to fit, never below `display` (device test round 1, 2026-10-05); the clock always carries a full-time content description.
 
@@ -696,7 +709,7 @@ Visual specs. Behaviour for every row lives in `EXPERIENCE.md > Component Patter
 | `number-pad-key` | 64 dp square, `{rounded.md}`, `{colors.surface-variant-sunrise}` fill, digit in `title`, `text-sunrise`. 3×4 grid with 8 dp gaps; backspace and "Check" keys in the same grid. |
 | `memory-tile` | ≥ 64 dp square, `{rounded.md}`, `surface-sunrise` fill with 1 dp `outline-sunrise` border. Lit: `accent-sunrise` fill (3.37:1 on surface) with its number in `on-accent-sunrise`. 3×3 (4×4 on Hard). Accessible variant shows numbers 1 to 9 on every tile. |
 | `letter-tile` | 48 dp, `{rounded.sm}`, `surface-variant-sunrise` fill, `outline-sunrise` border, letter in `title`. Answer slots are empty tiles with a dashed `outline-sunrise` border. |
-| `text-field` | Material outlined field, `{rounded.sm}`, `outline` border, `error` border and supporting text on error. Math answer field uses `display` digits. |
+| `text-field` | Material outlined field with a transparent container (it sits on a glass card), `{rounded.sm}`, `outline` border; the label (`text-secondary`) rests inside the empty, unfocused field in `body` and floats onto the top border in `caption` when focused or filled (0.1.7 polish: the editor's "Alarm name"). Focused: `accent` border (glass 3.24 Light, 8.21 Dark) and `accent-text` label (glass 5.21 Light, 8.21 Dark). `error` border, label and supporting text on error. Math answer field uses `display` digits. |
 | `viewfinder` | Full-width camera preview inside a `{rounded.md}` frame. House Hunt adds a 72 dp ghost thumbnail of the reference photo, top-left, `{rounded.sm}`. QR adds a centred square guide. Torch toggle 48 dp. The design preview's feed placeholder is a flat fill, 4:3: `inverse-surface` with `inverse-text` guides and icons in Light and Sunrise, `bg` with `text` and a hairline `glass-edge` frame in Dark (text / bg 16.34), so it stands out from the dark card (round 3). On app screens (registration) it sits inside a glass card. |
 | `shutter` | 72 dp circle, `accent-sunrise` fill, `on-accent-sunrise` camera icon, centred in the thumb zone. |
 | `fallback-link` | Text button "Can't do this check?" in `{colors.accent-text-sunrise}`, `body`, 48 dp target, centred above the snooze button. |
@@ -736,9 +749,9 @@ Visual specs. Behaviour for every row lives in `EXPERIENCE.md > Component Patter
 | `sound-row` | 56 dp. Radio selection, sound name (`body`), source caption, 48 dp preview play button. |
 | `recorder` | 72 dp round record button (accent, on-accent mic icon), elapsed and max time "0:12 / 1:00" in `display`, level meter in `text-secondary`. In a glass card (accent on glass). While recording the button shows the stop square; disabled (microphone off) it is the `disabled-container` / `disabled-content` pair. The level meter is 24 thin `text-secondary` bars, 32 dp tall, decorative. A take shows a 48 dp play button, `button-text` "Re-record" and "Delete" (`error`), then `button-filled` "Save"; saved messages are 56 dp rows with 48 dp play / pause and delete. |
 | `photo-slot` | House Hunt registration (round 3): a taken photo is a 72 dp `{rounded.sm}` `surface-variant` thumbnail (the preview shows the house icon in `text`) with `button-text` "Remove" under it; an empty slot is a 72 dp dashed `outline` square (decorative). Three slots in a wrapping row, so "Remove" never breaks at 200%. The `shutter` sits under the viewfinder in the same glass card (accent on glass, 3.24) and turns `disabled-container` with three photos. |
-| `printable-qr` | QR registration (round 3): the page as it prints inside a glass card, a `{rounded.md}` sheet with 24 dp padding, the 200 dp code and "Scan this to stop your alarm." (`body`). The sheet is dark on light in both themes so it scans: `text` on `surface` in Light (17.85), `inverse-text` on `inverse-surface` in Dark (16.34). Then `button-filled` "Print or save as PDF". |
+| `printable-qr` | QR registration (round 3): the page as it prints inside a glass card, a `{rounded.md}` sheet with 24 dp padding, the 200 dp code and "Scan this to stop your alarm." (`body`). On the printed page the code (without its quiet zone) is 14 cm square, centred, with the caption under it (0.1.7 polish). The sheet is dark on light in both themes so it scans: `text` on `surface` in Light (17.85), `inverse-text` on `inverse-surface` in Dark (16.34). Then `button-filled` "Print or save as PDF". |
 | `motivation-player` | `surface-sunrise` card, `{rounded.md}`, 48 dp play/pause and replay, progress bar in accent. |
-| `dialog-confirm` | Material 3 dialog, `{rounded.lg}`, title `headline`, body `body`, actions `button-text` (confirm uses `error` text colour only when destructive). |
+| `dialog-confirm` | Material 3 dialog, `{rounded.lg}`, title `title` (20 sp), body `dialog-body` (15 sp) in `text-secondary` (surface 7.03 Light, 6.88 Dark), actions `button-text` (confirm uses `error` text colour only when destructive). Every app dialog uses it (0.1.7 polish). |
 | `snackbar` | `{colors.inverse-surface}` container, `{colors.inverse-text}` message, optional action in `{colors.inverse-accent}`, `{rounded.sm}`. On wake screens: no action, message only. |
 | `notification-ringing` | Ongoing alarm notification: monochrome sunrise small icon, alarm time as title, "Tap to return to your alarm" text, accent tint. |
 | `notification-summary` | Weekly summary: monochrome small icon, no accent tint, plain copy. |

@@ -758,7 +758,7 @@ class OnboardingViewModel(
             alarmTime = form.time,
             repeatDays = form.repeatDays,
             customRepeat = editor?.customRepeat == true,
-            ringsTomorrowAt = editor?.ringsTomorrowAt,
+            ringsAt = editor?.ringsAt,
             // Story 4.6 under the commitment lock (an edit of the stored first alarm close to its ring), as in the editor.
             firstAlarmNote = editor?.full?.weakeningNote,
             checksNote = editor?.full?.checksNote,

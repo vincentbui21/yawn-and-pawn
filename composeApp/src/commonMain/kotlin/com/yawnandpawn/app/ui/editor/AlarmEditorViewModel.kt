@@ -69,6 +69,7 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import kotlinx.datetime.LocalDate
 import kotlinx.datetime.TimeZone
+import kotlinx.datetime.daysUntil
 import kotlinx.datetime.toLocalDateTime
 import kotlin.random.Random
 import kotlin.time.Instant
@@ -1112,8 +1113,8 @@ private fun List<CheckChip>.moved(
 }
 
 /**
- * "Rings in ..." and, for a one-time alarm whose time has passed today, when it rings tomorrow (shifted in a DST gap). A
- * repeating alarm's ring on [skippedDate] is passed over (Story 7.11, as `SaveAlarm` keeps the skip for a repeating edit).
+ * "Rings in ..." and the day and time of the next ring (shifted in a DST gap) for the time card's line. A repeating
+ * alarm's ring on [skippedDate] is passed over (Story 7.11, as `SaveAlarm` keeps the skip for a repeating edit).
  */
 private fun EditorUiState.withRings(
     form: EditorForm,
@@ -1123,8 +1124,8 @@ private fun EditorUiState.withRings(
 ): EditorUiState {
     val next = nextRing(AlarmRule(form.time, form.repeatDays), skippedDate.takeIf { form.repeatDays.isNotEmpty() }, now, zone)
     val ring = next.toLocalDateTime(zone)
-    val tomorrow = form.repeatDays.isEmpty() && ring.date != now.toLocalDateTime(zone).date
-    return copy(ringsIn = countdownOf(next - now), ringsTomorrowAt = if (tomorrow) ring.time else null)
+    val daysAhead = now.toLocalDateTime(zone).date.daysUntil(ring.date)
+    return copy(ringsIn = countdownOf(next - now), ringsAt = RingsAt(daysAhead, ring.date.dayOfWeek, ring.time))
 }
 
 /**

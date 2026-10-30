@@ -132,35 +132,36 @@ class AlarmEditorViewModelTest {
         }
 
     @Test
-    fun `a one-time alarm whose time has passed today rings tomorrow`() =
+    fun `the time card line says today, tomorrow or the weekday of the next ring`() =
         runTest(dispatcher) {
             val viewModel = viewModel()
 
-            // Now is 08:00 local; the default 07:00 has passed.
-            assertEquals(viewModel.state.value.form.time, viewModel.state.value.ringsTomorrowAt)
+            // Now is Wednesday 2027-03-03, 08:00 local; the default 07:00 has passed.
+            assertEquals(RingsAt(1, DayOfWeek.THURSDAY, LocalTime(7, 0)), viewModel.state.value.ringsAt, "tomorrow")
             viewModel.onIntent(EditorIntent.TimeChanged(LocalTime(9, 0)))
-            assertNull(viewModel.state.value.ringsTomorrowAt, "later today")
+            assertEquals(RingsAt(0, DayOfWeek.WEDNESDAY, LocalTime(9, 0)), viewModel.state.value.ringsAt, "later today")
             viewModel.onIntent(EditorIntent.TimeChanged(LocalTime(8, 0)))
-            assertEquals(viewModel.state.value.form.time, viewModel.state.value.ringsTomorrowAt, "exactly now is already past")
+            assertEquals(RingsAt(1, DayOfWeek.THURSDAY, LocalTime(8, 0)), viewModel.state.value.ringsAt, "exactly now is already past")
         }
 
     @Test
-    fun `a repeating alarm never shows the tomorrow note`() =
+    fun `a repeating alarm's line names the weekday it next rings on`() =
         runTest(dispatcher) {
             val viewModel = viewModel()
 
+            viewModel.onIntent(EditorIntent.DayToggled(DayOfWeek.MONDAY))
+            assertEquals(RingsAt(5, DayOfWeek.MONDAY, LocalTime(7, 0)), viewModel.state.value.ringsAt, "Monday only, now Wednesday")
+            viewModel.onIntent(EditorIntent.DayToggled(DayOfWeek.MONDAY))
+            assertEquals(RingsAt(1, DayOfWeek.THURSDAY, LocalTime(7, 0)), viewModel.state.value.ringsAt, "no days again: one-time")
             viewModel.onIntent(EditorIntent.DayToggled(DayOfWeek.WEDNESDAY))
-
-            assertNull(viewModel.state.value.ringsTomorrowAt)
-            viewModel.onIntent(EditorIntent.DayToggled(DayOfWeek.WEDNESDAY))
-            assertEquals(viewModel.state.value.form.time, viewModel.state.value.ringsTomorrowAt, "no days again: one-time")
+            assertEquals(RingsAt(7, DayOfWeek.WEDNESDAY, LocalTime(7, 0)), viewModel.state.value.ringsAt, "today's has passed")
         }
 
     @Test
-    fun `the tomorrow note follows the time zone port`() =
+    fun `the line follows the time zone port`() =
         runTest(dispatcher) {
             zone.set(TimeZone.UTC) // 06:00 UTC, so 07:00 is still ahead
-            assertNull(viewModel().state.value.ringsTomorrowAt)
+            assertEquals(RingsAt(0, DayOfWeek.WEDNESDAY, LocalTime(7, 0)), viewModel().state.value.ringsAt)
         }
 
     @Test
@@ -726,7 +727,7 @@ class AlarmEditorViewModelTest {
         }
 
     @Test
-    fun `in a DST gap the tomorrow note shows the time the alarm actually rings`() =
+    fun `in a DST gap the line shows the time the alarm actually rings`() =
         runTest(dispatcher) {
             // Helsinki skips 03:00 to 04:00 on Sunday 2027-03-28; now is Saturday 12:00 local.
             clock.set(Instant.parse("2027-03-27T10:00:00Z"))
@@ -734,6 +735,6 @@ class AlarmEditorViewModelTest {
 
             viewModel.onIntent(EditorIntent.TimeChanged(LocalTime(3, 30)))
 
-            assertEquals(LocalTime(4, 30), viewModel.state.value.ringsTomorrowAt)
+            assertEquals(RingsAt(1, DayOfWeek.SUNDAY, LocalTime(4, 30)), viewModel.state.value.ringsAt)
         }
 }

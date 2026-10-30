@@ -36,6 +36,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.DpSize
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
+import com.yawnandpawn.app.ui.components.entranceProgress
 import com.yawnandpawn.app.ui.components.glass
 import com.yawnandpawn.app.ui.components.rememberReducedMotion
 import com.yawnandpawn.app.ui.format.DayNameStyle

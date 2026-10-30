@@ -1,5 +1,6 @@
 package com.yawnandpawn.app.ui
 
+import androidx.compose.ui.semantics.LiveRegionMode
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.SemanticsActions
 import androidx.compose.ui.semantics.SemanticsNode
@@ -59,6 +60,7 @@ import com.yawnandpawn.app.ui.editor.EditorIntent
 import com.yawnandpawn.app.ui.editor.EditorPane
 import com.yawnandpawn.app.ui.editor.EditorSoundFiles
 import com.yawnandpawn.app.ui.editor.EditorUiState
+import com.yawnandpawn.app.ui.editor.RingsAt
 import com.yawnandpawn.app.ui.format.DayNameStyle
 import com.yawnandpawn.app.ui.format.WeekOrder
 import com.yawnandpawn.app.ui.format.dayName
@@ -72,6 +74,7 @@ import com.yawnandpawn.app.ui.shell.AppShell
 import com.yawnandpawn.app.ui.shell.AppTab
 import com.yawnandpawn.app.ui.sound.SoundFilePicker
 import com.yawnandpawn.app.ui.theme.PpsThemeMode
+import kotlinx.datetime.DayOfWeek
 import kotlinx.datetime.LocalTime
 import kotlinx.datetime.TimeZone
 import org.junit.Rule
@@ -262,9 +265,35 @@ class AlarmScreensSemanticsTest {
         editor(EditorSamples.labelError) {
             composeRule.onNodeWithText("Keep the label under 40 characters.", useUnmergedTree = true).assertExists()
             composeRule
-                .onNode(hasSetTextAction() and hasContentDescription("Alarm name"))
-                .assert(SemanticsMatcher.keyIsDefined(SemanticsProperties.Error))
+                .onNode(hasSetTextAction() and hasText("Alarm name"))
+                .assert(SemanticsMatcher.expectValue(SemanticsProperties.Error, "Keep the label under 40 characters."))
+            composeRule
+                .onNode(
+                    hasText("Keep the label under 40 characters.") and
+                        SemanticsMatcher.expectValue(SemanticsProperties.LiveRegion, LiveRegionMode.Polite),
+                    useUnmergedTree = true,
+                ).assertExists()
         }
+
+    @Test
+    fun `the time card says when the alarm rings, and says nothing before that is known (0_1_7 polish)`() {
+        val lines =
+            mapOf(
+                RingsAt(0, DayOfWeek.WEDNESDAY, LocalTime(7, 0)) to "Rings today at 7:00 AM.",
+                RingsAt(1, DayOfWeek.THURSDAY, LocalTime(7, 0)) to "Rings tomorrow at 7:00 AM.",
+                RingsAt(5, DayOfWeek.MONDAY, LocalTime(7, 0)) to "Rings on Monday at 7:00 AM.",
+                RingsAt(7, DayOfWeek.WEDNESDAY, LocalTime(7, 0)) to "Rings next Wednesday at 7:00 AM.",
+            )
+        lines.forEach { (ringsAt, line) ->
+            editor(EditorUiState(ringsAt = ringsAt)) {
+                composeRule.onNodeWithText(line, useUnmergedTree = true).assertExists()
+            }
+        }
+        editor(EditorUiState(ringsAt = null)) {
+            val rings = composeRule.onAllNodes(hasText("Rings", substring = true), useUnmergedTree = true).fetchSemanticsNodes()
+            assertEquals(0, rings.size, "the reserved line is silent")
+        }
+    }
 
     @Test
     fun `a failed save shows the snackbar and the editor stays open`() {
@@ -512,7 +541,7 @@ class AlarmScreensSemanticsTest {
         val intents = mutableListOf<HomeIntent>()
         home(HomeSamples.deleteDialog, onIntent = { intents += it }) {
             composeRule.onNode(isDialog()).assertExists()
-            composeRule.onNodeWithText("Delete your 6:30 AM alarm? This is logged.").assertExists()
+            composeRule.onNodeWithText("Delete the 6:30 AM alarm?").assertExists()
             composeRule.onNodeWithText("Keep it").performClick()
             composeRule.onNodeWithText("Delete").performClick()
 
@@ -647,7 +676,7 @@ class AlarmScreensSemanticsTest {
     fun `the editor's delete dialog meets the accessibility floor`() =
         editor(EditorSamples.editDeleteDialog) {
             composeRule.onNode(isDialog()).assertExists()
-            composeRule.onNodeWithText("Delete your 6:30 AM alarm? This is logged.").assertExists()
+            composeRule.onNodeWithText("Delete the 6:30 AM alarm?").assertExists()
             composeRule.onNodeWithText("Keep it").assert(hasClickAction())
             assertAccessibilityFloor(minControls = 2)
         }

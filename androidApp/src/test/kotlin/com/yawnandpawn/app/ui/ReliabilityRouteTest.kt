@@ -116,7 +116,7 @@ class ReliabilityRouteTest {
             // Story 6.8: with the "Weekly summary" row this last row is just inside the screen, under the floating nav
             // capsule; a user scrolls on, and the list's bottom padding (the capsule's clearance) lifts it clear. A real tap.
             composeRule.onNode(hasScrollAction()).performSemanticsAction(SemanticsActions.ScrollBy) { scrollBy -> scrollBy(0f, 10_000f) }
-            composeRule.onNode(hasText("Reliability checklist") and hasClickAction()).performScrollTo().performClick()
+            composeRule.onNode(hasText("Make sure alarms ring") and hasClickAction()).performScrollTo().performClick()
 
             waitForRow("Notifications", "OK")
             composeRule.onNode(hasText("Battery") and hasText("Stops Android from pausing your alarm.")).assertExists()
@@ -158,11 +158,11 @@ class ReliabilityRouteTest {
         }
     }
 
-    /** Settings, then its "Reliability checklist" row. */
+    /** Settings, then its "Make sure alarms ring" row. */
     private fun openChecklistFromSettings() {
         composeRule.onNodeWithContentDescription("Settings").performClick()
-        waitForText("Reliability checklist")
-        composeRule.onNode(hasText("Reliability checklist") and hasClickAction()).performScrollTo().performClick()
+        waitForText("Make sure alarms ring")
+        composeRule.onNode(hasText("Make sure alarms ring") and hasClickAction()).performScrollTo().performClick()
     }
 
     @Test
@@ -223,8 +223,8 @@ class ReliabilityRouteTest {
         start(DeviceInfo(sdkInt = 34, maker = "Xiaomi", fingerprint = "xiaomi/1", deviceMaker = DeviceMaker.Xiaomi))
         ActivityScenario.launch(MainActivity::class.java).use {
             composeRule.onNodeWithContentDescription("Settings").performClick()
-            waitForText("Reliability checklist")
-            composeRule.onNode(hasText("Reliability checklist") and hasClickAction()).performScrollTo().performClick()
+            waitForText("Make sure alarms ring")
+            composeRule.onNode(hasText("Make sure alarms ring") and hasClickAction()).performScrollTo().performClick()
             waitForText("Manufacturer settings")
 
             composeRule.onNode(hasText("Fix") and hasClickAction()).performClick()

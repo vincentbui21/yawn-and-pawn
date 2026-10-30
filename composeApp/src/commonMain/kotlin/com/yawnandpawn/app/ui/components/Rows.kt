@@ -1,7 +1,6 @@
 package com.yawnandpawn.app.ui.components
 
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -10,8 +9,6 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.selection.selectable
 import androidx.compose.foundation.selection.toggleable
-import androidx.compose.foundation.text.BasicTextField
-import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Switch
 import androidx.compose.material3.SwitchDefaults
@@ -20,15 +17,9 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.SolidColor
-import androidx.compose.ui.semantics.LiveRegionMode
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
-import androidx.compose.ui.semantics.error
-import androidx.compose.ui.semantics.liveRegion
 import androidx.compose.ui.semantics.semantics
-import androidx.compose.ui.text.input.ImeAction
-import androidx.compose.ui.text.input.KeyboardCapitalization
 import androidx.compose.ui.unit.dp
 import com.yawnandpawn.app.ui.resources.Res
 import com.yawnandpawn.app.ui.resources.symbol_check_box
@@ -122,7 +113,8 @@ fun ValueRow(
  * A tappable `settings-row` (progressive disclosure): [label] with the current [value] as a subtitle and a chevron; the
  * tap opens the sub-screen that sets it. TalkBack reads label and value as one button. [titleColor] `error` marks a
  * destructive row ("Delete all data", which opens a dialog, so [chevron] is off). Disabled ([enabled] false), the title
- * is `text-secondary` and the row is not tappable ("Export CSV" with nothing to export).
+ * is `text-secondary` and the row is not tappable ("Export CSV" with nothing to export). [trailingIcon] replaces the
+ * chevron, in the same size and colour (About's links: `open_in_new`, as they leave the app).
  */
 @Composable
 fun NavRow(
@@ -134,6 +126,7 @@ fun NavRow(
     enabled: Boolean = true,
     titleColor: Color = PpsTheme.colors.text,
     chevron: Boolean = true,
+    trailingIcon: DrawableResource = Res.drawable.symbol_chevron_right,
 ) {
     val colors = PpsTheme.colors
     Row(
@@ -149,7 +142,7 @@ fun NavRow(
         )
         if (chevron && enabled) {
             Icon(
-                painter = painterResource(Res.drawable.symbol_chevron_right),
+                painter = painterResource(trailingIcon),
                 contentDescription = null,
                 modifier = Modifier.padding(start = PpsTheme.spacing.space2).size(CHEVRON_SIZE),
                 tint = colors.textSecondary,
@@ -238,53 +231,6 @@ fun CheckboxRow(
             tint = if (checked) colors.accentText else colors.textSecondary,
         )
     }
-}
-
-/**
- * An inline text field row of a `card-group` ("Alarm name"): [label] as a small title above the typed text, which uses
- * the system keyboard. On error, [errorText] in `error` below it, announced politely. TalkBack reads [label].
- */
-@Composable
-fun TextFieldRow(
-    label: String,
-    value: String,
-    onValueChange: (String) -> Unit,
-    modifier: Modifier = Modifier,
-    errorText: String? = null,
-) {
-    val colors = PpsTheme.colors
-    // The whole row is the field (its tap target), with the label drawn inside it above the typed text.
-    BasicTextField(
-        value = value,
-        onValueChange = onValueChange,
-        modifier =
-            modifier.fillMaxWidth().semantics {
-                contentDescription = label
-                if (errorText != null) error(errorText)
-            },
-        textStyle = PpsTheme.typography.body.copy(color = colors.text),
-        singleLine = true,
-        cursorBrush = SolidColor(colors.text),
-        keyboardOptions = KeyboardOptions(capitalization = KeyboardCapitalization.Sentences, imeAction = ImeAction.Done),
-        decorationBox = { innerTextField ->
-            Column(modifier = Modifier.rowFrame(), verticalArrangement = Arrangement.spacedBy(PpsTheme.spacing.space1)) {
-                Text(
-                    text = label,
-                    style = PpsTheme.typography.caption,
-                    color =
-                        if (errorText !=
-                            null
-                        ) {
-                            colors.error
-                        } else {
-                            colors.textSecondary
-                        },
-                )
-                innerTextField()
-                if (errorText != null) InlineError(text = errorText)
-            }
-        },
-    )
 }
 
 /** DESIGN.md `settings-row.height`. */

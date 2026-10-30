@@ -112,7 +112,7 @@ class Round2TapThroughTest {
     @Test
     fun `Fix on the checklist turns the row OK`() =
         tapThrough(AppTab.Settings) {
-            composeRule.onNodeWithText("Reliability checklist").performScrollTo().performClick()
+            composeRule.onNodeWithText("Make sure alarms ring").performScrollTo().performClick()
             composeRule.onNodeWithText("Alarm may not ring: battery optimization turned back on").assertExists()
             composeRule.onAllNodes(hasText("Fix"))[1].performClick()
             composeRule.onNodeWithText("Alarm may not ring: battery optimization turned back on").assertDoesNotExist()

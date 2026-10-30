@@ -20,7 +20,7 @@ enum class FireKind {
 
 /** Everything the app logs. Events are past tense. */
 sealed interface LogEvent {
-    /** The user deleted the alarm [alarmId] at [at] (the delete dialog says "This is logged."). */
+    /** The user deleted the alarm [alarmId] at [at] (after the delete dialog, "Delete the {time} alarm?"). */
     data class AlarmDeleted(
         val alarmId: String,
         val at: Instant,

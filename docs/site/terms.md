@@ -47,7 +47,7 @@ Google lets you request a refund yourself within 48 hours of a charge, from your
 
 ## No guarantee that an alarm rings
 
-We work hard to make the alarm reliable, but we can't promise that it rings on every phone, every time. A phone maker's battery saver, Do Not Disturb, a setting changed by you or by an update, a phone that is off or out of battery, or a fault can stop an alarm. Use the reliability checklist and the test alarm in the app to check your phone. Don't rely on the app as your only alarm when missing it could cause harm.
+We work hard to make the alarm reliable, but we can't promise that it rings on every phone, every time. A phone maker's battery saver, Do Not Disturb, a setting changed by you or by an update, a phone that is off or out of battery, or a fault can stop an alarm. Use "Make sure alarms ring" in the app's Settings and the test alarm to check your phone. Don't rely on the app as your only alarm when missing it could cause harm.
 
 The app is provided as it is, without warranties, to the extent the law allows. Nothing in these terms takes away rights you have under the law where you live, such as consumer rights.
 

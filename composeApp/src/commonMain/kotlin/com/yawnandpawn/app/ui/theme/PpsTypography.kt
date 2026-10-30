@@ -17,7 +17,7 @@ import com.yawnandpawn.app.ui.resources.geist_regular
 import com.yawnandpawn.app.ui.resources.geist_semibold
 import org.jetbrains.compose.resources.Font
 
-/** The eight DESIGN.md type styles. Read through `PpsTheme.typography`. */
+/** The nine DESIGN.md type styles. Read through `PpsTheme.typography`. */
 @Immutable
 data class PpsTypography(
     /** Ringing clock. Font scale is capped at [CLOCK_XL_MAX_FONT_SCALE] by `PpsTheme`. */
@@ -28,6 +28,8 @@ data class PpsTypography(
     /** Wake-screen action labels only. */
     val buttonWake: TextStyle,
     val body: TextStyle,
+    /** The body of every app dialog (`dialog-confirm`), in `text-secondary`. */
+    val dialogBody: TextStyle,
     val label: TextStyle,
     val caption: TextStyle,
 )
@@ -71,6 +73,7 @@ fun ppsTypography(fontFamily: FontFamily = FontFamily.SansSerif): PpsTypography 
             title = style(title, tabular = true),
             buttonWake = style(buttonWake, tabular = true),
             body = style(body),
+            dialogBody = style(dialogBody),
             label = style(label),
             caption = style(caption),
         )
@@ -117,8 +120,8 @@ fun PpsTypography.withClockCap(density: Density): PpsTypography =
 /**
  * Material 3 slots, each filled with one DESIGN.md style (no new sizes): display* = display,
  * headline* = headline, titleLarge = title, titleMedium / titleSmall / labelLarge / labelMedium = label,
- * bodyLarge / bodyMedium = body, bodySmall / labelSmall = caption. `clock-xl` and `button-wake`
- * have no Material slot; use `PpsTheme.typography`.
+ * bodyLarge / bodyMedium = body, bodySmall / labelSmall = caption. `clock-xl`, `button-wake` and
+ * `dialog-body` have no Material slot; use `PpsTheme.typography`.
  */
 fun PpsTypography.toMaterialTypography(): Typography =
     Typography(

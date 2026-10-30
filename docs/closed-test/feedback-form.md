@@ -95,7 +95,7 @@ Mark a question required only where it says **Required**.
     - Yes, and I paid with my real card
     - Yes, but the payment sheet didn't open
 
-11. **Have you done everything in Settings > Reliability checklist?** (Multiple choice, optional)
+11. **Have you done everything in Settings > Make sure alarms ring?** (Multiple choice, optional)
     - Yes, every item
     - Some items
     - No

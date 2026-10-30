@@ -26,6 +26,7 @@ val Route.tab: AppTab?
             Route.ProblemWithCharge -> null
             Route.Reliability -> null
             Route.ManufacturerGuidance -> null
+            Route.About -> null
             is Route.DayDetail -> null
             Route.SessionInProgress -> null
             Route.Onboarding -> null

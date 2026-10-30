@@ -215,6 +215,12 @@ object PpsTokens {
                 lineHeight = 24.sp,
                 fontWeight = FontWeight(400),
             )
+        val dialogBody =
+            PpsTypeToken(
+                fontSize = 15.sp,
+                lineHeight = 22.sp,
+                fontWeight = FontWeight(400),
+            )
         val label =
             PpsTypeToken(
                 fontSize = 14.sp,

@@ -42,6 +42,7 @@ import com.yawnandpawn.app.ui.resources.editor_vibrate_quiet_time
 import com.yawnandpawn.app.ui.resources.home_fix
 import com.yawnandpawn.app.ui.resources.home_reliability_banner
 import com.yawnandpawn.app.ui.resources.nav_settings
+import com.yawnandpawn.app.ui.resources.settings_about
 import com.yawnandpawn.app.ui.resources.settings_appearance
 import com.yawnandpawn.app.ui.resources.settings_base_fee
 import com.yawnandpawn.app.ui.resources.settings_bright_wake
@@ -75,9 +76,9 @@ import org.jetbrains.compose.resources.stringResource
 /**
  * Settings (the Settings tab), stateless, in grouped `card-group`s whose rows show their value and open a sub-screen
  * (owner decision 2026-09-27): Snooze (base fee, max snoozes, default length), Wake (default quiet time, vibrate during
- * quiet time, bright wake screen), Appearance (System / Light / Dark), weekly summary and usage stats, and the
- * Reliability checklist: app behaviour only (owner decision 2026-10-01, feedback item 26: payments, privacy, delete all
- * data, support, terms and about moved to the You tab). The
+ * quiet time, bright wake screen), Appearance (System / Light / Dark), weekly summary and usage stats, and "Make sure
+ * alarms ring" with "About" (0.1.7 polish): app behaviour only (owner decision 2026-10-01, feedback item 26: payments,
+ * privacy, delete all data, support and terms moved to the You tab). The
  * reliability `banner-warning` sits on top while an item fails. During a session only `panel-session-in-progress` shows.
  * Only the [rows] given show (all by default); a card with none of its rows is left out.
  */
@@ -196,7 +197,7 @@ private fun WakeCard(
     )
 }
 
-/** Appearance, weekly summary and usage stats, and the Reliability checklist. */
+/** Appearance, weekly summary and usage stats, and "Make sure alarms ring" with "About" in one card. */
 @Composable
 private fun GeneralCards(
     state: SettingsUiState,
@@ -244,6 +245,12 @@ private fun GeneralCards(
                     NavRow(
                         label = stringResource(Res.string.settings_reliability),
                         onClick = { onIntent(SettingsIntent.ReliabilityClicked) },
+                    )
+                },
+                rowIf(SettingsRow.About in rows) {
+                    NavRow(
+                        label = stringResource(Res.string.settings_about),
+                        onClick = { onIntent(SettingsIntent.AboutClicked) },
                     )
                 },
             ),

@@ -32,7 +32,7 @@ private val editAlarm =
             ),
     )
 
-private val tomorrow = EditorUiState(ringsTomorrowAt = EditorForm.DEFAULT_TIME)
+private val tomorrow = EditorUiState(ringsAt = RingsAt(1, DayOfWeek.TUESDAY, EditorForm.DEFAULT_TIME))
 
 private val labelError =
     EditorUiState(form = EditorForm(label = "A label that is far too long for any alarm"), fieldError = AlarmField.Label)

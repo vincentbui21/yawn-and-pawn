@@ -27,7 +27,10 @@
     <string name="editor_percent">%1$d%</string>
     <string name="editor_vibration">Vibration</string>
     <string name="editor_save">Save</string>
+    <string name="editor_rings_today">Rings today at %1$s.</string>
     <string name="editor_rings_tomorrow">Rings tomorrow at %1$s.</string>
+    <string name="editor_rings_on_day">Rings on %1$s at %2$s.</string>
+    <string name="editor_rings_next_day">Rings next %1$s at %2$s.</string>
     <string name="editor_save_failed">Couldn't save the alarm. Try again.</string>
     <string name="editor_test_scheduled">Lock your phone. We'll ring in 10 seconds.</string>
     <string name="editor_discard_title">Discard changes?</string>
@@ -87,8 +90,11 @@
     <string name="session_back_to_alarm">Back to alarm</string>
     <string name="alarm_card_switch">%1$s alarm</string>
     <string name="alarm_card_summary">%1$s · %2$s</string>
-    <string name="disable_under_lock_hours">Turn off your %1$s alarm? It rings in %2$d h. This is logged.</string>
-    <string name="disable_under_lock_minutes">Turn off your %1$s alarm? It rings in %2$d min. This is logged.</string>
+    <string name="disable_title">Turn off the %1$s alarm?</string>
+    <string name="disable_rings_in_hours">It rings in %1$d hours.</string>
+    <string name="disable_rings_in_hour_one">It rings in 1 hour.</string>
+    <string name="disable_rings_in_minutes">It rings in %1$d minutes.</string>
+    <string name="disable_rings_in_minute_one">It rings in 1 minute.</string>
     <string name="disable_turn_off">Turn off</string>
     <string name="disable_keep_on">Keep it on</string>
 
@@ -101,7 +107,7 @@
     <string name="alarm_delete">Delete</string>
     <string name="alarm_card_options">Duplicate or delete</string>
     <string name="editor_more_options">More options</string>
-    <string name="delete_alarm_title">Delete your %1$s alarm? This is logged.</string>
+    <string name="delete_alarm_title">Delete the %1$s alarm?</string>
     <string name="delete_alarm_confirm">Delete</string>
     <string name="delete_alarm_keep">Keep it</string>
 
@@ -361,8 +367,11 @@
     <string name="settings_theme_light">Light</string>
     <string name="settings_theme_dark">Dark</string>
     <string name="settings_weekly_summary">Weekly summary</string>
-    <string name="settings_usage_stats">Share anonymous usage stats</string>
-    <string name="settings_reliability">Reliability checklist</string>
+    <string name="settings_usage_stats">Share usage stats</string>
+    <string name="settings_reliability">Make sure alarms ring</string>
+    <string name="settings_about">About</string>
+    <string name="about_website">Website</string>
+    <string name="about_contact_support">Contact support</string>
     <string name="settings_payments">How payments &amp; refunds work</string>
     <string name="settings_privacy">Privacy policy</string>
     <string name="settings_terms">Terms</string>

@@ -10,11 +10,6 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.saveable.rememberSaveable
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalDensity
@@ -26,7 +21,9 @@ import com.yawnandpawn.app.core.billing.totalsByCurrency
 import com.yawnandpawn.app.ui.components.PpsTextButton
 import com.yawnandpawn.app.ui.components.RowIcon
 import com.yawnandpawn.app.ui.components.TabScreen
+import com.yawnandpawn.app.ui.components.entrance
 import com.yawnandpawn.app.ui.components.glass
+import com.yawnandpawn.app.ui.components.rememberEnteredOnce
 import com.yawnandpawn.app.ui.format.formatMoney
 import com.yawnandpawn.app.ui.format.formatPercent
 import com.yawnandpawn.app.ui.resources.Res
@@ -98,9 +95,7 @@ private fun ProgressContent(
     onIntent: (ProgressIntent) -> Unit,
     showPurchaseHistory: Boolean,
 ) {
-    var enteredBefore by rememberSaveable { mutableStateOf(false) }
-    val entered = rememberEntered() || enteredBefore
-    LaunchedEffect(entered) { if (entered) enteredBefore = true }
+    val entered = rememberEnteredOnce()
     val stats = state.stats
     var order = 0
     HeroRing(

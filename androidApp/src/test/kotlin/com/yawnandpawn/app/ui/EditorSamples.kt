@@ -4,6 +4,7 @@ import com.yawnandpawn.app.core.alarm.AlarmField
 import com.yawnandpawn.app.ui.editor.EditorForm
 import com.yawnandpawn.app.ui.editor.EditorPane
 import com.yawnandpawn.app.ui.editor.EditorUiState
+import com.yawnandpawn.app.ui.editor.RingsAt
 import kotlinx.datetime.DayOfWeek
 import kotlinx.datetime.LocalTime
 
@@ -28,7 +29,7 @@ object EditorSamples {
         )
 
     /** A one-time 07:00 alarm opened after 07:00. */
-    val ringsTomorrow = EditorUiState(ringsTomorrowAt = EditorForm.DEFAULT_TIME)
+    val ringsTomorrow = EditorUiState(ringsAt = RingsAt(1, DayOfWeek.TUESDAY, EditorForm.DEFAULT_TIME))
 
     /** The edited alarm with a change, after Back. */
     val discardDialog = editAlarm.copy(form = editAlarm.form.copy(label = "Gym day"), showDiscardDialog = true)

@@ -611,8 +611,8 @@ private const val MISSED_RETRY_MAX_DOUBLINGS = 6L
 
 /**
  * How long until a ring inside the lock window, as the turn-off dialog says it (Story 4.6, EXPERIENCE.md Key strings):
- * whole hours rounded down ("It rings in 7 h" at 7 h 59 min), or under 1 h whole minutes rounded down, at least 1 ("It
- * rings in 1 min" at 30 s).
+ * whole hours rounded down ("It rings in 7 hours." at 7 h 59 min), or under 1 h whole minutes rounded down, at least 1
+ * ("It rings in 1 minute." at 30 s).
  */
 internal fun lockCountdownOf(untilRing: Duration): Countdown {
     val minutes = untilRing.inWholeMinutes.coerceAtLeast(1)
@@ -694,7 +694,7 @@ private sealed interface HomeMessage {
 private data class LocalState(
     val toggles: Map<String, PendingToggle> = emptyMap(),
     val deleteDialog: DeleteAlarmDialog? = null,
-    /** "Turn off your {time} alarm? ..." for an alarm switched off inside its lock window (Story 4.6). */
+    /** "Turn off the {time} alarm?" for an alarm switched off inside its lock window (Story 4.6). */
     val disableDialog: DisableUnderLock? = null,
     /** "Skip your {time} alarm? This is logged." after a pre-alarm notification's "Skip this one" (Story 7.11). */
     val skipDialog: SkipDialog? = null,

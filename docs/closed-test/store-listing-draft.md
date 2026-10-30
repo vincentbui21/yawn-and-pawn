@@ -54,7 +54,7 @@ WHEN IT RINGS
 It keeps ringing until you finish your check or pay. Your phone stays usable: calls, other apps and emergency calls all work. Other ways to stop it: force-stop or uninstall the app, turn off the phone, or leave it for 30 minutes (that morning counts as missed). Paying is not offered offline, before the first unlock after a restart, or during a test.
 
 MADE TO RING
-A reliability checklist walks you through notifications, full-screen display, exact timing, Do Not Disturb, battery settings and your phone maker's background settings. A test alarm on the lock screen shows it works on your phone, and never charges you.
+"Make sure alarms ring" walks you through notifications, full-screen display, exact timing, Do Not Disturb, battery settings and your phone maker's background settings. A test alarm on the lock screen shows it works on your phone, and never charges you.
 
 MAKE IT YOURS
 • Record a short message to yourself. Hear it once you are up, or mixed into the ringing.

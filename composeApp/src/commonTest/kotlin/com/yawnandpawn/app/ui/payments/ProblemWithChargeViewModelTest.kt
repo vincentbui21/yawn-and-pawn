@@ -52,6 +52,7 @@ class ProblemWithChargeViewModelTest {
             privacyUrl = "https://example.com/privacy/",
             termsUrl = "https://example.com/terms/",
             supportUrl = "https://example.com/support/",
+            websiteUrl = "https://example.com/",
         )
 
     /** Writes the charge it was given into the body, so the test sees which charge the email is about. */

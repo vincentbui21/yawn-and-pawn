@@ -112,6 +112,7 @@ import com.yawnandpawn.app.core.summary.WeeklySummaryScheduler
 import com.yawnandpawn.app.core.telemetry.Telemetry
 import com.yawnandpawn.app.core.telemetry.TelemetryReporter
 import com.yawnandpawn.app.data.dataModule
+import com.yawnandpawn.app.ui.about.AppInfo
 import com.yawnandpawn.app.ui.format.moneyFormatter
 import com.yawnandpawn.app.ui.links.AppLinks
 import com.yawnandpawn.app.ui.links.ExternalLinks
@@ -367,7 +368,7 @@ val appModule =
             )
         }
         // "Problem with a charge?" (Story 4.17): the order history link and the support email; the privacy policy, terms
-        // and support pages (Story 5.7). All from config/app-links.properties through BuildConfig.
+        // and support pages (Story 5.7); the site's home page (About). All from config/app-links.properties through BuildConfig.
         single {
             AppLinks(
                 supportEmail = BuildConfig.SUPPORT_EMAIL,
@@ -375,8 +376,11 @@ val appModule =
                 privacyUrl = BuildConfig.PRIVACY_URL,
                 termsUrl = BuildConfig.TERMS_URL,
                 supportUrl = BuildConfig.SUPPORT_URL,
+                websiteUrl = BuildConfig.WEBSITE_URL,
             )
         }
+        // About (0.1.7 polish): the version name the build was given (the release workflow passes the tag).
+        single { AppInfo(versionName = BuildConfig.VERSION_NAME) }
         single<ExternalLinks> { AndroidExternalLinks(androidContext(), get()) }
         // "Delete all data" (Story 5.9): an unfinished deletion holds the app (the guard refuses other writes,
         // rescheduleAll arms nothing, the restoring screen shows) until it completes or the resume gives up. One per

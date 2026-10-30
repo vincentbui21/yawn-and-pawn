@@ -44,7 +44,7 @@ data class SkipDialog(
 )
 
 /**
- * "Turn off your {time} alarm? It rings in ..." for an enabled alarm switched off within 8 h (commitment lock, Story
+ * "Turn off the {time} alarm?" / "It rings in ..." for an enabled alarm switched off within 8 h (commitment lock, Story
  * 4.6); [ringsIn] is [Countdown.HoursMinutes] (the dialog says the whole hours) or, under 1 h, [Countdown.Minutes].
  */
 data class DisableUnderLock(
@@ -53,7 +53,7 @@ data class DisableUnderLock(
     val ringsIn: Countdown,
 )
 
-/** "Delete your {time} alarm? This is logged." for the alarm [alarmId] at [time]. */
+/** "Delete the {time} alarm?" for the alarm [alarmId] at [time]. */
 data class DeleteAlarmDialog(
     val alarmId: String,
     val time: LocalTime,
@@ -85,7 +85,7 @@ data class HomeUiState(
     val isLoading: Boolean = false,
     /** The stored alarms could not be read: "Couldn't load your alarms." and "Try again", never the empty state. */
     val loadFailed: Boolean = false,
-    /** Delete was chosen for a card: `dialog-confirm` "Delete your {time} alarm? This is logged.". */
+    /** Delete was chosen for a card: `dialog-confirm` "Delete the {time} alarm?". */
     val deleteDialog: DeleteAlarmDialog? = null,
     /** The editor closed because its alarm could not be read: the snackbar "Couldn't open this alarm.". */
     val openFailed: Boolean = false,

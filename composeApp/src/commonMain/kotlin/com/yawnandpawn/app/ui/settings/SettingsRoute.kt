@@ -16,7 +16,8 @@ import org.koin.compose.viewmodel.koinViewModel
  * The Settings rows built so far: the Snooze card's base fee and max snoozes (Story 4.5); its default snooze length, the
  * Wake card's default quiet time and "Vibrate during quiet time", and Appearance (Story 5.1); "Bright wake screen"
  * (Story 5.2); the reliability checklist (Story 5.4); the usage stats switch (Story 5.6); the weekly summary switch
- * (Story 6.8), in the card with usage stats. Every row of the approved Settings is built.
+ * (Story 6.8), in the card with usage stats; About, after the checklist row (0.1.7 polish). Every row of the approved
+ * Settings is built.
  */
 val BuiltSettingsRows: Set<SettingsRow> =
     setOf(
@@ -30,14 +31,15 @@ val BuiltSettingsRows: Set<SettingsRow> =
         SettingsRow.WeeklySummary,
         SettingsRow.UsageStats,
         SettingsRow.Reliability,
+        SettingsRow.About,
     )
 
 /**
  * The Settings tab route: [SettingsViewModel] (scoped to the nav entry) feeding [SettingsScreen] with [rows]. Until the
  * stored settings are read it shows the title only, so no default fee flashes. System Back on a sub-screen returns to
  * the Settings main screen; on the main screen it is left to the tab navigation. Every start evaluates the reliability
- * checklist again (the banner clears itself once fixed), and its "Fix" and the "Reliability checklist" row call
- * [onOpenReliability] (Story 5.4).
+ * checklist again (the banner clears itself once fixed), and its "Fix" and the "Make sure alarms ring" row call
+ * [onOpenReliability] (Story 5.4); the "About" row calls [onOpenAbout].
  */
 @Composable
 fun SettingsRoute(
@@ -45,6 +47,7 @@ fun SettingsRoute(
     modifier: Modifier = Modifier,
     rows: Set<SettingsRow> = BuiltSettingsRows,
     onOpenReliability: () -> Unit = {},
+    onOpenAbout: () -> Unit = {},
     viewModel: SettingsViewModel = koinViewModel(),
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
@@ -53,6 +56,7 @@ fun SettingsRoute(
         viewModel.effects.collect { effect ->
             when (effect) {
                 SettingsEffect.OpenReliability -> onOpenReliability()
+                SettingsEffect.OpenAbout -> onOpenAbout()
             }
         }
     }

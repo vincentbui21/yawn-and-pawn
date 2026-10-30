@@ -1,5 +1,6 @@
 package com.yawnandpawn.app.ui
 
+import com.yawnandpawn.app.ui.about.AboutViewModel
 import com.yawnandpawn.app.ui.daydetail.DayDetailViewModel
 import com.yawnandpawn.app.ui.editor.AlarmEditorArgs
 import com.yawnandpawn.app.ui.editor.AlarmEditorViewModel
@@ -83,6 +84,7 @@ val uiModule =
         viewModel { ManufacturerGuidanceViewModel(get(), get(), get()) }
         // The You tab (Stories 5.8 and 5.9): its links, and "Delete all data" through core's DeleteAllData (bound by :androidApp).
         viewModel { YouViewModel(links = get(), appLinks = get(), clock = get(), deleteAllData = get(), sessionLock = get()) }
+        viewModel { AboutViewModel(links = get(), appLinks = get(), appInfo = get(), clock = get()) }
         viewModel { PaymentsViewModel(priceCatalog = get(), clock = get(), logger = get()) }
         viewModel {
             OnboardingViewModel(

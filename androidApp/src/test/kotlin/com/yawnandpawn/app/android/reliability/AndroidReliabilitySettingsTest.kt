@@ -66,14 +66,14 @@ class AndroidReliabilitySettingsTest {
         channelBlocked: Boolean = false,
     ) = AndroidReliabilitySettings(context, logger, sdkInt = sdkInt, batteryExempt = { exempt }, alarmChannelBlocked = { channelBlocked })
 
-    /** The row's own screen on API 34 (Exact alarms is Hidden there, but its screen still exists). */
+    /** The row's own screen on API 34 (Exact alarms is Hidden there, but its screen still exists; Battery is App info). */
     private val api34Screens =
         mapOf(
             ChecklistRow.Notifications to Settings.ACTION_APP_NOTIFICATION_SETTINGS,
             ChecklistRow.FullScreenAlarm to Settings.ACTION_MANAGE_APP_USE_FULL_SCREEN_INTENT,
             ChecklistRow.ExactAlarms to Settings.ACTION_REQUEST_SCHEDULE_EXACT_ALARM,
             ChecklistRow.DoNotDisturb to Settings.ACTION_ZEN_MODE_PRIORITY_SETTINGS,
-            ChecklistRow.Battery to Settings.ACTION_IGNORE_BATTERY_OPTIMIZATION_SETTINGS,
+            ChecklistRow.Battery to Settings.ACTION_APPLICATION_DETAILS_SETTINGS,
             ChecklistRow.Manufacturer to Settings.ACTION_APPLICATION_DETAILS_SETTINGS,
             ChecklistRow.Camera to Settings.ACTION_APPLICATION_DETAILS_SETTINGS,
             ChecklistRow.Microphone to Settings.ACTION_APPLICATION_DETAILS_SETTINGS,
@@ -129,17 +129,32 @@ class AndroidReliabilitySettingsTest {
 
     @Test
     @Config(sdk = [34])
-    fun `battery opens the optimisation list while not exempt, and the app details once exempt (background restriction)`() {
-        val optimised = settings(exempt = false).intentFor(ChecklistRow.Battery)
+    fun `from API 31 battery always opens this app's App info, whatever the exemption (0_1_7 polish)`() {
+        listOf(false, true).forEach { exempt ->
+            val settings = settings(sdkInt = 31, exempt = exempt)
+            val battery = settings.intentFor(ChecklistRow.Battery)
+            assertEquals(Settings.ACTION_APPLICATION_DETAILS_SETTINGS, battery.action, "exempt: $exempt")
+            assertEquals(packageUri, battery.dataString, "exempt: $exempt")
+            val fallbacks = settings.targets(ChecklistRow.Battery).map { it.action }
+            assertEquals(listOf(Settings.ACTION_APPLICATION_DETAILS_SETTINGS, Settings.ACTION_SETTINGS), fallbacks, "no repeats")
+        }
+        assertEquals(Settings.ACTION_APPLICATION_DETAILS_SETTINGS, settings(sdkInt = 34).intentFor(ChecklistRow.Battery).action)
+        assertEquals(emptyList(), logger.events)
+    }
+
+    @Test
+    @Config(sdk = [28])
+    fun `below API 31 battery opens the optimisation list while not exempt, and the app details once exempt`() {
+        val optimised = settings(sdkInt = 28, exempt = false).intentFor(ChecklistRow.Battery)
         assertEquals(Settings.ACTION_IGNORE_BATTERY_OPTIMIZATION_SETTINGS, optimised.action)
-        val exempt = settings(exempt = true)
+        val exempt = settings(sdkInt = 28, exempt = true)
         assertEquals(Settings.ACTION_APPLICATION_DETAILS_SETTINGS, exempt.intentFor(ChecklistRow.Battery).action)
         val fallbacks = exempt.targets(ChecklistRow.Battery).map { it.action }
         assertEquals(listOf(Settings.ACTION_APPLICATION_DETAILS_SETTINGS, Settings.ACTION_SETTINGS), fallbacks, "no repeats")
 
         // Without the seam the exemption is read from PowerManager at the tap.
         val power = shadowOf(app.getSystemService(PowerManager::class.java))
-        val platform = AndroidReliabilitySettings(app, logger)
+        val platform = AndroidReliabilitySettings(app, logger, sdkInt = 28)
         power.setIgnoringBatteryOptimizations(app.packageName, false)
         assertEquals(Settings.ACTION_IGNORE_BATTERY_OPTIMIZATION_SETTINGS, platform.intentFor(ChecklistRow.Battery).action)
         power.setIgnoringBatteryOptimizations(app.packageName, true)
@@ -249,15 +264,15 @@ class AndroidReliabilitySettingsTest {
     }
 
     @Test
-    @Config(sdk = [34])
-    fun `a battery exemption read that throws is logged and offers the optimisation list`() {
+    @Config(sdk = [28])
+    fun `below API 31 a battery exemption read that throws is logged and offers the optimisation list`() {
         val broken: Context =
             object : ContextWrapper(app) {
                 override fun getSystemService(name: String): Any? =
                     if (name == Context.POWER_SERVICE) throw IllegalStateException("broken") else super.getSystemService(name)
             }
 
-        val battery = AndroidReliabilitySettings(broken, logger).intentFor(ChecklistRow.Battery)
+        val battery = AndroidReliabilitySettings(broken, logger, sdkInt = 28).intentFor(ChecklistRow.Battery)
 
         assertEquals(Settings.ACTION_IGNORE_BATTERY_OPTIMIZATION_SETTINGS, battery.action)
         assertEquals(

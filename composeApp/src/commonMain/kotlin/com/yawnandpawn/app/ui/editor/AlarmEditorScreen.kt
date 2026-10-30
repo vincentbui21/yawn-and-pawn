@@ -60,10 +60,10 @@ import com.yawnandpawn.app.ui.components.PpsBackground
 import com.yawnandpawn.app.ui.components.PpsSegmentedControl
 import com.yawnandpawn.app.ui.components.PpsSnackbarHost
 import com.yawnandpawn.app.ui.components.PpsTextButton
+import com.yawnandpawn.app.ui.components.PpsTextField
 import com.yawnandpawn.app.ui.components.PpsWheelTimePicker
 import com.yawnandpawn.app.ui.components.SaveCancelPill
 import com.yawnandpawn.app.ui.components.SwitchRow
-import com.yawnandpawn.app.ui.components.TextFieldRow
 import com.yawnandpawn.app.ui.components.subScreenTransition
 import com.yawnandpawn.app.ui.format.countdownText
 import com.yawnandpawn.app.ui.format.formatClockTime
@@ -95,7 +95,6 @@ import com.yawnandpawn.app.ui.resources.editor_no_check
 import com.yawnandpawn.app.ui.resources.editor_offer_skip
 import com.yawnandpawn.app.ui.resources.editor_quiet_time
 import com.yawnandpawn.app.ui.resources.editor_repeat
-import com.yawnandpawn.app.ui.resources.editor_rings_tomorrow
 import com.yawnandpawn.app.ui.resources.editor_save
 import com.yawnandpawn.app.ui.resources.editor_save_failed
 import com.yawnandpawn.app.ui.resources.editor_snooze
@@ -332,7 +331,7 @@ private fun TimeCard(
     time = state.form.time,
     is24Hour = is24Hour,
     onTimeChange = { onIntent(EditorIntent.TimeChanged(it)) },
-    ringsTomorrowAt = state.ringsTomorrowAt,
+    ringsAt = state.ringsAt,
 )
 
 /** The editor's repeat card. */
@@ -348,7 +347,7 @@ private fun RepeatCard(
 )
 
 /**
- * Card 1: alarm name (inline field), Sound (value, opens the Sound sub-screen), Vibration and, in the app's editor,
+ * Card 1: alarm name (`text-field`), Sound (value, opens the Sound sub-screen), Vibration and, in the app's editor,
  * "Offer to skip 2 h before" (Story 7.11; its lock note is the cards' "Saved. Takes effect after ..." note).
  */
 @Composable
@@ -360,10 +359,17 @@ private fun NameSoundCard(
     val sound = state.sound
     Column(verticalArrangement = Arrangement.spacedBy(PpsTheme.spacing.space2)) {
         GroupCard {
-            TextFieldRow(
-                label = stringResource(Res.string.editor_alarm_name),
+            PpsTextField(
                 value = form.label,
                 onValueChange = { onIntent(EditorIntent.LabelChanged(it)) },
+                label = stringResource(Res.string.editor_alarm_name),
+                modifier =
+                    Modifier.padding(
+                        start = PpsTheme.spacing.cardPadding,
+                        end = PpsTheme.spacing.cardPadding,
+                        top = PpsTheme.spacing.space2,
+                        bottom = PpsTheme.spacing.space3,
+                    ),
                 errorText = if (state.fieldError == AlarmField.Label) stringResource(Res.string.editor_label_too_long) else null,
             )
             GroupDivider()

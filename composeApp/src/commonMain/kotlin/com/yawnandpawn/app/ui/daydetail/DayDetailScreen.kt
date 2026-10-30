@@ -30,7 +30,9 @@ import com.yawnandpawn.app.ui.checks.icon
 import com.yawnandpawn.app.ui.components.NoteInline
 import com.yawnandpawn.app.ui.components.RowIcon
 import com.yawnandpawn.app.ui.components.SubScreen
+import com.yawnandpawn.app.ui.components.entranceProgress
 import com.yawnandpawn.app.ui.components.glass
+import com.yawnandpawn.app.ui.components.rememberEntered
 import com.yawnandpawn.app.ui.format.DateStyle
 import com.yawnandpawn.app.ui.format.formatClockTime
 import com.yawnandpawn.app.ui.format.formatDate
@@ -40,9 +42,7 @@ import com.yawnandpawn.app.ui.progress.Outcome
 import com.yawnandpawn.app.ui.progress.OutcomeMarker
 import com.yawnandpawn.app.ui.progress.Tile
 import com.yawnandpawn.app.ui.progress.TileRow
-import com.yawnandpawn.app.ui.progress.entranceProgress
 import com.yawnandpawn.app.ui.progress.label
-import com.yawnandpawn.app.ui.progress.rememberEntered
 import com.yawnandpawn.app.ui.resources.Res
 import com.yawnandpawn.app.ui.resources.alarm_card_summary
 import com.yawnandpawn.app.ui.resources.day_detail_before_unlock

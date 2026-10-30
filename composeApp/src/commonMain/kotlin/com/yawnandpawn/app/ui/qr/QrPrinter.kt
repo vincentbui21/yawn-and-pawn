@@ -42,7 +42,7 @@ interface QrPrinter {
     fun encode(payload: String): QrMatrix?
 
     /**
-     * Opens the system print dialog with one page: [matrix] 6 cm square in the middle, [line] under it, as the print job
+     * Opens the system print dialog with one page: [matrix] 14 cm square in the middle, [line] under it, as the print job
      * [jobName]. False when nothing could be shown: no screen to print from, or the print service gave no job or failed
      * (logged); then neither callback is called. True when the dialog opened; then exactly one callback follows, on the
      * main thread, when the print service is done with the page: [onPrinted] when the job went to print (queued, started,

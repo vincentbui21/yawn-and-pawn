@@ -32,7 +32,7 @@ import java.util.concurrent.TimeUnit
 
 /**
  * Story 7.10 on the managed device: the printable page is read by the app's own bundled ML Kit scanner as the code
- * registered for the alarm, both drawn as it prints (A4, the code 6 cm square in the middle) and, since review pass 1,
+ * registered for the alarm, both drawn as it prints (A4, the code 14 cm square in the middle) and, since review pass 1,
  * written as the print adapter writes it ([writeQrPdf], A4 with a printer's margins) and rendered from the PDF with
  * [PdfRenderer].
  *
@@ -81,12 +81,12 @@ class PrintableQrDeviceTest {
 
         val barcode = scan(bitmap)
         assertEquals(PrintableCode.registered(payload), codeOf(barcode))
-        // The code is 6 cm square in the middle of the page (review): ML Kit's box, in pixels at SCALE, within 10%.
+        // The code is 14 cm square in the middle of the page (review): ML Kit's box, in pixels at SCALE, within 10%.
         val layout = QrPageLayout.of(bitmap.width / SCALE, bitmap.height / SCALE)
         val side = layout.side * SCALE
         val box = requireNotNull(barcode.boundingBox)
-        assertEquals("6 cm wide", side, box.width().toFloat(), side * TOLERANCE)
-        assertEquals("6 cm high", side, box.height().toFloat(), side * TOLERANCE)
+        assertEquals("14 cm wide", side, box.width().toFloat(), side * TOLERANCE)
+        assertEquals("14 cm high", side, box.height().toFloat(), side * TOLERANCE)
         assertEquals("centred across", (layout.left * SCALE) + side / 2, box.exactCenterX(), side * TOLERANCE)
         assertEquals("centred down", (layout.top * SCALE) + side / 2, box.exactCenterY(), side * TOLERANCE)
     }

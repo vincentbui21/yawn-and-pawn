@@ -6,6 +6,7 @@ import com.yawnandpawn.app.ui.checks.CheckType
 import com.yawnandpawn.app.ui.checks.Difficulty
 import com.yawnandpawn.app.ui.checks.PickableCheckTypes
 import com.yawnandpawn.app.ui.editor.CheckChip
+import com.yawnandpawn.app.ui.editor.RingsAt
 import com.yawnandpawn.app.ui.format.formatMoney
 import com.yawnandpawn.app.ui.onboarding.OnboardingStep
 import com.yawnandpawn.app.ui.onboarding.OnboardingUiState
@@ -13,6 +14,7 @@ import com.yawnandpawn.app.ui.onboarding.TestAlarmStatus
 import com.yawnandpawn.app.ui.reliability.ChecklistItem
 import com.yawnandpawn.app.ui.reliability.ChecklistRow
 import com.yawnandpawn.app.ui.reliability.ItemStatus
+import kotlinx.datetime.DayOfWeek
 import kotlinx.datetime.LocalTime
 
 /**
@@ -51,7 +53,7 @@ internal object OnboardingSamples {
             step = step,
             alarmTime = LocalTime(7, 0),
             repeatDays = emptySet(),
-            ringsTomorrowAt = LocalTime(7, 0),
+            ringsAt = RingsAt(1, DayOfWeek.TUESDAY, LocalTime(7, 0)),
             checks = CheckPickerUiState(checks = listOf(CheckChip(CheckType.Math, Difficulty.Easy, count = 3)), types = PickableCheckTypes),
         )
 

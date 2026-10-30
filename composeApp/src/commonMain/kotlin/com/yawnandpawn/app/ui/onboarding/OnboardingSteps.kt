@@ -138,7 +138,7 @@ internal fun FirstAlarmStep(
         time = state.alarmTime,
         is24Hour = is24Hour,
         onTimeChange = { onIntent(OnboardingIntent.TimeChanged(it)) },
-        ringsTomorrowAt = state.ringsTomorrowAt,
+        ringsAt = state.ringsAt,
     )
     RepeatChoiceCard(
         choice = state.repeatChoice,

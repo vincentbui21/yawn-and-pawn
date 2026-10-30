@@ -307,7 +307,7 @@ class OnboardingFlowTest {
             }
 
             composeRule.onNode(navCapsule).performClick()
-            val usageStats = hasText("Share anonymous usage stats") and isToggleable()
+            val usageStats = hasText("Share usage stats") and isToggleable()
             waitFor(usageStats)
             composeRule.onNode(usageStats).assertIsOff()
         }

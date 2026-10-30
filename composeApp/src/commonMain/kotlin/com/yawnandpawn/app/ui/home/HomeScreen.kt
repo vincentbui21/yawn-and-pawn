@@ -20,7 +20,7 @@ import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.layout.windowInsetsTopHeight
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyListState
-import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
@@ -58,8 +58,10 @@ import com.yawnandpawn.app.ui.components.PpsSwitch
 import com.yawnandpawn.app.ui.components.PpsTextButton
 import com.yawnandpawn.app.ui.components.RowIcon
 import com.yawnandpawn.app.ui.components.SessionInProgressPanel
+import com.yawnandpawn.app.ui.components.entrance
 import com.yawnandpawn.app.ui.components.glass
 import com.yawnandpawn.app.ui.components.glassSource
+import com.yawnandpawn.app.ui.components.rememberEnteredOnce
 import com.yawnandpawn.app.ui.components.rememberGlassBackdrop
 import com.yawnandpawn.app.ui.format.Countdown
 import com.yawnandpawn.app.ui.format.countdownText
@@ -77,10 +79,6 @@ import com.yawnandpawn.app.ui.resources.alarm_duplicate
 import com.yawnandpawn.app.ui.resources.alarms_add_alarm
 import com.yawnandpawn.app.ui.resources.alarms_add_first
 import com.yawnandpawn.app.ui.resources.alarms_empty_title
-import com.yawnandpawn.app.ui.resources.disable_keep_on
-import com.yawnandpawn.app.ui.resources.disable_turn_off
-import com.yawnandpawn.app.ui.resources.disable_under_lock_hours
-import com.yawnandpawn.app.ui.resources.disable_under_lock_minutes
 import com.yawnandpawn.app.ui.resources.home_dismiss
 import com.yawnandpawn.app.ui.resources.home_fallback_banner
 import com.yawnandpawn.app.ui.resources.home_fix
@@ -181,6 +179,8 @@ private fun HomeList(
     val statusBarTop = WindowInsets.statusBars.getTop(density)
     val fade = with(density) { spacing.space3.toPx() }
     val opaque = PpsTheme.colors.text
+    // The opening screenful fades and rises in order, like Progress (0.1.7 polish).
+    val entered = rememberEnteredOnce()
     Box(modifier = Modifier.fillMaxSize()) {
         LazyColumn(
             state = listState,
@@ -206,13 +206,13 @@ private fun HomeList(
             // inserted below it and shows, instead of above the first visible item, off screen (review fix 1).
             item(key = TOP_KEY) { }
             // The hero first, above every notice (Story 6.3); the notices only when one shows, so no empty item adds a gap.
-            state.hero?.let { hero -> item(key = HERO_KEY) { HeroCard(hero, modifier = Modifier.collapsingHero(collapse)) } }
-            if (state.hasNotices) item(key = "notices") { Notices(state = state, is24Hour = is24Hour, onIntent = onIntent) }
-            state.nextAlarm?.let { countdown -> item(key = "next") { NextAlarm(countdown) } }
-            items(state.alarms, key = { it.id }) { alarm ->
+            state.hero?.let { hero -> item(key = HERO_KEY) { HeroCard(hero, Modifier.entrance(entered, 0).collapsingHero(collapse)) } }
+            if (state.hasNotices) item(key = "notices") { Notices(state, is24Hour, onIntent, Modifier.entrance(entered, 1)) }
+            state.nextAlarm?.let { countdown -> item(key = "next") { NextAlarm(countdown, Modifier.entrance(entered, 2)) } }
+            itemsIndexed(state.alarms, key = { _, alarm -> alarm.id }) { index, alarm ->
                 AlarmCardView(
                     // Cards animate in and out when an alarm is added or removed (owner decision 2026-09-27).
-                    modifier = Modifier.animateItem(),
+                    modifier = Modifier.animateItem().entrance(entered, order = minOf(FIRST_CARD_ORDER + index, LAST_ENTRANCE_ORDER)),
                     alarm = alarm,
                     is24Hour = is24Hour,
                     onIntent = onIntent,
@@ -233,10 +233,13 @@ private fun HomeList(
 
 /** "Rings in ..." above the alarm cards. */
 @Composable
-private fun NextAlarm(countdown: Countdown) {
+private fun NextAlarm(
+    countdown: Countdown,
+    modifier: Modifier = Modifier,
+) {
     Text(
         text = countdownText(countdown),
-        modifier = Modifier.padding(top = PpsTheme.spacing.space2),
+        modifier = modifier.padding(top = PpsTheme.spacing.space2),
         style = PpsTheme.typography.title,
         color = PpsTheme.colors.text,
     )
@@ -244,6 +247,12 @@ private fun NextAlarm(countdown: Countdown) {
 
 /** The empty first item of the Home list. */
 private const val TOP_KEY = "top"
+
+/** Entrance order of the first alarm card (after the hero, the notices and the countdown). */
+private const val FIRST_CARD_ORDER = 3
+
+/** Cards further down enter with this one, so the last ones on screen do not wait long. */
+private const val LAST_ENTRANCE_ORDER = 8
 
 /** Some banner or note shows. */
 private val HomeUiState.hasNotices: Boolean
@@ -255,9 +264,10 @@ private fun Notices(
     state: HomeUiState,
     is24Hour: Boolean,
     onIntent: (HomeIntent) -> Unit,
+    modifier: Modifier = Modifier,
 ) {
     val spacing = PpsTheme.spacing
-    Column(verticalArrangement = Arrangement.spacedBy(spacing.space3)) {
+    Column(modifier = modifier, verticalArrangement = Arrangement.spacedBy(spacing.space3)) {
         if (state.reliabilityProblem) {
             BannerWarning(
                 message = stringResource(Res.string.home_reliability_banner),
@@ -482,44 +492,6 @@ private fun LoadFailed(
         )
     }
 }
-
-/** `dialog-confirm` for switching an alarm off under the commitment lock; "Keep it on" is the default dismiss. */
-@Composable
-private fun DisableDialog(
-    dialog: DisableUnderLock,
-    is24Hour: Boolean,
-    onIntent: (HomeIntent) -> Unit,
-) {
-    val time = formatClockTime(dialog.time, is24Hour)
-    val title =
-        when (val ringsIn = dialog.ringsIn) {
-            is Countdown.Minutes -> {
-                stringResource(Res.string.disable_under_lock_minutes, time, ringsIn.minutes)
-            }
-
-            is Countdown.HoursMinutes -> {
-                stringResource(Res.string.disable_under_lock_hours, time, ringsIn.hours)
-            }
-
-            is Countdown.DaysHours -> {
-                stringResource(
-                    Res.string.disable_under_lock_hours,
-                    time,
-                    ringsIn.days * HOURS_PER_DAY + ringsIn.hours,
-                )
-            }
-        }
-    ConfirmDialog(
-        title = title,
-        confirmText = stringResource(Res.string.disable_turn_off),
-        safeText = stringResource(Res.string.disable_keep_on),
-        onConfirm = { onIntent(HomeIntent.DisableConfirmed) },
-        onSafe = { onIntent(HomeIntent.DisableCancelled) },
-        destructive = true,
-    )
-}
-
-private const val HOURS_PER_DAY = 24
 
 /**
  * The card's time in `title`, the repeat summary and label in `caption` ("Next ring skipped" in its place while the next

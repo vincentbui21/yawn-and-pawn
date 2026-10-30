@@ -64,7 +64,7 @@ You can find your Android version in your phone's **Settings > About phone**. Pl
 ## 5. Tell us what happened
 
 - **Feedback form (best):** **[FEEDBACK FORM LINK: owner fills in]**. It takes about 2 minutes.
-- **Email:** <vincentbui2108@gmail.com> (the address on our [support page](https://vincentbui21.github.io/yawn-and-pawn/support/)).
+- **Email:** <support@yawnandpawn.com> (the address on our [support page](https://yawnandpawn.com/support/)).
 - **Google Play:** you can also leave private feedback on the app's page in Google Play. Only we see it.
 
 Please always tell us:
@@ -87,7 +87,7 @@ Never send us your card details or passwords.
 
 ## 6. Your data
 
-There is no account. Your alarms, history and payments stay on your phone. Crash reports are sent automatically so we can fix alarms that fail. Usage stats are sent only if you said yes, and you can change that in Settings. The full details are in the [privacy policy](https://vincentbui21.github.io/yawn-and-pawn/privacy/).
+There is no account. Your alarms, history and payments stay on your phone. Crash reports are sent automatically so we can fix alarms that fail. Usage stats are sent only if you said yes, and you can change that in Settings. The full details are in the [privacy policy](https://yawnandpawn.com/privacy/).
 
 ## 7. When the test ends
 

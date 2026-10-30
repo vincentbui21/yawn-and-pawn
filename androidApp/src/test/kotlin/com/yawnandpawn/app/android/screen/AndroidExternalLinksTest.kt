@@ -153,7 +153,7 @@ class AndroidExternalLinksTest {
         assertEquals(config.getProperty("support.url"), BuildConfig.SUPPORT_URL)
         assertEquals(config.getProperty("support.email"), BuildConfig.SUPPORT_EMAIL)
         listOf(BuildConfig.PRIVACY_URL, BuildConfig.TERMS_URL, BuildConfig.SUPPORT_URL).forEach { url ->
-            assertTrue(url.startsWith("https://vincentbui21.github.io/yawn-and-pawn/"), url)
+            assertTrue(url.startsWith("https://yawnandpawn.com/"), url)
         }
     }
 

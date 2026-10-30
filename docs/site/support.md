@@ -5,7 +5,7 @@ permalink: /support/
 
 # Support
 
-Email us at <vincentbui2108@gmail.com>. We are a small developer, so a reply can take a few days.
+Email us at <support@yawnandpawn.com>. We are a small developer, so a reply can take a few days.
 
 For a question about a charge, include the order ID from your Google Play receipt or from the app's purchase history. In the app, "Problem with a charge?" (in "How payments & refunds work") writes the email for you, with the order already filled in. Never send your card details or passwords.
 

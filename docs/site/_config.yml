@@ -1,14 +1,14 @@
 # The Yawn & Pawn site on GitHub Pages (Story 5.7). Only this folder is published, by .github/workflows/pages.yml.
 # url + baseurl + each page's permalink must equal the links in config/app-links.properties (checkSitePages).
-# Every link and asset uses relative_url (or absolute_url for Open Graph), so moving to a custom domain changes only
-# url and baseurl here (and the links in config/app-links.properties).
+# Every link and asset uses relative_url (or absolute_url for Open Graph). Since 2026-10-30 the site is served on the
+# owner's custom domain, at the root, so baseurl is empty.
 title: Yawn & Pawn
 description: An alarm clock where every snooze costs real money. Waking up is always free.
-url: "https://vincentbui21.github.io"
-baseurl: "/yawn-and-pawn"
+url: "https://yawnandpawn.com"
+baseurl: ""
 markdown: kramdown
-# The address the home page's "Join the test" button and the shared footer write to. The support and privacy pages
-# show config/app-links.properties' support.email (checkSitePages); the two meet when the domain switch lands.
+# The address the home page's "Join the test" button and the shared footer write to. Keep it equal to
+# config/app-links.properties' support.email, which the support and privacy pages show (checkSitePages).
 support_email: support@yawnandpawn.com
 # The site's own look (_layouts, _includes, assets/css/site.css) replaces the primer theme: the home page uses the
 # "home" layout (index.md), every other page the "default" layout with a readable article column.

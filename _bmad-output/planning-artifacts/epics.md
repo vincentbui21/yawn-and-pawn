@@ -30,7 +30,7 @@ PRD IDs are kept exactly as in PRD v0.3 §7 (never renumbered). Priority: [Must]
 - FR-ALM-7 [Must]: Home shows the next alarm as a relative countdown (e.g., "Rings in 7 h 12 min").
 - FR-ALM-8 [Must]: "Test alarm" runs the full flow (sound, checks, grace window) with no payment possible; the Snooze button shows the price but is disabled with the label "Test · no charge".
 - FR-ALM-9 [Must]: If a single ring continues 30 minutes with no interaction (any tap on a wake screen), the alarm stops and the session is logged Missed; each interaction and each re-ring restarts the 30-minute timer, snooze time never counts, the timer pauses during a call, and it uses monotonic time (`elapsedRealtime`).
-- FR-ALM-10 [Could]: (Approved by owner, Q9 closed) An optional, default-off pre-alarm notification lets the user skip the next occurrence up to 2 hours before; skipping is free and logged as Skipped.
+- FR-ALM-10 [Could]: (Approved by owner, Q9 closed) An optional, default-off pre-alarm notification lets the user skip the next occurrence up to 2 hours before; skipping is free and logged as Skipped. (0.1.8 change, 2026-10-31: replaced by one global "Skip reminder" in Settings, on by default, that offers to skip all of a day's alarms 2 h before the first one; see the note under Story 7.11.)
 - FR-ALM-11 [Must]: Alarms ring after an overnight reboot before first unlock (directBootAware `LOCKED_BOOT_COMPLETED` receiver; schedule, frozen session config and active session in device-protected storage); before first unlock, checks/sounds needing normal storage are replaced by Math + default built-in sound, and Snooze is shown disabled with "Unlock your phone to snooze"; after unlock Snooze becomes available while the substituted check stays for the current ring.
 - FR-ALM-12 [Must]: On API 31–32 the app requests `SCHEDULE_EXACT_ALARM` (manifest `maxSdkVersion="32"`) with a `canScheduleExactAlarms()` check; API 33+ uses `USE_EXACT_ALARM`.
 
@@ -3972,6 +3972,14 @@ So that I don't have to turn the alarm off and remember to turn it back on.
 **And** the `pps-design` Done checklist is ticked in the story file, all strings are resources, key strings match EXPERIENCE.md verbatim and `CopyRulesTest` passes (FR-MSG-4)
 **And** `./gradlew qualityGate` passes
 
+> **0.1.8 change (2026-10-31, owner-approved).** The criteria above record Story 7.11 as built. In 0.1.8 one global "Skip reminder" replaces the per-alarm option (spec: `_bmad-output/implementation-artifacts/spec-0-1-8-skip-reminder.md`):
+> - **Removed:** the editor switch "Offer to skip 2 h before", its commitment lock (`LockedField.OfferSkip` stays only as a legacy no-op so stored rows decode), the per-alarm pre-alarm notification ("{time} alarm", "Rings in {hours} h {minutes} min", "Skip this one") and its `pre-alarm-{alarmId}` job, and the Home skip dialog that only that notification opened. The `alarm.offer_skip` column stays, unused.
+> - **Kept:** `alarm.skipped_date`, the free Skipped history row, Home's "Next ring skipped" caption and the card menu's "Don't skip".
+> - **New setting:** a "Skip reminder" switch in Settings, in the card with "Weekly summary" and "Share usage stats", right after "Weekly summary", with the subtitle "If you're up early, ask to skip today's alarms." It is on by default and not locked: skipping is free and allowed inside the lock window (FR-ALM-10, `SkipNextAlarm`), and the old switch was locked only because it gated the skip. Turning it off cancels the scheduled reminder and removes a posted one.
+> - **When:** one notification per local date D, 2 h before the first enabled, not-skipped alarm ring on D. Once D's first ring has passed, D has no reminder. If the reminder time has already passed when it is scheduled or runs (new alarm, late job), it posts at once only if more than 15 min remain; otherwise D gets none. Never posted while a wake session is active; never twice for the same D. Channel "Upcoming alarms".
+> - **Notification:** title "Up already?", text "Your {time} alarm rings in {h} h {m} min. Skip today's alarms?" (under an hour: "Your {time} alarm rings in {m} min. Skip today's alarms?"), actions "Skip today's alarms" and "Keep". Tapping the body opens the app on Alarms (Home). The time follows the phone's 12/24 h setting.
+> - **Skip:** "Skip today's alarms" works without opening the app. It skips, free, every enabled alarm whose next ring is on D and still to come, each with a Skipped history row. The notification then reads "Today's alarms are skipped. No charge." and goes away when D's first ring time passes. "Keep" dismisses it. During an active session nothing is skipped and the notification stays.
+
 ### Story 7.12: Epic 7 device verification checklist
 
 As the owner,
@@ -3994,7 +4002,7 @@ So that the personal touches work and never make an alarm silent.
 8. A real House Hunt morning completes by photographing the spot within 3 tries on each device; covering the camera for 5 attempts shows "Can't do this check?", and revoking camera permission shows the fallback immediately.
 9. Photographing the reference photo shown on another phone: result recorded (known limitation, PRD Q11).
 10. A printed QR from "Make a printable QR" scans on the QR check from 30 cm in normal room light.
-11. With "Offer to skip 2 h before" on, the notification arrives within 15 minutes of occurrence − 2 h (Doze allowed), "Skip this one" → "Skip" prevents the ring, Day detail and the calendar show Skipped, and streak and rates are unchanged; "Don't skip" restores it.
+11. With "Offer to skip 2 h before" on, the notification arrives within 15 minutes of occurrence − 2 h (Doze allowed), "Skip this one" → "Skip" prevents the ring, Day detail and the calendar show Skipped, and streak and rates are unchanged; "Don't skip" restores it. (0.1.8: the per-alarm option is gone; see the Story 7.11 change note for the global Skip reminder.)
 12. No recording, photo or file path appears in Crashlytics logs from these tests.
 13. At 200% font size and with TalkBack on, the recorder, Recordings list, House Hunt registration and check screens are usable.
 14. All copy seen matches EXPERIENCE.md and the owner-approved assumption strings (FR-MSG-4).

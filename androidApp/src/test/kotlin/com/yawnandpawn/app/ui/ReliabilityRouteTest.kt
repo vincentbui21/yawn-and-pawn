@@ -113,10 +113,7 @@ class ReliabilityRouteTest {
         ActivityScenario.launch(MainActivity::class.java).use {
             composeRule.onNodeWithContentDescription("Settings").performClick()
             waitForText(banner)
-            // Story 6.8: with the "Weekly summary" row this last row is just inside the screen, under the floating nav
-            // capsule; a user scrolls on, and the list's bottom padding (the capsule's clearance) lifts it clear. A real tap.
-            composeRule.onNode(hasScrollAction()).performSemanticsAction(SemanticsActions.ScrollBy) { scrollBy -> scrollBy(0f, 10_000f) }
-            composeRule.onNode(hasText("Make sure alarms ring") and hasClickAction()).performScrollTo().performClick()
+            scrollToChecklistRow()
 
             waitForRow("Notifications", "OK")
             composeRule.onNode(hasText("Battery") and hasText("Stops Android from pausing your alarm.")).assertExists()
@@ -125,7 +122,8 @@ class ReliabilityRouteTest {
 
             composeRule.onNodeWithContentDescription("Back").performClick()
             waitForText(banner)
-            composeRule.onNode(hasText("Fix") and hasClickAction()).performClick()
+            // Back returns to the list scrolled down: the banner's "Fix" is scrolled into view first, as a user would.
+            composeRule.onNode(hasText("Fix") and hasClickAction()).performScrollTo().performClick()
 
             // The rows come with the first evaluation, which reads the records DataStore on the main looper.
             waitForRow("Battery", "Stops Android from pausing your alarm.")
@@ -162,6 +160,15 @@ class ReliabilityRouteTest {
     private fun openChecklistFromSettings() {
         composeRule.onNodeWithContentDescription("Settings").performClick()
         waitForText("Make sure alarms ring")
+        scrollToChecklistRow()
+    }
+
+    /**
+     * Story 6.8 (and 0.1.8's "Skip reminder" row): the last card sits under the floating nav capsule; a user scrolls on,
+     * and the list's bottom padding (the capsule's clearance) lifts it clear. Then a real tap on "Make sure alarms ring".
+     */
+    private fun scrollToChecklistRow() {
+        composeRule.onNode(hasScrollAction()).performSemanticsAction(SemanticsActions.ScrollBy) { scrollBy -> scrollBy(0f, 10_000f) }
         composeRule.onNode(hasText("Make sure alarms ring") and hasClickAction()).performScrollTo().performClick()
     }
 
@@ -224,7 +231,7 @@ class ReliabilityRouteTest {
         ActivityScenario.launch(MainActivity::class.java).use {
             composeRule.onNodeWithContentDescription("Settings").performClick()
             waitForText("Make sure alarms ring")
-            composeRule.onNode(hasText("Make sure alarms ring") and hasClickAction()).performScrollTo().performClick()
+            scrollToChecklistRow()
             waitForText("Manufacturer settings")
 
             composeRule.onNode(hasText("Fix") and hasClickAction()).performClick()

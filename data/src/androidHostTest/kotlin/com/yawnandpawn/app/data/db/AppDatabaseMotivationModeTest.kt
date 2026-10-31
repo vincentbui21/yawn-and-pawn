@@ -62,7 +62,6 @@ class AppDatabaseMotivationModeTest {
                 val alarm = (alarms.get("a") as Outcome.Success).value
                 assertEquals(MotivationMode.AfterImUp, alarm.motivationMode)
                 assertEquals(Motivation.Recording("r1"), alarm.motivation, "the message is kept")
-                assertTrue(alarm.offerSkip, "Story 7.11's value is kept")
                 assertEquals(1, database.sessionHistoryDao().count())
                 assertNotNull(database.sessionHistoryDao().findById("s1"))
                 assertEquals(1, database.recordingDao().count())

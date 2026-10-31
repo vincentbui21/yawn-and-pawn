@@ -90,7 +90,6 @@ import com.yawnandpawn.app.ui.resources.editor_mode_random
 import com.yawnandpawn.app.ui.resources.editor_motivation
 import com.yawnandpawn.app.ui.resources.editor_new_title
 import com.yawnandpawn.app.ui.resources.editor_no_check
-import com.yawnandpawn.app.ui.resources.editor_offer_skip
 import com.yawnandpawn.app.ui.resources.editor_repeat
 import com.yawnandpawn.app.ui.resources.editor_save
 import com.yawnandpawn.app.ui.resources.editor_save_failed
@@ -341,8 +340,8 @@ private fun RepeatCard(
 )
 
 /**
- * Card 1: alarm name (`text-field`), Sound (value, opens the Sound sub-screen), Vibration and, in the app's editor,
- * "Offer to skip 2 h before" (Story 7.11; its lock note is the cards' "Saved. Takes effect after ..." note).
+ * Card 1: alarm name (`text-field`), Sound (value, opens the Sound sub-screen) and Vibration. Story 7.11's "Offer to skip
+ * 2 h before" is gone since 0.1.8 (the global Skip reminder in Settings).
  */
 @Composable
 private fun NameSoundCard(
@@ -381,14 +380,6 @@ private fun NameSoundCard(
                 checked = form.vibration,
                 onCheckedChange = { onIntent(EditorIntent.VibrationToggled(it)) },
             )
-            if (state.full?.showOfferSkip == true) {
-                GroupDivider()
-                SwitchRow(
-                    label = stringResource(Res.string.editor_offer_skip),
-                    checked = form.offerSkip,
-                    onCheckedChange = { onIntent(EditorIntent.OfferSkipToggled(it)) },
-                )
-            }
         }
         if (sound?.missing == true) NoteInline(text = stringResource(Res.string.sound_file_missing))
     }

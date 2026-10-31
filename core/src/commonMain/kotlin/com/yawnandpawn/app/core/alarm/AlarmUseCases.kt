@@ -63,8 +63,6 @@ data class AlarmDraft(
     val motivation: Motivation = Motivation.None,
     /** When the message plays (Story 7.5); never a locked field. */
     val motivationMode: MotivationMode = MotivationMode.AfterImUp,
-    /** "Offer to skip 2 h before" (Story 7.11); a locked field. */
-    val offerSkip: Boolean = false,
 )
 
 /**
@@ -102,9 +100,9 @@ class AlarmWriteLock {
  * and stored with it in one transaction ([CheckConfigRepository.saveWithAlarm]); an identical alarm has the same checks
  * in the same order too.
  *
- * **Commitment lock (Story 4.4, AD-16):** an edit's locked fields (grace window, checks and, since Story 7.11, "Offer to
- * skip") go through
- * [CommitmentRules.decide]. The alarm is locked by its stored next occurrence (when the stored alarm is on) and by its
+ * **Commitment lock (Story 4.4, AD-16):** an edit's locked fields (grace window and checks; Story 7.11's "Offer to skip"
+ * is gone since 0.1.8) go through [CommitmentRules.decide]. The alarm is locked by its stored next occurrence (when the
+ * stored alarm is on) and by its
  * new one (when the draft is on), whichever are inside the window; a weakening change waits for the latest of them. The
  * other fields are stored at once, the weakened ones keep their effective values in the row and are stored as
  * [PendingChange]s after it ([save] returns when they take effect). A new alarm has no commitment yet.
@@ -172,7 +170,7 @@ class SaveAlarm(
                                     draft.checks,
                                     now,
                                 )
-                            }.onSuccess(scheduling::sync)
+                            }.onSuccess { scheduling.sync(it) }
                             .map { AlarmSaved(it, null) }
                     }
                 } else {
@@ -227,15 +225,12 @@ class SaveAlarm(
                         SettingValue.Checks(CheckPlan(stored.checkMode, liveEntries)),
                         SettingValue.Checks(CheckPlan(edited.checkMode, draft.checks)),
                     )
-                // Story 7.11: "Offer to skip" on weakens, off strengthens.
-                val offerSkip = decide(SettingValue.OfferSkip(stored.offerSkip), SettingValue.OfferSkip(edited.offerSkip))
                 // A code registered in this edit is never held back (a new sticker is not a weaker plan).
                 val plan = (checks.live as SettingValue.Checks).plan.withCodesFrom(draft.checks)
                 val row =
                     edited.copy(
                         graceSeconds = (grace.live as SettingValue.GraceSeconds).seconds,
                         checkMode = plan.mode,
-                        offerSkip = (offerSkip.live as SettingValue.OfferSkip).on,
                     )
                 // Review fix 3: a change applied now drops its pending change before the row is written, so a failure between
                 // never leaves a weaker pending value to undo it later; a deferred change is put after the row. The row is
@@ -245,17 +240,16 @@ class SaveAlarm(
                 moveGlobalWaits(stored.id, edited, now, zone)
                     .flatMap { clearApplied(grace, mine) }
                     .flatMap { clearApplied(checks, mine) }
-                    .flatMap { clearApplied(offerSkip, mine) }
                     .flatMap { storeWithChecks(checkConfigRepository, row, plan.entries, now) }
-                    .onSuccess(scheduling::sync)
+                    .onSuccess { scheduling.sync(it) }
                     .onSuccess { withContext(NonCancellable) { staleSkips?.after(stored, it, now) } }
                     .flatMap { alarm ->
-                        listOf(grace, checks, offerSkip)
+                        listOf(grace, checks)
                             .fold<LockDecision, Outcome<Unit, DomainError>>(Outcome.Success(Unit)) { done, decision ->
                                 done.flatMap { putDeferred(decision, mine) }
                             }.map { alarm }
                     }.map { alarm ->
-                        AlarmSaved(alarm, LockWindow.latestOf(listOf(grace, checks, offerSkip).mapNotNull { it.pendingUntil() }))
+                        AlarmSaved(alarm, LockWindow.latestOf(listOf(grace, checks).mapNotNull { it.pendingUntil() }))
                     }
             }
         }
@@ -342,7 +336,7 @@ class SaveAlarm(
         return repository
             .upsert(on)
             .map { on }
-            .onSuccess(scheduling::sync)
+            .onSuccess { scheduling.sync(it) }
             .onSuccess { withContext(NonCancellable) { staleSkips?.after(alarm, it, now) } }
     }
 
@@ -370,7 +364,6 @@ class SaveAlarm(
         checkMode = checkMode,
         motivation = motivation,
         motivationMode = motivationMode,
-        offerSkip = offerSkip,
     )
 }
 
@@ -408,7 +401,7 @@ class SetAlarmEnabled(
                         repository
                             .upsert(changed)
                             .map { changed }
-                            .onSuccess(scheduling::sync)
+                            .onSuccess { scheduling.sync(it) }
                             .onSuccess { staleSkips?.after(stored, it, now) }
                             .onSuccess { if (!enabled) recordCommitment(commitments, logger, stored, CommitmentAction.Disabled, now) }
                     }
@@ -441,7 +434,7 @@ class DeleteAlarm(
                 withContext(NonCancellable) {
                     repository.get(id).flatMap { stored ->
                         checkConfigRepository.deleteWithAlarm(id).onSuccess {
-                            scheduling.cancel(stored.requestCode, stored.id)
+                            scheduling.cancel(stored.requestCode)
                             val now = clock.nowMillis()
                             logger.log(LogEvent.AlarmDeleted(id, now))
                             recordCommitment(commitments, logger, stored, CommitmentAction.Deleted, now)
@@ -490,7 +483,7 @@ class DuplicateAlarm(
                                 storeWithChecks(checkConfigRepository, copy, checks, now)
                             }
                         }
-                    }.onSuccess(scheduling::sync)
+                    }.onSuccess { scheduling.sync(it) }
             }
         }
 }

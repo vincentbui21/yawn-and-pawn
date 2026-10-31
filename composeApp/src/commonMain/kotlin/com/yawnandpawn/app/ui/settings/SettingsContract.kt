@@ -23,6 +23,9 @@ enum class SettingsRow {
     BrightWakeScreen,
     Appearance,
     WeeklySummary,
+
+    /** "Skip reminder" (0.1.8): one notification 2 h before each day's first alarm, offering to skip that day's alarms. */
+    SkipReminder,
     UsageStats,
     Reliability,
     About,
@@ -56,6 +59,8 @@ data class SettingsUiState(
     val brightWakeScreen: Boolean = true,
     val theme: PpsThemeMode = PpsThemeMode.System,
     val weeklySummary: Boolean = true,
+    /** The Skip reminder switch (0.1.8), on by default. */
+    val skipReminder: Boolean = true,
     val usageStats: Boolean = false,
     /** A blocking reliability checklist row is not OK (Story 5.4): the non-dismissible `banner-warning`. */
     val reliabilityProblem: Boolean = false,
@@ -122,6 +127,11 @@ sealed interface SettingsIntent {
     ) : SettingsIntent
 
     data class WeeklySummaryToggled(
+        val on: Boolean,
+    ) : SettingsIntent
+
+    /** The "Skip reminder" switch (0.1.8): never locked, stored at once. */
+    data class SkipReminderToggled(
         val on: Boolean,
     ) : SettingsIntent
 

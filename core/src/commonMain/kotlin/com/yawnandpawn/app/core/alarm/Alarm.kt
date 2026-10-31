@@ -16,8 +16,6 @@ import kotlin.time.Instant
  * @property label optional, at most [Alarm.MAX_LABEL_LENGTH] characters.
  * @property requestCode stable, unique PendingIntent request code (AD-4), see [RequestCodes].
  * @property checkMode how a ring uses the alarm's checks (FR-PWK-2): one picked at random, or all in order.
- * @property offerSkip "Offer to skip 2 h before" (Story 7.11, FR-ALM-10): the pre-alarm notification with "Skip this
- *   one". Off by default; turning it on is a weakening change under the commitment lock (`LockedField.OfferSkip`).
  * @property skippedDate the local date (in the zone of the time of the skip) whose occurrence is skipped (Story 7.11), or
  *   null. A past date never matches a later occurrence, so it is never cleared after its day ([nextRing]).
  */
@@ -51,7 +49,6 @@ data class Alarm(
     val motivation: Motivation = Motivation.None,
     /** When the message plays (Story 7.5): after the check or mixed into the ring; never a locked field. */
     val motivationMode: MotivationMode = MotivationMode.AfterImUp,
-    val offerSkip: Boolean = false,
     val skippedDate: LocalDate? = null,
 ) {
     /** When this alarm rings, for [nextOccurrence] (Story 1.6). */
@@ -117,7 +114,7 @@ val AlarmListOrder: Comparator<Alarm> =
 
 /**
  * True when [other] rings exactly like this alarm: every setting the user chooses is equal (time, repeat days, label,
- * sound, volume, gradual volume, vibration, snooze length, check mode, motivation and when it plays, "Offer to skip"). The
+ * sound, volume, gradual volume, vibration, snooze length, check mode, motivation and when it plays). The
  * id, request code, on/off state, timestamps, a skipped date, the ramp start (fixed, not a user setting) and the alarm's
  * own quiet time and its vibration (unused since 0.1.7, not shown) do not count. The checks themselves are stored apart,
  * so `SaveAlarm` compares them too. Saving a new alarm identical to a stored one switches that one on instead of storing
@@ -134,5 +131,4 @@ fun Alarm.hasSameSettingsAs(other: Alarm): Boolean =
         snoozeLengthMinutes == other.snoozeLengthMinutes &&
         checkMode == other.checkMode &&
         motivation == other.motivation &&
-        motivationMode == other.motivationMode &&
-        offerSkip == other.offerSkip
+        motivationMode == other.motivationMode

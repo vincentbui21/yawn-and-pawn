@@ -318,7 +318,8 @@ class RestoreEntryPointsTest {
     @Test
     fun `restore is called only from WakeService, MainActivity, WakeActivity and an empty-session resume - never a receiver`() {
         // YawnAndPawnApp.kt restores only for an unfinished "Delete all data" with no session stored (Story 5.9 review):
-        // restoring nothing runs no entry effect and starts no service, so Story 2.1 still holds.
+        // restoring nothing runs no entry effect and starts no service, so Story 2.1 still holds. The Skip reminder's action
+        // receiver (0.1.8) goes through that same one empty-session restore (`RestoreIfIdle`), never a restore of its own.
         val allowed = setOf("WakeService.kt", "MainActivity.kt", "WakeActivity.kt", "YawnAndPawnApp.kt")
         val sources =
             listOf(File("src/main/kotlin"), File("src/debug/kotlin")).flatMap { root ->

@@ -31,6 +31,7 @@ import com.yawnandpawn.app.core.error.DomainError
 import com.yawnandpawn.app.core.error.Outcome
 import com.yawnandpawn.app.core.log.LogEvent
 import com.yawnandpawn.app.core.log.Logger
+import com.yawnandpawn.app.core.reminder.SkipReminderTask
 import com.yawnandpawn.app.core.session.UserLockState
 import com.yawnandpawn.app.core.summary.WeeklySummaryTask
 import com.yawnandpawn.app.core.work.BackgroundTask
@@ -207,21 +208,38 @@ class BackgroundWorkWiringTest {
     }
 
     @Test
-    fun `the app registers the pre-alarm task`() {
+    fun `the app registers the Skip reminder task, and an old pre-alarm job (Story 7-11) does nothing`() {
         start()
+        val tasks = GlobalContext.get().get<BackgroundTasks>()
 
-        assertNotNull(GlobalContext.get().get<BackgroundTasks>().taskFor(BackgroundTaskKind.PreAlarm, "alarm-1"))
+        assertIs<SkipReminderTask>(tasks.taskFor(BackgroundTaskKind.SkipReminder))
+        val legacy = assertNotNull(tasks.taskFor(BackgroundTaskKind.PreAlarm, "alarm-1"))
+        assertEquals(TaskResult.Done, runBlocking { legacy.run() })
+        assertEquals(
+            ListenableWorker.Result.success(),
+            runBlocking {
+                TestListenableWorkerBuilder<BackgroundTaskWorker>(app)
+                    .setInputData(
+                        workDataOf(
+                            BackgroundTaskWorker.KEY_TASK to BackgroundTaskKind.PreAlarm.name,
+                            BackgroundTaskWorker.KEY_ALARM_ID to "alarm-1",
+                        ),
+                    ).build()
+                    .doWork()
+            },
+        )
     }
 
     @Test
-    fun `the pre-alarm calls never reach WorkManager while the user is locked`() {
+    fun `the Skip reminder and pre-alarm calls never reach WorkManager while the user is locked`() {
         val work =
             AndroidBackgroundWork(app, FakeUserLockState(unlocked = false), log) { fail("WorkManager must not start before the unlock") }
 
         assertEquals(
-            Outcome.Failure(DomainError.BackgroundWorkFailure("user locked: pre-alarm-a")),
-            work.schedulePreAlarm("a", 1.hours),
+            Outcome.Failure(DomainError.BackgroundWorkFailure("user locked: skip-reminder")),
+            work.scheduleSkipReminder(1.hours, SchedulePolicy.Replace),
         )
+        assertEquals(Outcome.Failure(DomainError.BackgroundWorkFailure("user locked: skip-reminder")), work.cancelSkipReminder())
         assertEquals(Outcome.Failure(DomainError.BackgroundWorkFailure("user locked: pre-alarm-a")), work.cancelPreAlarm("a"))
     }
 

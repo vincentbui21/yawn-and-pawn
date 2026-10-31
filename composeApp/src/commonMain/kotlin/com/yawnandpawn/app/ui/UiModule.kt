@@ -9,7 +9,6 @@ import com.yawnandpawn.app.ui.editor.EditorSoundFiles
 import com.yawnandpawn.app.ui.home.AlarmActions
 import com.yawnandpawn.app.ui.home.HomeViewModel
 import com.yawnandpawn.app.ui.nav.AppOpenRequests
-import com.yawnandpawn.app.ui.nav.SkipRequests
 import com.yawnandpawn.app.ui.onboarding.ChecklistScreens
 import com.yawnandpawn.app.ui.onboarding.FirstAlarmEditors
 import com.yawnandpawn.app.ui.onboarding.FirstAlarmSources
@@ -25,6 +24,7 @@ import com.yawnandpawn.app.ui.reliability.ManufacturerGuidanceViewModel
 import com.yawnandpawn.app.ui.reliability.ReliabilityViewModel
 import com.yawnandpawn.app.ui.settings.DefaultSettingSetters
 import com.yawnandpawn.app.ui.settings.SettingsViewModel
+import com.yawnandpawn.app.ui.settings.SkipReminderSwitch
 import com.yawnandpawn.app.ui.settings.WeeklySummarySwitch
 import com.yawnandpawn.app.ui.you.YouViewModel
 import kotlinx.datetime.LocalDate
@@ -40,16 +40,14 @@ import org.koin.dsl.module
  * `ConfirmMakerGuidance`, `ConsentStore`, `SetAnalyticsConsent`, `EvaluateReliability`, `ReliabilitySettings`,
  * `CameraPermission`, `RecordingRepository`, `CustomSoundRepository`, `SoundFilePicker`, `SoundImporter`,
  * `ScheduleTestAlarm`, `OnboardingRepository`, `ReliabilityRecords`, the onboarding use cases, `OnboardingTestNote`,
- * `ObserveProgress`, `WeeklySummaryStore`, `SetWeeklySummary`, `SkipNextAlarm` and `UndoSkip`)
+ * `ObserveProgress`, `WeeklySummaryStore`, `SetWeeklySummary`, `SkipReminderStore`, `SetSkipReminder` and `UndoSkip`)
  * are bound by :androidApp and :data.
  */
 val uiModule =
     module {
         // Story 6.8: the tab a notification asks the app to open (the weekly summary opens Progress), one per app.
         single { AppOpenRequests() }
-        // Story 7.11: the alarm a pre-alarm notification's "Skip this one" asks to skip, one per app.
-        single { SkipRequests() }
-        factory { AlarmActions(get(), get(), get(), skipNext = get(), undoSkip = get()) }
+        factory { AlarmActions(get(), get(), get(), undoSkip = get()) }
         // Story 5.12: Home's note after "Skip for now" on onboarding's test alarm. Story 6.3: the hero's stats.
         viewModel { HomeViewModel(get(), get(), get(), get(), get(), get(), get(), get(), testNote = get(), progress = get()) }
         viewModel { PurchaseHistoryViewModel(get(), get(), get(), get(), get()) }
@@ -77,6 +75,8 @@ val uiModule =
                 reliability = get(),
                 // Story 6.8: the "Weekly summary" switch.
                 weeklySummary = WeeklySummarySwitch(store = get(), set = get()),
+                // 0.1.8: the "Skip reminder" switch.
+                skipReminder = SkipReminderSwitch(store = get(), set = get()),
             )
         }
         viewModel { ProblemWithChargeViewModel(get(), get(), get(), get(), get()) }

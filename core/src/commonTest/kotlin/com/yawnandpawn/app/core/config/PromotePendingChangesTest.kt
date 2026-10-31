@@ -126,6 +126,18 @@ class PromotePendingChangesTest {
         }
 
     @Test
+    fun `a leftover Offer to skip (Story 7_11, gone since 0_1_8) is only removed, the alarm is left as it is`() =
+        runTest {
+            alarms.alarms.value += "a" to alarm
+            pending.changes.value = listOf(change(SettingValue.OfferSkip(true), "a"))
+
+            assertEquals(Outcome.Success(1), promote())
+
+            assertEquals(alarm, alarms.alarms.value.getValue("a"))
+            assertTrue(pending.changes.value.isEmpty())
+        }
+
+    @Test
     fun `an alarm turned off still takes the change, a deleted alarm drops it`() =
         runTest {
             alarms.alarms.value += "a" to alarm.copy(enabled = false)

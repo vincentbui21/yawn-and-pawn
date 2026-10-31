@@ -60,6 +60,8 @@ import com.yawnandpawn.app.ui.resources.settings_quiet_time
 import com.yawnandpawn.app.ui.resources.settings_quiet_time_note
 import com.yawnandpawn.app.ui.resources.settings_quiet_time_value
 import com.yawnandpawn.app.ui.resources.settings_reliability
+import com.yawnandpawn.app.ui.resources.settings_skip_reminder
+import com.yawnandpawn.app.ui.resources.settings_skip_reminder_body
 import com.yawnandpawn.app.ui.resources.settings_snooze
 import com.yawnandpawn.app.ui.resources.settings_support
 import com.yawnandpawn.app.ui.resources.settings_terms
@@ -199,7 +201,7 @@ private fun WakeCard(
     )
 }
 
-/** Appearance, weekly summary and usage stats, and "Make sure alarms ring" with "About" in one card. */
+/** Appearance; weekly summary, Skip reminder and usage stats; and "Make sure alarms ring" with "About" in one card. */
 @Composable
 private fun GeneralCards(
     state: SettingsUiState,
@@ -221,25 +223,7 @@ private fun GeneralCards(
                 },
             ),
     )
-    GroupCardOf(
-        rows =
-            listOfNotNull(
-                rowIf(SettingsRow.WeeklySummary in rows) {
-                    SwitchRow(
-                        label = stringResource(Res.string.settings_weekly_summary),
-                        checked = state.weeklySummary,
-                        onCheckedChange = { onIntent(SettingsIntent.WeeklySummaryToggled(it)) },
-                    )
-                },
-                rowIf(SettingsRow.UsageStats in rows) {
-                    SwitchRow(
-                        label = stringResource(Res.string.settings_usage_stats),
-                        checked = state.usageStats,
-                        onCheckedChange = { onIntent(SettingsIntent.UsageStatsToggled(it)) },
-                    )
-                },
-            ),
-    )
+    GeneralSwitches(state = state, onIntent = onIntent, rows = rows)
     GroupCardOf(
         rows =
             listOfNotNull(
@@ -253,6 +237,42 @@ private fun GeneralCards(
                     NavRow(
                         label = stringResource(Res.string.settings_about),
                         onClick = { onIntent(SettingsIntent.AboutClicked) },
+                    )
+                },
+            ),
+    )
+}
+
+/** Weekly summary, Skip reminder (0.1.8, with its grey subtitle) and usage stats, in one card. */
+@Composable
+private fun GeneralSwitches(
+    state: SettingsUiState,
+    onIntent: (SettingsIntent) -> Unit,
+    rows: Set<SettingsRow>,
+) {
+    GroupCardOf(
+        rows =
+            listOfNotNull(
+                rowIf(SettingsRow.WeeklySummary in rows) {
+                    SwitchRow(
+                        label = stringResource(Res.string.settings_weekly_summary),
+                        checked = state.weeklySummary,
+                        onCheckedChange = { onIntent(SettingsIntent.WeeklySummaryToggled(it)) },
+                    )
+                },
+                rowIf(SettingsRow.SkipReminder in rows) {
+                    SwitchRow(
+                        label = stringResource(Res.string.settings_skip_reminder),
+                        subtitle = stringResource(Res.string.settings_skip_reminder_body),
+                        checked = state.skipReminder,
+                        onCheckedChange = { onIntent(SettingsIntent.SkipReminderToggled(it)) },
+                    )
+                },
+                rowIf(SettingsRow.UsageStats in rows) {
+                    SwitchRow(
+                        label = stringResource(Res.string.settings_usage_stats),
+                        checked = state.usageStats,
+                        onCheckedChange = { onIntent(SettingsIntent.UsageStatsToggled(it)) },
                     )
                 },
             ),

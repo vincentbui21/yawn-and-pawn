@@ -86,7 +86,6 @@ import com.yawnandpawn.app.ui.home.HomeViewModel
 import com.yawnandpawn.app.ui.links.AppLinks
 import com.yawnandpawn.app.ui.links.ExternalLinks
 import com.yawnandpawn.app.ui.nav.AppOpenRequests
-import com.yawnandpawn.app.ui.nav.SkipRequests
 import com.yawnandpawn.app.ui.onboarding.FirstAlarmEditors
 import com.yawnandpawn.app.ui.payments.PaymentsViewModel
 import com.yawnandpawn.app.ui.progress.ProgressViewModel
@@ -137,8 +136,6 @@ class UiModuleTest {
         val app = koinApplication { modules(uiModule) }
 
         assertSame(app.koin.get<AppOpenRequests>(), app.koin.get<AppOpenRequests>())
-        // Story 7.11: the skip requests too.
-        assertSame(app.koin.get<SkipRequests>(), app.koin.get<SkipRequests>())
         app.close()
     }
 

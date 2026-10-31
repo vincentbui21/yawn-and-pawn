@@ -216,6 +216,12 @@
             android:directBootAware="true"
             android:exported="false" />
 
+        <!-- The Skip reminder's actions (0.1.8): "Skip today's alarms" and "Keep". Only the app's own PendingIntents reach it;
+             it never opens the app. -->
+        <receiver
+            android:name=".android.reminder.SkipReminderActionReceiver"
+            android:exported="false" />
+
         <!-- rescheduleAll() and the session slot on the system events that clear or shift alarms; all protected system
              broadcasts. LOCKED_BOOT_COMPLETED (Story 2.2) arrives before the first unlock; both databases are
              device-protected, so the slot is armed then. -->

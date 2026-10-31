@@ -14,8 +14,9 @@ import kotlin.time.Instant
 
 /**
  * The settings the commitment lock covers (PRD §6.2 lists fee, checks, grace and snoozes; Epic 7 adds "Offer to skip"):
- * [BaseFee], [MaxSnoozes] and [QuietTime] are global, [Checks] and [OfferSkip] belong to an alarm. [GraceSeconds] is the
- * per-alarm quiet time of before 0.1.7: old rows may still hold it, but no session reads it. Snooze length, sound, volume,
+ * [BaseFee], [MaxSnoozes] and [QuietTime] are global, [Checks] belongs to an alarm. [GraceSeconds] is the per-alarm
+ * quiet time of before 0.1.7 and [OfferSkip] Story 7.11's per-alarm "Offer to skip" of before 0.1.8: old rows may still
+ * hold them, but nothing reads them. Snooze length, sound, volume,
  * label, repeat days and "Vibrate during quiet time" are never locked. The names are stored (`pending_change.field`), so
  * they never change.
  */
@@ -27,7 +28,10 @@ enum class LockedField(
     GraceSeconds(global = false),
     Checks(global = false),
 
-    /** "Offer to skip 2 h before" (Story 7.11): turning it on weakens. */
+    /**
+     * "Offer to skip 2 h before" (Story 7.11). Legacy since 0.1.8 (one global Skip reminder, never locked): kept so a stored
+     * row still decodes; promoting one only removes it.
+     */
     OfferSkip(global = false),
 
     /** The global quiet time (0.1.7, owner decision 2026-10-30): a longer one weakens. */
@@ -84,7 +88,7 @@ sealed interface SettingValue {
         override val field: LockedField get() = LockedField.Checks
     }
 
-    /** An alarm's "Offer to skip 2 h before" (Story 7.11). */
+    /** An alarm's "Offer to skip 2 h before" (Story 7.11); legacy since 0.1.8, like [LockedField.OfferSkip]. */
     @Serializable
     @SerialName("OfferSkip")
     data class OfferSkip(

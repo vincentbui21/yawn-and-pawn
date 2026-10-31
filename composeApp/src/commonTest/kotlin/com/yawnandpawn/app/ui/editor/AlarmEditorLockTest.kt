@@ -254,11 +254,12 @@ class AlarmEditorLockTest {
             val viewModel = viewModel()
             val effects = effectsOf(viewModel)
 
-            viewModel.onIntent(EditorIntent.OfferSkipToggled(true))
+            viewModel.onIntent(EditorIntent.CheckSetupClicked(CheckType.Math))
+            viewModel.onIntent(EditorIntent.CheckSetup(CheckSetupIntent.DifficultySelected(Difficulty.Easy)))
             viewModel.onIntent(EditorIntent.SaveClicked)
 
             assertEquals(listOf<EditorEffect>(EditorEffect.CloseSavedUnderLock(WeakeningNote(LocalTime(7, 30), today = true))), effects)
-            assertEquals(listOf(PendingChange(id, SettingValue.OfferSkip(true), Occurrence(id, sevenThirty))), pending.current)
+            assertEquals(listOf(waitingEasier()), pending.current)
         }
 
     @Test
@@ -288,77 +289,12 @@ class AlarmEditorLockTest {
 
     // Fee ladder ---------------------------------------------------------------------------------------------------
 
-    // Offer to skip 2 h before (Story 7.11) -------------------------------------------------------------------------
-
-    @Test
-    fun `the app's editor shows the Offer to skip switch, off for a new alarm`() =
-        runTest(dispatcher) {
-            val viewModel = viewModel(alarmId = null)
-
-            assertTrue(
-                viewModel.state.value.full!!
-                    .showOfferSkip,
-            )
-            assertFalse(viewModel.state.value.form.offerSkip)
-        }
-
-    @Test
-    fun `turning Offer to skip on within 8 h saves it pending, with the note, and closes with the note for Home`() =
-        runTest(dispatcher) {
-            storeAlarm()
-            val viewModel = viewModel()
-            val effects = effectsOf(viewModel)
-
-            viewModel.onIntent(EditorIntent.OfferSkipToggled(true))
-            viewModel.onIntent(EditorIntent.SaveClicked)
-
-            assertEquals(listOf(PendingChange(id, SettingValue.OfferSkip(true), Occurrence(id, sevenThirty))), pending.current)
-            assertFalse((alarms.repository.get(id) as Outcome.Success).value.offerSkip, "the row keeps the live value")
-            assertEquals(listOf<EditorEffect>(EditorEffect.CloseSavedUnderLock(WeakeningNote(LocalTime(7, 30)))), effects)
-        }
-
-    @Test
-    fun `a pending Offer to skip opens switched on with the note under the cards`() =
-        runTest(dispatcher) {
-            storeAlarm()
-            pending.put(PendingChange(id, SettingValue.OfferSkip(true), Occurrence(id, sevenThirty)))
-            val viewModel = viewModel()
-
-            assertTrue(viewModel.state.value.form.offerSkip)
-            assertEquals(
-                WeakeningNote(LocalTime(7, 30), today = false),
-                viewModel.state.value.full
-                    ?.weakeningNote,
-            )
-
-            viewModel.onIntent(EditorIntent.OfferSkipToggled(false))
-            assertNull(
-                viewModel.state.value.full
-                    ?.weakeningNote,
-            )
-        }
-
-    @Test
-    fun `turning Offer to skip off applies at once`() =
-        runTest(dispatcher) {
-            assertTrue(alarms.save(draft.copy(offerSkip = true)) is Outcome.Success)
-            clock.set(lateEvening)
-            val viewModel = viewModel()
-            val effects = effectsOf(viewModel)
-            assertTrue(viewModel.state.value.form.offerSkip)
-
-            viewModel.onIntent(EditorIntent.OfferSkipToggled(false))
-            viewModel.onIntent(EditorIntent.SaveClicked)
-
-            assertFalse((alarms.repository.get(id) as Outcome.Success).value.offerSkip)
-            assertTrue(pending.current.isEmpty())
-            assertEquals(listOf<EditorEffect>(EditorEffect.Close), effects)
-        }
+    // Story 7.11's skip in the editor's header (0.1.8: "Offer to skip 2 h before" is the global Skip reminder now) ----
 
     @Test
     fun `the header's Rings in passes over a skipped next ring`() =
         runTest(dispatcher) {
-            assertTrue(alarms.save(draft.copy(offerSkip = true)) is Outcome.Success)
+            assertTrue(alarms.save(draft) is Outcome.Success)
             clock.set(lateEvening)
             assertTrue(alarms.skip(id) is Outcome.Success)
 

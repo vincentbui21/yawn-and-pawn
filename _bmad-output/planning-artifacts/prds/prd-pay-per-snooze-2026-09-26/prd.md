@@ -212,7 +212,7 @@ IDs are stable so stories can reference them; new IDs are added at the end of ea
 
 **Priority tags** (MoSCoW for the launch build): **[Must]** ships at launch · **[Should]** ships at launch unless the build runs late · **[Could]** first to drop.
 
-**Cut line.** Launch needs every [Must]. If the Ralph build runs past its 4-week budget (§13), cut in this order: (1) all [Could]: FR-SND-7 "Mix into alarm", FR-ALM-10 skip, FR-PWK-13 printable QR; (2) House Hunt (FR-PWK-6) — dropped immediately if Spike S3 is marginal; (3) FR-PRG-3 calendar view; (4) FR-PRG-5 weekly summary; (5) FR-SND-6 custom audio file; (6) FR-SND-3/FR-SND-4 motivation recordings. Minimum check set at launch: Math, Word Unscramble, Memory Sequence, QR/Barcode.
+**Cut line.** Launch needs every [Must]. If the Ralph build runs past its 4-week budget (§13), cut in this order: (1) all [Could]: FR-SND-7 "Mix into alarm", FR-ALM-10 Skip reminder, FR-PWK-13 printable QR; (2) House Hunt (FR-PWK-6) — dropped immediately if Spike S3 is marginal; (3) FR-PRG-3 calendar view; (4) FR-PRG-5 weekly summary; (5) FR-SND-6 custom audio file; (6) FR-SND-3/FR-SND-4 motivation recordings. Minimum check set at launch: Math, Word Unscramble, Memory Sequence, QR/Barcode.
 
 ### 7.1 Alarms (ALM)
 - **FR-ALM-1** [Must] Create, edit, delete, enable/disable multiple alarms.
@@ -224,7 +224,11 @@ IDs are stable so stories can reference them; new IDs are added at the end of ea
 - **FR-ALM-7** [Must] Home screen shows the next alarm ("Rings in 7 h 12 min").
 - **FR-ALM-8** [Must] "Test alarm" rings the full flow (sound, checks, grace window) **without any payment**; the snooze button shows the price but is disabled with the label "Test · no charge".
 - **FR-ALM-9** [Must] If a **single ring** continues for 30 minutes with no interaction (any tap on a wake screen), the alarm stops and the session is logged as Missed (prevents endless ringing if the phone is left at home). Each interaction restarts the 30-minute timer; each re-ring starts a new timer; snooze time never counts; the timer pauses during a call (FR-SES-8). Timers use monotonic time (`elapsedRealtime`), not the wall clock (reboot handling: §6.4).
-- **FR-ALM-10** [Could] *(Approved by owner 2026-09-26, Q9 closed)* A pre-alarm notification (optional, off by default) lets the user skip the next occurrence up to 2 hours before — skipping is free and logged.
+- **FR-ALM-10** [Could] *(Approved by owner 2026-09-26, Q9 closed; changed in 0.1.8, owner decision 2026-10-31)* A global **Skip reminder** lets the user skip a day's alarms from a notification. Skipping is free and logged (one Skipped history row per alarm).
+  - **Setting:** a switch "Skip reminder" in Settings, on by default. It is not a locked setting: it can be turned on or off at any time, even inside the commitment lock window (skipping is free and allowed inside the lock window, and switching an alarm off under the lock is already allowed with a confirm). Turning it off cancels the scheduled reminder and removes a posted one.
+  - **When:** one notification per local date, 2 hours before that date's first enabled, not-skipped alarm ring. Once that first ring has passed, there is no reminder for that date. If the reminder time has already passed when it is scheduled or runs (a new alarm, a late job), it posts at once only if more than 15 minutes remain; otherwise that date gets none. Never posted while a wake session is active, and never twice for the same date.
+  - **Action:** "Skip today's alarms" (without opening the app) skips every enabled alarm whose next ring is on that date and still to come. "Keep" dismisses the notification. During an active session nothing is skipped. Home then shows each skipped alarm with "Next ring skipped" and "Don't skip".
+  - **Replaces** the per-alarm "Offer to skip 2 h before" option (off by default, under the commitment lock) and its Home skip dialog from Story 7.11.
 - **FR-ALM-11** [Must] Alarms ring after an **overnight reboot even before the phone is unlocked** (Direct Boot: `directBootAware` receiver for `LOCKED_BOOT_COMPLETED`, alarm schedule, frozen session config and active session in device-protected storage). Before first unlock: checks that need normal storage (House Hunt, QR references, custom sounds, recordings) are replaced by Math + the default built-in sound (Direct Boot substitution), and **Snooze is unavailable**, shown disabled with "Unlock your phone to snooze". Once the phone is unlocked, Snooze becomes available; the substituted check stays for the current ring.
 - **FR-ALM-12** [Must] On Android 12–12L (API 31–32) request `SCHEDULE_EXACT_ALARM` (manifest `maxSdkVersion="32"`) with a `canScheduleExactAlarms()` check; API 33+ uses `USE_EXACT_ALARM`.
 
@@ -474,7 +478,7 @@ Every epic ends with a device-verification checklist story (NFR-11).
 - **Q6** ~~Set Play target audience to 18+?~~ Decided: yes (NFR-5), with the clarification that it doesn't prevent minors paying.
 - **Q7** ~~Second language?~~ Decided 2026-09-26: English only.
 - **Q8** ~~App name?~~ Decided 2026-09-26: **Yawn & Pawn**, package id `com.yawnandpawn.app`. No same-name app found on Google Play at decision time; a trademark search is still recommended before launch.
-- **Q9** ~~Allow skipping the next alarm?~~ Decided 2026-09-26: keep FR-ALM-10 as written, [Could] priority.
+- **Q9** ~~Allow skipping the next alarm?~~ Decided 2026-09-26: keep FR-ALM-10 as written, [Could] priority. Changed 2026-10-31 (0.1.8): one global Skip reminder replaces the per-alarm option, see FR-ALM-10.
 
 Deferred review findings (each with a revisit condition):
 

@@ -59,7 +59,10 @@ data class AlarmEntity(
     /** The core `Motivation` as text, `none`, `random` or `recording:{id}` (schema v12, Story 7.2). */
     @ColumnInfo(name = "motivation", defaultValue = "none")
     val motivation: String = "none",
-    /** "Offer to skip 2 h before" (schema v13, Story 7.11); rows stored before v13 migrate to off. */
+    /**
+     * "Offer to skip 2 h before" (schema v13, Story 7.11); rows stored before v13 migrate to off. Unused since 0.1.8 (one
+     * global Skip reminder): kept, written off and never read, like the per-alarm quiet time of before 0.1.7.
+     */
     @ColumnInfo(name = "offer_skip", defaultValue = "0")
     val offerSkip: Boolean = false,
     /** The skipped occurrence's local date, ISO `YYYY-MM-DD` (schema v13, Story 7.11); null when none is skipped. */

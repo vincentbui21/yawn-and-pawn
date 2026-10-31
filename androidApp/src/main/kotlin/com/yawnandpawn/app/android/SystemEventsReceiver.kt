@@ -31,6 +31,9 @@ import kotlin.coroutines.cancellation.CancellationException
  * Story 6.8: after a boot, a clock or zone change and an app update, once the alarms and the slot are re-armed, the
  * weekly summary work is re-aligned to the new local Sunday 19:00 ([WeeklySummaryScheduler.sync]; locked, it does
  * nothing). Its failure is logged and never touches the alarms.
+ *
+ * 0.1.8: the Skip reminder follows inside `rescheduleAll` (its date and delay in the new zone; locked, it schedules
+ * nothing and the boot after the unlock syncs again).
  */
 class SystemEventsReceiver :
     BroadcastReceiver(),

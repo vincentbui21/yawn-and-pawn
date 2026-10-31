@@ -97,7 +97,7 @@ class AppDatabaseSkipTest {
                 assertEquals(1, database.purchaseRecordDao().count())
                 assertEquals(1, database.recordingDao().count())
 
-                val skipped = alarm.copy(offerSkip = true, skippedDate = LocalDate(2027, 3, 4))
+                val skipped = alarm.copy(skippedDate = LocalDate(2027, 3, 4))
                 assertEquals(Outcome.Success(Unit), alarms.upsert(skipped))
                 assertEquals(Outcome.Success(skipped), alarms.get("a"))
                 val skip =

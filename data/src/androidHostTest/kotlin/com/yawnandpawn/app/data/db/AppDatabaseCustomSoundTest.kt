@@ -96,7 +96,6 @@ class AppDatabaseCustomSoundTest {
                 val alarms = RoomAlarmRepository(database.alarmDao())
                 val skippedSecond =
                     second.copy(
-                        offerSkip = true,
                         skippedDate = LocalDate(2027, 3, 4),
                         motivation = Motivation.Random,
                     )

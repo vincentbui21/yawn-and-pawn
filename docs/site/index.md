@@ -141,7 +141,7 @@ layout: home
 <div class="feature" data-reveal><span class="feature-dot" aria-hidden="true"></span><div class="feature-text"><h3 class="feature-title">Your own voice</h3><p class="card-body">Record a message to yourself and hear it once you are up, or mixed into the alarm.</p></div></div>
 <div class="feature" data-reveal><span class="feature-dot" aria-hidden="true"></span><div class="feature-text"><h3 class="feature-title">Your own sound</h3><p class="card-body">Pick a song or sound from your phone. If the file goes missing, a built-in sound plays instead.</p></div></div>
 <div class="feature" data-reveal><span class="feature-dot" aria-hidden="true"></span><div class="feature-text"><h3 class="feature-title">Streaks and progress</h3><p class="card-body">See your mornings on a calendar and keep your streak of on-time days going.</p></div></div>
-<div class="feature" data-reveal><span class="feature-dot" aria-hidden="true"></span><div class="feature-text"><h3 class="feature-title">Skip one morning</h3><p class="card-body">Day off? A reminder before the alarm lets you skip just that one morning, without turning the alarm off.</p></div></div>
+<div class="feature" data-reveal><span class="feature-dot" aria-hidden="true"></span><div class="feature-text"><h3 class="feature-title">Skip one morning</h3><p class="card-body">Up early? A reminder 2 hours before your first alarm lets you skip the day's alarms, for free.</p></div></div>
 </div>
 </section>
 

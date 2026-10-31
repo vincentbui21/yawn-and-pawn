@@ -22,8 +22,8 @@ import kotlin.time.Duration.Companion.minutes
 import kotlin.time.Instant
 
 /**
- * Story 7.11: "Skip this one" confirmed ([SkipNextAlarm]) and "Don't skip" ([UndoSkip]), with the system alarm, the
- * Skipped history row and the pre-alarm job. Monday 2027-03-08 22:00 UTC; a daily 07:00 alarm's next ring is Tuesday.
+ * Story 7.11: one alarm skipped ([SkipNextAlarm]) and "Don't skip" ([UndoSkip]), with the system alarm, the Skipped
+ * history row and the Skip reminder (0.1.8). Monday 2027-03-08 22:00 UTC; a daily 07:00 alarm's next ring is Tuesday.
  */
 class SkipNextAlarmTest {
     private val monday = Instant.parse("2027-03-08T22:00:00Z")
@@ -34,7 +34,6 @@ class SkipNextAlarmTest {
     private fun daily(
         id: String = "a",
         enabled: Boolean = true,
-        offerSkip: Boolean = true,
         time: LocalTime = LocalTime(7, 0),
         repeatDays: Set<DayOfWeek> = DayOfWeek.entries.toSet(),
     ) = Alarm(
@@ -42,7 +41,6 @@ class SkipNextAlarmTest {
         time = time,
         repeatDays = repeatDays,
         enabled = enabled,
-        offerSkip = offerSkip,
         requestCode = 1000,
         createdAt = Instant.parse("2027-03-01T00:00:00Z"),
         updatedAt = Instant.parse("2027-03-01T00:00:00Z"),
@@ -72,8 +70,8 @@ class SkipNextAlarmTest {
             assertFalse(row.fallbackUsed)
             assertEquals(monday, row.endedAt)
             assertFalse(isCounted(row), "a skip never counts toward rates or streaks")
-            // The pre-alarm job follows: 2 h before Wednesday's ring.
-            assertEquals(wednesday7 - 2.hours - monday, f.work.pending.getValue("a"))
+            // The Skip reminder follows: 2 h before Wednesday's ring, the first one still to come.
+            assertEquals(wednesday7 - 2.hours - monday, f.work.reminder)
         }
 
     @Test
@@ -88,7 +86,7 @@ class SkipNextAlarmTest {
             assertNull(f.stored("a").skippedDate)
             assertEquals(Call.Cancel(1000), f.scheduler.calls.last())
             assertEquals(tuesday7, f.rows().single().scheduledAt)
-            assertEquals(PreAlarmWorkCall.Cancel("a"), f.work.calls.last())
+            assertNull(f.work.reminder, "no alarm left, so no reminder")
         }
 
     @Test
@@ -186,7 +184,7 @@ class SkipNextAlarmTest {
             assertNull(f.stored("a").skippedDate)
             assertEquals(Call.Schedule("a", 1000, tuesday7), f.scheduler.calls.last())
             assertTrue(f.rows().isEmpty())
-            assertEquals(tuesday7 - 2.hours - monday, f.work.pending.getValue("a"))
+            assertEquals(tuesday7 - 2.hours - monday, f.work.reminder)
         }
 
     @Test
@@ -247,18 +245,6 @@ class SkipNextAlarmTest {
         }
 
     @Test
-    fun `an alarm whose stored Offer to skip is off (also while turning it on waits under the lock) is not skipped`() =
-        runTest {
-            val f = SkipFixture(monday)
-            f.store(daily(offerSkip = false))
-
-            assertEquals(Outcome.Success(SkipResult.NothingToSkip), f.skip("a"))
-
-            assertNull(f.stored("a").skippedDate)
-            assertTrue(f.rows().isEmpty())
-        }
-
-    @Test
     fun `a skip of an occurrence that is no longer the next one skips nothing`() =
         runTest {
             val f = SkipFixture(monday)
@@ -271,4 +257,37 @@ class SkipNextAlarmTest {
             assertEquals(Outcome.Success(SkipResult.Skipped), f.skip("a", tuesday7))
             assertEquals(tuesday, f.stored("a").skippedDate)
         }
+
+    // nextRing and isNextOccurrenceSkipped (Story 7.11; moved here from the pre-alarm tests in 0.1.8) --------------------
+
+    @Test
+    fun `a DST spring Sunday is skipped by its date and the next ring is Monday's`() {
+        val helsinki = TimeZone.of("Europe/Helsinki")
+        // Sunday 2027-03-28: 03:00 jumps to 04:00, so a 03:30 alarm rings at 04:30 EEST (01:30Z).
+        val alarm = daily(time = LocalTime(3, 30)).copy(skippedDate = LocalDate(2027, 3, 28))
+        val saturdayNight = Instant.parse("2027-03-27T20:00:00Z")
+
+        assertEquals(Instant.parse("2027-03-28T01:30:00Z"), nextOccurrence(alarm.toRule(), saturdayNight, helsinki))
+        assertEquals(Instant.parse("2027-03-29T00:30:00Z"), nextRing(alarm, saturdayNight, helsinki))
+        assertTrue(alarm.isNextOccurrenceSkipped(saturdayNight, helsinki))
+    }
+
+    @Test
+    fun `a DST autumn Sunday is skipped by its date and the next ring is Monday's`() {
+        val helsinki = TimeZone.of("Europe/Helsinki")
+        // Sunday 2027-10-31: 04:00 goes back to 03:00, so 03:30 happens twice; only the earlier (00:30Z) rings.
+        val alarm = daily(time = LocalTime(3, 30)).copy(skippedDate = LocalDate(2027, 10, 31))
+        val saturdayNight = Instant.parse("2027-10-30T20:00:00Z")
+
+        assertEquals(Instant.parse("2027-10-31T00:30:00Z"), nextOccurrence(alarm.toRule(), saturdayNight, helsinki))
+        assertEquals(Instant.parse("2027-11-01T01:30:00Z"), nextRing(alarm, saturdayNight, helsinki))
+    }
+
+    @Test
+    fun `a past skipped date skips nothing`() {
+        val alarm = daily().copy(skippedDate = LocalDate(2027, 3, 1))
+
+        assertEquals(tuesday7, nextRing(alarm, Instant.parse("2027-03-09T01:00:00Z"), TimeZone.UTC))
+        assertFalse(alarm.isNextOccurrenceSkipped(Instant.parse("2027-03-09T01:00:00Z"), TimeZone.UTC))
+    }
 }

@@ -68,10 +68,6 @@ import org.koin.compose.koinInject
  * is past those screens, then let go; a screen pushed over a tab closes first ([openRequested]). Under the session lock
  * or onboarding the stack holds no tab, so the request changes nothing and is dropped; under the editor it is dropped
  * too, so no draft is lost.
- *
- * "Skip this one" on a pre-alarm notification ([SkipRequests], Story 7.11) is taken the same way: past those screens it
- * selects Home, which asks "Skip the {time} alarm?" before anything is skipped; under the session lock,
- * onboarding or the editor it is dropped.
  */
 @Composable
 fun AppNavHost(modifier: Modifier = Modifier) {
@@ -86,8 +82,6 @@ fun AppNavHost(modifier: Modifier = Modifier) {
     // Story 6.8: below shownStack on purpose. Its SideEffect has made the stack the session lock or onboarding before this
     // effect runs, so a request can never open a tab past either of them.
     OpenRequestedTab(backStack)
-    // Story 7.11: the alarm whose skip Home asks about, until Home has taken it.
-    val skipRequest = rememberSkipRequest(backStack)
     // The editor's result for Home: its alarm could not be read, so Home shows "Couldn't open this alarm.".
     var openFailed by rememberSaveable { mutableStateOf(false) }
     // The editor's other result (Story 4.6): a weakening change waits under the lock, so Home says until when.
@@ -126,8 +120,6 @@ fun AppNavHost(modifier: Modifier = Modifier) {
                             onSavedUnderLockShown = { savedUnderLock = null },
                             onOpenQrRegistration = { id -> backStack.openEditor(id, scanCode = true) },
                             onOpenReliability = { backStack.openReliability(from = Route.Alarms) },
-                            skipRequest = skipRequest.value,
-                            onSkipRequestShown = { skipRequest.value = null },
                         )
                     }
                     entry<Route.Progress>(metadata = TabMetadata) { ProgressEntry(backStack) }

@@ -23,8 +23,8 @@ enum class ChangeKind {
  *   [ChangeKind.Weakening]; the opposite directions are
  *   [ChangeKind.Strengthening]; an equal value is [ChangeKind.NoChange];
  * - checks: see [classifyChecks];
- * - "Offer to skip" (Story 7.11): off to on is [ChangeKind.Weakening] (a morning can be skipped), on to off
- *   [ChangeKind.Strengthening].
+ * - "Offer to skip" (Story 7.11, a legacy value since 0.1.8, no longer set by anything): off to on is
+ *   [ChangeKind.Weakening], on to off [ChangeKind.Strengthening].
  *
  * [old] and [new] must be values of the same field.
  */

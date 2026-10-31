@@ -70,10 +70,12 @@ internal class WeeklyWork : BackgroundWork {
 
     override fun cancelWeeklySummary(): Outcome<Unit, DomainError> = record(WorkCall.Cancel)
 
-    override fun schedulePreAlarm(
-        alarmId: String,
+    override fun scheduleSkipReminder(
         delay: Duration,
+        policy: SchedulePolicy,
     ): Outcome<Unit, DomainError> = Outcome.Success(Unit)
+
+    override fun cancelSkipReminder(): Outcome<Unit, DomainError> = Outcome.Success(Unit)
 
     override fun cancelPreAlarm(alarmId: String): Outcome<Unit, DomainError> = Outcome.Success(Unit)
 

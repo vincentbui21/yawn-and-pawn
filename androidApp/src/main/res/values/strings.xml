@@ -15,12 +15,18 @@
     <string name="weekly_summary_paid">%1$d on-time mornings, %2$s paid this week.</string>
     <string name="weekly_summary_paid_one">1 on-time morning, %1$s paid this week.</string>
     <string name="weekly_summary_none">0 on-time mornings this week. Next week\'s a fresh start.</string>
-    <!-- The pre-alarm notification (Story 7.11), verbatim from EXPERIENCE.md > Key strings ("Skip next alarm"); the text
-         uses the Home countdown wording. %1$s is the alarm time for the phone's 12/24-hour setting; "{time} alarm" as the
-         title is the epic's text (EXPERIENCE.md Key strings has none), listed for the owner. -->
+    <!-- The Skip reminder notification (0.1.8, owner-approved 2026-10-31), verbatim from EXPERIENCE.md > Key strings.
+         %1$s is the first alarm's time for the phone's 12/24-hour setting; the time left is computed when it is posted. -->
     <string name="notification_channel_upcoming_alarms">Upcoming alarms</string>
-    <string name="pre_alarm_title">%1$s alarm</string>
-    <string name="pre_alarm_rings_in_hours">Rings in %1$d h %2$d min</string>
-    <string name="pre_alarm_rings_in_minutes">Rings in %1$d min</string>
-    <string name="pre_alarm_skip_action">Skip this one</string>
+    <string name="skip_reminder_title">Up already?</string>
+    <string name="skip_reminder_text_hours">Your %1$s alarm rings in %2$d h %3$d min. Skip today\'s alarms?</string>
+    <string name="skip_reminder_text_minutes">Your %1$s alarm rings in %2$d min. Skip today\'s alarms?</string>
+    <string name="skip_reminder_skip">Skip today\'s alarms</string>
+    <string name="skip_reminder_keep">Keep</string>
+    <string name="skip_reminder_done">Today\'s alarms are skipped. No charge.</string>
+    <!-- The same, posted the evening before a first ring between 00:00 and 01:59 (its date is tomorrow at post time). -->
+    <string name="skip_reminder_text_hours_tomorrow">Your %1$s alarm rings in %2$d h %3$d min. Skip tomorrow\'s alarms?</string>
+    <string name="skip_reminder_text_minutes_tomorrow">Your %1$s alarm rings in %2$d min. Skip tomorrow\'s alarms?</string>
+    <string name="skip_reminder_skip_tomorrow">Skip tomorrow\'s alarms</string>
+    <string name="skip_reminder_done_tomorrow">Tomorrow\'s alarms are skipped. No charge.</string>
 </resources>

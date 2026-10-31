@@ -23,6 +23,7 @@ import com.yawnandpawn.app.core.work.BackgroundTaskKind
 import com.yawnandpawn.app.core.work.BackgroundWork
 import com.yawnandpawn.app.core.work.PreAlarmJobs
 import com.yawnandpawn.app.core.work.SchedulePolicy
+import com.yawnandpawn.app.core.work.SkipReminderJobs
 import com.yawnandpawn.app.core.work.WeeklySummaryJobs
 import java.util.concurrent.ExecutionException
 import java.util.concurrent.TimeUnit
@@ -44,9 +45,10 @@ import kotlin.time.Duration
  * constraint, handed over with the caller's [SchedulePolicy] (REPLACE, KEEP or APPEND_OR_REPLACE) and cancelled by
  * name, under the same lock guard and failure boundary as [enqueue].
  *
- * Each alarm's pre-alarm notification (Story 7.11) is one-time unique work [PreAlarmJobs.nameOf] (`pre-alarm-{alarmId}`)
- * with the alarm id as input ([BackgroundTaskWorker.KEY_ALARM_ID]), an initial delay, no network constraint and
- * REPLACE, cancelled by name, under the same guards.
+ * The Skip reminder (0.1.8) is one-time unique work [SkipReminderJobs.NAME] with an initial delay and no network
+ * constraint, handed over like the weekly summary (REPLACE, or chained after its own run), cancelled by name, under the
+ * same guards. Story 7.11's per-alarm pre-alarm jobs ([PreAlarmJobs.nameOf],
+ * `pre-alarm-{alarmId}`) are only cancelled (the update cleanup); nothing enqueues them any more.
  */
 class AndroidBackgroundWork(
     private val context: Context,
@@ -62,7 +64,7 @@ class AndroidBackgroundWork(
     ): Outcome<Unit, DomainError> =
         guarded(WeeklySummaryJobs.NAME) {
             // A run executed again after its process died already chained its successor: a second one would fork the chain.
-            if (policy == SchedulePolicy.AfterRun && successorPending()) return@guarded
+            if (policy == SchedulePolicy.AfterRun && successorPending(WeeklySummaryJobs.NAME)) return@guarded
             val request =
                 OneTimeWorkRequestBuilder<BackgroundTaskWorker>()
                     .setInitialDelay(delay.coerceAtLeast(Duration.ZERO).inWholeMilliseconds, TimeUnit.MILLISECONDS)
@@ -70,46 +72,40 @@ class AndroidBackgroundWork(
                     .setBackoffCriteria(BackoffPolicy.EXPONENTIAL, BACKOFF_SECONDS, TimeUnit.SECONDS)
                     .addTag(TAG)
                     .build()
-            val existing =
-                when (policy) {
-                    SchedulePolicy.Replace -> ExistingWorkPolicy.REPLACE
-                    SchedulePolicy.KeepPending -> ExistingWorkPolicy.KEEP
-                    SchedulePolicy.AfterRun -> ExistingWorkPolicy.APPEND_OR_REPLACE
-                }
-            watch(workManager().enqueueUniqueWork(WeeklySummaryJobs.NAME, existing, request).result, WeeklySummaryJobs.NAME)
+            watch(workManager().enqueueUniqueWork(WeeklySummaryJobs.NAME, existingOf(policy), request).result, WeeklySummaryJobs.NAME)
         }
 
     override fun cancelWeeklySummary(): Outcome<Unit, DomainError> =
         guarded(WeeklySummaryJobs.NAME) { watch(workManager().cancelUniqueWork(WeeklySummaryJobs.NAME).result, WeeklySummaryJobs.NAME) }
 
-    override fun schedulePreAlarm(
-        alarmId: String,
+    override fun scheduleSkipReminder(
         delay: Duration,
+        policy: SchedulePolicy,
     ): Outcome<Unit, DomainError> =
-        guarded(PreAlarmJobs.nameOf(alarmId)) {
+        guarded(SkipReminderJobs.NAME) {
+            // No successor check here (unlike the weekly summary): a run executed again after its process died appends a
+            // second successor to the same chain, whose leaves merge on the next append, and each run only re-syncs.
             val request =
                 OneTimeWorkRequestBuilder<BackgroundTaskWorker>()
                     .setInitialDelay(delay.coerceAtLeast(Duration.ZERO).inWholeMilliseconds, TimeUnit.MILLISECONDS)
-                    .setInputData(
-                        workDataOf(
-                            BackgroundTaskWorker.KEY_TASK to BackgroundTaskKind.PreAlarm.name,
-                            BackgroundTaskWorker.KEY_ALARM_ID to alarmId,
-                        ),
-                    ).addTag(TAG)
+                    .setInputData(workDataOf(BackgroundTaskWorker.KEY_TASK to BackgroundTaskKind.SkipReminder.name))
+                    .addTag(TAG)
                     .build()
-            val name = PreAlarmJobs.nameOf(alarmId)
-            watch(workManager().enqueueUniqueWork(name, ExistingWorkPolicy.REPLACE, request).result, name)
+            watch(workManager().enqueueUniqueWork(SkipReminderJobs.NAME, existingOf(policy), request).result, SkipReminderJobs.NAME)
         }
+
+    override fun cancelSkipReminder(): Outcome<Unit, DomainError> =
+        guarded(SkipReminderJobs.NAME) { watch(workManager().cancelUniqueWork(SkipReminderJobs.NAME).result, SkipReminderJobs.NAME) }
 
     override fun cancelPreAlarm(alarmId: String): Outcome<Unit, DomainError> {
         val name = PreAlarmJobs.nameOf(alarmId)
         return guarded(name) { watch(workManager().cancelUniqueWork(name).result, name) }
     }
 
-    /** A `weekly-summary` work waits to run (ENQUEUED, or BLOCKED behind the running one). */
-    private fun successorPending(): Boolean =
+    /** A [name] work waits to run (ENQUEUED, or BLOCKED behind the running one). */
+    private fun successorPending(name: String): Boolean =
         workManager()
-            .getWorkInfosForUniqueWork(WeeklySummaryJobs.NAME)
+            .getWorkInfosForUniqueWork(name)
             .get()
             .any { it.state == WorkInfo.State.ENQUEUED || it.state == WorkInfo.State.BLOCKED }
 
@@ -194,3 +190,11 @@ class AndroidBackgroundWork(
         const val ENQUEUE = "enqueue background work"
     }
 }
+
+/** WorkManager's policy for [policy]. */
+private fun existingOf(policy: SchedulePolicy): ExistingWorkPolicy =
+    when (policy) {
+        SchedulePolicy.Replace -> ExistingWorkPolicy.REPLACE
+        SchedulePolicy.KeepPending -> ExistingWorkPolicy.KEEP
+        SchedulePolicy.AfterRun -> ExistingWorkPolicy.APPEND_OR_REPLACE
+    }

@@ -53,8 +53,6 @@ data class EditorForm(
     val motivation: MotivationChoice = MotivationChoice.None,
     /** "When it plays" (Story 7.5), saved with the alarm; kept when the message is None, never a locked field. */
     val motivationTiming: MotivationTiming = MotivationTiming.AfterImUp,
-    /** "Offer to skip 2 h before" (Story 7.11): off for a new alarm; turning it on is under the commitment lock. */
-    val offerSkip: Boolean = false,
 ) {
     companion object {
         /** The time a new alarm opens with. */
@@ -272,11 +270,6 @@ data class FullEditorSections(
     val types: List<CheckType> = CheckType.entries,
     /** TalkBack is on (Story 3.8): Memory Sequence says "Uses numbered tiles with TalkBack." in the picker and its setup. */
     val talkBackOn: Boolean = false,
-    /**
-     * The "Offer to skip 2 h before" switch in card 1, after "Vibration" (Story 7.11): the app's editor shows it; the
-     * design previews of rounds 2 and 3 predate it.
-     */
-    val showOfferSkip: Boolean = false,
 )
 
 /**
@@ -358,11 +351,6 @@ sealed interface EditorIntent {
 
     data class CheckModeSelected(
         val mode: CheckMode,
-    ) : EditorIntent
-
-    /** The "Offer to skip 2 h before" switch (Story 7.11). */
-    data class OfferSkipToggled(
-        val enabled: Boolean,
     ) : EditorIntent
 
     /** A tap in the Sound sub-screen's list (select, preview, pick a file). */

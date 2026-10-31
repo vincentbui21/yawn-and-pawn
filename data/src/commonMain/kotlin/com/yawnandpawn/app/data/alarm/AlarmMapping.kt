@@ -31,7 +31,8 @@ internal fun Alarm.toEntity(): AlarmEntity =
         updatedAt = updatedAt.toEpochMilliseconds(),
         checkMode = checkMode.name,
         motivation = motivation.encode(),
-        offerSkip = offerSkip,
+        // Story 7.11's "Offer to skip" is gone since 0.1.8 (one global Skip reminder): the column stays, always written off.
+        offerSkip = false,
         skippedDate = skippedDate?.toString(),
         motivationMode = motivationMode.text,
     )
@@ -59,7 +60,6 @@ internal fun AlarmEntity.toAlarm(): Alarm =
         checkMode = CheckMode.entries.firstOrNull { it.name == checkMode } ?: CheckMode.Random,
         // Unknown text (a newer version's) plays no message.
         motivation = Motivation.parse(motivation),
-        offerSkip = offerSkip,
         // A date this build cannot read skips nothing: the alarm rings.
         skippedDate = skippedDate?.let { runCatching { LocalDate.parse(it) }.getOrNull() },
         // Unknown text (a newer version's) plays the message after the check.

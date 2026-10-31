@@ -16,9 +16,8 @@ import org.koin.compose.viewmodel.koinViewModel
  * [openFailed] is the editor's result when its alarm could not be read: Home shows "Couldn't open this alarm." and
  * calls [onOpenFailedShown]. [savedUnderLock] is its result after a save that left a weakening change waiting under the
  * commitment lock: Home shows "Saved. Takes effect after ..." and calls [onSavedUnderLockShown] (Story 4.6).
- * [skipRequest] is an alarm whose pre-alarm notification's "Skip this one" was tapped (Story 7.11): Home asks "Skip the
- * {time} alarm?" and calls [onSkipRequestShown]. [onOpenQrRegistration] opens QR registration of an
- * alarm's code ("Re-register", Story 3.10; the editor by default). [onOpenReliability] opens the reliability checklist
+ * [onOpenQrRegistration] opens QR registration of an alarm's code ("Re-register", Story 3.10; the editor by default).
+ * [onOpenReliability] opens the reliability checklist
  * from the banner's "Fix" (Story 5.4). The countdown is recomputed and the reliability checklist evaluated again (once)
  * whenever Home resumes, which also ends every start, so the banner clears itself once the blocking rows are fixed.
  */
@@ -32,8 +31,6 @@ fun HomeRoute(
     savedUnderLock: WeakeningNote? = null,
     onSavedUnderLockShown: () -> Unit = {},
     onOpenReliability: () -> Unit = {},
-    skipRequest: String? = null,
-    onSkipRequestShown: () -> Unit = {},
     viewModel: HomeViewModel = koinViewModel(),
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
@@ -57,12 +54,6 @@ fun HomeRoute(
         savedUnderLock?.let {
             viewModel.onIntent(HomeIntent.SavedUnderLock(it))
             onSavedUnderLockShown()
-        }
-    }
-    LaunchedEffect(skipRequest) {
-        skipRequest?.let {
-            viewModel.onIntent(HomeIntent.SkipRequested(it))
-            onSkipRequestShown()
         }
     }
     LifecycleEventEffect(Lifecycle.Event.ON_RESUME) { viewModel.onIntent(HomeIntent.Resumed) }

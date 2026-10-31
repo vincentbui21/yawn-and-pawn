@@ -68,6 +68,7 @@ private fun reduceSettingValues(
         is SettingsIntent.BrightWakeScreenToggled -> state.copy(brightWakeScreen = intent.on)
         is SettingsIntent.ThemeSelected -> state.copy(theme = intent.mode)
         is SettingsIntent.WeeklySummaryToggled -> state.copy(weeklySummary = intent.on)
+        is SettingsIntent.SkipReminderToggled -> state.copy(skipReminder = intent.on)
         is SettingsIntent.UsageStatsToggled -> state.copy(usageStats = intent.on)
         else -> state
     }

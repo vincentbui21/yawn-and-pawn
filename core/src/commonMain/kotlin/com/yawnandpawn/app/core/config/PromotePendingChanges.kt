@@ -5,7 +5,6 @@ import com.yawnandpawn.app.core.alarm.AlarmRepository
 import com.yawnandpawn.app.core.alarm.AlarmWriteLock
 import com.yawnandpawn.app.core.alarm.CheckConfig
 import com.yawnandpawn.app.core.alarm.CheckConfigRepository
-import com.yawnandpawn.app.core.alarm.PreAlarmScheduler
 import com.yawnandpawn.app.core.alarm.checkRowsFor
 import com.yawnandpawn.app.core.alarm.nowMillis
 import com.yawnandpawn.app.core.alarm.orderedEntries
@@ -24,9 +23,9 @@ import kotlin.time.Instant
  * Makes the pending changes that are due the live settings (AD-16): once the occurrence they wait for is over
  * ([PendingChange.isDue]: more than [PendingChange.SETTLE] after it, review fix 9), and no
  * session in progress rings that very occurrence ([activeOccurrence]), the pending value is written as the live value
- * (the global setting, or the alarm's grace window, checks or "Offer to skip") and then the pending change is deleted,
- * in that order (a failure between leaves the change to be promoted again). A change whose alarm was turned off still takes effect; one
- * whose alarm was deleted is dropped.
+ * (the global setting, or the alarm's grace window or checks; a legacy "Offer to skip" of Story 7.11 is only removed)
+ * and then the pending change is deleted, in that order (a failure between leaves the change to be promoted again). A
+ * change whose alarm was turned off still takes effect; one whose alarm was deleted is dropped.
  *
  * It runs in `AlarmScheduling.rescheduleAll` (app start, boot, time changes) and when the wake service shuts down
  * after a session. The settle delay keeps it from ever weakening the ring a change waited for, even when the fire
@@ -43,11 +42,6 @@ class PromotePendingChanges(
     private val clock: Clock,
     private val lock: AlarmWriteLock,
     private val logger: Logger,
-    /**
-     * The pre-alarm jobs (Story 7.11): a promoted "Offer to skip" on schedules the alarm's job at once, since nothing else
-     * re-syncs it before the next ring. None in tests.
-     */
-    private val preAlarms: PreAlarmScheduler? = null,
     /** The occurrence a session in progress rings, in memory or, before the engine is restored, in the stored session. */
     private val activeOccurrence: suspend () -> Occurrence?,
 ) : PendingChangePromotion {
@@ -104,11 +98,9 @@ class PromotePendingChanges(
                     alarmField(change) { alarm -> storeChecks(alarm, value, now) }
                 }
 
+                // Story 7.11's per-alarm "Offer to skip", gone since 0.1.8: nothing to write, the change is only removed.
                 is SettingValue.OfferSkip -> {
-                    alarmField(change) { alarm ->
-                        val promoted = alarm.copy(offerSkip = value.on)
-                        alarmRepository.upsert(promoted).also { if (it is Outcome.Success) preAlarms?.sync(promoted) }
-                    }
+                    Outcome.Success(Unit)
                 }
             }
         val done = live.flatMap { pendingRepository.remove(change.alarmId, change.field) }

@@ -68,18 +68,3 @@ private fun DiscardLightPreview() = EditorPreview(PpsThemeMode.Light, editAlarm.
 @Preview(name = "Discard dialog · Dark", heightDp = 1200)
 @Composable
 private fun DiscardDarkPreview() = EditorPreview(PpsThemeMode.Dark, editAlarm.copy(showDiscardDialog = true))
-
-/** Story 7.11: the app's editor with "Offer to skip 2 h before" on. */
-private val offerSkip =
-    editAlarm.copy(
-        form = editAlarm.form.copy(offerSkip = true),
-        full = FullEditorSections(rows = setOf(EditorPane.WakeCheck), showOfferSkip = true),
-    )
-
-@Preview(name = "Offer to skip · Light", heightDp = 1200)
-@Composable
-private fun OfferSkipLightPreview() = EditorPreview(PpsThemeMode.Light, offerSkip)
-
-@Preview(name = "Offer to skip · Dark", heightDp = 1200)
-@Composable
-private fun OfferSkipDarkPreview() = EditorPreview(PpsThemeMode.Dark, offerSkip)

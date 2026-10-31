@@ -7,7 +7,7 @@ import kotlin.time.Duration
 /**
  * What a background job runs (AD-17). The adapter stores the name with the job and looks up the [BackgroundTask]
  * registered for it when the job runs: the price refresh (Story 4.3), the consume retry (Story 4.10), the weekly
- * summary (Story 6.8) and the pre-alarm notification (Story 7.11).
+ * summary (Story 6.8) and the Skip reminder (0.1.8). The names are stored with the jobs, so they never change.
  */
 enum class BackgroundTaskKind {
     /** Refresh the cached Play prices (Story 4.3). */
@@ -19,8 +19,14 @@ enum class BackgroundTaskKind {
     /** Post the Sunday-evening weekly summary and chain next week's run (Story 6.8, [WeeklySummaryJobs]). */
     WeeklySummary,
 
-    /** Post one alarm's "Skip this one" notification 2 h before its next ring (Story 7.11, [PreAlarmJobs]; keyed by the alarm id). */
+    /**
+     * Story 7.11's per-alarm pre-alarm notification (keyed by the alarm id), removed in 0.1.8: kept so a job left from
+     * before the update still decodes; its run does nothing.
+     */
     PreAlarm,
+
+    /** Post the Skip reminder of the next date with an alarm, then schedule the next one (0.1.8, [SkipReminderJobs]). */
+    SkipReminder,
 }
 
 /**
@@ -43,10 +49,15 @@ object WeeklySummaryJobs {
     const val NAME = "weekly-summary"
 }
 
-/** The pre-alarm notification's one-time unique work per alarm (Story 7.11). */
+/** Story 7.11's per-alarm pre-alarm work, removed in 0.1.8: the names are kept so an update can cancel what is left. */
 object PreAlarmJobs {
     /** The unique work name of the alarm [alarmId]'s pre-alarm job: `pre-alarm-{alarmId}`. */
     fun nameOf(alarmId: String): String = "pre-alarm-$alarmId"
+}
+
+/** The Skip reminder's one-time unique work (0.1.8). */
+object SkipReminderJobs {
+    const val NAME = "skip-reminder"
 }
 
 /** How [BackgroundWork.scheduleWeeklySummary] hands the job over when a `weekly-summary` work already exists. */
@@ -85,17 +96,23 @@ interface BackgroundWork {
     fun cancelWeeklySummary(): Outcome<Unit, DomainError>
 
     /**
-     * The pre-alarm notification of the alarm [alarmId] (Story 7.11): one-time unique work [PreAlarmJobs.nameOf] running
-     * [BackgroundTaskKind.PreAlarm] with the alarm id after [delay] (a negative one counts as none), no network needed,
-     * replacing a pending one (REPLACE). Never an `AlarmScheduler` alarm.
+     * Cancels the unique work [PreAlarmJobs.nameOf] of [alarmId] (Story 7.11's job, removed in 0.1.8: the update cleans
+     * up what is left); nothing pending is not an error.
      */
-    fun schedulePreAlarm(
-        alarmId: String,
+    fun cancelPreAlarm(alarmId: String): Outcome<Unit, DomainError>
+
+    /**
+     * The Skip reminder (0.1.8): one-time unique work [SkipReminderJobs.NAME] running [BackgroundTaskKind.SkipReminder]
+     * after [delay] (a negative one counts as none), no network needed, handed over by [policy] ([SchedulePolicy.Replace],
+     * or [SchedulePolicy.AfterRun] from the reminder's own run). Never an `AlarmScheduler` alarm.
+     */
+    fun scheduleSkipReminder(
         delay: Duration,
+        policy: SchedulePolicy,
     ): Outcome<Unit, DomainError>
 
-    /** Cancels the unique work [PreAlarmJobs.nameOf] of [alarmId] (Story 7.11); nothing pending is not an error. */
-    fun cancelPreAlarm(alarmId: String): Outcome<Unit, DomainError>
+    /** Cancels the unique work [SkipReminderJobs.NAME] (0.1.8); nothing pending is not an error. */
+    fun cancelSkipReminder(): Outcome<Unit, DomainError>
 }
 
 /** How a [BackgroundTask] run ended. */
@@ -115,7 +132,7 @@ fun interface BackgroundTask {
     suspend fun run(): TaskResult
 }
 
-/** The work behind a [BackgroundTaskKind] whose jobs carry a key (Story 7.11: the pre-alarm job's alarm id). */
+/** The work behind a [BackgroundTaskKind] whose jobs carry a key (Story 7.11's pre-alarm job, a no-op since 0.1.8). */
 fun interface KeyedBackgroundTask {
     suspend fun run(key: String): TaskResult
 }

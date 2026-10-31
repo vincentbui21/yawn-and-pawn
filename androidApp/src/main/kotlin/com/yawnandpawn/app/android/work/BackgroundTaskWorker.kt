@@ -15,7 +15,7 @@ import kotlin.coroutines.cancellation.CancellationException
 
 /**
  * The task registered for each [BackgroundTaskKind] (a Koin single built in `workModule`); a kind whose jobs carry a key
- * (Story 7.11: the pre-alarm job's alarm id) has its task in [keyed].
+ * (Story 7.11's pre-alarm job, a no-op since 0.1.8) has its task in [keyed].
  */
 class BackgroundTasks(
     private val tasks: Map<BackgroundTaskKind, BackgroundTask>,
@@ -74,7 +74,7 @@ class BackgroundTaskWorker(
         /** The input naming the job's [BackgroundTaskKind]. */
         const val KEY_TASK = "task"
 
-        /** The input carrying the alarm id of a keyed job (Story 7.11: the pre-alarm job). */
+        /** The input carrying the alarm id of a keyed job (Story 7.11's pre-alarm job, left from before 0.1.8). */
         const val KEY_ALARM_ID = "alarmId"
 
         /** Runs per job before a transient failure gives up (a periodic job runs again at its next period). */

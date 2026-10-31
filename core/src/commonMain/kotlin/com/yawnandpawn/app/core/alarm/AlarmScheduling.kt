@@ -6,6 +6,7 @@ import com.yawnandpawn.app.core.error.Outcome
 import com.yawnandpawn.app.core.error.map
 import com.yawnandpawn.app.core.log.LogEvent
 import com.yawnandpawn.app.core.log.Logger
+import com.yawnandpawn.app.core.reminder.SkipReminderScheduler
 import com.yawnandpawn.app.core.time.Clock
 import com.yawnandpawn.app.core.time.TimeZoneProvider
 import kotlinx.coroutines.flow.StateFlow
@@ -25,9 +26,9 @@ import kotlin.time.Instant
  * [sync] and [cancel] must run while the caller holds [lock] (the alarm use cases call them inside it, right after
  * their repository write succeeded); [rescheduleAll] takes the lock itself.
  *
- * Story 7.11: an alarm is armed at its [nextRing] (its next occurrence, unless that one is skipped), and each system alarm
- * change also re-syncs the alarm's pre-alarm job ([preAlarms]: save, switch, delete, [rescheduleAll] and the re-arm after
- * a ring all come through here).
+ * Story 7.11: an alarm is armed at its [nextRing] (its next occurrence, unless that one is skipped). 0.1.8: each system
+ * alarm change also re-syncs the Skip reminder once ([skipReminder]: save, switch, delete, skip and its undo,
+ * [rescheduleAll] and the re-arm after a ring all come through here).
  */
 class AlarmScheduling(
     private val repository: AlarmRepository,
@@ -43,24 +44,23 @@ class AlarmScheduling(
      * a background start (boot, a time change) never re-arms the alarms being deleted. None in tests and the fallback.
      */
     private val deletionPending: StateFlow<Boolean>? = null,
-    /** The pre-alarm jobs (Story 7.11), kept in step with each alarm; none in tests and the backup fallback. */
-    private val preAlarms: PreAlarmScheduler? = null,
+    /** The Skip reminder (0.1.8), kept in step with the alarms; none in tests and the backup fallback. */
+    private val skipReminder: SkipReminderScheduler? = null,
 ) {
     /** Arms [alarm] at its next occurrence after now when it is enabled, cancels its code when it is not. */
-    fun sync(alarm: Alarm) {
+    suspend fun sync(alarm: Alarm) {
         syncAfter(alarm, clock.now())
     }
 
-    /**
-     * Cancels the system alarm under [requestCode] (an alarm that was just deleted), and the pre-alarm job and notification
-     * of [alarmId] when given (Story 7.11).
-     */
-    fun cancel(
-        requestCode: Int,
-        alarmId: String? = null,
-    ) {
+    /** A skip was undone (Story 7.11 "Don't skip"): the Skip reminder's confirmation goes (0.1.8). */
+    fun skipUndone() {
+        skipReminder?.skipUndone()
+    }
+
+    /** Cancels the system alarm under [requestCode] (an alarm that was just deleted); the Skip reminder follows (0.1.8). */
+    suspend fun cancel(requestCode: Int) {
         scheduler.cancel(requestCode).logFailure(OPERATION_CANCEL)
-        alarmId?.let { preAlarms?.cancel(it, requestCode) }
+        skipReminder?.sync()
     }
 
     /**
@@ -77,6 +77,9 @@ class AlarmScheduling(
      *
      * While a "Delete all data" is pending ([deletionPending]) it does nothing and succeeds: the deletion cancels every
      * code and removes the rows when it resumes.
+     *
+     * 0.1.8: then the Skip reminder is synced once, after every stored alarm's pre-alarm job of Story 7.11 is cancelled
+     * (`pre-alarm-{id}`, left from before the update).
      */
     suspend fun rescheduleAll(): Outcome<Unit, DomainError> {
         if (deletionPending?.value == true) return Outcome.Success(Unit)
@@ -93,11 +96,13 @@ class AlarmScheduling(
                 all.forEach { stored ->
                     val alarm = if (stored.isPassedOneTime(now, zone)) disablePassed(stored, now, zone) else stored
                     when {
-                        !syncAfter(alarm, now) -> failed++
+                        !arm(alarm, now) -> failed++
                         alarm.enabled -> scheduled++
                         else -> disabled++
                     }
                 }
+                skipReminder?.cancelLegacyPreAlarms(all)
+                skipReminder?.sync()
                 logger.log(LogEvent.AlarmsRescheduled(scheduled = scheduled, disabled = disabled, failed = failed))
             }
         }
@@ -117,23 +122,28 @@ class AlarmScheduling(
 
     /**
      * Like [sync], but the next ring strictly after [after] instead of now (a repeating alarm that just fired re-arms
-     * after its own scheduled time, so a fire a little early never re-arms the same occurrence). The pre-alarm job follows
-     * (Story 7.11). True when the scheduler call succeeded.
+     * after its own scheduled time, so a fire a little early never re-arms the same occurrence). The Skip reminder follows
+     * (0.1.8).
      */
-    internal fun syncAfter(
+    internal suspend fun syncAfter(
         alarm: Alarm,
         after: Instant,
-    ): Boolean {
-        val synced =
-            if (alarm.enabled) {
-                val trigger = nextRing(alarm, after, timeZoneProvider.current())
-                scheduler.schedule(alarm.id, alarm.requestCode, trigger.toEpochMilliseconds()).logFailure(OPERATION_SCHEDULE)
-            } else {
-                scheduler.cancel(alarm.requestCode).logFailure(OPERATION_CANCEL)
-            }
-        preAlarms?.sync(alarm, after)
-        return synced
+    ) {
+        arm(alarm, after)
+        skipReminder?.sync()
     }
+
+    /** Arms [alarm] at its next ring after [after], or cancels its code when it is off. True when the scheduler call succeeded. */
+    private fun arm(
+        alarm: Alarm,
+        after: Instant,
+    ): Boolean =
+        if (alarm.enabled) {
+            val trigger = nextRing(alarm, after, timeZoneProvider.current())
+            scheduler.schedule(alarm.id, alarm.requestCode, trigger.toEpochMilliseconds()).logFailure(OPERATION_SCHEDULE)
+        } else {
+            scheduler.cancel(alarm.requestCode).logFailure(OPERATION_CANCEL)
+        }
 
     private fun Alarm.isPassedOneTime(
         now: Instant,

@@ -168,8 +168,8 @@ val appModule =
                 get(),
                 promotion = get<PromotePendingChanges>(),
                 deletionPending = get<PendingDeletion>().pending,
-                // Story 7.11: each alarm's pre-alarm job follows its system alarm.
-                preAlarms = get(),
+                // 0.1.8: the Skip reminder follows every system alarm change.
+                skipReminder = get(),
             )
         }
         // The commitment lock (Story 4.4): promotion skips the occurrence the session in progress rings, read lazily (the
@@ -177,7 +177,7 @@ val appModule =
         // Before the engine is restored (a cold start), the stored session in runtime.db is read instead (review fix 9).
         single {
             val scope = this
-            PromotePendingChanges(get(), get(), get(), get(), get(), get(), get(), preAlarms = get()) {
+            PromotePendingChanges(get(), get(), get(), get(), get(), get(), get()) {
                 val engine = scope.get<SessionEngine>()
                 PromotePendingChanges.occurrenceOf(engine.state.value) ?: if (engine.restored.value) {
                     null
@@ -213,8 +213,8 @@ val appModule =
                 starts = get(),
                 timings = get(),
                 rearm = get(),
-                // Story 7.11: the ringing occurrence's "Skip this one" notification goes.
-                preAlarms = get(),
+                // 0.1.8: the Skip reminder (or its confirmation) goes when an alarm rings.
+                skipReminder = get(),
             )
         }
         // The session slot armed from runtime.db without the engine (Story 2.1): after system events and refused starts.
@@ -235,7 +235,8 @@ val appModule =
         // Story 3.10: Home's "Re-register" stores a new code alone.
         factory { ReRegisterCode(get(), get(), get(), get(), get()) }
         factory { DeleteAlarm(get(), get(), get(), get(), get(), get(), get(), get()) }
-        // Story 7.11: "Skip this one" and Home's "Don't skip"; the Skipped row goes through SessionRecorder.
+        // Story 7.11: one alarm's skip (0.1.8: through the Skip reminder's "Skip today's alarms") and Home's "Don't skip";
+        // the Skipped row goes through SessionRecorder.
         factory { SkipNextAlarm(get(), get(), get(), get(), get(), get(), get(), get(), get()) }
         factory { UndoSkip(get(), get(), get(), get(), get(), get(), get(), get(), get()) }
         // "Test alarm" (Story 1.18): the editor's values ring as a test 10 s later, through the test request code.
@@ -414,12 +415,18 @@ val appModule =
             val context = androidContext()
             if (isFirebaseConfigured(context)) CrashlyticsUnsentReports(CrashlyticsSink(context), get()) else UnsentCrashReports {}
         }
-        // An unfinished deletion is finished from the app start, also with no activity (boot, a time change): with no
-        // session stored it restores the (empty) session itself, so the guard opens; with one stored it waits for the
-        // restore entry points (Story 2.1). On the app's scope, so a test's teardown cancels a resume left waiting.
+        // The one empty-session restore (Story 5.9 review, and 0.1.8's Skip reminder action): with no session stored, the
+        // (empty) session is restored so the guard opens; restoring nothing runs no entry effect and starts no service, so
+        // Story 2.1 still holds. With one stored it waits for the restore entry points.
         single {
             val engine = get<SessionEngine>()
             val store = get<ActiveSessionStore>()
+            RestoreIfIdle { if (store.load().valueOrNull()?.holdsNoSession() == true) engine.restore() }
+        }
+        // An unfinished deletion is finished from the app start, also with no activity (boot, a time change), restoring an
+        // empty session first. On the app's scope, so a test's teardown cancels a resume left waiting.
+        single {
+            val restoreIfIdle = get<RestoreIfIdle>()
             ResumePendingDeletion(
                 deleteAllData = get(),
                 pendingDeletion = get(),
@@ -427,7 +434,7 @@ val appModule =
                 sessionLock = get(),
                 scope = get<ApplicationScope>(),
                 logger = get(),
-                restoreSession = { if (store.load().valueOrNull()?.holdsNoSession() == true) engine.restore() },
+                restoreSession = { restoreIfIdle() },
             )
         }
     }
@@ -515,6 +522,14 @@ open class YawnAndPawnApp :
             if (store.load().valueOrNull()?.holdsNoSession() == true) runtime.restoreVolumeIfIdle()
         }
     }
+}
+
+/**
+ * Restores the session engine only when runtime.db holds no session ([holdsNoSession]): the guard then opens without a
+ * restore entry point, and nothing is taken over (Story 2.1). Bound once in the app module.
+ */
+fun interface RestoreIfIdle {
+    suspend operator fun invoke()
 }
 
 /** Nothing to take over: no row, an unreadable one or a stored Idle (restoring it runs no entry effect). */

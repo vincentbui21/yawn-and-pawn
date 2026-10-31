@@ -27,6 +27,9 @@ import com.yawnandpawn.app.core.error.Outcome
 import com.yawnandpawn.app.core.log.LogEvent
 import com.yawnandpawn.app.core.log.Logger
 import com.yawnandpawn.app.core.reliability.EvaluateReliability
+import com.yawnandpawn.app.core.reminder.SetSkipReminder
+import com.yawnandpawn.app.core.reminder.SkipReminderPrefs
+import com.yawnandpawn.app.core.reminder.SkipReminderStore
 import com.yawnandpawn.app.core.session.GlobalSettings
 import com.yawnandpawn.app.core.summary.SetWeeklySummary
 import com.yawnandpawn.app.core.summary.WeeklySummaryPrefs
@@ -94,6 +97,12 @@ class WeeklySummarySwitch(
     val set: SetWeeklySummary,
 )
 
+/** The "Skip reminder" switch's sources (0.1.8): the stored switch and the use case that stores it and aligns the reminder. */
+class SkipReminderSwitch(
+    val store: SkipReminderStore,
+    val set: SetSkipReminder,
+)
+
 /**
  * Settings: the Snooze card's base fee and max snoozes per session and (0.1.7) the Wake card's quiet time of every alarm,
  * set through the commitment lock (Story 4.5), and "Vibrate during quiet time", the new-alarm snooze length and the theme
@@ -122,6 +131,9 @@ class WeeklySummarySwitch(
  * once and aligns the work through its use case. A failed write is logged and the switch stays at the stored value; an
  * unreadable store is logged and shows on. Without [weeklySummary] (tests of the other rows) it shows on and a tap does
  * nothing.
+ *
+ * Skip reminder (0.1.8): the same, from [skipReminder] (on by default). It is never a locked or weakening change (skipping
+ * is free and allowed inside the lock window, FR-ALM-10), so a tap is stored at once and shows no lock note.
  *
  * The reliability banner (Story 5.4) follows the checklist's `alarmBlocking`, evaluated on every start; "Fix" and the
  * "Make sure alarms ring" row open the checklist through [effects]; the "About" row opens the About page.
@@ -159,6 +171,7 @@ class SettingsViewModel(
     /** Where the banner's evaluation runs (system service calls): off the main thread in the app, the test's in tests. */
     evaluationContext: CoroutineContext = Dispatchers.Default,
     private val weeklySummary: WeeklySummarySwitch? = null,
+    private val skipReminder: SkipReminderSwitch? = null,
 ) : ViewModel() {
     private val local = MutableStateFlow(Local())
     private val saves = Channel<Save>(Channel.UNLIMITED)
@@ -216,13 +229,28 @@ class SettingsViewModel(
             }?.map { it.enabled }
             ?: flowOf(WeeklySummaryPrefs().enabled)
 
-    /** The two general switches in one flow, so the state stays a five-flow combine. */
-    private val switches: Flow<Pair<Boolean, Boolean>> = combine(consent, weekly, ::Pair)
+    /** The stored Skip reminder switch (0.1.8); an unreadable store is logged and reads as on (the default). */
+    private val reminder: Flow<Boolean> =
+        skipReminder
+            ?.store
+            ?.observe()
+            ?.catch { cause ->
+                logger.logFailure(LOAD_SKIP_REMINDER, cause)
+                emit(SkipReminderPrefs())
+            }?.map { it.enabled }
+            ?: flowOf(SkipReminderPrefs().enabled)
+
+    /** The three general switches in one flow, so the state stays a five-flow combine. */
+    private val switches: Flow<GeneralSwitches> = combine(consent, weekly, reminder, ::GeneralSwitches)
 
     val state: StateFlow<SettingsUiState?> =
-        combine(stored, priceCatalog.observe(), ticks, local, switches) { saved, prices, _, ui, (usageStats, weeklyOn) ->
+        combine(stored, priceCatalog.observe(), ticks, local, switches) { saved, prices, _, ui, general ->
             forgetEchoed(saved, ui)
-            render(saved, prices, ui).copy(usageStats = usageStats, weeklySummary = weeklyOn)
+            render(saved, prices, ui).copy(
+                usageStats = general.usageStats,
+                weeklySummary = general.weeklySummary,
+                skipReminder = general.skipReminder,
+            )
         }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(STOP_TIMEOUT_MILLIS), null)
 
     /** The save queue, run in order. */
@@ -268,8 +296,8 @@ class SettingsViewModel(
                 defaultOf(intent)?.let { request(it) }
             }
 
-            is SettingsIntent.UsageStatsToggled, is SettingsIntent.WeeklySummaryToggled, SettingsIntent.Started, SettingsIntent.FixSettings,
-            SettingsIntent.ReliabilityClicked,
+            is SettingsIntent.UsageStatsToggled, is SettingsIntent.WeeklySummaryToggled, is SettingsIntent.SkipReminderToggled,
+            SettingsIntent.Started, SettingsIntent.FixSettings, SettingsIntent.ReliabilityClicked,
             -> {
                 onGeneralIntent(intent)
             }
@@ -286,8 +314,9 @@ class SettingsViewModel(
     }
 
     /**
-     * The usage stats switch (Story 5.6), the weekly summary switch (Story 6.8) and the reliability checklist (Story
-     * 5.4): a start evaluates the checklist again (back from it, too); "Fix" and its row open it.
+     * The usage stats switch (Story 5.6), the weekly summary switch (Story 6.8), the Skip reminder switch (0.1.8) and the
+     * reliability checklist (Story 5.4): a start evaluates the checklist again (back from it, too); "Fix" and its row open
+     * it.
      */
     private fun onGeneralIntent(intent: SettingsIntent) {
         when (intent) {
@@ -298,6 +327,11 @@ class SettingsViewModel(
             is SettingsIntent.WeeklySummaryToggled -> {
                 val switch = weeklySummary ?: return
                 saveSwitch(SAVE_WEEKLY_SUMMARY) { switch.set(intent.on) }
+            }
+
+            is SettingsIntent.SkipReminderToggled -> {
+                val switch = skipReminder ?: return
+                saveSwitch(SAVE_SKIP_REMINDER) { switch.set(intent.on) }
             }
 
             SettingsIntent.Started -> {
@@ -627,6 +661,8 @@ class SettingsViewModel(
         /** The operations logged when the weekly summary switch could not be read or saved (Story 6.8). */
         const val LOAD_WEEKLY_SUMMARY = "load weekly summary"
         const val SAVE_WEEKLY_SUMMARY = "save weekly summary"
+        const val LOAD_SKIP_REMINDER = "load skip reminder"
+        const val SAVE_SKIP_REMINDER = "save skip reminder"
 
         private const val STOP_TIMEOUT_MILLIS = 5_000L
     }
@@ -673,3 +709,10 @@ private fun Logger.logFailure(
     operation: String,
     cause: Throwable,
 ) = log(LogEvent.OperationFailed(operation, cause.message ?: cause::class.simpleName.orEmpty()))
+
+/** The stored general switches: usage stats (Story 5.6), weekly summary (Story 6.8) and Skip reminder (0.1.8). */
+private data class GeneralSwitches(
+    val usageStats: Boolean,
+    val weeklySummary: Boolean,
+    val skipReminder: Boolean,
+)

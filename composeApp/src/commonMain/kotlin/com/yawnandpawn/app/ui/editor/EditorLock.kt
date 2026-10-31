@@ -71,8 +71,6 @@ internal fun feeLadderOf(
 internal data class PendingFields(
     /** The pending checks and mode as the form shows them, and the ring they wait for. */
     val checks: Pair<Pair<List<CheckChip>, CheckMode>, Instant>? = null,
-    /** The pending "Offer to skip" (on), and the ring it waits for (Story 7.11). */
-    val offerSkip: Pair<Boolean, Instant>? = null,
 ) {
     companion object {
         /**
@@ -92,11 +90,7 @@ internal data class PendingFields(
                     val chips = toChips(plan.entries.ifEmpty { CheckConfig.DEFAULT_ENTRIES })
                     (chips to CheckMode.valueOf(plan.mode.name)) to own.getValue(LockedField.Checks).effectiveAfter.scheduledAt
                 }
-            val offerSkip =
-                (own[LockedField.OfferSkip]?.value as? SettingValue.OfferSkip)?.let { value ->
-                    value.on to own.getValue(LockedField.OfferSkip).effectiveAfter.scheduledAt
-                }
-            return PendingFields(checks, offerSkip)
+            return PendingFields(checks)
         }
     }
 }
@@ -119,7 +113,6 @@ internal fun EditorForm.withPending(pending: PendingFields): EditorForm {
     return copy(
         checks = checks?.first ?: this.checks,
         checkMode = checks?.second ?: checkMode,
-        offerSkip = pending.offerSkip?.first ?: offerSkip,
     )
 }
 
@@ -145,17 +138,11 @@ internal fun FullEditorSections.lockSections(
             ?.takeIf { (shown, _) -> shown == (form.checks to form.checkMode) }
             ?.second
             ?.let(waitsUntil)
-    // Story 7.11: "Offer to skip" switched on while it is pending shows the same note under the cards.
-    val offerSkipAt =
-        pending.offerSkip
-            ?.takeIf { (on, _) -> form.offerSkip == on }
-            ?.second
-            ?.let(waitsUntil)
     val prices = ladder?.let { (inputs, formatter) -> feeLadderOf(form, alarmId, inputs, now, zone, formatter) }
     return copy(
         feeLadder = prices?.first,
         pricesApproximate = prices?.second == true,
         checksNote = weakeningNoteOf(checksAt, now, zone),
-        weakeningNote = weakeningNoteOf(listOfNotNull(checksAt, offerSkipAt).maxOrNull(), now, zone),
+        weakeningNote = weakeningNoteOf(checksAt, now, zone),
     )
 }

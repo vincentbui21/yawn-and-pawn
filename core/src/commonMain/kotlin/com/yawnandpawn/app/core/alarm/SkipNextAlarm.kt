@@ -27,27 +27,27 @@ enum class SkipResult {
     AlreadySkipped,
 
     /**
-     * Nothing to skip: the alarm is off (a skipped one-time alarm is off too), its "Offer to skip" is off (or still waits
-     * under the commitment lock), or its next occurrence is no longer the one the user was asked about.
+     * Nothing to skip: the alarm is off (a skipped one-time alarm is off too), or its next occurrence is no longer the one
+     * the user was asked about.
      */
     NothingToSkip,
 }
 
 /**
- * "Skip this one" confirmed (Story 7.11, FR-ALM-10): the alarm's next occurrence ([nextOccurrence] after now) does not
- * ring. Free, never charged, and allowed inside the commitment lock window: the confirmation dialog and the Skipped row
- * are the log.
+ * Skips one alarm's next occurrence (Story 7.11, FR-ALM-10; since 0.1.8 for each alarm of the day through the Skip
+ * reminder's "Skip today's alarms", `SkipTodaysAlarms`): the alarm's next occurrence ([nextOccurrence] after now) does
+ * not ring. Free, never charged, and allowed inside the commitment lock window: the Skipped row is the log.
  *
  * - A repeating alarm stores that occurrence's local date ([Alarm.skippedDate], in the current zone), so it is armed for
  *   the following one ([nextRing]); a one-time alarm is switched off instead (its row stays as the log).
  * - [SessionRecorder.recordSkip] writes one Skipped row (a new session id, `scheduled_at` the occurrence, no first ring)
  *   before the alarm is stored: a failed row write changes nothing; a failed alarm write removes the row again (a
- *   failure of that is logged), so nothing is half-applied. Then the system alarm and the pre-alarm job follow
+ *   failure of that is logged), so nothing is half-applied. Then the system alarm and the Skip reminder follow
  *   ([AlarmScheduling.sync]).
  * - Idempotent: an occurrence already skipped is [SkipResult.AlreadySkipped], with no second row.
- * - Only for an alarm whose live "Offer to skip" is on (review fix: turning it on is a locked, weakening change, so a
- *   skip must never get around a change still waiting). With [expected] (the occurrence the dialog asked about), a skip
- *   confirmed after that occurrence passed skips nothing rather than the following one.
+ * - Any enabled alarm (0.1.8: Story 7.11's per-alarm "Offer to skip" that gated it is gone). With [expected] (the
+ *   occurrence the reminder was about), a skip confirmed after that occurrence passed skips nothing rather than the
+ *   following one.
  * - Inside [SessionLockGuard.whenIdle] (`SessionActive` during a session: nothing is skipped) and the alarm write lock;
  *   it runs to its end once started, like the other alarm writes.
  */
@@ -75,7 +75,7 @@ class SkipNextAlarm(
                         val occurrence = nextOccurrence(stored.toRule(), now, zone)
                         val date = occurrence.toLocalDateTime(zone).date
                         when {
-                            !stored.enabled || !stored.offerSkip -> {
+                            !stored.enabled -> {
                                 Outcome.Success(SkipResult.NothingToSkip)
                             }
 
@@ -126,7 +126,8 @@ class SkipNextAlarm(
  *
  * The skip's Skipped row is removed first ([SessionRecorder.discardSkip]; the rows of this alarm still to come, or on
  * the skipped date in the current zone, so an edited time or a zone change still finds it), then the skipped date is
- * cleared and the alarm and its pre-alarm job are armed for that occurrence again ([AlarmScheduling.sync]). A failed
+ * cleared and the alarm is armed for that occurrence again, the Skip reminder following ([AlarmScheduling.sync]); the
+ * reminder's "Today's alarms are skipped." confirmation goes ([AlarmScheduling.skipUndone], 0.1.8). A failed
  * row removal changes nothing; a failed alarm write puts the rows back (a failure of that is logged). True when a skip
  * was undone; false when there was none to undo (no skipped date, the alarm off, or the skipped day already passed).
  */
@@ -158,6 +159,7 @@ class UndoSkip(
                                     when (val written = repository.upsert(restored)) {
                                         is Outcome.Success -> {
                                             scheduling.sync(restored)
+                                            scheduling.skipUndone()
                                             Outcome.Success(true)
                                         }
 

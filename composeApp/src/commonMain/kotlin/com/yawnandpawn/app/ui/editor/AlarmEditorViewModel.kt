@@ -102,8 +102,7 @@ data class AlarmEditorArgs(
  * (Story 1.18) rings the form as it is now, unsaved changes included, as a test 10 s later through [testAlarm], then
  * shows its snackbar. The Wake-up check row (Story 3.5) edits the alarm's checks ([checkConfigs]) in the form: tick a
  * check, its setup (difficulty and count within the type's range), Random / All and the order; with none, Save shows
- * "Pick at least one check." and stores nothing. "Offer to skip 2 h before" (Story 7.11) is a switch in card 1, saved
- * through the commitment lock like the checks, and the header's "Rings in" passes over a skipped next ring.
+ * "Pick at least one check." and stores nothing. The header's "Rings in" passes over a skipped next ring (Story 7.11).
  */
 @Suppress("TooManyFunctions", "LargeClass") // One small handler per editor action; at the size limit before Story 5.1.
 class AlarmEditorViewModel(
@@ -361,7 +360,7 @@ class AlarmEditorViewModel(
         }
     }
 
-    /** The form's switches (gradual volume, vibration, "Offer to skip"); false for any other intent. */
+    /** The form's switches (gradual volume, vibration); false for any other intent. */
     private fun onSwitchIntent(intent: EditorIntent): Boolean {
         when (intent) {
             is EditorIntent.GradualVolumeToggled -> {
@@ -370,11 +369,6 @@ class AlarmEditorViewModel(
 
             is EditorIntent.VibrationToggled -> {
                 editForm { it.copy(vibration = intent.enabled) }
-            }
-
-            // Story 7.11: saved through the commitment lock (turning it on within 8 h waits for the next ring).
-            is EditorIntent.OfferSkipToggled -> {
-                editForm { it.copy(offerSkip = intent.enabled) }
             }
 
             else -> {
@@ -1076,13 +1070,12 @@ private fun EditorForm.toDraft(alarmId: String?): AlarmDraft =
         checkMode = CoreCheckMode.valueOf(checkMode.name),
         motivation = motivation.toCore(),
         motivationMode = motivationTiming.toCore(),
-        offerSkip = offerSkip,
     )
 
 /**
  * The production editor's full-editor rows (Story 3.5): the Wake-up check, offering [pickable], with [motivation] the
- * Motivation row (Story 7.2) and its "When it plays" card (Story 7.5), and the "Offer to skip 2 h before" switch (Story
- * 7.11). The quiet time is in Settings since 0.1.7.
+ * Motivation row (Story 7.2) and its "When it plays" card (Story 7.5). The quiet time is in Settings since 0.1.7, and the
+ * per-alarm "Offer to skip 2 h before" (Story 7.11) became the global Skip reminder in Settings in 0.1.8.
  */
 private fun wakeCheckOnly(
     pickable: List<CheckType>,
@@ -1093,7 +1086,6 @@ private fun wakeCheckOnly(
         rows = if (motivation) setOf(EditorPane.WakeCheck, EditorPane.Motivation) else setOf(EditorPane.WakeCheck),
         types = pickable,
         talkBackOn = talkBackOn,
-        showOfferSkip = true,
     )
 
 /** The Wake-up check row and sub-screen show the form's checks and mode, and whether QR/Barcode has its code. */
@@ -1163,7 +1155,6 @@ private fun Alarm.toForm(checks: List<CheckConfig>): EditorForm =
         vibrateInGrace = vibrateInGrace,
         motivation = motivation.toChoice(),
         motivationTiming = motivationMode.toTiming(),
-        offerSkip = offerSkip,
     )
 
 /**

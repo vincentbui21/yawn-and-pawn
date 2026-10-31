@@ -9,7 +9,6 @@ import com.yawnandpawn.app.core.alarm.CheckConfigRepository
 import com.yawnandpawn.app.core.alarm.DeleteAlarm
 import com.yawnandpawn.app.core.alarm.DiscardStaleSkips
 import com.yawnandpawn.app.core.alarm.DuplicateAlarm
-import com.yawnandpawn.app.core.alarm.PreAlarmScheduler
 import com.yawnandpawn.app.core.alarm.ReRegisterCode
 import com.yawnandpawn.app.core.alarm.RequestCodeHighWaterMark
 import com.yawnandpawn.app.core.alarm.RequestCodeSequence
@@ -25,6 +24,8 @@ import com.yawnandpawn.app.core.error.Outcome
 import com.yawnandpawn.app.core.id.IdGenerator
 import com.yawnandpawn.app.core.log.Logger
 import com.yawnandpawn.app.core.onboarding.OnboardingRepository
+import com.yawnandpawn.app.core.reminder.SkipReminderScheduler
+import com.yawnandpawn.app.core.reminder.SkipTodaysAlarms
 import com.yawnandpawn.app.core.session.SessionLockGuard
 import com.yawnandpawn.app.core.session.SessionRecorder
 import com.yawnandpawn.app.core.session.SessionState
@@ -164,8 +165,9 @@ class FakeRequestCodeSequence(
 
 /**
  * The four alarm use cases and [AlarmScheduling] wired to one repository, lock, request-code sequence and scheduler,
- * as the app wires them. Every part can be replaced; the defaults are fakes. Story 7.11: the pre-alarm jobs ([work],
- * [preAlarmNotifier], unlocked) follow every scheduling call, and [skip] / [undoSkip] write through [history].
+ * as the app wires them. Every part can be replaced; the defaults are fakes. 0.1.8: the Skip reminder ([work],
+ * [skipReminderNotifier], [skipReminderStore], unlocked) follows every scheduling call; [skip] / [undoSkip] (Story 7.11)
+ * and [skipToday] write through [history].
  */
 class AlarmUseCasesFixture(
     val repository: AlarmRepository = FakeAlarmRepository(),
@@ -186,10 +188,12 @@ class AlarmUseCasesFixture(
     val commitmentEvents: FakeCommitmentEventRepository = FakeCommitmentEventRepository(),
     /** The onboarding progress SaveAlarm checks for the disclosure consent (Story 5.10); completed unless a test says. */
     val onboarding: OnboardingRepository = FakeOnboardingRepository(),
-    /** Where the pre-alarm jobs go (Story 7.11). */
+    /** Where the Skip reminder job goes (0.1.8). */
     val work: FakeBackgroundWork = FakeBackgroundWork(),
-    /** The pre-alarm notifications (Story 7.11). */
-    val preAlarmNotifier: FakePreAlarmNotifier = FakePreAlarmNotifier(),
+    /** The Skip reminder notification (0.1.8). */
+    val skipReminderNotifier: FakeSkipReminderNotifier = FakeSkipReminderNotifier(),
+    /** The Skip reminder switch and last reminded date (0.1.8). */
+    val skipReminderStore: FakeSkipReminderStore = FakeSkipReminderStore(),
     /** The session history the skip use cases write through `SessionRecorder` (Story 7.11). */
     val history: FakeSessionHistoryRepository = FakeSessionHistoryRepository(),
     /** The skipped rows' session ids come from their own generator, so they never shift the alarm ids a test expects. */
@@ -197,9 +201,19 @@ class AlarmUseCasesFixture(
 ) {
     /** The commitment events' ids come from their own generator, so they never shift the alarm ids a test expects. */
     val commitments = CommitmentLog(commitmentEvents, FakeIdGenerator(), timeZoneProvider)
-    val preAlarms = PreAlarmScheduler(work, preAlarmNotifier, clock, timeZoneProvider, FakeUserLockState(unlocked = true), logger)
-    val scheduling = AlarmScheduling(repository, scheduler, clock, timeZoneProvider, lock, logger, preAlarms = preAlarms)
     val sessionLock = SessionLockGuard(sessionState, restored = MutableStateFlow(true), emergency = MutableStateFlow(false))
+    val skipReminder =
+        SkipReminderScheduler(
+            repository,
+            skipReminderStore,
+            skipReminderNotifier,
+            work,
+            clock,
+            timeZoneProvider,
+            FakeUserLockState(unlocked = true),
+            logger,
+        ) { sessionLock.isLocked }
+    val scheduling = AlarmScheduling(repository, scheduler, clock, timeZoneProvider, lock, logger, skipReminder = skipReminder)
     val recorder = SessionRecorder(history)
     val staleSkips = DiscardStaleSkips(history, recorder, timeZoneProvider, logger)
     val save =
@@ -223,4 +237,5 @@ class AlarmUseCasesFixture(
     val reRegisterCode = ReRegisterCode(repository, clock, lock, sessionLock, checkConfigs)
     val skip = SkipNextAlarm(repository, recorder, sessionIds, clock, timeZoneProvider, lock, scheduling, sessionLock, logger)
     val undoSkip = UndoSkip(repository, history, recorder, clock, timeZoneProvider, lock, scheduling, sessionLock, logger)
+    val skipToday = SkipTodaysAlarms(repository, skip, clock, timeZoneProvider)
 }

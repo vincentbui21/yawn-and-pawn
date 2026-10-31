@@ -443,6 +443,9 @@ class SessionLockGuardScanTest {
                 // The weekly summary switch (Story 6.8 review): its store write is inside whenIdle (SetWeeklySummaryTest refuses
                 // it during a session); only the work alignment runs after the guard, so a ring never waits on WorkManager.
                 "SetWeeklySummary" to "store write guarded; work alignment after the guard",
+                // The Skip reminder switch (0.1.8), likewise: its store write is inside whenIdle (SkipReminderTest refuses
+                // it during a session); the reminder is aligned after the guard.
+                "SetSkipReminder" to "store write guarded; reminder alignment after the guard",
             )
 
         val DECLARATION =

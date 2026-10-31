@@ -27,7 +27,6 @@ import com.yawnandpawn.app.core.session.SessionEngine
 import com.yawnandpawn.app.core.session.ThemeMode
 import com.yawnandpawn.app.ui.App
 import com.yawnandpawn.app.ui.nav.AppOpenRequests
-import com.yawnandpawn.app.ui.nav.SkipRequests
 import com.yawnandpawn.app.ui.shell.AppTab
 import com.yawnandpawn.app.ui.theme.colors
 import com.yawnandpawn.app.ui.theme.resolveColorSet
@@ -50,13 +49,9 @@ import org.koin.android.ext.android.inject
  * While it is resumed and the alarm rings (Ringing, Grace, Loud or an emergency ring), it opens the wake screen
  * (Story 2.5): opening the app during a ring brings the user back to the alarm.
  *
- * Launched (or brought back) with [EXTRA_OPEN_TAB] = [OPEN_PROGRESS] (the weekly summary notification, Story 6.8), it
- * asks the navigation to open Progress ([AppOpenRequests]); the extra is then removed, so a recreation never opens it
- * again. During a session or onboarding the request is dropped.
- *
- * Launched (or brought back) with [EXTRA_SKIP_ALARM] (a pre-alarm notification's "Skip this one", Story 7.11), it hands
- * the alarm id to [SkipRequests], and the app asks "Skip the {time} alarm?" over Home; nothing is skipped
- * before "Skip". The extra is removed the same way, and dropped during a session or onboarding.
+ * Launched (or brought back) with [EXTRA_OPEN_TAB] = [OPEN_PROGRESS] (the weekly summary notification, Story 6.8) or
+ * [OPEN_ALARMS] (the Skip reminder notification, 0.1.8), it asks the navigation to open that tab ([AppOpenRequests]);
+ * the extra is then removed, so a recreation never opens it again. During a session or onboarding the request is dropped.
  */
 class MainActivity : ComponentActivity() {
     private val notificationPermission: AndroidNotificationPermission by inject()
@@ -79,8 +74,6 @@ class MainActivity : ComponentActivity() {
     private val settings: GlobalSettingsRepository by inject()
 
     private val openRequests: AppOpenRequests by inject()
-
-    private val skipRequests: SkipRequests by inject()
 
     private val requestNotifications = registerForActivityResult(ActivityResultContracts.RequestPermission()) { }
 
@@ -148,29 +141,26 @@ class MainActivity : ComponentActivity() {
             openRequestedTab(intent)
         } else {
             intent.removeExtra(EXTRA_OPEN_TAB)
-            intent.removeExtra(EXTRA_SKIP_ALARM)
         }
         setContent {
             App()
         }
     }
 
-    /** Story 6.8: the weekly summary tapped while the app is open (single top). */
+    /** Story 6.8: the weekly summary (0.1.8: or the Skip reminder) tapped while the app is open (single top). */
     override fun onNewIntent(intent: Intent) {
         super.onNewIntent(intent)
         setIntent(intent)
         openRequestedTab(intent)
     }
 
-    /**
-     * Asks the navigation for the tab in [EXTRA_OPEN_TAB], or the skip of the alarm in [EXTRA_SKIP_ALARM] (Story 7.11), if
-     * any, and removes the extras so each is handled once.
-     */
+    /** Asks the navigation for the tab in [EXTRA_OPEN_TAB], if any, and removes the extra so it is handled once. */
     private fun openRequestedTab(intent: Intent) {
-        if (intent.getStringExtra(EXTRA_OPEN_TAB) == OPEN_PROGRESS) openRequests.open(AppTab.Progress)
-        intent.getStringExtra(EXTRA_SKIP_ALARM)?.let(skipRequests::request)
+        when (intent.getStringExtra(EXTRA_OPEN_TAB)) {
+            OPEN_PROGRESS -> openRequests.open(AppTab.Progress)
+            OPEN_ALARMS -> openRequests.open(AppTab.Alarms)
+        }
         intent.removeExtra(EXTRA_OPEN_TAB)
-        intent.removeExtra(EXTRA_SKIP_ALARM)
     }
 
     /**
@@ -187,14 +177,14 @@ class MainActivity : ComponentActivity() {
     }
 
     companion object {
-        /** The tab to open (Story 6.8); [OPEN_PROGRESS] is the only value. */
+        /** The tab to open (Story 6.8): [OPEN_PROGRESS] or [OPEN_ALARMS]. */
         const val EXTRA_OPEN_TAB = "openTab"
 
         /** [EXTRA_OPEN_TAB]'s value for Progress (the weekly summary notification). */
         const val OPEN_PROGRESS = "progress"
 
-        /** The alarm id whose "Skip this one" was tapped on its pre-alarm notification (Story 7.11). */
-        const val EXTRA_SKIP_ALARM = "skipAlarm"
+        /** [EXTRA_OPEN_TAB]'s value for Alarms (Home; the Skip reminder notification, 0.1.8). */
+        const val OPEN_ALARMS = "alarms"
 
         /** The document picker's filter for "Pick a file" (Story 7.4); some providers report Ogg audio as `application/ogg`. */
         val AUDIO_FILES = arrayOf("audio/*", "application/ogg")

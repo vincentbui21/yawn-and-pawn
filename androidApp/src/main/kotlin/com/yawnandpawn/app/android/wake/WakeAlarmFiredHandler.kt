@@ -1,15 +1,14 @@
 package com.yawnandpawn.app.android.wake
 
-import com.yawnandpawn.app.core.alarm.Alarm
 import com.yawnandpawn.app.core.alarm.AlarmFired
 import com.yawnandpawn.app.core.alarm.AlarmFiredHandler
 import com.yawnandpawn.app.core.alarm.AlarmRepository
-import com.yawnandpawn.app.core.alarm.PreAlarmNotifier
 import com.yawnandpawn.app.core.error.DomainError
 import com.yawnandpawn.app.core.error.Outcome
 import com.yawnandpawn.app.core.log.LogEvent
 import com.yawnandpawn.app.core.log.Logger
 import com.yawnandpawn.app.core.log.WakeStage
+import com.yawnandpawn.app.core.reminder.SkipReminderNotifier
 import com.yawnandpawn.app.core.session.SessionSlotRearm
 import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.currentCoroutineContext
@@ -35,8 +34,8 @@ import kotlin.time.TimeSource
  * - The test alarm (Story 1.18): start the service with the test action and the time the test was armed for; it rings
  *   the pending test config. Nothing is re-armed (a test rings once).
  * - The re-arm runs even when the read or the start throws.
- * - Story 7.11: once the start was asked for, the alarm's pre-alarm notification ("Skip this one") is removed: that
- *   occurrence is ringing. Only that cancel runs here; the re-arm re-syncs the pre-alarm job for the next ring.
+ * - 0.1.8: once the start was asked for, the Skip reminder notification (or its "Today's alarms are skipped." confirmation)
+ *   is removed: an alarm is ringing. Only that cancel runs here; the re-arm re-syncs the reminder for the next date.
  * - After a start, the fire is not handled until [WakeService] took that start (its [WakeServiceStarts] token), at
  *   most [WakeServiceStarts.wait] from the fire's start, so the receiver's budget never cuts the wait: the receiver's
  *   broadcast stays open meanwhile, so the phone does not freeze the process between the start and `onStartCommand`.
@@ -51,21 +50,19 @@ class WakeAlarmFiredHandler(
     private val timings: WakeTimings = WakeTimings.None,
     private val timeSource: TimeSource = TimeSource.Monotonic,
     private val rearm: SessionSlotRearm,
-    /** Removes the ringing alarm's pre-alarm notification (Story 7.11); none in tests that do not post one. */
-    private val preAlarms: PreAlarmNotifier? = null,
+    /** Removes the Skip reminder notification when an alarm rings (0.1.8); none in tests that do not post one. */
+    private val skipReminder: SkipReminderNotifier? = null,
 ) : AlarmFiredHandler {
     override suspend fun onAlarmFired(fired: AlarmFired) {
         val begin = timeSource.markNow()
         val token = starts.newToken()
         var started = false
         try {
-            var stored: Alarm? = null
             var rings = true
             try {
                 // Whether the stored alarm rings: it is enabled, or it cannot be read (the service then rings the default).
                 when (val read = repository.get(fired.alarmId)) {
                     is Outcome.Success -> {
-                        stored = read.value
                         rings = read.value.enabled
                     }
 
@@ -75,7 +72,7 @@ class WakeAlarmFiredHandler(
                 }
             } finally {
                 if (rings) started = startOrRearm(fired, token)
-                stored?.let(::removePreAlarm)
+                if (rings) removeSkipReminder()
             }
         } finally {
             // The re-arm never depends on the read or the start: a start that throws still re-arms the next occurrence.
@@ -126,10 +123,10 @@ class WakeAlarmFiredHandler(
         return started
     }
 
-    /** The occurrence of [alarm] rings now: its "Skip this one" notification goes (a failure is logged). */
-    private fun removePreAlarm(alarm: Alarm) {
-        val removed = preAlarms?.cancel(alarm.requestCode) ?: return
-        if (removed is Outcome.Failure) logger.log(LogEvent.OperationFailed.of("remove pre-alarm notification", removed.error))
+    /** An alarm rings now: the Skip reminder notification goes (a failure is logged). */
+    private fun removeSkipReminder() {
+        val removed = skipReminder?.cancel() ?: return
+        if (removed is Outcome.Failure) logger.log(LogEvent.OperationFailed.of("remove skip reminder", removed.error))
     }
 
     private inline fun start(request: () -> Boolean): Boolean = request().also { timings.stage(WakeStage.ServiceStartRequested) }

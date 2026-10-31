@@ -59,7 +59,7 @@ MADE TO RING
 MAKE IT YOURS
 • Record a short message to yourself. Hear it once you are up, or mixed into the ringing.
 • Wake up to your own song or sound file. If the file goes missing, a built-in sound plays instead.
-• Need a day off? An optional reminder before the alarm lets you skip just that morning, for free.
+• Up early? A reminder 2 hours before your first alarm lets you skip that day, for free.
 
 SEE YOUR PROGRESS
 Your streak of on-time mornings, on-time rate, a calendar of each morning and the money you paid.
@@ -91,7 +91,7 @@ Yawn & Pawn is for adults (18+). We recommend turning on purchase authentication
 - **Phone stays usable, other ways to stop it, 30 minutes:** the payments page "How the alarm behaves" and the terms, word for word in meaning (FR-ONB-5 disclosure).
 - **Refunded automatically:** terms "Unused payments".
 - **Checks listed:** only the four checks a user can pick in this build. House Hunt moved to v2 (owner 2026-10-27) and is not mentioned.
-- **Make it yours (Epic 7, built 2026-10-28):** recordings play after "I'm up" (Story 7.3) or mixed into the ring (7.5); own sound file with a built-in fallback (7.4); printable QR (7.10); the skip reminder is optional and skipping is free (7.11, FR-ALM-10). Recordings stay on the phone (privacy policy, 7.1).
+- **Make it yours (Epic 7, built 2026-10-28):** recordings play after "I'm up" (Story 7.3) or mixed into the ring (7.5); own sound file with a built-in fallback (7.4); printable QR (7.10); the Skip reminder is one Settings switch, on by default, and skipping is free (7.11, changed in 0.1.8 on 2026-10-31, FR-ALM-10). Recordings stay on the phone (privacy policy, 7.1).
 - **Progress:** Stories 6.3 to 6.7 are on `main`. The Sunday weekly summary (Story 6.8) is not built, so it is not mentioned.
 - **Privacy paragraph:** matches the privacy policy's short version. It does not say "nothing leaves your phone", because crash reports always do.
 - **No reliability promise:** the text says the checklist and test alarm help, never that the alarm always rings (terms "No guarantee that an alarm rings").

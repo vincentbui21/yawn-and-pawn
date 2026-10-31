@@ -13,6 +13,8 @@ import com.yawnandpawn.app.core.error.DomainError
 import com.yawnandpawn.app.core.error.Outcome
 import com.yawnandpawn.app.core.log.LogEvent
 import com.yawnandpawn.app.core.log.WakeStage
+import com.yawnandpawn.app.core.reminder.SkipReminderNotifier
+import com.yawnandpawn.app.core.reminder.SkipReminderTarget
 import com.yawnandpawn.app.core.session.SessionReducer
 import com.yawnandpawn.app.core.session.SessionSlotRearm
 import com.yawnandpawn.app.core.session.SessionState
@@ -22,6 +24,7 @@ import com.yawnandpawn.app.testing.FakeAlarmRepository
 import com.yawnandpawn.app.testing.FakeAlarmScheduler
 import com.yawnandpawn.app.testing.FakeClock
 import com.yawnandpawn.app.testing.FakeLogger
+import com.yawnandpawn.app.testing.FakeSkipReminderNotifier
 import com.yawnandpawn.app.testing.FakeTime
 import com.yawnandpawn.app.testing.SchedulerCall
 import com.yawnandpawn.app.testing.aSession
@@ -36,6 +39,8 @@ import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
 import kotlinx.coroutines.test.testTimeSource
 import kotlinx.coroutines.withTimeoutOrNull
+import kotlinx.datetime.LocalDate
+import kotlinx.datetime.LocalTime
 import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -43,9 +48,11 @@ import org.robolectric.RobolectricTestRunner
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
 import kotlin.test.assertFalse
+import kotlin.test.assertNotNull
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
 import kotlin.time.Duration
+import kotlin.time.Duration.Companion.hours
 import kotlin.time.Duration.Companion.milliseconds
 import kotlin.time.Duration.Companion.minutes
 import kotlin.time.Duration.Companion.seconds
@@ -94,6 +101,7 @@ class WakeAlarmFiredHandlerTest {
         starter: WakeServiceStarter = this.starter,
         starts: WakeServiceStarts = this.starts,
         timeSource: TimeSource = TimeSource.Monotonic,
+        skipReminder: SkipReminderNotifier? = null,
         schedule: suspend (AlarmFired) -> Unit = { steps += "re-arm" },
     ) = WakeAlarmFiredHandler(
         repository,
@@ -113,6 +121,7 @@ class WakeAlarmFiredHandlerTest {
         timings,
         timeSource,
         rearm,
+        skipReminder,
     )
 
     @Test
@@ -174,6 +183,21 @@ class WakeAlarmFiredHandlerTest {
 
         assertNull(finished, "timed out")
         assertEquals(listOf(WakeService.ACTION_ALARM to "alarm-a"), startedAlarms())
+    }
+
+    @Test
+    fun `a fire of an enabled alarm removes the Skip reminder, a disabled one leaves it (0_1_8)`() {
+        val notifier = FakeSkipReminderNotifier()
+        val target = SkipReminderTarget(LocalDate(2027, 3, 9), fired.scheduledAt, LocalTime(7, 0))
+        notifier.post(target, 2.hours)
+        runBlocking { repository.upsert(anAlarm(id = "alarm-a", enabled = false)) }
+
+        runBlocking { handler(skipReminder = notifier).onAlarmFired(fired) }
+        assertNotNull(notifier.showing, "a disabled alarm does not ring")
+
+        runBlocking { repository.upsert(anAlarm(id = "alarm-a")) }
+        runBlocking { handler(skipReminder = notifier).onAlarmFired(fired) }
+        assertNull(notifier.showing)
     }
 
     @Test

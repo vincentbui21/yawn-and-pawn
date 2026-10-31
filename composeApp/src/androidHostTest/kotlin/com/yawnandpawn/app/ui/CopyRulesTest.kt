@@ -62,7 +62,7 @@ class CopyRulesTest {
     }
 
     @Test
-    fun `the skip next alarm strings are EXPERIENCE's Key strings (Story 7_11)`() {
+    fun `the skip strings are EXPERIENCE's Key strings (Story 7_11, 0_1_8 Skip reminder)`() {
         val compose = CopyRules.stringFiles(composeResources).flatMap { CopyRules.read(it) }.associate { it.key to it.text }
         val android =
             CopyRules
@@ -70,33 +70,36 @@ class CopyRulesTest {
                 .flatMap { CopyRules.read(it) }
                 .associate { it.key to it.text }
 
+        // Home's card keeps "Next ring skipped" / "Don't skip"; the editor switch and the skip dialog are gone (0.1.8).
         assertEquals(
             mapOf(
-                "editor_offer_skip" to "Offer to skip 2 h before",
-                "skip_title" to "Skip the %1\$s alarm?",
-                "skip_rings_again_tomorrow" to "It rings again tomorrow.",
-                "skip_rings_again_on_day" to "It rings again on %1\$s.",
-                "skip_confirm" to "Skip",
-                "skip_keep" to "Keep it",
-                "skip_done" to "Skipped. No charge.",
                 "alarm_card_skipped" to "Next ring skipped",
                 "alarm_dont_skip" to "Don't skip",
+                "settings_skip_reminder" to "Skip reminder",
+                "settings_skip_reminder_body" to "If you're up early, ask to skip today's alarms.",
             ),
             compose.filterKeys {
-                it == "editor_offer_skip" || it.startsWith("skip_") || it == "alarm_card_skipped" ||
-                    it == "alarm_dont_skip"
+                it.startsWith("skip_") || it == "editor_offer_skip" || it == "alarm_card_skipped" || it == "alarm_dont_skip" ||
+                    it.startsWith("settings_skip_reminder")
             },
         )
-        // The notification text is the Home countdown's wording; "{time} alarm" is the epic's title (listed for the owner).
         assertEquals(
             mapOf(
                 "notification_channel_upcoming_alarms" to "Upcoming alarms",
-                "pre_alarm_title" to "%1\$s alarm",
-                "pre_alarm_rings_in_hours" to compose.getValue("home_rings_in_hours"),
-                "pre_alarm_rings_in_minutes" to compose.getValue("home_rings_in_minutes"),
-                "pre_alarm_skip_action" to "Skip this one",
+                "skip_reminder_title" to "Up already?",
+                "skip_reminder_text_hours" to "Your %1\$s alarm rings in %2\$d h %3\$d min. Skip today\\'s alarms?",
+                "skip_reminder_text_minutes" to "Your %1\$s alarm rings in %2\$d min. Skip today\\'s alarms?",
+                "skip_reminder_skip" to "Skip today\\'s alarms",
+                "skip_reminder_keep" to "Keep",
+                "skip_reminder_done" to "Today\\'s alarms are skipped. No charge.",
+                "skip_reminder_text_hours_tomorrow" to "Your %1\$s alarm rings in %2\$d h %3\$d min. Skip tomorrow\\'s alarms?",
+                "skip_reminder_text_minutes_tomorrow" to "Your %1\$s alarm rings in %2\$d min. Skip tomorrow\\'s alarms?",
+                "skip_reminder_skip_tomorrow" to "Skip tomorrow\\'s alarms",
+                "skip_reminder_done_tomorrow" to "Tomorrow\\'s alarms are skipped. No charge.",
             ),
-            android.filterKeys { it == "notification_channel_upcoming_alarms" || it.startsWith("pre_alarm_") },
+            android.filterKeys {
+                it == "notification_channel_upcoming_alarms" || it.startsWith("skip_reminder_") || it.startsWith("pre_alarm_")
+            },
         )
     }
 

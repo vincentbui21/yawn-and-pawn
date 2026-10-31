@@ -20,6 +20,7 @@ import com.yawnandpawn.app.core.history.SessionHistoryRepository
 import com.yawnandpawn.app.core.onboarding.OnboardingRepository
 import com.yawnandpawn.app.core.recording.RecordingRepository
 import com.yawnandpawn.app.core.reliability.ReliabilityRecords
+import com.yawnandpawn.app.core.reminder.SkipReminderStore
 import com.yawnandpawn.app.core.reset.DeletionMarker
 import com.yawnandpawn.app.core.reset.LocalDataEraser
 import com.yawnandpawn.app.core.reset.SessionHistoryEraser
@@ -60,6 +61,7 @@ import com.yawnandpawn.app.data.settings.DataStoreMissedNoteDismissals
 import com.yawnandpawn.app.data.settings.DataStorePriceCacheStore
 import com.yawnandpawn.app.data.settings.DataStoreReRegisterDismissals
 import com.yawnandpawn.app.data.settings.DataStoreReliabilityRecords
+import com.yawnandpawn.app.data.settings.DataStoreSkipReminderStore
 import com.yawnandpawn.app.data.settings.DataStoreTestAlarmStore
 import com.yawnandpawn.app.data.settings.DataStoreWeeklySummaryStore
 import com.yawnandpawn.app.data.settings.InstallIdDataStore
@@ -124,6 +126,8 @@ val dataModule =
         single<OnboardingRepository> { get<SettingsDataStore>().onboarding(get()) }
         // The weekly summary switch and the last handled week (Story 6.8), in the same backed-up DataStore.
         single<WeeklySummaryStore> { DataStoreWeeklySummaryStore(get<SettingsDataStore>().store, get()) }
+        // The Skip reminder switch and the last reminded date (0.1.8), in the same backed-up DataStore.
+        single<SkipReminderStore> { DataStoreSkipReminderStore(get<SettingsDataStore>().store, get()) }
         // The reliability checklist's records (Story 5.3): the rows seen OK, the locked test pass and the maker
         // confirmation, in their own device-protected DataStore, never backed up (review fix 14); released like the others.
         single { ReliabilityDataStore(get<Context>()) } withOptions { onClose { it?.close() } }

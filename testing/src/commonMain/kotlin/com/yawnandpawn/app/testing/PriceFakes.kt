@@ -144,9 +144,9 @@ class FakePriceCatalog(
 
 /**
  * [BackgroundWork] that keeps every enqueued job in [enqueued]; set [failure] to refuse them. The weekly summary calls
- * (Story 6.8) are kept apart, in [weeklySchedules] and [weeklyCancels]; set [failWeekly] to refuse those. The pre-alarm
- * jobs (Story 7.11) are kept apart too: [preAlarms] holds each alarm's pending delay (a schedule replaces it, a cancel
- * removes it), [preAlarmCalls] every call in order; set [failPreAlarm] to refuse them.
+ * (Story 6.8) are kept apart, in [weeklySchedules] and [weeklyCancels]; set [failWeekly] to refuse those. The Skip
+ * reminder job (0.1.8) is kept apart too: [skipReminder] holds its pending delay, [skipReminderCalls] every call in order;
+ * set [failSkipReminder] to refuse them. [preAlarmCancels] records the update cleanup of Story 7.11's jobs.
  */
 class FakeBackgroundWork : BackgroundWork {
     private val recorded = mutableListOf<BackgroundJob>()
@@ -191,46 +191,51 @@ class FakeBackgroundWork : BackgroundWork {
         return Outcome.Success(Unit)
     }
 
-    private val pendingPreAlarms = MutableStateFlow<Map<String, Duration>>(emptyMap())
-    private val preAlarmLog = MutableStateFlow<List<PreAlarmCall>>(emptyList())
+    private val legacyCancels = MutableStateFlow<List<String>>(emptyList())
+    private val reminder = MutableStateFlow<Duration?>(null)
+    private val reminderLog = MutableStateFlow<List<Duration?>>(emptyList())
 
-    /** Set to refuse the pre-alarm calls (Story 7.11), as the adapter does before the first unlock. */
-    var failPreAlarm: DomainError? = null
+    /** Set to refuse the Skip reminder calls (0.1.8), as the adapter does before the first unlock. */
+    var failSkipReminder: DomainError? = null
 
-    /** The pending pre-alarm job of each alarm id, with its delay (REPLACE: the latest schedule wins). */
-    val preAlarms: Map<String, Duration>
-        get() = pendingPreAlarms.value
+    /** The pending Skip reminder job's delay (REPLACE: the latest schedule wins), or null when none is pending. */
+    val skipReminder: Duration?
+        get() = reminder.value
 
-    /** Every pre-alarm call, oldest first. */
-    val preAlarmCalls: List<PreAlarmCall>
-        get() = preAlarmLog.value
+    /** Every Skip reminder call, oldest first: a schedule's delay, or null for a cancel. */
+    val skipReminderCalls: List<Duration?>
+        get() = reminderLog.value
 
-    override fun schedulePreAlarm(
-        alarmId: String,
-        delay: Duration,
-    ): Outcome<Unit, DomainError> {
-        failPreAlarm?.let { return Outcome.Failure(it) }
-        pendingPreAlarms.update { it + (alarmId to delay.coerceAtLeast(Duration.ZERO)) }
-        preAlarmLog.update { it + PreAlarmCall.Schedule(alarmId, delay) }
-        return Outcome.Success(Unit)
-    }
+    /** The alarm ids whose Story 7.11 pre-alarm job was cancelled ([cancelPreAlarm]), oldest first. */
+    val preAlarmCancels: List<String>
+        get() = legacyCancels.value
 
     override fun cancelPreAlarm(alarmId: String): Outcome<Unit, DomainError> {
-        failPreAlarm?.let { return Outcome.Failure(it) }
-        pendingPreAlarms.update { it - alarmId }
-        preAlarmLog.update { it + PreAlarmCall.Cancel(alarmId) }
+        legacyCancels.update { it + alarmId }
         return Outcome.Success(Unit)
     }
-}
 
-/** One pre-alarm call on [FakeBackgroundWork] (Story 7.11). */
-sealed interface PreAlarmCall {
-    data class Schedule(
-        val alarmId: String,
-        val delay: Duration,
-    ) : PreAlarmCall
+    /** The policy of each Skip reminder schedule, oldest first. */
+    val skipReminderPolicies: List<SchedulePolicy>
+        get() = reminderPolicies.value
 
-    data class Cancel(
-        val alarmId: String,
-    ) : PreAlarmCall
+    private val reminderPolicies = MutableStateFlow<List<SchedulePolicy>>(emptyList())
+
+    override fun scheduleSkipReminder(
+        delay: Duration,
+        policy: SchedulePolicy,
+    ): Outcome<Unit, DomainError> {
+        failSkipReminder?.let { return Outcome.Failure(it) }
+        reminderPolicies.update { it + policy }
+        reminder.value = delay.coerceAtLeast(Duration.ZERO)
+        reminderLog.update { it + delay }
+        return Outcome.Success(Unit)
+    }
+
+    override fun cancelSkipReminder(): Outcome<Unit, DomainError> {
+        failSkipReminder?.let { return Outcome.Failure(it) }
+        reminder.value = null
+        reminderLog.update { it + null }
+        return Outcome.Success(Unit)
+    }
 }

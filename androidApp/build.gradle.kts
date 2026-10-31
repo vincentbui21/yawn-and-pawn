@@ -87,6 +87,8 @@ android {
         buildConfigField("String", "PRIVACY_URL", "\"${appLink("privacy.url")}\"")
         buildConfigField("String", "TERMS_URL", "\"${appLink("terms.url")}\"")
         buildConfigField("String", "SUPPORT_URL", "\"${appLink("support.url")}\"")
+        // 0.1.7 polish: the site's home page, About's "Website" row.
+        buildConfigField("String", "WEBSITE_URL", "\"${appLink("index.url")}\"")
     }
 
     signingConfigs {

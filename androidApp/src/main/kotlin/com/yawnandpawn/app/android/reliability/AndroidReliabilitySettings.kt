@@ -48,8 +48,12 @@ class AndroidReliabilitySettings(
      *   app's notification settings;
      * - Full-screen alarm (API 34+) and Exact alarms (API 31+): their special app access page for this app;
      * - Do Not Disturb: its priority settings, where alarms are allowed;
-     * - Battery: the battery optimisation list while the app is not exempt; once exempt, the app details, where
-     *   background restriction (its Battery page) lives;
+     * - Battery: from API 31 (Android 12) always this app's App info page, whose Battery page has the optimisation
+     *   switch (and background restriction), so the user lands on the app's own page and not the list of all apps
+     *   (0.1.7 polish). Below API 31 App info has no such switch, so the battery optimisation list (no permission
+     *   needed) while the app is not exempt, and App info once exempt. The app never sends
+     *   REQUEST_IGNORE_BATTERY_OPTIMIZATIONS: Google Play allows it only when Doze breaks an app's core function, and
+     *   `setAlarmClock` alarms fire in Doze;
      * - everything else (Camera, Manufacturer, Microphone, Test alarm, and the screens an API level lacks): app details.
      */
     @SuppressLint("InlinedApi") // Each action is used only on the API level that has it.
@@ -77,7 +81,7 @@ class AndroidReliabilitySettings(
                 Intent(Settings.ACTION_ZEN_MODE_PRIORITY_SETTINGS)
             }
 
-            row == ChecklistRow.Battery && !(batteryExempt?.invoke() ?: platformBatteryExempt()) -> {
+            row == ChecklistRow.Battery && sdkInt < Build.VERSION_CODES.S && !(batteryExempt?.invoke() ?: platformBatteryExempt()) -> {
                 Intent(Settings.ACTION_IGNORE_BATTERY_OPTIMIZATION_SETTINGS)
             }
 

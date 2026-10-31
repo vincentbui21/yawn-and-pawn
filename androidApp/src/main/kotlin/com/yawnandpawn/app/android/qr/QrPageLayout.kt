@@ -8,9 +8,10 @@ import com.yawnandpawn.app.ui.qr.QrMatrix
 
 /**
  * Where the printable QR sits on a page (Story 7.10), in PostScript points (1/72 inch, the PDF page unit) from the
- * page's top left: the code itself (its dark modules, without the quiet zone) is exactly 6 cm square in the middle of
- * the page, the white quiet zone around it is extra, and the line "Scan this to stop your alarm." is centred under it,
- * below the quiet zone. Any page size works; A4 and Letter are the usual ones.
+ * page's top left: the code itself (its dark modules, without the quiet zone) is 14 cm square in the middle of the page
+ * (0.1.7 polish, was 6 cm), the white quiet zone around it is extra, and the line "Scan this to stop your alarm." is
+ * centred under it, below the quiet zone. A4 and Letter in portrait fit the full 14 cm; a smaller or landscape page gets
+ * the largest side whose widest quiet zone and line stay on the page ([fittingSide]).
  */
 data class QrPageLayout(
     val pageWidth: Float,
@@ -27,18 +28,21 @@ data class QrPageLayout(
         const val POINTS_PER_INCH = 72f
         const val CM_PER_INCH = 2.54f
 
-        /** The code's side without the quiet zone: 6 cm. */
-        const val SIDE_CM = 6f
+        /** The code's side without the quiet zone: 14 cm (0.1.7 polish), where the page fits it. */
+        const val SIDE_CM = 14f
 
         /**
          * The line's size and its gap under the code, in points (print only, not a screen type token). The gap is wider
-         * than the 4-module quiet zone of any QR version (version 1: 4 of 21 modules of 6 cm, about 32 points), so the
+         * than the 4-module quiet zone of any QR version (version 1: 4 of 21 modules of 14 cm, about 76 points), so the
          * text never enters it.
          */
-        const val LINE_TEXT_SIZE = 14f
-        const val LINE_GAP = 36f
+        const val LINE_TEXT_SIZE = 18f
+        const val LINE_GAP = 88f
 
         private const val MILS_PER_INCH = 1000f
+
+        /** The widest quiet zone per side as a share of the code: version 1, 4 of its 21 modules. */
+        private const val WIDEST_QUIET_ZONE = 4f / 21f
 
         /** [centimetres] in points. */
         fun points(centimetres: Float): Float = centimetres / CM_PER_INCH * POINTS_PER_INCH
@@ -51,7 +55,7 @@ data class QrPageLayout(
             pageWidth: Float,
             pageHeight: Float,
         ): QrPageLayout {
-            val side = points(SIDE_CM)
+            val side = minOf(points(SIDE_CM), fittingSide(pageWidth, pageHeight))
             val left = (pageWidth - side) / 2
             val top = (pageHeight - side) / 2
             return QrPageLayout(
@@ -63,6 +67,20 @@ data class QrPageLayout(
                 lineCenter = pageWidth / 2,
                 lineBaseline = top + side + LINE_GAP + LINE_TEXT_SIZE,
             )
+        }
+
+        /**
+         * The largest side, centred on a [pageWidth] x [pageHeight] page, whose widest quiet zone stays on the page across
+         * and down, and whose line (its gap, its size and one more line height below for the descenders) ends on it.
+         */
+        fun fittingSide(
+            pageWidth: Float,
+            pageHeight: Float,
+        ): Float {
+            val withQuietZone = 1 + 2 * WIDEST_QUIET_ZONE
+            // The code is centred, so the line takes the space below it twice: once under the code, once mirrored above.
+            val belowCode = LINE_GAP + 2 * LINE_TEXT_SIZE
+            return minOf(pageWidth / withQuietZone, pageHeight / withQuietZone, pageHeight - 2 * belowCode)
         }
     }
 }

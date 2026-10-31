@@ -114,6 +114,16 @@ enum class EditorPane {
 /** The repeat quick choices "Once" · "Weekdays" · "Custom"; Custom reveals the day chips. */
 enum class RepeatChoice { Once, Weekdays, Custom }
 
+/**
+ * The next ring as the time card's line says it: [daysAhead] days after today (0 today, 1 tomorrow, more on its
+ * [dayOfWeek]) at [time].
+ */
+data class RingsAt(
+    val daysAhead: Int,
+    val dayOfWeek: DayOfWeek,
+    val time: LocalTime,
+)
+
 /** What the Alarm editor screen renders. */
 data class EditorUiState(
     /** `true` for a new alarm ("New alarm"), `false` when editing a stored one ("Edit alarm"). */
@@ -122,10 +132,11 @@ data class EditorUiState(
     val isLoading: Boolean = false,
     val form: EditorForm = EditorForm(),
     /**
-     * One-time alarm whose time has passed today: when it actually rings tomorrow (the chosen time, or later in a DST
-     * gap), shown as "Rings tomorrow at {time}."; `null` shows no note.
+     * When the alarm next rings (the chosen time, or later in a DST gap), always shown under the wheels as "Rings today at
+     * {time}.", "Rings tomorrow at {time}." or "Rings on {weekday} at {time}." (0.1.7 polish: the line never comes and
+     * goes, so the layout does not jump); `null` (not computed yet) keeps the line's space empty.
      */
-    val ringsTomorrowAt: LocalTime? = null,
+    val ringsAt: RingsAt? = null,
     /** The field `SaveAlarm` rejected; [AlarmField.Label] shows "Keep the label under 40 characters." on the field. */
     val fieldError: AlarmField? = null,
     val showDiscardDialog: Boolean = false,
@@ -143,7 +154,7 @@ data class EditorUiState(
     val full: FullEditorSections? = null,
     /** Editing a stored alarm: the header's overflow menu offers Duplicate and Delete (also for TalkBack). */
     val hasOverflowMenu: Boolean = false,
-    /** Delete was chosen in the overflow menu: "Delete your {time} alarm? This is logged." for the stored time. */
+    /** Delete was chosen in the overflow menu: "Delete the {time} alarm?" for the stored time. */
     val deleteDialogTime: LocalTime? = null,
     /**
      * The Sound row's value and the Sound sub-screen's list (Story 1.17); `null` shows the default sound's name and no

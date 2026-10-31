@@ -22,6 +22,7 @@ enum class SettingsRow {
     WeeklySummary,
     UsageStats,
     Reliability,
+    About,
 }
 
 /** A commitment-lock note after a weakening change: it takes effect after the next alarm at [time]. */
@@ -125,8 +126,11 @@ sealed interface SettingsIntent {
     /** "Fix" on the reliability banner: opens the reliability checklist (Story 5.4). */
     data object FixSettings : SettingsIntent
 
-    /** The "Reliability checklist" row: opens the checklist (Story 5.4). */
+    /** The "Make sure alarms ring" row: opens the checklist (Story 5.4). */
     data object ReliabilityClicked : SettingsIntent
+
+    /** The "About" row: opens the About page (0.1.7 polish). */
+    data object AboutClicked : SettingsIntent
 
     data object BackToAlarm : SettingsIntent
 
@@ -138,4 +142,7 @@ sealed interface SettingsIntent {
 sealed interface SettingsEffect {
     /** Open the reliability checklist (Story 5.4). */
     data object OpenReliability : SettingsEffect
+
+    /** Open the About page (0.1.7 polish). */
+    data object OpenAbout : SettingsEffect
 }

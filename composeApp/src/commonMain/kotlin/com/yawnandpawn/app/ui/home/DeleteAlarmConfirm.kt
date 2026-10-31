@@ -11,8 +11,8 @@ import kotlinx.datetime.LocalTime
 import org.jetbrains.compose.resources.stringResource
 
 /**
- * `dialog-confirm` before an alarm is deleted (from Home or the editor): "Delete your {time} alarm? This is logged.",
- * the destructive "Delete" and "Keep it", the safe default (Back and a tap outside keep it too).
+ * `dialog-confirm` before an alarm is deleted (from Home or the editor): "Delete the {time} alarm?" (0.1.7 polish; the
+ * deletion is still logged), the destructive "Delete" and "Keep it", the safe default (Back and a tap outside keep it too).
  */
 @Composable
 internal fun DeleteAlarmConfirm(

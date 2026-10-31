@@ -25,7 +25,7 @@ The test runs for 14 days, from **[START DATE: owner fills in]** to **[END DATE:
 
 1. Open the app and follow the setup. It explains how the alarm behaves and asks you to choose a snooze fee (in this test, nothing is charged).
 2. Create your first alarm.
-3. On "Make sure it rings", go through every item and fix what it marks. This is the reliability checklist. It is also in **Settings > Reliability checklist**.
+3. On "Make sure it rings", go through every item and fix what it marks. This is the reliability checklist. It is also in **Settings > Make sure alarms ring**.
 4. Ring the test alarm with your screen locked. It should light up the screen and ring over the lock screen. A test alarm never charges you.
 5. The app asks if you want to share anonymous usage stats. Either answer is fine for the test.
 
@@ -36,7 +36,7 @@ Use Yawn & Pawn for your real wake-up, with your second alarm set a few minutes 
 - **Wake up for free:** tap "I'm up" and finish the check. The alarm goes quiet while you do it.
 - **Snooze a few times:** tap Snooze, confirm, and pay with the test card. Check that the snooze starts and the alarm rings again later. Each snooze in the same morning should cost more than the last.
 - **Try every check:** Math, Word Unscramble, Memory Sequence and QR/Barcode (scan a code you put in another room, such as a barcode on a box).
-- **Once a week:** open **Settings > Reliability checklist** and fix anything it marks. Phone updates sometimes turn settings back off.
+- **Once a week:** open **Settings > Make sure alarms ring** and fix anything it marks. Phone updates sometimes turn settings back off.
 - **Once a week, a locked test alarm:** lock your phone, then ring a test alarm (from the alarm editor's "Test alarm", or "Ring a test alarm" in the checklist). Check that it shows on the lock screen and rings. Test alarms are always free.
 
 If you have time, these help us a lot too:

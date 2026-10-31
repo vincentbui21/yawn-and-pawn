@@ -360,3 +360,6 @@
   summary: The real print dialog's outcome decides whether a printed QR code is registered; only a phone can check it.
   evidence: A new code is registered only when the adapter's `onFinish` sees the `PrintJob` as QUEUED, STARTED, BLOCKED or COMPLETED. Every automated test fakes the print service, and the adapter's `onLayout`/`onWrite` callbacks cannot be built in tests (package-private constructors). The page itself (`writeQrPdf`) is decoded with ML Kit on the managed device.
   status: assigned to Story 7.12. On the phone: (a) Home "Re-register", then "Make a printable QR", then Replace, then cancel the print dialog: the old sheet still stops the alarm; (b) "Save as PDF" completes: the new code is registered and the saved PDF (and a 6 cm print) scans from 30 cm; (c) the print preview shows the code centred with "Scan this to stop your alarm." under it.
+- source_spec: `_bmad-output/implementation-artifacts/spec-0-1-7-polish.md`
+  summary: Add a test for the Home list's entrance (cards fade and rise once on open, instant with animator scale 0, no replay on return from the editor).
+  evidence: Review of 0.1.7 polish (verification gap): no test reads the graphics-layer alpha on Home; the motion is checked only on the phone.

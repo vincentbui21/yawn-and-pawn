@@ -35,7 +35,7 @@ class ReliabilityScreenshotTest {
         name: String,
         state: ReliabilityUiState,
         mode: PpsThemeMode = PpsThemeMode.Light,
-        expected: String = "Reliability checklist",
+        expected: String = "Make sure alarms ring",
     ) = withScreen(mode, content = { ReliabilityScreen(state = state, onIntent = {}) }) {
         composeRule.onNodeWithText(expected, useUnmergedTree = true).assertExists()
         composeRule.onRoot().captureRoboImage("src/test/screenshots/$name.png", roborazziOptions = screenshotOptions)

@@ -6,6 +6,7 @@ import com.yawnandpawn.app.ui.checkpicker.CheckPickerUiState
 import com.yawnandpawn.app.ui.editor.EditorIntent
 import com.yawnandpawn.app.ui.editor.EditorUiState
 import com.yawnandpawn.app.ui.editor.RepeatChoice
+import com.yawnandpawn.app.ui.editor.RingsAt
 import com.yawnandpawn.app.ui.format.Weekdays
 import com.yawnandpawn.app.ui.reliability.ChecklistItem
 import com.yawnandpawn.app.ui.reliability.ChecklistRow
@@ -41,10 +42,10 @@ data class OnboardingUiState(
     /** "Custom" was chosen, so the day chips show even while the days match "Once" or "Weekdays". */
     val customRepeat: Boolean = false,
     /**
-     * A one-time first alarm whose time has passed today: when it actually rings tomorrow, shown on the time card as "Rings
-     * tomorrow at {time}." (like the editor); `null` shows no note.
+     * When the first alarm next rings, always shown on the time card as "Rings today / tomorrow / on {weekday} at {time}."
+     * (like the editor); `null` (not computed yet) keeps the line's space empty.
      */
-    val ringsTomorrowAt: LocalTime? = null,
+    val ringsAt: RingsAt? = null,
     /**
      * The stored first alarm, edited after Back close to its ring, keeps a weaker change pending under the commitment lock
      * (Story 4.6): "Saved. Takes effect after tomorrow's {time} alarm." under step 4's cards, as in the editor.

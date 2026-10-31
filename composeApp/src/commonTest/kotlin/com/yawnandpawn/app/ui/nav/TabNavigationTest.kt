@@ -246,6 +246,29 @@ class TabNavigationTest {
     }
 
     @Test
+    fun `About is pushed once over Settings, only while Settings is on top, and closes to it (0_1_7 polish)`() {
+        val settings = stack(Route.Alarms, Route.Settings)
+        assertNull(Route.About.tab)
+
+        settings.openAbout()
+        settings.openAbout()
+        assertEquals(listOf<NavKey>(Route.Alarms, Route.Settings, Route.About), settings)
+        settings.close(Route.About)
+        settings.close(Route.About)
+        assertEquals(listOf<NavKey>(Route.Alarms, Route.Settings), settings)
+
+        // Never over another tab, the checklist or the session lock.
+        listOf(stack(Route.Alarms), stack(Route.Alarms, Route.You), stack(Route.Alarms, Route.Settings, Route.Reliability)).forEach {
+            val before = it.toList()
+            it.openAbout()
+            assertEquals(before, it)
+        }
+        val locked = stack(Route.SessionInProgress)
+        locked.openAbout()
+        assertEquals(listOf<NavKey>(Route.SessionInProgress), locked)
+    }
+
+    @Test
     fun `the maker guidance is pushed over the checklist once, only from there, and closes to it`() {
         val backStack = stack(Route.Alarms, Route.Settings)
         assertNull(Route.ManufacturerGuidance.tab)

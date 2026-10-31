@@ -124,7 +124,7 @@ class WeeklySummarySwitch(
  * nothing.
  *
  * The reliability banner (Story 5.4) follows the checklist's `alarmBlocking`, evaluated on every start; "Fix" and the
- * "Reliability checklist" row open the checklist through [effects].
+ * "Make sure alarms ring" row open the checklist through [effects]; the "About" row opens the About page.
  *
  * [state] is null until the stored settings are read, so no default value flashes. When the ViewModel is cleared, the
  * base fee and max snoozes saves still queued are logged as dropped, and the defaults and the theme are finished in
@@ -265,6 +265,10 @@ class SettingsViewModel(
             SettingsIntent.ReliabilityClicked,
             -> {
                 onGeneralIntent(intent)
+            }
+
+            SettingsIntent.AboutClicked -> {
+                mutableEffects.trySend(SettingsEffect.OpenAbout)
             }
 
             // The other rows belong to later Epic 5 stories; production does not show them.

@@ -8,6 +8,7 @@ import com.yawnandpawn.app.ui.checksetup.CheckPreviewUiState
 import com.yawnandpawn.app.ui.checksetup.CheckSetupUiState
 import com.yawnandpawn.app.ui.editor.CheckChip
 import com.yawnandpawn.app.ui.editor.CheckMode
+import com.yawnandpawn.app.ui.editor.RingsAt
 import com.yawnandpawn.app.ui.format.Countdown
 import com.yawnandpawn.app.ui.format.Weekdays
 import com.yawnandpawn.app.ui.format.formatMoney
@@ -34,6 +35,7 @@ import com.yawnandpawn.app.ui.wake.CheckContent
 import com.yawnandpawn.app.ui.wake.HouseHuntResult
 import com.yawnandpawn.app.ui.wake.MathOperator
 import com.yawnandpawn.app.ui.wake.MemoryPhase
+import kotlinx.datetime.DayOfWeek
 import kotlinx.datetime.LocalTime
 
 /**
@@ -107,7 +109,8 @@ object PreviewSetupSamples {
             pricesApproximate = true,
         )
 
-    val onboardingFirstAlarm: OnboardingUiState get() = onboarding.copy(step = OnboardingStep.FirstAlarm)
+    val onboardingFirstAlarm: OnboardingUiState
+        get() = onboarding.copy(step = OnboardingStep.FirstAlarm, ringsAt = RingsAt(1, DayOfWeek.TUESDAY, onboarding.alarmTime))
 
     val onboardingChecks: OnboardingUiState get() = onboarding.copy(step = OnboardingStep.Checks)
 

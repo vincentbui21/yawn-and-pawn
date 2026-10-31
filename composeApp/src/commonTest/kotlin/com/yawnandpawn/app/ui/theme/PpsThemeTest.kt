@@ -152,6 +152,7 @@ class PpsThemeTest {
                 Triple(type.title, 20 to 26, 600),
                 Triple(type.buttonWake, 20 to 24, 500),
                 Triple(type.body, 16 to 24, 400),
+                Triple(type.dialogBody, 15 to 22, 400),
                 Triple(type.label, 14 to 20, 500),
                 Triple(type.caption, 12 to 16, 400),
             )
@@ -166,7 +167,7 @@ class PpsThemeTest {
     fun `tabular figures are on for clock-xl, display, title and button-wake only`() {
         val type = ppsTypography()
         listOf(type.clockXl, type.display, type.title, type.buttonWake).forEach { assertEquals("tnum", it.fontFeatureSettings) }
-        listOf(type.headline, type.body, type.label, type.caption).forEach { assertNull(it.fontFeatureSettings) }
+        listOf(type.headline, type.body, type.dialogBody, type.label, type.caption).forEach { assertNull(it.fontFeatureSettings) }
     }
 
     /** Linear font scaling (Android 13 and older), where the cap is needed. */

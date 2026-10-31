@@ -9,6 +9,7 @@ package com.yawnandpawn.app.ui.links
  * @property privacyUrl the privacy policy on the project's GitHub Pages site (`docs/site/privacy.md`).
  * @property termsUrl the terms on the site (`docs/site/terms.md`).
  * @property supportUrl the support page on the site (`docs/site/support.md`).
+ * @property websiteUrl the site's home page (`docs/site/index.md`), About's "Website" row.
  */
 data class AppLinks(
     val supportEmail: String,
@@ -16,6 +17,7 @@ data class AppLinks(
     val privacyUrl: String,
     val termsUrl: String,
     val supportUrl: String,
+    val websiteUrl: String,
 )
 
 /**

@@ -149,10 +149,10 @@ class DefaultsSettingsSemanticsTest {
         show(DefaultsSettingsSamples.main) {
             composeRule.onNode(hasText("Weekly summary")).assertExists()
             // Story 5.6.
-            composeRule.onNode(hasText("Share anonymous usage stats")).assertExists()
+            composeRule.onNode(hasText("Share usage stats")).assertExists()
             // Story 5.4: the row opens the checklist.
             composeRule
-                .onNode(hasText("Reliability checklist") and hasClickAction())
+                .onNode(hasText("Make sure alarms ring") and hasClickAction())
                 .performScrollTo()
                 .assertHeightIsAtLeast(48.dp)
         }

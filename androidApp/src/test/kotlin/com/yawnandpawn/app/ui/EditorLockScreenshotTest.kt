@@ -94,10 +94,10 @@ internal object EditorLockSamples {
             alarms = listOf(AlarmCard("1", LocalTime(7, 30), DayOfWeek.entries.toSet(), "Stand-up", emptyList(), enabled = true)),
         )
 
-    /** 23:31, the 07:30 alarm switched off: "It rings in 7 h". */
+    /** 23:31, the 07:30 alarm switched off: "It rings in 7 hours.". */
     val turnOffHours = home.copy(disableDialog = DisableUnderLock("1", LocalTime(7, 30), Countdown.HoursMinutes(7, 59)))
 
-    /** 06:48: "It rings in 42 min". */
+    /** 06:48: "It rings in 42 minutes.". */
     val turnOffMinutes =
         home.copy(
             nextAlarm = Countdown.Minutes(42),
@@ -157,8 +157,8 @@ class EditorLockScreenshotTest {
     private val ladder = "Snooze 1: $2.00 · 2: $4.00 · 3: $6.00"
     private val approximate = "Approximate. Your local price shows when you're online."
     private val note = "Saved. Takes effect after tomorrow's 7:30 AM alarm."
-    private val hours = "Turn off your 7:30 AM alarm? It rings in 7 h. This is logged."
-    private val minutes = "Turn off your 7:30 AM alarm? It rings in 42 min. This is logged."
+    private val hours = "It rings in 7 hours."
+    private val minutes = "It rings in 42 minutes."
 
     @Test
     fun `fee ladder in Light`() = editor("editor_fee_ladder_light", EditorLockSamples.ladderLoaded, PpsThemeMode.Light, ladder)

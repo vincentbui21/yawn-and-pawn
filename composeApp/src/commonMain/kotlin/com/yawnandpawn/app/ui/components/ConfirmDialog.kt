@@ -9,7 +9,8 @@ import com.yawnandpawn.app.ui.theme.PpsTheme
 /**
  * `dialog-confirm`: two actions, the safe one ([safeText]) is the default dismiss: Back, a tap outside and the
  * prominent end-position button all run [onSafe]. [confirmText] runs [onConfirm] and uses `error` text when
- * [destructive]. `surface` container, `rounded.lg`, title in `headline`, optional [body] in `body`.
+ * [destructive]. `surface` container, `rounded.lg`, title in `title` (20 sp), optional [body] in `dialog-body` (15 sp)
+ * and `text-secondary` (0.1.7 polish: every app dialog).
  */
 @Composable
 fun ConfirmDialog(
@@ -34,11 +35,11 @@ fun ConfirmDialog(
                 contentColor = if (destructive) colors.error else colors.accentText,
             )
         },
-        title = { Text(text = title, style = PpsTheme.typography.headline) },
-        text = body?.let { { Text(text = it, style = PpsTheme.typography.body) } },
+        title = { Text(text = title, style = PpsTheme.typography.title) },
+        text = body?.let { { Text(text = it, style = PpsTheme.typography.dialogBody) } },
         shape = PpsTheme.shapes.lg,
         containerColor = colors.surface,
         titleContentColor = colors.text,
-        textContentColor = colors.text,
+        textContentColor = colors.textSecondary,
     )
 }

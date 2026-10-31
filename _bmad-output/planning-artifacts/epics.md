@@ -358,7 +358,7 @@ FR-SET-3, FR-SET-4 and FR-SET-5, together with Purchase history (FR-PRG-4), are 
 - UX-DR88: F3 Grace expiry: countdown reaches 0 → "Time's up. Alarm's back on until you finish.", strong haptic, full volume, progress kept → completion → "You're up. That's what counts."; snooze during grace keeps mute only until countdown ends.
 - UX-DR89: F4 Paid snooze with rising fee and failed payment: Snooze · price → sheet with 500 ms guard and full copy → Pay → unlocking state → keyguard → Play sheet with alarm at full volume → "Snoozed. Next ring at {time}." screen off → re-ring with session line and next price; failure paths: pending (disabled "payment pending", auto-start if confirmed during check, success note about auto-refund otherwise), unlock cancelled/cancelled/error/offline per outcomes table, late-cleared payment opens already-paid state next time.
 - UX-DR90: F5 Fallback check with TalkBack and revoked camera: TalkBack reads "6:15. I'm up, button." → QR check camera fails → message + link immediately → picker with Math first → spoken problem, announced number pad → alarm stops with no sighted step; Day detail shows fallback badge; failure: link after 5 failed scans, no second fallback per session, re-register prompt after 3 in 7 days.
-- UX-DR91: F6 Commitment lock: lowering base fee under lock shows "Saved. Takes effect after tomorrow's {time} alarm."; toggling alarm off within 8 h shows dialog "Turn off your {time} alarm? It rings in {hours} h. This is logged." with safe default "Keep it on"; confirmed turn-off is logged; strengthening applies immediately.
+- UX-DR91: F6 Commitment lock: lowering base fee under lock shows "Saved. Takes effect after tomorrow's {time} alarm."; toggling alarm off within 8 h shows dialog "Turn off your {time} alarm? It rings in {hours} h. This is logged." (0.1.7 polish: "Turn off the {time} alarm?" with "It rings in {hours} hours.") with safe default "Keep it on"; confirmed turn-off is logged; strengthening applies immediately.
 - UX-DR92: F7 Reliability warning: revoked battery optimization → non-dismissible Home banner → checklist row reason → Fix deep-link → row turns OK on return and banner clears itself → "Ring a test alarm".
 - UX-DR93: F8 Overnight reboot before first unlock: rings on lock screen, Direct Boot notice, default sound, Snooze disabled with lock icon; after unlock on the lock screen the wake screen stays on top, button becomes "Snooze · {price}", Math stays for the ring.
 - UX-DR94: F9 Review progress: weekly summary notification tap → Progress (30-morning ring with the streak, three stat tiles, `card-streak`, money and Insight) → a ring or calendar day's label chip → Day detail (snoozes, paid, check, timeline) → Purchase history.
@@ -793,7 +793,7 @@ So that I trust what will happen tomorrow morning.
 **Given** an alarm card
 **When** the user long-presses it, or opens the editor overflow menu (for TalkBack)
 **Then** a menu offers "Duplicate" and "Delete"; Duplicate creates a copy with a new id and `requestCode` and opens it in the editor
-**And** Delete opens `dialog-confirm` "Delete your {time} alarm? This is logged." with "Delete" (in `error` colour) and "Keep it" as the default dismiss; confirming deletes the alarm and writes an `AlarmDeleted(alarmId, at)` entry through the `Logger` port
+**And** Delete opens `dialog-confirm` "Delete your {time} alarm? This is logged." (0.1.7 polish: "Delete the {time} alarm?") with "Delete" (in `error` colour) and "Keep it" as the default dismiss; confirming deletes the alarm and writes an `AlarmDeleted(alarmId, at)` entry through the `Logger` port
 
 **Given** a storage read failure
 **When** Home loads the alarm list, or the editor loads an alarm
@@ -2326,11 +2326,11 @@ So that I know the price before the morning and don't weaken my plan by accident
 
 **Given** an enabled alarm inside the lock window on Home
 **When** the user toggles its `switch` off
-**Then** a `dialog-confirm` "Turn off your {time} alarm? It rings in {hours} h. This is logged." opens with "Turn off" and "Keep it on" (the default dismiss), {hours} being whole hours rounded down, and under 1 h the body reads "Turn off your {time} alarm? It rings in {minutes} min. This is logged." (EXPERIENCE.md Key strings)
+**Then** a `dialog-confirm` "Turn off your {time} alarm? It rings in {hours} h. This is logged." opens with "Turn off" and "Keep it on" (the default dismiss), {hours} being whole hours rounded down, and under 1 h the body reads "Turn off your {time} alarm? It rings in {minutes} min. This is logged." (EXPERIENCE.md Key strings; 0.1.7 polish: title "Turn off the {time} alarm?", body "It rings in {n} hours." / "It rings in 1 hour." / "It rings in {n} minutes." / "It rings in 1 minute.")
 **And** "Turn off" disables the alarm (cancelling its schedule) and calls `RecordCommitmentEvent(Disabled)`; "Keep it on", Back or tapping outside leaves it enabled; outside the lock window the switch turns off with no dialog (Story 1.9 behaviour)
 
 **Given** a delete inside the lock window
-**When** the user confirms the existing "Delete your {time} alarm? This is logged." dialog (Story 1.9)
+**When** the user confirms the existing "Delete your {time} alarm? This is logged." dialog (Story 1.9; "Delete the {time} alarm?" since 0.1.7 polish)
 **Then** `RecordCommitmentEvent(Deleted)` is written in addition to the Story 1.9 log entry, and outside the window no commitment event is written
 
 **Given** the editor and Home states
@@ -2841,7 +2841,7 @@ So that I can make my alarm reliable in a minute and notice when a phone update 
 **Acceptance Criteria:**
 
 **Given** Settings
-**When** the user taps "Reliability checklist" (EXPERIENCE.md Key strings)
+**When** the user taps "Reliability checklist" (EXPERIENCE.md Key strings; "Make sure alarms ring" since 0.1.7 polish)
 **Then** a pushed screen shows each non-hidden row from Story 5.3 as a `checklist-row` (64 dp): leading icon, title (`body`), reason (`caption`), and trailing `check_circle` in `success` with "OK" or a `button-outlined` "Fix"
 **And** row titles and reasons are (EXPERIENCE.md Key strings): "Notifications" · "Needed to show your alarm."; "Full-screen alarm" · "Shows the alarm over the lock screen."; "Exact alarms" · "Lets the alarm ring on time."; "Do Not Disturb" · "Do Not Disturb must allow alarms."; "Battery" · "Stops Android from pausing your alarm."; "Manufacturer settings" · "Your phone may stop apps in the background."; "Camera" · "Needed for your QR/Barcode check."; "Microphone" · "Needed to record messages."; "Test alarm" · "Ring a test with your phone locked."
 **And** a Revoked row's reason reads "Alarm may not ring: {setting} turned back on" or "Alarm may not ring: {setting} turned off" as fits, with exactly "Alarm may not ring: battery optimization turned back on" for Battery (PRD FR-ONB-3) (EXPERIENCE.md Key strings)
@@ -2918,7 +2918,7 @@ So that my mornings stay private unless I choose to help.
 
 **Given** Settings
 **When** the "Usage stats" section renders
-**Then** it has a `switch` "Share anonymous usage stats" (EXPERIENCE.md Key strings), default off, applying immediately
+**Then** it has a `switch` "Share anonymous usage stats" (EXPERIENCE.md Key strings; "Share usage stats" since 0.1.7 polish), default off, applying immediately
 **And** Roborazzi screenshots cover the section in Light and Dark and at 200% font scale
 
 **Given** the owner's Firebase debug project

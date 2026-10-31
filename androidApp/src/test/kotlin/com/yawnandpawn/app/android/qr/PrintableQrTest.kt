@@ -23,7 +23,7 @@ import kotlin.test.assertTrue
 
 /**
  * Story 7.10: the printable code decodes (ZXing) to the code registered for the alarm, its quiet zone is there, a code
- * that cannot be made is logged without its text, the page puts it 6 cm square in the middle of A4 and Letter, and with
+ * that cannot be made is logged without its text, the page puts it 14 cm square in the middle of A4 and Letter, and with
  * no screen to print from nothing is printed.
  */
 class PrintableQrTest {
@@ -86,8 +86,10 @@ class PrintableQrTest {
     }
 
     @Test
-    fun `the page puts the code 6 cm square in the middle of A4 and Letter, the line under it`() {
-        val sixCm = 6f / 2.54f * 72f
+    fun `the page puts the code 14 cm square in the middle of A4 and Letter, the line under its quiet zone`() {
+        val fourteenCm = 14f / 2.54f * 72f
+        // The widest quiet zone: version 1, 4 of its 21 modules.
+        val widestQuietZone = fourteenCm * ZxingQrEncoder.QUIET_ZONE / VERSION_1_MODULES
         val pages =
             mapOf(
                 "A4" to (QrPageLayout.pointsOfMils(A4_WIDTH_MILS) to QrPageLayout.pointsOfMils(A4_HEIGHT_MILS)),
@@ -97,15 +99,44 @@ class PrintableQrTest {
             val (width, height) = size
             val layout = QrPageLayout.of(width, height)
 
-            assertClose(sixCm, layout.side, "$name: 6 cm")
+            assertClose(fourteenCm, layout.side, "$name: 14 cm")
             assertClose(layout.left, width - layout.left - layout.side, "$name: centred across")
             assertClose(layout.top, height - layout.top - layout.side, "$name: centred down")
             assertClose(width / 2, layout.lineCenter, "$name: the line is centred")
             assertTrue(layout.lineBaseline > layout.top + layout.side, "$name: the line is under the code")
+            val lineTop = layout.lineBaseline - QrPageLayout.LINE_TEXT_SIZE
+            assertTrue(lineTop > layout.top + layout.side + widestQuietZone, "$name: the line stays out of the quiet zone")
+            assertTrue(layout.left > 0f && layout.top > 0f, "$name: the code fits the page")
             assertTrue(layout.lineBaseline < height, "$name: on the page")
         }
         assertClose(595.3f, QrPageLayout.pointsOfMils(A4_WIDTH_MILS), "A4 is 595 x 842 points")
         assertClose(612f, QrPageLayout.pointsOfMils(LETTER_WIDTH_MILS), "Letter is 612 x 792 points")
+    }
+
+    @Test
+    fun `on A5 portrait and A4 landscape the code shrinks so its quiet zone and the line stay on the page`() {
+        val fourteenCm = 14f / 2.54f * 72f
+        val pages =
+            mapOf(
+                "A5 portrait" to (QrPageLayout.pointsOfMils(A5_WIDTH_MILS) to QrPageLayout.pointsOfMils(A5_HEIGHT_MILS)),
+                "A4 landscape" to (QrPageLayout.pointsOfMils(A4_HEIGHT_MILS) to QrPageLayout.pointsOfMils(A4_WIDTH_MILS)),
+            )
+        for ((name, size) in pages) {
+            val (width, height) = size
+            val layout = QrPageLayout.of(width, height)
+            val quiet = layout.side * ZxingQrEncoder.QUIET_ZONE / VERSION_1_MODULES
+
+            assertTrue(layout.side < fourteenCm, "$name: smaller than 14 cm, was ${layout.side}")
+            assertTrue(layout.left - quiet >= -TOLERANCE, "$name: quiet zone on the page at the left")
+            assertTrue(layout.left + layout.side + quiet <= width + TOLERANCE, "$name: quiet zone on the page at the right")
+            assertTrue(layout.top - quiet >= -TOLERANCE, "$name: quiet zone on the page at the top")
+            assertClose(layout.top, height - layout.top - layout.side, "$name: centred down")
+            assertTrue(
+                layout.lineBaseline - QrPageLayout.LINE_TEXT_SIZE > layout.top + layout.side + quiet,
+                "$name: line under the quiet zone",
+            )
+            assertTrue(layout.lineBaseline + QrPageLayout.LINE_TEXT_SIZE <= height + TOLERANCE, "$name: the line is on the page")
+        }
     }
 
     @Test
@@ -132,11 +163,14 @@ class PrintableQrTest {
         const val BLACK = 0xFF000000.toInt()
         const val WHITE = 0xFFFFFFFF.toInt()
         const val TOLERANCE = 0.05f
+        const val VERSION_1_MODULES = 21f
 
         // PrintAttributes.MediaSize.ISO_A4 and NA_LETTER, in thousandths of an inch.
         const val A4_WIDTH_MILS = 8268
         const val A4_HEIGHT_MILS = 11693
         const val LETTER_WIDTH_MILS = 8500
         const val LETTER_HEIGHT_MILS = 11000
+        const val A5_WIDTH_MILS = 5827
+        const val A5_HEIGHT_MILS = 8268
     }
 }

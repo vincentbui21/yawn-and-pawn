@@ -1,0 +1,53 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- The app icon for About (0.1.7 polish): the launcher icon's two layers (androidApp res/drawable ic_launcher_background
+     and ic_launcher_foreground, the "Sunrise clock", owner decision 2026-10-29) merged into one vector and cropped to the
+     adaptive icon's visible centre, 72 of its 108 dp: 341.33 of the 512 units, from 85.33 in. Artwork, not UI tokens;
+     keep it in step with the launcher layers. -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:aapt="http://schemas.android.com/aapt"
+    android:width="84dp"
+    android:height="84dp"
+    android:viewportWidth="341.33"
+    android:viewportHeight="341.33">
+    <group
+        android:translateX="-85.33"
+        android:translateY="-85.33">
+        <path android:pathData="M0,0h512v512h-512z">
+            <aapt:attr name="android:fillColor">
+                <gradient
+                    android:endColor="#FF8A3D0E"
+                    android:endX="0"
+                    android:endY="512"
+                    android:startColor="#FF1F1A17"
+                    android:startX="0"
+                    android:startY="0"
+                    android:type="linear" />
+            </aapt:attr>
+        </path>
+        <path
+            android:fillColor="#FF111214"
+            android:pathData="M0,372h512v140h-512z" />
+        <path
+            android:pathData="M146,214L182,178M366,214L330,178"
+            android:strokeWidth="24"
+            android:strokeColor="#FFF5A04E"
+            android:strokeLineCap="round" />
+        <path android:pathData="M154.4,372A118,118 0,1 1,357.6 372Z">
+            <aapt:attr name="android:fillColor">
+                <gradient
+                    android:endColor="#FFF5A04E"
+                    android:endX="0"
+                    android:endY="430"
+                    android:startColor="#FFFFE3B8"
+                    android:startX="0"
+                    android:startY="194"
+                    android:type="linear" />
+            </aapt:attr>
+        </path>
+        <path
+            android:pathData="M256,312V244M256,312L302,338"
+            android:strokeWidth="20"
+            android:strokeColor="#FFA8520A"
+            android:strokeLineCap="round" />
+    </group>
+</vector>

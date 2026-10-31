@@ -416,8 +416,8 @@ class SetAlarmEnabled(
 /**
  * Removes an alarm with its checks in one transaction ([CheckConfigRepository.deleteWithAlarm]) and then cancels its
  * system alarm. `NotFound(id)` when there is no such alarm, and nothing changes; a failed delete changes and cancels
- * nothing, so the alarm stays stored with its checks and armed. A deletion is logged as `AlarmDeleted(id, now)` (the
- * dialog says "This is logged."), and inside the alarm's lock window a `CommitmentEvent(Deleted)` is written too
+ * nothing, so the alarm stays stored with its checks and armed. A deletion is logged as `AlarmDeleted(id, now)`, and
+ * inside the alarm's lock window a `CommitmentEvent(Deleted)` is written too
  * ([CommitmentLog], Story 4.6), both here so no caller can skip them. A failed event write is logged; the alarm stays
  * deleted. Like [SetAlarmEnabled], the guarded write runs to its end even when the caller is cancelled meanwhile.
  */

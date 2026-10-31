@@ -14,6 +14,7 @@ import com.yawnandpawn.app.ui.editor.LadderPrice
 import com.yawnandpawn.app.ui.editor.MotivationChoice
 import com.yawnandpawn.app.ui.editor.MotivationRecording
 import com.yawnandpawn.app.ui.editor.MotivationTiming
+import com.yawnandpawn.app.ui.editor.RingsAt
 import com.yawnandpawn.app.ui.format.Countdown
 import com.yawnandpawn.app.ui.home.AlarmCard
 import com.yawnandpawn.app.ui.home.DisableUnderLock
@@ -147,6 +148,7 @@ object PreviewSamples {
     val editorNew =
         EditorUiState(
             ringsIn = Countdown.HoursMinutes(23, 0),
+            ringsAt = RingsAt(1, DayOfWeek.TUESDAY, EditorForm.DEFAULT_TIME),
             full =
                 FullEditorSections(
                     feeLadder = listOf(price(1), price(2), price(3)).map(LadderPrice::Amount),
@@ -160,6 +162,7 @@ object PreviewSamples {
             isNew = false,
             form = EditorForm(time = LocalTime(7, 30), repeatDays = weekdays, label = "Stand-up"),
             ringsIn = Countdown.HoursMinutes(7, 12),
+            ringsAt = RingsAt(1, DayOfWeek.TUESDAY, LocalTime(7, 30)),
             full =
                 fullSections.copy(
                     motivation = MotivationChoice.Recording("m1"),
@@ -171,7 +174,11 @@ object PreviewSamples {
 
     /** Custom repeat days (Mon, Wed, Fri): the day chips are shown. */
     val editorCustomDays =
-        editorEdit.copy(form = editorEdit.form.copy(repeatDays = setOf(DayOfWeek.MONDAY, DayOfWeek.WEDNESDAY, DayOfWeek.FRIDAY)))
+        editorEdit.copy(
+            form = editorEdit.form.copy(repeatDays = setOf(DayOfWeek.MONDAY, DayOfWeek.WEDNESDAY, DayOfWeek.FRIDAY)),
+            ringsIn = Countdown.DaysHours(1, 7),
+            ringsAt = RingsAt(2, DayOfWeek.WEDNESDAY, LocalTime(7, 30)),
+        )
 
     val editorSoundPane = editorEdit.copy(pane = EditorPane.Sound)
 
@@ -194,7 +201,8 @@ object PreviewSamples {
 
     val editorSoundMissing = editorEdit.copy(sound = editorSound.copy(name = "morning-mix.mp3", missing = true))
 
-    val editorTomorrow = editorNew.copy(ringsTomorrowAt = EditorForm.DEFAULT_TIME, ringsIn = Countdown.HoursMinutes(23, 0))
+    val editorTomorrow =
+        editorNew.copy(ringsAt = RingsAt(1, DayOfWeek.TUESDAY, EditorForm.DEFAULT_TIME), ringsIn = Countdown.HoursMinutes(23, 0))
 
     // Wake flow ----------------------------------------------------------------------------------------------------
 

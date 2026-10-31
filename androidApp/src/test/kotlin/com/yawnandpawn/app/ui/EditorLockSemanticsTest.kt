@@ -14,10 +14,13 @@ import androidx.compose.ui.unit.dp
 import com.yawnandpawn.app.StopAppRule
 import com.yawnandpawn.app.ui.editor.AlarmEditorScreen
 import com.yawnandpawn.app.ui.editor.EditorUiState
+import com.yawnandpawn.app.ui.format.Countdown
+import com.yawnandpawn.app.ui.home.DisableUnderLock
 import com.yawnandpawn.app.ui.home.HomeIntent
 import com.yawnandpawn.app.ui.home.HomeScreen
 import com.yawnandpawn.app.ui.home.HomeUiState
 import com.yawnandpawn.app.ui.theme.PpsThemeMode
+import kotlinx.datetime.LocalTime
 import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -28,7 +31,8 @@ import kotlin.test.assertEquals
 
 /**
  * Story 4.6 with TalkBack in mind, at 200 % font: the "Saved. Takes effect after ..." notes are polite live regions, the
- * snooze lengths and the turn-off dialog's buttons are at least 48 dp, and "Keep it on" leaves the alarm on.
+ * snooze lengths and the turn-off dialog's buttons are at least 48 dp, and "Keep it on" leaves the alarm on. The dialog's
+ * four "It rings in ..." bodies (0.1.7 polish).
  */
 @RunWith(RobolectricTestRunner::class)
 @GraphicsMode(GraphicsMode.Mode.NATIVE)
@@ -76,13 +80,33 @@ class EditorLockSemanticsTest {
     fun `the turn-off dialog's buttons are at least 48 dp, and Keep it on is the safe action`() {
         val intents = mutableListOf<HomeIntent>()
         home(EditorLockSamples.turnOffHours, onIntent = { intents += it }) {
-            composeRule.onNodeWithText("Turn off your 7:30 AM alarm? It rings in 7 h. This is logged.").assertExists()
+            composeRule.onNodeWithText("Turn off the 7:30 AM alarm?").assertExists()
+            composeRule.onNodeWithText("It rings in 7 hours.").assertExists()
             val turnOff = composeRule.onNode(hasText("Turn off") and hasClickAction())
             val keep = composeRule.onNode(hasText("Keep it on") and hasClickAction())
             listOf(turnOff, keep).forEach { it.assertHeightIsAtLeast(48.dp) }
 
             keep.performClick()
             assertEquals(listOf<HomeIntent>(HomeIntent.DisableCancelled), intents)
+        }
+    }
+
+    @Test
+    fun `the turn-off dialog says how long until the ring in hours, 1 hour, minutes or 1 minute (0_1_7 polish)`() {
+        val variants =
+            mapOf(
+                Countdown.HoursMinutes(7, 59) to "It rings in 7 hours.",
+                Countdown.HoursMinutes(1, 30) to "It rings in 1 hour.",
+                Countdown.Minutes(25) to "It rings in 25 minutes.",
+                Countdown.Minutes(1) to "It rings in 1 minute.",
+            )
+        variants.forEach { (ringsIn, body) ->
+            val state = EditorLockSamples.turnOffHours.copy(disableDialog = DisableUnderLock("1", LocalTime(7, 30), ringsIn))
+            home(state) {
+                composeRule.onNodeWithText("Turn off the 7:30 AM alarm?").assertExists()
+                composeRule.onNodeWithText(body).assertExists()
+                composeRule.onNodeWithText("This is logged.", substring = true).assertDoesNotExist()
+            }
         }
     }
 

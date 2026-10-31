@@ -56,8 +56,8 @@ import kotlin.time.Duration.Companion.seconds
 import kotlin.time.Instant
 
 /**
- * Story 4.6: switching an alarm off inside its lock window asks first ("Turn off your {time} alarm? It rings in {hours}
- * h. This is logged."), "Keep it on" is the safe default, "Turn off" disables the alarm and writes the commitment event;
+ * Story 4.6: switching an alarm off inside its lock window asks first ("Turn off the {time} alarm?" / "It rings in {n}
+ * hours.", 0.1.7 polish), "Keep it on" is the safe default, "Turn off" disables the alarm and writes the commitment event;
  * outside the window the switch turns off at once with no event (Story 1.9). Also the editor's "Saved. Takes effect
  * after ..." snackbar.
  */

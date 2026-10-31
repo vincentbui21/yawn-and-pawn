@@ -146,7 +146,7 @@ class MainActivityTest {
 
         composeRule.onNode(hasText("Custom") and hasClickAction()).performClick()
         composeRule.onNodeWithContentDescription("Monday").performClick()
-        composeRule.onNode(hasSetTextAction() and hasContentDescription("Alarm name")).performTextReplacement("Stand-up")
+        composeRule.onNode(hasSetTextAction() and hasText("Alarm name")).performTextReplacement("Stand-up")
         composeRule.onNode(hasText("Vibration") and hasClickAction()).performScrollTo().performClick()
         // Snooze is a row that opens its sub-screen; the sub-screen's back arrow returns with the change kept.
         composeRule.onNode(hasText("Snooze") and hasClickAction()).performScrollTo().performClick()
@@ -311,8 +311,8 @@ class MainActivityTest {
         composeRule.onNode(hasText("Purchase history") and hasClickAction()).assertExists()
 
         // Story 4.5 built the Snooze card's base fee and max snoozes, Story 5.1 the defaults and Appearance, Story 5.2
-        // "Bright wake screen" (on by default, with its caption), Story 5.4 the Reliability checklist row (it leads to the
-        // checklist), Story 6.8 the weekly summary switch (on by default).
+        // "Bright wake screen" (on by default, with its caption), Story 5.4 the "Make sure alarms ring" row (it leads to
+        // the checklist), Story 6.8 the weekly summary switch (on by default).
         tab("Settings").performClick()
         waitForText("Max snoozes per session")
         composeRule.onNode(hasText("Default snooze length", substring = true) and hasClickAction()).assertExists()
@@ -320,7 +320,7 @@ class MainActivityTest {
             .onNode(hasText("Bright wake screen") and hasText("Raises screen brightness while the alarm rings.") and isToggleable())
             .assertIsOn()
         composeRule.onNode(hasText("Weekly summary") and isToggleable()).performScrollTo().assertIsOn()
-        composeRule.onNode(hasText("Reliability checklist") and hasClickAction()).assertExists()
+        composeRule.onNode(hasText("Make sure alarms ring") and hasClickAction()).assertExists()
 
         // Story 5.8 built the links and 5.9 "Delete all data"; only About stays hidden.
         tab("You").performClick()
@@ -451,13 +451,14 @@ class MainActivityTest {
         pinnedClock().set(Instant.parse("2027-03-03T23:30:00Z"))
 
         composeRule.onNodeWithContentDescription("7:00 AM alarm").assertIsOn().performClick()
-        waitForText("Turn off your 7:00 AM alarm? It rings in 7 h. This is logged.")
+        waitForText("Turn off the 7:00 AM alarm?")
+        composeRule.onNodeWithText("It rings in 7 hours.").assertExists()
         composeRule.onNodeWithText("Keep it on").performClick()
-        waitForGone("Turn off your 7:00 AM alarm? It rings in 7 h. This is logged.")
+        waitForGone("Turn off the 7:00 AM alarm?")
         composeRule.onNodeWithContentDescription("7:00 AM alarm").assertIsOn()
 
         composeRule.onNodeWithContentDescription("7:00 AM alarm").performClick()
-        waitForText("Turn off your 7:00 AM alarm? It rings in 7 h. This is logged.")
+        waitForText("Turn off the 7:00 AM alarm?")
         composeRule.onNode(hasText("Turn off") and hasClickAction()).performClick()
 
         composeRule.waitUntil(timeoutMillis = APP_WORK_TIMEOUT_MILLIS) {
@@ -493,13 +494,13 @@ class MainActivityTest {
 
         composeRule.onNode(hasText("7:00 AM") and hasClickAction()).performTouchInput { longClick() }
         composeRule.onNode(hasText("Delete") and hasClickAction()).performClick()
-        waitForText("Delete your 7:00 AM alarm? This is logged.")
+        waitForText("Delete the 7:00 AM alarm?")
         composeRule.onNodeWithText("Keep it").performClick()
         composeRule.onNodeWithText("7:00 AM").assertExists()
 
         composeRule.onNode(hasText("7:00 AM") and hasClickAction()).performTouchInput { longClick() }
         composeRule.onNode(hasText("Delete") and hasClickAction()).performClick()
-        waitForText("Delete your 7:00 AM alarm? This is logged.")
+        waitForText("Delete the 7:00 AM alarm?")
         composeRule.onNodeWithText("Delete").performClick()
 
         waitForText("No alarms yet.")
@@ -586,7 +587,7 @@ class MainActivityTest {
 
         composeRule.onNodeWithContentDescription("More options").performClick()
         composeRule.onNode(hasText("Delete") and hasClickAction()).performClick()
-        waitForText("Delete your 7:00 AM alarm? This is logged.")
+        waitForText("Delete the 7:00 AM alarm?")
         composeRule.onNodeWithText("Delete").performClick()
 
         waitForGone("Edit alarm")

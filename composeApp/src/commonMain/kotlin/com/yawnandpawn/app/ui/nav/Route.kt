@@ -66,7 +66,7 @@ sealed interface Route : NavKey {
     data object ProblemWithCharge : Route
 
     /**
-     * The reliability checklist (Story 5.4), pushed over Settings (its "Reliability checklist" row or banner) or Home
+     * The reliability checklist (Story 5.4), pushed over Settings (its "Make sure alarms ring" row or banner) or Home
      * (the banner's "Fix"); Back returns there. Not a tab, so the nav capsule hides.
      */
     @Serializable
@@ -79,6 +79,13 @@ sealed interface Route : NavKey {
      */
     @Serializable
     data object ManufacturerGuidance : Route
+
+    /**
+     * About (0.1.7 polish): the app icon, name and version with the website, support, privacy policy and terms links,
+     * pushed over Settings from its "About" row; Back returns to Settings. Not a tab, so the nav capsule hides.
+     */
+    @Serializable
+    data object About : Route
 
     /**
      * Day detail of [date] (Story 6.7), pushed over Progress from a ring or calendar chip, or a second tap on the

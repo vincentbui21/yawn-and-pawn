@@ -25,7 +25,7 @@ If you paid but never got the snooze (for example, the payment went through afte
 
 Phones save battery in different ways, and some of them can stop an alarm. To check your phone:
 
-- Open Settings in the app, then the reliability checklist, and fix every item it marks. It covers notifications, full-screen alarms, exact alarms, Do Not Disturb, battery optimisation and your phone maker's background settings.
+- Open Settings in the app, then "Make sure alarms ring", and fix every item it marks. It covers notifications, full-screen alarms, exact alarms, Do Not Disturb, battery optimisation and your phone maker's background settings.
 - Ring a test alarm with your screen locked. It never charges you.
 - Don't force-stop the app: that cancels its alarms until you open it again.
 - Keep the app updated.

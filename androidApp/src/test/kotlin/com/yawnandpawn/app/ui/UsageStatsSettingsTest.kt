@@ -40,7 +40,7 @@ import org.robolectric.annotation.GraphicsMode
 import kotlin.test.assertEquals
 
 /**
- * Story 5.6: the "Share anonymous usage stats" switch in Settings' untitled general card, off by default, stored at once
+ * Story 5.6: the "Share usage stats" switch in Settings' untitled general card, off by default, stored at once
  * by a tap (no Save), in the real app; and its screenshots off and on, in Light, Dark and Light at 200 % font scale.
  */
 @RunWith(RobolectricTestRunner::class)
@@ -55,7 +55,7 @@ class UsageStatsSettingsTest {
 
     private val app: Application = ApplicationProvider.getApplicationContext()
 
-    private val usageStats = hasText("Share anonymous usage stats") and isToggleable()
+    private val usageStats = hasText("Share usage stats") and isToggleable()
 
     private fun storedConsent(): AnalyticsConsent =
         runBlocking {

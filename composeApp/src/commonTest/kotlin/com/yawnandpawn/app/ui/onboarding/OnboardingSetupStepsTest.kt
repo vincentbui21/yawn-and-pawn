@@ -14,6 +14,7 @@ import com.yawnandpawn.app.ui.editor.CheckMode
 import com.yawnandpawn.app.ui.editor.EditorIntent
 import com.yawnandpawn.app.ui.editor.EditorPane
 import com.yawnandpawn.app.ui.editor.RepeatChoice
+import com.yawnandpawn.app.ui.editor.RingsAt
 import com.yawnandpawn.app.ui.format.Weekdays
 import com.yawnandpawn.app.ui.qr.TestCameraPermission
 import com.yawnandpawn.app.ui.reliability.ChecklistItem
@@ -25,6 +26,7 @@ import kotlinx.coroutines.test.StandardTestDispatcher
 import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.runTest
 import kotlinx.coroutines.test.setMain
+import kotlinx.datetime.DayOfWeek
 import kotlinx.datetime.LocalTime
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -55,7 +57,7 @@ class OnboardingSetupStepsTest : OnboardingViewModelFixture() {
             assertEquals(OnboardingStep.FirstAlarm, shown.step)
             assertEquals(LocalTime(7, 0), shown.alarmTime)
             assertEquals(RepeatChoice.Once, shown.repeatChoice)
-            assertEquals(LocalTime(7, 0), shown.ringsTomorrowAt, "at 23:40 a one-time 7:00 rings tomorrow")
+            assertEquals(RingsAt(1, DayOfWeek.TUESDAY, LocalTime(7, 0)), shown.ringsAt, "at 23:40 a one-time 7:00 rings tomorrow")
             assertEquals(listOf(CheckType.Math), shown.checks.checks.map { it.type })
             assertEquals(1, editorsOpened)
         }
@@ -75,7 +77,7 @@ class OnboardingSetupStepsTest : OnboardingViewModelFixture() {
             viewModel.onIntent(OnboardingIntent.RepeatChosen(RepeatChoice.Weekdays))
             assertEquals(LocalTime(6, 30), viewModel.shown.alarmTime)
             assertEquals(Weekdays, viewModel.shown.repeatDays)
-            assertNull(viewModel.shown.ringsTomorrowAt)
+            assertEquals(RingsAt(1, DayOfWeek.TUESDAY, LocalTime(6, 30)), viewModel.shown.ringsAt)
 
             viewModel.next()
             assertEquals(OnboardingStep.Checks, viewModel.shown.step)

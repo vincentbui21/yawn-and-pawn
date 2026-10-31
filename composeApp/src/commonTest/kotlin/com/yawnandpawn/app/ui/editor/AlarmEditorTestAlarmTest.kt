@@ -5,9 +5,11 @@ import com.yawnandpawn.app.core.alarm.AlarmField
 import com.yawnandpawn.app.core.alarm.RequestCodes
 import com.yawnandpawn.app.core.checks.word.WordBank
 import com.yawnandpawn.app.core.checks.word.WordList
+import com.yawnandpawn.app.core.config.GlobalSettingsRepository
 import com.yawnandpawn.app.core.error.DomainError
 import com.yawnandpawn.app.core.error.Outcome
 import com.yawnandpawn.app.core.log.LogEvent
+import com.yawnandpawn.app.core.session.GlobalSettings
 import com.yawnandpawn.app.core.session.ScheduleTestAlarm
 import com.yawnandpawn.app.core.session.SessionConfig
 import com.yawnandpawn.app.core.session.TestAlarmStore
@@ -15,6 +17,7 @@ import com.yawnandpawn.app.testing.AlarmUseCasesFixture
 import com.yawnandpawn.app.testing.FakeAlarmRepository
 import com.yawnandpawn.app.testing.FakeAlarmScheduler
 import com.yawnandpawn.app.testing.FakeClock
+import com.yawnandpawn.app.testing.FakeGlobalSettingsRepository
 import com.yawnandpawn.app.testing.FakeLogger
 import com.yawnandpawn.app.testing.FakeNotificationPermission
 import com.yawnandpawn.app.testing.FakeRequestCodeSequence
@@ -84,20 +87,23 @@ class AlarmEditorTestAlarmTest {
         Dispatchers.resetMain()
     }
 
-    private fun viewModel(alarmId: String? = null) =
-        AlarmEditorViewModel(
-            alarmId = alarmId,
-            repository = repository,
-            checkConfigs = alarms.checkConfigs,
-            saveAlarm = alarms.save,
-            clock = clock,
-            timeZoneProvider = FakeTimeZoneProvider(TimeZone.UTC),
-            actions = AlarmActions(alarms.setEnabled, alarms.delete, logger),
-            soundLibrary = FakeSoundLibrary(),
-            soundPreview = FakeSoundPreview(),
-            notificationPermission = FakeNotificationPermission(),
-            testAlarm = ScheduleTestAlarm(testAlarmScheduler, testAlarmStore, clock, logger),
-        )
+    private fun viewModel(
+        alarmId: String? = null,
+        settings: GlobalSettingsRepository? = null,
+    ) = AlarmEditorViewModel(
+        alarmId = alarmId,
+        repository = repository,
+        checkConfigs = alarms.checkConfigs,
+        saveAlarm = alarms.save,
+        clock = clock,
+        timeZoneProvider = FakeTimeZoneProvider(TimeZone.UTC),
+        actions = AlarmActions(alarms.setEnabled, alarms.delete, logger),
+        soundLibrary = FakeSoundLibrary(),
+        soundPreview = FakeSoundPreview(),
+        notificationPermission = FakeNotificationPermission(),
+        testAlarm = ScheduleTestAlarm(testAlarmScheduler, testAlarmStore, clock, logger),
+        newAlarmDefaults = settings,
+    )
 
     private fun TestScope.effectsOf(viewModel: AlarmEditorViewModel): List<EditorEffect> {
         val effects = mutableListOf<EditorEffect>()
@@ -126,6 +132,22 @@ class AlarmEditorTestAlarmTest {
             assertFalse(config.vibration)
             assertTrue(repository.current.isEmpty(), "a test saves nothing")
             assertEquals("Gym", viewModel.state.value.form.label, "the unsaved form is kept")
+        }
+
+    @Test
+    fun `Test alarm rings with the Settings quiet time and its vibration, whatever the alarm stored (0_1_7)`() =
+        runTest(dispatcher) {
+            repository.upsert(stored.copy(graceSeconds = 30, vibrateInGrace = false, vibration = true))
+            val settings = FakeGlobalSettingsRepository(GlobalSettings(graceSeconds = 17, vibrateInGrace = true))
+            val viewModel = viewModel(stored.id, settings)
+            advanceUntilIdle()
+
+            viewModel.onIntent(EditorIntent.TestAlarmClicked)
+            advanceUntilIdle()
+
+            val config = checkNotNull(testAlarmStore.pending)
+            assertEquals(17, config.graceSeconds)
+            assertTrue(config.vibrateInGrace)
         }
 
     @Test

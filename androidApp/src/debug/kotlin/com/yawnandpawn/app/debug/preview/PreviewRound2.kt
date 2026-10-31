@@ -143,7 +143,7 @@ object PreviewRound2 {
             ),
             settings("settings_max_snoozes", "Max snoozes per session", { s.settingsMaxSnoozes }, group = "Settings sub-screens"),
             settings("settings_snooze_length", "Default snooze length", { s.settingsSnoozeLength }, group = "Settings sub-screens"),
-            settings("settings_quiet_time", "Default quiet time", { s.settingsQuietTime }, group = "Settings sub-screens"),
+            settings("settings_quiet_time", "Quiet time (all alarms)", { s.settingsQuietTime }, group = "Settings sub-screens"),
             reliability("reliability_missing", "Items missing and revoked", s.reliabilityMissing, primary = true),
             reliability("reliability_all_ok", "All OK", s.reliabilityAllOk),
             reliability("reliability_manufacturer", "Manufacturer steps (Xiaomi)", s.reliabilityManufacturer),

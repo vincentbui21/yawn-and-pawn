@@ -81,7 +81,6 @@ import com.yawnandpawn.app.ui.resources.editor_check_chip
 import com.yawnandpawn.app.ui.resources.editor_discard
 import com.yawnandpawn.app.ui.resources.editor_discard_title
 import com.yawnandpawn.app.ui.resources.editor_edit_title
-import com.yawnandpawn.app.ui.resources.editor_grace_seconds
 import com.yawnandpawn.app.ui.resources.editor_keep_editing
 import com.yawnandpawn.app.ui.resources.editor_label_too_long
 import com.yawnandpawn.app.ui.resources.editor_message_none
@@ -93,7 +92,6 @@ import com.yawnandpawn.app.ui.resources.editor_motivation
 import com.yawnandpawn.app.ui.resources.editor_new_title
 import com.yawnandpawn.app.ui.resources.editor_no_check
 import com.yawnandpawn.app.ui.resources.editor_offer_skip
-import com.yawnandpawn.app.ui.resources.editor_quiet_time
 import com.yawnandpawn.app.ui.resources.editor_repeat
 import com.yawnandpawn.app.ui.resources.editor_save
 import com.yawnandpawn.app.ui.resources.editor_save_failed
@@ -209,7 +207,7 @@ fun AlarmEditorRoute(
  * The Alarm editor, stateless (owner decisions 2026-09-27): a header ("New alarm" / "Edit alarm" and "Rings in ..."),
  * the time wheels in their own card, the repeat quick choices, then grouped `card-group`s whose rows show their value
  * and open a sub-screen ([EditorPane]), "Test alarm", and the floating "Cancel | Save" pill. Sub-screens slide in and
- * out. With [EditorUiState.full] it is the full editor (wake-up check, quiet time, motivation, fee ladder); without
+ * out. With [EditorUiState.full] it is the full editor (wake-up check, motivation, fee ladder); without
  * it, the Story 1.8 fields, the Sound row and "Test alarm" (Story 1.18) only.
  *
  * The pill has its own bottom area under the scrolling content and sits above the keyboard (`imePadding`, with the
@@ -400,7 +398,7 @@ private fun NameSoundCard(
     }
 }
 
-/** Card 2: Wake-up check, Quiet time, Snooze and Motivation, each with its value, opening its sub-screen. */
+/** Card 2: Wake-up check, Snooze and Motivation, each with its value, opening its sub-screen (quiet time: Settings, 0.1.7). */
 @Composable
 private fun RowsCard(
     state: EditorUiState,
@@ -423,13 +421,6 @@ private fun RowsCard(
             }
             GroupDivider()
         }
-        // Story 3.4: the quiet time is a stored alarm setting, so its row shows in every editor.
-        NavRow(
-            label = stringResource(Res.string.editor_quiet_time),
-            value = stringResource(Res.string.editor_grace_seconds, state.form.graceSeconds),
-            onClick = { onIntent(EditorIntent.PaneOpened(EditorPane.QuietTime)) },
-        )
-        GroupDivider()
         NavRow(
             label = stringResource(Res.string.editor_snooze),
             value = stringResource(Res.string.editor_snooze_minutes, state.form.snoozeLengthMinutes),

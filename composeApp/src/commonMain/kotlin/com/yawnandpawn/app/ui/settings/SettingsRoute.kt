@@ -24,7 +24,7 @@ val BuiltSettingsRows: Set<SettingsRow> =
         SettingsRow.BaseFee,
         SettingsRow.MaxSnoozes,
         SettingsRow.DefaultSnoozeLength,
-        SettingsRow.DefaultQuietTime,
+        SettingsRow.QuietTime,
         SettingsRow.VibrateDuringQuietTime,
         SettingsRow.BrightWakeScreen,
         SettingsRow.Appearance,

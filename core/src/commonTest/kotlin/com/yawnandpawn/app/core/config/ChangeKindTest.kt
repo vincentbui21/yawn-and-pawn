@@ -29,6 +29,10 @@ class ChangeKindTest {
                 Triple(SettingValue.GraceSeconds(20), SettingValue.GraceSeconds(30), weakening),
                 Triple(SettingValue.GraceSeconds(20), SettingValue.GraceSeconds(15), strengthening),
                 Triple(SettingValue.GraceSeconds(20), SettingValue.GraceSeconds(20), same),
+                // 0.1.7: the global quiet time, the same rule.
+                Triple(SettingValue.QuietTimeSeconds(20), SettingValue.QuietTimeSeconds(30), weakening),
+                Triple(SettingValue.QuietTimeSeconds(30), SettingValue.QuietTimeSeconds(20), strengthening),
+                Triple(SettingValue.QuietTimeSeconds(20), SettingValue.QuietTimeSeconds(20), same),
             )
         cases.forEach { (old, new, kind) -> assertEquals(kind, classify(old, new), "$old -> $new") }
     }

@@ -36,7 +36,6 @@ import com.yawnandpawn.app.ui.editor.EditorForm
 import com.yawnandpawn.app.ui.resources.Res
 import com.yawnandpawn.app.ui.resources.editor_back
 import com.yawnandpawn.app.ui.resources.editor_grace_seconds
-import com.yawnandpawn.app.ui.resources.editor_quiet_time_note
 import com.yawnandpawn.app.ui.resources.editor_snooze_minutes
 import com.yawnandpawn.app.ui.resources.editor_vibrate_quiet_time
 import com.yawnandpawn.app.ui.resources.home_fix
@@ -47,7 +46,6 @@ import com.yawnandpawn.app.ui.resources.settings_appearance
 import com.yawnandpawn.app.ui.resources.settings_base_fee
 import com.yawnandpawn.app.ui.resources.settings_bright_wake
 import com.yawnandpawn.app.ui.resources.settings_bright_wake_caption
-import com.yawnandpawn.app.ui.resources.settings_default_quiet_time
 import com.yawnandpawn.app.ui.resources.settings_default_snooze_length
 import com.yawnandpawn.app.ui.resources.settings_delete_all
 import com.yawnandpawn.app.ui.resources.settings_delete_body
@@ -58,6 +56,9 @@ import com.yawnandpawn.app.ui.resources.settings_max_snoozes
 import com.yawnandpawn.app.ui.resources.settings_no_browser
 import com.yawnandpawn.app.ui.resources.settings_payments
 import com.yawnandpawn.app.ui.resources.settings_privacy
+import com.yawnandpawn.app.ui.resources.settings_quiet_time
+import com.yawnandpawn.app.ui.resources.settings_quiet_time_note
+import com.yawnandpawn.app.ui.resources.settings_quiet_time_value
 import com.yawnandpawn.app.ui.resources.settings_reliability
 import com.yawnandpawn.app.ui.resources.settings_snooze
 import com.yawnandpawn.app.ui.resources.settings_support
@@ -75,8 +76,9 @@ import org.jetbrains.compose.resources.stringResource
 
 /**
  * Settings (the Settings tab), stateless, in grouped `card-group`s whose rows show their value and open a sub-screen
- * (owner decision 2026-09-27): Snooze (base fee, max snoozes, default length), Wake (default quiet time, vibrate during
- * quiet time, bright wake screen), Appearance (System / Light / Dark), weekly summary and usage stats, and "Make sure
+ * (owner decision 2026-09-27): Snooze (base fee, max snoozes, default length), Wake (quiet time and vibrate during quiet
+ * time, for every alarm since 0.1.7; bright wake screen), Appearance (System / Light / Dark), weekly summary and usage stats,
+ * and "Make sure
  * alarms ring" with "About" (0.1.7 polish): app behaviour only (owner decision 2026-10-01, feedback item 26: payments,
  * privacy, delete all data, support and terms moved to the You tab). The
  * reliability `banner-warning` sits on top while an item fails. During a session only `panel-session-in-progress` shows.
@@ -160,7 +162,7 @@ private fun SettingsMain(
     }
 }
 
-/** Wake: default quiet time, vibrate during quiet time, bright wake screen. */
+/** Wake: quiet time ("{seconds} seconds · all alarms", 0.1.7), vibrate during quiet time, bright wake screen. */
 @Composable
 private fun WakeCard(
     state: SettingsUiState,
@@ -171,10 +173,10 @@ private fun WakeCard(
         title = stringResource(Res.string.settings_wake),
         rows =
             listOfNotNull(
-                rowIf(SettingsRow.DefaultQuietTime in rows) {
+                rowIf(SettingsRow.QuietTime in rows) {
                     NavRow(
-                        label = stringResource(Res.string.settings_default_quiet_time),
-                        value = stringResource(Res.string.editor_grace_seconds, state.defaultQuietSeconds),
+                        label = stringResource(Res.string.settings_quiet_time),
+                        value = stringResource(Res.string.settings_quiet_time_value, state.quietSeconds),
                         onClick = { onIntent(SettingsIntent.OpenPane(SettingsPane.QuietTime)) },
                     )
                 },
@@ -282,7 +284,7 @@ private fun SettingsSubScreen(
             SettingsPane.BaseFee -> BaseFeePane(state = state, is24Hour = is24Hour, onIntent = onIntent)
             SettingsPane.MaxSnoozes -> MaxSnoozesPane(state = state, is24Hour = is24Hour, onIntent = onIntent)
             SettingsPane.SnoozeLength -> SnoozeLengthPane(state = state, onIntent = onIntent)
-            SettingsPane.QuietTime -> QuietTimePane(state = state, onIntent = onIntent)
+            SettingsPane.QuietTime -> QuietTimePane(state = state, is24Hour = is24Hour, onIntent = onIntent)
         }
     }
 }
@@ -293,10 +295,10 @@ private fun SettingsPane.title(): StringResource =
         SettingsPane.BaseFee -> Res.string.settings_base_fee
         SettingsPane.MaxSnoozes -> Res.string.settings_max_snoozes
         SettingsPane.SnoozeLength -> Res.string.settings_default_snooze_length
-        SettingsPane.QuietTime -> Res.string.settings_default_quiet_time
+        SettingsPane.QuietTime -> Res.string.settings_quiet_time
     }
 
-/** Default snooze length: 5 / 9 / 10 / 15 min. */
+/** Default snooze length: 5 / 10 / 15 / 30 min. */
 @Composable
 private fun SnoozeLengthPane(
     state: SettingsUiState,
@@ -314,25 +316,28 @@ private fun SnoozeLengthPane(
     }
 }
 
-/** Default quiet time: 15 to 30 s, for new alarms. */
+/**
+ * Quiet time: 15 to 30 s for every alarm (0.1.7), its note, and after making it longer under the commitment lock, "Saved.
+ * Takes effect after ...".
+ */
 @Composable
 private fun QuietTimePane(
     state: SettingsUiState,
+    is24Hour: Boolean,
     onIntent: (SettingsIntent) -> Unit,
 ) {
+    val notePadding = Modifier.padding(horizontal = PpsTheme.spacing.cardPadding)
     GroupCard {
         StepSlider(
-            title = stringResource(Res.string.settings_default_quiet_time),
-            valueText = stringResource(Res.string.editor_grace_seconds, state.defaultQuietSeconds),
-            value = state.defaultQuietSeconds,
+            title = stringResource(Res.string.settings_quiet_time),
+            valueText = stringResource(Res.string.editor_grace_seconds, state.quietSeconds),
+            value = state.quietSeconds,
             range = Alarm.GRACE_SECONDS_RANGE,
             step = 1,
             onValueChange = { onIntent(SettingsIntent.QuietTimeChanged(it)) },
             modifier = Modifier.padding(horizontal = PpsTheme.spacing.cardPadding, vertical = PpsTheme.spacing.space3),
         )
     }
-    NoteInline(
-        text = stringResource(Res.string.editor_quiet_time_note),
-        modifier = Modifier.padding(horizontal = PpsTheme.spacing.cardPadding),
-    )
+    NoteInline(text = stringResource(Res.string.settings_quiet_time_note), modifier = notePadding)
+    state.quietTimeNote?.let { WeakeningNoteInline(note = it, is24Hour = is24Hour, modifier = notePadding) }
 }

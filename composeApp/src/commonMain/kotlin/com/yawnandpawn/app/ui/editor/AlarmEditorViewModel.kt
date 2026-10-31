@@ -103,7 +103,7 @@ data class AlarmEditorArgs(
  * shows its snackbar. The Wake-up check row (Story 3.5) edits the alarm's checks ([checkConfigs]) in the form: tick a
  * check, its setup (difficulty and count within the type's range), Random / All and the order; with none, Save shows
  * "Pick at least one check." and stores nothing. "Offer to skip 2 h before" (Story 7.11) is a switch in card 1, saved
- * through the commitment lock like the quiet time, and the header's "Rings in" passes over a skipped next ring.
+ * through the commitment lock like the checks, and the header's "Rings in" passes over a skipped next ring.
  */
 @Suppress("TooManyFunctions", "LargeClass") // One small handler per editor action; at the size limit before Story 5.1.
 class AlarmEditorViewModel(
@@ -139,8 +139,9 @@ class AlarmEditorViewModel(
     /** The fee ladder's settings and prices (Story 4.6); null shows no ladder (tests that do not price snoozes). */
     private val fees: EditorFeeSources? = null,
     /**
-     * The Settings defaults a new alarm opens with (Story 5.1): snooze length, quiet time and its vibration. Not an edit,
-     * not a Duplicate (which keeps the copied alarm's values). Null opens with the built-in defaults (tests).
+     * The Settings defaults a new alarm opens with (Story 5.1): the snooze length (and the global quiet time and its
+     * vibration for the alarm's unused own columns, 0.1.7). Not an edit, not a Duplicate (which keeps the copied alarm's
+     * values). Null opens with the built-in defaults (tests).
      */
     private val newAlarmDefaults: GlobalSettingsRepository? = null,
     /**
@@ -354,18 +355,13 @@ class AlarmEditorViewModel(
                 sounds.onIntent(intent.intent, ::editForm)
             }
 
-            // Story 3.4: the Quiet time sub-screen.
-            is EditorIntent.GraceChanged -> {
-                editForm { it.copy(graceSeconds = intent.seconds.coerceIn(Alarm.GRACE_SECONDS_RANGE)) }
-            }
-
             else -> {
                 if (!onSwitchIntent(intent) && !onCheckIntent(intent) && !onMotivationIntent(intent)) onMenuIntent(intent)
             }
         }
     }
 
-    /** The form's switches (gradual volume, vibration, vibration in quiet time, "Offer to skip"); false for any other intent. */
+    /** The form's switches (gradual volume, vibration, "Offer to skip"); false for any other intent. */
     private fun onSwitchIntent(intent: EditorIntent): Boolean {
         when (intent) {
             is EditorIntent.GradualVolumeToggled -> {
@@ -374,10 +370,6 @@ class AlarmEditorViewModel(
 
             is EditorIntent.VibrationToggled -> {
                 editForm { it.copy(vibration = intent.enabled) }
-            }
-
-            is EditorIntent.VibrateInGraceToggled -> {
-                editForm { it.copy(vibrateInGrace = intent.enabled) }
             }
 
             // Story 7.11: saved through the commitment lock (turning it on within 8 h waits for the next ring).
@@ -846,6 +838,8 @@ class AlarmEditorViewModel(
     /**
      * "Test alarm": the form as it is now (unsaved changes included, built like a save) rings as a test 10 s later,
      * then "Lock your phone. We'll ring in 10 seconds." shows. A test that cannot be armed is logged and shows nothing.
+     * It rings with the Settings it reads ([testSettings]): the global quiet time and its vibration (0.1.7), the base fee
+     * and max snoozes, as a real ring of this alarm would.
      */
     private fun scheduleTest() {
         val current = _state.value
@@ -859,11 +853,30 @@ class AlarmEditorViewModel(
         testInFlight = true
         viewModelScope.launch {
             // Not cancelled by the editor closing: the config is stored and the alarm armed (or both taken back).
-            val result = withContext(NonCancellable) { testAlarm(current.form.toDraft(alarmId)) }
+            val result =
+                withContext(NonCancellable) { testAlarm(current.form.toDraft(alarmId), globalSettings = testSettings()) }
             testInFlight = false
             when (result) {
                 is Outcome.Success -> _effects.trySend(EditorEffect.ShowTestScheduled)
                 is Outcome.Failure -> actions.logFailure("schedule test alarm", result.error)
+            }
+        }
+    }
+
+    /**
+     * The Settings a test ring uses (0.1.7: the global quiet time and its vibration). A store that cannot be read is
+     * logged and the last-known settings are used, else the built-in ones; without a store (tests), the built-in ones.
+     */
+    private suspend fun testSettings(): GlobalSettings {
+        val store = fees?.globalSettings ?: newAlarmDefaults ?: return GlobalSettings()
+        return when (val read = store.get()) {
+            is Outcome.Success -> {
+                read.value
+            }
+
+            is Outcome.Failure -> {
+                actions.logFailure(LOAD_TEST_SETTINGS, read.error)
+                store.lastKnown()?.settings ?: GlobalSettings()
             }
         }
     }
@@ -1067,9 +1080,9 @@ private fun EditorForm.toDraft(alarmId: String?): AlarmDraft =
     )
 
 /**
- * The production editor's full-editor rows (Story 3.5): the Wake-up check, offering [pickable] (the Quiet time row shows
- * in every editor, Story 3.4), with [motivation] the Motivation row (Story 7.2) and its "When it plays" card (Story 7.5),
- * and the "Offer to skip 2 h before" switch (Story 7.11).
+ * The production editor's full-editor rows (Story 3.5): the Wake-up check, offering [pickable], with [motivation] the
+ * Motivation row (Story 7.2) and its "When it plays" card (Story 7.5), and the "Offer to skip 2 h before" switch (Story
+ * 7.11). The quiet time is in Settings since 0.1.7.
  */
 private fun wakeCheckOnly(
     pickable: List<CheckType>,

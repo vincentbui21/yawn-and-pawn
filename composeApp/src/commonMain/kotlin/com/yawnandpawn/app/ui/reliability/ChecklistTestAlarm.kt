@@ -25,10 +25,10 @@ import kotlin.time.Instant
 /**
  * "Ring a test alarm" on the reliability checklist (Story 5.4, DEFAULT TAKEN 4): a Story 1.18 test through
  * [testAlarm], 10 seconds from now, that rings like the soonest enabled alarm (by its next occurrence): its sound,
- * volume, vibration, quiet time, snooze length and checks, built as the editor's draft of it would be. With no enabled
- * alarm (or alarms that cannot be read) it rings the built-in alarm defaults with the Settings defaults of Story 5.1
- * (quiet time, its vibration and the snooze length); settings that cannot be read count as the built-in ones. Read
- * failures are logged.
+ * volume, vibration, snooze length and checks, built as the editor's draft of it would be. With no enabled alarm (or
+ * alarms that cannot be read) it rings the built-in alarm defaults with the Settings snooze length (Story 5.1). The quiet
+ * time and its vibration are the Settings ones in either case (0.1.7); settings that cannot be read count as the built-in
+ * ones. Read failures are logged.
  */
 class ChecklistTestAlarm(
     private val checks: CheckConfigRepository,
@@ -65,8 +65,8 @@ class ChecklistTestAlarm(
         return AlarmDraft(
             time = LocalTime(time.hour, time.minute),
             snoozeLengthMinutes = defaults.defaultSnoozeLengthMinutes,
-            graceSeconds = defaults.defaultGraceSeconds,
-            vibrateInGrace = defaults.defaultVibrateInGrace,
+            graceSeconds = defaults.graceSeconds,
+            vibrateInGrace = defaults.vibrateInGrace,
         )
     }
 

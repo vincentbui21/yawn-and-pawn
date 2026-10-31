@@ -52,7 +52,9 @@ data class AlarmDraft(
     val rampStartPercent: Int = Alarm.DEFAULT_RAMP_START_PERCENT,
     val vibration: Boolean = true,
     val snoozeLengthMinutes: Int = Alarm.DEFAULT_SNOOZE_LENGTH_MINUTES,
+    /** The alarm's own quiet time (kept, unused by sessions since 0.1.7: `GlobalSettings.graceSeconds` applies). */
     val graceSeconds: Int = Alarm.DEFAULT_GRACE_SECONDS,
+    /** The alarm's own "Vibrate during quiet time" (kept, unused since 0.1.7: `GlobalSettings.vibrateInGrace` applies). */
     val vibrateInGrace: Boolean = Alarm.DEFAULT_VIBRATE_IN_GRACE,
     /** The alarm's checks in the order All mode runs them (Story 3.5). */
     val checks: List<CheckEntry> = CheckConfig.DEFAULT_ENTRIES,
@@ -217,6 +219,8 @@ class SaveAlarm(
                 val decide = { live: SettingValue, new: SettingValue ->
                     CommitmentRules.decide(stored.id, live, mine[live.field], new, window, now)
                 }
+                // The alarm's own quiet time (unused since 0.1.7): the editor passes the stored value through, so this is
+                // no change and only clears a leftover pending row; kept so an old caller can never weaken it unlocked.
                 val grace = decide(SettingValue.GraceSeconds(stored.graceSeconds), SettingValue.GraceSeconds(edited.graceSeconds))
                 val checks =
                     decide(

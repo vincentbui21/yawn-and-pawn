@@ -12,6 +12,7 @@ import com.yawnandpawn.app.core.config.SaveDefaultSetting
 import com.yawnandpawn.app.core.config.SaveGlobalSetting
 import com.yawnandpawn.app.core.config.SetBaseFee
 import com.yawnandpawn.app.core.config.SetMaxSnoozes
+import com.yawnandpawn.app.core.config.SetQuietTime
 import com.yawnandpawn.app.core.config.SettingValue
 import com.yawnandpawn.app.core.error.DomainError
 import com.yawnandpawn.app.core.error.Outcome
@@ -118,6 +119,7 @@ class SettingsViewModelSequenceTest {
             priceCatalog = FakePriceCatalog(aPriceSnapshot(currency = "EUR")),
             setBaseFee = SetBaseFee(save),
             setMaxSnoozes = SetMaxSnoozes(save),
+            setQuietTime = SetQuietTime(save),
             clock = clock,
             timeZoneProvider = zone,
             timeChanges = FakeTimeChangeSignal(),

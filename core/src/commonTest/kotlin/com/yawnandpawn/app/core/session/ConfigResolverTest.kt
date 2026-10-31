@@ -12,11 +12,15 @@ import com.yawnandpawn.app.core.checks.CheckType
 import com.yawnandpawn.app.core.checks.Difficulty
 import com.yawnandpawn.app.core.checks.qr.CodeFormat
 import com.yawnandpawn.app.core.checks.qr.RegisteredCode
+import com.yawnandpawn.app.core.config.Occurrence
+import com.yawnandpawn.app.core.config.PendingChange
+import com.yawnandpawn.app.core.config.SettingValue
 import com.yawnandpawn.app.core.time.Deadline
 import kotlinx.datetime.LocalTime
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertTrue
+import kotlin.time.Duration.Companion.days
 import kotlin.time.Duration.Companion.seconds
 import kotlin.time.Instant
 
@@ -39,14 +43,14 @@ class ConfigResolverTest {
         )
 
     @Test
-    fun `global settings default to fee tier 1, 5 snoozes, 20 s grace, 9 min snooze, grace vibration, system theme, bright wake`() {
+    fun `global settings default to fee tier 1, 5 snoozes, 20 s grace, 10 min snooze, grace vibration, system theme, bright wake`() {
         assertEquals(
             GlobalSettings(
                 baseFeeTier = 1,
                 maxSnoozes = 5,
-                defaultGraceSeconds = 20,
-                defaultSnoozeLengthMinutes = 9,
-                defaultVibrateInGrace = true,
+                graceSeconds = 20,
+                defaultSnoozeLengthMinutes = 10,
+                vibrateInGrace = true,
                 themeMode = ThemeMode.System,
                 brightWakeScreen = true,
             ),
@@ -55,8 +59,9 @@ class ConfigResolverTest {
     }
 
     @Test
-    fun `the config takes the alarm's own settings, its quiet-time vibration included, and the global fee settings`() {
-        val settings = GlobalSettings(baseFeeTier = 3, maxSnoozes = 2, defaultVibrateInGrace = true)
+    fun `the config takes the alarm's own settings and the global fee and quiet-time settings (0_1_7)`() {
+        // The alarm's own 30 s and its quiet-time vibration off are ignored; its vibration is off, so nothing vibrates.
+        val settings = GlobalSettings(baseFeeTier = 3, maxSnoozes = 2, graceSeconds = 25, vibrateInGrace = true)
         assertEquals(
             SessionConfig(
                 alarmId = "alarm-7",
@@ -66,7 +71,7 @@ class ConfigResolverTest {
                 baseFeeTier = 3,
                 maxSnoozes = 2,
                 snoozeLengthMinutes = 15,
-                graceSeconds = 30,
+                graceSeconds = 25,
                 vibrateInGrace = false,
                 volumePercent = 65,
                 gradualVolume = false,
@@ -143,15 +148,34 @@ class ConfigResolverTest {
     }
 
     @Test
-    fun `changed Settings defaults never reach a stored alarm's session - it keeps its own 20 s, 9 min and vibration (Story 5_1)`() {
-        val stored = alarm.copy(graceSeconds = 20, snoozeLengthMinutes = 9, vibration = true, vibrateInGrace = true)
-        val defaults = GlobalSettings(defaultGraceSeconds = 30, defaultSnoozeLengthMinutes = 15, defaultVibrateInGrace = false)
+    fun `the Settings quiet time and its vibration reach every stored alarm, the default snooze length never does (0_1_7)`() {
+        val stored = alarm.copy(graceSeconds = 30, snoozeLengthMinutes = 5, vibration = true, vibrateInGrace = false)
+        val settings = GlobalSettings(graceSeconds = 20, defaultSnoozeLengthMinutes = 15, vibrateInGrace = true)
 
-        val config = ConfigResolver.resolve(stored, emptyList(), defaults, testMode = false, scheduledAt = SCHEDULED_AT)
+        val config = ConfigResolver.resolve(stored, emptyList(), settings, testMode = false, scheduledAt = SCHEDULED_AT)
 
-        assertEquals(20, config.graceSeconds)
-        assertEquals(9, config.snoozeLengthMinutes)
-        assertEquals(true, config.vibrateInGrace)
+        assertEquals(20, config.graceSeconds, "the global quiet time, not the alarm's 30")
+        assertEquals(5, config.snoozeLengthMinutes, "the alarm's own snooze length")
+        assertEquals(true, config.vibrateInGrace, "the global vibration, not the alarm's off")
+    }
+
+    @Test
+    fun `a longer quiet time pending under the lock rings only after the occurrence it waits for (0_1_7)`() {
+        val waitsFor = Occurrence("other", SCHEDULED_AT)
+        val pending = listOf(PendingChange(null, SettingValue.QuietTimeSeconds(30), waitsFor))
+        val settings = GlobalSettings(graceSeconds = 20)
+
+        fun graceAt(at: Instant) =
+            ConfigResolver.resolve(alarm, NO_CHECKS, settings, false, at, wordsAvailable = true, pendingChanges = pending).graceSeconds
+
+        assertEquals(20, graceAt(SCHEDULED_AT), "the protected occurrence")
+        assertEquals(30, graceAt(SCHEDULED_AT + 1.days), "the next one")
+        val leftover = listOf(PendingChange(alarm.id, SettingValue.GraceSeconds(15), waitsFor))
+        assertEquals(
+            20,
+            ConfigResolver.resolve(alarm, NO_CHECKS, settings, false, SCHEDULED_AT + 1.days, pendingChanges = leftover).graceSeconds,
+            "a leftover per-alarm quiet time is ignored",
+        )
     }
 
     @Test
@@ -164,32 +188,35 @@ class ConfigResolverTest {
     }
 
     @Test
-    fun `quiet-time vibration is the alarm's own setting, on by default, whatever the global setting says (Story 3_4)`() {
-        val off = GlobalSettings(defaultVibrateInGrace = false)
-        val on = GlobalSettings(defaultVibrateInGrace = true)
+    fun `quiet-time vibration is the global setting, on by default, whatever the alarm's own switch says (0_1_7)`() {
+        val off = GlobalSettings(vibrateInGrace = false)
+        val on = GlobalSettings(vibrateInGrace = true)
 
+        assertEquals(true, GlobalSettings().vibrateInGrace)
         assertEquals(
-            true,
-            Alarm(id = "a", time = LocalTime(7, 0), requestCode = 1, createdAt = SCHEDULED_AT, updatedAt = SCHEDULED_AT).vibrateInGrace,
-        )
-        assertEquals(
-            true,
+            false,
             ConfigResolver
                 .resolve(alarm.copy(vibration = true, vibrateInGrace = true), NO_CHECKS, off, testMode = false, scheduledAt = SCHEDULED_AT)
                 .vibrateInGrace,
         )
         assertEquals(
-            false,
-            ConfigResolver.resolve(alarm.copy(vibration = true), NO_CHECKS, on, false, SCHEDULED_AT).vibrateInGrace,
+            true,
+            ConfigResolver.resolve(alarm.copy(vibration = true, vibrateInGrace = false), NO_CHECKS, on, false, SCHEDULED_AT).vibrateInGrace,
         )
         val draft = AlarmDraft(time = LocalTime(7, 0))
-        assertEquals(true, draft.vibrateInGrace)
-        assertEquals(true, ConfigResolver.resolveTest(draft, off, SCHEDULED_AT).vibrateInGrace)
-        assertEquals(false, ConfigResolver.resolveTest(draft.copy(vibrateInGrace = false), on, SCHEDULED_AT).vibrateInGrace)
+        assertEquals(false, ConfigResolver.resolveTest(draft, off, SCHEDULED_AT).vibrateInGrace)
+        assertEquals(true, ConfigResolver.resolveTest(draft.copy(vibrateInGrace = false), on, SCHEDULED_AT).vibrateInGrace)
     }
 
     @Test
-    fun `an alarm with vibration off never vibrates during quiet time, whatever its quiet-time switch says (review fix)`() {
+    fun `a test ring uses the Settings quiet time, whatever the draft holds (0_1_7)`() {
+        val draft = AlarmDraft(time = LocalTime(7, 0), graceSeconds = 15)
+
+        assertEquals(27, ConfigResolver.resolveTest(draft, GlobalSettings(graceSeconds = 27), SCHEDULED_AT).graceSeconds)
+    }
+
+    @Test
+    fun `an alarm with vibration off never vibrates during quiet time, whatever the quiet-time switch says (review fix)`() {
         val quiet = alarm.copy(vibration = false, vibrateInGrace = true)
 
         val config = ConfigResolver.resolve(quiet, NO_CHECKS, GlobalSettings(), testMode = false, scheduledAt = SCHEDULED_AT)

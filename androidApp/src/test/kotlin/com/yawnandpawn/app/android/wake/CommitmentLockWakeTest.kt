@@ -85,7 +85,7 @@ class CommitmentLockWakeTest {
         runBlocking { app.koin.get<GlobalSettingsRepository>().setBaseFeeTier(7) }
         val waited = Occurrence(alarm.id, ringsAt - 1.days)
         runBlocking { app.koin.get<PendingChangeRepository>().put(PendingChange(null, SettingValue.BaseFeeTier(1), waited)) }
-        runBlocking { app.koin.get<PendingChangeRepository>().put(PendingChange(alarm.id, SettingValue.GraceSeconds(30), waited)) }
+        runBlocking { app.koin.get<PendingChangeRepository>().put(PendingChange(null, SettingValue.QuietTimeSeconds(30), waited)) }
 
         app.ring(AlarmFired(alarm.id, ringsAt))
 

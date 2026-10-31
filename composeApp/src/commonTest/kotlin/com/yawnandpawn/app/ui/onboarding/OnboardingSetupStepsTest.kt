@@ -66,8 +66,8 @@ class OnboardingSetupStepsTest : OnboardingViewModelFixture() {
     fun `steps 3 to 7 with No thanks store exactly one enabled alarm with the choices and the defaults, then open step 8`() =
         runTest {
             settings.setDefaultSnoozeLength(10)
-            settings.setDefaultGraceSeconds(25)
-            settings.setDefaultVibrateInGrace(false)
+            settings.setGraceSeconds(25)
+            settings.setVibrateInGrace(false)
             onStep(OnboardingStep.BaseFee)
             val viewModel = viewModel()
 

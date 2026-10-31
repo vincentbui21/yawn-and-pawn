@@ -19,7 +19,8 @@ enum class ChangeKind {
 
 /**
  * Classifies a change of one [LockedField] from the current effective value [old] to [new] (Story 4.4 rules):
- * - a lower base fee, more max snoozes and a longer grace window are [ChangeKind.Weakening]; the opposite directions are
+ * - a lower base fee, more max snoozes and a longer grace window (an alarm's own or the global quiet time) are
+ *   [ChangeKind.Weakening]; the opposite directions are
  *   [ChangeKind.Strengthening]; an equal value is [ChangeKind.NoChange];
  * - checks: see [classifyChecks];
  * - "Offer to skip" (Story 7.11): off to on is [ChangeKind.Weakening] (a morning can be skipped), on to off
@@ -36,6 +37,7 @@ fun classify(
         is SettingValue.BaseFeeTier -> higherIsStronger(old.tier, (new as SettingValue.BaseFeeTier).tier)
         is SettingValue.MaxSnoozes -> lowerIsStronger(old.count, (new as SettingValue.MaxSnoozes).count)
         is SettingValue.GraceSeconds -> lowerIsStronger(old.seconds, (new as SettingValue.GraceSeconds).seconds)
+        is SettingValue.QuietTimeSeconds -> lowerIsStronger(old.seconds, (new as SettingValue.QuietTimeSeconds).seconds)
         is SettingValue.Checks -> classifyChecks(old.plan, (new as SettingValue.Checks).plan)
         is SettingValue.OfferSkip -> lowerIsStronger(old.on.toInt(), (new as SettingValue.OfferSkip).on.toInt())
     }

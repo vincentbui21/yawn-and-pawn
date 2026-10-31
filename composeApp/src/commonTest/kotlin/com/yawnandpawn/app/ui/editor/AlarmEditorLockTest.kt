@@ -63,7 +63,8 @@ import com.yawnandpawn.app.core.checks.CheckType as CoreCheckType
 import com.yawnandpawn.app.core.checks.Difficulty as CoreDifficulty
 
 /**
- * Story 4.6: the editor and the commitment lock. A stored alarm opens with its pending (weaker) values selected and the
+ * Story 4.6: the editor and the commitment lock (the quiet time is a Settings row since 0.1.7). A stored alarm opens with its
+ * pending (weaker) values selected and the
  * "Saved. Takes effect after ..." notes, so saving again keeps the commitment (the Story 4.4 deferral); a weakening save
  * closes with the note for Home; and the Snooze sub-screen's fee ladder shows what the next ring will charge. Tests use
  * 23:40 and a 07:30 alarm (7 h 50 min), never F6's 23:10 (UX note).
@@ -156,8 +157,13 @@ class AlarmEditorLockTest {
 
     // Pending values and notes -------------------------------------------------------------------------------------
 
+    /** Math at Easy (3 sums) in Random: easier than the stored Math at Medium, so it waits under the lock. */
+    private val easier = CheckPlan(CoreCheckMode.Random, listOf(CheckEntry(CoreCheckType.Math, CoreDifficulty.Easy, 3)))
+
+    private fun waitingEasier(at: Instant = sevenThirty) = PendingChange(id, SettingValue.Checks(easier), Occurrence(id, at))
+
     @Test
-    fun `a pending quiet time opens selected with its note, and opening it is not an unsaved change`() =
+    fun `a leftover pending quiet time (before 0_1_7) opens the live value with no note, and saving clears it`() =
         runTest(dispatcher) {
             storeAlarm()
             pending.put(waitingGrace(30))
@@ -165,62 +171,25 @@ class AlarmEditorLockTest {
             val effects = effectsOf(viewModel)
             val full = viewModel.state.value.full!!
 
-            assertEquals(30, viewModel.state.value.form.graceSeconds)
-            assertEquals(WeakeningNote(LocalTime(7, 30), today = false), full.graceNote)
-            assertEquals(WeakeningNote(LocalTime(7, 30), today = false), full.weakeningNote)
+            assertEquals(20, viewModel.state.value.form.graceSeconds, "the stored value, passed through unchanged")
+            assertNull(full.weakeningNote)
             assertNull(full.checksNote)
-
-            viewModel.onIntent(EditorIntent.BackRequested)
-            assertFalse(viewModel.state.value.showDiscardDialog)
-            assertEquals(listOf<EditorEffect>(EditorEffect.Close), effects)
-        }
-
-    @Test
-    fun `saving again keeps the pending quiet time with its date, and the alarm keeps its live value`() =
-        runTest(dispatcher) {
-            storeAlarm()
-            pending.put(waitingGrace(30))
-            val viewModel = viewModel()
-            val effects = effectsOf(viewModel)
 
             viewModel.onIntent(EditorIntent.LabelChanged("Gym"))
             viewModel.onIntent(EditorIntent.SaveClicked)
 
-            assertEquals(listOf(waitingGrace(30)), pending.current)
-            assertEquals(20, alarms.repository.get(id).let { (it as Outcome.Success).value.graceSeconds })
-            assertEquals(listOf<EditorEffect>(EditorEffect.CloseSavedUnderLock(WeakeningNote(LocalTime(7, 30)))), effects)
-        }
-
-    @Test
-    fun `setting the quiet time back to its live value hides the note, and saving cancels the pending change`() =
-        runTest(dispatcher) {
-            storeAlarm()
-            pending.put(waitingGrace(30))
-            val viewModel = viewModel()
-            val effects = effectsOf(viewModel)
-
-            viewModel.onIntent(EditorIntent.GraceChanged(20))
-            assertNull(
-                viewModel.state.value.full!!
-                    .graceNote,
-            )
-            assertNull(
-                viewModel.state.value.full!!
-                    .weakeningNote,
-            )
-            viewModel.onIntent(EditorIntent.SaveClicked)
-
             assertEquals(emptyList(), pending.current)
+            assertEquals(20, alarms.repository.get(id).let { (it as Outcome.Success).value.graceSeconds })
             assertEquals(listOf<EditorEffect>(EditorEffect.Close), effects)
         }
 
     @Test
-    fun `a pending quiet time moved to a later ring says and waits for that ring (review fix 1)`() =
+    fun `pending easier checks moved to a later ring say and wait for that ring (review fix 1)`() =
         runTest(dispatcher) {
             storeAlarm()
             // 23:50: the moved ring at 07:45 is inside the window too (7 h 55 min).
             clock.set(Instant.parse("2027-03-08T23:50:00Z"))
-            pending.put(waitingGrace(30))
+            pending.put(waitingEasier())
             val viewModel = viewModel()
             val effects = effectsOf(viewModel)
 
@@ -228,7 +197,7 @@ class AlarmEditorLockTest {
             assertEquals(
                 WeakeningNote(LocalTime(7, 45)),
                 viewModel.state.value.full!!
-                    .graceNote,
+                    .checksNote,
             )
             viewModel.onIntent(EditorIntent.SaveClicked)
 
@@ -240,8 +209,7 @@ class AlarmEditorLockTest {
     fun `saving pending easier checks again with only a label change keeps the change as it is (review fix 3)`() =
         runTest(dispatcher) {
             storeAlarm()
-            val easier = CheckPlan(CoreCheckMode.Random, listOf(CheckEntry(CoreCheckType.Math, CoreDifficulty.Easy, 3)))
-            pending.put(PendingChange(id, SettingValue.Checks(easier), Occurrence(id, sevenThirty)))
+            pending.put(waitingEasier())
             val before = pending.current
             val viewModel = viewModel()
 
@@ -261,14 +229,13 @@ class AlarmEditorLockTest {
     fun `pending easier checks open selected with their note`() =
         runTest(dispatcher) {
             storeAlarm()
-            val easier = CheckPlan(CoreCheckMode.Random, listOf(CheckEntry(CoreCheckType.Math, CoreDifficulty.Easy, 3)))
-            pending.put(PendingChange(id, SettingValue.Checks(easier), Occurrence(id, sevenThirty)))
+            pending.put(waitingEasier())
             val viewModel = viewModel()
             val state = viewModel.state.value
 
             assertEquals(listOf(CheckChip(CheckType.Math, Difficulty.Easy, 3)), state.form.checks)
             assertEquals(WeakeningNote(LocalTime(7, 30)), state.full!!.checksNote)
-            assertNull(state.full.graceNote)
+            assertEquals(WeakeningNote(LocalTime(7, 30)), state.full.weakeningNote)
 
             // Harder again: the note goes, as saving would apply the harder checks at once.
             viewModel.onIntent(EditorIntent.CheckSetupClicked(CheckType.Math))
@@ -287,26 +254,11 @@ class AlarmEditorLockTest {
             val viewModel = viewModel()
             val effects = effectsOf(viewModel)
 
-            viewModel.onIntent(EditorIntent.GraceChanged(30))
+            viewModel.onIntent(EditorIntent.OfferSkipToggled(true))
             viewModel.onIntent(EditorIntent.SaveClicked)
 
             assertEquals(listOf<EditorEffect>(EditorEffect.CloseSavedUnderLock(WeakeningNote(LocalTime(7, 30), today = true))), effects)
-            assertEquals(listOf(waitingGrace(30)), pending.current)
-        }
-
-    @Test
-    fun `a strengthening save under the lock applies at once and closes with no note`() =
-        runTest(dispatcher) {
-            storeAlarm()
-            val viewModel = viewModel()
-            val effects = effectsOf(viewModel)
-
-            viewModel.onIntent(EditorIntent.GraceChanged(15))
-            viewModel.onIntent(EditorIntent.SaveClicked)
-
-            assertEquals(listOf<EditorEffect>(EditorEffect.Close), effects)
-            assertEquals(emptyList(), pending.current)
-            assertEquals(15, (alarms.repository.get(id) as Outcome.Success).value.graceSeconds)
+            assertEquals(listOf(PendingChange(id, SettingValue.OfferSkip(true), Occurrence(id, sevenThirty))), pending.current)
         }
 
     @Test
@@ -324,13 +276,13 @@ class AlarmEditorLockTest {
     fun `a duplicate opens with the live values and no note`() =
         runTest(dispatcher) {
             storeAlarm()
-            pending.put(waitingGrace(30))
+            pending.put(waitingEasier())
             val viewModel = viewModel(alarmId = null, copyOf = id)
 
-            assertEquals(20, viewModel.state.value.form.graceSeconds)
+            assertEquals(listOf(CheckChip(CheckType.Math, Difficulty.Medium, 3)), viewModel.state.value.form.checks)
             assertNull(
                 viewModel.state.value.full!!
-                    .graceNote,
+                    .checksNote,
             )
         }
 

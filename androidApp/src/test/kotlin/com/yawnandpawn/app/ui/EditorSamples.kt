@@ -44,11 +44,8 @@ object EditorSamples {
     /** The Sound sub-screen of a new alarm: volume and "Gradually increase volume". */
     val soundPane = EditorUiState(pane = EditorPane.Sound)
 
-    /** The Snooze sub-screen of a new alarm: 5 / 9 / 10 / 15 min. */
+    /** The Snooze sub-screen of a new alarm: 5 / 10 / 15 / 30 min. */
     val snoozePane = EditorUiState(pane = EditorPane.Snooze)
-
-    /** Story 3.4: the Quiet time sub-screen, 25 s with "Vibrate during quiet time" on. */
-    val quietTimePane = EditorUiState(pane = EditorPane.QuietTime, form = EditorForm(graceSeconds = 25))
 
     /** Editing a stored alarm: the header has the overflow button (Story 1.9). */
     val editStored = editAlarm.copy(hasOverflowMenu = true)

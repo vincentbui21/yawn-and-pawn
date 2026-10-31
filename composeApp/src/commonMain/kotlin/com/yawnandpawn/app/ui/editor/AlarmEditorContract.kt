@@ -39,9 +39,12 @@ data class EditorForm(
     val vibration: Boolean = true,
     /** The chosen sound, an encoded `SoundRef` (Story 1.17), saved with the alarm. */
     val soundRef: String = Alarm.DEFAULT_SOUND_REF,
-    /** The quiet time ("Quiet time", internally the grace window), 15 to 30 s (Story 3.4: edited and saved). */
+    /**
+     * The alarm's own stored quiet time (Story 3.4), passed through unchanged: since 0.1.7 the editor no longer shows or
+     * edits it, and sessions use the global quiet time in Settings.
+     */
     val graceSeconds: Int = Alarm.DEFAULT_GRACE_SECONDS,
-    /** "Vibrate during quiet time" (Story 3.4: per alarm, on by default). */
+    /** The alarm's own stored "Vibrate during quiet time", passed through unchanged like [graceSeconds] (0.1.7). */
     val vibrateInGrace: Boolean = Alarm.DEFAULT_VIBRATE_IN_GRACE,
     /** The checks in the order All mode runs them (Story 3.5); a new alarm starts with Math · Easy · 3. */
     val checks: List<CheckChip> = DEFAULT_CHECKS,
@@ -79,7 +82,6 @@ enum class EditorPane {
     Sound,
     Snooze,
     WakeCheck,
-    QuietTime,
     Motivation,
     CheckSetup,
     TryIt,
@@ -254,16 +256,14 @@ data class FullEditorSections(
      * tomorrow's {time} alarm." (or "today's") under the rows card. It shows while a field holds its pending value.
      */
     val weakeningNote: WeakeningNote? = null,
-    /** The quiet time shows its pending (longer) value: the same note under it in its sub-screen. */
-    val graceNote: WeakeningNote? = null,
     /** The checks show their pending (easier) plan: the same note under them in the Wake-up check sub-screen. */
     val checksNote: WeakeningNote? = null,
     /**
-     * The full-editor rows shown on the main screen ([EditorPane.WakeCheck], [EditorPane.QuietTime],
-     * [EditorPane.Motivation]): all of them in the design preview; the app shows each once its story wires it (Story 3.5:
-     * the Wake-up check only).
+     * The full-editor rows shown on the main screen ([EditorPane.WakeCheck], [EditorPane.Motivation]): all of them in the
+     * design preview; the app shows each once its story wires it (Story 3.5: the Wake-up check only). The quiet time is a
+     * Settings row since 0.1.7.
      */
-    val rows: Set<EditorPane> = setOf(EditorPane.WakeCheck, EditorPane.QuietTime, EditorPane.Motivation),
+    val rows: Set<EditorPane> = setOf(EditorPane.WakeCheck, EditorPane.Motivation),
     /** The checks the Wake-up check sub-screen lists: every one in the preview, the pickable ones in the app. */
     val types: List<CheckType> = CheckType.entries,
     /** TalkBack is on (Story 3.8): Memory Sequence says "Uses numbered tiles with TalkBack." in the picker and its setup. */
@@ -354,14 +354,6 @@ sealed interface EditorIntent {
 
     data class CheckModeSelected(
         val mode: CheckMode,
-    ) : EditorIntent
-
-    data class GraceChanged(
-        val seconds: Int,
-    ) : EditorIntent
-
-    data class VibrateInGraceToggled(
-        val enabled: Boolean,
     ) : EditorIntent
 
     /** The "Offer to skip 2 h before" switch (Story 7.11). */

@@ -92,9 +92,9 @@ class FakeGlobalSettingsRepository(
 
     override suspend fun setMaxSnoozes(count: Int): Outcome<Unit, DomainError> = write { it.copy(maxSnoozes = count) }
 
-    override suspend fun setDefaultGraceSeconds(seconds: Int): Outcome<Unit, DomainError> = write { it.copy(defaultGraceSeconds = seconds) }
+    override suspend fun setGraceSeconds(seconds: Int): Outcome<Unit, DomainError> = write { it.copy(graceSeconds = seconds) }
 
-    override suspend fun setDefaultVibrateInGrace(on: Boolean): Outcome<Unit, DomainError> = write { it.copy(defaultVibrateInGrace = on) }
+    override suspend fun setVibrateInGrace(on: Boolean): Outcome<Unit, DomainError> = write { it.copy(vibrateInGrace = on) }
 
     override suspend fun setDefaultSnoozeLength(minutes: Int): Outcome<Unit, DomainError> =
         write { it.copy(defaultSnoozeLengthMinutes = minutes) }

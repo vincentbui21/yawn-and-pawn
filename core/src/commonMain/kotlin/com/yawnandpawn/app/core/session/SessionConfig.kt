@@ -61,19 +61,20 @@ data class SessionConfig(
 )
 
 /**
- * The global settings (FR-SET-1), kept in DataStore by `:data`. A session reads the base fee and max snoozes. The
- * `default*` fields are the Settings defaults a new alarm opens with (Story 5.1); a session uses the values stored on
- * its alarm, and changing a default never changes a stored alarm (AD-16). [themeMode] is the app screens' theme.
+ * The global settings (FR-SET-1), kept in DataStore by `:data`. A session reads the base fee, max snoozes and (since
+ * 0.1.7, owner decision 2026-10-30) the quiet time and its vibration, for every alarm. [defaultSnoozeLengthMinutes] is the
+ * Settings default a new alarm opens with (Story 5.1); a session uses the snooze length stored on its alarm, and changing
+ * the default never changes a stored alarm (AD-16). [themeMode] is the app screens' theme.
  */
 data class GlobalSettings(
     val baseFeeTier: Int = DEFAULT_BASE_FEE_TIER,
     val maxSnoozes: Int = DEFAULT_MAX_SNOOZES,
-    /** "Default quiet time", 15 to 30 s. */
-    val defaultGraceSeconds: Int = Alarm.DEFAULT_GRACE_SECONDS,
-    /** "Default snooze length", 5 / 9 / 10 / 15 min. */
+    /** "Quiet time", 15 to 30 s: the grace window after "I'm up" of every alarm and test ring (locked, `LockedField.QuietTime`). */
+    val graceSeconds: Int = Alarm.DEFAULT_GRACE_SECONDS,
+    /** "Default snooze length", 5 / 10 / 15 / 30 min. */
     val defaultSnoozeLengthMinutes: Int = Alarm.DEFAULT_SNOOZE_LENGTH_MINUTES,
-    /** "Vibrate during quiet time" for new alarms; a session uses its alarm's own `vibrateInGrace` (Story 3.4). */
-    val defaultVibrateInGrace: Boolean = Alarm.DEFAULT_VIBRATE_IN_GRACE,
+    /** "Vibrate during quiet time" of every alarm and test ring, when the alarm's own "Vibration" is on (never locked). */
+    val vibrateInGrace: Boolean = Alarm.DEFAULT_VIBRATE_IN_GRACE,
     /** Appearance: System / Light / Dark. Wake screens always use Sunrise, whatever it says. */
     val themeMode: ThemeMode = ThemeMode.System,
     /** "Bright wake screen" (Story 5.2): the Ringing screen at full brightness. Frozen into [SessionConfig] at the fire. */
@@ -101,6 +102,11 @@ object ConfigResolver {
      * [pendingChanges] (Story 4.4, the commitment lock) are the stored pending changes: one of [alarm] or a global one
      * applies only to an occurrence strictly after the one it waits for ([PendingChange.appliesTo]), so it is ignored
      * at that occurrence and any earlier one. [alarm], [checks] and [globalSettings] are the live values.
+     *
+     * The quiet time and its vibration are the global ones (0.1.7): [GlobalSettings.graceSeconds] with a global
+     * [SettingValue.QuietTimeSeconds] change applied, and [GlobalSettings.vibrateInGrace] when the alarm's own vibration
+     * is on. The alarm's stored `graceSeconds` / `vibrateInGrace` and its leftover [SettingValue.GraceSeconds] pending
+     * rows are ignored.
      */
     fun resolve(
         alarm: Alarm,
@@ -114,11 +120,10 @@ object ConfigResolver {
     ): SessionConfig {
         val applying = pendingChanges.applyingTo(alarm.id, scheduledAt)
         val settings = globalSettings.withPending(applying)
-        val graceSeconds = applying.firstNotNullOfOrNull { (it.value as? SettingValue.GraceSeconds)?.seconds } ?: alarm.graceSeconds
         val plan =
             applying.firstNotNullOfOrNull { (it.value as? SettingValue.Checks)?.plan?.withCodesFrom(checks) }
                 ?: CheckPlan(alarm.checkMode, checks)
-        return resolveLive(alarm, plan, settings, graceSeconds, testMode, scheduledAt, accessible, wordsAvailable)
+        return resolveLive(alarm, plan, settings, testMode, scheduledAt, accessible, wordsAvailable)
     }
 
     @Suppress("LongParameterList")
@@ -126,7 +131,6 @@ object ConfigResolver {
         alarm: Alarm,
         plan: CheckPlan,
         globalSettings: GlobalSettings,
-        graceSeconds: Int,
         testMode: Boolean,
         scheduledAt: Instant,
         accessible: Boolean,
@@ -140,9 +144,9 @@ object ConfigResolver {
             baseFeeTier = globalSettings.baseFeeTier,
             maxSnoozes = globalSettings.maxSnoozes,
             snoozeLengthMinutes = alarm.snoozeLengthMinutes,
-            graceSeconds = graceSeconds,
+            graceSeconds = globalSettings.graceSeconds,
             // Quiet-time vibration needs vibration itself on (review fix): "Vibration" off never vibrates.
-            vibrateInGrace = alarm.vibration && alarm.vibrateInGrace,
+            vibrateInGrace = alarm.vibration && globalSettings.vibrateInGrace,
             volumePercent = Alarm.ringableVolume(alarm.volumePercent),
             gradualVolume = alarm.gradualVolume,
             // Fixed (owner decision 2026-09-27); alarms saved before Story 1.14 may hold min(20, volume).
@@ -192,8 +196,9 @@ object ConfigResolver {
             baseFeeTier = globalSettings.baseFeeTier,
             maxSnoozes = globalSettings.maxSnoozes,
             snoozeLengthMinutes = draft.snoozeLengthMinutes,
-            graceSeconds = draft.graceSeconds,
-            vibrateInGrace = draft.vibration && draft.vibrateInGrace,
+            // The Settings quiet time and its vibration (0.1.7), as a real ring of any alarm uses them.
+            graceSeconds = globalSettings.graceSeconds,
+            vibrateInGrace = draft.vibration && globalSettings.vibrateInGrace,
             volumePercent = Alarm.ringableVolume(draft.volumePercent),
             gradualVolume = draft.gradualVolume,
             rampStartPercent = Alarm.DEFAULT_RAMP_START_PERCENT,

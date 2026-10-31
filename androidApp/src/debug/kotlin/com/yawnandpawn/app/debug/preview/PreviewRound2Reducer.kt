@@ -63,7 +63,7 @@ private fun reduceSettingValues(
     when (intent) {
         is SettingsIntent.MaxSnoozesChanged -> state.copy(maxSnoozes = intent.value).withPreviewFee(state.baseFeeTier)
         is SettingsIntent.SnoozeLengthSelected -> state.copy(defaultSnoozeMinutes = intent.minutes)
-        is SettingsIntent.QuietTimeChanged -> state.copy(defaultQuietSeconds = intent.seconds)
+        is SettingsIntent.QuietTimeChanged -> state.copy(quietSeconds = intent.seconds)
         is SettingsIntent.VibrateDuringQuietTimeToggled -> state.copy(vibrateDuringQuietTime = intent.on)
         is SettingsIntent.BrightWakeScreenToggled -> state.copy(brightWakeScreen = intent.on)
         is SettingsIntent.ThemeSelected -> state.copy(theme = intent.mode)

@@ -10,6 +10,7 @@ import com.yawnandpawn.app.core.config.SaveDefaultSetting
 import com.yawnandpawn.app.core.config.SaveGlobalSetting
 import com.yawnandpawn.app.core.config.SetBaseFee
 import com.yawnandpawn.app.core.config.SetMaxSnoozes
+import com.yawnandpawn.app.core.config.SetQuietTime
 import com.yawnandpawn.app.core.config.SettingValue
 import com.yawnandpawn.app.core.error.DomainError
 import com.yawnandpawn.app.core.log.LogEvent
@@ -99,6 +100,7 @@ class SettingsViewModelTest {
                 priceCatalog = prices,
                 setBaseFee = SetBaseFee(save),
                 setMaxSnoozes = SetMaxSnoozes(save),
+                setQuietTime = SetQuietTime(save),
                 clock = clock,
                 timeZoneProvider = zone,
                 timeChanges = signal,
@@ -257,6 +259,48 @@ class SettingsViewModelTest {
         }
 
     @Test
+    fun `a longer quiet time under the lock waits, shows the new value and its note, and the live value stays (0_1_7)`() =
+        runTest {
+            alarmAtSevenThirty()
+            val viewModel = viewModel()
+
+            viewModel.onIntent(SettingsIntent.QuietTimeChanged(30))
+
+            assertEquals(20, settings.current.graceSeconds, "the live quiet time stays until after the alarm")
+            assertEquals(listOf(PendingChange(null, SettingValue.QuietTimeSeconds(30), Occurrence("a", sevenThirty))), pending.current)
+            assertEquals(30, viewModel.shown.quietSeconds)
+            assertEquals(WeakeningNote(LocalTime(7, 30), today = false), viewModel.shown.quietTimeNote)
+            assertNull(viewModel.shown.maxSnoozesNote)
+        }
+
+    @Test
+    fun `a shorter quiet time under the lock applies at once with no note, and clears a longer one waiting (0_1_7)`() =
+        runTest {
+            alarmAtSevenThirty()
+            val viewModel = viewModel()
+            viewModel.onIntent(SettingsIntent.QuietTimeChanged(30))
+
+            viewModel.onIntent(SettingsIntent.QuietTimeChanged(15))
+
+            assertEquals(15, settings.current.graceSeconds)
+            assertTrue(pending.current.isEmpty())
+            assertEquals(15, viewModel.shown.quietSeconds)
+            assertNull(viewModel.shown.quietTimeNote)
+        }
+
+    @Test
+    fun `a longer quiet time with no alarm inside 8 h applies at once with no note (0_1_7)`() =
+        runTest {
+            val viewModel = viewModel()
+
+            viewModel.onIntent(SettingsIntent.QuietTimeChanged(30))
+
+            assertEquals(30, settings.current.graceSeconds)
+            assertTrue(pending.current.isEmpty())
+            assertNull(viewModel.shown.quietTimeNote)
+        }
+
+    @Test
     fun `a stored pending change shows its value and note on open, and the note goes once that alarm has rung`() =
         runTest {
             pending.put(PendingChange(null, SettingValue.BaseFeeTier(1), Occurrence("a", sevenThirty)))
@@ -334,6 +378,7 @@ class SettingsViewModelTest {
                     prices,
                     SetBaseFee(save),
                     SetMaxSnoozes(save),
+                    SetQuietTime(save),
                     clock,
                     zone,
                     signal,
@@ -407,6 +452,7 @@ class SettingsViewModelTest {
                     prices,
                     SetBaseFee(save),
                     SetMaxSnoozes(save),
+                    SetQuietTime(save),
                     clock,
                     zone,
                     signal,

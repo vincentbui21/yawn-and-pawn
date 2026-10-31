@@ -347,9 +347,9 @@ class DeleteAllDataIntegrationTest {
                 GlobalSettings(
                     baseFeeTier = 3,
                     maxSnoozes = 2,
-                    defaultGraceSeconds = 25,
+                    graceSeconds = 25,
                     defaultSnoozeLengthMinutes = 15,
-                    defaultVibrateInGrace = false,
+                    vibrateInGrace = false,
                     themeMode = ThemeMode.Dark,
                     brightWakeScreen = false,
                 ),

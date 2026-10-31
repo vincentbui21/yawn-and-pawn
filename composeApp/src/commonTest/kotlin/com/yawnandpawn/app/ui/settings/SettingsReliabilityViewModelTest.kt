@@ -5,6 +5,7 @@ import com.yawnandpawn.app.core.config.SaveDefaultSetting
 import com.yawnandpawn.app.core.config.SaveGlobalSetting
 import com.yawnandpawn.app.core.config.SetBaseFee
 import com.yawnandpawn.app.core.config.SetMaxSnoozes
+import com.yawnandpawn.app.core.config.SetQuietTime
 import com.yawnandpawn.app.core.reliability.ChecklistRow
 import com.yawnandpawn.app.core.reliability.EvaluateReliability
 import com.yawnandpawn.app.core.reliability.ReliabilityStatus
@@ -83,6 +84,7 @@ class SettingsReliabilityViewModelTest {
                 priceCatalog = FakePriceCatalog(aPriceSnapshot()),
                 setBaseFee = SetBaseFee(save),
                 setMaxSnoozes = SetMaxSnoozes(save),
+                setQuietTime = SetQuietTime(save),
                 clock = clock,
                 timeZoneProvider = zone,
                 timeChanges = FakeTimeChangeSignal(),

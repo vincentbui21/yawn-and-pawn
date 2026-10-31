@@ -22,7 +22,7 @@ PRD IDs are kept exactly as in PRD v0.3 §7 (never renumbered). Priority: [Must]
 #### 7.1 Alarms (ALM)
 
 - FR-ALM-1 [Must]: The user can create, edit, delete, and enable/disable multiple alarms.
-- FR-ALM-2 [Must]: Each alarm stores time, repeat days (or one-time), label, sound, volume, vibration on/off, snooze length (5/9/10/15 min, default 9), check configuration, grace window length, and an optional motivation recording.
+- FR-ALM-2 [Must]: Each alarm stores time, repeat days (or one-time), label, sound, volume, vibration on/off, snooze length (5/9/10/15 min, default 9; owner decision 2026-10-30: 5/10/15/30 min, default 10, from 0.1.7), check configuration, grace window length (one global setting since 0.1.7, owner decision 2026-10-30), and an optional motivation recording.
 - FR-ALM-3 [Must]: Alarms fire at the exact scheduled time in Doze, silent mode and Do Not Disturb on the alarm audio stream; an automated test asserts `AlarmManager.setAlarmClock` is called with trigger time equal to the scheduled epoch ms (fake scheduler), and on-device timing (≤ 2 s, NFR-1) is covered by the device-verification checklist.
 - FR-ALM-4 [Must]: When an alarm rings, a full-screen ringing screen appears over the lock screen whether the phone is locked or the screen is off (unlocked in-use phone behaviour: FR-SES-4).
 - FR-ALM-5 [Must]: Scheduled alarms survive reboot, app update, time change, time-zone change and DST transitions.
@@ -72,7 +72,7 @@ Accepted escapes (never prevented): force-stop, uninstall, the 30-minute no-inte
 - FR-PWK-6 [Should]: House Hunt: at setup the user photographs one or more reference spots far from bed; to dismiss they photograph the same spot, accepted when on-device similarity ≥ the Spike S3 threshold.
 - FR-PWK-7 [Must]: QR/Barcode: at setup the user registers any barcode/QR; to dismiss they scan it with on-device scanning.
 - FR-PWK-8 [Must]: Word Unscramble: unscramble N English words, length 4–5 / 6–7 / 8+ by difficulty.
-- FR-PWK-9 [Must]: Tapping "I'm up" mutes the alarm for the grace window (15–30 s per alarm, default 20) with a visible countdown; finishing within it ends the session; expiry returns the alarm at full set volume until the check is done with progress kept; one grace window per ring.
+- FR-PWK-9 [Must]: Tapping "I'm up" mutes the alarm for the grace window (15–30 s per alarm, default 20; owner decision 2026-10-30: one global setting in Settings for every alarm from 0.1.7) with a visible countdown; finishing within it ends the session; expiry returns the alarm at full set volume until the check is done with progress kept; one grace window per ring.
 - FR-PWK-10 [Must]: Snooze stays available (subject to RNG rules) during the check; if granted, check progress is discarded.
 - FR-PWK-11 [Must]: If a check can't physically be done (CameraX error or no frame within 5 s, QR lost, House Hunt fails 5 matches), the user can switch once per session to a fallback check chosen from non-camera checks (Math listed first) at Hard difficulty with double count; the link appears immediately when camera/permission is unavailable, otherwise after 5 failed attempts; the alarm keeps ringing with no new grace window; fallback use is shown in stats and 3 fallbacks in 7 days prompts re-registration.
 - FR-PWK-12 [Must]: Check setup screens let the user try each check before saving.
@@ -117,7 +117,7 @@ Accepted escapes (never prevented): force-stop, uninstall, the 30-minute no-inte
 
 FR-SET-3, FR-SET-4 and FR-SET-5, together with Purchase history (FR-PRG-4), are reached from the **You** tab, not Settings. Settings keeps app behaviour only: Snooze, Wake, Appearance, Notifications, Usage stats and the Reliability checklist. There is still no account or sign-in (NFR-4).
 
-- FR-SET-1 [Must]: Settings for base fee ($1–$10 in $1 steps, commitment lock rules), max snoozes per session (default 5, min 1), default grace window (Quiet time) and default snooze length.
+- FR-SET-1 [Must]: Settings for base fee ($1–$10 in $1 steps, commitment lock rules), max snoozes per session (default 5, min 1), default grace window (Quiet time) and default snooze length. (Owner decision 2026-10-30, 0.1.7: the default grace window becomes "Quiet time" for every alarm, existing ones included, under the commitment lock; snooze lengths 5 / 10 / 15 / 30 min, default 10.)
 - FR-SET-2 [Must]: Settings includes the reliability checklist (FR-ONB-3).
 - FR-SET-3 [Must]: Settings includes privacy policy, terms, support contact and "How payments & refunds work" (including the FR-ONB-5 disclosure).
 - FR-SET-4 [Must]: Settings includes "Delete all data".
@@ -2315,7 +2315,7 @@ So that I know the price before the morning and don't weaken my plan by accident
 
 **Acceptance Criteria:**
 
-**Given** the editor's Snooze sub-screen (snooze length 5 / 9 / 10 / 15 min; the same ladder shows on the Settings Base fee sub-screen, Story 4.5)
+**Given** the editor's Snooze sub-screen (snooze length 5 / 9 / 10 / 15 min, 5 / 10 / 15 / 30 min since the owner decision 2026-10-30; the same ladder shows on the Settings Base fee sub-screen, Story 4.5)
 **When** it renders
 **Then** under the snooze length a fee ladder line shows "Snooze 1: {price1} · 2: {price2} · 3: {price3}" using the effective base fee (pending changes applied for the alarm's next-but-one occurrence are not shown; the ladder shows what the next morning will charge), the cached Play prices, and up to max snoozes entries, or USD approximations with "Approximate. Your local price shows when you're online." when the cache is empty
 
@@ -2759,12 +2759,12 @@ So that new alarms start the way I like and the app is comfortable to use at nig
 
 **Given** `GlobalSettings` in the device-protected settings DataStore
 **When** this story extends it
-**Then** it holds `defaultGraceSeconds` (15–30, default 20), `defaultVibrateInGrace` (default on, matching Story 3.4), `defaultSnoozeLengthMinutes` (5, 9, 10 or 15, default 9) and `themeMode` (System, Light, Dark; default System), edited only through core use cases `SetDefaultGrace`, `SetDefaultVibrateInGrace`, `SetDefaultSnoozeLength`, `SetThemeMode` that reject out-of-range values with `DomainError.InvalidSetting`
+**Then** it holds `defaultGraceSeconds` (15–30, default 20), `defaultVibrateInGrace` (default on, matching Story 3.4), `defaultSnoozeLengthMinutes` (5, 9, 10 or 15, default 9; owner decision 2026-10-30: 5, 10, 15 or 30, default 10, and the default grace window and its vibration became the global `graceSeconds` / `vibrateInGrace` for every alarm, quiet time through `SetQuietTime` under the commitment lock) and `themeMode` (System, Light, Dark; default System), edited only through core use cases `SetDefaultGrace`, `SetDefaultVibrateInGrace`, `SetDefaultSnoozeLength`, `SetThemeMode` that reject out-of-range values with `DomainError.InvalidSetting`
 **And** these defaults apply only to alarms created after the change (the Alarm editor reads them for a new alarm), never alter existing alarms, and are therefore not commitment-locked fields (owner-approved default 2026-09-26)
 
 **Given** Settings (grouped cards; rows open sub-screens)
 **When** it renders
-**Then** the Snooze card gains a "Default snooze length" row that opens its sub-screen (5 / 9 / 10 / 15 min); a "Wake" card shows "Default quiet time", which opens a sub-screen with a `slider` 15–30 s in 1 s steps with the value announced, and "Vibrate during quiet time" as a `switch`; an "Appearance" card shows a `segmented-control` "System" / "Light" / "Dark" (EXPERIENCE.md Key strings)
+**Then** the Snooze card gains a "Default snooze length" row that opens its sub-screen (5 / 9 / 10 / 15 min; 5 / 10 / 15 / 30 since the owner decision 2026-10-30); a "Wake" card shows "Default quiet time" ("Quiet time" for every alarm since the owner decision 2026-10-30), which opens a sub-screen with a `slider` 15–30 s in 1 s steps with the value announced, and "Vibrate during quiet time" as a `switch`; an "Appearance" card shows a `segmented-control` "System" / "Light" / "Dark" (EXPERIENCE.md Key strings)
 **And** switches and segmented controls apply immediately (no Save)
 
 **Given** the theme override

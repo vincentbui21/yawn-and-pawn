@@ -345,7 +345,7 @@ class SessionConflictScenariosTest {
 
         assertNull(app.player.sound, "sound off")
         assertEquals(StepPointer(0, 0), session().checkRun.step, "check progress discarded")
-        pass(9.minutes)
+        pass(10.minutes)
         deliverSlot(service)
         app.awaitRinging()
         assertEquals(2, session().ringIndex)
@@ -520,17 +520,17 @@ class SessionConflictScenariosTest {
         clock.advanceBy(2.hours)
         app.app.sendBroadcast(Intent(Intent.ACTION_TIME_CHANGED).setPackage(app.app.packageName))
         idle()
-        val sixMinutesOn = clock.now().toEpochMilliseconds() + 6.minutes.inWholeMilliseconds
-        assertEquals(sixMinutesOn, slotTrigger(), "new wall time + 6 min")
+        val sevenMinutesOn = clock.now().toEpochMilliseconds() + 7.minutes.inWholeMilliseconds
+        assertEquals(sevenMinutesOn, slotTrigger(), "new wall time + 7 min (a 10 min snooze, 3 min passed)")
         // The slot fires early anyway (the phone acted on the old trigger): through its receiver and the service.
         val ignoredSlot: () -> Int = { app.logs().count { it.startsWith("SessionEventIgnored type=SlotFired") } }
         val ignoredBefore = ignoredSlot()
         deliverSlot(service)
         app.awaitUntil("the engine ignored the early slot") { ignoredSlot() > ignoredBefore }
         assertIs<SessionState.Snoozed>(state(), "an early slot does not end the snooze")
-        assertEquals(sixMinutesOn, slotTrigger(), "the slot is armed again at new wall time + 6 min")
+        assertEquals(sevenMinutesOn, slotTrigger(), "the slot is armed again at new wall time + 7 min")
 
-        pass(6.minutes)
+        pass(7.minutes)
         deliverSlot(service)
         app.awaitRinging()
         assertEquals(2, session().ringIndex)

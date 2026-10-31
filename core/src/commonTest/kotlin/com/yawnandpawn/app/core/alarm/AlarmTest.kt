@@ -28,7 +28,7 @@ class AlarmTest {
         assertEquals(true, alarm.gradualVolume)
         assertEquals(20, alarm.rampStartPercent)
         assertEquals(true, alarm.vibration)
-        assertEquals(9, alarm.snoozeLengthMinutes)
+        assertEquals(10, alarm.snoozeLengthMinutes)
         assertEquals(20, alarm.graceSeconds)
     }
 
@@ -99,6 +99,8 @@ class AlarmTest {
             ValidationCase("snooze 5", valid.copy(snoozeLengthMinutes = 5), null),
             ValidationCase("snooze 10", valid.copy(snoozeLengthMinutes = 10), null),
             ValidationCase("snooze 15", valid.copy(snoozeLengthMinutes = 15), null),
+            ValidationCase("snooze 30", valid.copy(snoozeLengthMinutes = 30), null),
+            ValidationCase("snooze 9 (before 0.1.7)", valid.copy(snoozeLengthMinutes = 9), AlarmField.SnoozeLengthMinutes),
             ValidationCase("snooze 7", valid.copy(snoozeLengthMinutes = 7), AlarmField.SnoozeLengthMinutes),
             ValidationCase("snooze 0", valid.copy(snoozeLengthMinutes = 0), AlarmField.SnoozeLengthMinutes),
             ValidationCase("grace 15", valid.copy(graceSeconds = 15), null),

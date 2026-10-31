@@ -66,8 +66,8 @@ class AlarmEditorDefaultsTest {
         FakeGlobalSettingsRepository(
             GlobalSettings(
                 defaultSnoozeLengthMinutes = 15,
-                defaultGraceSeconds = 30,
-                defaultVibrateInGrace = false,
+                graceSeconds = 30,
+                vibrateInGrace = false,
                 themeMode = ThemeMode.Dark,
             ),
         )
@@ -191,7 +191,7 @@ class AlarmEditorDefaultsTest {
 
     @Test
     fun `a stored default the form cannot take opens as the built-in one`() {
-        val form = newAlarmForm(GlobalSettings(defaultSnoozeLengthMinutes = 7, defaultGraceSeconds = 99, defaultVibrateInGrace = false))
+        val form = newAlarmForm(GlobalSettings(defaultSnoozeLengthMinutes = 7, graceSeconds = 99, vibrateInGrace = false))
 
         assertEquals(EditorForm().copy(vibrateInGrace = false), form)
     }

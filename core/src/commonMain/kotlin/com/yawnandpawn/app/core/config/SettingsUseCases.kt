@@ -1,5 +1,6 @@
 package com.yawnandpawn.app.core.config
 
+import com.yawnandpawn.app.core.alarm.Alarm
 import com.yawnandpawn.app.core.alarm.AlarmRepository
 import com.yawnandpawn.app.core.alarm.AlarmWriteLock
 import com.yawnandpawn.app.core.billing.FeeRules
@@ -17,10 +18,10 @@ enum class SettingField {
     BaseFee,
     MaxSnoozes,
 
-    /** "Default quiet time" outside 15 to 30 s (Story 5.1). */
-    DefaultGrace,
+    /** "Quiet time" outside 15 to 30 s (Story 5.1; global since 0.1.7). */
+    QuietTime,
 
-    /** "Default snooze length" other than 5 / 9 / 10 / 15 min (Story 5.1). */
+    /** "Default snooze length" other than 5 / 10 / 15 / 30 min (Story 5.1). */
     DefaultSnoozeLength,
 }
 
@@ -33,7 +34,8 @@ data class Saved(
 )
 
 /**
- * Saves a global locked setting ([SettingValue.BaseFeeTier] or [SettingValue.MaxSnoozes]) through the commitment lock
+ * Saves a global locked setting ([SettingValue.BaseFeeTier], [SettingValue.MaxSnoozes] or, since 0.1.7,
+ * [SettingValue.QuietTimeSeconds]) through the commitment lock
  * ([CommitmentRules.decide]): the window is any enabled alarm's, and the change waits for the latest occurrence inside
  * it. Applying now deletes the pending change before the live write; deferring writes the live value before the pending
  * change, so a crash between never leaves a weaker setting to apply later ([store]). Invalid input
@@ -96,6 +98,7 @@ class SaveGlobalSetting(
         when (value) {
             is SettingValue.BaseFeeTier -> settingsRepository.setBaseFeeTier(value.tier)
             is SettingValue.MaxSnoozes -> settingsRepository.setMaxSnoozes(value.count)
+            is SettingValue.QuietTimeSeconds -> settingsRepository.setGraceSeconds(value.seconds)
             is SettingValue.GraceSeconds, is SettingValue.Checks, is SettingValue.OfferSkip -> Outcome.Success(Unit)
         }
 
@@ -103,6 +106,7 @@ class SaveGlobalSetting(
         when (value) {
             is SettingValue.BaseFeeTier -> SettingField.BaseFee.takeUnless { value.tier in BASE_FEE_TIERS }
             is SettingValue.MaxSnoozes -> SettingField.MaxSnoozes.takeUnless { value.count in MAX_SNOOZES }
+            is SettingValue.QuietTimeSeconds -> SettingField.QuietTime.takeUnless { value.seconds in GRACE_SECONDS }
             is SettingValue.GraceSeconds, is SettingValue.Checks, is SettingValue.OfferSkip -> null
         }
 
@@ -112,6 +116,9 @@ class SaveGlobalSetting(
 
         /** Max snoozes per session (FR-SET-1, default 5). */
         val MAX_SNOOZES: IntRange = FeeRules.MAX_SNOOZES
+
+        /** The quiet times (15 to 30 s), the same range an alarm's own stored value has. */
+        val GRACE_SECONDS: IntRange = Alarm.GRACE_SECONDS_RANGE
     }
 }
 
@@ -129,8 +136,21 @@ class SetMaxSnoozes(
     suspend operator fun invoke(count: Int): Outcome<Saved, DomainError> = saveGlobalSetting(SettingValue.MaxSnoozes(count))
 }
 
-/** The live value of the global [field]; an alarm field's live value is on its alarm, so it has none here. */
-internal fun GlobalSettings.valueOf(field: LockedField): SettingValue {
-    require(field.global) { "$field is an alarm setting" }
-    return if (field == LockedField.BaseFee) SettingValue.BaseFeeTier(baseFeeTier) else SettingValue.MaxSnoozes(maxSnoozes)
+/**
+ * Sets the global quiet time (15 to 30 s, 0.1.7) through the commitment lock: a longer one inside the window waits until
+ * that alarm has rung ([SaveGlobalSetting]). It applies to every alarm, existing ones included, and to test rings.
+ */
+class SetQuietTime(
+    private val saveGlobalSetting: SaveGlobalSetting,
+) {
+    suspend operator fun invoke(seconds: Int): Outcome<Saved, DomainError> = saveGlobalSetting(SettingValue.QuietTimeSeconds(seconds))
 }
+
+/** The live value of the global [field]; an alarm field's live value is on its alarm, so it has none here. */
+internal fun GlobalSettings.valueOf(field: LockedField): SettingValue =
+    when (field) {
+        LockedField.BaseFee -> SettingValue.BaseFeeTier(baseFeeTier)
+        LockedField.MaxSnoozes -> SettingValue.MaxSnoozes(maxSnoozes)
+        LockedField.QuietTime -> SettingValue.QuietTimeSeconds(graceSeconds)
+        LockedField.GraceSeconds, LockedField.Checks, LockedField.OfferSkip -> throw IllegalArgumentException("$field is an alarm setting")
+    }

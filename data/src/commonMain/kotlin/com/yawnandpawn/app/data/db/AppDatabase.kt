@@ -39,7 +39,9 @@ import com.yawnandpawn.app.data.sound.CustomSoundEntity
  * `alarm.offer_skip` and `alarm.skipped_date` and makes `session_history.first_ring_at` nullable for skipped occurrences
  * ([MIGRATION_12_13]); version 14 (Story 7.5) adds `alarm.motivation_mode`, when the message plays ([MIGRATION_13_14]);
  * version 15 (Story 7.4) adds `custom_sound`, the user's imported alarm sounds, whose copies stay in credential-protected
- * `sounds/` and are never backed up ([MIGRATION_14_15]). There is no destructive migration fallback; restoring a newer
+ * `sounds/` and are never backed up ([MIGRATION_14_15]); version 16 (0.1.7) changes no table: it moves every alarm's snooze
+ * length outside 5 / 10 / 15 / 30 min (the old 9) to 10 ([MIGRATION_15_16]). There is no destructive migration fallback;
+ * restoring a newer
  * file onto an older install is
  * covered by `docs/decisions/db-downgrade.md`.
  */
@@ -90,7 +92,7 @@ abstract class AppDatabase : RoomDatabase() {
          * The `app.db` schema this build knows: the `@Database` version, and the limit `PpsBackupAgent` checks a restored
          * file against (Room cannot open a newer one, `docs/decisions/db-downgrade.md`).
          */
-        const val SCHEMA_VERSION = 15
+        const val SCHEMA_VERSION = 16
     }
 }
 

@@ -11,6 +11,23 @@
 
 When something fails, the job summary lists the failing Gradle tasks, and the test, lint and screenshot reports are attached as the `reports` artifact.
 
+## How releases are made now
+
+The GitHub secrets below are not set, so the tag workflow cannot sign or upload. Releases are built on the owner's PC and uploaded by hand:
+
+1. Merge the changes to `main` (CI green).
+2. In PowerShell in the repo folder, the owner types the keystore password at the prompt (it is never stored):
+
+   ```powershell
+   $s = Read-Host -AsSecureString "Keystore password"; $env:UPLOAD_KEYSTORE_PASSWORD = [Runtime.InteropServices.Marshal]::PtrToStringAuto([Runtime.InteropServices.Marshal]::SecureStringToBSTR($s)); $env:UPLOAD_KEY_PASSWORD = $env:UPLOAD_KEYSTORE_PASSWORD; $env:UPLOAD_KEYSTORE_FILE = "<path to the upload keystore>"; $env:UPLOAD_KEY_ALIAS = "upload"; git pull; .\gradlew.bat :androidApp:bundleRelease "-Pyawnandpawn.versionName=0.1.X"
+   ```
+
+   The local, git-ignored `androidApp/google-services.json` gives the bundle its Firebase config (Crashlytics, usage stats).
+3. Upload `androidApp/build/outputs/bundle/release/androidApp-release.aab` in Play Console:
+   - **Internal testing** > Create new release > Upload > release notes > Next > **Save and publish**. It is published at once and reaches internal testers within about an hour.
+   - **Closed testing - Alpha** > Create new release > **Add from library** (the same versionCode) > release notes > Next > Save, then **Publishing overview > Submit changes for review**. Google's review has taken a few hours.
+4. Play shows one expected warning: the bundle has native code but no debug symbols.
+
 ## Releases (tag `vX.Y.Z`)
 
 Push a tag such as `v0.1.0`:

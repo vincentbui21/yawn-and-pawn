@@ -59,6 +59,7 @@ import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import kotlinx.datetime.TimeZone
+import kotlinx.datetime.daysUntil
 import kotlinx.datetime.toLocalDateTime
 import kotlin.coroutines.CoroutineContext
 import kotlin.time.Duration
@@ -92,7 +93,7 @@ import com.yawnandpawn.app.ui.checks.CheckType as UiCheckType
  *
  * Story 7.11: the countdown targets each alarm's next ring (`nextRing`: a skipped occurrence is passed over), and a card
  * whose next occurrence is skipped says "Next ring skipped" with "Don't skip" (which undoes the skip). A pre-alarm
- * notification's "Skip this one" arrives as [HomeIntent.SkipRequested]: "Skip your {time} alarm? This is logged." for an
+ * notification's "Skip this one" arrives as [HomeIntent.SkipRequested]: "Skip the {time} alarm?" for an
  * enabled alarm, then "Skip" skips it and shows "Skipped. No charge."; a skip that cannot be stored is logged, with no
  * snackbar.
  */
@@ -314,7 +315,7 @@ class HomeViewModel(
     }
 
     /**
-     * Asks "Skip your {time} alarm? This is logged." for the alarm [id] when it is on with "Offer to skip" on; an alarm
+     * Asks "Skip the {time} alarm?" for the alarm [id] when it is on with "Offer to skip" on; an alarm
      * the cards do not hold yet is read from the store first. One that is off, gone or unreadable is left as it is.
      */
     private fun requestSkip(id: String) {
@@ -335,12 +336,25 @@ class HomeViewModel(
         }
     }
 
-    /** Only for an alarm that is on with "Offer to skip" on; the dialog keeps the occurrence it asks about. */
+    /**
+     * Only for an alarm that is on with "Offer to skip" on; the dialog keeps the occurrence it asks about and, for a
+     * repeating alarm, when it rings again after it (counted in days from today); a one-time alarm has no ring after it.
+     */
     private fun askSkip(alarm: Alarm) {
         if (!alarm.enabled || !alarm.offerSkip) return
+        val now = clock.now()
+        val zone = timeZoneProvider.current()
+        val rule = alarm.toRule()
         // The raw next occurrence: the one `SkipNextAlarm` compares with, a skipped one included (it then answers AlreadySkipped).
-        val occurrence = nextOccurrence(alarm.toRule(), clock.now(), timeZoneProvider.current())
-        local.update { it.copy(skipDialog = SkipDialog(alarm.id, alarm.time, occurrence)) }
+        val occurrence = nextOccurrence(rule, now, zone)
+        val ringsAgain =
+            if (alarm.repeatDays.isEmpty()) {
+                null
+            } else {
+                val again = nextOccurrence(rule, occurrence, zone).toLocalDateTime(zone).date
+                RingsAgain(now.toLocalDateTime(zone).date.daysUntil(again), again)
+            }
+        local.update { it.copy(skipDialog = SkipDialog(alarm.id, alarm.time, occurrence, ringsAgain)) }
     }
 
     /**
@@ -696,7 +710,7 @@ private data class LocalState(
     val deleteDialog: DeleteAlarmDialog? = null,
     /** "Turn off the {time} alarm?" for an alarm switched off inside its lock window (Story 4.6). */
     val disableDialog: DisableUnderLock? = null,
-    /** "Skip your {time} alarm? This is logged." after a pre-alarm notification's "Skip this one" (Story 7.11). */
+    /** "Skip the {time} alarm?" after a pre-alarm notification's "Skip this one" (Story 7.11). */
     val skipDialog: SkipDialog? = null,
     /** The snackbar showing, if any. */
     val message: HomeMessage? = null,

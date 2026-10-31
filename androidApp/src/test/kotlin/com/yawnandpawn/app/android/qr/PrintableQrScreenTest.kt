@@ -97,7 +97,7 @@ class PrintableQrScreenTest {
             composeRule.onNodeWithText("Print or save as PDF").performClick()
             composeRule.onNodeWithText("Keep it").performClick()
             composeRule.waitForIdle()
-            composeRule.onNodeWithText("Replace your QR code? The old one stops working.").assertDoesNotExist()
+            composeRule.onNodeWithText("Replace your QR code?").assertDoesNotExist()
             assertTrue(printer.printed.isEmpty())
             assertTrue(chosen.isEmpty())
 

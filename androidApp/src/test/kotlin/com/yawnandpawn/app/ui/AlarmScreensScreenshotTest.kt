@@ -5,7 +5,6 @@ import androidx.compose.material3.SnackbarHostState
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.remember
 import androidx.compose.ui.test.assertCountEquals
-import androidx.compose.ui.test.hasClickAction
 import androidx.compose.ui.test.hasText
 import androidx.compose.ui.test.isDialog
 import androidx.compose.ui.test.junit4.v2.createEmptyComposeRule
@@ -170,6 +169,7 @@ class AlarmScreensScreenshotTest {
         mode: PpsThemeMode,
     ) = withScreen(mode, content = { AlarmEditorScreen(state = EditorSamples.editStored, is24Hour = false, onIntent = {}) }) {
         composeRule.onNodeWithContentDescription("More options").performClick()
+        composeRule.onNodeWithText("Test alarm").assertExists()
         composeRule.onNodeWithText("Duplicate").assertExists()
         capture(name, allWindows = true)
     }
@@ -190,7 +190,7 @@ class AlarmScreensScreenshotTest {
     @Test
     fun `delete dialog in the editor in Dark`() = editor("alarm_editor_delete_dark", EditorSamples.editDeleteDialog, PpsThemeMode.Dark)
 
-    /** Story 1.18: "Test alarm" under the cards and its snackbar over the editor, above the pill. */
+    /** Story 1.18: the "Test alarm" snackbar over the editor, above the pill; "Test alarm" is in "More options" (0.1.8). */
     private fun testSnackbar(
         name: String,
         mode: PpsThemeMode,
@@ -202,7 +202,8 @@ class AlarmScreensScreenshotTest {
             AlarmEditorScreen(state = EditorSamples.newAlarm, is24Hour = false, onIntent = {}, snackbarHostState = snackbar)
         },
     ) {
-        composeRule.onNode(hasText("Test alarm") and hasClickAction()).assertExists()
+        composeRule.onNodeWithText("Test alarm").assertDoesNotExist()
+        composeRule.onNodeWithContentDescription("More options").assertExists()
         composeRule.onNodeWithText(TEST_SNACKBAR).assertExists()
         capture(name)
     }

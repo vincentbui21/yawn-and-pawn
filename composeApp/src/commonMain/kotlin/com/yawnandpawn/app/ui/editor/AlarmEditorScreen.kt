@@ -59,7 +59,6 @@ import com.yawnandpawn.app.ui.components.PILL_CLEARANCE
 import com.yawnandpawn.app.ui.components.PpsBackground
 import com.yawnandpawn.app.ui.components.PpsSegmentedControl
 import com.yawnandpawn.app.ui.components.PpsSnackbarHost
-import com.yawnandpawn.app.ui.components.PpsTextButton
 import com.yawnandpawn.app.ui.components.PpsTextField
 import com.yawnandpawn.app.ui.components.PpsWheelTimePicker
 import com.yawnandpawn.app.ui.components.SaveCancelPill
@@ -99,7 +98,6 @@ import com.yawnandpawn.app.ui.resources.editor_snooze
 import com.yawnandpawn.app.ui.resources.editor_snooze_minutes
 import com.yawnandpawn.app.ui.resources.editor_sound
 import com.yawnandpawn.app.ui.resources.editor_sound_default
-import com.yawnandpawn.app.ui.resources.editor_test_alarm
 import com.yawnandpawn.app.ui.resources.editor_test_scheduled
 import com.yawnandpawn.app.ui.resources.editor_vibration
 import com.yawnandpawn.app.ui.resources.editor_wake_check
@@ -206,9 +204,10 @@ fun AlarmEditorRoute(
 /**
  * The Alarm editor, stateless (owner decisions 2026-09-27): a header ("New alarm" / "Edit alarm" and "Rings in ..."),
  * the time wheels in their own card, the repeat quick choices, then grouped `card-group`s whose rows show their value
- * and open a sub-screen ([EditorPane]), "Test alarm", and the floating "Cancel | Save" pill. Sub-screens slide in and
- * out. With [EditorUiState.full] it is the full editor (wake-up check, motivation, fee ladder); without
- * it, the Story 1.8 fields, the Sound row and "Test alarm" (Story 1.18) only.
+ * and open a sub-screen ([EditorPane]), and the floating "Cancel | Save" pill. "Test alarm" (Story 1.18) is in the
+ * header's "More options" menu in every editor (owner decision 2026-10-31, 0.1.8). Sub-screens slide in and out. With
+ * [EditorUiState.full] it is the full editor (wake-up check, motivation, fee ladder); without it, the Story 1.8 fields
+ * and the Sound row only.
  *
  * The pill has its own bottom area under the scrolling content and sits above the keyboard (`imePadding`, with the
  * activity edge-to-edge and `adjustResize`), so Save and the focused name field stay visible while it is typed.
@@ -269,7 +268,10 @@ fun AlarmEditorScreen(
     }
 }
 
-/** The main editor screen: header, time card, repeat card, the two row cards, notes, "Test alarm" and the pill. */
+/**
+ * The main editor screen: header (its "More options" menu holds "Test alarm", owner decision 2026-10-31), time card,
+ * repeat card, the two row cards, notes and the pill.
+ */
 @Composable
 private fun EditorMain(
     state: EditorUiState,
@@ -300,12 +302,6 @@ private fun EditorMain(
                 RowsCard(state = state, onIntent = onIntent)
                 // Story 4.6: a weakening change of this alarm waits under the commitment lock.
                 state.full?.weakeningNote?.let { WeakeningNoteInline(note = it, is24Hour = is24Hour) }
-                // Under the cards in every editor (Story 1.18); Save and Cancel stay in the pill.
-                PpsTextButton(
-                    text = stringResource(Res.string.editor_test_alarm),
-                    onClick = { onIntent(EditorIntent.TestAlarmClicked) },
-                    modifier = Modifier.align(Alignment.CenterHorizontally),
-                )
             }
             SaveCancelPill(
                 cancelText = stringResource(Res.string.editor_cancel),

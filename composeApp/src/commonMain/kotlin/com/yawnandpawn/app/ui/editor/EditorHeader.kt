@@ -28,27 +28,25 @@ import com.yawnandpawn.app.ui.resources.alarm_duplicate
 import com.yawnandpawn.app.ui.resources.editor_edit_title
 import com.yawnandpawn.app.ui.resources.editor_more_options
 import com.yawnandpawn.app.ui.resources.editor_new_title
+import com.yawnandpawn.app.ui.resources.editor_test_alarm
 import com.yawnandpawn.app.ui.resources.symbol_more_vert
 import com.yawnandpawn.app.ui.theme.PpsTheme
 import org.jetbrains.compose.resources.painterResource
 import org.jetbrains.compose.resources.stringResource
 
 /**
- * "New alarm" / "Edit alarm" in `headline` with "Rings in ..." under it; for a stored alarm a 48 dp "More options"
- * button at the end opens the overflow menu (Duplicate, Delete).
+ * "New alarm" / "Edit alarm" in `headline` with "Rings in ..." under it, and a 48 dp "More options" button at the end
+ * that opens the overflow menu (0.1.8: in every editor): "Test alarm", then Duplicate and Delete for a stored alarm
+ * ([EditorUiState.hasOverflowMenu]).
  */
 @Composable
 internal fun EditorHeader(
     state: EditorUiState,
     onIntent: (EditorIntent) -> Unit,
 ) {
-    if (!state.hasOverflowMenu) {
-        EditorTitle(state = state, modifier = Modifier.padding(bottom = PpsTheme.spacing.space2))
-        return
-    }
     Row(modifier = Modifier.fillMaxWidth().padding(bottom = PpsTheme.spacing.space2), verticalAlignment = Alignment.Top) {
         EditorTitle(state = state, modifier = Modifier.weight(1f))
-        OverflowMenu(onIntent = onIntent)
+        OverflowMenu(stored = state.hasOverflowMenu, onIntent = onIntent)
     }
 }
 
@@ -70,9 +68,15 @@ private fun EditorTitle(
     }
 }
 
-/** The overflow button ("More options", `text`) and its menu: Duplicate and Delete. */
+/**
+ * The overflow button ("More options", `text`) and its menu: "Test alarm" (rings as the form is set, never charges), then
+ * Duplicate and Delete when the alarm is [stored].
+ */
 @Composable
-private fun OverflowMenu(onIntent: (EditorIntent) -> Unit) {
+private fun OverflowMenu(
+    stored: Boolean,
+    onIntent: (EditorIntent) -> Unit,
+) {
     var open by remember { mutableStateOf(false) }
     Box {
         IconButton(
@@ -86,14 +90,20 @@ private fun OverflowMenu(onIntent: (EditorIntent) -> Unit) {
             )
         }
         PpsMenu(expanded = open, onDismiss = { open = false }) {
-            PpsMenuItem(label = stringResource(Res.string.alarm_duplicate), onClick = {
+            PpsMenuItem(label = stringResource(Res.string.editor_test_alarm), onClick = {
                 open = false
-                onIntent(EditorIntent.DuplicateClicked)
+                onIntent(EditorIntent.TestAlarmClicked)
             })
-            PpsMenuItem(label = stringResource(Res.string.alarm_delete), onClick = {
-                open = false
-                onIntent(EditorIntent.DeleteClicked)
-            })
+            if (stored) {
+                PpsMenuItem(label = stringResource(Res.string.alarm_duplicate), onClick = {
+                    open = false
+                    onIntent(EditorIntent.DuplicateClicked)
+                })
+                PpsMenuItem(label = stringResource(Res.string.alarm_delete), onClick = {
+                    open = false
+                    onIntent(EditorIntent.DeleteClicked)
+                })
+            }
         }
     }
 }

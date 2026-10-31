@@ -11,11 +11,13 @@ import androidx.compose.ui.test.assert
 import androidx.compose.ui.test.assertIsOff
 import androidx.compose.ui.test.assertIsOn
 import androidx.compose.ui.test.assertIsSelected
+import androidx.compose.ui.test.hasAnyAncestor
 import androidx.compose.ui.test.hasClickAction
 import androidx.compose.ui.test.hasContentDescription
 import androidx.compose.ui.test.hasSetTextAction
 import androidx.compose.ui.test.hasText
 import androidx.compose.ui.test.isDialog
+import androidx.compose.ui.test.isPopup
 import androidx.compose.ui.test.junit4.ComposeTestRule
 import androidx.compose.ui.test.junit4.v2.createEmptyComposeRule
 import androidx.compose.ui.test.longClick
@@ -376,7 +378,7 @@ class AlarmScreensSemanticsTest {
     }
 
     @Test
-    fun `Test alarm arms a test ring and shows the snackbar, and the editor stays open`() {
+    fun `More options then Test alarm arms a test ring and shows the snackbar, and the editor stays open (0_1_8)`() {
         val repository = FakeAlarmRepository()
         val testScheduler = FakeAlarmScheduler()
         val testAlarms = FakeTestAlarmStore()
@@ -398,7 +400,10 @@ class AlarmScreensSemanticsTest {
             PpsThemeMode.Light,
             content = { AlarmEditorRoute(alarmId = null, onClose = {}, onOpenFailed = {}, onOpenCopy = {}, viewModel = viewModel) },
         ) {
-            composeRule.onNode(hasText("Test alarm") and hasClickAction()).performScrollTo().performClick()
+            // 0.1.8: "Test alarm" left the editor body for the header's "More options" menu.
+            composeRule.onNodeWithText("Test alarm").assertDoesNotExist()
+            composeRule.onNodeWithContentDescription("More options").performClick()
+            composeRule.onNode(hasText("Test alarm") and hasClickAction()).performClick()
 
             composeRule.waitUntil(timeoutMillis = APP_WORK_TIMEOUT_MILLIS) {
                 composeRule.onAllNodes(hasText("Lock your phone. We'll ring in 10 seconds.")).fetchSemanticsNodes().isNotEmpty()
@@ -655,7 +660,7 @@ class AlarmScreensSemanticsTest {
     }
 
     @Test
-    fun `a stored alarm's editor has a More options button with Duplicate and Delete, a new alarm has none`() {
+    fun `a stored alarm's More options menu has Test alarm, Duplicate and Delete, a new alarm's Test alarm only (0_1_8)`() {
         val intents = mutableListOf<EditorIntent>()
         withScreen(
             PpsThemeMode.Light,
@@ -663,14 +668,33 @@ class AlarmScreensSemanticsTest {
         ) {
             assertAccessibilityFloor()
             composeRule.onNodeWithContentDescription("More options").performClick()
-            composeRule.onNode(hasText("Duplicate") and hasClickAction()).assertExists()
+            assertEquals(listOf("Test alarm", "Duplicate", "Delete"), menuItems())
             composeRule.onNode(hasText("Delete") and hasClickAction()).performClick()
 
             assertEquals(listOf<EditorIntent>(EditorIntent.DeleteClicked), intents)
         }
-        editor(EditorSamples.newAlarm) { composeRule.onNodeWithContentDescription("More options").assertDoesNotExist() }
-        editor(EditorSamples.editAlarm) { composeRule.onNodeWithContentDescription("More options").assertDoesNotExist() }
+        // A new alarm, and an alarm not stored yet (a duplicate): the button is there, with "Test alarm" alone.
+        listOf(EditorSamples.newAlarm, EditorSamples.editAlarm).forEach { state ->
+            intents.clear()
+            withScreen(
+                PpsThemeMode.Light,
+                content = { AlarmEditorScreen(state = state, is24Hour = false, onIntent = { intents += it }) },
+            ) {
+                composeRule.onNodeWithContentDescription("More options").performClick()
+                assertEquals(listOf("Test alarm"), menuItems())
+                composeRule.onNode(hasText("Test alarm") and hasClickAction()).performClick()
+
+                assertEquals(listOf<EditorIntent>(EditorIntent.TestAlarmClicked), intents)
+            }
+        }
     }
+
+    /** The open overflow menu's items, top to bottom, as TalkBack reads them. */
+    private fun menuItems(): List<String> =
+        composeRule
+            .onAllNodes(hasAnyAncestor(isPopup()) and hasClickAction())
+            .fetchSemanticsNodes()
+            .map { it.label() }
 
     @Test
     fun `the editor's delete dialog meets the accessibility floor`() =

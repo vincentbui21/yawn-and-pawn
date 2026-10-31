@@ -55,7 +55,7 @@ import org.koin.android.ext.android.inject
  * again. During a session or onboarding the request is dropped.
  *
  * Launched (or brought back) with [EXTRA_SKIP_ALARM] (a pre-alarm notification's "Skip this one", Story 7.11), it hands
- * the alarm id to [SkipRequests], and the app asks "Skip your {time} alarm? This is logged." over Home; nothing is skipped
+ * the alarm id to [SkipRequests], and the app asks "Skip the {time} alarm?" over Home; nothing is skipped
  * before "Skip". The extra is removed the same way, and dropped during a session or onboarding.
  */
 class MainActivity : ComponentActivity() {

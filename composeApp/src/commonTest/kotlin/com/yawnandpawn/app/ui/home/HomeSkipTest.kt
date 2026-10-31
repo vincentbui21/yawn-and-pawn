@@ -47,12 +47,14 @@ import kotlin.test.BeforeTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
+import kotlin.test.assertNotNull
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
 import kotlin.time.Instant
 
 /**
- * Story 7.11 on Home: "Skip this one" asks "Skip your {time} alarm? This is logged." ("Keep it" is the safe default),
+ * Story 7.11 on Home: "Skip this one" asks "Skip the {time} alarm?" with when it rings again after the skipped one (0.1.8;
+ * "Keep it" is the safe default),
  * "Skip" skips the next ring (the countdown then targets the following one, the card says "Next ring skipped") and shows
  * "Skipped. No charge."; "Don't skip" restores the ring and removes the Skipped row.
  */
@@ -125,9 +127,76 @@ class HomeSkipTest {
 
             viewModel.onIntent(HomeIntent.SkipRequested(ID))
 
-            assertEquals(SkipDialog(ID, LocalTime(7, 0), TUESDAY_7), viewModel.state.value.skipDialog)
+            assertEquals(
+                SkipDialog(ID, LocalTime(7, 0), TUESDAY_7, RingsAgain(2, LocalDate(2027, 3, 10))),
+                viewModel.state.value.skipDialog,
+            )
             assertNull(repository.current.single().skippedDate)
             assertTrue(history.rows.isEmpty())
+        }
+
+    /** The skip dialog's body for an alarm at [time] on [repeatDays], asked at [now] (0.1.8). */
+    private suspend fun TestScope.ringsAgainAsked(
+        repeatDays: Set<DayOfWeek>,
+        time: LocalTime,
+        now: Instant,
+    ): RingsAgain? {
+        repository.upsert(repository.current.single().copy(time = time, repeatDays = repeatDays))
+        clock.set(now)
+        val viewModel = home()
+        viewModel.onIntent(HomeIntent.SkipRequested(ID))
+        return assertNotNull(viewModel.state.value.skipDialog).ringsAgain
+    }
+
+    @Test
+    fun `skipping today's ring of a daily alarm says it rings again tomorrow (0_1_8)`() =
+        runTest(dispatcher) {
+            // Monday 05:00: today's 07:00 is skipped, Tuesday's is next.
+            val ringsAgain = ringsAgainAsked(DayOfWeek.entries.toSet(), LocalTime(7, 0), Instant.parse("2027-03-08T05:00:00Z"))
+
+            assertEquals(RingsAgain(1, LocalDate(2027, 3, 9)), ringsAgain)
+        }
+
+    @Test
+    fun `skipping Friday's ring of a weekday alarm says it rings again on Monday (0_1_8)`() =
+        runTest(dispatcher) {
+            // Thursday 22:00: Friday's 07:30 is skipped, Monday's is next, 4 days from today.
+            val ringsAgain = ringsAgainAsked(WEEKDAYS, LocalTime(7, 30), Instant.parse("2027-03-11T22:00:00Z"))
+
+            assertEquals(RingsAgain(4, LocalDate(2027, 3, 15)), ringsAgain)
+        }
+
+    @Test
+    fun `skipping today's ring of a weekly alarm says it rings again in 7 days, named by its date (0_1_8)`() =
+        runTest(dispatcher) {
+            // Monday 05:00: today's 07:00 is skipped, next Monday's is 7 days away ("on Monday, March 15.").
+            val ringsAgain = ringsAgainAsked(setOf(DayOfWeek.MONDAY), LocalTime(7, 0), Instant.parse("2027-03-08T05:00:00Z"))
+
+            assertEquals(RingsAgain(7, LocalDate(2027, 3, 15)), ringsAgain)
+        }
+
+    @Test
+    fun `skipping tomorrow's ring of a weekly alarm, asked the night before, is 8 days away (0_1_8)`() =
+        runTest(dispatcher) {
+            // Sunday 22:00: Monday's 07:00 is skipped, the Monday after is 8 days from today.
+            val ringsAgain = ringsAgainAsked(setOf(DayOfWeek.MONDAY), LocalTime(7, 0), Instant.parse("2027-03-07T22:00:00Z"))
+
+            assertEquals(RingsAgain(8, LocalDate(2027, 3, 15)), ringsAgain)
+        }
+
+    @Test
+    fun `a weekly alarm asked after today's ring passed skips next week's, so it rings again in 14 days (0_1_8)`() =
+        runTest(dispatcher) {
+            // Monday 08:00: today's 07:00 has rung, next Monday's is skipped, the one after is 14 days away.
+            val ringsAgain = ringsAgainAsked(setOf(DayOfWeek.MONDAY), LocalTime(7, 0), Instant.parse("2027-03-08T08:00:00Z"))
+
+            assertEquals(RingsAgain(14, LocalDate(2027, 3, 22)), ringsAgain)
+        }
+
+    @Test
+    fun `a one-time alarm's skip dialog has no rings-again body (0_1_8)`() =
+        runTest(dispatcher) {
+            assertNull(ringsAgainAsked(emptySet(), LocalTime(7, 0), Instant.parse("2027-03-08T05:00:00Z")))
         }
 
     @Test
@@ -359,5 +428,7 @@ class HomeSkipTest {
     private companion object {
         const val ID = "alarm-1"
         val TUESDAY_7: Instant = Instant.parse("2027-03-09T07:00:00Z")
+        val WEEKDAYS: Set<DayOfWeek> =
+            setOf(DayOfWeek.MONDAY, DayOfWeek.TUESDAY, DayOfWeek.WEDNESDAY, DayOfWeek.THURSDAY, DayOfWeek.FRIDAY)
     }
 }

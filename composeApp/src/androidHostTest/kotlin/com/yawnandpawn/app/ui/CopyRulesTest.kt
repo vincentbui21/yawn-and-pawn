@@ -73,7 +73,9 @@ class CopyRulesTest {
         assertEquals(
             mapOf(
                 "editor_offer_skip" to "Offer to skip 2 h before",
-                "skip_title" to "Skip your %1\$s alarm? This is logged.",
+                "skip_title" to "Skip the %1\$s alarm?",
+                "skip_rings_again_tomorrow" to "It rings again tomorrow.",
+                "skip_rings_again_on_day" to "It rings again on %1\$s.",
                 "skip_confirm" to "Skip",
                 "skip_keep" to "Keep it",
                 "skip_done" to "Skipped. No charge.",

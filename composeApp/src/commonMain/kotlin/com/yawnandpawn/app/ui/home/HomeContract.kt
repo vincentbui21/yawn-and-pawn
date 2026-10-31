@@ -5,6 +5,7 @@ import com.yawnandpawn.app.ui.checks.CheckType
 import com.yawnandpawn.app.ui.format.Countdown
 import com.yawnandpawn.app.ui.settings.WeakeningNote
 import kotlinx.datetime.DayOfWeek
+import kotlinx.datetime.LocalDate
 import kotlinx.datetime.LocalTime
 import kotlin.time.Instant
 
@@ -34,13 +35,22 @@ data class AlarmCard(
 )
 
 /**
- * "Skip your {time} alarm? This is logged." for the alarm [alarmId] at [time] (Story 7.11, "Skip this one" tapped).
- * [occurrence] is the occurrence asked about: "Skip" confirmed once it has passed skips nothing (review fix).
+ * "Skip the {time} alarm?" for the alarm [alarmId] at [time] (Story 7.11, "Skip this one" tapped), with the grey body
+ * from [ringsAgain] (owner decision 2026-10-31, 0.1.8): "It rings again tomorrow.", "It rings again on {weekday}." or, a
+ * week or more away, "It rings again on {date}."; a one-time alarm (switched off by the skip) has no [ringsAgain] and no
+ * body. [occurrence] is the occurrence asked about: "Skip" confirmed once it has passed skips nothing (review fix).
  */
 data class SkipDialog(
     val alarmId: String,
     val time: LocalTime,
     val occurrence: Instant? = null,
+    val ringsAgain: RingsAgain? = null,
+)
+
+/** The ring after the skipped one: on [date], [daysAhead] days after today's local date. */
+data class RingsAgain(
+    val daysAhead: Int,
+    val date: LocalDate,
 )
 
 /**

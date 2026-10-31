@@ -70,7 +70,7 @@ import org.koin.compose.koinInject
  * too, so no draft is lost.
  *
  * "Skip this one" on a pre-alarm notification ([SkipRequests], Story 7.11) is taken the same way: past those screens it
- * selects Home, which asks "Skip your {time} alarm? This is logged." before anything is skipped; under the session lock,
+ * selects Home, which asks "Skip the {time} alarm?" before anything is skipped; under the session lock,
  * onboarding or the editor it is dropped.
  */
 @Composable

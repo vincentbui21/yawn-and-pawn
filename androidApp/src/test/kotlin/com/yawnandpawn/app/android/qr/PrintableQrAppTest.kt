@@ -156,12 +156,13 @@ class PrintableQrAppTest {
             composeRule.waitForIdle()
             composeRule.onNodeWithText("Print or save as PDF").performClick()
             composeRule.waitForIdle()
-            composeRule.onNodeWithText("Replace your QR code? The old one stops working.").assertExists()
+            composeRule.onNodeWithText("Replace your QR code?").assertExists()
+            composeRule.onNodeWithText("The old one stops working.").assertExists()
             assertTrue(starter.started.isEmpty(), "nothing printed before Replace")
 
             composeRule.onNodeWithText("Keep it").performClick()
             composeRule.waitForIdle()
-            composeRule.onNodeWithText("Replace your QR code? The old one stops working.").assertDoesNotExist()
+            composeRule.onNodeWithText("Replace your QR code?").assertDoesNotExist()
         }
         assertTrue(starter.started.isEmpty(), "Keep it prints nothing")
         assertTrue(intents.none { it is EditorIntent.CodeRegistered }, "and changes nothing")
@@ -173,7 +174,7 @@ class PrintableQrAppTest {
             composeRule.waitForIdle()
             composeRule.onNodeWithText("Print or save as PDF").performClick()
             composeRule.waitForIdle()
-            composeRule.onNodeWithText("Replace your QR code? The old one stops working.").assertDoesNotExist()
+            composeRule.onNodeWithText("Replace your QR code?").assertDoesNotExist()
             assertEquals(1, starter.started.size, "the print dialog opens")
             assertTrue(intents.none { it is EditorIntent.CodeRegistered }, "nothing registered while the dialog is open")
 

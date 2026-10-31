@@ -205,9 +205,9 @@ class AlarmScreensSemanticsTest {
     }
 
     @Test
-    fun `snooze lengths are radio buttons with 9 min selected by default`() =
+    fun `snooze lengths are radio buttons with 10 min selected by default`() =
         editor(EditorSamples.snoozePane) {
-            composeRule.onNode(hasText("9 min") and hasClickAction()).assertIsSelected()
+            composeRule.onNode(hasText("10 min") and hasClickAction()).assertIsSelected()
             composeRule
                 .onNode(hasText("5 min") and hasClickAction())
                 .assert(SemanticsMatcher.expectValue(SemanticsProperties.Role, Role.RadioButton))

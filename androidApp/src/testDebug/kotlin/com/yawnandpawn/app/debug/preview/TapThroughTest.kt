@@ -120,8 +120,8 @@ class TapThroughTest {
                 }
             }
             composeRule.onNodeWithContentDescription("Add alarm").performClick()
-            composeRule.onNode(hasText("Quiet time") and hasClickAction()).performScrollTo().performClick()
-            composeRule.onNodeWithText("Vibrate during quiet time").assertExists()
+            composeRule.onNode(hasText("Snooze") and hasClickAction()).performScrollTo().performClick()
+            composeRule.onNodeWithText("Snooze length").assertExists()
             scenario.onActivity { it.onBackPressedDispatcher.onBackPressed() }
             composeRule.onNodeWithText("New alarm").assertExists()
 

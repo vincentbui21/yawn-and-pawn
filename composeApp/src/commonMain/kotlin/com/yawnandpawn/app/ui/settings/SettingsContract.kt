@@ -1,5 +1,6 @@
 package com.yawnandpawn.app.ui.settings
 
+import com.yawnandpawn.app.core.alarm.Alarm
 import com.yawnandpawn.app.core.billing.FeeRules
 import com.yawnandpawn.app.ui.theme.PpsThemeMode
 import kotlinx.datetime.LocalTime
@@ -15,7 +16,9 @@ enum class SettingsRow {
     BaseFee,
     MaxSnoozes,
     DefaultSnoozeLength,
-    DefaultQuietTime,
+
+    /** "Quiet time" of every alarm (0.1.7, was "Default quiet time" for new alarms). */
+    QuietTime,
     VibrateDuringQuietTime,
     BrightWakeScreen,
     Appearance,
@@ -47,7 +50,8 @@ data class SettingsUiState(
     val pricesApproximate: Boolean = false,
     val maxSnoozes: Int = DEFAULT_MAX_SNOOZES,
     val defaultSnoozeMinutes: Int = DEFAULT_SNOOZE_MINUTES,
-    val defaultQuietSeconds: Int = DEFAULT_QUIET_SECONDS,
+    /** The quiet time of every alarm (0.1.7): the pending value once a longer one waits under the lock. */
+    val quietSeconds: Int = DEFAULT_QUIET_SECONDS,
     val vibrateDuringQuietTime: Boolean = false,
     val brightWakeScreen: Boolean = true,
     val theme: PpsThemeMode = PpsThemeMode.System,
@@ -62,6 +66,8 @@ data class SettingsUiState(
     val baseFeeNote: WeakeningNote? = null,
     /** More snoozes per session were saved under the commitment lock and wait for an alarm. */
     val maxSnoozesNote: WeakeningNote? = null,
+    /** A longer quiet time was saved under the commitment lock and waits for an alarm (0.1.7). */
+    val quietTimeNote: WeakeningNote? = null,
 ) {
     /** − is enabled above tier 1. */
     val canLowerFee: Boolean get() = baseFeeTier > FeeRules.BASE_FEE_TIERS.first
@@ -73,8 +79,8 @@ data class SettingsUiState(
         /** 5, the default and the most (FR-SET-1). */
         val DEFAULT_MAX_SNOOZES: Int = FeeRules.MAX_SNOOZES.last
         val MIN_MAX_SNOOZES: Int = FeeRules.MAX_SNOOZES.first
-        const val DEFAULT_SNOOZE_MINUTES = 9
-        const val DEFAULT_QUIET_SECONDS = 20
+        const val DEFAULT_SNOOZE_MINUTES = Alarm.DEFAULT_SNOOZE_LENGTH_MINUTES
+        const val DEFAULT_QUIET_SECONDS = Alarm.DEFAULT_GRACE_SECONDS
     }
 }
 

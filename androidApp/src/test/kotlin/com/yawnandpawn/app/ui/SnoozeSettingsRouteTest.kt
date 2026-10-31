@@ -27,7 +27,6 @@ import com.yawnandpawn.app.android.ApplicationScope
 import com.yawnandpawn.app.awaitChildren
 import com.yawnandpawn.app.core.billing.PriceCatalog
 import com.yawnandpawn.app.core.config.GlobalSettingsRepository
-import com.yawnandpawn.app.core.config.SetDefaultGrace
 import com.yawnandpawn.app.core.error.Outcome
 import com.yawnandpawn.app.core.log.Logger
 import com.yawnandpawn.app.core.session.GlobalSettings
@@ -157,33 +156,31 @@ class SnoozeSettingsRouteTest {
             awaitStored { it.defaultSnoozeLengthMinutes == 15 }
             composeRule.onNode(hasText("15 min") and isSelectable()).assertIsSelected()
             composeRule.onNodeWithContentDescription("Back").performClick()
-            waitForText("Default quiet time")
+            waitForText("Quiet time")
             composeRule.onNode(hasText("15 min", substring = true) and hasClickAction()).assertExists()
 
             composeRule.onNode(hasText("Vibrate during quiet time") and isToggleable()).performClick()
-            awaitStored { !it.defaultVibrateInGrace }
+            awaitStored { !it.vibrateInGrace }
             composeRule.onNode(hasText("Vibrate during quiet time") and isToggleable()).assertIsOff()
 
-            assertEquals(GlobalSettings(defaultSnoozeLengthMinutes = 15, defaultVibrateInGrace = false), stored())
+            assertEquals(GlobalSettings(defaultSnoozeLengthMinutes = 15, vibrateInGrace = false), stored())
 
             // The slider as TalkBack drives it (SetProgress): stored and announced (review fix).
-            composeRule.onNode(hasText("Default quiet time", substring = true) and hasClickAction()).performClick()
+            // 0.1.7: the quiet time of every alarm, through the commitment lock (no alarm inside 8 h: at once).
+            composeRule.onNode(hasText("Quiet time", substring = true) and hasClickAction()).performClick()
             val slider =
                 composeRule.onNode(
-                    hasContentDescription("Default quiet time") and SemanticsMatcher.keyIsDefined(SemanticsProperties.ProgressBarRangeInfo),
+                    hasContentDescription("Quiet time") and SemanticsMatcher.keyIsDefined(SemanticsProperties.ProgressBarRangeInfo),
                 )
             slider.performSemanticsAction(SemanticsActions.SetProgress) { it(26f) }
-            awaitStored { it.defaultGraceSeconds == 26 }
+            awaitStored { it.graceSeconds == 26 }
             slider.assert(SemanticsMatcher.expectValue(SemanticsProperties.StateDescription, "26 seconds"))
             composeRule.onNodeWithContentDescription("Back").performClick()
-            waitForText("26 seconds")
+            waitForText("26 seconds · all alarms")
 
-            // The real "+" (the Koin-wired editor) opens a new alarm with the stored defaults (review fix).
-            runBlocking { GlobalContext.get().get<SetDefaultGrace>()(25) }
-            awaitStored { it.defaultGraceSeconds == 25 }
+            // The real "+" (the Koin-wired editor) opens a new alarm with the stored default snooze length (review fix).
             composeRule.onNodeWithContentDescription("Add alarm").performClick()
             waitForText("New alarm")
-            waitForText("25 seconds")
             composeRule.onNode(hasText("15 min", substring = true) and hasClickAction()).assertExists()
         }
     }

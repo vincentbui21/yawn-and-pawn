@@ -123,12 +123,12 @@ class AlarmEditorViewModelTest {
             assertEquals(LocalTime(7, 0), state.form.time)
             assertEquals(emptySet(), state.form.repeatDays)
             assertEquals("", state.form.label)
-            assertEquals(9, state.form.snoozeLengthMinutes)
+            assertEquals(10, state.form.snoozeLengthMinutes)
             assertEquals(80, state.form.volumePercent)
             assertTrue(state.form.gradualVolume)
             assertEquals(20, state.form.rampStartPercent)
             assertTrue(state.form.vibration)
-            assertEquals(listOf(5, 9, 10, 15), EditorForm.SNOOZE_OPTIONS)
+            assertEquals(listOf(5, 10, 15, 30), EditorForm.SNOOZE_OPTIONS)
         }
 
     @Test
@@ -522,11 +522,12 @@ class AlarmEditorViewModelTest {
         }
 
     @Test
-    fun `the Quiet time sub-screen edits the quiet time and its vibration, saved with Save (Story 3_4)`() =
+    fun `the editor has no quiet time row, and Save passes the stored quiet time and its vibration through (0_1_7)`() =
         runTest(dispatcher) {
             repository.upsert(stored)
             val viewModel = viewModel(stored.id)
             advanceUntilIdle()
+            assertEquals(setOf(EditorPane.WakeCheck, EditorPane.Motivation), EditorUiState(full = FullEditorSections()).full?.rows)
             assertEquals(
                 25 to false,
                 viewModel.state.value.form
@@ -534,36 +535,12 @@ class AlarmEditorViewModelTest {
                 "opens with the stored values",
             )
 
-            viewModel.onIntent(EditorIntent.PaneOpened(EditorPane.QuietTime))
-            viewModel.onIntent(EditorIntent.GraceChanged(17))
-            viewModel.onIntent(EditorIntent.VibrateInGraceToggled(true))
-            assertEquals(EditorPane.QuietTime, viewModel.state.value.pane)
-            viewModel.onIntent(EditorIntent.GraceChanged(99))
-            assertEquals(30, viewModel.state.value.form.graceSeconds, "kept in 15 to 30 s")
-            viewModel.onIntent(EditorIntent.GraceChanged(17))
+            viewModel.onIntent(EditorIntent.LabelChanged("Gym"))
             viewModel.onIntent(EditorIntent.SaveClicked)
             advanceUntilIdle()
 
             val saved = repository.current.single()
-            assertEquals(17 to true, saved.graceSeconds to saved.vibrateInGrace)
-        }
-
-    @Test
-    fun `a new alarm vibrates during its 20 s quiet time, and changing either asks to discard on Back`() =
-        runTest(dispatcher) {
-            val fresh = viewModel()
-            assertEquals(
-                20 to true,
-                fresh.state.value.form
-                    .let { it.graceSeconds to it.vibrateInGrace },
-            )
-
-            listOf(EditorIntent.GraceChanged(22), EditorIntent.VibrateInGraceToggled(false)).forEach { change ->
-                val viewModel = viewModel()
-                viewModel.onIntent(change)
-                viewModel.onIntent(EditorIntent.BackRequested)
-                assertTrue(viewModel.state.value.showDiscardDialog, "$change")
-            }
+            assertEquals(25 to false, saved.graceSeconds to saved.vibrateInGrace)
         }
 
     @Test
@@ -714,7 +691,7 @@ class AlarmEditorViewModelTest {
             val viewModel = viewModel(stored.id)
             val effects = effectsOf(viewModel)
             advanceUntilIdle()
-            assertEquals(9, viewModel.state.value.form.snoozeLengthMinutes)
+            assertEquals(10, viewModel.state.value.form.snoozeLengthMinutes)
             assertEquals(100, viewModel.state.value.form.volumePercent)
 
             viewModel.onIntent(EditorIntent.SaveClicked)

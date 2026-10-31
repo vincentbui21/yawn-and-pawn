@@ -51,9 +51,7 @@
     <string name="repeat_custom">Custom</string>
     <string name="editor_wake_check">Wake-up check</string>
     <string name="editor_snooze">Snooze</string>
-    <string name="editor_quiet_time">Quiet time</string>
     <string name="editor_vibrate_quiet_time">Vibrate during quiet time</string>
-    <string name="editor_quiet_time_note">After I'm up, the alarm stays quiet this long while you do your check.</string>
     <string name="editor_check_mode">Mode</string>
     <string name="editor_difficulty">Difficulty</string>
     <string name="editor_record_message">Record a message</string>
@@ -359,7 +357,9 @@
     <string name="settings_max_snoozes">Max snoozes per session</string>
     <string name="settings_default_snooze_length">Default snooze length</string>
     <string name="settings_wake">Wake</string>
-    <string name="settings_default_quiet_time">Default quiet time</string>
+    <string name="settings_quiet_time">Quiet time</string>
+    <string name="settings_quiet_time_value">%1$d seconds · all alarms</string>
+    <string name="settings_quiet_time_note">After I'm up, every alarm stays quiet this long while you do your check.</string>
     <string name="settings_bright_wake">Bright wake screen</string>
     <string name="settings_bright_wake_caption">Raises screen brightness while the alarm rings.</string>
     <string name="settings_appearance">Appearance</string>

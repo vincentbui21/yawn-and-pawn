@@ -18,14 +18,12 @@ import com.yawnandpawn.app.ui.components.NavRow
 import com.yawnandpawn.app.ui.components.NoteInline
 import com.yawnandpawn.app.ui.components.PercentSlider
 import com.yawnandpawn.app.ui.components.RadioRow
-import com.yawnandpawn.app.ui.components.StepSlider
 import com.yawnandpawn.app.ui.components.SubScreen
 import com.yawnandpawn.app.ui.components.SwitchRow
 import com.yawnandpawn.app.ui.format.formatMoney
 import com.yawnandpawn.app.ui.resources.Res
 import com.yawnandpawn.app.ui.resources.editor_after_im_up
 import com.yawnandpawn.app.ui.resources.editor_back
-import com.yawnandpawn.app.ui.resources.editor_grace_seconds
 import com.yawnandpawn.app.ui.resources.editor_gradual_volume
 import com.yawnandpawn.app.ui.resources.editor_message
 import com.yawnandpawn.app.ui.resources.editor_message_none
@@ -33,20 +31,16 @@ import com.yawnandpawn.app.ui.resources.editor_message_random
 import com.yawnandpawn.app.ui.resources.editor_mix_into_alarm
 import com.yawnandpawn.app.ui.resources.editor_motivation
 import com.yawnandpawn.app.ui.resources.editor_percent
-import com.yawnandpawn.app.ui.resources.editor_quiet_time
-import com.yawnandpawn.app.ui.resources.editor_quiet_time_note
 import com.yawnandpawn.app.ui.resources.editor_record_message
 import com.yawnandpawn.app.ui.resources.editor_snooze
 import com.yawnandpawn.app.ui.resources.editor_snooze_length
 import com.yawnandpawn.app.ui.resources.editor_snooze_minutes
 import com.yawnandpawn.app.ui.resources.editor_sound
-import com.yawnandpawn.app.ui.resources.editor_vibrate_quiet_time
 import com.yawnandpawn.app.ui.resources.editor_volume
 import com.yawnandpawn.app.ui.resources.editor_wake_check
 import com.yawnandpawn.app.ui.resources.editor_when_it_plays
 import com.yawnandpawn.app.ui.resources.settings_prices_approximate
 import com.yawnandpawn.app.ui.resources.sound_file_missing
-import com.yawnandpawn.app.ui.settings.WeakeningNote
 import com.yawnandpawn.app.ui.settings.WeakeningNoteInline
 import com.yawnandpawn.app.ui.settings.feeLadderText
 import com.yawnandpawn.app.ui.sound.SoundList
@@ -90,10 +84,6 @@ internal fun EditorSubScreen(
 
             EditorPane.WakeCheck -> {
                 full?.let { WakeCheckPane(full = it, is24Hour = is24Hour, onIntent = onIntent) }
-            }
-
-            EditorPane.QuietTime -> {
-                QuietTimePane(form = state.form, note = full?.graceNote, is24Hour = is24Hour, onIntent = onIntent)
             }
 
             EditorPane.Motivation -> {
@@ -156,10 +146,6 @@ private fun EditorPane.title(): StringResource =
 
         EditorPane.WakeCheck, EditorPane.CheckSetup, EditorPane.TryIt, EditorPane.ScanCode, EditorPane.PrintableQr -> {
             Res.string.editor_wake_check
-        }
-
-        EditorPane.QuietTime -> {
-            Res.string.editor_quiet_time
         }
 
         EditorPane.Motivation, EditorPane.Recordings -> {
@@ -274,47 +260,6 @@ private fun WakeCheckPane(
     // Story 4.6: the easier checks shown wait under the commitment lock.
     full.checksNote?.let {
         WeakeningNoteInline(note = it, is24Hour = is24Hour, modifier = Modifier.padding(horizontal = PpsTheme.spacing.cardPadding))
-    }
-}
-
-/**
- * Quiet time (the grace window): 15 to 30 s and "Vibrate during quiet time", and while the longer quiet time shown waits
- * under the commitment lock, [note] (Story 4.6).
- */
-@Composable
-private fun QuietTimePane(
-    form: EditorForm,
-    note: WeakeningNote?,
-    is24Hour: Boolean,
-    onIntent: (EditorIntent) -> Unit,
-) {
-    GroupCard {
-        StepSlider(
-            title = stringResource(Res.string.editor_quiet_time),
-            valueText = stringResource(Res.string.editor_grace_seconds, form.graceSeconds),
-            value = form.graceSeconds,
-            range = Alarm.GRACE_SECONDS_RANGE,
-            step = 1,
-            onValueChange = { onIntent(EditorIntent.GraceChanged(it)) },
-            modifier = Modifier.padding(horizontal = PpsTheme.spacing.cardPadding, vertical = PpsTheme.spacing.space3),
-        )
-        GroupDivider()
-        SwitchRow(
-            label = stringResource(Res.string.editor_vibrate_quiet_time),
-            checked = form.vibrateInGrace,
-            onCheckedChange = { onIntent(EditorIntent.VibrateInGraceToggled(it)) },
-        )
-    }
-    NoteInline(
-        text = stringResource(Res.string.editor_quiet_time_note),
-        modifier = Modifier.padding(horizontal = PpsTheme.spacing.cardPadding),
-    )
-    note?.let {
-        WeakeningNoteInline(
-            note = it,
-            is24Hour = is24Hour,
-            modifier = Modifier.padding(horizontal = PpsTheme.spacing.cardPadding),
-        )
     }
 }
 

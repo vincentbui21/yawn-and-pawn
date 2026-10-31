@@ -259,6 +259,18 @@ val MIGRATION_14_15: Migration =
         }
     }
 
+/**
+ * v15 to v16 (0.1.7, owner decision 2026-10-30): the snooze lengths are 5 / 10 / 15 / 30 min, so a stored alarm with any
+ * other length (9, the old default) becomes 10, the new default. No table or column changes; the exported `16.json` has
+ * the same tables as `15.json`.
+ */
+val MIGRATION_15_16: Migration =
+    object : Migration(15, 16) {
+        override suspend fun migrate(connection: SQLiteConnection) {
+            connection.execSQL("UPDATE `alarm` SET `snooze_length_minutes` = 10 WHERE `snooze_length_minutes` NOT IN (5, 10, 15, 30)")
+        }
+    }
+
 /** Every migration of `app.db`, oldest first; `buildAppDatabase` registers them all. */
 val APP_DATABASE_MIGRATIONS: Array<Migration> =
     arrayOf(
@@ -276,4 +288,5 @@ val APP_DATABASE_MIGRATIONS: Array<Migration> =
         MIGRATION_12_13,
         MIGRATION_13_14,
         MIGRATION_14_15,
+        MIGRATION_15_16,
     )

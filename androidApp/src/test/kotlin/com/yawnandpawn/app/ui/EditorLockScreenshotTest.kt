@@ -69,17 +69,9 @@ internal object EditorLockSamples {
 
     private val note = WeakeningNote(LocalTime(7, 30))
 
-    /** A longer quiet time (30 s) saved at 23:40 waits for tomorrow's 7:30 ring: the main screen. */
+    /** Easier checks (Math at Easy) saved at 23:40 wait for tomorrow's 7:30 ring: the main screen. */
     val pendingMain =
-        stored.copy(form = stored.form.copy(graceSeconds = 30), full = full.copy(graceNote = note, weakeningNote = note))
-
-    /** The same, in the Quiet time sub-screen. */
-    val pendingQuietTime = pendingMain.copy(pane = EditorPane.QuietTime)
-
-    /** Easier checks (Math at Easy) waiting, in the Wake-up check sub-screen. */
-    val pendingChecks =
         stored.copy(
-            pane = EditorPane.WakeCheck,
             full =
                 full.copy(
                     checks = listOf(CheckChip(CheckType.Math, Difficulty.Easy, 3)),
@@ -87,6 +79,9 @@ internal object EditorLockSamples {
                     weakeningNote = note,
                 ),
         )
+
+    /** The same, in the Wake-up check sub-screen. */
+    val pendingChecks = pendingMain.copy(pane = EditorPane.WakeCheck)
 
     private val home =
         HomeUiState(
@@ -104,7 +99,7 @@ internal object EditorLockSamples {
             disableDialog = DisableUnderLock("1", LocalTime(7, 30), Countdown.Minutes(42)),
         )
 
-    /** Back on Home after the editor saved a longer quiet time at 23:40. */
+    /** Back on Home after the editor saved easier checks at 23:40. */
     val savedSnackbar = home.copy(savedUnderLock = note)
 }
 
@@ -209,17 +204,6 @@ class EditorLockScreenshotTest {
     @Config(qualifiers = "+h2400dp", fontScale = 2.0f)
     fun `pending note on the main screen in Light at 200 percent`() =
         editor("editor_pending_main_light_font200", EditorLockSamples.pendingMain, PpsThemeMode.Light, note)
-
-    @Test
-    fun `pending quiet time in Light`() = editor("editor_pending_quiet_light", EditorLockSamples.pendingQuietTime, PpsThemeMode.Light, note)
-
-    @Test
-    fun `pending quiet time in Dark`() = editor("editor_pending_quiet_dark", EditorLockSamples.pendingQuietTime, PpsThemeMode.Dark, note)
-
-    @Test
-    @Config(fontScale = 2.0f)
-    fun `pending quiet time in Light at 200 percent`() =
-        editor("editor_pending_quiet_light_font200", EditorLockSamples.pendingQuietTime, PpsThemeMode.Light, note)
 
     @Test
     fun `pending checks in Light`() = editor("editor_pending_checks_light", EditorLockSamples.pendingChecks, PpsThemeMode.Light, note)

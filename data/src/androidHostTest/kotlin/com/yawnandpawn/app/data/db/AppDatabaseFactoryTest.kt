@@ -564,10 +564,10 @@ class AppDatabaseFactoryTest {
     @Test
     fun `the migrations cover every version step and nothing is destructive`() {
         assertEquals(
-            (1..14).map { it to it + 1 },
+            (1..15).map { it to it + 1 },
             APP_DATABASE_MIGRATIONS.map { it.startVersion to it.endVersion },
         )
-        assertEquals(15, AppDatabase.SCHEMA_VERSION)
+        assertEquals(16, AppDatabase.SCHEMA_VERSION)
     }
 
     @Test

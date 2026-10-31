@@ -89,6 +89,11 @@ class PromotePendingChanges(
                     settingsRepository.setMaxSnoozes(value.count)
                 }
 
+                is SettingValue.QuietTimeSeconds -> {
+                    settingsRepository.setGraceSeconds(value.seconds)
+                }
+
+                // A leftover per-alarm quiet time (before 0.1.7) goes into the unused column: harmless, no session reads it.
                 is SettingValue.GraceSeconds -> {
                     alarmField(
                         change,

@@ -1,6 +1,5 @@
 package com.yawnandpawn.app.ui.editor
 
-import com.yawnandpawn.app.core.alarm.Alarm
 import com.yawnandpawn.app.core.alarm.AlarmRule
 import com.yawnandpawn.app.core.alarm.CheckConfig
 import com.yawnandpawn.app.core.alarm.nextOccurrence
@@ -70,8 +69,6 @@ internal fun feeLadderOf(
  * same value stays pending with its date), and setting a field back to its live value cancels its pending change.
  */
 internal data class PendingFields(
-    /** The pending quiet time, in seconds, and the ring it waits for. */
-    val grace: Pair<Int, Instant>? = null,
     /** The pending checks and mode as the form shows them, and the ring they wait for. */
     val checks: Pair<Pair<List<CheckChip>, CheckMode>, Instant>? = null,
     /** The pending "Offer to skip" (on), and the ring it waits for (Story 7.11). */
@@ -89,10 +86,6 @@ internal data class PendingFields(
             toChips: (List<CheckEntry>) -> List<CheckChip>,
         ): PendingFields {
             val own = pending.filter { it.alarmId != null }.associateBy { it.field }
-            val grace =
-                (own[LockedField.GraceSeconds]?.value as? SettingValue.GraceSeconds)?.let { value ->
-                    value.seconds to own.getValue(LockedField.GraceSeconds).effectiveAfter.scheduledAt
-                }
             val checks =
                 (own[LockedField.Checks]?.value as? SettingValue.Checks)?.let { value ->
                     val plan = value.plan.withCodesFrom(liveEntries)
@@ -103,7 +96,7 @@ internal data class PendingFields(
                 (own[LockedField.OfferSkip]?.value as? SettingValue.OfferSkip)?.let { value ->
                     value.on to own.getValue(LockedField.OfferSkip).effectiveAfter.scheduledAt
                 }
-            return PendingFields(grace, checks, offerSkip)
+            return PendingFields(checks, offerSkip)
         }
     }
 }
@@ -122,10 +115,8 @@ internal fun chipsOf(entries: List<CheckEntry>): List<CheckChip> =
 
 /** The form with the alarm's [pending] values selected (Story 4.6), so a save keeps them waiting. */
 internal fun EditorForm.withPending(pending: PendingFields): EditorForm {
-    val grace = pending.grace?.first?.coerceIn(Alarm.GRACE_SECONDS_RANGE) ?: graceSeconds
     val checks = pending.checks?.first
     return copy(
-        graceSeconds = grace,
         checks = checks?.first ?: this.checks,
         checkMode = checks?.second ?: checkMode,
         offerSkip = pending.offerSkip?.first ?: offerSkip,
@@ -149,11 +140,6 @@ internal fun FullEditorSections.lockSections(
 ): FullEditorSections {
     val formRing = nextOccurrence(AlarmRule(form.time, form.repeatDays), now, zone).takeIf { LockWindow.contains(it, now) }
     val waitsUntil: (Instant) -> Instant = { maxOf(it, formRing ?: it) }
-    val graceAt =
-        pending.grace
-            ?.takeIf { (seconds, _) -> form.graceSeconds == seconds }
-            ?.second
-            ?.let(waitsUntil)
     val checksAt =
         pending.checks
             ?.takeIf { (shown, _) -> shown == (form.checks to form.checkMode) }
@@ -169,8 +155,7 @@ internal fun FullEditorSections.lockSections(
     return copy(
         feeLadder = prices?.first,
         pricesApproximate = prices?.second == true,
-        graceNote = weakeningNoteOf(graceAt, now, zone),
         checksNote = weakeningNoteOf(checksAt, now, zone),
-        weakeningNote = weakeningNoteOf(listOfNotNull(graceAt, checksAt, offerSkipAt).maxOrNull(), now, zone),
+        weakeningNote = weakeningNoteOf(listOfNotNull(checksAt, offerSkipAt).maxOrNull(), now, zone),
     )
 }

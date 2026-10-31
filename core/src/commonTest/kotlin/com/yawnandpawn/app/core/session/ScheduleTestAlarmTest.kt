@@ -51,7 +51,7 @@ class ScheduleTestAlarmTest {
     @Test
     fun `it stores the unsaved values as a test config and arms the test alarm 10 s ahead`() =
         runTest {
-            assertEquals(Outcome.Success(now + 10.seconds), schedule(draft))
+            assertEquals(Outcome.Success(now + 10.seconds), schedule(draft, globalSettings = GlobalSettings(graceSeconds = 25)))
 
             assertEquals(listOf<Call>(Call.Test(now + 10.seconds)), scheduler.calls)
             val config = store.pending!!

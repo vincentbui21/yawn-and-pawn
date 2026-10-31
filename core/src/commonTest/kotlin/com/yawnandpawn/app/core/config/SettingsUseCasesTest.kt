@@ -20,12 +20,16 @@ import kotlinx.datetime.LocalTime
 import kotlinx.datetime.TimeZone
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertFailsWith
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
 import kotlin.time.Duration.Companion.hours
 import kotlin.time.Instant
 
-/** Story 4.4: SetBaseFee and SetMaxSnoozes through the commitment lock. Tests use 23:40 and a 07:30 alarm (7 h 50 min). */
+/**
+ * Story 4.4: SetBaseFee and SetMaxSnoozes, and (0.1.7) SetQuietTime, through the commitment lock. Tests use 23:40 and a
+ * 07:30 alarm (7 h 50 min).
+ */
 class SettingsUseCasesTest {
     private val now = Instant.parse("2027-03-08T23:40:00Z")
     private val clock = TestClock(now)
@@ -37,6 +41,7 @@ class SettingsUseCasesTest {
     private val save = SaveGlobalSetting(settings, pending, alarms, clock, TestZone(TimeZone.UTC), AlarmWriteLock(), sessionLock)
     private val setBaseFee = SetBaseFee(save)
     private val setMaxSnoozes = SetMaxSnoozes(save)
+    private val setQuietTime = SetQuietTime(save)
 
     private val sevenThirty = Occurrence("a", Instant.parse("2027-03-09T07:30:00Z"))
 
@@ -166,11 +171,50 @@ class SettingsUseCasesTest {
         }
 
     @Test
+    fun `a longer quiet time inside the window waits for the alarm with the note's occurrence, a shorter one applies now`() =
+        runTest {
+            alarmAt(LocalTime(7, 30))
+            assertEquals(20, settings.settings.value.graceSeconds)
+
+            assertEquals(Outcome.Success(Saved(sevenThirty)), setQuietTime(30))
+            assertEquals(20, settings.settings.value.graceSeconds, "the live quiet time stays 20 until that ring")
+            assertEquals(listOf(PendingChange(null, SettingValue.QuietTimeSeconds(30), sevenThirty)), pending.changes.value)
+
+            assertEquals(Outcome.Success(Saved(null)), setQuietTime(15))
+            assertEquals(15, settings.settings.value.graceSeconds)
+            assertTrue(pending.changes.value.isEmpty(), "shorter clears the pending change")
+        }
+
+    @Test
+    fun `a longer quiet time with no alarm inside 8 h applies now, and 15 to 30 s are the only valid values`() =
+        runTest {
+            alarmAt(LocalTime(9, 0))
+
+            assertEquals(Outcome.Success(Saved(null)), setQuietTime(30))
+            assertEquals(30, settings.settings.value.graceSeconds)
+            assertTrue(pending.changes.value.isEmpty())
+
+            val writes = settings.writes
+            listOf(14, 31).forEach { assertEquals(Outcome.Failure(DomainError.InvalidSetting(SettingField.QuietTime)), setQuietTime(it)) }
+            assertEquals(writes, settings.writes, "nothing written")
+        }
+
+    @Test
+    fun `each global field has its live value, and an alarm field has none here`() {
+        val live = GlobalSettings(baseFeeTier = 3, maxSnoozes = 2, graceSeconds = 25)
+        assertEquals(SettingValue.BaseFeeTier(3), live.valueOf(LockedField.BaseFee))
+        assertEquals(SettingValue.MaxSnoozes(2), live.valueOf(LockedField.MaxSnoozes))
+        assertEquals(SettingValue.QuietTimeSeconds(25), live.valueOf(LockedField.QuietTime))
+        LockedField.entries.filterNot { it.global }.forEach { field -> assertFailsWith<IllegalArgumentException> { live.valueOf(field) } }
+    }
+
+    @Test
     fun `nothing changes during a session`() =
         runTest {
             sessionState.value = SessionState.Snoozed(snoozedSession())
 
             assertEquals(Outcome.Failure(DomainError.SessionActive), setBaseFee(5))
+            assertEquals(Outcome.Failure(DomainError.SessionActive), setQuietTime(15))
             assertEquals(0, settings.writes)
         }
 

@@ -60,7 +60,7 @@ class EditorLockSemanticsTest {
 
     @Test
     fun `the pending-field notes are polite live regions`() {
-        listOf(EditorLockSamples.pendingMain, EditorLockSamples.pendingQuietTime, EditorLockSamples.pendingChecks).forEach { state ->
+        listOf(EditorLockSamples.pendingMain, EditorLockSamples.pendingChecks).forEach { state ->
             editor(state) { composeRule.onNode(hasText(note) and polite).assertExists() }
         }
     }
@@ -69,7 +69,7 @@ class EditorLockSemanticsTest {
     fun `the snooze lengths are 48 dp and the ladder reads as text`() =
         editor(EditorLockSamples.ladderApproximate) {
             composeRule.onAllNodes(isSelectable()).fetchSemanticsNodes().let { assertEquals(4, it.size) }
-            listOf("5 min", "9 min", "10 min", "15 min").forEach { label ->
+            listOf("5 min", "10 min", "15 min", "30 min").forEach { label ->
                 composeRule.onNode(hasText(label) and isSelectable()).assertHeightIsAtLeast(48.dp)
             }
             composeRule.onNodeWithText("Snooze 1: $2.00 · 2: $4.00 · 3: $6.00", useUnmergedTree = true).assertExists()

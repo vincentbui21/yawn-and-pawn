@@ -8,21 +8,17 @@ import com.yawnandpawn.app.core.session.SessionLockGuard
 import com.yawnandpawn.app.core.session.ThemeMode
 
 /**
- * A Settings value with no commitment (Story 5.1): a default for alarms created later, or the app theme. Changing one
- * never changes a stored alarm or a running session (AD-16).
+ * A Settings value with no commitment (Story 5.1): a default for alarms created later, the app theme, or (0.1.7) "Vibrate
+ * during quiet time". Changing one never changes a running session (AD-16). The quiet time itself is locked
+ * ([SetQuietTime]).
  */
 sealed interface DefaultSetting {
-    /** "Default quiet time", 15 to 30 s. */
-    data class GraceSeconds(
-        val seconds: Int,
-    ) : DefaultSetting
-
-    /** "Vibrate during quiet time" for new alarms. */
+    /** "Vibrate during quiet time" (0.1.7: for every alarm, existing ones included); never locked. */
     data class VibrateInGrace(
         val on: Boolean,
     ) : DefaultSetting
 
-    /** "Default snooze length", 5 / 9 / 10 / 15 min. */
+    /** "Default snooze length", 5 / 10 / 15 / 30 min. */
     data class SnoozeLength(
         val minutes: Int,
     ) : DefaultSetting
@@ -41,8 +37,7 @@ sealed interface DefaultSetting {
 /** These settings with [value] set, valid or not (the ViewModel shows a requested value at once with it). */
 fun GlobalSettings.with(value: DefaultSetting): GlobalSettings =
     when (value) {
-        is DefaultSetting.GraceSeconds -> copy(defaultGraceSeconds = value.seconds)
-        is DefaultSetting.VibrateInGrace -> copy(defaultVibrateInGrace = value.on)
+        is DefaultSetting.VibrateInGrace -> copy(vibrateInGrace = value.on)
         is DefaultSetting.SnoozeLength -> copy(defaultSnoozeLengthMinutes = value.minutes)
         is DefaultSetting.Theme -> copy(themeMode = value.mode)
         is DefaultSetting.BrightWakeScreen -> copy(brightWakeScreen = value.on)
@@ -64,8 +59,7 @@ class SaveDefaultSetting(
 
     private suspend fun write(value: DefaultSetting): Outcome<Unit, DomainError> =
         when (value) {
-            is DefaultSetting.GraceSeconds -> settingsRepository.setDefaultGraceSeconds(value.seconds)
-            is DefaultSetting.VibrateInGrace -> settingsRepository.setDefaultVibrateInGrace(value.on)
+            is DefaultSetting.VibrateInGrace -> settingsRepository.setVibrateInGrace(value.on)
             is DefaultSetting.SnoozeLength -> settingsRepository.setDefaultSnoozeLength(value.minutes)
             is DefaultSetting.Theme -> settingsRepository.setThemeMode(value.mode)
             is DefaultSetting.BrightWakeScreen -> settingsRepository.setBrightWakeScreen(value.on)
@@ -73,35 +67,24 @@ class SaveDefaultSetting(
 
     private fun invalidField(value: DefaultSetting): SettingField? =
         when (value) {
-            is DefaultSetting.GraceSeconds -> SettingField.DefaultGrace.takeUnless { value.seconds in GRACE_SECONDS }
             is DefaultSetting.SnoozeLength -> SettingField.DefaultSnoozeLength.takeUnless { value.minutes in SNOOZE_LENGTHS }
             is DefaultSetting.VibrateInGrace, is DefaultSetting.Theme, is DefaultSetting.BrightWakeScreen -> null
         }
 
     companion object {
-        /** The quiet times an alarm may have (15 to 30 s), so a default is always one a new alarm can save. */
-        val GRACE_SECONDS: IntRange = Alarm.GRACE_SECONDS_RANGE
-
-        /** The snooze lengths an alarm may have (5 / 9 / 10 / 15 min). */
+        /** The snooze lengths an alarm may have (5 / 10 / 15 / 30 min). */
         val SNOOZE_LENGTHS: Set<Int> = Alarm.SNOOZE_LENGTHS_MINUTES
     }
 }
 
-/** Sets "Default quiet time" (15 to 30 s) for alarms created later ([SaveDefaultSetting]). */
-class SetDefaultGrace(
-    private val saveDefaultSetting: SaveDefaultSetting,
-) {
-    suspend operator fun invoke(seconds: Int): Outcome<Unit, DomainError> = saveDefaultSetting(DefaultSetting.GraceSeconds(seconds))
-}
-
-/** Sets "Vibrate during quiet time" for alarms created later ([SaveDefaultSetting]). */
-class SetDefaultVibrateInGrace(
+/** Sets "Vibrate during quiet time" for every alarm (0.1.7), applied at once with no lock ([SaveDefaultSetting]). */
+class SetVibrateInGrace(
     private val saveDefaultSetting: SaveDefaultSetting,
 ) {
     suspend operator fun invoke(on: Boolean): Outcome<Unit, DomainError> = saveDefaultSetting(DefaultSetting.VibrateInGrace(on))
 }
 
-/** Sets "Default snooze length" (5 / 9 / 10 / 15 min) for alarms created later ([SaveDefaultSetting]). */
+/** Sets "Default snooze length" (5 / 10 / 15 / 30 min) for alarms created later ([SaveDefaultSetting]). */
 class SetDefaultSnoozeLength(
     private val saveDefaultSetting: SaveDefaultSetting,
 ) {

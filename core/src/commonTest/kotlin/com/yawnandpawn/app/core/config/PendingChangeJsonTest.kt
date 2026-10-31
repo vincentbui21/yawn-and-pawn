@@ -29,13 +29,14 @@ class PendingChangeJsonTest {
                 ),
             ),
             SettingValue.OfferSkip(true),
+            SettingValue.QuietTimeSeconds(25),
         )
 
     @Test
     fun `every value round-trips, and each one names its field`() {
         values.forEach { value -> assertEquals(value, PendingChangeJson.decode(PendingChangeJson.encode(value))) }
         assertEquals(LockedField.entries.toList(), values.map { it.field })
-        assertEquals(listOf(true, true, false, false, false), values.map { it.field.global })
+        assertEquals(listOf(true, true, false, false, false, true), values.map { it.field.global })
     }
 
     @Test
@@ -45,6 +46,8 @@ class PendingChangeJsonTest {
         assertEquals("""{"type":"GraceSeconds","seconds":30}""", PendingChangeJson.encode(SettingValue.GraceSeconds(30)))
         // Story 7.11.
         assertEquals("""{"type":"OfferSkip","on":true}""", PendingChangeJson.encode(SettingValue.OfferSkip(true)))
+        // 0.1.7: the global quiet time.
+        assertEquals("""{"type":"QuietTime","seconds":25}""", PendingChangeJson.encode(SettingValue.QuietTimeSeconds(25)))
         assertEquals(SettingValue.GraceSeconds(25), PendingChangeJson.decode("""{"type":"GraceSeconds","seconds":25,"later":1}"""))
     }
 
@@ -60,6 +63,7 @@ class PendingChangeJsonTest {
             listOf(
                 PendingChange(null, SettingValue.BaseFeeTier(1), Occurrence("a", Instant.parse("2027-03-09T07:30:00Z"))),
                 PendingChange(null, SettingValue.MaxSnoozes(5), Occurrence("b", Instant.parse("2027-03-09T06:00:00Z"))),
+                PendingChange(null, SettingValue.QuietTimeSeconds(30), Occurrence("a", Instant.parse("2027-03-09T07:30:00Z"))),
             )
 
         assertEquals(changes, PendingChangeJson.decodeGlobal(PendingChangeJson.encodeGlobal(changes)))

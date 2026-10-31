@@ -165,19 +165,19 @@ class ConfigRepositoriesTest {
         }
 
     @Test
-    fun `the new-alarm defaults, the theme and bright wake persist, keep the last-known snapshot, and read garbage as defaults`() =
+    fun `quiet time, new-alarm defaults, theme and bright wake persist, keep the last-known snapshot, read garbage as defaults`() =
         runTest(timeout = TIMEOUT) {
             val chosen =
                 GlobalSettings(
-                    defaultGraceSeconds = 25,
+                    graceSeconds = 25,
                     defaultSnoozeLengthMinutes = 15,
-                    defaultVibrateInGrace = false,
+                    vibrateInGrace = false,
                     themeMode = ThemeMode.Dark,
                     brightWakeScreen = false,
                 )
-            global.setDefaultGraceSeconds(25)
+            global.setGraceSeconds(25)
             global.setDefaultSnoozeLength(15)
-            global.setDefaultVibrateInGrace(false)
+            global.setVibrateInGrace(false)
             global.setThemeMode(ThemeMode.Dark)
             global.setBrightWakeScreen(false)
             assertEquals(chosen, global.observe().first())
@@ -193,7 +193,29 @@ class ConfigRepositoriesTest {
                 it[DataStoreGlobalSettings.DEFAULT_SNOOZE_LENGTH] = 7
                 it[DataStoreGlobalSettings.THEME_MODE] = "Purple"
             }
-            assertEquals(Outcome.Success(GlobalSettings(defaultVibrateInGrace = false, brightWakeScreen = false)), reopened.get())
+            assertEquals(Outcome.Success(GlobalSettings(vibrateInGrace = false, brightWakeScreen = false)), reopened.get())
+        }
+
+    @Test
+    fun `a default snooze length of 9 stored before 0_1_7 reads as 10, and the quiet-time keys keep their names`() =
+        runTest(timeout = TIMEOUT) {
+            settingsStore.store.edit { it[DataStoreGlobalSettings.DEFAULT_SNOOZE_LENGTH] = 9 }
+            assertEquals(10, assertIs<Outcome.Success<GlobalSettings>>(global.get()).value.defaultSnoozeLengthMinutes)
+            settingsStore.store.edit { it[DataStoreGlobalSettings.DEFAULT_SNOOZE_LENGTH] = 30 }
+            assertEquals(30, assertIs<Outcome.Success<GlobalSettings>>(global.get()).value.defaultSnoozeLengthMinutes)
+
+            // The global quiet time and its vibration (0.1.7) are stored under the Story 5.1 keys, never renamed.
+            assertEquals("default_grace_seconds", DataStoreGlobalSettings.DEFAULT_GRACE_SECONDS.name)
+            assertEquals("default_vibrate_in_grace", DataStoreGlobalSettings.DEFAULT_VIBRATE_IN_GRACE.name)
+            assertEquals("default_snooze_length_minutes", DataStoreGlobalSettings.DEFAULT_SNOOZE_LENGTH.name)
+            global.setGraceSeconds(27)
+            assertEquals(27, settingsStore.store.data.first()[DataStoreGlobalSettings.DEFAULT_GRACE_SECONDS])
+
+            val quiet = PendingChange(null, SettingValue.QuietTimeSeconds(30), sevenThirty)
+            pending.put(quiet)
+            assertEquals(Outcome.Success(listOf(quiet)), global.allPending())
+            val expected = SettingsSnapshot(GlobalSettings(graceSeconds = 27, defaultSnoozeLengthMinutes = 30), listOf(quiet))
+            assertEquals(expected, global.lastKnown())
         }
 
     @Test

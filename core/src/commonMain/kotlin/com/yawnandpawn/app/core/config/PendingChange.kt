@@ -14,9 +14,10 @@ import kotlin.time.Instant
 
 /**
  * The settings the commitment lock covers (PRD §6.2 lists fee, checks, grace and snoozes; Epic 7 adds "Offer to skip"):
- * [BaseFee] and [MaxSnoozes] are global, [GraceSeconds], [Checks] and [OfferSkip] belong to an alarm. Snooze length,
- * sound, volume, label and repeat days are never locked. The names are stored (`pending_change.field`), so they never
- * change.
+ * [BaseFee], [MaxSnoozes] and [QuietTime] are global, [Checks] and [OfferSkip] belong to an alarm. [GraceSeconds] is the
+ * per-alarm quiet time of before 0.1.7: old rows may still hold it, but no session reads it. Snooze length, sound, volume,
+ * label, repeat days and "Vibrate during quiet time" are never locked. The names are stored (`pending_change.field`), so
+ * they never change.
  */
 enum class LockedField(
     val global: Boolean,
@@ -28,6 +29,9 @@ enum class LockedField(
 
     /** "Offer to skip 2 h before" (Story 7.11): turning it on weakens. */
     OfferSkip(global = false),
+
+    /** The global quiet time (0.1.7, owner decision 2026-10-30): a longer one weakens. */
+    QuietTime(global = true),
 }
 
 /** A value of one [LockedField], stored as JSON ([PendingChangeJson]); the serial names never change. */
@@ -53,13 +57,22 @@ sealed interface SettingValue {
         override val field: LockedField get() = LockedField.MaxSnoozes
     }
 
-    /** An alarm's grace window ("quiet time"), in seconds. */
+    /** An alarm's own grace window ("quiet time"), in seconds; before 0.1.7 only, no session reads it any more. */
     @Serializable
     @SerialName("GraceSeconds")
     data class GraceSeconds(
         val seconds: Int,
     ) : SettingValue {
         override val field: LockedField get() = LockedField.GraceSeconds
+    }
+
+    /** The global quiet time (0.1.7): the grace window after "I'm up" of every alarm, in seconds. */
+    @Serializable
+    @SerialName("QuietTime")
+    data class QuietTimeSeconds(
+        val seconds: Int,
+    ) : SettingValue {
+        override val field: LockedField get() = LockedField.QuietTime
     }
 
     /** An alarm's checks: its check mode and its entries in order. */
@@ -154,7 +167,8 @@ object PendingChangeJson {
     /**
      * A [SettingsSnapshot] as the fallback cache keeps it. The Story 5.1 and 5.2 fields are optional, so a snapshot saved by an
      * older build still decodes (as the defaults); the theme is its name, so an unknown one reads as System instead of
-     * losing the fire's fallback.
+     * losing the fire's fallback. The stored names never change: `defaultGraceSeconds` and `defaultVibrateInGrace` hold
+     * the global quiet time and its vibration since 0.1.7.
      */
     @Serializable
     private data class StoredSnapshot(
@@ -177,9 +191,9 @@ object PendingChangeJson {
                 baseFeeTier = settings.baseFeeTier,
                 maxSnoozes = settings.maxSnoozes,
                 pending = snapshot.pending.map { it.toStored() },
-                defaultGraceSeconds = settings.defaultGraceSeconds,
+                defaultGraceSeconds = settings.graceSeconds,
                 defaultSnoozeLengthMinutes = settings.defaultSnoozeLengthMinutes,
-                defaultVibrateInGrace = settings.defaultVibrateInGrace,
+                defaultVibrateInGrace = settings.vibrateInGrace,
                 themeMode = settings.themeMode.name,
                 brightWakeScreen = settings.brightWakeScreen,
             ),
@@ -195,12 +209,11 @@ object PendingChangeJson {
                 GlobalSettings(
                     baseFeeTier = stored.baseFeeTier,
                     maxSnoozes = stored.maxSnoozes,
-                    defaultGraceSeconds =
-                        stored.defaultGraceSeconds?.takeIf { it in SaveDefaultSetting.GRACE_SECONDS } ?: defaults.defaultGraceSeconds,
+                    graceSeconds = stored.defaultGraceSeconds?.takeIf { it in SaveGlobalSetting.GRACE_SECONDS } ?: defaults.graceSeconds,
                     defaultSnoozeLengthMinutes =
                         stored.defaultSnoozeLengthMinutes?.takeIf { it in SaveDefaultSetting.SNOOZE_LENGTHS }
                             ?: defaults.defaultSnoozeLengthMinutes,
-                    defaultVibrateInGrace = stored.defaultVibrateInGrace ?: defaults.defaultVibrateInGrace,
+                    vibrateInGrace = stored.defaultVibrateInGrace ?: defaults.vibrateInGrace,
                     themeMode = ThemeMode.parse(stored.themeMode) ?: defaults.themeMode,
                     brightWakeScreen = stored.brightWakeScreen ?: defaults.brightWakeScreen,
                 ),

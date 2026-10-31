@@ -33,8 +33,15 @@ data class Alarm(
     val rampStartPercent: Int = DEFAULT_RAMP_START_PERCENT,
     val vibration: Boolean = true,
     val snoozeLengthMinutes: Int = DEFAULT_SNOOZE_LENGTH_MINUTES,
+    /**
+     * The alarm's own quiet time (Story 3.4). Kept, but no longer used by sessions (0.1.7, owner decision 2026-10-30): quiet
+     * time is one global setting, `GlobalSettings.graceSeconds`.
+     */
     val graceSeconds: Int = DEFAULT_GRACE_SECONDS,
-    /** "Vibrate during quiet time" (Story 3.4): vibration continues while the grace window mutes the alarm. */
+    /**
+     * The alarm's own "Vibrate during quiet time" (Story 3.4). Kept, but no longer used by sessions (0.1.7): the global
+     * `GlobalSettings.vibrateInGrace` applies to every alarm.
+     */
     val vibrateInGrace: Boolean = DEFAULT_VIBRATE_IN_GRACE,
     val requestCode: Int,
     val createdAt: Instant,
@@ -55,13 +62,17 @@ data class Alarm(
         const val DEFAULT_SOUND_REF = "builtin:default"
         const val DEFAULT_VOLUME_PERCENT = 80
         const val DEFAULT_RAMP_START_PERCENT = 20
-        const val DEFAULT_SNOOZE_LENGTH_MINUTES = 9
+
+        /** 10 min (owner decision 2026-10-30, was 9). */
+        const val DEFAULT_SNOOZE_LENGTH_MINUTES = 10
         const val DEFAULT_GRACE_SECONDS = 20
 
         /** Owner-approved default 2026-09-26: vibration continues during quiet time. */
         const val DEFAULT_VIBRATE_IN_GRACE = true
         const val MAX_LABEL_LENGTH = 40
-        val SNOOZE_LENGTHS_MINUTES: Set<Int> = setOf(5, 9, 10, 15)
+
+        /** 5 / 10 / 15 / 30 min (owner decision 2026-10-30, was 5 / 9 / 10 / 15). */
+        val SNOOZE_LENGTHS_MINUTES: Set<Int> = setOf(5, 10, 15, 30)
         val GRACE_SECONDS_RANGE: IntRange = 15..30
         val PERCENT_RANGE: IntRange = 0..100
 
@@ -106,11 +117,11 @@ val AlarmListOrder: Comparator<Alarm> =
 
 /**
  * True when [other] rings exactly like this alarm: every setting the user chooses is equal (time, repeat days, label,
- * sound, volume, gradual volume, vibration, snooze length, quiet time and its vibration, check mode, motivation and when
- * it plays, "Offer to skip"). The id, request code, on/off state, timestamps, a skipped date and the ramp start (fixed, not
- * a user setting) do not count. The checks themselves are stored apart, so `SaveAlarm` compares them too. Saving a new
- * alarm identical to a stored one switches that one on instead of storing a second (owner decision 2026-10-05, like
- * Samsung Clock).
+ * sound, volume, gradual volume, vibration, snooze length, check mode, motivation and when it plays, "Offer to skip"). The
+ * id, request code, on/off state, timestamps, a skipped date, the ramp start (fixed, not a user setting) and the alarm's
+ * own quiet time and its vibration (unused since 0.1.7, not shown) do not count. The checks themselves are stored apart,
+ * so `SaveAlarm` compares them too. Saving a new alarm identical to a stored one switches that one on instead of storing
+ * a second (owner decision 2026-10-05, like Samsung Clock).
  */
 fun Alarm.hasSameSettingsAs(other: Alarm): Boolean =
     time == other.time &&
@@ -121,8 +132,6 @@ fun Alarm.hasSameSettingsAs(other: Alarm): Boolean =
         gradualVolume == other.gradualVolume &&
         vibration == other.vibration &&
         snoozeLengthMinutes == other.snoozeLengthMinutes &&
-        graceSeconds == other.graceSeconds &&
-        vibrateInGrace == other.vibrateInGrace &&
         checkMode == other.checkMode &&
         motivation == other.motivation &&
         motivationMode == other.motivationMode &&

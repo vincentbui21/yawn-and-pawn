@@ -35,7 +35,7 @@ import org.robolectric.annotation.GraphicsMode
 import kotlin.test.assertEquals
 
 /**
- * Story 5.1 with TalkBack in mind, at 200 % font on a small phone: the Default snooze length and Default quiet time rows
+ * Story 5.1 with TalkBack in mind, at 200 % font on a small phone: the Default snooze length and Quiet time rows
  * are 56 dp buttons with their values, the "Vibrate during quiet time" switch row, the theme segments, the radio rows
  * and Back are at least 48 dp, the segments and radio rows are selectable with their labels, and the slider exposes its
  * range and its value text. The "Bright wake screen" switch row (Story 5.2), the usage stats switch (Story 5.6) and the
@@ -66,10 +66,10 @@ class DefaultsSettingsSemanticsTest {
         val intents = mutableListOf<SettingsIntent>()
         show(DefaultsSettingsSamples.main, onIntent = { intents += it }) {
             val snooze = composeRule.onNode(hasText("Default snooze length", substring = true) and hasClickAction())
-            val quiet = composeRule.onNode(hasText("Default quiet time", substring = true) and hasClickAction())
+            val quiet = composeRule.onNode(hasText("Quiet time", substring = true) and hasClickAction())
             listOf(snooze, quiet).forEach { it.performScrollTo().assertHeightIsAtLeast(56.dp) }
-            composeRule.onNode(hasText("9 min", substring = true) and hasClickAction()).assertExists()
-            composeRule.onNode(hasText("20 seconds", substring = true) and hasClickAction()).assertExists()
+            composeRule.onNode(hasText("10 min", substring = true) and hasClickAction()).assertExists()
+            composeRule.onNode(hasText("20 seconds · all alarms", substring = true) and hasClickAction()).assertExists()
 
             snooze.performClick()
             quiet.performClick()
@@ -162,9 +162,9 @@ class DefaultsSettingsSemanticsTest {
         val intents = mutableListOf<SettingsIntent>()
         show(DefaultsSettingsSamples.snoozeLength, onIntent = { intents += it }) {
             fun row(label: String) = composeRule.onNode(hasText(label) and isSelectable())
-            listOf("5 min", "9 min", "10 min", "15 min").forEach { row(it).performScrollTo().assertHeightIsAtLeast(48.dp) }
+            listOf("5 min", "10 min", "15 min", "30 min").forEach { row(it).performScrollTo().assertHeightIsAtLeast(48.dp) }
             row("10 min").assertIsSelected()
-            row("9 min").assertIsNotSelected()
+            row("30 min").assertIsNotSelected()
             composeRule.onNodeWithContentDescription("Back").assertHeightIsAtLeast(48.dp).assertWidthIsAtLeast(48.dp)
 
             row("15 min").performClick()
@@ -178,7 +178,7 @@ class DefaultsSettingsSemanticsTest {
         show(DefaultsSettingsSamples.quietTime) {
             composeRule
                 .onNode(
-                    hasContentDescription("Default quiet time") and SemanticsMatcher.keyIsDefined(SemanticsProperties.ProgressBarRangeInfo),
+                    hasContentDescription("Quiet time") and SemanticsMatcher.keyIsDefined(SemanticsProperties.ProgressBarRangeInfo),
                 ).assert(SemanticsMatcher.expectValue(SemanticsProperties.StateDescription, "25 seconds"))
                 .assert(
                     SemanticsMatcher("range 15 to 30 at 25") { node ->

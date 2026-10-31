@@ -363,3 +363,6 @@
 - source_spec: `_bmad-output/implementation-artifacts/spec-0-1-7-polish.md`
   summary: Add a test for the Home list's entrance (cards fade and rise once on open, instant with animator scale 0, no replay on return from the editor).
   evidence: Review of 0.1.7 polish (verification gap): no test reads the graphics-layer alpha on Home; the motion is checked only on the phone.
+- source_spec: `_bmad-output/implementation-artifacts/spec-0-1-7-settings-rules.md`
+  summary: Test the editor's "Test alarm" settings read failure (logs LOAD_TEST_SETTINGS, falls back to the last known settings, then the built-in ones).
+  evidence: Review of 0.1.7 settings rules (verification gap): only the successful read is tested; a failure would ring the test with the built-in 20 s quiet time.

@@ -85,6 +85,7 @@ fun GlobalSettings.withPending(changes: List<PendingChange>): GlobalSettings =
         when (val value = change.value) {
             is SettingValue.BaseFeeTier -> settings.copy(baseFeeTier = value.tier)
             is SettingValue.MaxSnoozes -> settings.copy(maxSnoozes = value.count)
+            is SettingValue.QuietTimeSeconds -> settings.copy(graceSeconds = value.seconds)
             is SettingValue.GraceSeconds, is SettingValue.Checks, is SettingValue.OfferSkip -> settings
         }
     }

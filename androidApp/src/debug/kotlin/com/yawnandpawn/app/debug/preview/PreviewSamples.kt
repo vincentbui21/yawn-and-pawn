@@ -189,8 +189,6 @@ object PreviewSamples {
 
     val editorCheckPane = editorEdit.copy(pane = EditorPane.WakeCheck)
 
-    val editorQuietPane = editorEdit.copy(pane = EditorPane.QuietTime)
-
     val editorMotivationPane = editorEdit.copy(pane = EditorPane.Motivation)
 
     val editorNoCheck = editorNew.copy(full = editorNew.full?.copy(checks = emptyList(), noCheckError = true))

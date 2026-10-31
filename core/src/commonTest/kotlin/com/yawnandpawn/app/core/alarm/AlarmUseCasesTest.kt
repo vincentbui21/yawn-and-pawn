@@ -363,7 +363,6 @@ class AlarmUseCasesTest {
                     draft.copy(gradualVolume = false),
                     draft.copy(vibration = false),
                     draft.copy(snoozeLengthMinutes = 5),
-                    draft.copy(graceSeconds = 30),
                 )
 
             val added = differing.map { saved(it) }
@@ -408,8 +407,8 @@ class AlarmUseCasesTest {
 
         assertTrue(a.hasSameSettingsAs(b))
         assertTrue(!a.hasSameSettingsAs(b.copy(label = "Gym")))
-        assertTrue(!a.hasSameSettingsAs(b.copy(graceSeconds = 30)))
-        assertTrue(!a.hasSameSettingsAs(b.copy(vibrateInGrace = false)), "quiet-time vibration is a setting (Story 3.4)")
+        // 0.1.7: the alarm's own quiet time and its vibration are no longer settings the user sees or chooses.
+        assertTrue(a.hasSameSettingsAs(b.copy(graceSeconds = 30, vibrateInGrace = false)))
     }
 
     @Test

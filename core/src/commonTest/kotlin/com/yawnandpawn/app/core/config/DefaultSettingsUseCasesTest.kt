@@ -15,8 +15,9 @@ import kotlin.test.assertNull
 import kotlin.time.Instant
 
 /**
- * Stories 5.1 and 5.2: the new-alarm defaults, the theme and "Bright wake screen", saved at once with no commitment lock,
- * inside the session lock.
+ * Stories 5.1 and 5.2: the new-alarm snooze length, "Vibrate during quiet time" (global since 0.1.7), the theme and
+ * "Bright wake screen", saved at once with no commitment lock, inside the session lock. The quiet time itself is locked
+ * (`SaveGlobalSettingTest`).
  */
 class DefaultSettingsUseCasesTest {
     private val settings = InMemoryGlobalSettings(GlobalSettings(baseFeeTier = 3, maxSnoozes = 2))
@@ -24,8 +25,7 @@ class DefaultSettingsUseCasesTest {
     private val restored = MutableStateFlow(true)
     private val sessionLock = SessionLockGuard(sessionState, restored, MutableStateFlow(false))
     private val save = SaveDefaultSetting(settings, sessionLock)
-    private val setGrace = SetDefaultGrace(save)
-    private val setVibrate = SetDefaultVibrateInGrace(save)
+    private val setVibrate = SetVibrateInGrace(save)
     private val setSnooze = SetDefaultSnoozeLength(save)
     private val setTheme = SetThemeMode(save)
     private val setBright = SetBrightWakeScreen(save)
@@ -33,7 +33,6 @@ class DefaultSettingsUseCasesTest {
     @Test
     fun `each default is stored at once, and the fee settings stay as they are`() =
         runTest {
-            assertEquals(Outcome.Success(Unit), setGrace(25))
             assertEquals(Outcome.Success(Unit), setVibrate(false))
             assertEquals(Outcome.Success(Unit), setSnooze(10))
             assertEquals(Outcome.Success(Unit), setTheme(ThemeMode.Dark))
@@ -43,36 +42,31 @@ class DefaultSettingsUseCasesTest {
                 GlobalSettings(
                     baseFeeTier = 3,
                     maxSnoozes = 2,
-                    defaultGraceSeconds = 25,
                     defaultSnoozeLengthMinutes = 10,
-                    defaultVibrateInGrace = false,
+                    vibrateInGrace = false,
                     themeMode = ThemeMode.Dark,
                     brightWakeScreen = false,
                 ),
                 settings.settings.value,
             )
-            assertEquals(5, settings.writes)
+            assertEquals(4, settings.writes)
 
             assertEquals(Outcome.Success(Unit), setBright(true))
             assertEquals(true, settings.settings.value.brightWakeScreen)
         }
 
     @Test
-    fun `the ends of the ranges are valid`() =
+    fun `every snooze length offered is valid`() =
         runTest {
-            assertEquals(Outcome.Success(Unit), setGrace(15))
-            assertEquals(Outcome.Success(Unit), setGrace(30))
-            listOf(5, 9, 10, 15).forEach { assertEquals(Outcome.Success(Unit), setSnooze(it)) }
-            assertEquals(30, settings.settings.value.defaultGraceSeconds)
-            assertEquals(15, settings.settings.value.defaultSnoozeLengthMinutes)
+            listOf(5, 10, 15, 30).forEach { assertEquals(Outcome.Success(Unit), setSnooze(it)) }
+            assertEquals(30, settings.settings.value.defaultSnoozeLengthMinutes)
         }
 
     @Test
     fun `a value outside its range is InvalidSetting and nothing is written`() =
         runTest {
-            assertEquals(Outcome.Failure(DomainError.InvalidSetting(SettingField.DefaultGrace)), setGrace(14))
-            assertEquals(Outcome.Failure(DomainError.InvalidSetting(SettingField.DefaultGrace)), setGrace(31))
             assertEquals(Outcome.Failure(DomainError.InvalidSetting(SettingField.DefaultSnoozeLength)), setSnooze(7))
+            assertEquals(Outcome.Failure(DomainError.InvalidSetting(SettingField.DefaultSnoozeLength)), setSnooze(9))
             assertEquals(Outcome.Failure(DomainError.InvalidSetting(SettingField.DefaultSnoozeLength)), setSnooze(0))
 
             assertEquals(0, settings.writes)
@@ -83,7 +77,6 @@ class DefaultSettingsUseCasesTest {
     fun `during a session, or before the session is restored, every set is SessionActive and writes nothing`() =
         runTest {
             sessionState.value = SessionState.Snoozed(snoozedSession())
-            assertEquals(Outcome.Failure(DomainError.SessionActive), setGrace(25))
             assertEquals(Outcome.Failure(DomainError.SessionActive), setVibrate(false))
             assertEquals(Outcome.Failure(DomainError.SessionActive), setSnooze(10))
             assertEquals(Outcome.Failure(DomainError.SessionActive), setTheme(ThemeMode.Light))
@@ -104,14 +97,13 @@ class DefaultSettingsUseCasesTest {
             settings.writeFailure = DomainError.StorageFailure("disk full")
 
             assertEquals(Outcome.Failure(DomainError.StorageFailure("disk full")), setVibrate(false))
-            assertEquals(true, settings.settings.value.defaultVibrateInGrace)
+            assertEquals(true, settings.settings.value.vibrateInGrace)
         }
 
     @Test
     fun `with sets one field, valid or not`() {
         val base = GlobalSettings()
-        assertEquals(base.copy(defaultGraceSeconds = 99), base.with(DefaultSetting.GraceSeconds(99)))
-        assertEquals(base.copy(defaultVibrateInGrace = false), base.with(DefaultSetting.VibrateInGrace(false)))
+        assertEquals(base.copy(vibrateInGrace = false), base.with(DefaultSetting.VibrateInGrace(false)))
         assertEquals(base.copy(defaultSnoozeLengthMinutes = 15), base.with(DefaultSetting.SnoozeLength(15)))
         assertEquals(base.copy(themeMode = ThemeMode.Light), base.with(DefaultSetting.Theme(ThemeMode.Light)))
         assertEquals(base.copy(brightWakeScreen = false), base.with(DefaultSetting.BrightWakeScreen(false)))
@@ -131,9 +123,9 @@ class DefaultSettingsUseCasesTest {
             SettingsSnapshot(
                 GlobalSettings(
                     baseFeeTier = 2,
-                    defaultGraceSeconds = 30,
+                    graceSeconds = 30,
                     defaultSnoozeLengthMinutes = 15,
-                    defaultVibrateInGrace = false,
+                    vibrateInGrace = false,
                     themeMode = ThemeMode.Dark,
                     brightWakeScreen = false,
                 ),
@@ -144,16 +136,16 @@ class DefaultSettingsUseCasesTest {
     }
 
     @Test
-    fun `a snapshot from an older build reads its defaults as the defaults, and garbage reads as the defaults too`() {
+    fun `a snapshot from an older build reads its defaults as the defaults, and garbage (a snooze length of 9) reads as defaults`() {
         assertEquals(
             SettingsSnapshot(GlobalSettings(baseFeeTier = 4, maxSnoozes = 2), emptyList()),
             PendingChangeJson.decodeSnapshot("""{"baseFeeTier":4,"maxSnoozes":2,"pending":[]}"""),
         )
         val garbage =
-            """{"baseFeeTier":4,"maxSnoozes":2,"pending":[],"defaultGraceSeconds":99,"defaultSnoozeLengthMinutes":7,""" +
+            """{"baseFeeTier":4,"maxSnoozes":2,"pending":[],"defaultGraceSeconds":99,"defaultSnoozeLengthMinutes":9,""" +
                 """"defaultVibrateInGrace":false,"themeMode":"Purple"}"""
         assertEquals(
-            SettingsSnapshot(GlobalSettings(baseFeeTier = 4, maxSnoozes = 2, defaultVibrateInGrace = false), emptyList()),
+            SettingsSnapshot(GlobalSettings(baseFeeTier = 4, maxSnoozes = 2, vibrateInGrace = false), emptyList()),
             PendingChangeJson.decodeSnapshot(garbage),
         )
     }

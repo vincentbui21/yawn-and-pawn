@@ -12,13 +12,14 @@ import com.yawnandpawn.app.core.config.LockedField
 import com.yawnandpawn.app.core.config.PendingChange
 import com.yawnandpawn.app.core.config.PendingChangeRepository
 import com.yawnandpawn.app.core.config.SaveDefaultSetting
+import com.yawnandpawn.app.core.config.SaveGlobalSetting
 import com.yawnandpawn.app.core.config.SetBaseFee
 import com.yawnandpawn.app.core.config.SetBrightWakeScreen
-import com.yawnandpawn.app.core.config.SetDefaultGrace
 import com.yawnandpawn.app.core.config.SetDefaultSnoozeLength
-import com.yawnandpawn.app.core.config.SetDefaultVibrateInGrace
 import com.yawnandpawn.app.core.config.SetMaxSnoozes
+import com.yawnandpawn.app.core.config.SetQuietTime
 import com.yawnandpawn.app.core.config.SetThemeMode
+import com.yawnandpawn.app.core.config.SetVibrateInGrace
 import com.yawnandpawn.app.core.config.SettingValue
 import com.yawnandpawn.app.core.config.with
 import com.yawnandpawn.app.core.error.DomainError
@@ -61,20 +62,18 @@ import kotlinx.coroutines.withContext
 import kotlin.coroutines.CoroutineContext
 
 /**
- * The setters of Settings with no commitment lock: the new-alarm defaults and the theme (Story 5.1) and "Bright wake
- * screen" (Story 5.2), each through its own core use case.
+ * The setters of Settings with no commitment lock: "Vibrate during quiet time" (global since 0.1.7), the new-alarm snooze
+ * length and the theme (Story 5.1) and "Bright wake screen" (Story 5.2), each through its own core use case.
  */
 class DefaultSettingSetters(
-    private val setDefaultGrace: SetDefaultGrace,
-    private val setDefaultVibrateInGrace: SetDefaultVibrateInGrace,
+    private val setVibrateInGrace: SetVibrateInGrace,
     private val setDefaultSnoozeLength: SetDefaultSnoozeLength,
     private val setThemeMode: SetThemeMode,
     private val setBrightWakeScreen: SetBrightWakeScreen,
 ) {
-    /** The five setters over one [save]. */
+    /** The four setters over one [save]. */
     constructor(save: SaveDefaultSetting) : this(
-        SetDefaultGrace(save),
-        SetDefaultVibrateInGrace(save),
+        SetVibrateInGrace(save),
         SetDefaultSnoozeLength(save),
         SetThemeMode(save),
         SetBrightWakeScreen(save),
@@ -82,8 +81,7 @@ class DefaultSettingSetters(
 
     suspend fun save(value: DefaultSetting): Outcome<Unit, DomainError> =
         when (value) {
-            is DefaultSetting.GraceSeconds -> setDefaultGrace(value.seconds)
-            is DefaultSetting.VibrateInGrace -> setDefaultVibrateInGrace(value.on)
+            is DefaultSetting.VibrateInGrace -> setVibrateInGrace(value.on)
             is DefaultSetting.SnoozeLength -> setDefaultSnoozeLength(value.minutes)
             is DefaultSetting.Theme -> setThemeMode(value.mode)
             is DefaultSetting.BrightWakeScreen -> setBrightWakeScreen(value.on)
@@ -97,8 +95,9 @@ class WeeklySummarySwitch(
 )
 
 /**
- * Settings: the Snooze card's base fee and max snoozes per session, set through the commitment lock (Story 4.5), and the
- * new-alarm defaults and the theme (Story 5.1) and "Bright wake screen" (Story 5.2), applied at once.
+ * Settings: the Snooze card's base fee and max snoozes per session and (0.1.7) the Wake card's quiet time of every alarm,
+ * set through the commitment lock (Story 4.5), and "Vibrate during quiet time", the new-alarm snooze length and the theme
+ * (Story 5.1) and "Bright wake screen" (Story 5.2), applied at once.
  *
  * - **Shown values:** what the user chose, which is the global pending change from [pendingChanges] when one waits,
  *   else the live value from [globalSettings]. While a pending change waits for an occurrence still to come, its
@@ -106,8 +105,9 @@ class WeeklySummarySwitch(
  *   re-checked on every [timeChanges] tick, so it goes once that alarm has rung.
  * - **Prices:** the cached Play prices from [priceCatalog], or USD approximations by [moneyFormatter] when a tier is
  *   missing ([SnoozePrices]). Nothing waits for a refresh, so the screen works offline.
- * - **Saving:** each step, switch, radio or slider value calls its use case ([setBaseFee], [setMaxSnoozes], or one of
- *   [defaults]) through one queue, in order, so a long-press repeat or a slider drag never races itself. The control
+ * - **Saving:** each step, switch, radio or slider value calls its use case ([setBaseFee], [setMaxSnoozes],
+ *   [setQuietTime], or one of [defaults]) through one queue, in order, so a long-press repeat or a slider drag never races
+ *   itself. The control
  *   moves at once to the requested value (the requests overlay the stored values). A saved request is let go only by the
  *   same render that sees the store hold it (review fix 1), so the control never shows the old value in between and the
  *   next step starts from the new one. A failed save is logged and the stored value comes back, unless a newer request
@@ -127,7 +127,7 @@ class WeeklySummarySwitch(
  * "Make sure alarms ring" row open the checklist through [effects]; the "About" row opens the About page.
  *
  * [state] is null until the stored settings are read, so no default value flashes. When the ViewModel is cleared, the
- * base fee and max snoozes saves still queued are logged as dropped, and the defaults and the theme are finished in
+ * base fee, max snoozes and quiet time saves still queued are logged as dropped, and the defaults and the theme are finished in
  * [outlivingScope] ([onCleared]).
  */
 class SettingsViewModel(
@@ -136,6 +136,8 @@ class SettingsViewModel(
     priceCatalog: PriceCatalog,
     private val setBaseFee: SetBaseFee,
     private val setMaxSnoozes: SetMaxSnoozes,
+    /** The quiet time of every alarm (0.1.7), through the commitment lock like [setMaxSnoozes]. */
+    private val setQuietTime: SetQuietTime,
     private val clock: Clock,
     private val timeZoneProvider: TimeZoneProvider,
     timeChanges: TimeChangeSignal,
@@ -255,8 +257,13 @@ class SettingsViewModel(
                 request(SettingValue.MaxSnoozes(intent.value))
             }
 
-            is SettingsIntent.SnoozeLengthSelected, is SettingsIntent.QuietTimeChanged, is SettingsIntent.VibrateDuringQuietTimeToggled,
-            is SettingsIntent.ThemeSelected, is SettingsIntent.BrightWakeScreenToggled,
+            // 0.1.7: one global quiet time, locked like max snoozes (a longer one inside the window waits).
+            is SettingsIntent.QuietTimeChanged -> {
+                request(SettingValue.QuietTimeSeconds(intent.seconds))
+            }
+
+            is SettingsIntent.SnoozeLengthSelected, is SettingsIntent.VibrateDuringQuietTimeToggled, is SettingsIntent.ThemeSelected,
+            is SettingsIntent.BrightWakeScreenToggled,
             -> {
                 defaultOf(intent)?.let { request(it) }
             }
@@ -306,22 +313,29 @@ class SettingsViewModel(
     /**
      * The screen closes (a tab switch clears it). A base fee or max snoozes save still queued or running is dropped and
      * logged (Story 4.5). A default or theme save is not lost (review fix): the running one finishes ([NonCancellable]),
-     * and the latest queued value of each field is saved in [outlivingScope] after it, in order.
+     * and the latest queued value of each field is saved in [outlivingScope] after it, in order. The quiet time (0.1.7,
+     * a slider) is not lost either: the shown value not saved yet is saved through [setQuietTime] after them.
      */
     override fun onCleared() {
         val queued = generateSequence { saves.tryReceive().getOrNull() }.toList()
         saves.close()
-        val lostLocked = (listOfNotNull(saving) + queued).filterIsInstance<Save.Locked>()
+        val lostLocked =
+            (listOfNotNull(saving) + queued).filterIsInstance<Save.Locked>().filterNot { it.value is SettingValue.QuietTimeSeconds }
         if (lostLocked.isNotEmpty()) logger.log(LogEvent.OperationFailed(SAVE_SETTING, "dropped ${lostLocked.size} on close"))
         val latest = queued.filterIsInstance<Save.Default>().filter { local.value.holds(it.request) }.map { it.request.value }
-        if (latest.isEmpty()) return
+        val quiet =
+            local.value.quiet
+                ?.takeUnless { it.saved }
+                ?.value
+        if (latest.isEmpty() && quiet == null) return
         val scope = outlivingScope
         if (scope == null) {
-            logger.log(LogEvent.OperationFailed(SAVE_DEFAULT, "dropped ${latest.size} on close"))
+            logger.log(LogEvent.OperationFailed(SAVE_DEFAULT, "dropped ${latest.size + listOfNotNull(quiet).size} on close"))
         } else {
             scope.launch {
                 loop.join()
                 latest.forEach { value -> logger.logDefaultFailure(defaults.save(value)) }
+                quiet?.let { seconds -> logger.logSettingFailure(setQuietTime(seconds)) }
             }
         }
     }
@@ -346,13 +360,30 @@ class SettingsViewModel(
      */
     private fun currentTier(): Int? = local.value.fee?.value ?: state.value?.baseFeeTier
 
-    /** Shows [value] at once and queues its save; a value outside its range is ignored (the stepper end is disabled). */
+    /**
+     * Shows [value] at once and queues its save; a value outside its range is ignored (the stepper end is disabled), and
+     * so is the quiet time already shown (a slider drag repeats it).
+     */
     private fun request(value: SettingValue) {
+        val quietShown = local.value.quiet?.value ?: state.value?.quietSeconds
+        if (value is SettingValue.QuietTimeSeconds && value.seconds == quietShown) return
         val shown: (Local) -> Local =
             when {
-                value is SettingValue.BaseFeeTier && value.tier in FeeRules.BASE_FEE_TIERS -> { ui -> ui.copy(fee = Request(value.tier)) }
-                value is SettingValue.MaxSnoozes && value.count in FeeRules.MAX_SNOOZES -> { ui -> ui.copy(max = Request(value.count)) }
-                else -> return
+                value is SettingValue.BaseFeeTier && value.tier in FeeRules.BASE_FEE_TIERS -> {
+                    { ui -> ui.copy(fee = Request(value.tier)) }
+                }
+
+                value is SettingValue.MaxSnoozes && value.count in FeeRules.MAX_SNOOZES -> {
+                    { ui -> ui.copy(max = Request(value.count)) }
+                }
+
+                value is SettingValue.QuietTimeSeconds && value.seconds in SaveGlobalSetting.GRACE_SECONDS -> {
+                    { ui -> ui.copy(quiet = Request(value.seconds)) }
+                }
+
+                else -> {
+                    return
+                }
             }
         local.update(shown)
         saves.trySend(Save.Locked(value))
@@ -385,13 +416,20 @@ class SettingsViewModel(
             is Save.Locked -> {
                 val value = save.value
                 val result =
-                    when (value) {
-                        is SettingValue.BaseFeeTier -> setBaseFee(value.tier)
-                        is SettingValue.MaxSnoozes -> setMaxSnoozes(value.count)
-                        is SettingValue.GraceSeconds, is SettingValue.Checks, is SettingValue.OfferSkip -> return
+                    when {
+                        // The quiet time slider: a step superseded in the queue by a newer one is skipped (a drag coalesces).
+                        local.value.superseded(value) -> null
+
+                        value is SettingValue.BaseFeeTier -> setBaseFee(value.tier)
+
+                        value is SettingValue.MaxSnoozes -> setMaxSnoozes(value.count)
+
+                        value is SettingValue.QuietTimeSeconds -> setQuietTime(value.seconds)
+
+                        else -> null
                     }
-                if (result is Outcome.Failure) logger.log(LogEvent.OperationFailed.of(SAVE_SETTING, result.error))
-                local.update { it.settled(value, saved = result is Outcome.Success) }
+                result?.let(logger::logSettingFailure)
+                if (result != null) local.update { it.settled(value, saved = result is Outcome.Success) }
             }
 
             is Save.Default -> {
@@ -415,13 +453,16 @@ class SettingsViewModel(
     ) {
         val feeEchoed = ui.fee?.takeIf { it.saved && saved.tier == it.value }
         val maxEchoed = ui.max?.takeIf { it.saved && saved.maxSnoozes == it.value }
+        val quietEchoed = ui.quiet?.takeIf { it.saved && saved.quietSeconds == it.value }
         val defaultsEchoed = ui.defaults.filter { it.saved && saved.settings.with(it.value) == saved.settings }
-        if (feeEchoed != null || maxEchoed != null || defaultsEchoed.isNotEmpty()) {
+        val lockedEchoed = listOfNotNull(feeEchoed, maxEchoed, quietEchoed)
+        if (lockedEchoed.isNotEmpty() || defaultsEchoed.isNotEmpty()) {
             // Only the very request that was seen: a newer one made meanwhile stays.
             local.update {
                 it.copy(
                     fee = it.fee.takeUnless { request -> request == feeEchoed },
                     max = it.max.takeUnless { request -> request == maxEchoed },
+                    quiet = it.quiet.takeUnless { request -> request == quietEchoed },
                     defaults = it.defaults - defaultsEchoed.toSet(),
                 )
             }
@@ -437,6 +478,7 @@ class SettingsViewModel(
         val zone = timeZoneProvider.current()
         val tier = ui.fee?.value ?: saved.tier
         val max = ui.max?.value ?: saved.maxSnoozes
+        val quiet = ui.quiet?.value ?: saved.quietSeconds
         val fees = SnoozePrices.of(tier, max, prices, now, moneyFormatter)
         val chosen = ui.defaults.fold(saved.settings) { settings, request -> settings.with(request.value) }
         return SettingsUiState(
@@ -446,8 +488,8 @@ class SettingsViewModel(
             pricesApproximate = fees.approximate,
             maxSnoozes = max,
             defaultSnoozeMinutes = chosen.defaultSnoozeLengthMinutes,
-            defaultQuietSeconds = chosen.defaultGraceSeconds,
-            vibrateDuringQuietTime = chosen.defaultVibrateInGrace,
+            quietSeconds = quiet,
+            vibrateDuringQuietTime = chosen.vibrateInGrace,
             theme = chosen.themeMode.toPps(),
             brightWakeScreen = chosen.brightWakeScreen,
             reliabilityProblem = ui.reliabilityProblem,
@@ -455,10 +497,11 @@ class SettingsViewModel(
             // While a new value is still being saved, the stored note may be the old one: wait for the store.
             baseFeeNote = weakeningNoteOf(saved.pending(LockedField.BaseFee), now, zone).takeIf { tier == saved.tier },
             maxSnoozesNote = weakeningNoteOf(saved.pending(LockedField.MaxSnoozes), now, zone).takeIf { max == saved.maxSnoozes },
+            quietTimeNote = weakeningNoteOf(saved.pending(LockedField.QuietTime), now, zone).takeIf { quiet == saved.quietSeconds },
         )
     }
 
-    /** One save in the queue: a commitment-locked setting (Story 4.5) or a default (Story 5.1). */
+    /** One save in the queue: a commitment-locked setting (Story 4.5, the quiet time since 0.1.7) or a default (Story 5.1). */
     private sealed interface Save {
         data class Locked(
             val value: SettingValue,
@@ -483,6 +526,10 @@ class SettingsViewModel(
         /** Max snoozes the user chose: the pending value if any, else the live one. */
         val maxSnoozes: Int
             get() = (pending(LockedField.MaxSnoozes)?.value as? SettingValue.MaxSnoozes)?.count ?: settings.maxSnoozes
+
+        /** The quiet time the user chose (0.1.7): the pending value if any, else the live one. */
+        val quietSeconds: Int
+            get() = (pending(LockedField.QuietTime)?.value as? SettingValue.QuietTimeSeconds)?.seconds ?: settings.graceSeconds
     }
 
     /** A value the user asked for; [saved] once its save succeeded (it goes when the store shows it). */
@@ -508,12 +555,16 @@ class SettingsViewModel(
         val pane: SettingsPane = SettingsPane.Main,
         val fee: Request? = null,
         val max: Request? = null,
+        val quiet: Request? = null,
         /** At most one per field, the latest. */
         val defaults: List<DefaultRequest> = emptyList(),
         val reliabilityProblem: Boolean = false,
     ) {
         /** [request] is still the latest of its field: one superseded by a newer value is never saved (a drag coalesces). */
         fun holds(request: DefaultRequest): Boolean = defaults.any { it.id == request.id }
+
+        /** [value] is a quiet time step a newer one replaced: it is never saved (a slider drag coalesces). */
+        fun superseded(value: SettingValue): Boolean = value is SettingValue.QuietTimeSeconds && quiet?.value != value.seconds
 
         /**
          * [value]'s save is over. A newer request of the same field stays as it is. Otherwise a saved request waits for
@@ -526,6 +577,7 @@ class SettingsViewModel(
             when (value) {
                 is SettingValue.BaseFeeTier -> copy(fee = fee.settled(value.tier, saved))
                 is SettingValue.MaxSnoozes -> copy(max = max.settled(value.count, saved))
+                is SettingValue.QuietTimeSeconds -> copy(quiet = quiet.settled(value.seconds, saved))
                 is SettingValue.GraceSeconds, is SettingValue.Checks, is SettingValue.OfferSkip -> this
             }
 
@@ -557,7 +609,7 @@ class SettingsViewModel(
     }
 
     companion object {
-        /** The operation logged when a base fee or max snoozes change could not be saved. */
+        /** The operation logged when a base fee, max snoozes or quiet time change could not be saved. */
         const val SAVE_SETTING = "save snooze setting"
 
         /** The operation logged when a default or the theme could not be saved (Story 5.1). */
@@ -584,7 +636,6 @@ class SettingsViewModel(
 private fun defaultOf(intent: SettingsIntent): DefaultSetting? =
     when (intent) {
         is SettingsIntent.SnoozeLengthSelected -> DefaultSetting.SnoozeLength(intent.minutes)
-        is SettingsIntent.QuietTimeChanged -> DefaultSetting.GraceSeconds(intent.seconds)
         is SettingsIntent.VibrateDuringQuietTimeToggled -> DefaultSetting.VibrateInGrace(intent.on)
         is SettingsIntent.ThemeSelected -> DefaultSetting.Theme(intent.mode.toCore())
         is SettingsIntent.BrightWakeScreenToggled -> DefaultSetting.BrightWakeScreen(intent.on)
@@ -594,7 +645,6 @@ private fun defaultOf(intent: SettingsIntent): DefaultSetting? =
 /** Whether this state shows [value]. */
 private fun SettingsUiState.shows(value: DefaultSetting): Boolean =
     when (value) {
-        is DefaultSetting.GraceSeconds -> defaultQuietSeconds == value.seconds
         is DefaultSetting.VibrateInGrace -> vibrateDuringQuietTime == value.on
         is DefaultSetting.SnoozeLength -> defaultSnoozeMinutes == value.minutes
         is DefaultSetting.Theme -> theme == value.mode.toPps()
@@ -604,7 +654,6 @@ private fun SettingsUiState.shows(value: DefaultSetting): Boolean =
 /** Whether [this] is a value its use case accepts (the ViewModel never queues one it would refuse). */
 private fun DefaultSetting.isValid(): Boolean =
     when (this) {
-        is DefaultSetting.GraceSeconds -> seconds in SaveDefaultSetting.GRACE_SECONDS
         is DefaultSetting.SnoozeLength -> minutes in SaveDefaultSetting.SNOOZE_LENGTHS
         is DefaultSetting.VibrateInGrace, is DefaultSetting.Theme, is DefaultSetting.BrightWakeScreen -> true
     }
@@ -612,6 +661,11 @@ private fun DefaultSetting.isValid(): Boolean =
 /** Logs a default or theme save that failed (Story 5.1). */
 private fun Logger.logDefaultFailure(result: Outcome<Unit, DomainError>) {
     if (result is Outcome.Failure) log(LogEvent.OperationFailed.of(SettingsViewModel.SAVE_DEFAULT, result.error))
+}
+
+/** Logs a base fee, max snoozes or quiet time save that failed. */
+private fun Logger.logSettingFailure(result: Outcome<*, DomainError>) {
+    if (result is Outcome.Failure) log(LogEvent.OperationFailed.of(SettingsViewModel.SAVE_SETTING, result.error))
 }
 
 /** Logs a store read that failed with [cause] as [operation]. */

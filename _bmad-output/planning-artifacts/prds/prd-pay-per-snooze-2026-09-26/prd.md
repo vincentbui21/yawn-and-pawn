@@ -109,7 +109,7 @@ See Glossary: **Session**, **Ring**. A session starts when an alarm first rings 
 - **Per-snooze cap:** $50. A snooze that would cost more is not offered; only the check remains. With today's defaults (B ≤ $10, ≤ 5 snoozes) the max is exactly $50, so the cap only matters if Q1/Q3 change. (Q2)
 - **Fee locked per session:** B, max snoozes and snooze length are frozen when the session starts; settings changes apply from the next session.
 - **Max snoozes per session:** 5 by default, user may lower it (min 1). After that, snooze is not offered. (Q3)
-- **Snooze length:** set per alarm (5 / 9 / 10 / 15 min; default 9).
+- **Snooze length:** set per alarm (5 / 10 / 15 / 30 min; default 10; owner decision 2026-10-30, was 5 / 9 / 10 / 15 with default 9).
 - **Commitment lock (a nudge, not a wall):** raising B / making checks harder is always allowed. Within **8 hours** of an enabled alarm, "weakening" changes — lowering B, easier checks, longer grace window, more snoozes — are saved but only take effect **after** that alarm. Disabling or deleting an alarm stays allowed (plans change) but asks for confirmation and is logged. (Q4)
 - **Currency:** the fee ladder is defined in **USD tiers**; Google Play shows the user's **local price**. The app always displays the localized price string returned by Google Play and never hard-codes "$" or any currency symbol in UI copy. Local prices are not perfectly linear (the $2 product isn't always exactly 2× the $1 in local currency) — acceptable. Product details are cached so the fee picker works offline after first load, and refreshed at every session start when online.
 - **Tax:** in regions where Play prices exclude tax, the confirm sheet says "Google Play shows the final total, including any tax." (FR-RNG-2).
@@ -163,11 +163,11 @@ The session is an explicit state machine in the shared module (states: ringing, 
 Prices below are for a US account and appear as Google Play formats them.
 
 ### UJ1 — Linh's first paid morning (chronic snoozer)
-Linh, 24, grad student, snoozes 4× most days. Base fee $1, max 5 snoozes, snooze length 9 min, check Math Medium ×3.
+Linh, 24, grad student, snoozes 4× most days. Base fee $1, max 5 snoozes, snooze length 10 min, check Math Medium ×3.
 1. 6:30 the alarm rings over the lock screen and ramps up (FR-ALM-3, FR-ALM-4, FR-ALM-6). The ringing screen shows "I'm up" and "Snooze · $1.00" (FR-RNG-1).
-2. Linh taps Snooze. The confirm sheet shows $1.00, 9 minutes, and "Next snooze: $2.00"; the alarm keeps ringing (FR-RNG-2, FR-RNG-5).
-3. She taps "Pay $1.00 and snooze". A purchase intent is saved, the Play sheet opens, the purchase returns `PURCHASED` and the snooze is granted (§6.3, FR-RNG-3, FR-RNG-4). The screen says "Snoozed. Next ring at 6:39." (FR-RNG-6, FR-RNG-8).
-4. 6:39 the re-ring starts (FR-SES-2 keeps a backup alarm armed). Snooze now shows $2.00.
+2. Linh taps Snooze. The confirm sheet shows $1.00, 10 minutes, and "Next snooze: $2.00"; the alarm keeps ringing (FR-RNG-2, FR-RNG-5).
+3. She taps "Pay $1.00 and snooze". A purchase intent is saved, the Play sheet opens, the purchase returns `PURCHASED` and the snooze is granted (§6.3, FR-RNG-3, FR-RNG-4). The screen says "Snoozed. Next ring at 6:40." (FR-RNG-6, FR-RNG-8).
+4. 6:40 the re-ring starts (FR-SES-2 keeps a backup alarm armed). Snooze now shows $2.00.
 5. **Climax:** Linh opens the confirm sheet, reads "Pay $2.00 and snooze", and taps "I'll get up" instead.
 6. She taps "I'm up"; the alarm mutes for 20 s (FR-PWK-9). She's slow; at 20 s the alarm returns at full volume, her progress is kept, and she finishes the third problem 15 s later.
 7. **Outcome:** session logged as Snoozed, $1.00 paid (FR-PRG-1, FR-PRG-4); no shaming copy (FR-MSG-3); streak stays at 0 (FR-PRG-2).
@@ -216,7 +216,7 @@ IDs are stable so stories can reference them; new IDs are added at the end of ea
 
 ### 7.1 Alarms (ALM)
 - **FR-ALM-1** [Must] Create, edit, delete, enable/disable multiple alarms.
-- **FR-ALM-2** [Must] Each alarm has: time, repeat days (or one-time), label, sound, volume, vibration on/off, snooze length, check configuration, grace window length, motivation recording (optional, FR-SND-3).
+- **FR-ALM-2** [Must] Each alarm has: time, repeat days (or one-time), label, sound, volume, vibration on/off, snooze length, check configuration, motivation recording (optional, FR-SND-3). The grace window length is one global setting since 0.1.7 (FR-PWK-9).
 - **FR-ALM-3** [Must] Alarms fire at the exact scheduled time, including in Doze, silent mode and Do Not Disturb (alarm audio stream). Automated check: `AlarmManager.setAlarmClock` is called with trigger time equal to the scheduled epoch ms (fake scheduler). On-device timing (≤ 2 s, NFR-1) is verified in the epic's device-verification checklist.
 - **FR-ALM-4** [Must] When an alarm rings, a full-screen ringing screen appears over the lock screen (locked or screen off). On an unlocked, in-use phone see FR-SES-4.
 - **FR-ALM-5** [Must] Alarms survive reboot, app update, time change, time zone change and DST.
@@ -243,7 +243,7 @@ Within the app, every path leads back to the ringing alarm, but the **phone itse
 
 ### 7.2 Ringing screen & snooze payment (RNG)
 - **FR-RNG-1** [Must] Ringing screen shows: time, alarm label, primary action **"I'm up"** (starts the check), secondary action **"Snooze · {localized price}"**, today's snooze count and amount paid this session (currency-formatted).
-- **FR-RNG-2** [Must] Tapping Snooze opens a **confirmation step**: the exact Play price, snooze length, what the next snooze would cost, a tax note where prices exclude tax (§6.2) and a short supportive line (e.g., "Is 9 more minutes worth {price}? You've got this."). Buttons: "I'll get up" / "Pay {price} and snooze". No pre-selection. Exact copy and layout: EXPERIENCE.md → Voice and Tone; EXPERIENCE.md → Snooze confirm sheet.
+- **FR-RNG-2** [Must] Tapping Snooze opens a **confirmation step**: the exact Play price, snooze length, what the next snooze would cost, a tax note where prices exclude tax (§6.2) and a short supportive line (e.g., "Is 10 more minutes worth {price}? You've got this."). Buttons: "I'll get up" / "Pay {price} and snooze". No pre-selection. Exact copy and layout: EXPERIENCE.md → Voice and Tone; EXPERIENCE.md → Snooze confirm sheet.
 - **FR-RNG-3** [Must] On confirm, the purchase intent is saved (§6.3) and the Google Play purchase sheet opens. The device must be unlocked if Play requires it (see Spike S1).
 - **FR-RNG-4** [Must] A snooze is granted **only** when the purchase is `PURCHASED` and linked to the current session (rules in §6.3). On cancel, error, no connection or pending, the user returns to the ringing screen and sees the message mapped to that `BillingResponseCode` / purchase state (one string resource per reason; mapping table unit-tested; copy in EXPERIENCE.md).
 - **FR-RNG-5** [Must] The alarm keeps ringing at full volume during the payment flow (no quiet period while the Play sheet is open). If Snooze is tapped during a muted grace window, the mute continues only until the window's countdown ends (§6.4).
@@ -264,7 +264,7 @@ Within the app, every path leads back to the ringing alarm, but the **phone itse
 - **FR-PWK-6** [Should] **House Hunt** — at setup the user photographs a spot far from the bed (e.g., bathroom sink). To dismiss, they photograph the same spot; on-device image matching accepts it when similarity ≥ the threshold chosen in Spike S3. Several reference photos allowed. (Spike S3)
 - **FR-PWK-7** [Must] **QR/Barcode** — at setup the user registers any barcode/QR (e.g., toothpaste). To dismiss, they scan it (on-device scanning). (App-generated printable QR: FR-PWK-13.)
 - **FR-PWK-8** [Must] **Word Unscramble** — unscramble N words (English at launch). Word length 4–5 / 6–7 / 8+ by difficulty.
-- **FR-PWK-9** [Must] **Grace window** — when the user taps "I'm up", the alarm is **muted for the grace window** (user sets 15–30 s per alarm, default 20 s) with a visible countdown.
+- **FR-PWK-9** [Must] **Grace window** — when the user taps "I'm up", the alarm is **muted for the grace window** (one setting in Settings for every alarm, existing ones included, and for test rings: 15–30 s, default 20 s; owner decision 2026-10-30, was per alarm) with a visible countdown.
   - Finish the check within the window → the alarm ends, session success.
   - Window runs out → the alarm **returns at full set volume** and stays on until the check is completed. Progress already made in this ring is kept.
   - One grace window per ring (after a re-ring, the user gets a new window).
@@ -325,7 +325,7 @@ Within the app, every path leads back to the ringing alarm, but the **phone itse
 ### 7.8 Settings (SET)
 FR-SET-3, FR-SET-4 and FR-SET-5, together with Purchase history (FR-PRG-4), are reached from the **You** tab, not Settings. Settings keeps app behaviour only: Snooze, Wake, Appearance, Notifications, Usage stats and the Reliability checklist. There is still no account or sign-in (NFR-4).
 
-- **FR-SET-1** [Must] Base fee (with commitment lock rules), max snoozes per session, default grace window (Quiet time), default snooze length.
+- **FR-SET-1** [Must] Base fee (with commitment lock rules), max snoozes per session, the grace window ("Quiet time", every alarm, under the commitment lock) and "Vibrate during quiet time" (every alarm), default snooze length.
 - **FR-SET-2** [Must] Reliability checklist (FR-ONB-3).
 - **FR-SET-3** [Must] Privacy policy, terms, support contact, "How payments & refunds work" (including the alarm behaviour disclosure, FR-ONB-5).
 - **FR-SET-4** [Must] Delete all data.

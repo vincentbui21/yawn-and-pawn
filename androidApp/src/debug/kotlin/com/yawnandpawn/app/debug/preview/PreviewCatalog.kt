@@ -139,7 +139,6 @@ object PreviewCatalog {
             subScreen("editor_snooze", "Snooze: length and fee ladder", s.editorSnoozePane),
             subScreen("editor_wake_check", "Wake-up check: checks, mode, difficulty", s.editorCheckPane, tall = true),
             subScreen("editor_wake_check_none", "Wake-up check: none selected", s.editorNoCheckPane, tall = true),
-            subScreen("editor_quiet_time", "Quiet time", s.editorQuietPane),
             subScreen("editor_motivation", "Motivation", s.editorMotivationPane),
             ringing("ringing_first", "First ring", s.ringingFirst, primary = true),
             ringing("ringing_after_snooze", "After a snooze", s.ringingAfterSnooze),

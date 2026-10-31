@@ -5,6 +5,7 @@ import com.yawnandpawn.app.core.config.SaveDefaultSetting
 import com.yawnandpawn.app.core.config.SaveGlobalSetting
 import com.yawnandpawn.app.core.config.SetBaseFee
 import com.yawnandpawn.app.core.config.SetMaxSnoozes
+import com.yawnandpawn.app.core.config.SetQuietTime
 import com.yawnandpawn.app.core.error.DomainError
 import com.yawnandpawn.app.core.log.LogEvent
 import com.yawnandpawn.app.core.session.GlobalSettings
@@ -88,6 +89,7 @@ class SettingsWeeklySummaryViewModelTest {
                 priceCatalog = FakePriceCatalog(aPriceSnapshot()),
                 setBaseFee = SetBaseFee(save),
                 setMaxSnoozes = SetMaxSnoozes(save),
+                setQuietTime = SetQuietTime(save),
                 clock = clock,
                 timeZoneProvider = zone,
                 timeChanges = FakeTimeChangeSignal(),

@@ -65,11 +65,11 @@ import com.yawnandpawn.app.core.config.SaveDefaultSetting
 import com.yawnandpawn.app.core.config.SaveGlobalSetting
 import com.yawnandpawn.app.core.config.SetBaseFee
 import com.yawnandpawn.app.core.config.SetBrightWakeScreen
-import com.yawnandpawn.app.core.config.SetDefaultGrace
 import com.yawnandpawn.app.core.config.SetDefaultSnoozeLength
-import com.yawnandpawn.app.core.config.SetDefaultVibrateInGrace
 import com.yawnandpawn.app.core.config.SetMaxSnoozes
+import com.yawnandpawn.app.core.config.SetQuietTime
 import com.yawnandpawn.app.core.config.SetThemeMode
+import com.yawnandpawn.app.core.config.SetVibrateInGrace
 import com.yawnandpawn.app.core.crash.UnsentCrashReports
 import com.yawnandpawn.app.core.error.valueOrNull
 import com.yawnandpawn.app.core.history.MissedNotes
@@ -192,10 +192,11 @@ val appModule =
         factory { SaveGlobalSetting(get(), get(), get(), get(), get(), get(), get()) }
         factory { SetBaseFee(get()) }
         factory { SetMaxSnoozes(get()) }
-        // Story 5.1: the new-alarm defaults and the theme, no commitment lock.
+        // 0.1.7: one global quiet time, through the commitment lock like max snoozes.
+        factory { SetQuietTime(get()) }
+        // Story 5.1: the new-alarm defaults and the theme, no commitment lock (and, since 0.1.7, the global quiet-time vibration).
         factory { SaveDefaultSetting(get(), get()) }
-        factory { SetDefaultGrace(get()) }
-        factory { SetDefaultVibrateInGrace(get()) }
+        factory { SetVibrateInGrace(get()) }
         factory { SetDefaultSnoozeLength(get()) }
         factory { SetThemeMode(get()) }
         factory { SetBrightWakeScreen(get()) }

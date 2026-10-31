@@ -37,9 +37,10 @@ import okio.IOException
 /**
  * The global settings (FR-SET-1) and the global pending changes (Story 4.4) in the settings DataStore (device-protected,
  * so a ring before the first unlock reads them; backed up). AD-6: no copy in `app.db`.
- * - [BASE_FEE_TIER] and [MAX_SNOOZES], and the Story 5.1 defaults and theme ([DEFAULT_GRACE_SECONDS],
- *   [DEFAULT_VIBRATE_IN_GRACE], [DEFAULT_SNOOZE_LENGTH], [THEME_MODE]) and Story 5.2's [BRIGHT_WAKE_SCREEN]: a missing
- *   or out-of-range value (an unknown theme name too) reads as the `GlobalSettings` default.
+ * - [BASE_FEE_TIER] and [MAX_SNOOZES], the quiet time and its vibration ([DEFAULT_GRACE_SECONDS] and
+ *   [DEFAULT_VIBRATE_IN_GRACE]: the Story 5.1 keys, global since 0.1.7), the Story 5.1 default snooze length and theme
+ *   ([DEFAULT_SNOOZE_LENGTH], [THEME_MODE]) and Story 5.2's [BRIGHT_WAKE_SCREEN]: a missing or out-of-range value (an
+ *   unknown theme name too, a snooze length of 9 stored before 0.1.7) reads as the `GlobalSettings` default.
  * - [PENDING_GLOBAL]: the global pending changes as one `PendingChangeJson` list; a list that does not decode reads as
  *   none (the live settings, the stronger ones, apply).
  * - Every successful [snapshot] and every write keeps the resulting snapshot in [cache] ([lastKnown], review fix 11), so a
@@ -71,9 +72,9 @@ class DataStoreGlobalSettings(
 
     override suspend fun setMaxSnoozes(count: Int): Outcome<Unit, DomainError> = edit { it[MAX_SNOOZES] = count }
 
-    override suspend fun setDefaultGraceSeconds(seconds: Int): Outcome<Unit, DomainError> = edit { it[DEFAULT_GRACE_SECONDS] = seconds }
+    override suspend fun setGraceSeconds(seconds: Int): Outcome<Unit, DomainError> = edit { it[DEFAULT_GRACE_SECONDS] = seconds }
 
-    override suspend fun setDefaultVibrateInGrace(on: Boolean): Outcome<Unit, DomainError> = edit { it[DEFAULT_VIBRATE_IN_GRACE] = on }
+    override suspend fun setVibrateInGrace(on: Boolean): Outcome<Unit, DomainError> = edit { it[DEFAULT_VIBRATE_IN_GRACE] = on }
 
     override suspend fun setDefaultSnoozeLength(minutes: Int): Outcome<Unit, DomainError> = edit { it[DEFAULT_SNOOZE_LENGTH] = minutes }
 
@@ -129,13 +130,13 @@ class DataStoreGlobalSettings(
         /** Max snoozes per session, 1–5. */
         val MAX_SNOOZES: Preferences.Key<Int> = intPreferencesKey("max_snoozes")
 
-        /** "Default quiet time" for new alarms, 15–30 s (Story 5.1). */
+        /** The quiet time of every alarm, 15–30 s (0.1.7; the Story 5.1 key of "Default quiet time", never renamed). */
         val DEFAULT_GRACE_SECONDS: Preferences.Key<Int> = intPreferencesKey("default_grace_seconds")
 
-        /** "Vibrate during quiet time" for new alarms (Story 5.1). */
+        /** "Vibrate during quiet time" of every alarm (0.1.7; the Story 5.1 key, never renamed). */
         val DEFAULT_VIBRATE_IN_GRACE: Preferences.Key<Boolean> = booleanPreferencesKey("default_vibrate_in_grace")
 
-        /** "Default snooze length" for new alarms, 5 / 9 / 10 / 15 min (Story 5.1). */
+        /** "Default snooze length" for new alarms, 5 / 10 / 15 / 30 min (Story 5.1; a stored 9 reads as 10 since 0.1.7). */
         val DEFAULT_SNOOZE_LENGTH: Preferences.Key<Int> = intPreferencesKey("default_snooze_length_minutes")
 
         /** The app theme as a `ThemeMode` name (Story 5.1); an unknown name reads as System. */
@@ -152,12 +153,12 @@ class DataStoreGlobalSettings(
             return defaults.copy(
                 baseFeeTier = preferences[BASE_FEE_TIER]?.takeIf { it in SaveGlobalSetting.BASE_FEE_TIERS } ?: defaults.baseFeeTier,
                 maxSnoozes = preferences[MAX_SNOOZES]?.takeIf { it in SaveGlobalSetting.MAX_SNOOZES } ?: defaults.maxSnoozes,
-                defaultGraceSeconds =
-                    preferences[DEFAULT_GRACE_SECONDS]?.takeIf { it in SaveDefaultSetting.GRACE_SECONDS } ?: defaults.defaultGraceSeconds,
+                graceSeconds =
+                    preferences[DEFAULT_GRACE_SECONDS]?.takeIf { it in SaveGlobalSetting.GRACE_SECONDS } ?: defaults.graceSeconds,
                 defaultSnoozeLengthMinutes =
                     preferences[DEFAULT_SNOOZE_LENGTH]?.takeIf { it in SaveDefaultSetting.SNOOZE_LENGTHS }
                         ?: defaults.defaultSnoozeLengthMinutes,
-                defaultVibrateInGrace = preferences[DEFAULT_VIBRATE_IN_GRACE] ?: defaults.defaultVibrateInGrace,
+                vibrateInGrace = preferences[DEFAULT_VIBRATE_IN_GRACE] ?: defaults.vibrateInGrace,
                 themeMode = ThemeMode.parse(preferences[THEME_MODE]) ?: defaults.themeMode,
                 brightWakeScreen = preferences[BRIGHT_WAKE_SCREEN] ?: defaults.brightWakeScreen,
             )

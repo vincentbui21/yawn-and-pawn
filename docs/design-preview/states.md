@@ -41,7 +41,6 @@ adb shell am start -S -n com.yawnandpawn.app/.debug.preview.PreviewActivity --es
 | `editor-snooze` | Alarm editor sub-screens | Snooze: length and fee ladder |
 | `editor-wake-check` | Alarm editor sub-screens | Wake-up check: checks, mode, difficulty |
 | `editor-wake-check-none` | Alarm editor sub-screens | Wake-up check: none selected |
-| `editor-quiet-time` | Alarm editor sub-screens | Quiet time |
 | `editor-motivation` | Alarm editor sub-screens | Motivation |
 | `ringing-first` | Ringing | First ring (Sunrise) |
 | `ringing-after-snooze` | Ringing | After a snooze (Sunrise) |
@@ -112,7 +111,7 @@ adb shell am start -S -n com.yawnandpawn.app/.debug.preview.PreviewActivity --es
 | `settings-base-fee-approximate` | Settings sub-screens | Base fee, prices never loaded |
 | `settings-max-snoozes` | Settings sub-screens | Max snoozes per session |
 | `settings-snooze-length` | Settings sub-screens | Default snooze length |
-| `settings-quiet-time` | Settings sub-screens | Default quiet time |
+| `settings-quiet-time` | Settings sub-screens | Quiet time (all alarms) |
 | `reliability-missing` | Reliability checklist | Items missing and revoked |
 | `reliability-all-ok` | Reliability checklist | All OK |
 | `reliability-manufacturer` | Reliability checklist | Manufacturer steps (Xiaomi) |

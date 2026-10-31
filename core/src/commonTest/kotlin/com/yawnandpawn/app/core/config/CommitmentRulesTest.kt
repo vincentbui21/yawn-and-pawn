@@ -124,7 +124,8 @@ class CommitmentRulesTest {
         Alarm(
             id = "a",
             time = LocalTime(7, 30),
-            graceSeconds = 20,
+            // The alarm's own quiet time is ignored since 0.1.7: sessions use the global one.
+            graceSeconds = 28,
             requestCode = 1_000,
             createdAt = Instant.parse("2027-01-01T00:00:00Z"),
             updatedAt = Instant.parse("2027-01-01T00:00:00Z"),
@@ -137,8 +138,11 @@ class CommitmentRulesTest {
         listOf(
             pending(fee(1)),
             pending(SettingValue.MaxSnoozes(5)),
-            pending(SettingValue.GraceSeconds(30), alarmId = "a"),
+            // 0.1.7: the global quiet time.
+            pending(SettingValue.QuietTimeSeconds(30)),
             pending(SettingValue.Checks(CheckPlan(CheckMode.Random, listOf(easyMath))), alarmId = "a"),
+            // A leftover per-alarm quiet time (before 0.1.7) applies to the alarm but is ignored by the resolver.
+            pending(SettingValue.GraceSeconds(25), alarmId = "a"),
             // Another alarm's change never applies to this one.
             pending(SettingValue.GraceSeconds(15), alarmId = "b"),
         )
@@ -155,7 +159,7 @@ class CommitmentRulesTest {
         )
 
     @Test
-    fun `the session at the waited-for occurrence and earlier ones ring the live settings`() {
+    fun `the session at the waited-for occurrence and earlier ones ring the live settings, the global quiet time too`() {
         listOf(window.scheduledAt, window.scheduledAt - 30.minutes).forEach { at ->
             val config = resolve(at)
             assertEquals(3, config.baseFeeTier, "$at")
@@ -166,7 +170,7 @@ class CommitmentRulesTest {
     }
 
     @Test
-    fun `every later occurrence rings the pending values, and only this alarm's and the global ones`() {
+    fun `every later occurrence rings the pending values, and only this alarm's and the global ones (the global quiet time)`() {
         val config = resolve(window.scheduledAt + 1.days)
 
         assertEquals(1, config.baseFeeTier)
@@ -228,7 +232,9 @@ class CommitmentRulesTest {
     fun `the global settings take only global changes`() {
         val settings = GlobalSettings().withPending(listOf(pending(fee(4)), pending(SettingValue.GraceSeconds(30), alarmId = "a")))
         assertEquals(GlobalSettings(baseFeeTier = 4), settings)
-        assertEquals(changes.take(4), changes.applyingTo("a", window.scheduledAt + 1.days))
+        val quiet = GlobalSettings().withPending(listOf(pending(SettingValue.QuietTimeSeconds(25))))
+        assertEquals(GlobalSettings(graceSeconds = 25), quiet)
+        assertEquals(changes.take(5), changes.applyingTo("a", window.scheduledAt + 1.days))
         assertNull(changes.applyingTo("a", window.scheduledAt).firstOrNull())
     }
 }

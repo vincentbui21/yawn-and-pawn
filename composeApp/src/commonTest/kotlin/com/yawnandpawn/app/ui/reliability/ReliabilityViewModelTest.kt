@@ -357,7 +357,7 @@ class ReliabilityViewModelTest {
             assertEquals(60, config.volumePercent)
             assertFalse(config.vibration)
             assertEquals(5, config.snoozeLengthMinutes)
-            assertEquals(25, config.graceSeconds)
+            assertEquals(20, config.graceSeconds, "the Settings quiet time (0.1.7), not the alarm's 25")
             assertEquals(CheckMode.All, config.checkPlan.mode)
             assertEquals(listOf(CheckType.QrBarcode), config.checkPlan.entries.map { it.type })
             assertTrue(config.testMode)
@@ -374,8 +374,8 @@ class ReliabilityViewModelTest {
     fun `with no enabled alarm the test rings the built-in alarm with the Settings defaults`() =
         runTest(dispatcher) {
             globalSettings.setDefaultSnoozeLength(15)
-            globalSettings.setDefaultGraceSeconds(30)
-            globalSettings.setDefaultVibrateInGrace(false)
+            globalSettings.setGraceSeconds(30)
+            globalSettings.setVibrateInGrace(false)
             alarmsOf(anAlarm(id = "off", time = LocalTime(7, 0), enabled = false))
 
             val draft = testAlarm().draft()
@@ -397,7 +397,7 @@ class ReliabilityViewModelTest {
 
             val draft = testAlarm().draft()
 
-            assertEquals(GlobalSettings().defaultGraceSeconds, draft.graceSeconds)
+            assertEquals(GlobalSettings().graceSeconds, draft.graceSeconds)
             assertEquals(GlobalSettings().defaultSnoozeLengthMinutes, draft.snoozeLengthMinutes)
             assertEquals(
                 listOf(ChecklistTestAlarm.READ_ALARMS, ChecklistTestAlarm.READ_SETTINGS),

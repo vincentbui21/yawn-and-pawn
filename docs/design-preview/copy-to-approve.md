@@ -98,7 +98,7 @@ Owner-given: "Stopped after 30 minutes" and the tile idea "rings · snoozes · p
 |---|---|---|---|
 | `day_event_rang` | Alarm rang | Timeline, first ring | |
 | `day_event_rang_again` | Rang again | Timeline, after a snooze | |
-| `day_event_snoozed` | Snoozed {minutes} min · {price} | Timeline | e.g. "Snoozed 9 min · 25.000 ₫". Price through the normal formatting, in `text`. |
+| `day_event_snoozed` | Snoozed {minutes} min · {price} | Timeline | e.g. "Snoozed 10 min · 25.000 ₫". Price through the normal formatting, in `text`. |
 | `day_event_quiet_ended` | Quiet time ran out | Timeline | The grace window ended before the check. |
 | `day_event_switched` | Check switched to {check} | Timeline, before the first unlock | Follows "Rang before your first unlock" (key string). |
 | `day_event_fallback` | Fallback check: {check} | Timeline | |

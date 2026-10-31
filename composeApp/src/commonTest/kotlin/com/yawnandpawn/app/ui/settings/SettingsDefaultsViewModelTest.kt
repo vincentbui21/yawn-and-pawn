@@ -10,6 +10,7 @@ import com.yawnandpawn.app.core.config.SaveDefaultSetting
 import com.yawnandpawn.app.core.config.SaveGlobalSetting
 import com.yawnandpawn.app.core.config.SetBaseFee
 import com.yawnandpawn.app.core.config.SetMaxSnoozes
+import com.yawnandpawn.app.core.config.SetQuietTime
 import com.yawnandpawn.app.core.error.DomainError
 import com.yawnandpawn.app.core.error.Outcome
 import com.yawnandpawn.app.core.log.LogEvent
@@ -72,9 +73,9 @@ private class GatedDefaults(
         return block()
     }
 
-    override suspend fun setDefaultGraceSeconds(seconds: Int) = gated("grace=$seconds") { inner.setDefaultGraceSeconds(seconds) }
+    override suspend fun setGraceSeconds(seconds: Int) = gated("grace=$seconds") { inner.setGraceSeconds(seconds) }
 
-    override suspend fun setDefaultVibrateInGrace(on: Boolean) = gated("vibrate=$on") { inner.setDefaultVibrateInGrace(on) }
+    override suspend fun setVibrateInGrace(on: Boolean) = gated("vibrate=$on") { inner.setVibrateInGrace(on) }
 
     override suspend fun setDefaultSnoozeLength(minutes: Int) = gated("snooze=$minutes") { inner.setDefaultSnoozeLength(minutes) }
 
@@ -85,7 +86,8 @@ private class GatedDefaults(
 
 /**
  * Stories 5.1 and 5.2: Settings shows the stored new-alarm defaults, theme and "Bright wake screen", and saves each
- * change at once through its use case, in order; a failed save is logged and the stored value comes back.
+ * change at once through its use case, in order; a failed save is logged and the stored value comes back. The quiet time
+ * (global and locked since 0.1.7) shares the queue: with no alarm inside 8 h it applies at once, like a default.
  */
 @OptIn(ExperimentalCoroutinesApi::class)
 class SettingsDefaultsViewModelTest {
@@ -128,6 +130,7 @@ class SettingsDefaultsViewModelTest {
             priceCatalog = FakePriceCatalog(aPriceSnapshot(currency = "EUR")),
             setBaseFee = SetBaseFee(save),
             setMaxSnoozes = SetMaxSnoozes(save),
+            setQuietTime = SetQuietTime(save),
             clock = clock,
             timeZoneProvider = zone,
             timeChanges = FakeTimeChangeSignal(),
@@ -150,27 +153,27 @@ class SettingsDefaultsViewModelTest {
     fun `the stored defaults and theme are shown`() =
         runTest {
             inner.setDefaultSnoozeLength(15)
-            inner.setDefaultGraceSeconds(30)
-            inner.setDefaultVibrateInGrace(false)
+            inner.setGraceSeconds(30)
+            inner.setVibrateInGrace(false)
             inner.setThemeMode(ThemeMode.Dark)
             inner.setBrightWakeScreen(false)
 
             val state = viewModel().now
 
             assertEquals(15, state.defaultSnoozeMinutes)
-            assertEquals(30, state.defaultQuietSeconds)
+            assertEquals(30, state.quietSeconds)
             assertEquals(false, state.vibrateDuringQuietTime)
             assertEquals(PpsThemeMode.Dark, state.theme)
             assertEquals(false, state.brightWakeScreen)
         }
 
     @Test
-    fun `the built-in defaults show when nothing is stored - 9 min, 20 s, vibration on, System, bright wake on`() =
+    fun `the built-in defaults show when nothing is stored - 10 min, 20 s, vibration on, System, bright wake on`() =
         runTest {
             val state = viewModel().now
 
-            assertEquals(9, state.defaultSnoozeMinutes)
-            assertEquals(20, state.defaultQuietSeconds)
+            assertEquals(10, state.defaultSnoozeMinutes)
+            assertEquals(20, state.quietSeconds)
             assertEquals(true, state.vibrateDuringQuietTime)
             assertEquals(PpsThemeMode.System, state.theme)
             assertEquals(true, state.brightWakeScreen)
@@ -181,7 +184,7 @@ class SettingsDefaultsViewModelTest {
         runTest {
             val viewModel = viewModel()
 
-            viewModel.onIntent(SettingsIntent.SnoozeLengthSelected(10))
+            viewModel.onIntent(SettingsIntent.SnoozeLengthSelected(30))
             viewModel.onIntent(SettingsIntent.QuietTimeChanged(25))
             viewModel.onIntent(SettingsIntent.VibrateDuringQuietTimeToggled(false))
             viewModel.onIntent(SettingsIntent.ThemeSelected(PpsThemeMode.Dark))
@@ -189,21 +192,21 @@ class SettingsDefaultsViewModelTest {
 
             assertEquals(
                 GlobalSettings(
-                    defaultSnoozeLengthMinutes = 10,
-                    defaultGraceSeconds = 25,
-                    defaultVibrateInGrace = false,
+                    defaultSnoozeLengthMinutes = 30,
+                    graceSeconds = 25,
+                    vibrateInGrace = false,
                     themeMode = ThemeMode.Dark,
                     brightWakeScreen = false,
                 ),
                 inner.current,
             )
             val state = viewModel.now
-            assertEquals(10, state.defaultSnoozeMinutes)
-            assertEquals(25, state.defaultQuietSeconds)
+            assertEquals(30, state.defaultSnoozeMinutes)
+            assertEquals(25, state.quietSeconds)
             assertEquals(false, state.vibrateDuringQuietTime)
             assertEquals(PpsThemeMode.Dark, state.theme)
             assertEquals(false, state.brightWakeScreen)
-            assertEquals(listOf("snooze=10", "grace=25", "vibrate=false", "theme=Dark", "bright=false"), settings.writes)
+            assertEquals(listOf("snooze=30", "grace=25", "vibrate=false", "theme=Dark", "bright=false"), settings.writes)
         }
 
     @Test
@@ -247,33 +250,34 @@ class SettingsDefaultsViewModelTest {
             viewModel.onIntent(SettingsIntent.QuietTimeChanged(14))
             viewModel.onIntent(SettingsIntent.QuietTimeChanged(31))
             viewModel.onIntent(SettingsIntent.SnoozeLengthSelected(7))
+            viewModel.onIntent(SettingsIntent.SnoozeLengthSelected(9))
             viewModel.onIntent(SettingsIntent.QuietTimeChanged(20))
             viewModel.onIntent(SettingsIntent.ThemeSelected(PpsThemeMode.System))
 
             assertTrue(settings.writes.isEmpty(), "${settings.writes}")
-            assertEquals(20, viewModel.now.defaultQuietSeconds)
+            assertEquals(20, viewModel.now.quietSeconds)
             assertEquals(GlobalSettings(), inner.current)
             // Ignored, not refused by the use case: nothing failed, and the screen never showed 14, 31 or 7 (review fix).
             assertTrue(!saveFailed(), "${logger.events}")
-            assertTrue(shown.none { it.defaultQuietSeconds !in 15..30 || it.defaultSnoozeMinutes == 7 }, "$shown")
+            assertTrue(shown.none { it.quietSeconds !in 15..30 || it.defaultSnoozeMinutes in setOf(7, 9) }, "$shown")
         }
 
     @Test
-    fun `slider steps show at once, and a drag saves the running step and then only the latest one`() =
+    fun `quiet time slider steps show at once, and a drag saves the running step and then only the latest one`() =
         runTest {
             val viewModel = viewModel()
             settings.open.value = false
 
             listOf(21, 21, 22, 22, 22, 23).forEach { viewModel.onIntent(SettingsIntent.QuietTimeChanged(it)) }
-            assertEquals(23, viewModel.now.defaultQuietSeconds, "shown before any save finished")
+            assertEquals(23, viewModel.now.quietSeconds, "shown before any save finished")
             assertTrue(settings.writes.isEmpty())
 
             settings.open.value = true
 
             // 21 was running; 22 was superseded by 23 in the queue, so it is never written (review fix: coalesced).
             assertEquals(listOf("grace=21", "grace=23"), settings.writes)
-            assertEquals(23, inner.current.defaultGraceSeconds)
-            assertEquals(23, viewModel.now.defaultQuietSeconds)
+            assertEquals(23, inner.current.graceSeconds)
+            assertEquals(23, viewModel.now.quietSeconds)
         }
 
     @Test
@@ -290,7 +294,7 @@ class SettingsDefaultsViewModelTest {
 
             // The running false, then the latest false; the true between them was superseded in the queue.
             assertEquals(listOf("vibrate=false", "vibrate=false"), settings.writes)
-            assertEquals(false, inner.current.defaultVibrateInGrace)
+            assertEquals(false, inner.current.vibrateInGrace)
             assertTrue(shown.drop(before).none { it.vibrateDuringQuietTime }, "never back on while the saves ran")
             assertEquals(false, viewModel.now.vibrateDuringQuietTime)
         }
@@ -308,7 +312,7 @@ class SettingsDefaultsViewModelTest {
             settings.open.value = true
 
             assertEquals(true, viewModel.now.vibrateDuringQuietTime, "back to the stored value")
-            assertEquals(true, inner.current.defaultVibrateInGrace)
+            assertEquals(true, inner.current.vibrateInGrace)
             assertTrue(saveFailed(), "the failure is logged")
         }
 
@@ -339,7 +343,31 @@ class SettingsDefaultsViewModelTest {
         }
 
     @Test
-    fun `a tab switch during a slider drag still saves the last value, once, after the running one`() =
+    fun `a tab switch during radio taps still saves the last default, once, after the running one`() =
+        runTest {
+            val store = ViewModelStore()
+            val viewModel =
+                ViewModelProvider.create(
+                    store,
+                    viewModelFactory {
+                        initializer { newViewModel(outliving = this@runTest) }
+                    },
+                )[SettingsViewModel::class]
+            backgroundScope.launch(dispatcher) { viewModel.state.collect {} }
+            settings.open.value = false
+
+            listOf(5, 15, 30).forEach { viewModel.onIntent(SettingsIntent.SnoozeLengthSelected(it)) }
+            store.clear() // the user taps another tab: the Settings entry and its ViewModel go
+            settings.open.value = true
+            advanceUntilIdle() // the app scope's drain (a child of the test, so it runs here)
+
+            assertEquals(30, inner.current.defaultSnoozeLengthMinutes)
+            assertEquals(listOf("snooze=5", "snooze=30"), settings.writes)
+            assertTrue(logger.events.none { it is LogEvent.OperationFailed }, "nothing dropped: ${logger.events}")
+        }
+
+    @Test
+    fun `a tab switch during a quiet time slider drag still saves the last value (0_1_7)`() =
         runTest {
             val store = ViewModelStore()
             val viewModel =
@@ -357,9 +385,32 @@ class SettingsDefaultsViewModelTest {
             settings.open.value = true
             advanceUntilIdle() // the app scope's drain (a child of the test, so it runs here)
 
-            assertEquals(30, inner.current.defaultGraceSeconds)
-            assertEquals(listOf("grace=21", "grace=30"), settings.writes)
-            assertTrue(logger.events.none { it is LogEvent.OperationFailed }, "nothing dropped: ${logger.events}")
+            assertEquals(30, inner.current.graceSeconds)
+            assertEquals("grace=30", settings.writes.last())
+            assertTrue(
+                logger.events.none { it is LogEvent.OperationFailed && it.operation == SettingsViewModel.SAVE_SETTING },
+                "nothing dropped: ${logger.events}",
+            )
+        }
+
+    @Test
+    fun `a failed quiet time save shows the new value at once, then the stored value again, and is logged (0_1_7)`() =
+        runTest {
+            val viewModel = viewModel()
+            settings.open.value = false
+            settings.fail = DomainError.StorageFailure("disk full")
+
+            viewModel.onIntent(SettingsIntent.QuietTimeChanged(25))
+            assertEquals(25, viewModel.now.quietSeconds, "the slider moves at once")
+
+            settings.open.value = true
+
+            assertEquals(20, viewModel.now.quietSeconds, "back to the stored value")
+            assertEquals(20, inner.current.graceSeconds)
+            assertTrue(
+                logger.events.any { it is LogEvent.OperationFailed && it.operation == SettingsViewModel.SAVE_SETTING },
+                "${logger.events}",
+            )
         }
 
     @Test
@@ -371,7 +422,7 @@ class SettingsDefaultsViewModelTest {
             settings.open.value = false
 
             viewModel.onIntent(SettingsIntent.ThemeSelected(PpsThemeMode.Dark))
-            viewModel.onIntent(SettingsIntent.QuietTimeChanged(25))
+            viewModel.onIntent(SettingsIntent.VibrateDuringQuietTimeToggled(false))
             store.clear()
             settings.open.value = true
 

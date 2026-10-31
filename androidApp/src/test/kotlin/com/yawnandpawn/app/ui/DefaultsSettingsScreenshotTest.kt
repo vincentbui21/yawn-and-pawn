@@ -13,9 +13,11 @@ import com.yawnandpawn.app.ui.settings.BuiltSettingsRows
 import com.yawnandpawn.app.ui.settings.SettingsPane
 import com.yawnandpawn.app.ui.settings.SettingsScreen
 import com.yawnandpawn.app.ui.settings.SettingsUiState
+import com.yawnandpawn.app.ui.settings.WeakeningNote
 import com.yawnandpawn.app.ui.shell.AppShell
 import com.yawnandpawn.app.ui.shell.AppTab
 import com.yawnandpawn.app.ui.theme.PpsThemeMode
+import kotlinx.datetime.LocalTime
 import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -23,29 +25,33 @@ import org.robolectric.RobolectricTestRunner
 import org.robolectric.annotation.Config
 import org.robolectric.annotation.GraphicsMode
 
-/** The Settings states of Story 5.1, as the real app shows them (en-US). */
+/** The Settings states of Story 5.1 (the quiet time global since 0.1.7), as the real app shows them (en-US). */
 internal object DefaultsSettingsSamples {
     /** The main screen with the built rows: the stored defaults and the System theme. */
     val main =
         SnoozeSettingsSamples.loaded.copy(
-            defaultSnoozeMinutes = 9,
-            defaultQuietSeconds = 20,
+            defaultSnoozeMinutes = 10,
+            quietSeconds = 20,
             vibrateDuringQuietTime = true,
             theme = PpsThemeMode.System,
         )
 
     /** Chosen 15 min, 30 s, vibration off and Dark. */
     val changed =
-        main.copy(defaultSnoozeMinutes = 15, defaultQuietSeconds = 30, vibrateDuringQuietTime = false, theme = PpsThemeMode.Dark)
+        main.copy(defaultSnoozeMinutes = 15, quietSeconds = 30, vibrateDuringQuietTime = false, theme = PpsThemeMode.Dark)
 
     val snoozeLength = main.copy(pane = SettingsPane.SnoozeLength, defaultSnoozeMinutes = 10)
 
-    val quietTime = main.copy(pane = SettingsPane.QuietTime, defaultQuietSeconds = 25)
+    val quietTime = main.copy(pane = SettingsPane.QuietTime, quietSeconds = 25)
+
+    /** 0.1.7: a longer quiet time (30 s) saved at 23:40 waits for tomorrow's 7:30 alarm. */
+    val quietTimePending = main.copy(pane = SettingsPane.QuietTime, quietSeconds = 30, quietTimeNote = WeakeningNote(LocalTime(7, 30)))
 }
 
 /**
  * Story 5.1 screenshots: the Settings main screen with its Snooze, Wake and Appearance cards, and the Default snooze
- * length and Default quiet time sub-screens, each in Light, Dark and Light at 200 % font scale.
+ * length and Quiet time sub-screens, each in Light, Dark and Light at 200 % font scale, and (0.1.7) a longer quiet time
+ * waiting under the commitment lock.
  */
 @RunWith(RobolectricTestRunner::class)
 @GraphicsMode(GraphicsMode.Mode.NATIVE)
@@ -81,7 +87,7 @@ class DefaultsSettingsScreenshotTest {
     }
 
     /** The quiet time value is read from the slider's state; its text row is visual only, so the note proves the pane. */
-    private val quietNote = "After I'm up, the alarm stays quiet this long while you do your check."
+    private val quietNote = "After I'm up, every alarm stays quiet this long while you do your check."
 
     @Test
     fun `Settings cards in Light`() = settings("settings_defaults_light", DefaultsSettingsSamples.main, PpsThemeMode.Light, "Appearance")
@@ -123,15 +129,22 @@ class DefaultsSettingsScreenshotTest {
         settings("settings_snooze_length_light_font200", DefaultsSettingsSamples.snoozeLength, PpsThemeMode.Light, "15 min")
 
     @Test
-    fun `default quiet time in Light`() =
-        settings("settings_quiet_time_light", DefaultsSettingsSamples.quietTime, PpsThemeMode.Light, quietNote)
+    fun `quiet time in Light`() = settings("settings_quiet_time_light", DefaultsSettingsSamples.quietTime, PpsThemeMode.Light, quietNote)
 
     @Test
-    fun `default quiet time in Dark`() =
-        settings("settings_quiet_time_dark", DefaultsSettingsSamples.quietTime, PpsThemeMode.Dark, quietNote)
+    fun `quiet time in Dark`() = settings("settings_quiet_time_dark", DefaultsSettingsSamples.quietTime, PpsThemeMode.Dark, quietNote)
 
     @Test
     @Config(fontScale = 2.0f)
-    fun `default quiet time in Light at 200 percent`() =
+    fun `quiet time in Light at 200 percent`() =
         settings("settings_quiet_time_light_font200", DefaultsSettingsSamples.quietTime, PpsThemeMode.Light, quietNote)
+
+    @Test
+    fun `a longer quiet time waiting under the lock in Light`() =
+        settings(
+            "settings_quiet_time_pending_light",
+            DefaultsSettingsSamples.quietTimePending,
+            PpsThemeMode.Light,
+            "Saved. Takes effect after tomorrow's 7:30 AM alarm.",
+        )
 }

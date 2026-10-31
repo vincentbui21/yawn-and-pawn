@@ -33,6 +33,7 @@ class ReadFireSettingsTest {
 
     private val globalFee = PendingChange(null, SettingValue.BaseFeeTier(1), waitsFor)
     private val ownGrace = PendingChange("a", SettingValue.GraceSeconds(30), waitsFor)
+    private val globalQuiet = PendingChange(null, SettingValue.QuietTimeSeconds(30), waitsFor)
     private val otherGrace = PendingChange("b", SettingValue.GraceSeconds(25), Occurrence("b", sevenThirty))
 
     private fun failures(operation: String) = logger.events.filter { it is LogEvent.OperationFailed && it.operation == operation }
@@ -106,7 +107,7 @@ class ReadFireSettingsTest {
             val alarm =
                 Alarm(id = "a", time = LocalTime(7, 30), graceSeconds = 20, requestCode = 1_000, createdAt = created, updatedAt = created)
             alarms.alarms.value += "a" to alarm
-            pending.changes.value = listOf(globalFee, ownGrace)
+            pending.changes.value = listOf(globalFee, globalQuiet)
             val promote =
                 PromotePendingChanges(pending, settings, alarms, InMemoryCheckConfigs(alarms), clock, AlarmWriteLock(), logger) { null }
 

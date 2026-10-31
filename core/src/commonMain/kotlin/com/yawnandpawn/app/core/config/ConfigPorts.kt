@@ -35,7 +35,8 @@ interface PendingChangeRepository {
 
 /**
  * Port for the persisted global settings (FR-SET-1) in the settings DataStore (device-protected, backed up): the base
- * fee tier and max snoozes (Story 4.4), the new-alarm defaults and the theme (Story 5.1), and "Bright wake screen"
+ * fee tier and max snoozes (Story 4.4), the quiet time and its vibration (global since 0.1.7), the new-alarm snooze length
+ * and the theme (Story 5.1), and "Bright wake screen"
  * (Story 5.2). A missing value, or one stored outside its range (an unknown theme name too), reads as the default.
  */
 interface GlobalSettingsRepository {
@@ -48,11 +49,11 @@ interface GlobalSettingsRepository {
 
     suspend fun setMaxSnoozes(count: Int): Outcome<Unit, DomainError>
 
-    /** "Default quiet time" for new alarms ([SaveDefaultSetting] checks the range). */
-    suspend fun setDefaultGraceSeconds(seconds: Int): Outcome<Unit, DomainError>
+    /** The global "Quiet time" of every alarm (0.1.7; [SaveGlobalSetting] checks the range and the lock). */
+    suspend fun setGraceSeconds(seconds: Int): Outcome<Unit, DomainError>
 
-    /** "Vibrate during quiet time" for new alarms. */
-    suspend fun setDefaultVibrateInGrace(on: Boolean): Outcome<Unit, DomainError>
+    /** The global "Vibrate during quiet time" of every alarm (0.1.7). */
+    suspend fun setVibrateInGrace(on: Boolean): Outcome<Unit, DomainError>
 
     /** "Default snooze length" for new alarms ([SaveDefaultSetting] checks the value). */
     suspend fun setDefaultSnoozeLength(minutes: Int): Outcome<Unit, DomainError>

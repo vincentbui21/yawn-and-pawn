@@ -73,13 +73,16 @@ class PromotePendingChangesTest {
                 listOf(
                     change(SettingValue.BaseFeeTier(1)),
                     change(SettingValue.MaxSnoozes(5)),
+                    // 0.1.7: the global quiet time.
+                    change(SettingValue.QuietTimeSeconds(30)),
+                    // A leftover per-alarm quiet time goes into the alarm's unused column.
                     change(SettingValue.GraceSeconds(30), "a"),
                     change(SettingValue.Checks(CheckPlan(CheckMode.Random, listOf(easy))), "a"),
                 )
 
-            assertEquals(Outcome.Success(4), promote())
+            assertEquals(Outcome.Success(5), promote())
 
-            assertEquals(GlobalSettings(baseFeeTier = 1, maxSnoozes = 5), settings.settings.value)
+            assertEquals(GlobalSettings(baseFeeTier = 1, maxSnoozes = 5, graceSeconds = 30), settings.settings.value)
             val stored = alarms.alarms.value.getValue("a")
             assertEquals(30, stored.graceSeconds)
             assertEquals(CheckMode.Random, stored.checkMode)

@@ -25,11 +25,13 @@ import com.yawnandpawn.app.ui.format.Countdown
 import com.yawnandpawn.app.ui.home.AlarmCard
 import com.yawnandpawn.app.ui.home.HomeScreen
 import com.yawnandpawn.app.ui.home.HomeUiState
+import com.yawnandpawn.app.ui.home.RingsAgain
 import com.yawnandpawn.app.ui.home.SkipDialog
 import com.yawnandpawn.app.ui.shell.AppShell
 import com.yawnandpawn.app.ui.shell.AppTab
 import com.yawnandpawn.app.ui.theme.PpsThemeMode
 import kotlinx.datetime.DayOfWeek
+import kotlinx.datetime.LocalDate
 import kotlinx.datetime.LocalTime
 import org.junit.Rule
 import org.junit.Test
@@ -68,12 +70,12 @@ internal object SkipNextAlarmSamples {
             alarms = listOf(skippedCard, AlarmCard("2", LocalTime(8, 30), emptySet(), null, emptyList(), enabled = false)),
         )
 
-    /** "Skip this one" tapped: the dialog over Home. */
+    /** "Skip this one" tapped: the dialog over Home, "It rings again tomorrow." under its title (0.1.8). */
     val dialog =
         HomeUiState(
             nextAlarm = Countdown.HoursMinutes(1, 45),
             alarms = listOf(skippedCard.copy(skipped = false)),
-            skipDialog = SkipDialog("1", LocalTime(7, 0)),
+            skipDialog = SkipDialog("1", LocalTime(7, 0), ringsAgain = RingsAgain(1, LocalDate(2027, 3, 9))),
         )
 
     /** After "Skip": the card says so and the snackbar shows. */
@@ -171,9 +173,33 @@ class SkipNextAlarmScreenshotTest {
             assertEquals(1, composeRule.onAllNodesWithText(SKIPPED_CAPTION).fetchSemanticsNodes().size)
         }
 
+    @Test
+    fun `the skip dialog's body says when the alarm rings again, by date a week or more away, and a one-time alarm's has none`() {
+        val bodies =
+            mapOf(
+                RingsAgain(1, LocalDate(2027, 3, 9)) to "It rings again tomorrow.",
+                RingsAgain(4, LocalDate(2027, 3, 15)) to "It rings again on Monday.",
+                RingsAgain(7, LocalDate(2027, 3, 15)) to "It rings again on Monday, March 15.",
+                RingsAgain(8, LocalDate(2027, 3, 15)) to "It rings again on Monday, March 15.",
+            )
+        bodies.forEach { (ringsAgain, body) ->
+            val state = SkipNextAlarmSamples.dialog.copy(skipDialog = SkipDialog("1", LocalTime(7, 0), ringsAgain = ringsAgain))
+            withScreen(PpsThemeMode.Light, content = { HomeScreen(state = state, is24Hour = false, onIntent = {}) }) {
+                composeRule.onNodeWithText(DIALOG).assertExists()
+                composeRule.onNodeWithText(body).assertExists()
+                composeRule.onNodeWithText("This is logged.", substring = true).assertDoesNotExist()
+            }
+        }
+        val oneTime = SkipNextAlarmSamples.dialog.copy(skipDialog = SkipDialog("1", LocalTime(7, 0)))
+        withScreen(PpsThemeMode.Light, content = { HomeScreen(state = oneTime, is24Hour = false, onIntent = {}) }) {
+            composeRule.onNodeWithText(DIALOG).assertExists()
+            composeRule.onNodeWithText("It rings again", substring = true).assertDoesNotExist()
+        }
+    }
+
     private companion object {
         const val SWITCH = "Offer to skip 2 h before"
-        const val DIALOG = "Skip your 7:00 AM alarm? This is logged."
+        const val DIALOG = "Skip the 7:00 AM alarm?"
         const val SKIPPED = "Skipped. No charge."
         const val SKIPPED_CAPTION = "Next ring skipped"
     }

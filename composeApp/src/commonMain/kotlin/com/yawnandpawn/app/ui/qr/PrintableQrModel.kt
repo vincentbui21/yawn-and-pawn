@@ -20,7 +20,7 @@ import org.koin.compose.koinInject
  * The printable QR's state (Story 7.10, FR-PWK-13): one new code per opening ([payload], never stored or logged), drawn
  * from [QrPrinter.encode]. "Print or save as PDF" opens the print dialog, and once the print job went to print it
  * registers the code exactly as "Use this code" does ([onCodeChosen] with [PrintableCode.registered]); with a code already
- * saved ([codeSaved]) it asks "Replace your QR code? The old one stops working." first, and "Keep it" closes the dialog
+ * saved ([codeSaved]) it asks "Replace your QR code?" / "The old one stops working." first, and "Keep it" closes the dialog
  * with nothing printed or changed. A cancelled print dialog registers nothing, so the old code and its sheet keep
  * working (review pass 1). When the code cannot be made, Print is disabled; when there is no screen to print from,
  * nothing is registered. While a print is under way, further Print and Replace taps are ignored (one print per tap).

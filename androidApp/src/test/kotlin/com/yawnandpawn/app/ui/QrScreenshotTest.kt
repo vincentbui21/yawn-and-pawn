@@ -241,7 +241,8 @@ class QrScreenshotTest {
         val path = "src/test/screenshots/$name.png"
         if (state.showReplaceDialog) {
             composeRule.onNode(isDialog()).assertExists()
-            composeRule.onNodeWithText("Replace your QR code? The old one stops working.").assertExists()
+            composeRule.onNodeWithText("Replace your QR code?").assertExists()
+            composeRule.onNodeWithText("The old one stops working.").assertExists()
             composeRule.onNodeWithText("Replace").assertHasClickAction().assertHeightIsAtLeast(48.dp)
             composeRule.onNodeWithText("Keep it").assertHasClickAction().assertHeightIsAtLeast(48.dp)
             captureScreenRoboImage(path, roborazziOptions = screenshotOptions)

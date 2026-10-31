@@ -59,7 +59,7 @@ class PrintableQrModelTest {
         val model = model(codeSaved = true)
 
         model.onIntent(QrIntent.PrintClicked)
-        assertTrue(model.state.showReplaceDialog, "Replace your QR code? The old one stops working.")
+        assertTrue(model.state.showReplaceDialog, "Replace your QR code?")
         assertTrue(printer.printed.isEmpty())
 
         model.onIntent(QrIntent.ReplaceCancelled)

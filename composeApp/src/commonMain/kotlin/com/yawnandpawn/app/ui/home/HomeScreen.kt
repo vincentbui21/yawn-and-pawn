@@ -64,8 +64,11 @@ import com.yawnandpawn.app.ui.components.glassSource
 import com.yawnandpawn.app.ui.components.rememberEnteredOnce
 import com.yawnandpawn.app.ui.components.rememberGlassBackdrop
 import com.yawnandpawn.app.ui.format.Countdown
+import com.yawnandpawn.app.ui.format.DayNameStyle
 import com.yawnandpawn.app.ui.format.countdownText
+import com.yawnandpawn.app.ui.format.dayName
 import com.yawnandpawn.app.ui.format.formatClockTime
+import com.yawnandpawn.app.ui.format.formatLongDate
 import com.yawnandpawn.app.ui.format.formatMoney
 import com.yawnandpawn.app.ui.format.repeatSummary
 import com.yawnandpawn.app.ui.resources.Res
@@ -94,6 +97,8 @@ import com.yawnandpawn.app.ui.resources.home_try_again
 import com.yawnandpawn.app.ui.resources.home_zero_paid
 import com.yawnandpawn.app.ui.resources.skip_confirm
 import com.yawnandpawn.app.ui.resources.skip_keep
+import com.yawnandpawn.app.ui.resources.skip_rings_again_on_day
+import com.yawnandpawn.app.ui.resources.skip_rings_again_tomorrow
 import com.yawnandpawn.app.ui.resources.skip_title
 import com.yawnandpawn.app.ui.theme.PpsTheme
 import org.jetbrains.compose.resources.stringResource
@@ -105,8 +110,8 @@ import org.jetbrains.compose.resources.stringResource
  * during a session, only `panel-session-in-progress`. While the alarms are read only the header shows; if they cannot
  * be read, "Couldn't load your alarms." with "Try again" (never the empty state). Long-press on a card (or its
  * TalkBack actions) offers Duplicate and Delete; Delete asks first. Story 7.11: a card whose next ring is skipped says
- * "Next ring skipped" and offers "Don't skip" too, and "Skip this one" on a pre-alarm notification asks "Skip your {time}
- * alarm? This is logged." ("Keep it" is the default dismiss).
+ * "Next ring skipped" and offers "Don't skip" too, and "Skip this one" on a pre-alarm notification asks "Skip the
+ * {time} alarm?" ("Keep it" is the default dismiss).
  */
 @Composable
 fun HomeScreen(
@@ -142,6 +147,7 @@ fun HomeScreen(
     state.skipDialog?.let { dialog ->
         ConfirmDialog(
             title = stringResource(Res.string.skip_title, formatClockTime(dialog.time, is24Hour)),
+            body = dialog.ringsAgain?.let { skipRingsAgain(it) },
             confirmText = stringResource(Res.string.skip_confirm),
             safeText = stringResource(Res.string.skip_keep),
             onConfirm = { onIntent(HomeIntent.SkipConfirmed) },
@@ -157,6 +163,27 @@ fun HomeScreen(
         )
     }
 }
+
+/**
+ * The skip dialog's grey body (owner decision 2026-10-31, 0.1.8): "It rings again tomorrow.", "It rings again on
+ * {weekday}." within the week, or "It rings again on {date}." ("on Monday, November 9.") a week or more away, where a
+ * weekday alone would read as this week's.
+ */
+@Composable
+private fun skipRingsAgain(ringsAgain: RingsAgain): String =
+    when {
+        ringsAgain.daysAhead >= DAYS_PER_WEEK -> {
+            stringResource(Res.string.skip_rings_again_on_day, formatLongDate(ringsAgain.date))
+        }
+
+        ringsAgain.daysAhead >= 2 -> {
+            stringResource(Res.string.skip_rings_again_on_day, dayName(ringsAgain.date.dayOfWeek, DayNameStyle.Full))
+        }
+
+        else -> {
+            stringResource(Res.string.skip_rings_again_tomorrow)
+        }
+    }
 
 /**
  * The alarm list under the pinned, collapsing header (owner decision 2026-09-28, Samsung Weather): the list starts below
@@ -247,6 +274,9 @@ private fun NextAlarm(
 
 /** The empty first item of the Home list. */
 private const val TOP_KEY = "top"
+
+/** A ring this many days ahead or more is named by its date, not its weekday alone. */
+private const val DAYS_PER_WEEK = 7
 
 /** Entrance order of the first alarm card (after the hero, the notices and the countdown). */
 private const val FIRST_CARD_ORDER = 3

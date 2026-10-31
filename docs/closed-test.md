@@ -37,7 +37,7 @@ Use Yawn & Pawn for your real wake-up, with your second alarm set a few minutes 
 - **Snooze a few times:** tap Snooze, confirm, and pay with the test card. Check that the snooze starts and the alarm rings again later. Each snooze in the same morning should cost more than the last.
 - **Try every check:** Math, Word Unscramble, Memory Sequence and QR/Barcode (scan a code you put in another room, such as a barcode on a box).
 - **Once a week:** open **Settings > Make sure alarms ring** and fix anything it marks. Phone updates sometimes turn settings back off.
-- **Once a week, a locked test alarm:** lock your phone, then ring a test alarm (from the alarm editor's "Test alarm", or "Ring a test alarm" in the checklist). Check that it shows on the lock screen and rings. Test alarms are always free.
+- **Once a week, a locked test alarm:** lock your phone, then ring a test alarm (from the alarm editor's ⋮ menu, "More options > Test alarm", or "Ring a test alarm" in the checklist). Check that it shows on the lock screen and rings. Test alarms are always free.
 
 If you have time, these help us a lot too:
 

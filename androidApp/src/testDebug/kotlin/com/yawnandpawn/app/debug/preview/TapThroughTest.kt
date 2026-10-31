@@ -2,7 +2,6 @@ package com.yawnandpawn.app.debug.preview
 
 import android.os.Looper
 import androidx.activity.compose.setContent
-import androidx.compose.ui.semantics.SemanticsActions
 import androidx.compose.ui.test.hasClickAction
 import androidx.compose.ui.test.hasScrollAction
 import androidx.compose.ui.test.hasText
@@ -12,7 +11,6 @@ import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performScrollTo
 import androidx.compose.ui.test.performScrollToNode
-import androidx.compose.ui.test.performSemanticsAction
 import androidx.test.core.app.ActivityScenario
 import com.yawnandpawn.app.StopAppRule
 import com.yawnandpawn.app.ui.theme.PpsThemeMode
@@ -103,8 +101,9 @@ class TapThroughTest {
         tapThrough(startInSession = false) {
             composeRule.onNodeWithContentDescription("Add alarm").performClick()
             composeRule.onNodeWithText("New alarm").assertExists()
-            // "Test alarm" may scroll in under the floating pill, so click it through its semantics action.
-            composeRule.onNodeWithText("Test alarm").performScrollTo().performSemanticsAction(SemanticsActions.OnClick)
+            // 0.1.8: "Test alarm" is in the header's "More options" menu.
+            composeRule.onNodeWithContentDescription("More options").performClick()
+            composeRule.onNodeWithText("Test alarm").performClick()
             composeRule.onNodeWithContentDescription("Snooze unavailable, Test · no charge").assertExists()
         }
 
@@ -125,8 +124,9 @@ class TapThroughTest {
             scenario.onActivity { it.onBackPressedDispatcher.onBackPressed() }
             composeRule.onNodeWithText("New alarm").assertExists()
 
-            // "Test alarm" may scroll in under the floating pill, so click it through its semantics action.
-            composeRule.onNodeWithText("Test alarm").performScrollTo().performSemanticsAction(SemanticsActions.OnClick)
+            // 0.1.8: "Test alarm" is in the header's "More options" menu (scrolled back into view after the Snooze row).
+            composeRule.onNodeWithContentDescription("More options").performScrollTo().performClick()
+            composeRule.onNodeWithText("Test alarm").performClick()
             composeRule.onNodeWithText("I'm up").assertExists()
             scenario.onActivity { it.onBackPressedDispatcher.onBackPressed() }
             composeRule.waitForIdle()

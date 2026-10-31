@@ -16,7 +16,7 @@ import org.koin.compose.koinInject
 
 /**
  * "Skip this one" tapped on an alarm's pre-alarm notification (Story 7.11), like [AppOpenRequests]: the activity
- * [request]s the alarm id; the navigation shows "Skip your {time} alarm? This is logged." over Home once the app is past
+ * [request]s the alarm id; the navigation shows "Skip the {time} alarm?" over Home once the app is past
  * the restore, session lock and onboarding screens, and lets go of it ([handled]) in every case. During a session or
  * onboarding (or with the editor open) the request is dropped, never deferred: nothing is skipped, and the notification
  * stays. One app-wide instance (a Koin single).

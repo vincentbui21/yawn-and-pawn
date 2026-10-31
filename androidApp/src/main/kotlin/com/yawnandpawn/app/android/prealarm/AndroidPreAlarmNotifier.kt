@@ -26,7 +26,7 @@ import kotlin.time.Duration
  * The pre-alarm notification (Story 7.11, FR-ALM-10): channel [CHANNEL_ID] "Upcoming alarms" at default importance, the
  * title "{time} alarm" (the phone's 12/24-hour setting), the text "Rings in {h} h {min} min" in the Home countdown's
  * wording ([countdownOf]), the monochrome alarm glyph with no tint, and the action "Skip this one", which opens
- * [MainActivity] with [MainActivity.EXTRA_SKIP_ALARM] (the app then asks "Skip your {time} alarm? This is logged." over
+ * [MainActivity] with [MainActivity.EXTRA_SKIP_ALARM] (the app then asks "Skip the {time} alarm?" over
  * Home). A tap on the notification itself opens the app. It goes away on its own when the alarm is due, and the
  * scheduler and the fire remove it earlier ([cancel]).
  *

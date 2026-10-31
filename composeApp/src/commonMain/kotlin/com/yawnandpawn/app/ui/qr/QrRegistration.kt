@@ -43,6 +43,7 @@ import com.yawnandpawn.app.ui.resources.qr_print
 import com.yawnandpawn.app.ui.resources.qr_printable
 import com.yawnandpawn.app.ui.resources.qr_printable_body
 import com.yawnandpawn.app.ui.resources.qr_replace
+import com.yawnandpawn.app.ui.resources.qr_replace_body
 import com.yawnandpawn.app.ui.resources.qr_replace_dialog
 import com.yawnandpawn.app.ui.resources.qr_scan_again
 import com.yawnandpawn.app.ui.resources.qr_torch
@@ -163,7 +164,7 @@ fun QrRegistrationScreen(
 /**
  * "Make a printable QR", stateless: "Stick it somewhere far from your bed.", the page as it prints (a light sheet with
  * the QR code, TalkBack "QR code for your alarm", and "Scan this to stop your alarm." under it) and `button-filled`
- * "Print or save as PDF" (with a code already saved it asks "Replace your QR code? The old one stops working." first:
+ * "Print or save as PDF" (with a code already saved it asks "Replace your QR code?" / "The old one stops working." first:
  * the new code replaces the old one). The sheet is dark on light in both themes so the code scans: `text` on `surface` in Light,
  * `inverse-text` on `inverse-surface` in Dark (17.85 and 16.34, DESIGN.md).
  */
@@ -198,6 +199,7 @@ fun PrintableQrScreen(
     if (state.showReplaceDialog) {
         ConfirmDialog(
             title = stringResource(Res.string.qr_replace_dialog),
+            body = stringResource(Res.string.qr_replace_body),
             confirmText = stringResource(Res.string.qr_replace),
             safeText = stringResource(Res.string.settings_delete_keep),
             onConfirm = { onIntent(QrIntent.ReplaceConfirmed) },

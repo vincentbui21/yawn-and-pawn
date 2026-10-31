@@ -94,7 +94,7 @@ Play Console > Yawn & Pawn > **Policy and programs > App content** (older menus:
 - Play may still ask for instructions. If there is a text box, paste:
 
 ```text
-No account or login. Create an alarm on the Alarms tab. In the alarm editor, "Test alarm" rings the full ringing screen at once and never charges. The free way to stop it is "I'm up", then a short check such as Math. "Snooze" opens Google Play's purchase sheet for a real one-time product at the fee set in Settings (a licence tester account sees a test card). Snooze is not offered during a test alarm or offline.
+No account or login. Create an alarm on the Alarms tab. In the alarm editor, the ⋮ menu's "More options > Test alarm" rings the full ringing screen at once and never charges. The free way to stop it is "I'm up", then a short check such as Math. "Snooze" opens Google Play's purchase sheet for a real one-time product at the fee set in Settings (a licence tester account sees a test card). Snooze is not offered during a test alarm or offline.
 ```
 
 ### 3.3 Ads

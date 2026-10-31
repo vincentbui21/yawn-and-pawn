@@ -150,11 +150,15 @@ data class EditorUiState(
     val ringsIn: Countdown? = null,
     /**
      * The rows of the full editor (EXPERIENCE.md Information Architecture) that later stories wire: wake-up check, fee
-     * ladder, motivation and "Test alarm" (the sound list is [sound]; quiet time is in [form] since Story 3.4). `null`
-     * hides them (the Story 1.8 editor).
+     * ladder and motivation (the sound list is [sound]; quiet time is in [form] since Story 3.4). `null` hides them (the
+     * Story 1.8 editor). "Test alarm" is not one of them: it is in the header's "More options" menu in every editor
+     * (owner decision 2026-10-31, 0.1.8).
      */
     val full: FullEditorSections? = null,
-    /** Editing a stored alarm: the header's overflow menu offers Duplicate and Delete (also for TalkBack). */
+    /**
+     * Editing a stored alarm: the header's overflow menu offers Duplicate and Delete after "Test alarm" (also for
+     * TalkBack); a new alarm or a duplicate gets "Test alarm" only (owner decision 2026-10-31, 0.1.8).
+     */
     val hasOverflowMenu: Boolean = false,
     /** Delete was chosen in the overflow menu: "Delete the {time} alarm?" for the stored time. */
     val deleteDialogTime: LocalTime? = null,

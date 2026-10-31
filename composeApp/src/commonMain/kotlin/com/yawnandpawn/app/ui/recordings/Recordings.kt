@@ -44,6 +44,7 @@ import com.yawnandpawn.app.ui.resources.editor_back
 import com.yawnandpawn.app.ui.resources.editor_save
 import com.yawnandpawn.app.ui.resources.home_fix
 import com.yawnandpawn.app.ui.resources.onboarding_save_failed
+import com.yawnandpawn.app.ui.resources.recordings_delete_body
 import com.yawnandpawn.app.ui.resources.recordings_delete_dialog
 import com.yawnandpawn.app.ui.resources.recordings_delete_failed
 import com.yawnandpawn.app.ui.resources.recordings_delete_named
@@ -168,7 +169,7 @@ sealed interface RecordingsIntent {
  * ("Record a message for your morning self." while there are none; elapsed and max time "0:09 / 1:00" in `display`; the
  * level meter; the 72 dp record button, "Start recording" / "Stop recording"); after a take "Play message", "Re-record",
  * "Delete" and `button-filled` "Save"; then "Your messages" with play / pause and delete for each ("Delete this
- * message? Alarms using it will play no message."). Microphone denied: "Microphone is off. Turn it on in Settings."
+ * message?" / "Alarms using it will play no message."). Microphone denied: "Microphone is off. Turn it on in Settings."
  * with "Fix"; a take under 1 s: the "Too short. Try again." snackbar. A message whose file is missing (Story 7.2) says
  * "File missing. Default sound will play." and cannot be previewed; while recording, TalkBack hears the time every 10 s.
  */
@@ -204,6 +205,7 @@ fun RecordingsScreen(
     state.deleteDialogFor?.let {
         ConfirmDialog(
             title = stringResource(Res.string.recordings_delete_dialog),
+            body = stringResource(Res.string.recordings_delete_body),
             confirmText = stringResource(Res.string.settings_delete_confirm),
             safeText = stringResource(Res.string.settings_delete_keep),
             onConfirm = { onIntent(RecordingsIntent.DeleteConfirmed) },

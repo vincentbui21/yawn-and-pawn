@@ -1,5 +1,12 @@
 # Closed test: the owner's Play Console checklist (Story 5.14)
 
+> **Status (2026-10-31): done.** The closed track went live on 2026-10-30 with 0.1.6, and 0.1.7 and 0.1.8 followed. What actually happened, where it differs from the steps below:
+> - **Testers:** Testers Community's Google Group was added to the closed track's Testers tab. Its testers are **not** licence testers, so `docs/closed-test.md` tells testers not to pay for a snooze.
+> - **No feedback form** was built; testers use support@yawnandpawn.com and Play's private feedback. `docs/closed-test.md` has the opt-in link and the dates filled in.
+> - **No GitHub release secrets:** releases are built locally and uploaded by hand (`docs/ci-release.md`, "How releases are made now"), not by tagging.
+> - **Support email:** support@yawnandpawn.com (Cloudflare Email Routing) is the public developer email.
+> - **Store listing:** the live Play description must be re-pasted from `store-listing-draft.md` whenever the draft changes (0.1.7 renamed the checklist; 0.1.8 changed the skip feature).
+
 Do the steps in order. Each step says where to click and what to pick. The answers come from the code on `main` (manifest, Firebase and Billing code, dependency allowlist) as of 2026-10-26, not from the plans.
 
 - **OWNER DECIDES** marks a choice only the owner can make. Each one has a recommendation.

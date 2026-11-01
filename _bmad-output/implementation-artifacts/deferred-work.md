@@ -366,3 +366,12 @@
 - source_spec: `_bmad-output/implementation-artifacts/spec-0-1-7-settings-rules.md`
   summary: Test the editor's "Test alarm" settings read failure (logs LOAD_TEST_SETTINGS, falls back to the last known settings, then the built-in ones).
   evidence: Review of 0.1.7 settings rules (verification gap): only the successful read is tested; a failure would ring the test with the built-in 20 s quiet time.
+- source_spec: `_bmad-output/implementation-artifacts/spec-release-prod-firebase.md`
+  summary: Fail a release build that has no Firebase config at all (with an explicit property to allow it for CI's unsigned check bundle), instead of only a plugin warning.
+  evidence: Review of the per-build-type Firebase change: with `src/debug/` but no `src/release/` file, `bundleRelease` succeeds with only "File google-services.json is missing." in the log, so a tester bundle could ship without Crashlytics or usage stats. Kept as a warning because the request said a build with no Firebase config keeps building without Firebase; `docs/ci-release.md` now tells the owner to check for the warning before uploading.
+- source_spec: `_bmad-output/implementation-artifacts/spec-release-prod-firebase.md`
+  summary: Test the Firebase project guard automatically (a release build with a `yawn-and-pawn-debug` file and a debug build with the `yawn-and-pawn` file fail; a release build with its own file processes it).
+  evidence: Review of the per-build-type Firebase change (verification gap): the guard was checked by hand with fake JSON files (four cases), and CI now runs its release bundle without Firebase, so nothing in CI exercises the release Firebase path or the guard.
+- source_spec: `_bmad-output/implementation-artifacts/spec-release-prod-firebase.md`
+  summary: Apply the production project's privacy settings (no Ads/AdMob link, 2-month Analytics retention, Google signals and data sharing off) to the debug project too, or delete its closed-test data.
+  evidence: Builds 0.1.5 to 0.1.8 sent testers' crash reports and opted-in usage stats to `yawn-and-pawn-debug`; `docs/closed-test/owner-checklist.md` sets those privacy-relevant settings only for the production project, which is what the privacy policy promises.

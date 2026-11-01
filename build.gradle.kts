@@ -11,7 +11,7 @@ plugins {
     alias(libs.plugins.roborazzi) apply false
     alias(libs.plugins.ksp) apply false
     alias(libs.plugins.room3) apply false
-    // Story 1.19: applied by :androidApp only when androidApp/google-services.json exists.
+    // Story 1.19: applied by :androidApp only when a google-services.json exists (module root, src/debug or src/release).
     alias(libs.plugins.google.services) apply false
     alias(libs.plugins.firebase.crashlytics) apply false
     alias(libs.plugins.kover)

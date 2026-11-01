@@ -99,14 +99,14 @@ jobs:
           sudo apt-get install -y -qq ffmpeg
 
       # Story 1.19: the production Firebase project's config, only when the secret is set; without it the release
-      # build has no Crashlytics (the no-op reporter).
+      # build has no Crashlytics (the no-op reporter). It goes in src/release, so only the release build uses it.
       - name: Write google-services.json (production Firebase project)
         env:
           GOOGLE_SERVICES_JSON_RELEASE: ${{ secrets.GOOGLE_SERVICES_JSON_RELEASE }}
         run: |
           if [ -n "$GOOGLE_SERVICES_JSON_RELEASE" ]; then
-            printf '%s' "$GOOGLE_SERVICES_JSON_RELEASE" > androidApp/google-services.json
-            echo "google-services.json written: Crashlytics is on."
+            printf '%s' "$GOOGLE_SERVICES_JSON_RELEASE" > androidApp/src/release/google-services.json
+            echo "androidApp/src/release/google-services.json written: Crashlytics is on."
           else
             echo "::warning::GOOGLE_SERVICES_JSON_RELEASE is not set: this release has no Crashlytics."
           fi

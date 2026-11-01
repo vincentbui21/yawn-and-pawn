@@ -9,12 +9,54 @@ plugins {
     alias(libs.plugins.roborazzi)
 }
 
-// Firebase (Story 1.19, AD-15): the google-services and Crashlytics plugins apply only when google-services.json is
-// here (CI writes it from the GOOGLE_SERVICES_JSON_* secrets; it is never committed). Without it the app has no Firebase
-// configuration and binds the no-op crash reporter, and qualityGate still passes.
-if (file("google-services.json").exists()) {
+// Firebase (Story 1.19, AD-15): the google-services and Crashlytics plugins apply only when a google-services.json is
+// here; it is never committed. Each build type has its own project: src/release/google-services.json (production) and
+// src/debug/google-services.json (debug) win over the module-root file, the google-services plugin's own lookup order.
+// CI writes the debug one from GOOGLE_SERVICES_JSON_DEBUG, release.yml the production one from
+// GOOGLE_SERVICES_JSON_RELEASE. A build type with no file builds without Firebase (the no-op crash reporter, a plugin
+// warning), so qualityGate still passes with none at all.
+val firebaseProjectIds = mapOf("debug" to "yawn-and-pawn-debug", "release" to "yawn-and-pawn")
+val googleServicesJsons =
+    firebaseProjectIds.keys.associateWith { buildType ->
+        listOf(file("src/$buildType/google-services.json"), file("google-services.json")).firstOrNull { it.exists() }
+    }
+if (googleServicesJsons.values.any { it != null }) {
     apply(plugin = "com.google.gms.google-services")
     apply(plugin = "com.google.firebase.crashlytics")
+    configure<com.google.gms.googleservices.GoogleServicesPlugin.GoogleServicesPluginConfig> {
+        missingGoogleServicesStrategy = com.google.gms.googleservices.GoogleServicesPlugin.MissingGoogleServicesStrategy.WARN
+    }
+    // Without a file there is no Firebase app id to upload that build type's R8 mapping to (the CI release bundle).
+    val withoutFirebase = googleServicesJsons.filterValues { it == null }.keys
+    android.buildTypes.matching { it.name in withoutFirebase }.configureEach {
+        (this as ExtensionAware).configure<com.google.firebase.crashlytics.buildtools.gradle.CrashlyticsExtension> {
+            mappingFileUploadEnabled = false
+        }
+    }
+}
+
+// A build type that would use the other build type's Firebase project fails before it builds anything (0.1.9): a
+// release build must never report to the debug project, nor a debug build to the production one.
+googleServicesJsons.forEach { (buildType, json) ->
+    if (json == null) return@forEach
+    // Read through a provider (configuration-cache safe). A file that is not valid JSON is left to the google-services
+    // plugin, which fails only that build type.
+    val text = providers.fileContents(layout.projectDirectory.file(json.relativeTo(projectDir).path)).asText.get()
+    val parsed = runCatching { groovy.json.JsonSlurper().parseText(text) }.getOrNull() as? Map<*, *>
+    val projectInfo = parsed?.get("project_info") as? Map<*, *>
+    val wrongProject = projectInfo?.get("project_id").takeIf { it in firebaseProjectIds.minus(buildType).values } ?: return@forEach
+    val problem =
+        "The $buildType build would use ${json.relativeTo(rootDir).invariantSeparatorsPath}, the Firebase project " +
+            "'$wrongProject'. Put the '${firebaseProjectIds.getValue(buildType)}' project's google-services.json in " +
+            "androidApp/src/$buildType/ (docs/ci-release.md)."
+    val variant = buildType.replaceFirstChar { it.uppercase() }
+    val check =
+        tasks.register("checkFirebaseProject$variant") {
+            group = "verification"
+            description = "Fails when the $buildType build would report to another build type's Firebase project."
+            doLast { throw GradleException(problem) }
+        }
+    tasks.matching { it.name == "pre${variant}Build" }.configureEach { dependsOn(check) }
 }
 
 // The release workflow passes the tag version (-Pyawnandpawn.versionName=X.Y.Z); local builds use the default.

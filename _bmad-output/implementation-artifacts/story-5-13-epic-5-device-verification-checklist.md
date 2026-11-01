@@ -22,7 +22,7 @@ Status: in progress. Sessions 2026-10-26 (Play 0.1.3) and 2026-10-27 (Play 0.1.4
 - A quick real alarm: add an alarm 2 minutes ahead with Math · Easy. A quick test alarm: the editor's "Test alarm".
 
 **Firebase (Part D)**
-- The debug build needs the debug project's `google-services.json` on the build PC.
+- The debug build needs the debug project's `google-services.json` on the build PC, in `androidApp/src/debug/` (`docs/ci-release.md`, "Firebase config files").
 - Before the first launch, turn DebugView on from the PC: `adb shell setprop debug.firebase.analytics.app com.yawnandpawn.app`. Open Firebase console > Analytics > DebugView.
 
 **How to record**

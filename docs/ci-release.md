@@ -22,11 +22,34 @@ The GitHub secrets below are not set, so the tag workflow cannot sign or upload.
    $s = Read-Host -AsSecureString "Keystore password"; $env:UPLOAD_KEYSTORE_PASSWORD = [Runtime.InteropServices.Marshal]::PtrToStringAuto([Runtime.InteropServices.Marshal]::SecureStringToBSTR($s)); $env:UPLOAD_KEY_PASSWORD = $env:UPLOAD_KEYSTORE_PASSWORD; $env:UPLOAD_KEYSTORE_FILE = "<path to the upload keystore>"; $env:UPLOAD_KEY_ALIAS = "upload"; git pull; .\gradlew.bat :androidApp:bundleRelease "-Pyawnandpawn.versionName=0.1.X"
    ```
 
-   The local, git-ignored `androidApp/google-services.json` gives the bundle its Firebase config (Crashlytics, usage stats).
+   The bundle takes its Firebase config (Crashlytics, usage stats) from `androidApp/src/release/google-services.json`, the production project `yawn-and-pawn`. See [Firebase config files](#firebase-config-files) below.
 3. Upload `androidApp/build/outputs/bundle/release/androidApp-release.aab` in Play Console:
    - **Internal testing** > Create new release > Upload > release notes > Next > **Save and publish**. It is published at once and reaches internal testers within about an hour.
    - **Closed testing - Alpha** > Create new release > **Add from library** (the same versionCode) > release notes > Next > Save, then **Publishing overview > Submit changes for review**. Google's review has taken a few hours.
 4. Play shows one expected warning: the bundle has native code but no debug symbols.
+
+## Firebase config files
+
+Each build type reports to its own Firebase project. The files are git-ignored and never committed (CI fails if one is tracked):
+
+| File | Firebase project | Used by |
+|---|---|---|
+| `androidApp/src/release/google-services.json` | `yawn-and-pawn` (production) | release builds (`bundleRelease`), the bundles testers get |
+| `androidApp/src/debug/google-services.json` | `yawn-and-pawn-debug` | debug builds (Android Studio, `assembleDebug`, tests) |
+| `androidApp/google-services.json` | not needed any more | a build type with no file of its own, so better left out: a debug file here breaks release builds, a production file breaks debug builds |
+
+Download each file in the Firebase console: the project > Project settings > General > Your apps > the Android app `com.yawnandpawn.app` > `google-services.json`.
+
+**On each computer, once (moving from the old single file):** move the old `androidApp/google-services.json` (the debug project) to `androidApp/src/debug/google-services.json`, and put the production project's file in `androidApp/src/release/google-services.json`. Until then every release build there fails, `qualityGate` included, with a message naming the file.
+
+```powershell
+Move-Item androidApp\google-services.json androidApp\src\debug\google-services.json
+Copy-Item "<downloaded production google-services.json>" androidApp\src\release\google-services.json
+```
+
+- A build type with no file at all builds without Firebase. The build only prints a warning (`google-services.json is missing`), and the app uses the no-op crash reporter. Before uploading a bundle, check that warning is not in the `bundleRelease` output: a bundle without Firebase sends no crash reports.
+- A release build that would use the debug project's file fails at once, naming the file, and so does a debug build that would use the production file. This stops a closed-test or production bundle from ever reporting to the debug project again (0.1.5 to 0.1.8 did, from the old single `androidApp/google-services.json`).
+- CI writes the debug file to `androidApp/src/debug/` from `GOOGLE_SERVICES_JSON_DEBUG`, so its release bundle builds without Firebase. The tag workflow writes the production file to `androidApp/src/release/` from `GOOGLE_SERVICES_JSON_RELEASE`.
 
 ## Releases (tag `vX.Y.Z`)
 
@@ -52,7 +75,7 @@ Add them in GitHub: repository → **Settings** → **Secrets and variables** �
 | `UPLOAD_KEY_ALIAS` | The key alias inside the keystore |
 | `UPLOAD_KEY_PASSWORD` | The key password |
 | `PLAY_SERVICE_ACCOUNT_JSON` | The full JSON of a Google Cloud service account with release access to the app in Play Console |
-| `GOOGLE_SERVICES_JSON_RELEASE` | The full `google-services.json` of the production Firebase project. Optional: without it the release still uploads (with a warning) but has no Crashlytics and no usage stats |
+| `GOOGLE_SERVICES_JSON_RELEASE` | The full `google-services.json` of the production Firebase project (written to `androidApp/src/release/`). Optional: without it the release still uploads (with a warning) but has no Crashlytics and no usage stats |
 
 Base64-encode the keystore in PowerShell and paste the result into the secret:
 

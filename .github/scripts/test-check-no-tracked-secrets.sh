@@ -38,6 +38,8 @@ forbidden=(
   "config/prod.env"
   "google-services.json"
   "androidApp/google-services.json"
+  "androidApp/src/debug/google-services.json"
+  "androidApp/src/release/google-services.json"
   "play-service-account.json"
   "ci/my-service-account-key.json"
   "dir with space/release.jks"

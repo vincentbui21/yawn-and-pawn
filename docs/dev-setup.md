@@ -73,7 +73,7 @@ Git is the only thing the two computers share, so these rules stop them overwrit
 4. **Never run two automatic loops on the same story**, and don't run loops on both computers on stories that touch the same core files (the session state machine in Epic 1–2, billing in Epic 4). The safe default: one computer runs the loop, the other reviews and tests on the phone.
 5. **Merge through pull requests** after `./gradlew qualityGate` passes and CI is green. Then set the story to `done` on `main`.
 6. `human-verify` stories are done only after you tested on the phone and wrote the result in the story file.
-7. Secrets (signing keys, `google-services.json`, Play service-account file) never go into git. Keep them in each computer's `local.properties`/files ignored by `.gitignore`, and in GitHub Actions secrets.
+7. Secrets (signing keys, `google-services.json`, Play service-account file) never go into git. Keep them in each computer's `local.properties`/files ignored by `.gitignore`, and in GitHub Actions secrets. The Firebase files go per build type: the debug project's in `androidApp/src/debug/google-services.json`, the production project's in `androidApp/src/release/google-services.json` (`docs/ci-release.md`, "Firebase config files").
 
 ## 5. Accounts still to create
 

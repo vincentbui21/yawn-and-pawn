@@ -53,6 +53,7 @@ class ProblemWithChargeViewModelTest {
             termsUrl = "https://example.com/terms/",
             supportUrl = "https://example.com/support/",
             websiteUrl = "https://example.com/",
+            playListingUrl = "https://play.google.com/store/apps/details?id=com.example",
         )
 
     /** Writes the charge it was given into the body, so the test sees which charge the email is about. */
@@ -349,6 +350,10 @@ class ProblemWithChargeViewModelTest {
             copied += text
             return !phoneConfirmsCopy
         }
+
+        override fun openInPlayStore(url: String): Boolean = error("not used")
+
+        override fun shareText(text: String): Boolean = error("not used")
 
         override fun openUrl(url: String): Boolean = canOpenUrls.also { if (it) urls += url }
 

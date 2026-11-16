@@ -131,6 +131,8 @@ android {
         buildConfigField("String", "SUPPORT_URL", "\"${appLink("support.url")}\"")
         // 0.1.7 polish: the site's home page, About's "Website" row.
         buildConfigField("String", "WEBSITE_URL", "\"${appLink("index.url")}\"")
+        // 0.1.9: the app's Google Play listing, Settings' "Rate Yawn & Pawn" and "Share Yawn & Pawn".
+        buildConfigField("String", "PLAY_LISTING_URL", "\"${appLink("play.listing")}\"")
     }
 
     signingConfigs {

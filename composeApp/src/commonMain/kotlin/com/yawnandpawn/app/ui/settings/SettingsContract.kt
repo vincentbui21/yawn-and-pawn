@@ -29,6 +29,12 @@ enum class SettingsRow {
     UsageStats,
     Reliability,
     About,
+
+    /** "Rate Yawn & Pawn" (0.1.9): the app's Google Play listing. */
+    Rate,
+
+    /** "Share Yawn & Pawn" (0.1.9): Android's share sheet with a line about the app and its Play listing. */
+    Share,
 }
 
 /** A commitment-lock note after a weakening change: it takes effect after the next alarm at [time]. */
@@ -64,6 +70,8 @@ data class SettingsUiState(
     val usageStats: Boolean = false,
     /** A blocking reliability checklist row is not OK (Story 5.4): the non-dismissible `banner-warning`. */
     val reliabilityProblem: Boolean = false,
+    /** "Rate Yawn & Pawn" found neither the Play Store nor a browser: "No browser found.", for 4 s (0.1.9). */
+    val noBrowser: Boolean = false,
     /** A session is active: Settings is not reachable, only `panel-session-in-progress` shows (session lock). */
     val sessionInProgress: Boolean = false,
     val pane: SettingsPane = SettingsPane.Main,
@@ -147,6 +155,17 @@ sealed interface SettingsIntent {
 
     /** The "About" row: opens the About page (0.1.7 polish). */
     data object AboutClicked : SettingsIntent
+
+    /** The "Rate Yawn & Pawn" row (0.1.9): the Play listing in the Play Store app, else in a browser. */
+    data object RateClicked : SettingsIntent
+
+    /**
+     * The "Share Yawn & Pawn" row (0.1.9): the share sheet with [message] (the screen's `settings_share_text`, so the
+     * words stay in resources) followed by the Play listing's address.
+     */
+    data class ShareClicked(
+        val message: String,
+    ) : SettingsIntent
 
     data object BackToAlarm : SettingsIntent
 

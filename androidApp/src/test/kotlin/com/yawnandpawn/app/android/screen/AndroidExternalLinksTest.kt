@@ -77,6 +77,56 @@ class AndroidExternalLinksTest {
     }
 
     @Test
+    fun `Rate opens the market link in the Play Store app only, as a new task`() {
+        assertTrue(links.openInPlayStore("market://details?id=com.yawnandpawn.app"))
+
+        val started = shadowOf(app).nextStartedActivity
+        assertEquals(Intent.ACTION_VIEW, started.action)
+        assertEquals("market://details?id=com.yawnandpawn.app", started.dataString)
+        assertEquals("com.android.vending", started.`package`)
+        assertTrue(started.flags and Intent.FLAG_ACTIVITY_NEW_TASK != 0)
+    }
+
+    @Test
+    fun `Share opens the share sheet with the text as plain text, as a new task`() {
+        assertTrue(links.shareText("Yawn & Pawn: hi. https://play.google.com/store/apps/details?id=com.yawnandpawn.app"))
+
+        val started = shadowOf(app).nextStartedActivity
+        assertEquals(Intent.ACTION_CHOOSER, started.action)
+        assertTrue(started.flags and Intent.FLAG_ACTIVITY_NEW_TASK != 0)
+        @Suppress("DEPRECATION")
+        val shared = checkNotNull(started.getParcelableExtra<Intent>(Intent.EXTRA_INTENT)) { "no shared intent" }
+        assertEquals(Intent.ACTION_SEND, shared.action)
+        assertEquals("text/plain", shared.type)
+        assertEquals(
+            "Yawn & Pawn: hi. https://play.google.com/store/apps/details?id=com.yawnandpawn.app",
+            shared.getStringExtra(Intent.EXTRA_TEXT),
+        )
+    }
+
+    @Test
+    fun `with no Play Store, Rate hears false and the log names no address`() {
+        shadowOf(app).checkActivities(true)
+
+        assertFalse(links.openInPlayStore("market://details?id=com.yawnandpawn.app"))
+
+        assertNull(shadowOf(app).nextStartedActivity)
+        assertEquals(listOf<LogEvent>(LogEvent.OperationFailed("open play store", "ActivityNotFoundException")), logger.events)
+    }
+
+    @Test
+    fun `the build takes the Play listing from config app-links properties`() {
+        val file =
+            generateSequence(File("").absoluteFile) { it.parentFile }
+                .map { File(it, "config/app-links.properties") }
+                .first { it.exists() }
+        val config = Properties().apply { file.reader().use { load(it) } }
+
+        assertEquals(config.getProperty("play.listing"), BuildConfig.PLAY_LISTING_URL)
+        assertEquals("https://play.google.com/store/apps/details?id=com.yawnandpawn.app", BuildConfig.PLAY_LISTING_URL)
+    }
+
+    @Test
     @Config(sdk = [34])
     fun `Copy address puts the plain address on the clipboard, and from Android 13 leaves the confirmation to the phone`() {
         assertFalse(links.copyText("help@example.com"))

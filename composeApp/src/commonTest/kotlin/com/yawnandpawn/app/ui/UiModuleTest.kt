@@ -307,6 +307,10 @@ class UiModuleTest {
                         ): Boolean = true
 
                         override fun copyText(text: String): Boolean = false
+
+                        override fun openInPlayStore(url: String): Boolean = error("not used")
+
+                        override fun shareText(text: String): Boolean = error("not used")
                     }
                 }
                 single {
@@ -317,6 +321,7 @@ class UiModuleTest {
                         termsUrl = "https://example.com/terms/",
                         supportUrl = "https://example.com/support/",
                         websiteUrl = "https://example.com/",
+                        playListingUrl = "https://play.google.com/store/apps/details?id=com.example",
                     )
                 }
                 single { AppInfo(versionName = "0.1.7") }

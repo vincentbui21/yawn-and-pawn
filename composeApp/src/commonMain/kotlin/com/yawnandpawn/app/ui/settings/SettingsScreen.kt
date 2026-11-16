@@ -59,7 +59,10 @@ import com.yawnandpawn.app.ui.resources.settings_privacy
 import com.yawnandpawn.app.ui.resources.settings_quiet_time
 import com.yawnandpawn.app.ui.resources.settings_quiet_time_note
 import com.yawnandpawn.app.ui.resources.settings_quiet_time_value
+import com.yawnandpawn.app.ui.resources.settings_rate
 import com.yawnandpawn.app.ui.resources.settings_reliability
+import com.yawnandpawn.app.ui.resources.settings_share
+import com.yawnandpawn.app.ui.resources.settings_share_text
 import com.yawnandpawn.app.ui.resources.settings_skip_reminder
 import com.yawnandpawn.app.ui.resources.settings_skip_reminder_body
 import com.yawnandpawn.app.ui.resources.settings_snooze
@@ -71,6 +74,7 @@ import com.yawnandpawn.app.ui.resources.settings_theme_system
 import com.yawnandpawn.app.ui.resources.settings_usage_stats
 import com.yawnandpawn.app.ui.resources.settings_wake
 import com.yawnandpawn.app.ui.resources.settings_weekly_summary
+import com.yawnandpawn.app.ui.resources.symbol_open_in_new
 import com.yawnandpawn.app.ui.theme.PpsTheme
 import com.yawnandpawn.app.ui.theme.PpsThemeMode
 import org.jetbrains.compose.resources.StringResource
@@ -80,9 +84,9 @@ import org.jetbrains.compose.resources.stringResource
  * Settings (the Settings tab), stateless, in grouped `card-group`s whose rows show their value and open a sub-screen
  * (owner decision 2026-09-27): Snooze (base fee, max snoozes, default length), Wake (quiet time and vibrate during quiet
  * time, for every alarm since 0.1.7; bright wake screen), Appearance (System / Light / Dark), weekly summary and usage stats,
- * and "Make sure
- * alarms ring" with "About" (0.1.7 polish): app behaviour only (owner decision 2026-10-01, feedback item 26: payments,
- * privacy, delete all data, support and terms moved to the You tab). The
+ * and "Make sure alarms ring" with "About" (0.1.7 polish), "Rate Yawn & Pawn" and "Share Yawn & Pawn" (0.1.9): app
+ * behaviour only (owner decision 2026-10-01, feedback item 26: payments, privacy, delete all data, support and terms moved
+ * to the You tab). The
  * reliability `banner-warning` sits on top while an item fails. During a session only `panel-session-in-progress` shows.
  * Only the [rows] given show (all by default); a card with none of its rows is left out.
  */
@@ -124,7 +128,11 @@ private fun SettingsMain(
     onIntent: (SettingsIntent) -> Unit,
     rows: Set<SettingsRow>,
 ) {
-    TabScreen(title = stringResource(Res.string.nav_settings)) {
+    TabScreen(
+        title = stringResource(Res.string.nav_settings),
+        // 0.1.9: "Rate Yawn & Pawn" found neither the Play Store nor a browser; above the nav bar, as on You.
+        overlay = { if (state.noBrowser) AppSnackbar(text = stringResource(Res.string.settings_no_browser)) },
+    ) {
         if (state.reliabilityProblem) {
             BannerWarning(
                 message = stringResource(Res.string.home_reliability_banner),
@@ -201,7 +209,10 @@ private fun WakeCard(
     )
 }
 
-/** Appearance; weekly summary, Skip reminder and usage stats; and "Make sure alarms ring" with "About" in one card. */
+/**
+ * Appearance; weekly summary, Skip reminder and usage stats; and "Make sure alarms ring", "About", "Rate Yawn & Pawn" and
+ * "Share Yawn & Pawn" (0.1.9) in one card.
+ */
 @Composable
 private fun GeneralCards(
     state: SettingsUiState,
@@ -237,6 +248,22 @@ private fun GeneralCards(
                     NavRow(
                         label = stringResource(Res.string.settings_about),
                         onClick = { onIntent(SettingsIntent.AboutClicked) },
+                    )
+                },
+                // 0.1.9: both leave the app, so they end in "open in new" like About's links.
+                rowIf(SettingsRow.Rate in rows) {
+                    NavRow(
+                        label = stringResource(Res.string.settings_rate),
+                        onClick = { onIntent(SettingsIntent.RateClicked) },
+                        trailingIcon = Res.drawable.symbol_open_in_new,
+                    )
+                },
+                rowIf(SettingsRow.Share in rows) {
+                    val message = stringResource(Res.string.settings_share_text)
+                    NavRow(
+                        label = stringResource(Res.string.settings_share),
+                        onClick = { onIntent(SettingsIntent.ShareClicked(message)) },
+                        trailingIcon = Res.drawable.symbol_open_in_new,
                     )
                 },
             ),

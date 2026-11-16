@@ -367,6 +367,10 @@
     <string name="settings_usage_stats">Share usage stats</string>
     <string name="settings_reliability">Make sure alarms ring</string>
     <string name="settings_about">About</string>
+    <!-- 0.1.9: after "About"; Rate opens the Play listing, Share opens the share sheet with settings_share_text and the listing's URL. -->
+    <string name="settings_rate">Rate Yawn &amp; Pawn</string>
+    <string name="settings_share">Share Yawn &amp; Pawn</string>
+    <string name="settings_share_text">Yawn &amp; Pawn: an alarm clock where snoozing costs money and waking up is free.</string>
     <string name="about_website">Website</string>
     <string name="about_contact_support">Contact support</string>
     <string name="settings_payments">How payments &amp; refunds work</string>

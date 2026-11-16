@@ -40,6 +40,8 @@ import com.yawnandpawn.app.core.telemetry.SetAnalyticsConsent
 import com.yawnandpawn.app.core.time.Clock
 import com.yawnandpawn.app.core.time.TimeChangeSignal
 import com.yawnandpawn.app.core.time.TimeZoneProvider
+import com.yawnandpawn.app.ui.links.AppLinks
+import com.yawnandpawn.app.ui.links.ExternalLinks
 import com.yawnandpawn.app.ui.reliability.AlarmBlockingCheck
 import com.yawnandpawn.app.ui.theme.toCore
 import com.yawnandpawn.app.ui.theme.toPps
@@ -48,6 +50,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.channels.Channel
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
@@ -104,6 +107,21 @@ class SkipReminderSwitch(
 )
 
 /**
+ * "Rate Yawn & Pawn" and "Share Yawn & Pawn" (0.1.9): the app's Play listing ([AppLinks.playListingUrl], written once in
+ * `config/app-links.properties`) opened or shared through [links], only ever on the user's tap.
+ */
+class RateAndShare(
+    private val links: ExternalLinks,
+    private val appLinks: AppLinks,
+) {
+    /** The listing in the Play Store app, else the web listing in a browser; false when neither opened. */
+    fun rate(): Boolean = links.openInPlayStore(appLinks.playStoreAppUrl) || links.openUrl(appLinks.playListingUrl)
+
+    /** The share sheet with [message] and the listing's address after it. */
+    fun share(message: String): Boolean = links.shareText("$message ${appLinks.playListingUrl}")
+}
+
+/**
  * Settings: the Snooze card's base fee and max snoozes per session and (0.1.7) the Wake card's quiet time of every alarm,
  * set through the commitment lock (Story 4.5), and "Vibrate during quiet time", the new-alarm snooze length and the theme
  * (Story 5.1) and "Bright wake screen" (Story 5.2), applied at once.
@@ -142,6 +160,7 @@ class SkipReminderSwitch(
  * base fee, max snoozes and quiet time saves still queued are logged as dropped, and the defaults and the theme are finished in
  * [outlivingScope] ([onCleared]).
  */
+@Suppress("TooManyFunctions") // One small handler per group of Settings rows (0.1.9 added the rows that leave the app).
 class SettingsViewModel(
     globalSettings: GlobalSettingsRepository,
     pendingChanges: PendingChangeRepository,
@@ -172,6 +191,8 @@ class SettingsViewModel(
     evaluationContext: CoroutineContext = Dispatchers.Default,
     private val weeklySummary: WeeklySummarySwitch? = null,
     private val skipReminder: SkipReminderSwitch? = null,
+    /** The "Rate" and "Share" rows (0.1.9); null (tests of the other rows) makes them do nothing. */
+    private val rateAndShare: RateAndShare? = null,
 ) : ViewModel() {
     private val local = MutableStateFlow(Local())
     private val saves = Channel<Save>(Channel.UNLIMITED)
@@ -187,6 +208,9 @@ class SettingsViewModel(
 
     /** Navigation out of Settings: the reliability checklist (Story 5.4). */
     val effects: Flow<SettingsEffect> = mutableEffects.receiveAsFlow()
+
+    /** Clears "No browser found." after [SNACKBAR_MILLIS]; a new one starts the time over. */
+    private var snackbarJob: Job? = null
 
     /** The save running now, if any (logged as dropped when the ViewModel is cleared under it). */
     private var saving: Save? = null
@@ -302,11 +326,43 @@ class SettingsViewModel(
                 onGeneralIntent(intent)
             }
 
+            SettingsIntent.AboutClicked, SettingsIntent.RateClicked, is SettingsIntent.ShareClicked -> {
+                onLinkIntent(intent)
+            }
+
+            // The other rows belong to later Epic 5 stories; production does not show them.
+            else -> {
+                Unit
+            }
+        }
+    }
+
+    /**
+     * The rows that lead out of Settings: About opens its page; Rate (0.1.9) with neither the Play Store nor a browser
+     * shows "No browser found." for [SNACKBAR_MILLIS] (as About's links); Share (0.1.9) failing is only logged (by the
+     * links): the share sheet is part of Android, so it does not happen in practice.
+     */
+    private fun onLinkIntent(intent: SettingsIntent) {
+        when (intent) {
             SettingsIntent.AboutClicked -> {
                 mutableEffects.trySend(SettingsEffect.OpenAbout)
             }
 
-            // The other rows belong to later Epic 5 stories; production does not show them.
+            SettingsIntent.RateClicked -> {
+                if (rateAndShare?.rate() != false) return
+                snackbarJob?.cancel()
+                local.update { it.copy(noBrowser = true) }
+                snackbarJob =
+                    viewModelScope.launch {
+                        delay(SNACKBAR_MILLIS)
+                        local.update { it.copy(noBrowser = false) }
+                    }
+            }
+
+            is SettingsIntent.ShareClicked -> {
+                rateAndShare?.share(intent.message)
+            }
+
             else -> {
                 Unit
             }
@@ -527,6 +583,7 @@ class SettingsViewModel(
             theme = chosen.themeMode.toPps(),
             brightWakeScreen = chosen.brightWakeScreen,
             reliabilityProblem = ui.reliabilityProblem,
+            noBrowser = ui.noBrowser,
             pane = ui.pane,
             // While a new value is still being saved, the stored note may be the old one: wait for the store.
             baseFeeNote = weakeningNoteOf(saved.pending(LockedField.BaseFee), now, zone).takeIf { tier == saved.tier },
@@ -593,6 +650,7 @@ class SettingsViewModel(
         /** At most one per field, the latest. */
         val defaults: List<DefaultRequest> = emptyList(),
         val reliabilityProblem: Boolean = false,
+        val noBrowser: Boolean = false,
     ) {
         /** [request] is still the latest of its field: one superseded by a newer value is never saved (a drag coalesces). */
         fun holds(request: DefaultRequest): Boolean = defaults.any { it.id == request.id }
@@ -665,6 +723,9 @@ class SettingsViewModel(
         const val SAVE_SKIP_REMINDER = "save skip reminder"
 
         private const val STOP_TIMEOUT_MILLIS = 5_000L
+
+        /** How long "No browser found." shows (as on About). */
+        const val SNACKBAR_MILLIS = 4_000L
     }
 }
 

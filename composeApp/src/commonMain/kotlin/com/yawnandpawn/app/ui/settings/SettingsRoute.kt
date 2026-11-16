@@ -17,7 +17,7 @@ import org.koin.compose.viewmodel.koinViewModel
  * Wake card's default quiet time and "Vibrate during quiet time", and Appearance (Story 5.1); "Bright wake screen"
  * (Story 5.2); the reliability checklist (Story 5.4); the usage stats switch (Story 5.6); the weekly summary switch
  * (Story 6.8), in the card with usage stats; About, after the checklist row (0.1.7 polish); the Skip reminder switch
- * (0.1.8), after the weekly summary. Every row of the approved
+ * (0.1.8), after the weekly summary; "Rate Yawn & Pawn" and "Share Yawn & Pawn", after About (0.1.9). Every row of the approved
  * Settings is built.
  */
 val BuiltSettingsRows: Set<SettingsRow> =
@@ -34,6 +34,8 @@ val BuiltSettingsRows: Set<SettingsRow> =
         SettingsRow.UsageStats,
         SettingsRow.Reliability,
         SettingsRow.About,
+        SettingsRow.Rate,
+        SettingsRow.Share,
     )
 
 /**

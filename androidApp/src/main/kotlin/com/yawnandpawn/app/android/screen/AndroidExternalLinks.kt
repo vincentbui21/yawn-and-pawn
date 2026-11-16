@@ -12,9 +12,10 @@ import com.yawnandpawn.app.core.log.Logger
 import com.yawnandpawn.app.ui.links.ExternalLinks
 
 /**
- * Opens links and the support email in other apps (Story 4.17). Only ever called from the user's tap on the app screen
- * in front, never from the background (AD-5). A phone with no app for it (no browser, no email app) gets false back,
- * logged without the address or any of the email's text, instead of a crash.
+ * Opens links and the support email in other apps (Story 4.17), and the app's Play listing and the share sheet (0.1.9).
+ * Only ever called from the user's tap on the app screen in front, never from the background (AD-5). A phone with no app
+ * for it (no browser, no email app, no Play Store) gets false back, logged without the address or any of the email's or
+ * the share's text, instead of a crash.
  */
 class AndroidExternalLinks(
     private val context: Context,
@@ -27,6 +28,11 @@ class AndroidExternalLinks(
         subject: String,
         body: String,
     ): Boolean = start(emailIntent(to, subject, body), "open support email")
+
+    override fun openInPlayStore(url: String): Boolean = start(playStoreIntent(url), "open play store")
+
+    // A chooser, so the user picks the app every time (no remembered default); logged without the text.
+    override fun shareText(text: String): Boolean = start(Intent.createChooser(shareIntent(text), null), "share app")
 
     override fun copyText(text: String): Boolean {
         val clipboard = context.getSystemService(ClipboardManager::class.java)
@@ -58,6 +64,15 @@ class AndroidExternalLinks(
     internal companion object {
         /** [url] in the app that handles it: a browser, or Google Play for its own pages. */
         fun viewIntent(url: String): Intent = Intent(Intent.ACTION_VIEW, Uri.parse(url)).addCategory(Intent.CATEGORY_BROWSABLE)
+
+        /** The Google Play Store app's package: other stores (Oppo App Market, Galaxy Store) also take `market://`. */
+        const val PLAY_STORE_PACKAGE = "com.android.vending"
+
+        /** [url] (`market://details?id=...`) in the Play Store app only. */
+        fun playStoreIntent(url: String): Intent = Intent(Intent.ACTION_VIEW, Uri.parse(url)).setPackage(PLAY_STORE_PACKAGE)
+
+        /** [text] as plain text for any app that shares it (the chooser wraps it). */
+        fun shareIntent(text: String): Intent = Intent(Intent.ACTION_SEND).setType("text/plain").putExtra(Intent.EXTRA_TEXT, text)
 
         /**
          * A new email to [to] in an email app only (`ACTION_SENDTO` with `mailto:`, so messaging and sharing apps are not

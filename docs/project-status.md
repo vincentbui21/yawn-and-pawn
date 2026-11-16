@@ -1,6 +1,6 @@
 # Yawn & Pawn — project status
 
-_Last updated: 2026-10-31_
+_Last updated: 2026-11-16_
 
 ## ▶ Where we are
 
@@ -20,6 +20,7 @@ _Last updated: 2026-10-31_
 | 0.1.6 (106) | 2026-10-30 | Internal, Closed | Links moved to yawnandpawn.com; the version the closed test started with |
 | 0.1.7 (107) | 2026-10-31 | Internal, Closed | Alarms page entrance animation, "Alarm name" field, steady "Rings … at" line, "Share usage stats", "Make sure alarms ring", About page, simpler turn-off/delete pop-ups with smaller text, 14 cm printed QR, battery Fix opens App info, one global quiet time, snooze lengths 5/10/15/30 (default 10; app.db v16) (#112, #113) |
 | 0.1.8 (108) | 2026-10-31 | Internal; Closed in review | One pop-up style everywhere, Test alarm in the editor's ⋮ menu, global "Skip reminder" notification 2 h before the first alarm of the day replaces the per-alarm "Offer to skip" (#114, #115) |
+| 0.1.9 (109) | 2026-11-16 (merged; not built yet) | Not uploaded yet | "Rate Yawn & Pawn" and "Share Yawn & Pawn" rows in Settings, after About; first build reporting to the production Firebase project (#117). The in-app review prompt is deferred to a later version |
 
 ## How a release is made
 
@@ -31,8 +32,8 @@ GitHub has no signing or Play secrets, so releases are built on the owner's PC (
 
 ## Next
 
-1. **0.1.9:** tester feedback and polish. Check every few days: Play Console's pre-launch report and tester feedback, Firebase Crashlytics, support@ emails, and Testers Community's app page.
-2. **Keep 12 or more testers opted in** until the 14 days are complete (about 2026-11-15).
+1. **0.1.9:** "Rate Yawn & Pawn" and "Share Yawn & Pawn" in Settings (merged 2026-11-16; build and upload it). Then tester feedback and polish. Check every few days: Play Console's pre-launch report and tester feedback, Firebase Crashlytics, support@ emails, and Testers Community's app page.
+2. **The 14-day closed test is complete** (2026-11-15).
 3. **Apply for production access** (Play Console asks about the test; answers should be specific to what testers found and what was fixed), then publish.
 4. Before the public launch: a promo video; the Epic 5 and 6 retrospectives.
 5. After launch: move the site to Cloudflare Pages, then optionally make the repo private.

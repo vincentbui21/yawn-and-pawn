@@ -23,6 +23,7 @@ import com.yawnandpawn.app.ui.reliability.ChecklistTestAlarm
 import com.yawnandpawn.app.ui.reliability.ManufacturerGuidanceViewModel
 import com.yawnandpawn.app.ui.reliability.ReliabilityViewModel
 import com.yawnandpawn.app.ui.settings.DefaultSettingSetters
+import com.yawnandpawn.app.ui.settings.RateAndShare
 import com.yawnandpawn.app.ui.settings.SettingsViewModel
 import com.yawnandpawn.app.ui.settings.SkipReminderSwitch
 import com.yawnandpawn.app.ui.settings.WeeklySummarySwitch
@@ -77,6 +78,8 @@ val uiModule =
                 weeklySummary = WeeklySummarySwitch(store = get(), set = get()),
                 // 0.1.8: the "Skip reminder" switch.
                 skipReminder = SkipReminderSwitch(store = get(), set = get()),
+                // 0.1.9: the "Rate Yawn & Pawn" and "Share Yawn & Pawn" rows.
+                rateAndShare = RateAndShare(links = get(), appLinks = get()),
             )
         }
         viewModel { ProblemWithChargeViewModel(get(), get(), get(), get(), get()) }

@@ -35,6 +35,7 @@ class AboutViewModelTest {
             termsUrl = "https://yawnandpawn.com/terms/",
             supportUrl = "https://yawnandpawn.com/support/",
             websiteUrl = "https://yawnandpawn.com/",
+            playListingUrl = "https://play.google.com/store/apps/details?id=com.example",
         )
 
     @BeforeTest
@@ -180,5 +181,9 @@ class AboutViewModelTest {
             copied += text
             return !phoneConfirmsCopy
         }
+
+        override fun openInPlayStore(url: String): Boolean = error("not used")
+
+        override fun shareText(text: String): Boolean = error("not used")
     }
 }

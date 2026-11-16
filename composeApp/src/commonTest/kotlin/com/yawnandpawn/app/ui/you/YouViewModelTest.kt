@@ -39,6 +39,7 @@ class YouViewModelTest {
             termsUrl = "https://example.com/terms/",
             supportUrl = "https://example.com/support/",
             websiteUrl = "https://example.com/",
+            playListingUrl = "https://play.google.com/store/apps/details?id=com.example",
         )
 
     @BeforeTest
@@ -276,5 +277,9 @@ class YouViewModelTest {
             copied += text
             return !phoneConfirmsCopy
         }
+
+        override fun openInPlayStore(url: String): Boolean = error("not used")
+
+        override fun shareText(text: String): Boolean = error("not used")
     }
 }

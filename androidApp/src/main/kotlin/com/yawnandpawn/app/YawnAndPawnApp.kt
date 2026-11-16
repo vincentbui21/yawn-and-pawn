@@ -370,7 +370,8 @@ val appModule =
             )
         }
         // "Problem with a charge?" (Story 4.17): the order history link and the support email; the privacy policy, terms
-        // and support pages (Story 5.7); the site's home page (About). All from config/app-links.properties through BuildConfig.
+        // and support pages (Story 5.7); the site's home page (About); the Play listing (0.1.9, Settings' Rate and Share).
+        // All from config/app-links.properties through BuildConfig.
         single {
             AppLinks(
                 supportEmail = BuildConfig.SUPPORT_EMAIL,
@@ -379,6 +380,7 @@ val appModule =
                 termsUrl = BuildConfig.TERMS_URL,
                 supportUrl = BuildConfig.SUPPORT_URL,
                 websiteUrl = BuildConfig.WEBSITE_URL,
+                playListingUrl = BuildConfig.PLAY_LISTING_URL,
             )
         }
         // About (0.1.7 polish): the version name the build was given (the release workflow passes the tag).

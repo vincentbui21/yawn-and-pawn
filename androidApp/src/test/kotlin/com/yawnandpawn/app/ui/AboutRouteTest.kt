@@ -62,6 +62,10 @@ class AboutRouteTest {
             ): Boolean = opened.add("mailto:$to")
 
             override fun copyText(text: String): Boolean = false
+
+            override fun openInPlayStore(url: String): Boolean = error("not used")
+
+            override fun shareText(text: String): Boolean = error("not used")
         }
 
     private fun start() {

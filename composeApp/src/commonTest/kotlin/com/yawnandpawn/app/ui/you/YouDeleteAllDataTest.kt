@@ -77,6 +77,10 @@ class YouDeleteAllDataTest {
             ): Boolean = error("not used")
 
             override fun copyText(text: String): Boolean = error("not used")
+
+            override fun openInPlayStore(url: String): Boolean = error("not used")
+
+            override fun shareText(text: String): Boolean = error("not used")
         }
 
     private val appLinks =
@@ -87,6 +91,7 @@ class YouDeleteAllDataTest {
             termsUrl = "https://example.com/terms/",
             supportUrl = "https://example.com/support/",
             websiteUrl = "https://example.com/",
+            playListingUrl = "https://play.google.com/store/apps/details?id=com.example",
         )
 
     @BeforeTest
